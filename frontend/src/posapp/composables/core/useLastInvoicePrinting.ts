@@ -136,6 +136,7 @@ export function useLastInvoicePrinting() {
 					printFormat: pf || "Standard",
 					letterhead: letter_head || null,
 					noLetterhead: letter_head ? "0" : "1",
+					printerName: posProfile.posa_qz_printer_name || undefined,
 				});
 				return;
 			} catch (error) {

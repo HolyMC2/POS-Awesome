@@ -1742,7 +1742,7 @@ export default {
 			const printOptions = { allowOfflineFallback: isOffline(), triggerPrint: "1", debugPrint };
 			if (useSilentPrint && !isOffline()) {
 				try {
-					await printDocumentViaQz({ doctype, name: invoice.name, printFormat, letterhead: letterHead || null, noLetterhead: letterHead ? "0" : "1" });
+					await printDocumentViaQz({ doctype, name: invoice.name, printFormat, letterhead: letterHead || null, noLetterhead: letterHead ? "0" : "1", printerName: posProfile.value?.posa_qz_printer_name || undefined });
 					return;
 				} catch (error) {
 					console.warn("QZ Tray print failed, falling back to browser print", error);
