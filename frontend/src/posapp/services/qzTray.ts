@@ -65,11 +65,12 @@ function buildPrintHtml(html: string, style: string, widthMm: number = 80): stri
 <meta charset="UTF-8">
 <style>
 @page { size: ${widthMm}mm auto; margin: 0; }
-html, body { width: ${widthMm}mm; margin: 0; padding: 0; }
-body { font-size: 10pt; line-height: 1.3; }
+html { width: ${widthMm}mm; margin: 0; padding: 0; }
+body { width: ${widthMm}mm; margin: 0; padding: 0 4mm; box-sizing: border-box; font-size: 10pt; line-height: 1.3; }
+* { box-sizing: border-box; }
 img { max-width: 100%; height: auto; }
-.print-format { width: ${widthMm}mm !important; max-width: ${widthMm}mm !important; padding: 2mm !important; }
-table { width: 100% !important; max-width: ${widthMm}mm !important; border-collapse: collapse; }
+.print-format { width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+table { width: 100% !important; max-width: 100% !important; border-collapse: collapse; }
 ${style || ""}
 </style>
 </head>
