@@ -51,12 +51,23 @@ async function callServer<T>(method: string, args: Record<string, unknown> = {})
 	return extractMessage<T>(response);
 }
 
-function buildPrintHtml(html: string, style: string): string {
+function buildPrintHtml(html: string, style: string, widthMm: number = 80): string {
+	// Pin the viewport to the printer's paper width. Without this, QZ Tray's
+	// HTML renderer uses a default (A4/Letter) viewport then scales the raster
+	// down to fit — text lands ~half size and logos hit full paper width.
 	return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<style>${style || ""}</style>
+<style>
+@page { size: ${widthMm}mm auto; margin: 0; }
+html, body { width: ${widthMm}mm; margin: 0; padding: 0; }
+body { font-size: 10pt; line-height: 1.3; }
+img { max-width: 100%; height: auto; }
+.print-format { width: ${widthMm}mm !important; max-width: ${widthMm}mm !important; padding: 2mm !important; }
+table { width: 100% !important; max-width: ${widthMm}mm !important; border-collapse: collapse; }
+${style || ""}
+</style>
 </head>
 <body>${html}</body>
 </html>`;
@@ -449,5 +460,5 @@ export async function printDocumentViaQz(options: QzPrintDocumentOptions) {
 	}
 
 	const inlinedHtml = await inlineImagesForQz(html);
-	await printHtmlViaQz(buildPrintHtml(inlinedHtml, style), options);
+	await printHtmlViaQz(buildPrintHtml(inlinedHtml, style, options.widthMm || 80), options);
 }
