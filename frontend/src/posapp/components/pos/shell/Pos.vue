@@ -217,6 +217,7 @@ import { useOffers } from "../../../composables/pos/shared/useOffers";
 // Import the cache cleanup function
 import { clearExpiredCustomerBalances } from "../../../../offline/index";
 import { useResponsive } from "../../../composables/core/useResponsive";
+import { connectQzTray } from "../../../services/qzTray";
 import { useRtl } from "../../../composables/core/useRtl";
 import { useCustomersStore } from "../../../stores/customersStore.js";
 import { useUIStore } from "../../../stores/uiStore.js";
@@ -450,6 +451,18 @@ export default {
 			eventBus,
 		});
 
+		// Pre-warm QZ Tray connection as soon as a POS Profile with silent_print is loaded.
+		// Keeps the websocket open so the first print doesn't pay the connect/cert/signing round-trip cost.
+		const stopQzPrewarm = watch(
+			posProfile,
+			(profile) => {
+				if (profile && profile.posa_silent_print) {
+					connectQzTray().catch(() => undefined);
+				}
+			},
+			{ immediate: true },
+		);
+
 		onMounted(() => {
 			if (typeof window !== "undefined" && "ResizeObserver" in window) {
 				mobileDockObserver = new ResizeObserver(() => {
@@ -481,6 +494,7 @@ export default {
 				eventBus.off("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.off("set_compact_panel", setCompactPanel);
 			}
+			stopQzPrewarm();
 		});
 
 		watch(usePaymentDialog, (enabled) => {
