@@ -62,6 +62,64 @@ function buildPrintHtml(html: string, style: string): string {
 </html>`;
 }
 
+// QZ Tray's HTML renderer has no base URL, so relative asset URLs (letterhead
+// logo, signature images) render as broken placeholders. Fetch each image
+// client-side (the browser carries the session cookie) and inline it as a
+// base64 data URL so QZ receives a self-contained document. Also keeps silent
+// printing working when the terminal has no internet — critical for rural POS
+// deployments where the tienda keeps selling during outages.
+const inlinedImageCache = new Map<string, string>();
+
+async function fetchImageAsDataUrl(url: string, timeoutMs = 5000): Promise<string | null> {
+	if (url.startsWith("data:")) return url;
+	const cached = inlinedImageCache.get(url);
+	if (cached) return cached;
+
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	try {
+		const response = await fetch(url, { credentials: "include", signal: controller.signal });
+		if (!response.ok) return null;
+		const blob = await response.blob();
+		const dataUrl = await new Promise<string>((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(reader.result as string);
+			reader.onerror = () => reject(reader.error);
+			reader.readAsDataURL(blob);
+		});
+		inlinedImageCache.set(url, dataUrl);
+		return dataUrl;
+	} catch {
+		return null;
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+async function inlineImagesForQz(html: string): Promise<string> {
+	if (!html || !html.includes("<img")) return html;
+	const doc = new DOMParser().parseFromString(`<div id="qz-inline-root">${html}</div>`, "text/html");
+	const container = doc.getElementById("qz-inline-root");
+	if (!container) return html;
+
+	await Promise.all(
+		Array.from(container.querySelectorAll("img")).map(async (img) => {
+			const src = img.getAttribute("src");
+			if (!src) return;
+			let absolute: string;
+			try {
+				absolute = new URL(src, window.location.href).href;
+			} catch {
+				return;
+			}
+			const dataUrl = await fetchImageAsDataUrl(absolute);
+			if (dataUrl) img.setAttribute("src", dataUrl);
+		}),
+	);
+
+	return container.innerHTML;
+}
+
 function loadCertReady() {
 	try {
 		return localStorage.getItem(CERT_READY_STORAGE_KEY) === "1";
@@ -390,5 +448,6 @@ export async function printDocumentViaQz(options: QzPrintDocumentOptions) {
 		throw new Error("Unable to load print HTML from server.");
 	}
 
-	await printHtmlViaQz(buildPrintHtml(html, style), options);
+	const inlinedHtml = await inlineImagesForQz(html);
+	await printHtmlViaQz(buildPrintHtml(inlinedHtml, style), options);
 }
