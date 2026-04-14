@@ -166,6 +166,7 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 						printFormat: print_format || "Standard",
 						letterhead: profile.letter_head || null,
 						noLetterhead: letter_head,
+						printerName: profile.posa_qz_printer_name || undefined,
 					});
 					return;
 				} catch (error) {

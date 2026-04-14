@@ -326,6 +326,7 @@ export default {
 							name: payment_name,
 							printFormat: "Standard",
 							noLetterhead: 1,
+							printerName: pos_profile.value?.posa_qz_printer_name || undefined,
 						});
 						return;
 					} catch (error) {
