@@ -688,11 +688,22 @@ const scanProcessor = useScanProcessor({
 });
 
 // 6. Template Helpers
+
+// Debounced store search — keeps filteredItems in sync with what the user typed.
+// Without this, the displayedItems computed has nothing to filter when filteredItems
+// is empty (initial load race) or contains only the first paginated page.
+const debouncedItemSearch = _.debounce((term: string) => {
+	itemsIntegration.searchItems(term);
+}, 300);
+
 const clearSearch = () => {
+	debouncedItemSearch.cancel();
 	clearingSearch.value = true;
 	search_input.value = "";
 	first_search.value = "";
 	clearingSearch.value = false;
+	// Restore filteredItems to the full list so the next search starts from a clean slate
+	itemsIntegration.searchItems("");
 };
 
 const clearSearchAndQty = () => {
@@ -1184,6 +1195,9 @@ const handleSearchInput = (val) => {
 	if (scannerInput.handleSearchInput) {
 		scannerInput.handleSearchInput(first_search.value);
 	}
+	// Keep the store's filteredItems in sync so local filtering in displayedItems always
+	// has the right base set, regardless of pagination or initial-load timing.
+	debouncedItemSearch(String(val ?? ""));
 };
 const handleSearchPaste = (e) => itemsSelectorFocus.handleSearchPaste(e);
 const searchItems = (term) => itemsIntegration.searchItems(term);
