@@ -321,8 +321,14 @@ def _shape_item_row(
     if plan.posa_show_template_items and item.get("variant_of"):
         item_attributes = (variant_attributes_map or {}).get(item.get("name"), [])
 
+    # Hide-unavailable filter only applies to stock-tracked items.
+    # Service / non-stock rows (Diagnóstico, Cambio Pin de Carga,
+    # Quitar Virus, Instalación Pantalla...) never have a Bin row,
+    # so actual_qty is None — without this guard the filter would
+    # drop every service item too.
     if (
         plan.posa_display_items_in_stock
+        and item.get("is_stock_item")
         and (not detail.get("actual_qty") or detail.get("actual_qty") < 0)
         and not item.get("has_variants")
     ):
