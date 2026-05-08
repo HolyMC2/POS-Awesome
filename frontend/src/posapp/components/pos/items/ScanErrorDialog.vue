@@ -2,7 +2,6 @@
 	<v-dialog
 		:model-value="modelValue"
 		@update:model-value="$emit('update:modelValue', $event)"
-		persistent
 		max-width="420"
 		content-class="scan-error-dialog"
 	>

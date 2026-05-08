@@ -1,4 +1,4 @@
-import { ref, nextTick, onMounted, onUnmounted } from "vue";
+import { ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useToastStore } from "../../../stores/toastStore";
 import {
 	normalizeScaleBarcodeSettings,
@@ -150,6 +150,17 @@ export function useScannerInput(options: ScannerInputOptions = {}) {
 		scanErrorDialog.value = true;
 		scannerLocked.value = true;
 
+		// Self-heal: auto-release the lock after 15 s in case the dialog
+		// gets obscured by the soft keyboard or the user can't reach OK
+		// (mobile freeze repro). Cleared early by acknowledgeScanError or
+		// by the watch on scanErrorDialog below.
+		setTimeout(() => {
+			if (scannerLocked.value) {
+				console.warn("scannerLocked auto-released after 15 s timeout");
+				acknowledgeScanError();
+			}
+		}, 15000);
+
 		playScanTone("error");
 
 		if (typeof frappe !== "undefined" && frappe.show_alert) {
@@ -187,6 +198,17 @@ export function useScannerInput(options: ScannerInputOptions = {}) {
 		if (clearSearchHandler.value) clearSearchHandler.value();
 		if (focusSearchHandler.value) focusSearchHandler.value();
 	};
+
+	// Self-heal: any path that closes the error dialog (Esc, programmatic
+	// reset, parent unmount, browser back-button on mobile) drops the
+	// lock too. Without this, the lock could outlive the dialog and
+	// silently freeze every subsequent scan with only an error tone.
+	watch(scanErrorDialog, (open) => {
+		if (!open && scannerLocked.value) {
+			scannerLocked.value = false;
+			awaitingScanResult.value = false;
+		}
+	});
 
 	// --- onScan Integration ---
 	const initScanner = () => {
