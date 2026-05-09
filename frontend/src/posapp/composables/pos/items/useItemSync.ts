@@ -8,6 +8,7 @@ import {
 	normalizeBackgroundSyncInterval,
 	shouldRunBackgroundSync,
 } from "../../../utils/backgroundSync.js";
+import { debugLog } from "../../../utils/debug";
 
 /**
  * useItemSync Composable
@@ -94,7 +95,7 @@ export function useItemSync() {
 
 	function startBackgroundSyncScheduler() {
 		stopBackgroundSyncScheduler();
-		console.debug(`${BG_SYNC_LOG} scheduler start requested`, {
+		debugLog(`${BG_SYNC_LOG} scheduler start requested`, {
 			enabled: ctx.enable_background_sync,
 			intervalSeconds: normalizeBackgroundSyncInterval(
 				ctx.background_sync_interval,
@@ -124,7 +125,7 @@ export function useItemSync() {
 			}
 			performBackgroundSync({ source: "interval" });
 		}, intervalMs);
-		console.debug(`${BG_SYNC_LOG} scheduler active`, { intervalMs });
+		debugLog(`${BG_SYNC_LOG} scheduler active`, { intervalMs });
 
 		performBackgroundSync({ source: "initial" });
 		bindVisibilityListener();
@@ -134,7 +135,7 @@ export function useItemSync() {
 		if (background_sync_timer.value) {
 			clearInterval(background_sync_timer.value);
 			background_sync_timer.value = null;
-			console.debug(`${BG_SYNC_LOG} scheduler stopped`);
+			debugLog(`${BG_SYNC_LOG} scheduler stopped`);
 		}
 		unbindVisibilityListener();
 	}
@@ -162,7 +163,7 @@ export function useItemSync() {
 		const lastSync = getItemsLastSync();
 		if (lastSync) {
 			last_background_sync_time.value = lastSync;
-			console.debug(`${BG_SYNC_LOG} baseline loaded from local cache`, {
+			debugLog(`${BG_SYNC_LOG} baseline loaded from local cache`, {
 				lastSync,
 			});
 			return lastSync;
@@ -173,14 +174,14 @@ export function useItemSync() {
 			if (serverTimestamp) {
 				setItemsLastSync(serverTimestamp);
 				last_background_sync_time.value = serverTimestamp;
-				console.debug(`${BG_SYNC_LOG} baseline fetched from server`, {
+				debugLog(`${BG_SYNC_LOG} baseline fetched from server`, {
 					serverTimestamp,
 				});
 				return serverTimestamp;
 			}
 		}
 
-		console.debug(`${BG_SYNC_LOG} baseline unavailable`);
+		debugLog(`${BG_SYNC_LOG} baseline unavailable`);
 		return null;
 	}
 
@@ -213,7 +214,7 @@ export function useItemSync() {
 				usesLimitSearch: ctx.usesLimitSearch,
 			})
 		) {
-			console.debug(`${BG_SYNC_LOG} skipped`, { source, skipReasons });
+			debugLog(`${BG_SYNC_LOG} skipped`, { source, skipReasons });
 			return;
 		}
 
