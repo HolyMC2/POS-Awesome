@@ -50,19 +50,12 @@ def create_payment_entry(
     if not bank:
         frappe.throw(_("Bank/Cash account not found for mode of payment {0}").format(mode_of_payment))
 
-    # Validate currency: frontend always sends bank currency (physical cash)
-    expected_currency = bank.account_currency
-    if currency != expected_currency:
-        frappe.throw(_(
-            "Currency is not correct. Expected {expected}, got {currency}"
-        ).format(expected=expected_currency, currency=currency))
-
-    # Get exchange rate
+    # Get exchange rate using the MOP bank account currency
     if exchange_rate and flt(exchange_rate) > 0:
         conversion_rate = flt(exchange_rate)
     else:
         conversion_rate = get_exchange_rate(
-            currency, company_currency, date,
+            bank.account_currency, company_currency, date,
             "for_buying" if payment_type == "Pay" else "for_selling"
         )
 
@@ -126,11 +119,10 @@ def create_payment_entry(
         )
         pe.paid_amount = paid_amount
         pe.received_amount = received_amount
-        # Defensive: ensure base amounts are set for same-currency case
-        if not pe.base_paid_amount:
-            pe.base_paid_amount = flt(paid_amount)
-        if not pe.base_received_amount:
-            pe.base_received_amount = flt(received_amount)
+        pe.source_exchange_rate = conversion_rate
+        pe.target_exchange_rate = conversion_rate
+        pe.base_paid_amount = flt(paid_amount * conversion_rate, precision)
+        pe.base_received_amount = flt(received_amount * conversion_rate, precision)
 
     if submit:
         pe.insert(ignore_permissions=True)

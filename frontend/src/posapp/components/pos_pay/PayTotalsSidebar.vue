@@ -23,7 +23,58 @@
 			</v-col>
 		</v-row>
 
-		<v-row v-if="totalSelectedPayments">
+		<v-row v-if="totalSelectedPayments && selectedPaymentsDetail.length">
+			<v-col cols="12">
+				<h4 class="text-primary mb-1">{{ __("Selected Payments") }}</h4>
+				<div
+					v-for="(pay, idx) in selectedPaymentsDetail"
+					:key="idx"
+					class="selected-payment-block py-1 text-caption"
+				>
+					<div class="d-flex align-center mb-1">
+						<span class="text-body-2 font-weight-medium">{{ __(pay.mode_of_payment) }}</span>
+						<span v-if="pay.account" class="text-medium-emphasis ml-1 text-truncate" style="max-width: 40%">
+							({{ pay.account }})
+						</span>
+					</div>
+					<div class="d-flex align-center mb-1">
+						<span class="text-medium-emphasis" style="min-width: 50%">{{ __("Paid (orig):") }}</span>
+						<span class="font-weight-medium text-end" style="min-width: 50%">
+							{{ currencySymbol(pay.currency) }}&nbsp;{{ formatCurrency(pay.paid_amount) }}
+						</span>
+					</div>
+					<div class="d-flex align-center mb-1">
+						<span class="text-medium-emphasis" style="min-width: 50%">{{ __("Source Rate:") }}</span>
+						<span class="font-weight-medium text-end" style="min-width: 50%">{{ formatCurrency(pay.exchange_rate) }}</span>
+					</div>
+					<div class="d-flex align-center mb-1">
+						<span class="text-medium-emphasis" style="min-width: 50%">{{ __("Unallocated:") }}</span>
+						<span class="font-weight-medium text-end" style="min-width: 50%">
+							{{ currencySymbol(pay.currency) }}&nbsp;{{ formatCurrency(pay.unallocated_amount) }}
+						</span>
+					</div>
+					<div class="d-flex align-center mb-1">
+						<span class="text-medium-emphasis" style="min-width: 50%">{{ __("Received:") }}</span>
+						<span class="font-weight-medium text-end" style="min-width: 50%">
+							{{ currencySymbol(companyCurrency) }}&nbsp;{{ formatCurrency(pay.received_amount) }}
+						</span>
+					</div>
+					<div class="d-flex align-center mb-1">
+						<span class="text-medium-emphasis" style="min-width: 50%">{{ __("Target Rate:") }}</span>
+						<span class="font-weight-medium text-end" style="min-width: 50%">{{ formatCurrency(pay.exchange_rate) }}</span>
+					</div>
+					<v-divider v-if="idx < selectedPaymentsDetail.length - 1" class="my-1"></v-divider>
+				</div>
+				<v-divider class="my-1"></v-divider>
+				<div class="d-flex align-center py-1 font-weight-bold">
+					<span class="text-body-2" style="min-width: 50%">{{ __("Total") }}</span>
+					<span class="text-body-2 text-end" style="min-width: 50%">
+						{{ currencySymbol(paymentTotalCurrency) }}&nbsp;{{ formatCurrency(totalSelectedPayments) }}
+					</span>
+				</div>
+			</v-col>
+		</v-row>
+		<v-row v-else-if="totalSelectedPayments">
 			<v-col md="7" class="mt-1"
 				><span>{{ __("Total Payments:") }}</span></v-col
 			>
@@ -61,32 +112,128 @@
 
 		<v-divider v-if="paymentMethods.length"></v-divider>
 		<div v-if="posProfile.posa_allow_make_new_payments">
-			<h4 class="text-primary">Make New Payment</h4>
-			<v-row
-				v-if="filteredPaymentMethods.length"
-				v-for="method in filteredPaymentMethods"
-				:key="method.row_id"
-			>
-				<v-col md="7"
-					><span class="mt-1">{{ __(method.mode_of_payment) }}:</span>
-				</v-col>
-				<v-col md="5">
-					<div class="d-flex align-center">
-						<div class="mr-1 text-primary">
-							{{ currencySymbol(getPaymentMethodCurrency(method.mode_of_payment)) }}
+			<h4 class="text-primary">{{ __("Make New Payment") }}</h4>
+			<template v-if="filteredPaymentMethods.length">
+				<v-select
+					v-model="selectedMopName"
+					:items="mopOptions"
+					:label="__('Mode of Payment')"
+					density="compact"
+					variant="outlined"
+					hide-details
+					class="mb-3"
+					clearable
+				></v-select>
+				<template v-if="selectedMop">
+					<div class="new-payment-card pa-3 mb-2">
+						<div class="d-flex align-center mb-2">
+							<span class="text-body-2 font-weight-medium">{{ __(selectedMop.mode_of_payment) }}</span>
+							<v-chip
+								v-if="getPaymentMethodAccount(selectedMop.mode_of_payment)?.account_type"
+								size="x-small"
+								color="primary"
+								variant="outlined"
+								class="ml-1"
+							>
+								{{ getPaymentMethodAccount(selectedMop.mode_of_payment).account_type }}
+							</v-chip>
 						</div>
-						<v-text-field
-							class="p-0 m-0 pos-themed-input"
-							density="compact"
-							color="primary"
-							hide-details
-							v-model="method.amount"
-							type="number"
-							flat
-						></v-text-field>
+						<div class="d-flex align-center mb-1">
+							<span class="text-caption text-medium-emphasis mr-1">{{ paymentType === "Pay" ? __("Paid:") : __("Recv:") }}</span>
+							<span class="text-h6 font-weight-bold mr-2">
+								{{ currencySymbol(getPaymentMethodCurrency(selectedMop.mode_of_payment)) }}
+							</span>
+							<v-text-field
+								class="paid-amount-input amount-field"
+								density="compact"
+								color="primary"
+								hide-details
+								v-model="selectedMop.amount"
+								type="number"
+								flat
+								variant="outlined"
+							></v-text-field>
+						</div>
+						<div v-if="flt(selectedMop.amount) > 0" class="text-caption text-medium-emphasis mt-1">
+							{{ __("Base:") }} {{ currencySymbol(companyCurrency) }}&nbsp;{{
+								formatCurrency(
+									requiresExchangeRate
+										? flt(selectedMop.amount) * flt(internalExchangeRateValue)
+										: flt(selectedMop.amount)
+								)
+							}}
+							<template v-if="requiresExchangeRate">
+								&nbsp;@ {{ formatCurrency(internalExchangeRateValue) }}
+							</template>
+						</div>
 					</div>
-				</v-col>
-			</v-row>
+					<div v-if="partyAccount && getPaymentMethodAccount(selectedMop.mode_of_payment)" class="text-caption mb-2">
+						<div class="d-flex align-center mb-1">
+							<span class="text-medium-emphasis" style="min-width: 50px">{{ __("From:") }}</span>
+							<span class="ml-1 text-truncate">{{ partyAccount.account }}</span>
+							<v-chip size="x-small" color="primary" variant="tonal" class="ml-auto">{{ partyAccount.currency }}</v-chip>
+						</div>
+						<div class="d-flex align-center">
+							<span class="text-medium-emphasis" style="min-width: 50px">{{ __("To:") }}</span>
+							<span class="ml-1 text-truncate">{{ getPaymentMethodAccount(selectedMop.mode_of_payment).account }}</span>
+							<v-chip size="x-small" color="primary" variant="tonal" class="ml-auto">{{ getPaymentMethodAccount(selectedMop.mode_of_payment).account_currency }}</v-chip>
+						</div>
+					</div>
+					<template v-if="flt(selectedMop.amount) > 0 && newPaymentFields[selectedMop.row_id]">
+						<v-divider class="my-1"></v-divider>
+						<div class="text-caption">
+							<div class="d-flex align-center mb-1">
+								<span class="text-medium-emphasis" style="min-width: 50%">{{ __("Source Ex. Rate:") }}</span>
+								<span class="font-weight-medium text-end" style="min-width: 50%">{{ formatCurrency(newPaymentFields[selectedMop.row_id].sourceRate) }}</span>
+							</div>
+							<div class="d-flex align-center mb-1">
+								<span class="text-medium-emphasis" style="min-width: 50%">{{ __("Base Paid Amt:") }}</span>
+								<span class="font-weight-medium text-end" style="min-width: 50%">
+									{{ currencySymbol(companyCurrency) }}&nbsp;{{ formatCurrency(newPaymentFields[selectedMop.row_id].basePaidAmount) }}
+								</span>
+							</div>
+							<div class="d-flex align-center mb-1">
+								<span class="text-medium-emphasis" style="min-width: 50%">{{ __("Target Ex. Rate:") }}</span>
+								<span class="font-weight-medium text-end" style="min-width: 50%">{{ formatCurrency(newPaymentFields[selectedMop.row_id].targetRate) }}</span>
+							</div>
+							<div class="d-flex align-center mb-1">
+								<span class="text-medium-emphasis" style="min-width: 50%">{{ __("Base Recv Amt:") }}</span>
+								<span class="font-weight-medium text-end" style="min-width: 50%">
+									{{ currencySymbol(companyCurrency) }}&nbsp;{{ formatCurrency(newPaymentFields[selectedMop.row_id].baseReceivedAmount) }}
+								</span>
+							</div>
+						</div>
+					</template>
+				</template>
+				<div v-if="enteredPayments.length" class="mt-2">
+					<v-divider class="mb-1"></v-divider>
+					<div class="text-caption">
+						<div
+							v-for="entry in enteredPayments"
+							:key="entry.row_id"
+							class="d-flex align-center py-1"
+						>
+							<span class="font-weight-medium" style="min-width: 40%">{{ __(entry.mode_of_payment) }}</span>
+							<span class="text-end" style="min-width: 30%">
+								{{ currencySymbol(getPaymentMethodCurrency(entry.mode_of_payment)) }}&nbsp;{{ formatCurrency(entry.amount) }}
+							</span>
+							<span class="text-medium-emphasis text-end" style="min-width: 30%">
+								({{ currencySymbol(companyCurrency) }}&nbsp;{{ formatCurrency(entry.baseAmount) }})
+							</span>
+						</div>
+					</div>
+					<v-divider class="my-1"></v-divider>
+					<div class="d-flex align-center font-weight-bold text-body-2">
+						<span style="min-width: 40%">{{ __("Total") }}</span>
+						<span class="text-end" style="min-width: 30%">
+							{{ currencySymbol(invoiceTotalCurrency) }}&nbsp;{{ formatCurrency(totalNewPayments) }}
+						</span>
+						<span class="text-end" style="min-width: 30%">
+							({{ currencySymbol(companyCurrency) }}&nbsp;{{ formatCurrency(totalNewPaymentsBase) }})
+						</span>
+					</div>
+				</div>
+			</template>
 		</div>
 
 		<v-divider v-if="requiresExchangeRate"></v-divider>
@@ -203,9 +350,14 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import VueDatePicker from "@vuepic/vue-datepicker";
 import { normalizeDateForBackend } from "../../format";
+
+const flt = (value, precision) => {
+	const num = parseFloat(String(value ?? 0).replace(/,/g, ""));
+	return isNaN(num) ? 0 : precision != null ? parseFloat(num.toFixed(precision)) : num;
+};
 
 const props = defineProps({
 	posProfile: Object,
@@ -215,6 +367,14 @@ const props = defineProps({
 	totalSelectedMpesa: Number,
 	paymentMethods: Array,
 	filteredPaymentMethods: Array,
+	selectedPaymentsDetail: {
+		type: Array,
+		default: () => [],
+	},
+	newPaymentsDetail: {
+		type: Array,
+		default: () => [],
+	},
 	invoiceTotalCurrency: String,
 	paymentTotalCurrency: String,
 	mpesaTotalCurrency: String,
@@ -233,6 +393,22 @@ const props = defineProps({
 	getPaymentMethodCurrency: Function,
 	referenceNo: String,
 	referenceDate: String,
+	partyAccount: {
+		type: Object,
+		default: null,
+	},
+	paymentMethodAccounts: {
+		type: Object,
+		default: () => ({}),
+	},
+	paymentType: {
+		type: String,
+		default: "Receive",
+	},
+	invoiceConversionRate: {
+		type: Number,
+		default: null,
+	},
 });
 
 const emit = defineEmits([
@@ -249,7 +425,106 @@ const internalExchangeRate = computed({
 	set: (val) => emit("update:exchangeRate", val),
 });
 
+const internalExchangeRateValue = computed(() => flt(props.exchangeRate || 1));
+
 const internalAutoAllocatePaymentAmount = computed(() => props.autoAllocatePaymentAmount ?? true);
+
+const getPaymentMethodAccount = (mode) => {
+	if (!mode || !props.paymentMethodAccounts) return null;
+	return props.paymentMethodAccounts[mode] || null;
+};
+
+const rateFromCurrencyToCompany = (currency) => {
+	if (!currency || currency === props.companyCurrency) return 1;
+	if (currency === props.invoiceTotalCurrency && flt(props.exchangeRate) > 0) return flt(props.exchangeRate);
+	if (currency === props.invoiceTotalCurrency && flt(props.invoiceConversionRate) > 0) return flt(props.invoiceConversionRate);
+	return 1;
+};
+
+const newPaymentFields = computed(() => {
+	const fields = {};
+	if (!props.filteredPaymentMethods) return fields;
+	for (const method of props.filteredPaymentMethods) {
+		const amt = flt(method.amount);
+		const mopCurr = props.getPaymentMethodCurrency(method.mode_of_payment);
+		const partyCurr = props.partyAccount?.currency || props.invoiceTotalCurrency;
+		const isReceive = props.paymentType === "Receive";
+		const fromCurr = isReceive ? partyCurr : mopCurr;
+		const toCurr = isReceive ? mopCurr : partyCurr;
+		const srcRate = rateFromCurrencyToCompany(fromCurr);
+		const tgtRate = rateFromCurrencyToCompany(toCurr);
+		let paidAmt, recvAmt;
+		if (isReceive) {
+			recvAmt = amt;
+			paidAmt = tgtRate !== 0 ? recvAmt * tgtRate / (srcRate || 1) : 0;
+		} else {
+			paidAmt = amt;
+			recvAmt = srcRate !== 0 ? paidAmt * srcRate / (tgtRate || 1) : 0;
+		}
+		fields[method.row_id] = {
+			paidAmount: paidAmt,
+			receivedAmount: recvAmt,
+			sourceRate: srcRate,
+			targetRate: tgtRate,
+			basePaidAmount: paidAmt * srcRate,
+			baseReceivedAmount: recvAmt * tgtRate,
+			fromCurrency: fromCurr,
+			toCurrency: toCurr,
+		};
+	}
+	return fields;
+});
+
+const selectedMopName = ref(null);
+
+const mopOptions = computed(() => {
+	if (!props.filteredPaymentMethods) return [];
+	return props.filteredPaymentMethods.map((m) => ({
+		title: __(m.mode_of_payment),
+		value: m.mode_of_payment,
+	}));
+});
+
+const selectedMop = computed(() => {
+	if (!selectedMopName.value || !props.filteredPaymentMethods) return null;
+	return props.filteredPaymentMethods.find((m) => m.mode_of_payment === selectedMopName.value) || null;
+});
+
+watch(
+	() => props.invoiceTotalCurrency,
+	(newCurrency) => {
+		if (!props.filteredPaymentMethods?.length || !newCurrency) return;
+		const match = props.filteredPaymentMethods.find(
+			(m) => props.getPaymentMethodCurrency(m.mode_of_payment) === newCurrency,
+		);
+		if (match) {
+			selectedMopName.value = match.mode_of_payment;
+		}
+	},
+);
+
+const enteredPayments = computed(() => {
+	if (!props.filteredPaymentMethods) return [];
+	return props.filteredPaymentMethods
+		.filter((m) => flt(m.amount) > 0)
+		.map((m) => {
+			const fields = newPaymentFields.value[m.row_id] || {};
+			return {
+				row_id: m.row_id,
+				mode_of_payment: m.mode_of_payment,
+				amount: flt(m.amount),
+				baseAmount: fields.basePaidAmount || fields.baseReceivedAmount || flt(m.amount),
+			};
+		});
+});
+
+const totalNewPayments = computed(() => {
+	return enteredPayments.value.reduce((sum, e) => sum + e.amount, 0);
+});
+
+const totalNewPaymentsBase = computed(() => {
+	return enteredPayments.value.reduce((sum, e) => sum + e.baseAmount, 0);
+});
 
 const internalReferenceNo = computed({
 	get: () => props.referenceNo,
@@ -296,5 +571,28 @@ defineExpose({
 	background-color: rgb(var(--v-theme-surface));
 	color: inherit;
 	padding: 0 12px;
+}
+
+.selected-payment-block + .selected-payment-block {
+	border-top: 1px solid rgba(var(--v-border-color), 0.3);
+	margin-top: 2px;
+	padding-top: 6px;
+}
+
+.new-payment-card {
+	border: 1px solid rgba(var(--v-border-color), 0.25);
+	border-radius: 8px;
+	background: rgba(var(--v-theme-surface), 0.6);
+}
+
+.new-payment-card .amount-field :deep(.v-field__input) {
+	font-size: 1rem;
+	font-weight: 600;
+}
+
+.text-truncate {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 </style>

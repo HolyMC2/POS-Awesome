@@ -80,9 +80,28 @@ def get_mode_of_payment_accounts(company, mode_of_payments):
     if isinstance(mode_of_payments, str):
         mode_of_payments = json.loads(mode_of_payments)
 
-    currency_map = {}
+    result = {}
     for mode in mode_of_payments:
         account = get_bank_cash_account(company, mode)
         if account:
-            currency_map[mode] = account.get("account_currency")
-    return currency_map
+            result[mode] = {
+                "account": account.get("account"),
+                "account_currency": account.get("account_currency"),
+                "account_type": account.get("account_type"),
+            }
+    return result
+
+
+@frappe.whitelist()
+def get_party_account_info(party_type, party, company):
+    account = get_party_account(party_type, party, company)
+    if not account:
+        return None
+
+    currency = frappe.get_cached_value("Account", account, "account_currency")
+    account_name = frappe.get_cached_value("Account", account, "account_name")
+    return {
+        "account": account,
+        "account_name": account_name,
+        "currency": currency,
+    }

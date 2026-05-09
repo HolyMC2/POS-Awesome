@@ -165,6 +165,8 @@
 						:total-selected-mpesa="total_selected_mpesa_payments"
 						:payment-methods="payment_methods"
 						:filtered-payment-methods="filtered_payment_methods"
+						:selected-payments-detail="selected_payments_detail"
+						:new-payments-detail="new_payments_detail"
 						:invoice-total-currency="invoiceTotalCurrency"
 						:payment-total-currency="paymentTotalCurrency"
 						:mpesa-total-currency="mpesaTotalCurrency"
@@ -176,6 +178,10 @@
 						:currency-symbol="currencySymbol"
 						:format-currency="formatCurrency"
 						:get-payment-method-currency="getPaymentMethodCurrency"
+						:party-account="partyAccount"
+						:payment-method-accounts="payment_method_accounts"
+						:payment-type="paymentEntryType"
+						:invoice-conversion-rate="invoiceConversionRate"
 						@validate-exchange-rate="validateExchangeRate"
 						@fetch-exchange-rate="fetchExchangeRate"
 					/>
@@ -308,7 +314,9 @@ export default {
 		const exchangeRateLoading = ref(false);
 		const exchangeRateError = ref(null);
 		const payment_method_currencies = ref({});
+		const payment_method_accounts = ref({});
 		const payment_methods_list = ref([]);
+		const partyAccount = ref(null);
 
 		const mpesa_payment_headers = [
 			{ title: __("Payment ID"), align: "start", sortable: true, key: "transid" },
@@ -380,6 +388,7 @@ export default {
 			total_selected_payments,
 			total_selected_mpesa_payments,
 			total_payment_methods,
+			selected_payments_detail,
 			total_of_diff,
 			toggleInvoiceSelection,
 			isInvoiceSelected,
@@ -520,15 +529,30 @@ export default {
 
 		const filtered_payment_methods = computed(() => {
 			if (!payment_methods.value.length) return [];
-			if (!selected_invoices.value.length) return payment_methods.value;
-			const target =
-				selected_invoices.value[0]?.party_account_currency ||
-				selected_invoices.value[0]?.currency ||
-				pos_profile.value.currency;
-			return payment_methods.value.filter(
-				(m) => getPaymentMethodCurrency(m.mode_of_payment) === target,
-			);
+			return payment_methods.value;
 		});
+
+		const new_payments_detail = computed(() => {
+			if (!filtered_payment_methods.value.length) return [];
+			const rate = flt(exchangeRate.value || 1);
+			return filtered_payment_methods.value
+				.filter((m) => flt(m.amount) > 0)
+				.map((m) => ({
+					mode_of_payment: m.mode_of_payment,
+					paid_amount: flt(m.amount),
+					currency: getPaymentMethodCurrency(m.mode_of_payment),
+					received_amount: flt(m.amount) * rate,
+					exchange_rate: rate,
+				}));
+		});
+
+		const invoiceConversionRate = computed(() => {
+			if (selected_invoices.value.length > 0) {
+				return selected_invoices.value[0]?.conversion_rate ?? null;
+			}
+			return null;
+		});
+
 		const postingDateDisplay = computed({
 			get: () => formatDisplayDate(postingDate.value),
 			set: (value) => {
@@ -687,17 +711,42 @@ export default {
 		const loadPaymentMethodCurrencies = async () => {
 			if (!pos_profile.value?.payments?.length || !company.value) return;
 			const modes = pos_profile.value.payments.map((p) => p.mode_of_payment).filter(Boolean);
-			payment_method_currencies.value = await loadPaymentMethodCurrencyMap({
-				company: company.value,
-				offline: isOffline(),
-				fetcher: async () => {
-					const r = await frappe.call({
-						method: "posawesome.posawesome.api.payment_processing.utils.get_mode_of_payment_accounts",
-						args: { company: company.value, mode_of_payments: modes },
-					});
-					return { ...(r.message || {}) };
-				},
-			});
+			try {
+				const r = await frappe.call({
+					method: "posawesome.posawesome.api.payment_processing.utils.get_mode_of_payment_accounts",
+					args: { company: company.value, mode_of_payments: modes },
+				});
+				const accountData = r.message || {};
+				payment_method_accounts.value = accountData;
+				const currencies = {};
+				for (const [mode, data] of Object.entries(accountData)) {
+					currencies[mode] = typeof data === "string" ? data : data.account_currency;
+				}
+				payment_method_currencies.value = currencies;
+			} catch (e) {
+				console.error("Failed to load payment method accounts", e);
+			}
+		};
+
+		const fetchPartyAccount = async () => {
+			if (!customer_name.value || !company.value) {
+				partyAccount.value = null;
+				return;
+			}
+			try {
+				const r = await frappe.call({
+					method: "posawesome.posawesome.api.payment_processing.utils.get_party_account_info",
+					args: {
+						party_type: partyType.value || "Customer",
+						party: customer_name.value,
+						company: company.value,
+					},
+				});
+				partyAccount.value = r.message || null;
+			} catch (e) {
+				console.error("Failed to fetch party account", e);
+				partyAccount.value = null;
+			}
 		};
 
 		const applyOpeningData = async (data) => {
@@ -857,6 +906,8 @@ export default {
 				}
 				customer_name.value = cust;
 			});
+			fetchPartyAccount();
+			loadPaymentMethodCurrencies();
 		}
 		async function syncCustomerPaymentContext(normalized, { forceReload = false } = {}) {
 			if (!normalized) {
@@ -889,6 +940,8 @@ export default {
 			customer_name.value = normalized;
 			if (!companyCurrency.value) await fetchCompanyCurrency();
 			fetch_customer_details();
+			fetchPartyAccount();
+			loadPaymentMethodCurrencies();
 			refreshOutstandingInvoices();
 			get_unallocated_payments();
 			get_draft_mpesa_payments_register(payment_methods_list.value);
@@ -1024,6 +1077,8 @@ export default {
 		watch(company, (newCompany, oldCompany) => {
 			if (isPaymentRouteLocked.value) return;
 			if (!newCompany || newCompany === oldCompany || !customer_name.value) return;
+			fetchPartyAccount();
+			loadPaymentMethodCurrencies();
 			refreshOutstandingInvoices();
 			get_unallocated_payments();
 			get_draft_mpesa_payments_register(payment_methods_list.value);
@@ -1098,6 +1153,7 @@ export default {
 			total_selected_mpesa_payments,
 			total_payment_methods,
 			total_of_diff,
+			invoiceConversionRate,
 			toggleInvoiceSelection,
 			isInvoiceSelected,
 			clearSelections,
