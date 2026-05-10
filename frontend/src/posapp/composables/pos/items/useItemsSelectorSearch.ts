@@ -336,6 +336,23 @@ export const useItemsSelectorSearch = ({
 			if (loadVisibleItems) {
 				await loadVisibleItems(true);
 			}
+			// Server fallback: when the local IDB cache returns nothing
+			// for a non-trivial query (≥ 3 chars), hit the server. Fixes
+			// the "newly-created item invisible until manual reload"
+			// case (Moto E15 typing 'motorola e15' got nothing because
+			// the item wasn't in the cached batch yet).
+			const cacheEmpty =
+				Array.isArray(vm.displayedItems) && vm.displayedItems.length === 0;
+			if (cacheEmpty && trimmedQuery.length >= 3 && !vm.isBackgroundLoading) {
+				const getItems = getItemsLoader(vm);
+				if (getItems) {
+					try {
+						await getItems(true);
+					} catch (err) {
+						console.warn("[POSA][SearchFallback] server retry failed", err);
+					}
+				}
+			}
 			triggerEnterEvent(vm);
 		} else {
 			// When local storage is disabled, always fetch items
