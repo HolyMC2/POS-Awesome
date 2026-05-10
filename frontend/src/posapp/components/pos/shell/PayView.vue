@@ -535,18 +535,27 @@ export default {
 			return payment_methods.value;
 		});
 
+		const rateFromCurrencyToCompany = (currency) => {
+			if (!currency || currency === companyCurrencyLocal.value) return 1;
+			if (currency === invoiceTotalCurrency.value) return flt(exchangeRate.value || 1);
+			return flt(invoiceConversionRate.value || exchangeRate.value || 1);
+		};
+
 		const new_payments_detail = computed(() => {
 			if (!filtered_payment_methods.value.length) return [];
-			const rate = flt(exchangeRate.value || 1);
 			return filtered_payment_methods.value
 				.filter((m) => flt(m.amount) > 0)
-				.map((m) => ({
-					mode_of_payment: m.mode_of_payment,
-					paid_amount: flt(m.amount),
-					currency: getPaymentMethodCurrency(m.mode_of_payment),
-					received_amount: flt(m.amount) * rate,
-					exchange_rate: rate,
-				}));
+				.map((m) => {
+					const mopCurrency = getPaymentMethodCurrency(m.mode_of_payment);
+					const rate = rateFromCurrencyToCompany(mopCurrency);
+					return {
+						mode_of_payment: m.mode_of_payment,
+						paid_amount: flt(m.amount),
+						currency: mopCurrency,
+						received_amount: flt(m.amount),
+						exchange_rate: rate,
+					};
+				});
 		});
 
 		const invoiceConversionRate = computed(() => {

@@ -3,6 +3,7 @@ from frappe import _
 from frappe.utils import nowdate, getdate, flt, cint
 from erpnext.accounts.party import get_party_account
 from erpnext.controllers.accounts_controller import get_advance_payment_entries_for_regional
+from erpnext.setup.utils import get_exchange_rate
 
 MAX_OUTSTANDING_PAGE_LENGTH = 500
 
@@ -207,14 +208,23 @@ def get_outstanding_invoices(
             # - Party YER (company), Invoice USD: 60,003 YER ÷ 531 (YER/USD) = 113 USD
             # - Party USD (invoice), Invoice USD: 100 USD → 100 USD (no conversion)
             party_account_currency = invoice.get("party_account_currency") or currency
+            company_currency = frappe.get_cached_value("Company", company, "default_currency")
             if party_account_currency == row_currency:
                 outstanding_in_invoice_currency = outstanding_amount
-            else:
+            elif party_account_currency == company_currency:
                 precision = frappe.get_precision("Sales Invoice", "outstanding_amount") or 2
                 if conversion_rate > 0:
                     outstanding_in_invoice_currency = flt(outstanding_amount / conversion_rate, precision)
                 else:
                     outstanding_in_invoice_currency = outstanding_amount
+            else:
+                # Third currency: convert from party account currency to invoice currency
+                precision = frappe.get_precision("Sales Invoice", "outstanding_amount") or 2
+                party_to_inv = get_exchange_rate(party_account_currency, row_currency, invoice.get("posting_date"))
+                if party_to_inv:
+                    outstanding_in_invoice_currency = flt(outstanding_amount / party_to_inv, precision)
+                else:
+                    outstanding_in_invoice_currency = flt(outstanding_amount / conversion_rate, precision) if conversion_rate > 0 else outstanding_amount
             invoice_total = flt(
                 invoice.get("rounded_total")
                 or invoice.get("grand_total")

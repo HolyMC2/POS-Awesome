@@ -658,7 +658,7 @@ def process_pos_payment(payload):
                         inv_to_party = flt(get_exchange_rate(inv_currency, party_account_currency, posting_date))
                         total_amount = flt((inv_doc.rounded_total or inv_doc.grand_total) * inv_to_party, precision)
                         outstanding_amount = flt(inv_doc.outstanding_amount * inv_to_party, precision)
-                        exchange_rate = inv_to_party
+                        exchange_rate = flt(get_exchange_rate(party_account_currency, company_currency, posting_date))
                     inv_outstanding_party = outstanding_amount
 
                     inv_total_party = total_amount
@@ -729,14 +729,18 @@ def process_pos_payment(payload):
                     if inv_rate and pe_exchange_rate and inv_rate != pe_exchange_rate:
                         ref = ref_map.get(inv["name"])
                         if ref and ref.allocated_amount:
-                            # Convert from party account currency to invoice currency
-                            allocated_in_invoice_currency = flt(ref.allocated_amount) / inv_rate
+                            # Gain/loss in company currency using ERPNext pattern:
+                            # base at payment rate - base at reference/invoice rate
+                            # allocated_amount is in party account currency
+                            ref_rate = flt(ref.exchange_rate) or 1
+                            allocated_base = flt(ref.allocated_amount * pe_exchange_rate, precision)
+                            allocated_base_at_ref_rate = flt(ref.allocated_amount * ref_rate, precision)
+                            gl_value = allocated_base - allocated_base_at_ref_rate
                         else:
                             inv_doc = frappe.get_cached_doc(inv.get("voucher_type") or "Sales Invoice", inv["name"])
-                            # Fallback to full invoice amount (in invoice currency)
-                            allocated_in_invoice_currency = flt(inv_doc.rounded_total or inv_doc.grand_total, precision)
-
-                        gl_value = flt(allocated_in_invoice_currency * (pe_exchange_rate - inv_rate), precision)
+                            # Fallback to full invoice amount in company currency
+                            allocated_base = flt(inv_doc.base_rounded_total or inv_doc.base_grand_total, precision)
+                            gl_value = 0
                         if gl_value:
                             amount = abs(gl_value)
                             gl_type = "gain" if gl_value > 0 else "loss"

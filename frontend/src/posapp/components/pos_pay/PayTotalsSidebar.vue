@@ -157,13 +157,11 @@
 						<div v-if="flt(selectedMop.amount) > 0" class="text-caption text-medium-emphasis mt-1">
 							{{ __("Base:") }} {{ currencySymbol(companyCurrency) }}&nbsp;{{
 								formatCurrency(
-									requiresExchangeRate
-										? flt(selectedMop.amount) * flt(internalExchangeRateValue)
-										: flt(selectedMop.amount)
+									flt(selectedMop.amount) * flt(selectedMopRate)
 								)
 							}}
-							<template v-if="requiresExchangeRate">
-								&nbsp;@ {{ formatCurrency(internalExchangeRateValue) }}
+							<template v-if="flt(selectedMopRate) !== 1">
+								&nbsp;@ {{ formatCurrency(selectedMopRate) }}
 							</template>
 						</div>
 					</div>
@@ -489,8 +487,13 @@ const getPaymentMethodAccount = (mode) => {
 
 const rateFromCurrencyToCompany = (currency) => {
 	if (!currency || currency === props.companyCurrency) return 1;
-	if (currency === props.invoiceTotalCurrency && flt(props.exchangeRate) > 0) return flt(props.exchangeRate);
-	if (currency === props.invoiceTotalCurrency && flt(props.invoiceConversionRate) > 0) return flt(props.invoiceConversionRate);
+	if (currency === props.invoiceTotalCurrency) {
+		if (flt(props.exchangeRate) > 0) return flt(props.exchangeRate);
+		if (flt(props.invoiceConversionRate) > 0) return flt(props.invoiceConversionRate);
+	}
+	// Fallback for third currencies: use invoice→company rate as best estimate
+	if (flt(props.exchangeRate) > 0) return flt(props.exchangeRate);
+	if (flt(props.invoiceConversionRate) > 0) return flt(props.invoiceConversionRate);
 	return 1;
 };
 
@@ -541,6 +544,12 @@ const mopOptions = computed(() => {
 const selectedMop = computed(() => {
 	if (!selectedMopName.value || !props.filteredPaymentMethods) return null;
 	return props.filteredPaymentMethods.find((m) => m.mode_of_payment === selectedMopName.value) || null;
+});
+
+const selectedMopRate = computed(() => {
+	if (!selectedMop.value) return 1;
+	const mopCurr = props.getPaymentMethodCurrency(selectedMop.value.mode_of_payment);
+	return rateFromCurrencyToCompany(mopCurr);
 });
 
 watch(
