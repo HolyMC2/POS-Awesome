@@ -193,7 +193,12 @@ export const useItemsSelectorSearch = ({
 
 		const searchTerm = scannedCode || vm.first_search;
 		await scannerInput.ensureScaleBarcodeSettings();
-		if (!vm.displayedItems.length || !searchTerm) {
+		// `displayedItems` may be undefined during early mount or after
+		// a cache reset (the bulk loader has not assigned the array yet
+		// when the user presses Enter on a fresh / cleared POS). Guard
+		// the read so we bail cleanly instead of crashing the whole
+		// scripted-scan / Enter pipeline.
+		if (!vm.displayedItems?.length || !searchTerm) {
 			return;
 		}
 
