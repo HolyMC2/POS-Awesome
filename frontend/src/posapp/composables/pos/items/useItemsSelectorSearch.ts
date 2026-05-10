@@ -341,16 +341,38 @@ export const useItemsSelectorSearch = ({
 			// the "newly-created item invisible until manual reload"
 			// case (Moto E15 typing 'motorola e15' got nothing because
 			// the item wasn't in the cached batch yet).
+			//
+			// Guarded heavily — getItems(true) reloads the FULL catalog
+			// and has been observed freezing low-end devices for 2-4s
+			// when the cached array is large. Only fire when:
+			//  - displayed list is empty AND
+			//  - underlying items array is also small (≤ 50) — suggests
+			//    a genuinely empty/uninitialized cache, not "the user
+			//    typed something with no local matches"
+			//  - no background sync currently running (avoid duplicate work)
+			//  - we haven't already retried within the last 10 s
 			const cacheEmpty =
 				Array.isArray(vm.displayedItems) && vm.displayedItems.length === 0;
-			if (cacheEmpty && trimmedQuery.length >= 3 && !vm.isBackgroundLoading) {
+			const cacheLooksFresh =
+				Array.isArray(vm.items) && vm.items.length > 50;
+			const lastRetry: number = vm._lastSearchServerRetry || 0;
+			const cooledDown = Date.now() - lastRetry > 10_000;
+			if (
+				cacheEmpty &&
+				!cacheLooksFresh &&
+				cooledDown &&
+				trimmedQuery.length >= 3 &&
+				!vm.isBackgroundLoading
+			) {
+				vm._lastSearchServerRetry = Date.now();
 				const getItems = getItemsLoader(vm);
 				if (getItems) {
-					try {
-						await getItems(true);
-					} catch (err) {
+					// Fire-and-forget: don't block the UI thread on the
+					// reload. The next render cycle will pick up new items
+					// once they land in the reactive array.
+					Promise.resolve(getItems(true)).catch((err) => {
 						console.warn("[POSA][SearchFallback] server retry failed", err);
-					}
+					});
 				}
 			}
 			triggerEnterEvent(vm);
