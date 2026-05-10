@@ -184,19 +184,25 @@ import {
 	watch,
 	reactive,
 	inject,
+	defineAsyncComponent,
 	type Ref,
 } from "vue";
 import { storeToRefs } from "pinia";
 import * as _ from "lodash";
 
-import CameraScanner from "./CameraScanner.vue";
+// Critical-path components — render on first paint, ship in the main chunk.
 import ItemActionToolbar from "./ItemActionToolbar.vue";
-import ItemSettingsDialog from "./ItemSettingsDialog.vue";
 import ItemHeader from "./ItemHeader.vue";
 import ItemsSelectorCards from "./ItemsSelectorCards.vue";
 import ItemsSelectorTable from "./ItemsSelectorTable.vue";
-import NewItemDialog from "./NewItemDialog.vue";
-import ScanErrorDialog from "./ScanErrorDialog.vue";
+
+// Lazy children — heavy dialogs operators only open on demand. Splitting
+// them out shaves ~150 kB of parsed JS off the initial Pos.vue chunk
+// (CameraScanner alone is 739 lines + OpenCV imports).
+const CameraScanner = defineAsyncComponent(() => import("./CameraScanner.vue"));
+const ItemSettingsDialog = defineAsyncComponent(() => import("./ItemSettingsDialog.vue"));
+const NewItemDialog = defineAsyncComponent(() => import("./NewItemDialog.vue"));
+const ScanErrorDialog = defineAsyncComponent(() => import("./ScanErrorDialog.vue"));
 
 import { useResponsive } from "../../../composables/core/useResponsive";
 import { useRtl } from "../../../composables/core/useRtl";

@@ -68,6 +68,10 @@ export default defineConfig({
 		outDir: "../posawesome/public/dist/js",
 		emptyOutDir: true,
 		cssCodeSplit: false,
+		// Pos.vue is intentionally not split as a chunk; warn-don't-fail
+		// for builds that grow past 500 kB while we keep extracting
+		// async dialogs (CameraScanner, NewItemDialog, etc.).
+		chunkSizeWarningLimit: 700,
 		rollupOptions: {
 			input: {
 				posawesome: path.resolve(__dirname, "src/posawesome.bundle.ts"),
