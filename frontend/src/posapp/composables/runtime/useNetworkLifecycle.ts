@@ -152,6 +152,19 @@ export function useNetworkLifecycle(options: UseNetworkLifecycleOptions) {
 			}),
 		];
 
+		// Seed from the underlying socket's current state. The realtime
+		// transport often connects before this composable mounts (Frappe's
+		// frappe.realtime is initialised by the desk shell, our SPA boots
+		// after); a late `connect` listener never sees the initial event
+		// and `serverOnline` stays undefined indefinitely, leaving the
+		// "Limited connectivity" banner stuck on.
+		const seedSocket = (options.realtime as any)?.socket;
+		if (seedSocket?.connected) {
+			options.serverOnline.value = true;
+			(window as any).serverOnline = true;
+			options.serverConnecting.value = false;
+		}
+
 		registerRealtime("connect", () => {
 			options.serverOnline.value = true;
 			(window as any).serverOnline = true;
