@@ -1,6 +1,11 @@
 <template>
 	<div class="items-selector-shell" :style="responsiveStyles">
+		<!-- v-if keeps the async chunk un-fetched until the dialog
+		     actually opens. Without it, defineAsyncComponent still
+		     splits the chunk but Vue instantiates the (empty) dialog
+		     on parent mount and triggers the loader immediately. -->
 		<ScanErrorDialog
+			v-if="scanErrorDialog"
 			v-model="scanErrorDialog"
 			:message="scanErrorMessage"
 			:code="scanErrorCode"
@@ -57,6 +62,7 @@
 				</v-card>
 
 				<ItemSettingsDialog
+					v-if="show_item_settings"
 					v-model="show_item_settings"
 					:allow-new-line-setting="!!pos_profile?.posa_new_line"
 					:initial-settings="{
@@ -154,6 +160,7 @@
 
 		<!-- New Item Dialog -->
 		<NewItemDialog
+			v-if="newItemDialog"
 			v-model="newItemDialog"
 			:items-group="items_group"
 			:camera-enabled="!!pos_profile.posa_enable_camera_scanning"
@@ -184,19 +191,25 @@ import {
 	watch,
 	reactive,
 	inject,
+	defineAsyncComponent,
 	type Ref,
 } from "vue";
 import { storeToRefs } from "pinia";
 import * as _ from "lodash";
 
-import CameraScanner from "./CameraScanner.vue";
+// Critical-path components — render on first paint, ship in the main chunk.
 import ItemActionToolbar from "./ItemActionToolbar.vue";
-import ItemSettingsDialog from "./ItemSettingsDialog.vue";
 import ItemHeader from "./ItemHeader.vue";
 import ItemsSelectorCards from "./ItemsSelectorCards.vue";
 import ItemsSelectorTable from "./ItemsSelectorTable.vue";
-import NewItemDialog from "./NewItemDialog.vue";
-import ScanErrorDialog from "./ScanErrorDialog.vue";
+
+// Lazy children — heavy dialogs operators only open on demand. Splitting
+// them out shaves ~150 kB of parsed JS off the initial Pos.vue chunk
+// (CameraScanner alone is 739 lines + OpenCV imports).
+const CameraScanner = defineAsyncComponent(() => import("./CameraScanner.vue"));
+const ItemSettingsDialog = defineAsyncComponent(() => import("./ItemSettingsDialog.vue"));
+const NewItemDialog = defineAsyncComponent(() => import("./NewItemDialog.vue"));
+const ScanErrorDialog = defineAsyncComponent(() => import("./ScanErrorDialog.vue"));
 
 import { useResponsive } from "../../../composables/core/useResponsive";
 import { useRtl } from "../../../composables/core/useRtl";
