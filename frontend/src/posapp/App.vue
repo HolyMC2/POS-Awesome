@@ -13,12 +13,14 @@
 			</transition>
 		</component>
 	</router-view>
+	<PerfBadge />
 </template>
 
 <script setup>
 import { computed, defineAsyncComponent } from "vue";
 import { useRoute } from "vue-router";
 import { isStandaloneCustomerDisplayMode } from "./utils/customerDisplay";
+import PerfBadge from "./components/PerfBadge.vue";
 
 const route = useRoute();
 

@@ -270,6 +270,11 @@ export function useItemSync() {
 				setItemsLastSync(deltaCursor);
 			}
 			last_background_sync_time.value = completedAt;
+			// Stash on window for the PerfBadge diagnostic overlay
+			// (see components/PerfBadge.vue). No-op when not enabled.
+			if (typeof window !== "undefined") {
+				(window as any).__posa_last_sync = completedAt;
+			}
 			console.info(`${BG_SYNC_LOG} completed`, {
 				source,
 				modifiedCount,
