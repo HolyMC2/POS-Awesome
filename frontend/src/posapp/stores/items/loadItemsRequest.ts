@@ -100,12 +100,20 @@ export const buildLoadItemsRequest = ({
 		};
 	}
 
-	const requestProfile = JSON.parse(JSON.stringify(posProfile));
+	// Shallow spread is enough: we only need to mutate the two
+	// `posa_*` flags without affecting the original profile. The
+	// previous `JSON.parse(JSON.stringify(...))` deep-clone allocated
+	// fresh string instances for every key in the 100-field POS
+	// profile — heap analysis showed values like "MXN" / "Nos" /
+	// item brand names duplicated 25 k+ times after a few minutes
+	// of search, contributing to the renderer OOM crash. The
+	// `JSON.stringify(requestProfile)` below already serialises a
+	// fresh string for the API payload; the intermediate clone was
+	// pure overhead.
+	const requestProfile = forceServer
+		? { ...posProfile, posa_use_server_cache: 0, posa_force_reload_items: 1 }
+		: posProfile;
 	const effectivePriceList = priceList || activePriceList;
-	if (forceServer) {
-		requestProfile.posa_use_server_cache = 0;
-		requestProfile.posa_force_reload_items = 1;
-	}
 
 	const args: GetItemsArgs = {
 		pos_profile: JSON.stringify(requestProfile),
