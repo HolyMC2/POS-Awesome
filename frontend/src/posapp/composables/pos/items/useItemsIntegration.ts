@@ -96,6 +96,21 @@ export function useItemsIntegration(options: IntegrationOptions = {}) {
 		});
 	};
 
+	// Lean server-side search: capped page, no images, merges into the
+	// existing items list. Used by the search-fallback so a single
+	// missing-item retry never re-pulls the entire catalog.
+	const search_items_lean = async () => {
+		if (!posProfile.value || !posProfile.value.name) return [];
+		const term = searchTerm.value;
+		if (!term || term.trim().length < 2) return [];
+		return await itemsStore.loadItems({
+			forceServer: true,
+			searchValue: term,
+			groupFilter: itemGroup.value,
+			lean: true,
+		});
+	};
+
 	const forceReloadItems = async () => {
 		return await itemsStore.refreshItems();
 	};
@@ -310,6 +325,7 @@ export function useItemsIntegration(options: IntegrationOptions = {}) {
 
 		// Legacy method adapters
 		get_items,
+		search_items_lean,
 		forceReloadItems,
 		get_items_groups,
 		search_onchange,

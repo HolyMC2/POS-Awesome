@@ -380,12 +380,18 @@ export const useItemsSelectorSearch = ({
 				trimmedQuery.length >= 3
 			) {
 				vm._lastSearchServerRetry = Date.now();
-				const getItems = getItemsLoader(vm);
-				if (getItems) {
-					// Fire-and-forget: don't block the UI thread on the
-					// reload. The next render cycle will pick up new items
-					// once they land in the reactive array.
-					Promise.resolve(getItems(true)).catch((err) => {
+				// Prefer the lean server-side search (capped 50 rows,
+				// no images, merges into the existing items list)
+				// over the legacy `getItems(true)` path which used to
+				// re-pull the entire catalog and froze the UI for
+				// 10-20 s on big stores. Fall back to the legacy
+				// loader only when the lean adapter isn't wired.
+				const lean = vm.search_items_lean || vm.itemsIntegration?.search_items_lean;
+				const fallback = typeof lean === "function"
+					? lean.call(vm.itemsIntegration || vm)
+					: getItemsLoader(vm)?.(true);
+				if (fallback && typeof (fallback as Promise<unknown>).then === "function") {
+					Promise.resolve(fallback).catch((err) => {
 						console.warn("[POSA][SearchFallback] server retry failed", err);
 					});
 				}

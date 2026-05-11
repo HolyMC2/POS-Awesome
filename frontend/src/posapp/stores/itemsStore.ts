@@ -478,6 +478,7 @@ export const useItemsStore = defineStore("items", () => {
 				effectivePriceList,
 				isInitialBootstrapRequest,
 				args,
+				lean,
 			} = buildLoadItemsRequest({
 				options,
 				posProfile: posProfile.value,
@@ -564,6 +565,32 @@ export const useItemsStore = defineStore("items", () => {
 
 			if (requestToken.value !== currentRequestToken) {
 				return;
+			}
+
+			if (lean) {
+				// Lean search merges (de-dupe by item_code) into the
+				// existing in-memory list — never replaces it. The
+				// search-fallback fires once per missing-term and
+				// should NOT clobber the catalog the operator has
+				// already loaded.
+				if (Array.isArray(fetchedItems) && fetchedItems.length) {
+					const knownCodes = new Set(
+						items.value.map((i: any) => i.item_code),
+					);
+					const additions = fetchedItems.filter(
+						(it: any) => it && !knownCodes.has(it.item_code),
+					);
+					if (additions.length) {
+						items.value = [...items.value, ...additions];
+					}
+					primeItemDetailsCache(
+						fetchedItems,
+						posProfile.value,
+						effectivePriceList,
+					);
+				}
+				updatePerformanceMetrics(startTime);
+				return fetchedItems;
 			}
 
 			cachedPagination.value.enabled = false;

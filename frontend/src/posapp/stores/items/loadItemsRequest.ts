@@ -7,6 +7,13 @@ export interface LoadItemsOptions {
 	groupFilter?: string;
 	priceList?: string | null;
 	limit?: number | null;
+	/**
+	 * "Lean" search mode: hard-cap the page (default 50), drop image
+	 * payload, and merge results into the existing items array
+	 * instead of replacing it. Used by the search server-fallback so
+	 * a single missing-item retry never re-pulls the full catalog.
+	 */
+	lean?: boolean;
 }
 
 export interface BuildLoadItemsRequestInput {
@@ -30,6 +37,7 @@ export interface BuiltLoadItemsRequest {
 	isInitialBootstrapRequest: boolean;
 	resolvedLimit: number | null;
 	args: GetItemsArgs | null;
+	lean: boolean;
 }
 
 export const buildLoadItemsRequest = ({
@@ -49,6 +57,7 @@ export const buildLoadItemsRequest = ({
 		groupFilter = "ALL",
 		priceList = null,
 		limit = null,
+		lean = false,
 	} = options;
 
 	const searchValue =
@@ -69,11 +78,13 @@ export const buildLoadItemsRequest = ({
 	const resolvedLimit =
 		Number.isFinite(limit) && limit! > 0
 			? limit!
-			: isInitialBootstrapRequest
-				? resolvePageSize()
-				: limitSearchEnabled
-					? resolveLimitSearchSize()
-					: null;
+			: lean
+				? 50
+				: isInitialBootstrapRequest
+					? resolvePageSize()
+					: limitSearchEnabled
+						? resolveLimitSearchSize()
+						: null;
 
 	if (!posProfile) {
 		return {
@@ -85,6 +96,7 @@ export const buildLoadItemsRequest = ({
 			isInitialBootstrapRequest,
 			resolvedLimit,
 			args: null,
+			lean,
 		};
 	}
 
@@ -101,7 +113,10 @@ export const buildLoadItemsRequest = ({
 		item_group: normalizedGroup !== "ALL" ? normalizedGroup.toLowerCase() : "",
 		search_value: searchValue || "",
 		customer,
-		include_image: 1,
+		// Lean searches drop the image payload — the server response
+		// shrinks dramatically on catalogs with embedded thumbnails,
+		// which is the dominant cost in the search-fallback path.
+		include_image: lean ? 0 : 1,
 		item_groups: posProfile?.item_groups?.map((g: any) => g.item_group) || [],
 	};
 
@@ -118,5 +133,6 @@ export const buildLoadItemsRequest = ({
 		isInitialBootstrapRequest,
 		resolvedLimit,
 		args,
+		lean,
 	};
 };
