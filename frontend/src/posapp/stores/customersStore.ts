@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref, computed } from "vue";
+import { ref, shallowRef, markRaw, computed } from "vue";
 
 declare const frappe: any;
 declare const __: any;
@@ -149,7 +149,20 @@ function getSerializedProfile(profile: unknown): string | null {
 }
 
 export const useCustomersStore = defineStore("customers", () => {
-	const customers = ref<CustomerSummary[]>([]);
+	// Same shape as itemsStore.items — `shallowRef` + `markRaw`
+	// per row. Profiles with 4 k+ customers were the dominant
+	// source of the keyboard-input freeze on the search box; every
+	// pagination chunk re-wrapped the entire growing list in Vue
+	// proxies. Customer summaries are display-only here (the
+	// dropdown reads name / mobile / email / etc. and never mutates
+	// the entries in-place); marking them raw is safe.
+	const customers = shallowRef<CustomerSummary[]>([]);
+	const markRawCustomers = (
+		list: CustomerSummary[] | undefined | null,
+	): CustomerSummary[] =>
+		Array.isArray(list)
+			? list.map((c) => (c && typeof c === "object" ? markRaw(c) : c))
+			: [];
 	const selectedCustomer = ref<string | null>(null);
 	const customerInfo = ref<CustomerInfo>({});
 	const searchTerm = ref("");
@@ -272,14 +285,15 @@ export const useCustomersStore = defineStore("customers", () => {
 		if (primaryAddress) summary.primary_address = primaryAddress;
 		if (taxId) summary.tax_id = taxId;
 
+		const rawSummary = markRaw(summary);
 		if (existingIndex >= 0) {
 			const updated = [...customers.value];
-			updated.splice(existingIndex, 1, summary);
+			updated.splice(existingIndex, 1, rawSummary);
 			customers.value = updated;
 			return;
 		}
 
-		customers.value = [...customers.value, summary];
+		customers.value = [...customers.value, rawSummary];
 	}
 
 	function setCustomerInfo(info: CustomerInfo) {
@@ -365,10 +379,11 @@ export const useCustomersStore = defineStore("customers", () => {
 			.limit(PAGE_SIZE)
 			.toArray();
 
+		const rawResults = markRawCustomers(results);
 		if (append) {
-			customers.value = [...customers.value, ...results];
+			customers.value = [...customers.value, ...rawResults];
 		} else {
-			customers.value = results;
+			customers.value = rawResults;
 		}
 
 		hasMore.value = results.length === PAGE_SIZE;
@@ -377,17 +392,20 @@ export const useCustomersStore = defineStore("customers", () => {
 		}
 
 		// Server fallback: when the IDB query returns nothing for a
-		// non-trivial term and we're on the first page, hit the
+		// non-trivial term on the first page, hit the
 		// `search_customers` endpoint. Mirrors the item-search
 		// fallback pattern (commit 10246649). Fixes the dialog
 		// showing "no customers" right after a price-list change /
 		// in-flight customer sync — the operator types a name they
 		// know exists, but the IDB hasn't caught up yet.
-		const FIRST_PAGE = 0;
+		// `page.value === 0` here because `resetPagination()` runs
+		// at the start of `searchCustomers` for non-append calls
+		// and the `hasMore` branch above only increments `page` when
+		// the IDB returned a FULL page (i.e. results.length>=PAGE_SIZE).
 		const MIN_TERM_LENGTH = 2;
 		if (
 			!append &&
-			page.value === FIRST_PAGE + 1 && // hasMore branch already incremented
+			page.value === 0 &&
 			results.length === 0 &&
 			normalizedTerm &&
 			normalizedTerm.length >= MIN_TERM_LENGTH &&
@@ -411,9 +429,8 @@ export const useCustomersStore = defineStore("customers", () => {
 						? response.message
 						: [];
 					if (remote.length > 0) {
-						customers.value = remote;
+						customers.value = markRawCustomers(remote);
 						hasMore.value = false;
-						page.value = FIRST_PAGE; // reset; remote results are not paginated
 						return remote.length;
 					}
 				} catch (err) {
@@ -424,13 +441,6 @@ export const useCustomersStore = defineStore("customers", () => {
 					);
 				}
 			}
-		}
-		// Normalise: when results are empty and we never paginated,
-		// keep `page` at 0 so a subsequent call doesn't skip the IDB
-		// page entirely (the previous code only incremented when
-		// hasMore was true).
-		if (results.length === 0 && !append) {
-			page.value = 0;
 		}
 
 		return results.length;
@@ -765,12 +775,13 @@ export const useCustomersStore = defineStore("customers", () => {
 		const existingIndex = customers.value.findIndex(
 			(c) => c.name === customer.name,
 		);
+		const rawCustomer = markRaw(customer);
 		if (existingIndex !== -1) {
 			const updated = [...customers.value];
-			updated.splice(existingIndex, 1, customer);
+			updated.splice(existingIndex, 1, rawCustomer);
 			customers.value = updated;
 		} else {
-			customers.value = [...customers.value, customer];
+			customers.value = [...customers.value, rawCustomer];
 		}
 		await setCustomerStorage([customer]);
 		syncBootstrapCustomerReadiness(Math.max(customers.value.length, 1));

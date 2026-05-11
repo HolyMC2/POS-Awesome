@@ -334,15 +334,22 @@ export async function applyPricingRulesForCart(context: any, force = false) {
 		// pricing-rule indexes, no server round-trip. Operator sees
 		// discounts / freebies applied within ~10 ms.
 		await _applyLocalPricingRules(context, force);
-		// Server pricing: fire-and-forget. The server-side pass
-		// reconciles rules that depend on data the client doesn't
-		// see (e.g. campaign-wide quotas, cross-shift coupons), but
-		// awaiting it serialises every cart edit behind a 1-5 s
-		// network round-trip and is the dominant blocker on slow
-		// connections. Run it async; if the server's verdict differs
-		// from the local one the cart self-heals on the next render
-		// after the response lands.
+
+		// Server pricing reconciles rules that depend on data the
+		// client doesn't see (campaign quotas, cross-shift coupons).
+		// Run it async so cart edits don't serialise behind the
+		// network — but keep `_applyingPricingRules = true` for the
+		// duration of the response-mutation phase so the cart-change
+		// watcher does NOT re-trigger pricing on the server's own
+		// mutations. Without this guard the cart flickers
+		// indefinitely on every cart edit involving a pricing rule:
+		//   add item → local apply → server apply (fire-and-forget)
+		//   server response mutates cart → watcher fires → local
+		//   apply → server apply → ...
 		if (hasServerContext) {
+			// Hold the guard until the server pass settles. The
+			// release lives inside the .finally below so the cart
+			// watcher stays muted throughout the server response.
 			Promise.resolve()
 				.then(() => _applyServerPricingRules(context, ctx))
 				.catch((error) => {
@@ -350,16 +357,23 @@ export async function applyPricingRulesForCart(context: any, force = false) {
 						"[POSA][Pricing] server pricing rules pass failed (cart kept local result)",
 						error,
 					);
+				})
+				.finally(() => {
+					context._applyingPricingRules = false;
+					if (context._pendingPricingRules) {
+						context._pendingPricingRules = false;
+						applyPricingRulesForCart(context, force);
+					}
 				});
+			return;
 		}
 	} catch (error) {
 		console.error("Failed to apply pricing rules locally", error);
-	} finally {
-		context._applyingPricingRules = false;
-		if (context._pendingPricingRules) {
-			context._pendingPricingRules = false;
-			applyPricingRulesForCart(context, force);
-		}
+	}
+	context._applyingPricingRules = false;
+	if (context._pendingPricingRules) {
+		context._pendingPricingRules = false;
+		applyPricingRulesForCart(context, force);
 	}
 }
 
