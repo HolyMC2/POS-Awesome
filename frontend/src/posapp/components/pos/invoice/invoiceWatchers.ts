@@ -279,6 +279,17 @@ const invoiceWatchers: Record<string, unknown> & ThisType<InvoiceWatchersVm> = {
 		}
 		const run = () => {
 			scheduler._priceListInvalidationHandle = null;
+			// Mark cart lines stale so their NEXT detail fetch picks
+			// up the new price-list rate. We deliberately DO NOT call
+			// `clearItemDetailCache()` / `clearItemStockCache()` /
+			// reset `available_stock_cache` — wiping the IDB caches
+			// here forces every subsequent add-to-cart to re-issue
+			// `get_items_details` from scratch (5 s timeout per add)
+			// instead of hitting the in-memory request cache. The
+			// detail fetcher already keys its cache by
+			// `(profile, price_list, items)` so old-price-list
+			// entries naturally fall out of use; we don't need to
+			// nuke them.
 			if (Array.isArray(this.items)) {
 				this.items.forEach((item) => {
 					item._detailSynced = false;
@@ -288,16 +299,6 @@ const invoiceWatchers: Record<string, unknown> & ThisType<InvoiceWatchersVm> = {
 				this.packed_items.forEach((item) => {
 					item._detailSynced = false;
 				});
-			}
-
-			if (typeof this.clearItemDetailCache === "function") {
-				this.clearItemDetailCache();
-			}
-			if (typeof this.clearItemStockCache === "function") {
-				this.clearItemStockCache();
-			}
-			if (this.available_stock_cache) {
-				this.available_stock_cache = {};
 			}
 		};
 		const idle = (window as any).requestIdleCallback as

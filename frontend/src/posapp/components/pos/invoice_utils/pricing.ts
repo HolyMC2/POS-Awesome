@@ -330,13 +330,30 @@ export async function applyPricingRulesForCart(context: any, force = false) {
 
 	context._applyingPricingRules = true;
 	try {
+		// Local pricing first — pure in-memory pass over cached
+		// pricing-rule indexes, no server round-trip. Operator sees
+		// discounts / freebies applied within ~10 ms.
 		await _applyLocalPricingRules(context, force);
+		// Server pricing: fire-and-forget. The server-side pass
+		// reconciles rules that depend on data the client doesn't
+		// see (e.g. campaign-wide quotas, cross-shift coupons), but
+		// awaiting it serialises every cart edit behind a 1-5 s
+		// network round-trip and is the dominant blocker on slow
+		// connections. Run it async; if the server's verdict differs
+		// from the local one the cart self-heals on the next render
+		// after the response lands.
 		if (hasServerContext) {
-			await _applyServerPricingRules(context, ctx);
+			Promise.resolve()
+				.then(() => _applyServerPricingRules(context, ctx))
+				.catch((error) => {
+					console.warn(
+						"[POSA][Pricing] server pricing rules pass failed (cart kept local result)",
+						error,
+					);
+				});
 		}
 	} catch (error) {
-		console.error("Failed to apply pricing rules via server", error);
-		await _applyLocalPricingRules(context, force);
+		console.error("Failed to apply pricing rules locally", error);
 	} finally {
 		context._applyingPricingRules = false;
 		if (context._pendingPricingRules) {
@@ -363,9 +380,6 @@ export async function _applyLocalPricingRules(context: any, force = false) {
 		}
 
 		syncAutoFreeLines(context, freebiesMap);
-		if (typeof context.$forceUpdate === "function") {
-			context.$forceUpdate();
-		}
 	} catch (error) {
 		console.error("Failed to apply pricing rules locally", error);
 	}
