@@ -200,7 +200,20 @@ export const useCustomersStore = defineStore("customers", () => {
 		customerLoadLogState.final = true;
 	}
 
-	const filteredCustomers = computed(() => customers.value);
+	// Cap the dropdown payload. Vuetify's v-autocomplete iterates
+	// the bound items array on every open / search keystroke even
+	// with virtual scroll, and the customer dropdown ships a heavy
+	// v-list-item template (5 v-html subtitles per row). On a POS
+	// with 4-5 k customers loaded that's enough to stutter the menu
+	// open. Operators only ever see the top-N matching results
+	// anyway — pagination + the server search-fallback handle the
+	// rest. 200 is well above any visible viewport.
+	const FILTERED_CUSTOMERS_VIEW_CAP = 200;
+	const filteredCustomers = computed(() =>
+		customers.value.length > FILTERED_CUSTOMERS_VIEW_CAP
+			? customers.value.slice(0, FILTERED_CUSTOMERS_VIEW_CAP)
+			: customers.value,
+	);
 
 	const isLoadComplete = computed(
 		() => customersLoaded.value && loadProgress.value >= 100,
