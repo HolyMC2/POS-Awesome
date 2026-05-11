@@ -481,12 +481,6 @@ const memoDeps = computed(() => {
 		isEditingDiscountPercent.value,
 		isEditingDiscountAmount.value,
 	];
-	console.log(`[CartItemRow] memoDeps updated for ${props.item.item_code}`, {
-		uom: props.item.uom,
-		rate: props.item.rate,
-		price_list_rate: props.item.price_list_rate,
-		qty: props.item.qty,
-	});
 	return deps;
 });
 

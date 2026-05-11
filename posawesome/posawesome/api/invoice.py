@@ -334,11 +334,14 @@ def apply_tax_inclusive(doc):
 
     has_changes = False
     for tax in doc.get("taxes", []):
+        # `Actual` taxes are charged as a flat amount and must never be
+        # marked inclusive in the print rate; everything else honours the
+        # POS Profile's `posa_tax_inclusive` flag.
         if tax.charge_type == "Actual":
             if tax.included_in_print_rate:
                 tax.included_in_print_rate = 0
                 has_changes = True
-        continue
+            continue
         if tax_inclusive and not tax.included_in_print_rate:
             tax.included_in_print_rate = 1
             has_changes = True

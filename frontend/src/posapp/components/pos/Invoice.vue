@@ -651,7 +651,6 @@ export default {
 			if (!date) return;
 			this.posting_date = date;
 			this.invoiceStore.setPostingDate(date);
-			this.$forceUpdate();
 		},
 
 		update_exchange_rate() {

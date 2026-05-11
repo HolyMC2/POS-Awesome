@@ -20,6 +20,28 @@ export function useUpdateChecks({
 	let intervalHandle: number | ReturnType<typeof setInterval> | null = null;
 	let started = false;
 
+	const startTimer = () => {
+		if (intervalHandle !== null) return;
+		intervalHandle = window.setInterval(() => {
+			void updateStore.checkForUpdates();
+		}, intervalMs);
+	};
+	const stopTimer = () => {
+		if (intervalHandle !== null) {
+			window.clearInterval(intervalHandle);
+			intervalHandle = null;
+		}
+	};
+	const onVisibility = () => {
+		if (typeof document === "undefined" || !started) return;
+		if (document.hidden) {
+			stopTimer();
+		} else {
+			void updateStore.checkForUpdates();
+			startTimer();
+		}
+	};
+
 	function start() {
 		if (started) {
 			return;
@@ -30,9 +52,12 @@ export function useUpdateChecks({
 			updateStore.setCurrentVersion(buildVersion);
 		}
 		void updateStore.checkForUpdates(true);
-		intervalHandle = window.setInterval(() => {
-			void updateStore.checkForUpdates();
-		}, intervalMs);
+		if (typeof document === "undefined" || !document.hidden) {
+			startTimer();
+		}
+		if (typeof document !== "undefined") {
+			document.addEventListener("visibilitychange", onVisibility);
+		}
 	}
 
 	function stop() {
@@ -40,9 +65,9 @@ export function useUpdateChecks({
 			return;
 		}
 		started = false;
-		if (intervalHandle !== null) {
-			window.clearInterval(intervalHandle);
-			intervalHandle = null;
+		stopTimer();
+		if (typeof document !== "undefined") {
+			document.removeEventListener("visibilitychange", onVisibility);
 		}
 	}
 
