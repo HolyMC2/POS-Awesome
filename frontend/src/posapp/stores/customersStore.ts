@@ -213,15 +213,14 @@ export const useCustomersStore = defineStore("customers", () => {
 		customerLoadLogState.final = true;
 	}
 
-	// Cap the dropdown payload. Vuetify's v-autocomplete iterates
-	// the bound items array on every open / search keystroke even
-	// with virtual scroll, and the customer dropdown ships a heavy
-	// v-list-item template (5 v-html subtitles per row). On a POS
-	// with 4-5 k customers loaded that's enough to stutter the menu
-	// open. Operators only ever see the top-N matching results
-	// anyway — pagination + the server search-fallback handle the
-	// rest. 200 is well above any visible viewport.
-	const FILTERED_CUSTOMERS_VIEW_CAP = 200;
+	// Cap the dropdown payload aggressively. Vuetify's
+	// v-autocomplete mounts a v-list-item per bound row (each with
+	// 5 v-html subtitles) regardless of virtual-scroll state on
+	// first open. Heap analysis showed 252k attached DOM nodes
+	// dominated by these mounts; 50 is more than the visible
+	// viewport ever shows, deeper matches still come via the
+	// server search-fallback (`search_customers`).
+	const FILTERED_CUSTOMERS_VIEW_CAP = 50;
 	const filteredCustomers = computed(() =>
 		customers.value.length > FILTERED_CUSTOMERS_VIEW_CAP
 			? customers.value.slice(0, FILTERED_CUSTOMERS_VIEW_CAP)
