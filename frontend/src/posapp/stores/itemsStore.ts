@@ -940,15 +940,41 @@ export const useItemsStore = defineStore("items", () => {
 		}
 	};
 
+	let applyPriceListInflight: number | null = null;
+	const CHUNK_SIZE = 400;
+
 	const applyPriceListToItems = (priceListItems: any[]) => {
-		const priceMap = new Map();
+		// Chunk + yield to the event loop between slices so big
+		// catalogs (5k+ items × 5 reactive writes per match = 25k+
+		// dep notifications) don't block the main thread long enough
+		// for Firefox to show the "page slowing down" banner.
+		const priceMap = new Map<string, any>();
 		priceListItems.forEach((item) => {
 			priceMap.set(item.item_code, item);
 		});
 
-		items.value.forEach((item) => {
-			const priceItem = priceMap.get(item.item_code);
-			if (priceItem) {
+		// Cancel any in-flight chunked apply — newer price list wins.
+		if (applyPriceListInflight != null) {
+			const cancel =
+				(window as any).cancelIdleCallback ||
+				((id: number) =>
+					clearTimeout(id as unknown as ReturnType<typeof setTimeout>));
+			cancel(applyPriceListInflight);
+			applyPriceListInflight = null;
+		}
+
+		const itemsRef = items.value;
+		const total = itemsRef.length;
+		let cursor = 0;
+
+		const processChunk = () => {
+			applyPriceListInflight = null;
+			const end = Math.min(cursor + CHUNK_SIZE, total);
+			for (let i = cursor; i < end; i++) {
+				const item = itemsRef[i];
+				if (!item) continue;
+				const priceItem = priceMap.get(item.item_code);
+				if (!priceItem) continue;
 				const nextRate =
 					priceItem.price_list_rate || priceItem.rate || 0;
 				const nextCurrency =
@@ -963,21 +989,36 @@ export const useItemsStore = defineStore("items", () => {
 				item.original_currency = nextCurrency;
 				item.currency = nextCurrency;
 			}
-		});
-		clearSearchCache();
+			cursor = end;
+			if (cursor < total) {
+				const idle = (window as any).requestIdleCallback as
+					| ((cb: () => void, opts?: { timeout?: number }) => number)
+					| undefined;
+				applyPriceListInflight = idle
+					? idle(processChunk, { timeout: 200 })
+					: (setTimeout(
+							processChunk,
+							0,
+						) as unknown as number);
+				return;
+			}
+			// Done — refresh search index + filtered list once at the end.
+			clearSearchCache();
+			if (searchTerm.value) {
+				filteredItems.value = performLocalSearch(
+					searchTerm.value,
+					items.value,
+					itemGroup.value,
+				);
+			} else {
+				filteredItems.value = filterItemsByGroup(
+					items.value,
+					itemGroup.value,
+				);
+			}
+		};
 
-		if (searchTerm.value) {
-			filteredItems.value = performLocalSearch(
-				searchTerm.value,
-				items.value,
-				itemGroup.value,
-			);
-		} else {
-			filteredItems.value = filterItemsByGroup(
-				items.value,
-				itemGroup.value,
-			);
-		}
+		processChunk();
 	};
 
 	const refreshItems = async () => {
