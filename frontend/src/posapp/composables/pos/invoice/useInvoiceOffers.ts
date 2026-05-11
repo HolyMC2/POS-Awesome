@@ -94,17 +94,26 @@ export function useInvoiceOffers() {
 	const discount_percentage_offer_name = ref<string | null>(null);
 	const brand_cache = ref<Record<string, string>>({});
 
-	// Watch for changes that should trigger offer evaluation
-	// We watch metadata specifically because it is "touched" whenever items are modified in the store
+	// Watch for changes that should trigger offer evaluation.
+	// `invoiceStore.metadata.changeVersion` is bumped on every
+	// cart mutation (add / remove / qty / replace) — using it as
+	// the cart-content signal lets us drop `deep: true`. The other
+	// dependencies (`items` / `posOffers` / `posa_coupons`) are
+	// detected on array reassignment which is the only way they
+	// change in normal flow.
 	watch(
-		[items, posOffers, posa_coupons, () => invoiceStore.metadata],
+		[
+			items,
+			posOffers,
+			posa_coupons,
+			() => invoiceStore.metadata?.changeVersion,
+		],
 		() => {
 			offerDebugLog(
 				"[useInvoiceOffers] watch triggered for items/offers/coupons/metadata",
 			);
 			scheduleOfferRefresh();
 		},
-		{ deep: true },
 	);
 
 	// Private state for refresh logic
