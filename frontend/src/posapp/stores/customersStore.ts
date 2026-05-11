@@ -363,7 +363,72 @@ export const useCustomersStore = defineStore("customers", () => {
 			page.value += 1;
 		}
 
+		// Server fallback: when the IDB query returns nothing for a
+		// non-trivial term and we're on the first page, hit the
+		// `search_customers` endpoint. Mirrors the item-search
+		// fallback pattern (commit 10246649). Fixes the dialog
+		// showing "no customers" right after a price-list change /
+		// in-flight customer sync — the operator types a name they
+		// know exists, but the IDB hasn't caught up yet.
+		const FIRST_PAGE = 0;
+		const MIN_TERM_LENGTH = 2;
+		if (
+			!append &&
+			page.value === FIRST_PAGE + 1 && // hasMore branch already incremented
+			results.length === 0 &&
+			normalizedTerm &&
+			normalizedTerm.length >= MIN_TERM_LENGTH &&
+			isOnline()
+		) {
+			const serializedProfile = getSerializedProfile(posProfile.value);
+			if (serializedProfile) {
+				try {
+					const response = await (frappe.call as any)({
+						method:
+							"posawesome.posawesome.api.customers.search_customers",
+						args: {
+							pos_profile: serializedProfile,
+							search_term: normalizedTerm,
+							limit: 25,
+						},
+					});
+					const remote: CustomerSummary[] = Array.isArray(
+						response?.message,
+					)
+						? response.message
+						: [];
+					if (remote.length > 0) {
+						customers.value = remote;
+						hasMore.value = false;
+						page.value = FIRST_PAGE; // reset; remote results are not paginated
+						return remote.length;
+					}
+				} catch (err) {
+					// Best-effort fallback — keep the empty IDB result.
+					console.warn(
+						"[POSA][CustomerSearch] server fallback failed",
+						err,
+					);
+				}
+			}
+		}
+		// Normalise: when results are empty and we never paginated,
+		// keep `page` at 0 so a subsequent call doesn't skip the IDB
+		// page entirely (the previous code only incremented when
+		// hasMore was true).
+		if (results.length === 0 && !append) {
+			page.value = 0;
+		}
+
 		return results.length;
+	}
+
+	function isOnline(): boolean {
+		try {
+			return !isOffline();
+		} catch {
+			return typeof navigator !== "undefined" ? navigator.onLine : true;
+		}
 	}
 
 	async function searchCustomers(term = "", append = false) {

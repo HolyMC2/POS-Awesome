@@ -918,12 +918,23 @@ export const useItemsStore = defineStore("items", () => {
 
 			if (priceData && priceData.length > 0) {
 				applyPriceListToItems(priceData);
-			} else {
-				await loadItems({
-					forceServer: true,
-					priceList: newPriceList,
-				});
+				return;
 			}
+
+			// No cached price-list snapshot for this list. Previously we
+			// fell back to `loadItems({ forceServer: true })` here, which
+			// re-pulled the entire item catalog from the server and froze
+			// the UI for 10-60s when the catalog is large + the customer
+			// happens to be on a price list the cache has not seen.
+			//
+			// Drop the eager full reload: the watcher in invoiceWatchers
+			// already marks every cart line `_detailSynced = false` and
+			// clears the per-item detail/stock caches, so the next render
+			// (or the next user interaction with each line) will lazily
+			// fetch fresh prices via `useItemDetailFetcher` for just the
+			// items the operator actually touches. The catalog list keeps
+			// its previous prices on screen for a moment, then converges
+			// as detail fetches resolve.
 		} catch (error) {
 			console.error("Failed to update price list:", error);
 		}

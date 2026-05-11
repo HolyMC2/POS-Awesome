@@ -343,31 +343,41 @@ export const useItemsSelectorSearch = ({
 			}
 			// Server fallback: when the local IDB cache returns nothing
 			// for a non-trivial query (≥ 3 chars), hit the server. Fixes
-			// the "newly-created item invisible until manual reload"
-			// case (Moto E15 typing 'motorola e15' got nothing because
-			// the item wasn't in the cached batch yet).
+			// two cases:
+			//  1. Newly-created item invisible until manual reload
+			//     (operator typing the name got nothing because the
+			//     item wasn't in the cached batch yet).
+			//  2. Operator typing e.g. "rev" for "revision" while the
+			//     item lives in a not-yet-loaded chunk of a large
+			//     catalog (the catalog is still streaming in via the
+			//     background loader and the matching item hasn't
+			//     landed locally yet).
 			//
-			// Guarded heavily — getItems(true) reloads the FULL catalog
-			// and has been observed freezing low-end devices for 2-4s
-			// when the cached array is large. Only fire when:
-			//  - displayed list is empty AND
-			//  - underlying items array is also small (≤ 50) — suggests
-			//    a genuinely empty/uninitialized cache, not "the user
-			//    typed something with no local matches"
-			//  - no background sync currently running (avoid duplicate work)
-			//  - we haven't already retried within the last 10 s
+			// Gates:
+			//  - displayed list is empty (otherwise we already have
+			//    matches the operator can pick)
+			//  - itemsLoaded is false (full catalog not yet local — so
+			//    a partial-cache miss is plausible) OR the cache is
+			//    genuinely tiny (initial bootstrap)
+			//  - 10 s cooldown between retries to avoid storms
+			//
+			// Previously the gate also required `!isBackgroundLoading`
+			// AND `vm.items.length <= 50`. That blocked the retry
+			// during the post-customer-switch background catalog
+			// re-pull, which was exactly when operators most need it.
 			const cacheEmpty =
 				Array.isArray(vm.displayedItems) && vm.displayedItems.length === 0;
-			const cacheLooksFresh =
-				Array.isArray(vm.items) && vm.items.length > 50;
+			const fullCatalogLocal =
+				vm.itemsLoaded === true &&
+				Array.isArray(vm.items) &&
+				vm.items.length > 50;
 			const lastRetry: number = vm._lastSearchServerRetry || 0;
 			const cooledDown = Date.now() - lastRetry > 10_000;
 			if (
 				cacheEmpty &&
-				!cacheLooksFresh &&
+				!fullCatalogLocal &&
 				cooledDown &&
-				trimmedQuery.length >= 3 &&
-				!vm.isBackgroundLoading
+				trimmedQuery.length >= 3
 			) {
 				vm._lastSearchServerRetry = Date.now();
 				const getItems = getItemsLoader(vm);
