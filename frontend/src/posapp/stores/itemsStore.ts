@@ -4,7 +4,7 @@
  */
 
 import { defineStore } from "pinia";
-import { ref, computed, watch } from "vue";
+import { ref, shallowRef, triggerRef, markRaw, computed, watch } from "vue";
 import type { Item, POSProfile } from "../types/models";
 import itemService from "../services/itemService";
 import { refreshBootstrapSnapshotFromCacheState } from "../../offline/index";
@@ -99,8 +99,20 @@ export const useItemsStore = defineStore("items", () => {
 	};
 
 	// Core State
-	const items = ref<Item[]>([]);
-	const filteredItems = ref<Item[]>([]);
+	// `shallowRef` + `markRaw(item)` on insert so the catalog (often
+	// 5 k+ rows on busy stores) does NOT get wrapped in per-property
+	// Vue proxies. Mutations to individual `item.*` fields stop
+	// firing reactivity automatically — call `triggerRef(items)` /
+	// `triggerRef(filteredItems)` after a batch of mutations to
+	// re-render consumers. The chunked background sync was the
+	// dominant 30-60 s freeze on low-end devices because each chunk
+	// re-wrapped the entire growing array as new proxies.
+	const items = shallowRef<Item[]>([]);
+	const filteredItems = shallowRef<Item[]>([]);
+	const markRawItems = (list: Item[]): Item[] =>
+		Array.isArray(list)
+			? list.map((it) => (it && typeof it === "object" ? markRaw(it) : it))
+			: [];
 	const totalItemCount = ref(0);
 	const itemsLoaded = ref(false);
 	const searchTerm = ref("");
@@ -244,7 +256,7 @@ export const useItemsStore = defineStore("items", () => {
 				: "ALL";
 
 		if (!append) {
-			items.value = Array.isArray(newItems) ? [...newItems] : [];
+			items.value = markRawItems(Array.isArray(newItems) ? newItems : []);
 			resetIndexes();
 			updateIndexes(items.value, posProfile.value);
 		} else if (Array.isArray(newItems) && newItems.length) {
@@ -257,13 +269,12 @@ export const useItemsStore = defineStore("items", () => {
 				) {
 					return;
 				}
-				additions.push(item);
+				additions.push(markRaw(item));
 			});
 
 			if (additions.length) {
 				items.value = [...items.value, ...additions];
-				const appendedItems = items.value.slice(-additions.length);
-				updateIndexes(appendedItems, posProfile.value);
+				updateIndexes(additions, posProfile.value);
 			}
 		}
 
@@ -577,11 +588,12 @@ export const useItemsStore = defineStore("items", () => {
 					const knownCodes = new Set(
 						items.value.map((i: any) => i.item_code),
 					);
-					const additions = fetchedItems.filter(
-						(it: any) => it && !knownCodes.has(it.item_code),
-					);
+					const additions = fetchedItems
+						.filter((it: any) => it && !knownCodes.has(it.item_code))
+						.map((it: any) => markRaw(it));
 					if (additions.length) {
 						items.value = [...items.value, ...additions];
+						updateIndexes(additions, posProfile.value);
 					}
 					primeItemDetailsCache(
 						fetchedItems,
@@ -1029,7 +1041,11 @@ export const useItemsStore = defineStore("items", () => {
 						) as unknown as number);
 				return;
 			}
-			// Done — refresh search index + filtered list once at the end.
+			// Done — items are markRaw, so per-property mutations
+			// inside the chunk loop don't fire reactivity. Replace
+			// the array reference + clearSearchCache once at the end
+			// so virtual scrollers + filteredItems re-evaluate.
+			items.value = [...items.value];
 			clearSearchCache();
 			if (searchTerm.value) {
 				filteredItems.value = performLocalSearch(
@@ -1087,8 +1103,9 @@ export const useItemsStore = defineStore("items", () => {
 					}
 				}
 
-				items.value.push(newItem);
-				updateIndexes([newItem], posProfile.value);
+				const rawItem = markRaw(newItem);
+				items.value = [...items.value, rawItem];
+				updateIndexes([rawItem], posProfile.value);
 
 				if (searchTerm.value) {
 					await searchItems(searchTerm.value);
@@ -1176,14 +1193,15 @@ export const useItemsStore = defineStore("items", () => {
 		});
 
 		if (additions.length > 0) {
-			items.value = [...items.value, ...additions];
-			const appendedItems = items.value.slice(-additions.length);
-			updateIndexes(appendedItems, posProfile.value);
+			const rawAdditions = additions.map((it: any) => markRaw(it));
+			items.value = [...items.value, ...rawAdditions];
+			updateIndexes(rawAdditions, posProfile.value);
 		}
 
 		if (touchedItems.length > 0) {
-			// Force a shallow array refresh so virtualized tables/cards re-render
-			// even when rows are updated in-place.
+			// In-place mutations on `markRaw`'d items don't trigger
+			// the shallowRef. Replace the array reference so virtual
+			// scrollers + computed `filteredItems` re-evaluate.
 			items.value = [...items.value];
 			updateIndexes(touchedItems, posProfile.value);
 		}
