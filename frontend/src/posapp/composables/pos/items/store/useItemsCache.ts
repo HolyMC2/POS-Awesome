@@ -1,4 +1,4 @@
-import { ref } from "vue";
+import { ref, shallowRef, markRaw } from "vue";
 // @ts-ignore
 import {
 	clearPriceListCache,
@@ -33,15 +33,31 @@ export function useItemsCache() {
 		lastCheck: null,
 	});
 
-	const cache = ref<ItemStoreCache>({
+	// `shallowRef` + `markRaw` on the inner Maps. The cache holds
+	// thousands of catalog snapshots and per-search result sets;
+	// when the outer ref was deep-reactive Pinia wrapped every
+	// entry as a Vue proxy and every Map.set fired dependency
+	// notifications, contributing to the renderer OOM crash on
+	// long sessions. Cache state is internal — no template binds
+	// it — so reactivity here is pure overhead.
+	const cache = shallowRef<ItemStoreCache>({
 		memory: {
-			searchResults: new Map(),
-			priceListData: new Map(),
-			itemDetails: new Map(),
+			searchResults: markRaw(new Map()),
+			priceListData: markRaw(new Map()),
+			itemDetails: markRaw(new Map()),
 			maxSize: 500,
 			ttl: 5 * 60 * 1000, // 5 minutes
 		},
 	});
+
+	// Hard caps for the un-bounded inner caches. Without these the
+	// `priceListData` map (one entry per (scope, price_list)
+	// combination, each ~ 5 k items at ~1 KB) ballooned past 100 MB
+	// in long sessions where operators changed customer / price
+	// list dozens of times. A 50-key LRU is more than enough for a
+	// shift on a busy POS.
+	const PRICE_LIST_CACHE_MAX = 50;
+	const ITEM_DETAILS_CACHE_MAX = 1000;
 
 	// Throttle expensive cache cleanup to avoid iterating large Maps after every search write
 	const MEMORY_CLEANUP_INTERVAL = 1000;
@@ -99,42 +115,64 @@ export function useItemsCache() {
 		cache.value.memory.searchResults.clear();
 	};
 
+	// Evict expired + LRU-trim a Map of `{ data, timestamp }`
+	// entries. Trims to `maxSize` keeping the most-recently-set
+	// entries (timestamp is set on every cache write).
+	const trimByLru = <T>(
+		map: Map<string, { data: T; timestamp: number }>,
+		maxSize: number,
+		ttl: number,
+		now: number,
+	) => {
+		// Cleanup expired entries
+		for (const [key, value] of map.entries()) {
+			if (now - value.timestamp > ttl) {
+				map.delete(key);
+			}
+		}
+		// Limit cache size — drop the oldest 20 % when over cap
+		if (map.size > maxSize) {
+			const entries = Array.from(map.entries());
+			entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+			const toRemove = Math.max(
+				1,
+				Math.min(
+					entries.length - maxSize,
+					Math.floor(entries.length * 0.2),
+				),
+			);
+			for (let i = 0; i < toRemove; i++) {
+				const entry = entries[i];
+				if (entry) {
+					map.delete(entry[0]);
+				}
+			}
+		}
+	};
+
 	const cleanupMemoryCache = () => {
 		const now = Date.now();
 		const ttl = cache.value.memory.ttl;
+		const memory = cache.value.memory;
 
 		if (
 			now - lastMemoryCleanup < MEMORY_CLEANUP_INTERVAL &&
-			cache.value.memory.searchResults.size <= cache.value.memory.maxSize
+			memory.searchResults.size <= memory.maxSize &&
+			memory.priceListData.size <= PRICE_LIST_CACHE_MAX &&
+			memory.itemDetails.size <= ITEM_DETAILS_CACHE_MAX
 		) {
 			return;
 		}
 		lastMemoryCleanup = now;
 
-		// Cleanup expired entries
-		for (const [key, value] of cache.value.memory.searchResults.entries()) {
-			if (now - value.timestamp > ttl) {
-				cache.value.memory.searchResults.delete(key);
-			}
-		}
-
-		// Limit cache size
-		if (
-			cache.value.memory.searchResults.size > cache.value.memory.maxSize
-		) {
-			const entries = Array.from(
-				cache.value.memory.searchResults.entries(),
-			);
-			entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-
-			const toRemove = Math.floor(entries.length * 0.2);
-			for (let i = 0; i < toRemove; i++) {
-				const entry = entries[i];
-				if (entry) {
-					cache.value.memory.searchResults.delete(entry[0]);
-				}
-			}
-		}
+		trimByLru(memory.searchResults, memory.maxSize, ttl, now);
+		// Previously `priceListData` and `itemDetails` were never
+		// evicted. Each entry holds a full per-(scope, price_list)
+		// catalog snapshot — over a long shift the renderer
+		// crashed (Chrome "Aw, Snap! Error code 5") as the heap
+		// climbed past the per-tab cap.
+		trimByLru(memory.priceListData, PRICE_LIST_CACHE_MAX, ttl, now);
+		trimByLru(memory.itemDetails, ITEM_DETAILS_CACHE_MAX, ttl, now);
 	};
 
 	const getCachedItems = async (cacheKey: string) => {
@@ -192,6 +230,10 @@ export function useItemsCache() {
 			data,
 			timestamp: Date.now(),
 		});
+		// Trigger LRU pass — without this `priceListData` grows
+		// unbounded (every customer's price-list snapshot stays
+		// resident forever).
+		cleanupMemoryCache();
 	};
 
 	const generateCacheKey = (
