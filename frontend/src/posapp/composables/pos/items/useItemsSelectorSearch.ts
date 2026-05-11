@@ -341,45 +341,38 @@ export const useItemsSelectorSearch = ({
 			if (loadVisibleItems) {
 				await loadVisibleItems(true);
 			}
-			// Server fallback: when the local IDB cache returns nothing
-			// for a non-trivial query (≥ 3 chars), hit the server. Fixes
-			// two cases:
-			//  1. Newly-created item invisible until manual reload
-			//     (operator typing the name got nothing because the
-			//     item wasn't in the cached batch yet).
-			//  2. Operator typing e.g. "rev" for "revision" while the
-			//     item lives in a not-yet-loaded chunk of a large
-			//     catalog (the catalog is still streaming in via the
-			//     background loader and the matching item hasn't
-			//     landed locally yet).
+			// Server fallback: when the local IDB cache hasn't fully
+			// synced AND the operator typed a non-trivial query
+			// (≥ 3 chars), hit the server. Fixes:
+			//  1. Newly-created item invisible until manual reload.
+			//  2. Operator typing e.g. "rev" for "revision" while
+			//     the item lives in a not-yet-loaded chunk of a
+			//     large catalog. Even when the local list happens
+			//     to surface OTHER matches for the same prefix, the
+			//     specific item the operator wants may still be
+			//     missing — fire the lean server search regardless.
 			//
 			// Gates:
-			//  - displayed list is empty (otherwise we already have
-			//    matches the operator can pick)
-			//  - itemsLoaded is false (full catalog not yet local — so
-			//    a partial-cache miss is plausible) OR the cache is
-			//    genuinely tiny (initial bootstrap)
-			//  - 10 s cooldown between retries to avoid storms
-			//
-			// Previously the gate also required `!isBackgroundLoading`
-			// AND `vm.items.length <= 50`. That blocked the retry
-			// during the post-customer-switch background catalog
-			// re-pull, which was exactly when operators most need it.
-			const cacheEmpty =
-				Array.isArray(vm.displayedItems) && vm.displayedItems.length === 0;
+			//  - itemsLoaded is false (full catalog not local) OR
+			//    the cache is genuinely tiny (bootstrap state)
+			//  - per-term cooldown (10 s) so backspace-edits don't
+			//    storm the server, but switching to a different
+			//    term re-queries immediately.
 			const fullCatalogLocal =
 				vm.itemsLoaded === true &&
 				Array.isArray(vm.items) &&
 				vm.items.length > 50;
-			const lastRetry: number = vm._lastSearchServerRetry || 0;
+			vm._lastSearchServerRetryByTerm =
+				vm._lastSearchServerRetryByTerm || new Map<string, number>();
+			const lastRetry: number =
+				vm._lastSearchServerRetryByTerm.get(trimmedQuery) || 0;
 			const cooledDown = Date.now() - lastRetry > 10_000;
 			if (
-				cacheEmpty &&
 				!fullCatalogLocal &&
 				cooledDown &&
 				trimmedQuery.length >= 3
 			) {
-				vm._lastSearchServerRetry = Date.now();
+				vm._lastSearchServerRetryByTerm.set(trimmedQuery, Date.now());
 				// Prefer the lean server-side search (capped 50 rows,
 				// no images, merges into the existing items list)
 				// over the legacy `getItems(true)` path which used to
