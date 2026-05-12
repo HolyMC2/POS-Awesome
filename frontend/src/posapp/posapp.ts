@@ -75,6 +75,18 @@ async function startOptionalRuntimeServices() {
 	const socketStore = useSocketStore();
 	socketStore.init();
 
+	// Browser RUM — PerformanceObserver hooks, custom-mark sampling
+	// (via utils/perf.withPerf), crash hooks, heap-pressure trigger.
+	// Opt-out at runtime with `localStorage.posa_rum=off`.
+	try {
+		const buildVersion =
+			typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : "";
+		const telemetry = await import("./utils/telemetry");
+		telemetry.start({ buildVersion });
+	} catch (error) {
+		console.warn("Failed to initialize POS telemetry client", error);
+	}
+
 	await import("../sw-updater").catch((error) => {
 		console.warn("Failed to initialize POS service worker updater", error);
 	});
