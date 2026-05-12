@@ -199,9 +199,13 @@ export const usePricingRulesStore = defineStore("pricing-rules", () => {
 		}
 		general.sort(compareRules);
 
-		indexes.byItem = itemMap;
-		indexes.byGroup = groupMap;
-		indexes.byBrand = brandMap;
+		// Wrap freshly-built Maps in `markRaw` to keep them consistent
+		// with the shallowRef + markRaw pattern used for `rules`. Otherwise
+		// every `setSnapshot()` would assign plain Maps that any future
+		// reactive consumer could pull into the proxy graph.
+		indexes.byItem = markRaw(itemMap);
+		indexes.byGroup = markRaw(groupMap);
+		indexes.byBrand = markRaw(brandMap);
 		indexes.general = general;
 	};
 
