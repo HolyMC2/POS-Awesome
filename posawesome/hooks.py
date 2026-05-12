@@ -130,23 +130,14 @@ doc_events = {
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"posawesome.tasks.all"
-# 	],
-# 	"daily": [
-# 		"posawesome.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"posawesome.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"posawesome.tasks.weekly"
-# 	]
-# 	"monthly": [
-# 		"posawesome.tasks.monthly"
-# 	]
-# }
+scheduler_events = {
+    "daily": [
+        # Prune browser RUM events older than 30 days.
+        # Telemetry is keep-it-cheap; we don't need historical retention
+        # beyond the rolling window the dashboard reads from.
+        "posawesome.posawesome.api.telemetry.prune_old_events",
+    ],
+}
 
 # Testing
 # -------

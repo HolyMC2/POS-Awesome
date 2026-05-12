@@ -55,6 +55,9 @@ from .offers import (
 # thread). Pre-importing means subsequent calls hit the cached
 # module without re-running this __init__ chain.
 from .pricing_rules import get_active_pricing_rules, reconcile_line_prices  # noqa: F401
+# Same rationale for `telemetry` — ingested by every SPA tab on a
+# 30 s flush cadence; concurrent imports were a deadlock vector.
+from .telemetry import ingest, get_pos_telemetry_summary, prune_old_events  # noqa: F401
 from .payments import (
     create_payment_request,
     get_available_credit,
