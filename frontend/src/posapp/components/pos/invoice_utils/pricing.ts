@@ -350,21 +350,38 @@ export async function applyPricingRulesForCart(context: any, force = false) {
 			// Hold the guard until the server pass settles. The
 			// release lives inside the .finally below so the cart
 			// watcher stays muted throughout the server response.
-			Promise.resolve()
+			//
+			// Race the server call against a 5s wall-clock timeout.
+			// Without this, a hung network request never resolves
+			// the promise; `_applyingPricingRules` stays true; every
+			// subsequent cart edit early-returns at the guard and
+			// pricing never re-applies until the component remounts.
+			const SERVER_PRICING_TIMEOUT_MS = 5000;
+			let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+			const timeoutPromise = new Promise<void>((resolve) => {
+				timeoutHandle = setTimeout(() => {
+					console.warn(
+						"[POSA][Pricing] server pricing pass timed out; releasing guard",
+					);
+					resolve();
+				}, SERVER_PRICING_TIMEOUT_MS);
+			});
+			const serverPass = Promise.resolve()
 				.then(() => _applyServerPricingRules(context, ctx))
 				.catch((error) => {
 					console.warn(
 						"[POSA][Pricing] server pricing rules pass failed (cart kept local result)",
 						error,
 					);
-				})
-				.finally(() => {
-					context._applyingPricingRules = false;
-					if (context._pendingPricingRules) {
-						context._pendingPricingRules = false;
-						applyPricingRulesForCart(context, force);
-					}
 				});
+			Promise.race([serverPass, timeoutPromise]).finally(() => {
+				if (timeoutHandle) clearTimeout(timeoutHandle);
+				context._applyingPricingRules = false;
+				if (context._pendingPricingRules) {
+					context._pendingPricingRules = false;
+					applyPricingRulesForCart(context, force);
+				}
+			});
 			return;
 		}
 	} catch (error) {
