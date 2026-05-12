@@ -17,8 +17,7 @@
  * ## Totals
  * `totalQty`, `grossTotal`, and `discountTotal` are maintained as separate refs.
  * Row inserts/removals and store-mediated item edits update those totals
- * incrementally. External direct item field edits are still caught by a debounced
- * full recalculation.
+ * incrementally. Manual edit paths call the debounced total refresh explicitly.
  *
  * ## Sticky fields
  * Discount and delivery-charge fields that should survive an invoice reset are stored as
@@ -27,7 +26,7 @@
  */
 
 import { defineStore } from "pinia";
-import { computed, ref, reactive, watch } from "vue";
+import { computed, ref, reactive } from "vue";
 
 declare const frappe: any;
 declare const __: any;
@@ -96,18 +95,6 @@ export const useInvoiceStore = defineStore("invoice", () => {
 	const totalQty = ref(0);
 	const grossTotal = ref(0);
 	const discountTotal = ref(0);
-	let suppressWatchedTotalRefresh = false;
-
-	const runWithIncrementalTotals = <T>(mutation: () => T): T => {
-		suppressWatchedTotalRefresh = true;
-		try {
-			return mutation();
-		} finally {
-			queueMicrotask(() => {
-				suppressWatchedTotalRefresh = false;
-			});
-		}
-	};
 
 	/**
 	 * Bumps `metadata.changeVersion` and records `lastUpdated = Date.now()`.
@@ -392,26 +379,24 @@ export const useInvoiceStore = defineStore("invoice", () => {
 	 */
 	const addItem = (item: any, index = -1) => {
 		if (!item) return;
-		return runWithIncrementalTotals(() => {
-			const rowId =
-				item.posa_row_id || Math.random().toString(36).substring(2, 20);
-			if (!item.posa_row_id) item.posa_row_id = rowId;
+		const rowId =
+			item.posa_row_id || Math.random().toString(36).substring(2, 20);
+		if (!item.posa_row_id) item.posa_row_id = rowId;
 
-			const cloned = cloneItem(item);
-			itemsData.set(rowId, cloned);
+		const cloned = cloneItem(item);
+		itemsData.set(rowId, cloned);
 
-			if (index >= 0 && index < itemOrder.value.length) {
-				itemOrder.value.splice(index, 0, rowId);
-			} else if (index === 0) {
-				itemOrder.value.unshift(rowId);
-			} else {
-				itemOrder.value.push(rowId);
-			}
-			addLineTotals(cloned);
-			touch();
-			// Return the reactive proxy from the map
-			return itemsData.get(rowId);
-		});
+		if (index >= 0 && index < itemOrder.value.length) {
+			itemOrder.value.splice(index, 0, rowId);
+		} else if (index === 0) {
+			itemOrder.value.unshift(rowId);
+		} else {
+			itemOrder.value.push(rowId);
+		}
+		addLineTotals(cloned);
+		touch();
+		// Return the reactive proxy from the map
+		return itemsData.get(rowId);
 	};
 
 	/**
@@ -426,33 +411,38 @@ export const useInvoiceStore = defineStore("invoice", () => {
 	 */
 	const addItems = (items: any[], index = -1) => {
 		if (!Array.isArray(items) || !items.length) return [];
-		return runWithIncrementalTotals(() => {
-			const addedIds: string[] = [];
+		const addedIds: string[] = [];
+		let deltaQty = 0;
+		let deltaGross = 0;
+		let deltaDiscount = 0;
 
-			items.forEach((item) => {
-				if (!item) return;
-				const rowId =
-					item.posa_row_id || Math.random().toString(36).substring(2, 20);
-				if (!item.posa_row_id) item.posa_row_id = rowId;
-				const cloned = cloneItem(item);
-				itemsData.set(rowId, cloned);
-				addLineTotals(cloned);
-				addedIds.push(rowId);
-			});
-
-			if (addedIds.length > 0) {
-				if (index >= 0 && index < itemOrder.value.length) {
-					itemOrder.value.splice(index, 0, ...addedIds);
-				} else if (index === 0) {
-					itemOrder.value.unshift(...addedIds);
-				} else {
-					itemOrder.value.push(...addedIds);
-				}
-				touch();
-			}
-
-			return addedIds.map((id) => itemsData.get(id));
+		items.forEach((item) => {
+			if (!item) return;
+			const rowId =
+				item.posa_row_id || Math.random().toString(36).substring(2, 20);
+			if (!item.posa_row_id) item.posa_row_id = rowId;
+			const cloned = cloneItem(item);
+			itemsData.set(rowId, cloned);
+			const totals = getItemTotals(cloned);
+			deltaQty += totals.qty;
+			deltaGross += totals.gross;
+			deltaDiscount += totals.discount;
+			addedIds.push(rowId);
 		});
+
+		if (addedIds.length > 0) {
+			if (index >= 0 && index < itemOrder.value.length) {
+				itemOrder.value.splice(index, 0, ...addedIds);
+			} else if (index === 0) {
+				itemOrder.value.unshift(...addedIds);
+			} else {
+				itemOrder.value.push(...addedIds);
+			}
+			applyTotalsDelta(deltaQty, deltaGross, deltaDiscount);
+			touch();
+		}
+
+		return addedIds.map((id) => itemsData.get(id));
 	};
 
 	/**
@@ -471,23 +461,21 @@ export const useInvoiceStore = defineStore("invoice", () => {
 		if (index < 0 || index >= itemOrder.value.length) {
 			return;
 		}
-		return runWithIncrementalTotals(() => {
-			const oldId = itemOrder.value[index];
-			if (oldId === undefined) return;
+		const oldId = itemOrder.value[index];
+		if (oldId === undefined) return;
 
-			const rowId = item.posa_row_id || oldId;
-			if (!item.posa_row_id) item.posa_row_id = rowId;
-			const previous = oldId ? itemsData.get(oldId) : undefined;
+		const rowId = item.posa_row_id || oldId;
+		if (!item.posa_row_id) item.posa_row_id = rowId;
+		const previous = oldId ? itemsData.get(oldId) : undefined;
 
-			if (oldId !== rowId) {
-				itemsData.delete(oldId);
-				itemOrder.value[index] = rowId;
-			}
-			const cloned = cloneItem(item);
-			itemsData.set(rowId, cloned);
-			applyLineTotalsDiff(previous, cloned);
-			touch();
-		});
+		if (oldId !== rowId) {
+			itemsData.delete(oldId);
+			itemOrder.value[index] = rowId;
+		}
+		const cloned = cloneItem(item);
+		itemsData.set(rowId, cloned);
+		applyLineTotalsDiff(previous, cloned);
+		touch();
 	};
 
 	/**
@@ -528,13 +516,11 @@ export const useInvoiceStore = defineStore("invoice", () => {
 		const item = itemsData.get(rowId);
 		if (!item) return;
 
-		return runWithIncrementalTotals(() => {
-			const before = cloneItem(item);
-			updater(item);
-			applyLineTotalsDiff(before, item);
-			touch();
-			return item;
-		});
+		const before = cloneItem(item);
+		updater(item);
+		applyLineTotalsDiff(before, item);
+		touch();
+		return item;
 	};
 
 	/**
@@ -551,18 +537,16 @@ export const useInvoiceStore = defineStore("invoice", () => {
 		}
 
 		if (itemsData.has(rowId)) {
-			runWithIncrementalTotals(() => {
-				const existing = itemsData.get(rowId);
-				itemsData.delete(rowId);
-				const idx = itemOrder.value.indexOf(rowId);
-				if (idx !== -1) {
-					itemOrder.value.splice(idx, 1);
-				}
-				if (existing) {
-					addLineTotals(existing, -1);
-				}
-				touch();
-			});
+			const existing = itemsData.get(rowId);
+			itemsData.delete(rowId);
+			const idx = itemOrder.value.indexOf(rowId);
+			if (idx !== -1) {
+				itemOrder.value.splice(idx, 1);
+			}
+			if (existing) {
+				addLineTotals(existing, -1);
+			}
+			touch();
 		}
 	};
 
@@ -659,19 +643,6 @@ export const useInvoiceStore = defineStore("invoice", () => {
 		return map;
 	});
 
-	// Watch deep changes in the map values
-	watch(
-		itemsData,
-		() => {
-			if (suppressWatchedTotalRefresh) {
-				return;
-			}
-			touch();
-			triggerUpdateTotals();
-		},
-		{ deep: true },
-	);
-
 	return {
 		invoiceDoc,
 		invoiceType,
@@ -697,6 +668,7 @@ export const useInvoiceStore = defineStore("invoice", () => {
 		replaceItemAt,
 		upsertItem,
 		updateItemWithTotals,
+		triggerUpdateTotals,
 		removeItemByRowId,
 		clearItems,
 		setPackedItems,

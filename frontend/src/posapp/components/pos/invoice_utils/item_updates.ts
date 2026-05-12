@@ -123,6 +123,10 @@ export async function update_items_details(context: any, items: any[]) {
 					item.currency = resolvedCurrency;
 				}
 			});
+
+			if (context.invoiceStore?.triggerUpdateTotals) {
+				context.invoiceStore.triggerUpdateTotals();
+			}
 		}
 	} catch (error) {
 		console.error("Error updating items:", error);
@@ -438,6 +442,10 @@ export function _applyItemDetailPayload(
 			item.base_amount = fmt(baseRate * (Number(item.qty) || 0));
 			item.amount = fmt(item.rate * (Number(item.qty) || 0));
 		}
+	}
+
+	if (context.invoiceStore?.triggerUpdateTotals) {
+		context.invoiceStore.triggerUpdateTotals();
 	}
 }
 

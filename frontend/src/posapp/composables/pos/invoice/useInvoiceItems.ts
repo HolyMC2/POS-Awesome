@@ -358,6 +358,9 @@ export function useInvoiceItems(invoiceType: Ref<string>) {
 
 		if (field_name === "qty") {
 			bus.emit("apply_pricing_rules");
+			if (invoiceStore.triggerUpdateTotals) {
+				invoiceStore.triggerUpdateTotals();
+			}
 		}
 
 		return parsedValue;

@@ -480,7 +480,9 @@ export function useStockUtils() {
 		if (context.calc_stock_qty) context.calc_stock_qty(item, item.qty);
 		if (context.invoiceStore) {
 			context.invoiceStore.touch();
-			if (context.invoiceStore.recalculateTotals) {
+			if (context.invoiceStore.triggerUpdateTotals) {
+				context.invoiceStore.triggerUpdateTotals();
+			} else if (context.invoiceStore.recalculateTotals) {
 				context.invoiceStore.recalculateTotals();
 			}
 		}

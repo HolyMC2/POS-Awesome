@@ -64,4 +64,14 @@ describe("large cart performance guards", () => {
 		expect(creationSource).not.toContain("[useItemCreation]");
 		expect(batchSerialSource).toContain("__POSAWESOME_DEBUG_BATCH_FLOW__");
 	});
+
+	it("does not deep-watch the invoice item map on every cart mutation", () => {
+		const source = readFileSync(
+			sourcePath("posapp/stores/invoiceStore.ts"),
+			"utf8",
+		);
+
+		expect(source).not.toMatch(/watch\(\s*itemsData[\s\S]*deep:\s*true/i);
+		expect(source).toContain("triggerUpdateTotals");
+	});
 });
