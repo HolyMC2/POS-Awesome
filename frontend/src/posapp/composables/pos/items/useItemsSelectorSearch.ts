@@ -373,6 +373,19 @@ export const useItemsSelectorSearch = ({
 				trimmedQuery.length >= 3
 			) {
 				vm._lastSearchServerRetryByTerm.set(trimmedQuery, Date.now());
+				// LRU-evict to keep the Map bounded across long shifts.
+				// A unique-term-per-keystroke pattern (operator types many
+				// distinct queries) would otherwise grow this Map without
+				// bound; 100 entries cover well past the cooldown window.
+				const RETRY_TERM_CAP = 100;
+				if (vm._lastSearchServerRetryByTerm.size > RETRY_TERM_CAP) {
+					const oldestKey = vm._lastSearchServerRetryByTerm
+						.keys()
+						.next().value;
+					if (oldestKey !== undefined) {
+						vm._lastSearchServerRetryByTerm.delete(oldestKey);
+					}
+				}
 				// Prefer the lean server-side search (capped 50 rows,
 				// no images, merges into the existing items list)
 				// over the legacy `getItems(true)` path which used to
