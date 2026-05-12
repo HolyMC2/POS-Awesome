@@ -119,6 +119,7 @@ export function useItemCreation() {
 			orig_base_pl: new_item.original_base_price_list_rate,
 		});
 
+
 		new_item.actual_batch_qty = "";
 		new_item.posa_offers = JSON.stringify([]);
 		new_item.posa_offer_applied = 0;

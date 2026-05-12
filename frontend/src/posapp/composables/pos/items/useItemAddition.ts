@@ -198,21 +198,34 @@ export function useItemAddition() {
 
 		// 1. Process Updates
 		for (const [rowId, data] of currentUpdates) {
-			const item = context.invoiceStore.itemsData.get(rowId);
-			if (item) {
-				debugLog("[useItemAddition] Merging item qty", {
-					item_code: item.item_code,
-					old_qty: item.qty,
-					added: data.qty,
-				});
-				item.qty += data.qty;
-				calcStockQty(item, item.qty);
+			const item = context.invoiceStore.updateItemWithTotals
+				? context.invoiceStore.updateItemWithTotals(rowId, (line) => {
+					debugLog("[useItemAddition] Merging item qty (fast path)", {
+						item_code: line.item_code,
+						old_qty: line.qty,
+						added: data.qty,
+					});
+					line.qty += data.qty;
+					calcStockQty(line, line.qty);
 
-				// Handle other updates that happen on merge
-				if (item.has_batch_no && item.batch_no) {
-					callSetBatchQty(context, item, item.batch_no, false);
+					// Handle other updates that happen on merge
+					if (line.has_batch_no && line.batch_no) {
+						callSetBatchQty(context, line, line.batch_no, false);
+					}
+					callSetSerialNo(context, line);
+				})
+				: context.invoiceStore.itemsData.get(rowId);
+			if (item) {
+				if (!context.invoiceStore.updateItemWithTotals) {
+					item.qty += data.qty;
+					calcStockQty(item, item.qty);
+
+					// Handle other updates that happen on merge
+					if (item.has_batch_no && item.batch_no) {
+						callSetBatchQty(context, item, item.batch_no, false);
+					}
+					callSetSerialNo(context, item);
 				}
-				callSetSerialNo(context, item);
 
 				// Resolve all promises waiting for this update
 				data.resolvers.forEach((r) => r(item));
