@@ -584,7 +584,25 @@ export const useItemsStore = defineStore("items", () => {
 				// search-fallback fires once per missing-term and
 				// should NOT clobber the catalog the operator has
 				// already loaded.
-				if (Array.isArray(fetchedItems) && fetchedItems.length) {
+				//
+				// Skip the merge entirely when the active price list
+				// has changed since the request was dispatched: the
+				// items in `fetchedItems` carry prices for the old
+				// list, and merging them would surface stale rates
+				// in the SPA. The detail cache still gets primed so
+				// the next per-item refresh can hit it.
+				const currentEffectivePriceList =
+					customerPriceList.value ||
+					posProfile.value?.selling_price_list ||
+					"";
+				const priceListStillActive =
+					!effectivePriceList ||
+					effectivePriceList === currentEffectivePriceList;
+				if (
+					Array.isArray(fetchedItems) &&
+					fetchedItems.length &&
+					priceListStillActive
+				) {
 					const knownCodes = new Set(
 						items.value.map((i: any) => i.item_code),
 					);
@@ -980,19 +998,27 @@ export const useItemsStore = defineStore("items", () => {
 	};
 
 	let applyPriceListInflight: number | null = null;
+	let applyPriceListGeneration = 0;
 	const CHUNK_SIZE = 400;
 
 	const applyPriceListToItems = (priceListItems: any[]) => {
 		// Chunk + yield to the event loop between slices so big
-		// catalogs (5k+ items × 5 reactive writes per match = 25k+
-		// dep notifications) don't block the main thread long enough
+		// catalogs don't block the main thread long enough
 		// for Firefox to show the "page slowing down" banner.
 		const priceMap = new Map<string, any>();
 		priceListItems.forEach((item) => {
 			priceMap.set(item.item_code, item);
 		});
 
-		// Cancel any in-flight chunked apply — newer price list wins.
+		// Bump generation. Any in-flight chunk loop captures the
+		// previous generation in `myGeneration` and bails on the
+		// next iteration when it sees the bump. This prevents the
+		// previous price-list's partial mutations from continuing
+		// to land after a newer price-list has taken over (which
+		// would leave the cart in a mixed-rate state until the
+		// next full apply cycle).
+		const myGeneration = ++applyPriceListGeneration;
+
 		if (applyPriceListInflight != null) {
 			const cancel =
 				(window as any).cancelIdleCallback ||
@@ -1008,6 +1034,9 @@ export const useItemsStore = defineStore("items", () => {
 
 		const processChunk = () => {
 			applyPriceListInflight = null;
+			if (myGeneration !== applyPriceListGeneration) {
+				return;
+			}
 			const end = Math.min(cursor + CHUNK_SIZE, total);
 			for (let i = cursor; i < end; i++) {
 				const item = itemsRef[i];
