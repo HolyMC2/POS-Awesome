@@ -2337,7 +2337,7 @@
 								/>
 							</div>
 
-							<div v-if="loading" class="py-2">
+							<div v-if="sectionLoading.inventory_insights" class="py-2">
 								<v-skeleton-loader type="list-item-three-line" class="mb-2" />
 								<v-skeleton-loader type="list-item-three-line" class="mb-2" />
 								<v-skeleton-loader type="list-item-three-line" />
@@ -2367,7 +2367,7 @@
 								</div>
 							</div>
 							<div
-								v-if="!loading && fastMovingItems.length && fastMovingTotalPages > 1"
+								v-if="!sectionLoading.inventory_insights && fastMovingItems.length && fastMovingTotalPages > 1"
 								class="pagination-row"
 							>
 								<v-pagination
@@ -2378,9 +2378,18 @@
 								/>
 							</div>
 
-							<div v-if="!loading && !fastMovingItems.length" class="empty-state">
+							<div v-if="!sectionLoading.inventory_insights && !fastMovingItems.length" class="empty-state">
 								{{ __("No sales activity found for this period.") }}
 							</div>
+							<v-alert
+								v-if="sectionErrors.inventory_insights"
+								type="warning"
+								variant="tonal"
+								density="compact"
+								class="mt-2"
+							>
+								{{ sectionErrors.inventory_insights }}
+							</v-alert>
 						</v-card>
 					</v-col>
 
@@ -2418,7 +2427,7 @@
 								/>
 							</div>
 
-							<div v-if="loading" class="py-2">
+							<div v-if="sectionLoading.inventory_insights" class="py-2">
 								<v-skeleton-loader type="list-item-two-line" class="mb-2" />
 								<v-skeleton-loader type="list-item-two-line" class="mb-2" />
 								<v-skeleton-loader type="list-item-two-line" />
@@ -2626,7 +2635,7 @@
 								</div>
 							</div>
 
-							<div v-if="loading" class="py-2">
+							<div v-if="sectionLoading.supplier_overview" class="py-2">
 								<v-skeleton-loader type="list-item-two-line" class="mb-2" />
 								<v-skeleton-loader type="list-item-two-line" class="mb-2" />
 								<v-skeleton-loader type="list-item-two-line" />
