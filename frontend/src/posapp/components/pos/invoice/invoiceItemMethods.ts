@@ -382,13 +382,19 @@ const invoiceItemMethods: Record<string, unknown> &
 		return Discounts.calc_item_price(this, item);
 	},
 
-	// Debounced Methods
+	// Debounced Methods. Bumped 150 → 350 ms: a single user action
+	// (add item, change customer, apply price list) bumps `changeVersion`
+	// multiple times within a few ticks (set price, mark raw, batch
+	// stock data); at 150 ms each bump escapes the debounce window and
+	// queues a fresh pricing pass that the inflight one then has to
+	// re-enter via `_pendingPricingRules`. 350 ms coalesces the burst
+	// into a single pass without the operator perceiving lag.
 	schedulePricingRuleApplication: debounce(function (
 		this: InvoiceItemMethodsVm,
 		force = false,
 	) {
 		this.applyPricingRulesForCart(force);
-	}, 150),
+	}, 350),
 
 	triggerBackgroundFlush: debounce(function (this: InvoiceItemMethodsVm) {
 		// flushBackgroundUpdates was added to ItemUpdates?

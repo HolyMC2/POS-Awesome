@@ -323,6 +323,18 @@ export async function applyPricingRulesForCart(context: any, force = false) {
 		context._pendingPricingRules = true;
 		return;
 	}
+	// Cart-empty fast path. Without items to score against, the entire
+	// pass is wasted work — including `_ensurePricingRules` which on a
+	// cold cache hits the server, and `_applyServerPricingRules` which
+	// posts an empty cart. On the Doco Ventas profile the changeVersion
+	// watcher fires whenever the customer changes (cart cleared) or
+	// price list applied — both happen before any item is added — so
+	// the cold-cache server pass kept landing on an empty cart and
+	// stretching the click latency.
+	const items = Array.isArray(context.items) ? context.items : [];
+	if (!items.length) {
+		return;
+	}
 
 	const ctx = context._getPricingContext ? context._getPricingContext() : {};
 	const hasServerContext =
