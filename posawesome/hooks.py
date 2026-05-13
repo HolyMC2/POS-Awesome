@@ -125,6 +125,27 @@ doc_events = {
         "after_insert": "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
         "on_update": "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
     },
+    # Phase 6: bust the Redis cache for `get_active_pricing_rules`
+    # whenever a rule is written, renamed, or deleted. Cheap (one
+    # namespace flush); operator sees rule changes on the next POS
+    # call instead of waiting for the 5-min TTL.
+    "Pricing Rule": {
+        "on_update": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "on_trash": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "after_rename": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+    },
+    "Pricing Rule Item Code": {
+        "on_update": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "on_trash": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+    },
+    "Pricing Rule Item Group": {
+        "on_update": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "on_trash": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+    },
+    "Pricing Rule Brand": {
+        "on_update": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "on_trash": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+    },
 }
 
 # Scheduled Tasks

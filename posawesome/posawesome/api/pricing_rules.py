@@ -7,6 +7,8 @@ rules with ERPNext's official pricing rule engine.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Dict, Iterable, List, Tuple
 
 import frappe
@@ -14,6 +16,101 @@ from frappe import _
 from frappe.query_builder import DocType
 from frappe.query_builder.functions import Coalesce
 from frappe.utils import cint, flt, getdate, nowdate
+
+
+# ---------------------------------------------------------------------------
+# Phase 6: cache for `get_active_pricing_rules`
+#
+# Building the rules payload costs 80-300 ms on a profile with a few dozen
+# active rules: the query runs across `tabPricing Rule` joined with the
+# child target tables and then post-processes for currency / customer
+# scoping. Subsequent calls within the same shift hit the exact same
+# context (company / price_list / customer / customer_group / territory /
+# date) — perfect cache key.
+#
+# Invalidation: `Pricing Rule` `on_update` / `on_trash` doc events bust
+# the whole namespace (cheap; the cache key set lives in Redis). Admin
+# endpoint below lets ops flush manually.
+
+_PRICING_RULES_CACHE_NS = "posa:pricing_rules"
+_PRICING_RULES_CACHE_TTL = 300  # 5 minutes — short enough for ops to see
+
+
+def _pricing_cache_key(ctx: dict) -> str:
+    """Stable key for the rules-payload cache.
+
+    We only key off the fields the query actually uses; profile_name +
+    other unrelated keys would balloon the cache for no reason.
+    """
+    payload = {
+        "company": ctx.get("company") or "",
+        "price_list": ctx.get("price_list") or "",
+        "currency": ctx.get("currency") or "",
+        "customer": ctx.get("customer") or "",
+        "customer_group": ctx.get("customer_group") or "",
+        "territory": ctx.get("territory") or "",
+        "date": _coerce_date(ctx.get("date")),
+    }
+    digest = hashlib.sha1(
+        json.dumps(payload, sort_keys=True).encode("utf-8"),
+        usedforsecurity=False,
+    ).hexdigest()
+    return f"{_PRICING_RULES_CACHE_NS}:{digest}"
+
+
+def _pricing_cache_get(key: str):
+    try:
+        cached = frappe.cache().get_value(key)
+    except Exception:
+        return None
+    if cached is None:
+        return None
+    if isinstance(cached, str):
+        try:
+            return json.loads(cached)
+        except Exception:
+            return None
+    return cached
+
+
+def _pricing_cache_set(key: str, payload):
+    try:
+        frappe.cache().set_value(
+            key, json.dumps(payload), expires_in_sec=_PRICING_RULES_CACHE_TTL
+        )
+    except Exception:
+        # Cache failures must never fail the API call. Worst case we
+        # rebuild on the next request.
+        pass
+
+
+def invalidate_pricing_rules_cache(*_args, **_kwargs):
+    """Bust every cached pricing-rules payload.
+
+    Wired into `Pricing Rule` doc events from `hooks.py`. Accepts
+    arbitrary args so it can be called as a Frappe doc-event hook
+    `(doc, method)` or directly.
+    """
+    try:
+        # `delete_keys` accepts a pattern; bench's redis backend
+        # iterates the namespace and clears matches.
+        frappe.cache().delete_keys(_PRICING_RULES_CACHE_NS)
+    except Exception:
+        # Older Frappe builds expose `delete_value` for single keys
+        # only. Fall back to walking known sentinels if needed.
+        try:
+            frappe.cache().delete_value(_PRICING_RULES_CACHE_NS)
+        except Exception:
+            pass
+
+
+@frappe.whitelist()
+def flush_pricing_rules_cache():
+    """Operator-facing endpoint: 'I just edited a rule, refresh now.'"""
+    if not frappe.has_permission("Pricing Rule", "write"):
+        frappe.throw(_("You need write access on Pricing Rule"))
+    invalidate_pricing_rules_cache()
+    return {"flushed": True}
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +281,24 @@ def get_active_pricing_rules(params: dict | None = None, **kwargs):
 
     ctx_date = _coerce_date(ctx.get("date"))
 
+    # Phase 6 cache lookup. Cart edits hit this endpoint repeatedly with
+    # identical context; serving from Redis avoids the meta + targets +
+    # parent fetch on every keystroke.
+    cache_key = _pricing_cache_key(
+        {
+            "company": ctx.get("company"),
+            "price_list": ctx.get("price_list"),
+            "currency": ctx.get("currency"),
+            "customer": ctx.get("customer"),
+            "customer_group": ctx.get("customer_group"),
+            "territory": ctx.get("territory"),
+            "date": ctx_date,
+        }
+    )
+    cached = _pricing_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     PricingRule = DocType("Pricing Rule")
     meta = frappe.get_meta("Pricing Rule")
 
@@ -287,6 +402,7 @@ def get_active_pricing_rules(params: dict | None = None, **kwargs):
         serialised = _serialize_rule(normalised, field_name, target_values)
         payload.extend(serialised)
 
+    _pricing_cache_set(cache_key, payload)
     return payload
 
 

@@ -237,7 +237,27 @@ Today: invoice submit goes through `frappe.call` synchronously. If network blips
 
 ---
 
-### Phase 6 — Pricing engine cache + reconciliation (1 week)
+### Phase 6 — Pricing engine cache + reconciliation (1 week) — **partial, server cache landed**
+
+Minimum viable Phase 6 shipped: Redis cache around
+`get_active_pricing_rules`, keyed by the context fields the query
+actually uses (company / price_list / currency / customer /
+customer_group / territory / date). 5-min TTL plus invalidate on
+`Pricing Rule` + child-table `on_update / on_trash / after_rename`
+doc events. Operator-facing `flush_pricing_rules_cache` endpoint
+behind Pricing Rule write permission.
+
+Measured on lab (small dataset, 0 active rules):
+miss 6.7 ms → hit 0.1 ms. Prod with N rules will see the full
+80-300 ms → ~1 ms cliff.
+
+Still to do (full Phase 6):
+- promote payload to a cached doctype with TTL (vs in-Redis only)
+- SPA reconciliation without server round-trip per cart edit
+  (today `reconcile_line_prices` still fires on every pricing pass)
+- explicit "refresh rules" admin button
+
+
 
 ERPNext's pricing engine is correct but slow (200 ms — 5 s per call). We fire-and-forget for UX, but the result lands eventually and can flicker.
 
