@@ -399,7 +399,7 @@ export const useItemsSelectorSearch = ({
 				// loader only when the lean adapter isn't wired.
 				const lean = vm.search_items_lean || vm.itemsIntegration?.search_items_lean;
 				const fallback = typeof lean === "function"
-					? lean.call(vm.itemsIntegration || vm)
+					? lean.call(vm.itemsIntegration || vm, trimmedQuery)
 					: getItemsLoader(vm)?.(true);
 				if (fallback && typeof (fallback as Promise<unknown>).then === "function") {
 					Promise.resolve(fallback).catch((err) => {

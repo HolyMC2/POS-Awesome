@@ -100,9 +100,20 @@ export function useItemsIntegration(options: IntegrationOptions = {}) {
 	// Lean server-side search: capped page, no images, merges into the
 	// existing items list. Used by the search-fallback so a single
 	// missing-item retry never re-pulls the entire catalog.
-	const search_items_lean = async () => {
+	//
+	// Accepts an explicit term: the search-input wiring writes to its
+	// own `search_input` / `first_search` refs and does NOT sync to
+	// `itemsStore.searchTerm` on every keystroke (that store ref is
+	// only set via the `search` computed used by the legacy adapter).
+	// Without the override the caller's typed query never reaches the
+	// server fallback during background load — operator sees an empty
+	// catalog until the full sync completes.
+	const search_items_lean = async (termOverride?: string) => {
 		if (!posProfile.value || !posProfile.value.name) return [];
-		const term = searchTerm.value;
+		const term =
+			typeof termOverride === "string" && termOverride.length
+				? termOverride
+				: searchTerm.value;
 		if (!term || term.trim().length < 2) return [];
 		return await itemsStore.loadItems({
 			forceServer: true,
