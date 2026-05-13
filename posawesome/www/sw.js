@@ -3,10 +3,23 @@ const VERSION_URL = "/assets/posawesome/dist/js/version.json";
 const DEFAULT_CACHE_VERSION = "default";
 const MAX_CACHE_ITEMS = 1000;
 
+// HTML shell for the web-route SPA mount (Phase 1). The Vue
+// router uses /posapp as its base, so any deep-link beneath that
+// (e.g. /posapp/pay) must resolve back to this same shell when
+// offline. The navigation handler matches by pathname and falls
+// back to the cached /posapp entry below.
+const POSAPP_WEB_ROUTE = "/posapp";
+
 const STATIC_PRECACHE_URLS = [
 	"/app/posapp",
+	POSAPP_WEB_ROUTE,
 	"/assets/posawesome/dist/js/posapp/workers/itemWorker.js",
 	"/assets/posawesome/dist/js/libs/dexie.min.js",
+	// Frappe-bundled jQuery is loaded synchronously by posapp.html
+	// (the SPA bundle calls `$()` at top-level assuming Desk
+	// provides it). Without precaching, a cold offline reload of
+	// /posapp blocks on a network 404 and the SPA never boots.
+	"/assets/frappe/js/lib/jquery/jquery.min.js",
 	"/manifest.json",
 	"/offline.html",
 ];
@@ -34,8 +47,19 @@ function getPrecacheUrls(version, assets = {}) {
 		pickAssetUrl(assets, "css", "/assets/posawesome/dist/js/posawesome.css", version),
 		pickAssetUrl(assets, "posawesome", "/assets/posawesome/dist/js/posawesome.js", version),
 		pickAssetUrl(assets, "offlineIndex", "/assets/posawesome/dist/js/offline/index.js", version),
+		// `web_entry` is the SPA's entry chunk for the /posapp web
+		// route (Phase 1). Hashed filename comes from version.json
+		// just like the other entry chunks.
+		pickAssetUrl(assets, "web_entry", "/assets/posawesome/dist/js/web-entry.js", version),
 		...STATIC_PRECACHE_URLS,
 	];
+}
+
+function isPosappWebRouteRequest(url) {
+	// Vue router uses /posapp as base, so /posapp/<anything> deep
+	// links must all hit the same cached shell offline.
+	const pathname = url && url.pathname ? url.pathname : "";
+	return pathname === POSAPP_WEB_ROUTE || pathname.startsWith(`${POSAPP_WEB_ROUTE}/`);
 }
 
 let cachedCacheName = null;
@@ -254,14 +278,43 @@ self.addEventListener("fetch", (event) => {
 	}
 
 	if (isNavigation) {
+		const isPosappWebRoute = isPosappWebRouteRequest(url);
 		event.respondWith(
 			(async () => {
 				try {
-					return await fetch(event.request);
+					const response = await fetch(event.request);
+					// Stale-while-revalidate the /posapp HTML shell.
+					// The boot payload is seeded server-side, so the
+					// shell MUST be re-fetched while online; we only
+					// keep the cached copy as an offline fallback.
+					if (isPosappWebRoute && response && response.ok) {
+						try {
+							const cacheName = await getCacheName();
+							const cache = await caches.open(cacheName);
+							// Always store under the bare /posapp key so
+							// deep-link reloads (vue-router pushes under
+							// /posapp/<sub>) all resolve to the same shell
+							// offline.
+							await cache.put(POSAPP_WEB_ROUTE, response.clone());
+						} catch (cacheError) {
+							console.warn("SW posapp shell cache put failed", cacheError);
+						}
+					}
+					return response;
 				} catch (err) {
+					// Offline path. Order: exact URL → /posapp shell
+					// (covers deep links) → /app/posapp Desk shell →
+					// /offline.html → network error.
 					const cached = await caches.match(event.request, { ignoreSearch: true });
 					if (cached) {
 						return cached;
+					}
+
+					if (isPosappWebRoute) {
+						const posappShell = await caches.match(POSAPP_WEB_ROUTE);
+						if (posappShell) {
+							return posappShell;
+						}
 					}
 
 					const appShell = await caches.match("/app/posapp");
