@@ -316,11 +316,33 @@ export function _applyPricingToLine(
 }
 
 export async function applyPricingRulesForCart(context: any, force = false) {
+	const t0 =
+		typeof performance !== "undefined" && performance.now
+			? performance.now()
+			: 0;
+	const recordPhase = (label: string, start: number) => {
+		if (typeof window === "undefined") return;
+		const dur =
+			typeof performance !== "undefined" && performance.now
+				? performance.now() - start
+				: 0;
+		const w = window as any;
+		w.__pricingPhases = w.__pricingPhases || [];
+		w.__pricingPhases.push({ label, dur, at: Date.now() });
+		// Cap log so a runaway loop doesn't grow the array without bound.
+		if (w.__pricingPhases.length > 200) w.__pricingPhases.shift();
+		if (dur > 1000) {
+			console.warn(`[POSA][Pricing] slow phase ${label}: ${Math.round(dur)}ms`);
+		}
+	};
+
 	if (context.isReturnInvoice) {
+		recordPhase("bail:returnInvoice", t0);
 		return;
 	}
 	if (context._applyingPricingRules) {
 		context._pendingPricingRules = true;
+		recordPhase("bail:inflight", t0);
 		return;
 	}
 	// Cart-empty fast path. Without items to score against, the entire
@@ -333,6 +355,7 @@ export async function applyPricingRulesForCart(context: any, force = false) {
 	// stretching the click latency.
 	const items = Array.isArray(context.items) ? context.items : [];
 	if (!items.length) {
+		recordPhase("bail:emptyCart", t0);
 		return;
 	}
 
@@ -345,7 +368,9 @@ export async function applyPricingRulesForCart(context: any, force = false) {
 		// Local pricing first — pure in-memory pass over cached
 		// pricing-rule indexes, no server round-trip. Operator sees
 		// discounts / freebies applied within ~10 ms.
+		const tLocal = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
 		await _applyLocalPricingRules(context, force);
+		recordPhase("local", tLocal);
 
 		// Server pricing reconciles rules that depend on data the
 		// client doesn't see (campaign quotas, cross-shift coupons).

@@ -1073,6 +1073,27 @@ export const useItemsStore = defineStore("items", () => {
 	const CHUNK_SIZE = 400;
 
 	const applyPriceListToItems = (priceListItems: any[]) => {
+		const _phaseStart =
+			typeof performance !== "undefined" && performance.now
+				? performance.now()
+				: 0;
+		const _recordPhase = (label: string, start: number) => {
+			if (typeof window === "undefined") return;
+			const dur =
+				typeof performance !== "undefined" && performance.now
+					? performance.now() - start
+					: 0;
+			const w = window as any;
+			w.__pricelistPhases = w.__pricelistPhases || [];
+			w.__pricelistPhases.push({ label, dur, at: Date.now() });
+			if (w.__pricelistPhases.length > 200)
+				w.__pricelistPhases.shift();
+			if (dur > 1000) {
+				console.warn(
+					`[POSA][PriceList] slow phase ${label}: ${Math.round(dur)}ms`,
+				);
+			}
+		};
 		// Chunk + yield to the event loop between slices so big
 		// catalogs don't block the main thread long enough
 		// for Firefox to show the "page slowing down" banner.
@@ -1080,6 +1101,7 @@ export const useItemsStore = defineStore("items", () => {
 		priceListItems.forEach((item) => {
 			priceMap.set(item.item_code, item);
 		});
+		_recordPhase("buildPriceMap", _phaseStart);
 
 		// Bump generation. Any in-flight chunk loop captures the
 		// previous generation in `myGeneration` and bails on the
@@ -1145,20 +1167,37 @@ export const useItemsStore = defineStore("items", () => {
 			// inside the chunk loop don't fire reactivity. Replace
 			// the array reference + clearSearchCache once at the end
 			// so virtual scrollers + filteredItems re-evaluate.
+			const _finalStart =
+				typeof performance !== "undefined" && performance.now
+					? performance.now()
+					: 0;
 			items.value = [...items.value];
+			_recordPhase("finalArraySwap", _finalStart);
+			const _cacheStart =
+				typeof performance !== "undefined" && performance.now
+					? performance.now()
+					: 0;
 			clearSearchCache();
+			_recordPhase("clearSearchCache", _cacheStart);
+			const _filterStart =
+				typeof performance !== "undefined" && performance.now
+					? performance.now()
+					: 0;
 			if (searchTerm.value) {
 				filteredItems.value = performLocalSearch(
 					searchTerm.value,
 					items.value,
 					itemGroup.value,
 				);
+				_recordPhase("performLocalSearch", _filterStart);
 			} else {
 				filteredItems.value = filterItemsByGroup(
 					items.value,
 					itemGroup.value,
 				);
+				_recordPhase("filterItemsByGroup", _filterStart);
 			}
+			_recordPhase("total", _phaseStart);
 		};
 
 		processChunk();
