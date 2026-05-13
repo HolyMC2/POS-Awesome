@@ -161,7 +161,9 @@ export async function show_payment(context: any) {
 export async function get_draft_invoices(
 	context: any,
 	source?: "invoice" | "order" | "quote",
+	options?: { quiet?: boolean },
 ) {
+	const quiet = options?.quiet === true;
 	try {
 		const selectedSource = getDefaultDocumentSource(
 			context.pos_profile,
@@ -178,20 +180,24 @@ export async function get_draft_invoices(
 		context.uiStore.setDraftSource?.(selectedSource);
 		context.uiStore.setDraftsData?.(drafts);
 		context.uiStore.setParkedOrders?.(drafts);
-		context.uiStore.closeDrafts?.();
+		if (!quiet) {
+			context.uiStore.closeDrafts?.();
+		}
 
 		if (typeof context.$nextTick === "function") {
 			await context.$nextTick();
 		}
-		if (drafts.length > 0) {
+		if (!quiet && drafts.length > 0) {
 			context.$refs?.invoiceSummary?.openDraftsSurface?.();
 		}
 	} catch (error) {
 		console.error("Error fetching draft invoices:", error);
-		context.toastStore.show({
-			title: __("Unable to fetch documents"),
-			color: "error",
-		});
+		if (!quiet) {
+			context.toastStore.show({
+				title: __("Unable to fetch documents"),
+				color: "error",
+			});
+		}
 	}
 }
 

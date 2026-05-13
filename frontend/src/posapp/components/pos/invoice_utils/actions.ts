@@ -176,7 +176,7 @@ export async function cancel_invoice(context: any) {
 
 export async function save_and_clear_invoice(context: any) {
 	const { clearInvoice } = getItemAdditionApi();
-	let old_invoice = null;
+	let old_invoice: any = null;
 	const doc = get_invoice_doc(context);
 
 	try {
@@ -203,6 +203,13 @@ export async function save_and_clear_invoice(context: any) {
 		clearInvoice(context);
 		if (context.eventBus) {
 			context.eventBus.emit("focus_item_search");
+			// Phase 1.H: notify listeners (drafts panel) that a draft was just
+			// persisted so the right-hand drafts list can auto-refresh without
+			// the operator clicking "Manage all".
+			context.eventBus.emit("draft_saved", {
+				doctype: old_invoice?.doctype,
+				name: old_invoice?.name,
+			});
 		}
 		return old_invoice;
 	}

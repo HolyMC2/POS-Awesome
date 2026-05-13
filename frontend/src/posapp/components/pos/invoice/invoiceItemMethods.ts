@@ -321,8 +321,12 @@ const invoiceItemMethods: Record<string, unknown> &
 	show_payment() {
 		return Dialogs.show_payment(this);
 	},
-	get_draft_invoices(source = "invoice") {
-		return Dialogs.get_draft_invoices(this, source as "invoice" | "order" | "quote");
+	get_draft_invoices(source = "invoice", options?: { quiet?: boolean }) {
+		return Dialogs.get_draft_invoices(
+			this,
+			source as "invoice" | "order" | "quote",
+			options,
+		);
 	},
 	get_draft_orders() {
 		return Dialogs.get_draft_orders(this);

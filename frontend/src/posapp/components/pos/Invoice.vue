@@ -1052,6 +1052,16 @@ export default {
 				this.invoiceType = "Invoice";
 				this.invoiceTypes = ["Invoice", "Order", "Quotation"];
 			},
+			// Phase 1.H: silently refresh the drafts panel after Save & Clear so
+			// the count badge + in-place preview update without the operator
+			// having to click "Manage all". Keeps the lazy "Manage all" path
+			// intact for flaky-network manual refresh.
+			draft_saved: () => {
+				if (typeof this.get_draft_invoices === "function") {
+					const source = this.uiStore?.draftSource || "invoice";
+					this.get_draft_invoices(source, { quiet: true });
+				}
+			},
 		};
 
 		Object.entries(this._busHandlers).forEach(([eventName, handler]) => {
