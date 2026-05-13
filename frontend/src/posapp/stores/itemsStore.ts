@@ -12,6 +12,13 @@ import { refreshBootstrapSnapshotFromCacheState } from "../../offline/index";
 // Composables
 import { useItemsCache } from "../composables/pos/items/store/useItemsCache";
 import { useItemsSearch } from "../composables/pos/items/store/useItemsSearch";
+import {
+	isSearchWorkerEnabled,
+	patchSearchIndex,
+	searchViaWorker,
+	setSearchIndex,
+	type SearchIndexEntry,
+} from "../composables/pos/items/useSearchWorker";
 import { useItemsSync } from "../composables/pos/items/store/useItemsSync";
 import { useItemsPagination } from "../composables/pos/items/store/useItemsPagination";
 import { useItemsMetrics } from "../composables/pos/items/store/useItemsMetrics";
@@ -149,6 +156,29 @@ export const useItemsStore = defineStore("items", () => {
 		getItemByBarcode,
 	} = useItemsSearch();
 
+	// Phase 3: convert the catalog into the lean payload the search
+	// Worker holds. Worker only needs the item_code + the precomputed
+	// `_search_index` string + the item_group for group-filter
+	// scoping. Cheap (single allocation per item; no deep clone).
+	function toWorkerIndexEntries(list: Item[]): SearchIndexEntry[] {
+		const out: SearchIndexEntry[] = [];
+		for (const item of list || []) {
+			if (!item?.item_code) continue;
+			const idx =
+				(item as any)._search_index ||
+				[item.item_code, item.item_name, (item as any).barcode]
+					.filter(Boolean)
+					.join(" ")
+					.toLowerCase();
+			out.push({
+				code: item.item_code,
+				idx,
+				group: item.item_group,
+			});
+		}
+		return out;
+	}
+
 	const {
 		isLoading,
 		isBackgroundLoading,
@@ -259,6 +289,12 @@ export const useItemsStore = defineStore("items", () => {
 			items.value = markRawItems(Array.isArray(newItems) ? newItems : []);
 			resetIndexes();
 			updateIndexes(items.value, posProfile.value);
+			// Phase 3: mirror the index into the search Worker so the
+			// flag-gated worker path has matching data when it runs.
+			// No-op (cheap) when the flag is off.
+			if (isSearchWorkerEnabled()) {
+				void setSearchIndex(toWorkerIndexEntries(items.value));
+			}
 		} else if (Array.isArray(newItems) && newItems.length) {
 			const additions: Item[] = [];
 			newItems.forEach((item) => {
@@ -275,6 +311,9 @@ export const useItemsStore = defineStore("items", () => {
 			if (additions.length) {
 				items.value = [...items.value, ...additions];
 				updateIndexes(additions, posProfile.value);
+				if (isSearchWorkerEnabled()) {
+					void patchSearchIndex(toWorkerIndexEntries(additions));
+				}
 			}
 		}
 
@@ -827,11 +866,37 @@ export const useItemsStore = defineStore("items", () => {
 				const sourceItems = canRefineSearch
 					? filteredItems.value
 					: items.value;
-				searchResults = performLocalSearch(
-					term,
-					sourceItems,
-					itemGroup.value,
-				);
+
+				// Phase 3: try the search Worker first (flag-gated). The
+				// worker returns matching item_codes; map them back via
+				// the existing itemsMap so we still hand the caller real
+				// Item objects. If the worker is off, not ready, errored,
+				// or times out, `searchViaWorker` resolves null and we
+				// fall through to the main-thread filter.
+				let workerCodes: string[] | null = null;
+				if (isSearchWorkerEnabled()) {
+					workerCodes = await searchViaWorker(term, itemGroup.value);
+				}
+				if (Array.isArray(workerCodes)) {
+					const lookup = canRefineSearch
+						? new Map(
+								(sourceItems as Item[]).map(
+									(item: Item) => [item.item_code, item] as const,
+								),
+							)
+						: itemsMap.value;
+					searchResults = [];
+					for (const code of workerCodes) {
+						const hit = lookup.get(code);
+						if (hit) searchResults.push(hit);
+					}
+				} else {
+					searchResults = performLocalSearch(
+						term,
+						sourceItems,
+						itemGroup.value,
+					);
+				}
 
 				if (searchResults.length === 0 && term.length >= 3) {
 					await loadItems({
@@ -839,6 +904,12 @@ export const useItemsStore = defineStore("items", () => {
 						groupFilter: itemGroup.value,
 						forceServer: true,
 					});
+					// Server reload widened items.value; re-run local
+					// filter against the fresh set. We deliberately skip
+					// the worker here — the worker still holds the old
+					// index until the loadItems append above mirrors the
+					// delta, and the main-thread filter is fast enough
+					// on a freshly hydrated slice.
 					searchResults = performLocalSearch(
 						term,
 						items.value,
