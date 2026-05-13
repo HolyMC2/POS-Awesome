@@ -332,6 +332,29 @@ test("telemetry ingest accepts tz-aware ISO timestamps (regression: tz-naive fix
 	expect(result.body).toContain('"dropped":0');
 });
 
+test("phase 1.E/1.F: posa_user_opted_into_web_route endpoint reachable + truthy for Administrator", async ({
+	page,
+}) => {
+	await login(page);
+	await bootSpa(page);
+	const result = await page.evaluate(async () => {
+		const r = await fetch(
+			"/api/method/posawesome.posawesome.api.utilities.posa_user_opted_into_web_route",
+			{
+				method: "POST",
+				headers: {
+					"X-Frappe-CSRF-Token": (window as any).posawesome_csrf_token || "",
+				},
+				credentials: "include",
+			},
+		);
+		return { status: r.status, body: await r.text() };
+	});
+	expect(result.status).toBe(200);
+	// Administrator bypasses the flag check; helper must return true.
+	expect(result.body).toContain('"message":true');
+});
+
 test("regression: get_last_buying_rate accepts null supplier (shim empty-string fix)", async ({
 	page,
 }) => {

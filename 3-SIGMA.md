@@ -126,9 +126,9 @@ on lab.
 | 1.B `frappe-shim.ts` (~470 LOC) | ✅ |
 | 1.C separate Vite entry + manifest plumbing | ✅ |
 | 1.D lab smoke + production fixes | ✅ |
-| 1.E feature flag `posa_use_web_route` | pending |
-| 1.F Page DocType redirect notice | pending |
-| 1.G `sw.js` precache `/posapp` | pending |
+| 1.E feature flag `posa_use_web_route` | ✅ |
+| 1.F Page DocType redirect notice | ✅ |
+| 1.G `sw.js` precache `/posapp` | ✅ |
 
 Smoke fixes uncovered by browser exercise (commits `acecdcd0` +
 `8186c671`):

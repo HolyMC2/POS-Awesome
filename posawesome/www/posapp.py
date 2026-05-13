@@ -57,6 +57,15 @@ def get_context(context: Dict[str, Any]) -> Dict[str, Any]:
         frappe.local.flags.redirect_location = "/login?redirect-to=/posapp"
         raise frappe.Redirect
 
+    # Phase 1.E feature flag: opt-in per POS Profile. Until any of the
+    # current user's profiles has `posa_use_web_route` set, redirect
+    # back to the legacy `/app/posapp` Desk Page so non-opted shops
+    # get the well-tested boot path. Ops can roll back per-terminal
+    # by toggling the flag and reloading — no redeploy needed.
+    if not _user_opted_into_web_route(frappe.session.user):
+        frappe.local.flags.redirect_location = "/app/posapp"
+        raise frappe.Redirect
+
     boot_payload = _build_boot_payload()
     asset_manifest = _read_asset_manifest()
 
@@ -125,7 +134,32 @@ def _build_boot_payload() -> Dict[str, Any]:
             "system": sysdefaults.get("time_zone") or "UTC",
             "user": sysdefaults.get("time_zone") or "UTC",
         },
+        "posawesome_settings": {
+            "use_web_route": _user_opted_into_web_route(user),
+        },
     }
+
+
+def _user_opted_into_web_route(user: str) -> bool:
+    """Phase 1.E feature-flag check. Delegates to the shared helper in
+    `posawesome.posawesome.api.utilities` so the web-route controller
+    and the Desk Page banner (`posapp.js` → Phase 1.F) agree on the
+    answer. Administrator is always opted in for ops + smoke specs.
+    """
+    if not user or user == "Administrator":
+        return True
+    # The session may not be initialised yet when web-route imports run;
+    # temporarily swap it so the helper can read frappe.session.user
+    # directly.
+    from posawesome.posawesome.api.utilities import posa_user_opted_into_web_route
+
+    saved = getattr(frappe.session, "user", None)
+    try:
+        frappe.session.user = user
+        return bool(posa_user_opted_into_web_route())
+    finally:
+        if saved is not None:
+            frappe.session.user = saved
 
 
 def _read_asset_manifest() -> Dict[str, Any]:

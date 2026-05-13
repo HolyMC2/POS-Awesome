@@ -927,3 +927,35 @@ def log_client_error(payload=None):
             title="POS Client Error Logging Failure",
         )
         return {"ok": False}
+
+
+@frappe.whitelist()
+def posa_user_opted_into_web_route() -> bool:
+    """Return True if the current user has any POS Profile with the
+    `posa_use_web_route` flag set. Phase 1.F uses this from the Desk
+    Page controller (`posapp.js`) to decide whether to show the
+    redirect banner. Kept tiny so it can be polled on every Desk POS
+    visit without measurable cost.
+
+    Administrator always returns True so smoke specs + ops can land
+    on /posapp without touching profile data.
+    """
+    user = frappe.session.user
+    if not user or user == "Guest":
+        return False
+    if user == "Administrator":
+        return True
+    try:
+        rows = frappe.db.sql(
+            """
+            SELECT p.posa_use_web_route
+            FROM `tabPOS Profile` p
+            INNER JOIN `tabPOS Profile User` u ON u.parent = p.name
+            WHERE p.disabled = 0 AND u.user = %s
+            LIMIT 50
+            """,
+            (user,),
+        )
+    except Exception:
+        return False
+    return any(int(row[0] or 0) for row in rows)
