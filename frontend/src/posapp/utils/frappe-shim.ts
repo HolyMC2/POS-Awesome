@@ -117,25 +117,25 @@ async function frappeCall(
 	let url = `/api/method/${method}`;
 	let body: BodyInit | undefined;
 
+	// Desk's frappe.call serializes null/undefined as empty strings,
+	// not as missing keys. Several SPA call sites pass `supplier: null`
+	// expecting the server to receive `supplier=""`; if we drop the key
+	// the server raises `TypeError: missing positional` (500).
+	const encode = (v: unknown): string => {
+		if (v === null || v === undefined) return "";
+		return typeof v === "string" ? v : JSON.stringify(v);
+	};
 	if (type === "GET") {
 		const qs = new URLSearchParams();
 		Object.entries(o.args || {}).forEach(([k, v]) => {
-			if (v == null) return;
-			qs.set(
-				k,
-				typeof v === "string" ? v : JSON.stringify(v),
-			);
+			qs.set(k, encode(v));
 		});
 		const q = qs.toString();
 		if (q) url += `?${q}`;
 	} else {
 		const params = new URLSearchParams();
 		Object.entries(o.args || {}).forEach(([k, v]) => {
-			if (v == null) return;
-			params.set(
-				k,
-				typeof v === "string" ? v : JSON.stringify(v),
-			);
+			params.set(k, encode(v));
 		});
 		body = params.toString();
 		headers["Content-Type"] = "application/x-www-form-urlencoded";

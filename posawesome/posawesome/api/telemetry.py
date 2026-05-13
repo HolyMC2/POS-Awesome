@@ -85,6 +85,12 @@ def _sanitise_event(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             event_timestamp = frappe.utils.get_datetime(ts_raw)
     except Exception:
         event_timestamp = now_datetime()
+    # MariaDB DATETIME columns reject tz-aware values; the browser
+    # client serialises `new Date().toISOString()` which carries `Z`
+    # (UTC). On Python 3.14 `get_datetime` preserves the offset, so
+    # strip it to a naive datetime before insert.
+    if getattr(event_timestamp, "tzinfo", None) is not None:
+        event_timestamp = event_timestamp.replace(tzinfo=None)
 
     return {
         "doctype": "POS Telemetry Event",
