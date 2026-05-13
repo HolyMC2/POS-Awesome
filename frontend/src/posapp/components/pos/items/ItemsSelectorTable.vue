@@ -186,6 +186,7 @@ defineExpose({ scrollToIndex, getTableElement, tableRef: scrollerRef });
 	display: flex;
 	flex-direction: column;
 	height: calc(100% - 80px);
+	min-height: 400px;
 	margin: 0;
 	background-color: transparent;
 	border-radius: var(--pos-radius-md);
@@ -240,11 +241,14 @@ defineExpose({ scrollToIndex, getTableElement, tableRef: scrollerRef });
 }
 
 .posa-catalog-scroller {
-	flex: 1;
+	flex: 1 1 auto;
+	min-height: 0;
+	height: 100%;
 	overflow-y: auto;
 	overflow-x: hidden;
 	background-color: transparent;
 	scrollbar-width: thin;
+	position: relative;
 }
 
 .posa-catalog-scroller :deep(.vue-recycle-scroller__item-view:nth-child(even) .posa-catalog-row) {

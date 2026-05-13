@@ -311,10 +311,15 @@ export const useItemsSelectorSearch = ({
 			return;
 		}
 
-		// If background loading is in progress, defer the search without changing the active query
+		// If background loading is in progress, queue the term so the loader
+		// can re-apply it when it finishes — BUT don't return early. Letting
+		// the local + lean-server fallback path below still run means the
+		// operator sees results immediately instead of staring at a blank
+		// catalog while the (possibly minute-long) full sync grinds through
+		// 3 k+ items. The cooldown gate inside the fallback prevents
+		// keystroke-storming the server.
 		if (vm.isBackgroundLoading) {
 			vm.pendingItemSearch = trimmedQuery;
-			return;
 		}
 
 		vm.search = trimmedQuery;
