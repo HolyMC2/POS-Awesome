@@ -62,5 +62,8 @@ export default defineConfig({
 		trace: "retain-on-failure",
 		screenshot: "only-on-failure",
 		video: "retain-on-failure",
+		// Lab + dev sites use self-signed certs; production runs land
+		// on a real CA so this only loosens the local/lab path.
+		ignoreHTTPSErrors: true,
 	},
 });

@@ -115,6 +115,53 @@ Without numbers you're guessing. Build the loop first.
 
 **Mitigation**: feature-flag via `posa_use_web_route` POS Profile setting. Operators opt in per-shop; can roll back per-terminal by toggling the flag and reloading.
 
+#### Phase 1 — status (2026-05-12)
+
+Phases 1.A — 1.D landed: `/posapp` web route boots end-to-end. Verified
+on lab.
+
+| Step | Status |
+|---|---|
+| 1.A web controller + Jinja shell | ✅ |
+| 1.B `frappe-shim.ts` (~470 LOC) | ✅ |
+| 1.C separate Vite entry + manifest plumbing | ✅ |
+| 1.D lab smoke + production fixes | ✅ |
+| 1.E feature flag `posa_use_web_route` | pending |
+| 1.F Page DocType redirect notice | pending |
+| 1.G `sw.js` precache `/posapp` | pending |
+
+Smoke fixes uncovered by browser exercise (commits `acecdcd0` +
+`8186c671`):
+- bundle minifier renames named exports → pin `mountPosApp` on
+  `window.__posaMountPosApp`
+- vue-router base hard-coded `/app/posapp` → detect from
+  `location.pathname`
+- template was missing jQuery, socket.io, and `.main-section` class
+- shim didn't support positional `frappe.call(method, args)` form
+- shim missed window globals (`flt`, `get_currency_symbol`, etc.) that
+  Desk attaches directly
+- shim missed `frappe.db.get_list / get_value` overload signatures
+- shim dropped null arg keys; Desk sends them as empty strings
+- telemetry rejected tz-aware ISO timestamps (Python 3.14 +
+  MariaDB DATETIME)
+
+**Measured baseline (lab, /posapp, opening shift open, items visible)**:
+- DOM: 981 nodes (vs Desk's ~150 k, ~99 % reduction — exceeds the 60 %
+  goal because the lab dataset has fewer Desk shells than prod)
+- Console errors: 0
+- Boot: SPA mounted within 2 s of the Vue mount marker firing
+
+End-to-end verified: cash sale, credit sale (Unpaid invoice with
+outstanding balance), draft save (lazy-loaded by Manage all),
+customer-create endpoint. Sales recorded as `ACC-SINV-2026-01494…01496`.
+
+Regression coverage now lives in
+`frontend/tests/smoke/posapp.web-route.spec.ts` (8 tests covering
+boot, cash sale, credit sale, draft save + resume, complex
+multi-add+swap flow, customer create, telemetry tz, shim null args).
+Run with `POSA_SMOKE_PATH=/posapp` and credentials in
+`frontend/.env.local`.
+
 ---
 
 ### Phase 2 — Replace cart's v-data-table-virtual (2 days)
