@@ -485,7 +485,20 @@ export function installFrappeShim() {
 	) => frappe.client.get_value({ doctype, filters, fieldname });
 
 	(window as any).frappe = frappe;
-	(window as any).__ = (text: string, _args?: any[]) => frappe._(text);
+	// Desk's `__()` substitutes `{0}`, `{1}`, ... in the translated string
+	// from the args array (frappe/translate.js `substitute_args`). The
+	// previous shim discarded args, so error toasts like `"{0} has only
+	// {1} in stock"` rendered with literal placeholders on `/posapp` —
+	// every translated message with parameters was broken. Mirror the
+	// Desk behavior: lookup, then substitute by index.
+	(window as any).__ = (text: string, args?: any[]) => {
+		const translated = frappe._(text);
+		if (!args || !args.length) return translated;
+		return translated.replace(/\{(\d+)\}/g, (match: string, idx: string) => {
+			const value = args[Number(idx)];
+			return value === undefined || value === null ? match : String(value);
+		});
+	};
 
 	// Desk attaches a handful of formatter/number helpers to window
 	// directly (frappe/public/js/frappe/form/formatters.js + utils).
