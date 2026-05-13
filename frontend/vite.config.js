@@ -103,6 +103,12 @@ export default defineConfig({
 				posawesome: path.resolve(__dirname, "src/posawesome.bundle.ts"),
 				"offline/index": path.resolve(__dirname, "src/offline/index.ts"),
 				loader: path.resolve(__dirname, "src/loader.ts"),
+				// Phase 1 web-route entry — installs the frappe-shim,
+				// then dynamically imports the SPA bundle. Served by
+				// `posawesome/www/posapp.html` at /posapp (no Frappe
+				// Desk shell). Falls back to the legacy `loader` when
+				// the SPA boots inside Desk (/app/posapp).
+				"web-entry": path.resolve(__dirname, "src/web-entry.ts"),
 			},
 			external: ["socket.io-client"],
 			output: {

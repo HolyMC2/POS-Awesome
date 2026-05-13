@@ -28,6 +28,11 @@ describe("build manifest helpers", () => {
 				name: "offline/index",
 				fileName: "offline/index-AbCd1234.js",
 			},
+			"web-entry-WEB456.js": {
+				type: "chunk",
+				name: "web-entry",
+				fileName: "web-entry-WEB456.js",
+			},
 			"style-Z9Z9.css": {
 				type: "asset",
 				name: "style.css",
@@ -45,6 +50,8 @@ describe("build manifest helpers", () => {
 				css: "/assets/posawesome/dist/js/style-Z9Z9.css?v=build-2000",
 				offlineIndex:
 					"/assets/posawesome/dist/js/offline/index-AbCd1234.js",
+				web_entry:
+					"/assets/posawesome/dist/js/web-entry-WEB456.js?v=build-2000",
 			},
 		});
 	});
@@ -60,6 +67,9 @@ describe("build manifest helpers", () => {
 		);
 		expect(payload.assets.css).toBe(
 			"/assets/posawesome/dist/js/posawesome.css?v=build%20with%20spaces",
+		);
+		expect(payload.assets.web_entry).toBe(
+			"/assets/posawesome/dist/js/web-entry.js?v=build%20with%20spaces",
 		);
 	});
 });

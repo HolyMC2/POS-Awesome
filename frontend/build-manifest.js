@@ -43,6 +43,7 @@ export function buildVersionPayload(version, bundle = {}) {
 	const loaderFile = getChunkFileName(bundle, "loader");
 	const posawesomeFile = getChunkFileName(bundle, "posawesome");
 	const offlineIndexFile = getChunkFileName(bundle, "offline/index");
+	const webEntryFile = getChunkFileName(bundle, "web-entry");
 	const cssFile = getCssAssetFileName(bundle);
 
 	return {
@@ -60,6 +61,11 @@ export function buildVersionPayload(version, bundle = {}) {
 			offlineIndex: offlineIndexFile
 				? toPublicAssetUrl(offlineIndexFile)
 				: toPublicAssetUrl("offline/index.js"),
+			// Web-route entry (Phase 1). Hashed-stable across deploys
+			// of the same git SHA, just like every other entry chunk.
+			web_entry: webEntryFile
+				? toVersionedPublicAssetUrl(webEntryFile, version)
+				: toVersionedPublicAssetUrl("web-entry.js", version),
 		},
 	};
 }
