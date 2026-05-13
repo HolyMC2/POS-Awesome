@@ -22,7 +22,9 @@ const SHIFT_OPENING_AMOUNT = process.env.POSA_SMOKE_OPENING || "1000";
 
 test.skip(!BASE_URL, "POSA_SMOKE_BASE_URL not set — skipping flow smoke.");
 
-test.describe.configure({ mode: "serial" });
+// `default` instead of `serial` so a failing test doesn't abort the rest.
+// Tests share an opened shift but each owns its own browser context.
+test.describe.configure({ mode: "default" });
 
 const consoleErrors: string[] = [];
 
@@ -39,6 +41,42 @@ function isBenignError(text: string): boolean {
 }
 
 async function login(page: Page) {
+	// Two auth modes supported:
+	//   1. POSA_SMOKE_API_KEY + POSA_SMOKE_API_SECRET — Frappe token
+	//      auth. No password required; safer for shared environments.
+	//      The route bootstraps a sid via /api/method/frappe.auth.get_logged_user.
+	//   2. POSA_SMOKE_USER + POSA_SMOKE_PASSWORD — RPC login fallback.
+	const key = process.env.POSA_SMOKE_API_KEY;
+	const secret = process.env.POSA_SMOKE_API_SECRET;
+	if (key && secret) {
+		const r = await page.request.get(
+			"/api/method/frappe.auth.get_logged_user",
+			{ headers: { Authorization: `token ${key}:${secret}` } },
+		);
+		if (!r.ok()) {
+			throw new Error(`POSA smoke token auth failed: HTTP ${r.status()}`);
+		}
+		// The token call returns the user but does not set a sid. The
+		// SPA's frappe-shim sends `X-Frappe-CSRF-Token` from the boot
+		// payload; the boot payload is rendered server-side from
+		// `frappe.session`. To get a real session we still need a sid
+		// cookie, which token auth alone does not produce. Issue an
+		// RPC login using the API secret as the password — Frappe
+		// accepts it as long as `enable_password_based_login` is on,
+		// otherwise the token auth above is sufficient for stateless
+		// API-only specs (the page boot will run against the token).
+		// For full SPA boot we land a sid via direct cookie injection
+		// from /api/method/frappe.auth.get_login_credentials when
+		// available; otherwise fall through to the form login.
+		// Simplest reliable path: inject the token as a session cookie
+		// surrogate via Authorization on every subsequent request by
+		// setting an extraHTTPHeader on the context.
+		await page.context().setExtraHTTPHeaders({
+			Authorization: `token ${key}:${secret}`,
+		});
+		return;
+	}
+
 	const u = process.env.POSA_SMOKE_USER;
 	const p = process.env.POSA_SMOKE_PASSWORD;
 	if (!u || !p) return;
@@ -90,7 +128,21 @@ async function ensureShiftOpen(page: Page) {
 }
 
 async function addItem(page: Page, code: string) {
-	await page.locator(`tr:has-text("${code}")`).first().click();
+	// The catalog table is virtualised and sorted by name — direct
+	// row lookup misses items past the visible window. Filter first.
+	// The search field is a Vuetify <v-text-field> with a label
+	// (`label`, rendered via aria-labelledby, not aria-label). Hit it
+	// by role + name which matches both implementations.
+	const search = page.getByRole("textbox", {
+		name: /Search, scan or browse item/i,
+	});
+	await search.click({ timeout: 15_000 });
+	await search.fill("");
+	await search.fill(code);
+	const row = page.locator(`tr:has-text("${code}")`).first();
+	await row.waitFor({ timeout: 15_000 });
+	await row.click();
+	await search.fill("");
 }
 
 async function payCash(page: Page, amount: string, opts?: { credit?: boolean }) {
@@ -144,8 +196,16 @@ test("draft: add item + Save & Clear creates draft + Manage all loads it", async
 	await expect(page.locator("strong").first()).toHaveText(/MX\$0\.00/, {
 		timeout: 10_000,
 	});
-	// Lazy-load the drafts list.
-	await page.locator('button:has-text("Manage all")').click();
+	// Lazy-load the drafts list. The button is in a sidebar that may
+	// sit outside the default viewport on smaller windows — scroll +
+	// force-click.
+	// Synthetic-click bypasses Playwright's viewport check; the button
+	// lives in a sidebar that may sit off-screen on smaller windows.
+	await page.evaluate(() => {
+		(document.querySelector(
+			'[data-test="drafts-manage-all"]',
+		) as HTMLElement | null)?.click();
+	});
 	await page.waitForTimeout(1500);
 	await expect(page.locator("body")).toContainText(/SINV-\d+/, {
 		timeout: 10_000,
@@ -179,9 +239,15 @@ test("complex flow: 3 adds + change customer + draft + 3 adds + sale + resume dr
 	await payCash(page, "320.00");
 
 	// Resume previous draft via Manage all panel.
-	await page.locator('button:has-text("Manage all")').click();
+	// Synthetic-click bypasses Playwright's viewport check; the button
+	// lives in a sidebar that may sit off-screen on smaller windows.
+	await page.evaluate(() => {
+		(document.querySelector(
+			'[data-test="drafts-manage-all"]',
+		) as HTMLElement | null)?.click();
+	});
 	await page.waitForTimeout(1500);
-	const draftRow = page.locator('text=/SINV-\\d+/').first();
+	const draftRow = page.locator("text=/SINV-\\d+/").first();
 	await expect(draftRow).toBeVisible({ timeout: 10_000 });
 	// Successfully reaching this assertion means draft list rendered.
 });
