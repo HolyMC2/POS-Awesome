@@ -18,7 +18,7 @@
 			v-if="!displayedItems.length"
 			class="posa-catalog-empty"
 		>
-			{{ noDataText }}
+			{{ noDataText || "No items match your search." }}
 		</div>
 		<RecycleScroller
 			v-else
@@ -222,6 +222,11 @@ defineExpose({ scrollToIndex, getTableElement, tableRef: scrollerRef });
 
 .posa-catalog-header-cell {
 	padding: 14px 16px;
+	line-height: 1.25;
+	display: flex;
+	align-items: center;
+	min-height: 48px;
+	box-sizing: border-box;
 }
 
 .posa-catalog-empty {

@@ -443,7 +443,17 @@ const {
 
 const displayedItems = computed(() => {
 	const baseItems = Array.isArray(filteredItems.value) ? filteredItems.value : [];
-	const rawTerm = first_search.value;
+	// Prefer `search_input` (the v-model source) over `first_search` (a
+	// derived mirror updated via watcher in useItemsSelectorSearchInput).
+	// On /posapp the watcher chain sometimes fails to keep first_search
+	// in step with the textfield value, leaving displayedItems stuck
+	// showing the unfiltered first page. Reading the model directly is
+	// always correct; first_search remains for any scanner/external
+	// injection code paths that set it without touching the input.
+	const rawTerm =
+		(typeof search_input.value === "string" && search_input.value) ||
+		first_search.value ||
+		"";
 	const term = (typeof rawTerm === "string" ? rawTerm : "").trim().toLowerCase();
 	return filterAndPaginate(baseItems, {
 		searchTerm: term,
