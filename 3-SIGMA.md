@@ -164,7 +164,7 @@ Run with `POSA_SMOKE_PATH=/posapp` and credentials in
 
 ---
 
-### Phase 2 — Replace cart's v-data-table-virtual (2 days)
+### Phase 2 — Replace cart's v-data-table-virtual (2 days) — **landed**
 
 Cart has 4-15 rows. v-data-table-virtual generates per-row dynamic CSS, watchers, scroll machinery — none of it needed. Custom `<table>` with `CartItemRow` rendering directly via `v-for` cuts:
 - ~5 k CSS rule allocations per shift
@@ -172,6 +172,19 @@ Cart has 4-15 rows. v-data-table-virtual generates per-row dynamic CSS, watchers
 - ~80 ms re-render time per cart edit on slow phones
 
 **Files**: `frontend/src/posapp/components/pos/invoice/ItemsTable.vue` (~270 LOC → ~150 LOC).
+
+Shipped 2026-05-12 (commit `fdf1a148` bundled with Phase 1.H). All
+preserved: CartItemRow row contract, expand-on-click, responsive
+columns, search filter (via `visibleItems` computed), drag/drop,
+empty state, name-edit dialog. Smoke spec stayed green.
+
+### Phase 1.H — Drafts panel auto-refresh — **landed**
+
+`save_and_clear_invoice` emits `eventBus.emit("draft_saved", …)`.
+Invoice.vue subscribes via `_busHandlers` and re-fetches drafts
+silently (new `quiet` flag in `get_draft_invoices` skips drawer
+open + error toast). Operators no longer need to click "Manage all"
+to see the count update. Commit `fdf1a148`.
 
 **Risk**: low — only loses `expand-on-click`, `:search`, `:custom-filter` props (cart doesn't use them meaningfully; cart has 10 rows max).
 
