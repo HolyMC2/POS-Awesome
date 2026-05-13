@@ -307,9 +307,14 @@ const rtl = useRtl();
 const { fly } = useFlyAnimation();
 const cartValidation = useCartValidation();
 
+// CATALOG-FREEZE.md mitigation 1: route every keystroke through the
+// composable's debounce (was `enableDebounce: false`, which made the
+// search setter fire `searchItems` synchronously on each character).
+// 400 ms is the Doherty threshold — coalesces a fast typer's ~2
+// keystrokes per filter pass without feeling laggy.
 const itemsIntegration = useItemsIntegration({
-	enableDebounce: false,
-	debounceDelay: 300,
+	enableDebounce: true,
+	debounceDelay: 400,
 });
 
 const {
@@ -441,16 +446,27 @@ const {
 	syncedItemsCount = ref(0),
 } = itemsIntegration;
 
+// CATALOG-FREEZE.md mitigation 3: when the operator has typed a
+// search term, clamp the visible window at 200 even if the operator
+// set a custom items-per-page in profile prefs. Operators don't
+// scroll past 200 search-result rows on a phone, and the extra rows
+// were paying virtualization cost while the catalog table churns
+// reactivity after a customer/price-list change.
+const SEARCH_RESULT_HARD_CAP = 200;
 const displayedItems = computed(() => {
 	const baseItems = Array.isArray(filteredItems.value) ? filteredItems.value : [];
 	const rawTerm = first_search.value;
 	const term = (typeof rawTerm === "string" ? rawTerm : "").trim().toLowerCase();
+	const profileLimit = enable_custom_items_per_page.value
+		? items_per_page.value
+		: itemsPerPage.value;
+	const limit = term ? Math.min(profileLimit, SEARCH_RESULT_HARD_CAP) : profileLimit;
 	return filterAndPaginate(baseItems, {
 		searchTerm: term,
 		hideZeroRate: hide_zero_rate_items.value,
 		hideVariants: pos_profile.value?.posa_hide_variants_items,
 		onlyBarcode: showOnlyBarcodeItemsRef.value,
-		limit: enable_custom_items_per_page.value ? items_per_page.value : itemsPerPage.value,
+		limit,
 	});
 });
 

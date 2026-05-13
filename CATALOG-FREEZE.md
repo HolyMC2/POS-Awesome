@@ -132,25 +132,32 @@ present (commit `d951d6e..` line, see addItem helper) — adding the
 attribute on the new row component will make the spec match both
 implementations without further change.
 
-## Quick-win mitigations to consider FIRST
+## Quick-win mitigations
 
-Before the full virtual-scroller rewrite, a few cheaper experiments:
+Audit corrected my earlier claim that (1) and (3) were already done.
+Both had infrastructure in place but were no-op at the call site.
+Landed this commit:
 
-1. **Debounce searchItems input handler** to 200-300 ms. Today the
-   filter recomputes per keystroke. With the catalog still on Vuetify,
-   a 250 ms debounce coalesces a fast typer's 5 keystrokes into one
-   filter pass.
-2. **Defer pricing-rule reschedule** while a search filter is active.
-   `schedulePricingRuleApplication` fires on every changeVersion bump;
-   if the operator is typing fast, queue the apply for `idle` instead
-   of microtask.
-3. **Cap displayedItems** to the first ~200 matches when search is
-   non-empty. Operators don't scroll past 200 rows of a search result;
-   the rest is wasted virtualization budget.
+1. **Debounce searchItems** — `useItemsIntegration` had a
+   `debouncedSearch` keyed by `debounceDelay`, but `ItemsSelector.vue`
+   was instantiating it with `enableDebounce: false`. Flipped to
+   `true` + raised delay 300 → 400 ms. Now every keystroke routes
+   through the debouncer instead of firing `searchItems`
+   synchronously per character.
+2. **Defer pricing-rule reschedule** while search-active — NOT done.
+   `schedulePricingRuleApplication` in `invoiceItemMethods.ts:386`
+   is debounced 150 ms but fires on every `changeVersion` bump even
+   while the operator is typing. Still worth doing.
+3. **Cap displayedItems** — `filterAndPaginate` already bails at
+   `result.length >= limit`, BUT `limit` came from the operator's
+   `items_per_page` profile pref (can be set arbitrarily high).
+   Added a hard cap of 200 in `ItemsSelector.vue`'s `displayedItems`
+   computed: `Math.min(profileLimit, SEARCH_RESULT_HARD_CAP)` when
+   search is non-empty. No effect on the no-search browse path.
 
-(1) is ~10 LOC + one Playwright test. (2) is a one-line `scheduleIdle`
-swap. (3) is the cheapest paint-time win without changing the table
-component. Any of them would buy time before the bigger refactor.
+(2) is the only remaining cheap experiment. Bigger structural fix
+remains the `CatalogItemRow` SFC inside `DynamicScrollerItem` per
+the section above.
 
 ## Files mapped during this session (read-only, useful next time)
 
