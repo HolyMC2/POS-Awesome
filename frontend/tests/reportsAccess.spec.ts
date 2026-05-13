@@ -5,16 +5,38 @@ import { createPinia, setActivePinia } from "pinia";
 import { defineComponent, h } from "vue";
 import { mount } from "@vue/test-utils";
 
-vi.mock("../src/posapp/services/dashboardService", () => ({
-	fetchDashboardData: vi.fn(async () => ({
-		enabled: false,
-		disabled_reason: "profile_disabled",
-		sales_overview: {},
-	})),
-}));
+vi.mock("../src/posapp/services/dashboardService", async () => {
+	const actual: any = await vi.importActual("../src/posapp/services/dashboardService");
+	return {
+		...actual,
+		fetchDashboardData: vi.fn(async () => ({
+			enabled: false,
+			disabled_reason: "profile_disabled",
+			sales_overview: {},
+		})),
+		fetchDashboardEnvelope: vi.fn(async () => ({
+			enabled: false,
+			disabled_reason: "profile_disabled",
+			default_scope: "current",
+			global_enabled: true,
+			allow_all_profiles: false,
+			profile_scope_enabled: true,
+			selected_profiles: [],
+			available_profiles: [],
+			company: "Acme",
+			currency: "PKR",
+			generated_at: new Date().toISOString(),
+			date_context: { today: "2026-05-12", month_start: "2026-05-01", report_month: "2026-05" },
+		})),
+		fetchDashboardSection: vi.fn(async () => ({})),
+	};
+});
 
 import Reports from "../src/posapp/components/reports/Reports.vue";
-import { fetchDashboardData } from "../src/posapp/services/dashboardService";
+import {
+	fetchDashboardEnvelope,
+	fetchDashboardSection,
+} from "../src/posapp/services/dashboardService";
 import { useEmployeeStore } from "../src/posapp/stores/employeeStore";
 import { useUIStore } from "../src/posapp/stores/uiStore";
 
@@ -25,6 +47,8 @@ const BoxStub = defineComponent({
 });
 
 const flushPromises = async () => {
+	await Promise.resolve();
+	await Promise.resolve();
 	await Promise.resolve();
 	await Promise.resolve();
 };
@@ -61,11 +85,12 @@ describe("Reports supervisor gating", () => {
 
 		await flushPromises();
 
-		expect(fetchDashboardData).not.toHaveBeenCalled();
+		expect(fetchDashboardEnvelope).not.toHaveBeenCalled();
+		expect(fetchDashboardSection).not.toHaveBeenCalled();
 		expect(wrapper.text()).toContain("POS supervisor");
 	});
 
-	it("allows supervisors to request dashboard data", async () => {
+	it("allows supervisors to request dashboard data via the envelope endpoint", async () => {
 		const employeeStore = useEmployeeStore();
 		employeeStore.setCurrentCashier({
 			user: "supervisor@example.com",
@@ -88,10 +113,12 @@ describe("Reports supervisor gating", () => {
 
 		await flushPromises();
 
-		expect(fetchDashboardData).toHaveBeenCalledWith(
+		expect(fetchDashboardEnvelope).toHaveBeenCalledWith(
 			expect.objectContaining({
 				pos_profile: "Main POS",
 			}),
 		);
+		// Envelope reports enabled=false so per-section fetches must be skipped.
+		expect(fetchDashboardSection).not.toHaveBeenCalled();
 	});
 });

@@ -2823,12 +2823,18 @@ import { useEmployeeStore } from "@/posapp/stores/employeeStore";
 import {
 	type BranchLocationRow,
 	type BranchTopItemsByLocationRow,
+	DASHBOARD_SECTION_KEYS,
+	type DashboardEnvelope,
+	type DashboardSectionKey,
 	fetchDashboardData,
+	fetchDashboardEnvelope,
+	fetchDashboardSection,
 	type CategoryBrandVariantRow,
 	type CustomerReportRow,
 	type DiscountVoidReturnCashierRow,
 	type DiscountVoidReturnDayRow,
 	type DiscountVoidReturnItemRow,
+	type DashboardRequest,
 	type DashboardResponse,
 	type SalesSummaryPayload,
 	type FastMovingItem,
@@ -2860,6 +2866,18 @@ const employeeStore = useEmployeeStore();
 
 const loading = ref(false);
 const errorMessage = ref("");
+const sectionLoading = ref<Record<DashboardSectionKey, boolean>>(
+	Object.fromEntries(DASHBOARD_SECTION_KEYS.map((k) => [k, false])) as Record<
+		DashboardSectionKey,
+		boolean
+	>,
+);
+const sectionErrors = ref<Record<DashboardSectionKey, string | null>>(
+	Object.fromEntries(DASHBOARD_SECTION_KEYS.map((k) => [k, null])) as Record<
+		DashboardSectionKey,
+		string | null
+	>,
+);
 const isDashboardEnabledOnServer = ref(true);
 const lastUpdatedAt = ref<Date | null>(null);
 const allowAllProfiles = ref(false);
@@ -4586,6 +4604,91 @@ function resetDashboardState() {
 	errorMessage.value = "";
 	isDashboardEnabledOnServer.value = true;
 	lastUpdatedAt.value = null;
+	for (const key of DASHBOARD_SECTION_KEYS) {
+		sectionLoading.value[key] = false;
+		sectionErrors.value[key] = null;
+	}
+}
+
+function buildDashboardRequest(): DashboardRequest {
+	return {
+		pos_profile: profileName.value || undefined,
+		scope: dashboardScope.value,
+		profile_filter:
+			dashboardScope.value === "specific" ? selectedProfileFilter.value || undefined : undefined,
+		report_month: selectedReportMonth.value || undefined,
+		low_stock_threshold: configuredLowStockThreshold.value,
+		item_sales_limit: itemSalesLimit.value,
+		category_report_limit: categoryReportLimit.value,
+		inventory_status_limit: inventoryStatusLimit.value,
+		stock_movement_limit: stockMovementLimit.value,
+		reorder_suggestion_limit: reorderSuggestionLimit.value,
+		payment_report_limit: paymentReportLimit.value,
+		discount_report_limit: discountReportLimit.value,
+		customer_report_limit: customerReportLimit.value,
+		staff_report_limit: staffReportLimit.value,
+		profitability_report_limit: profitabilityReportLimit.value,
+		branch_report_limit: branchReportLimit.value,
+		tax_report_limit: taxReportLimit.value,
+		fast_moving_page: fastMovingPage.value,
+		fast_moving_page_size: fastMovingPageSize.value,
+		fast_moving_search: fastMovingSearch.value || undefined,
+	};
+}
+
+function applyDashboardEnvelope(envelope: DashboardEnvelope) {
+	const merged = createEmptyDashboard();
+	Object.assign(merged, envelope);
+	// Preserve any section data we already have so the envelope refresh
+	// doesn't blank in-flight panels.
+	const previous = dashboardData.value;
+	for (const key of DASHBOARD_SECTION_KEYS) {
+		const existing = (previous as any)?.[key];
+		if (existing && Object.keys(existing).length > 0) {
+			(merged as any)[key] = existing;
+		}
+	}
+	dashboardData.value = merged;
+	if (envelope.date_context?.report_month) {
+		selectedReportMonth.value = String(envelope.date_context.report_month);
+	}
+	isDashboardEnabledOnServer.value = envelope.enabled !== false;
+	allowAllProfiles.value = Boolean(envelope.allow_all_profiles);
+	if (!scopeInitialized.value) {
+		const defaultScope = (envelope.default_scope || dashboardScope.value) as
+			| "all"
+			| "current"
+			| "specific";
+		dashboardScope.value = defaultScope;
+		scopeInitialized.value = true;
+	}
+	if (!allowAllProfiles.value && dashboardScope.value !== "current") {
+		dashboardScope.value = "current";
+	}
+	if (dashboardScope.value === "specific" && !selectedProfileFilter.value) {
+		const firstProfile = profileFilterItems.value[0]?.value || "";
+		selectedProfileFilter.value = firstProfile;
+	}
+}
+
+function applySectionPayload(section: DashboardSectionKey, payload: any) {
+	if (!payload) {
+		return;
+	}
+	const sectionValue = payload[section];
+	if (sectionValue == null) {
+		return;
+	}
+	const next = { ...dashboardData.value } as any;
+	const baseEmpty = createEmptyDashboard() as any;
+	const baseSection = baseEmpty[section] || {};
+	const previousSection = next[section] && Object.keys(next[section]).length ? next[section] : baseSection;
+	if (sectionValue && typeof sectionValue === "object" && !Array.isArray(sectionValue)) {
+		next[section] = { ...previousSection, ...sectionValue };
+	} else {
+		next[section] = sectionValue;
+	}
+	dashboardData.value = next;
 }
 
 async function loadDashboard() {
@@ -4596,59 +4699,74 @@ async function loadDashboard() {
 
 	loading.value = true;
 	errorMessage.value = "";
+	sectionErrors.value = {} as Record<DashboardSectionKey, string | null>;
+	for (const key of DASHBOARD_SECTION_KEYS) {
+		sectionLoading.value[key] = true;
+	}
 	logDashboardRequest();
 
+	const request = buildDashboardRequest();
+	let envelopeApplied = false;
+	let envelopeFailed = false;
+	const sectionFailures: string[] = [];
+
 	try {
-		const response = await fetchDashboardData({
-			pos_profile: profileName.value || undefined,
-			scope: dashboardScope.value,
-			profile_filter:
-				dashboardScope.value === "specific" ? selectedProfileFilter.value || undefined : undefined,
-			report_month: selectedReportMonth.value || undefined,
-			low_stock_threshold: configuredLowStockThreshold.value,
-			item_sales_limit: itemSalesLimit.value,
-			category_report_limit: categoryReportLimit.value,
-			inventory_status_limit: inventoryStatusLimit.value,
-			stock_movement_limit: stockMovementLimit.value,
-			reorder_suggestion_limit: reorderSuggestionLimit.value,
-			payment_report_limit: paymentReportLimit.value,
-			discount_report_limit: discountReportLimit.value,
-			customer_report_limit: customerReportLimit.value,
-			staff_report_limit: staffReportLimit.value,
-			profitability_report_limit: profitabilityReportLimit.value,
-			branch_report_limit: branchReportLimit.value,
-			tax_report_limit: taxReportLimit.value,
-			fast_moving_page: fastMovingPage.value,
-			fast_moving_page_size: fastMovingPageSize.value,
-			fast_moving_search: fastMovingSearch.value || undefined,
-		});
-		logDashboardResponse(response);
-		dashboardData.value = mergeDashboardPayload(response);
-		if (response.date_context?.report_month) {
-			selectedReportMonth.value = String(response.date_context.report_month);
+		const envelope = await fetchDashboardEnvelope(request);
+		applyDashboardEnvelope(envelope);
+		envelopeApplied = true;
+		if (envelope.enabled === false) {
+			// Server says no profiles in scope — section calls would just
+			// echo back empty payloads, so skip them.
+			for (const key of DASHBOARD_SECTION_KEYS) {
+				sectionLoading.value[key] = false;
+			}
+			lastUpdatedAt.value = new Date();
+			return;
 		}
-		isDashboardEnabledOnServer.value = response.enabled !== false;
-		allowAllProfiles.value = Boolean(response.allow_all_profiles);
-		if (!scopeInitialized.value) {
-			const defaultScope = (response.default_scope || dashboardScope.value) as
-				| "all"
-				| "current"
-				| "specific";
-			dashboardScope.value = defaultScope;
-			scopeInitialized.value = true;
-		}
-		if (!allowAllProfiles.value && dashboardScope.value !== "current") {
-			dashboardScope.value = "current";
-		}
-		if (dashboardScope.value === "specific" && !selectedProfileFilter.value) {
-			const firstProfile = profileFilterItems.value[0]?.value || "";
-			selectedProfileFilter.value = firstProfile;
-		}
-		lastUpdatedAt.value = new Date();
 	} catch (error: any) {
+		envelopeFailed = true;
 		logDashboardError(error);
 		errorMessage.value = error?.message || __("Failed to load dashboard data.");
+		for (const key of DASHBOARD_SECTION_KEYS) {
+			sectionLoading.value[key] = false;
+		}
+		return;
 	} finally {
+		if (envelopeFailed) {
+			loading.value = false;
+		}
+	}
+
+	const sectionPromises = DASHBOARD_SECTION_KEYS.map((section) =>
+		fetchDashboardSection(section, request)
+			.then((payload) => {
+				applySectionPayload(section, payload);
+				sectionErrors.value[section] = null;
+			})
+			.catch((error: any) => {
+				const message = error?.message || __("Section failed to load");
+				sectionErrors.value[section] = message;
+				sectionFailures.push(`${section}: ${message}`);
+				console.warn(`${DASHBOARD_LOG_PREFIX} section:${section} failed`, error);
+			})
+			.finally(() => {
+				sectionLoading.value[section] = false;
+			}),
+	);
+
+	try {
+		await Promise.allSettled(sectionPromises);
+		logDashboardResponse(dashboardData.value);
+		if (sectionFailures.length === DASHBOARD_SECTION_KEYS.length) {
+			errorMessage.value = __("Failed to load dashboard data.");
+		} else if (sectionFailures.length) {
+			console.warn(
+				`${DASHBOARD_LOG_PREFIX} ${sectionFailures.length}/${DASHBOARD_SECTION_KEYS.length} sections failed`,
+			);
+		}
+		lastUpdatedAt.value = new Date();
+	} finally {
+		void envelopeApplied;
 		loading.value = false;
 	}
 }

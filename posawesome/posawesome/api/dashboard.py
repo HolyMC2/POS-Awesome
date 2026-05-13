@@ -4566,6 +4566,226 @@ def _collect_supplier_overview_report(
     return report
 
 
+def _resolve_dashboard_context(
+    pos_profile=None,
+    scope=None,
+    profile_filter=None,
+    report_month=None,
+    low_stock_threshold=None,
+    fast_moving_limit: int = 10,
+    fast_moving_page: int = 1,
+    fast_moving_page_size=None,
+    fast_moving_search=None,
+    item_sales_limit: int = 20,
+    category_report_limit: int = 12,
+    inventory_status_limit: int = 20,
+    stock_movement_limit: int = 50,
+    reorder_suggestion_limit: int = 25,
+    payment_report_limit: int = 20,
+    discount_report_limit: int = 20,
+    customer_report_limit: int = 20,
+    staff_report_limit: int = 20,
+    profitability_report_limit: int = 20,
+    branch_report_limit: int = 20,
+    tax_report_limit: int = 20,
+    supplier_limit: int = 8,
+    low_stock_limit: int = 20,
+) -> dict[str, Any]:
+    """Resolve profile/scope/date context shared by all dashboard endpoints.
+
+    Centralises permission checks, scope normalisation, limit coercion, and
+    available-profile resolution so each per-section endpoint avoids redoing
+    that work and produces identical envelope metadata.
+    """
+
+    user = frappe.session.user
+    current_profile_doc = _resolve_profile(pos_profile)
+    current_profile_name = cstr(current_profile_doc.get("name")).strip()
+    _check_profile_permission(current_profile_name)
+
+    profile_scope_enabled = True
+    if frappe.db.has_column("POS Profile", "posa_allow_company_dashboard_scope"):
+        profile_scope_enabled = _to_bool_setting(
+            current_profile_doc.get("posa_allow_company_dashboard_scope"), True
+        )
+
+    default_scope = DEFAULT_DASHBOARD_SCOPE
+    allow_all_profiles = _user_can_view_all_profiles(user) and profile_scope_enabled
+    requested_scope = _normalize_scope(scope, default_scope, allow_all_profiles)
+    profile_filter = cstr(profile_filter).strip()
+
+    requested_fast_moving_page_size = (
+        fast_moving_page_size if fast_moving_page_size is not None else fast_moving_limit
+    )
+    fast_moving_page_size = _coerce_limit(requested_fast_moving_page_size, default=10, minimum=1, maximum=100)
+    fast_moving_page = _coerce_page(fast_moving_page, default=1)
+    fast_moving_offset = (fast_moving_page - 1) * fast_moving_page_size
+    fast_moving_search = cstr(fast_moving_search).strip()
+    supplier_limit = _coerce_limit(supplier_limit, default=8, minimum=1, maximum=25)
+    low_stock_limit = _coerce_limit(low_stock_limit, default=20, minimum=1, maximum=100)
+    item_sales_limit = _coerce_limit(item_sales_limit, default=20, minimum=1, maximum=100)
+    category_report_limit = _coerce_limit(category_report_limit, default=12, minimum=1, maximum=100)
+    inventory_status_limit = _coerce_limit(inventory_status_limit, default=20, minimum=1, maximum=100)
+    stock_movement_limit = _coerce_limit(stock_movement_limit, default=50, minimum=1, maximum=200)
+    reorder_suggestion_limit = _coerce_limit(reorder_suggestion_limit, default=25, minimum=1, maximum=200)
+    payment_report_limit = _coerce_limit(payment_report_limit, default=20, minimum=1, maximum=200)
+    discount_report_limit = _coerce_limit(discount_report_limit, default=20, minimum=1, maximum=200)
+    customer_report_limit = _coerce_limit(customer_report_limit, default=20, minimum=1, maximum=200)
+    staff_report_limit = _coerce_limit(staff_report_limit, default=20, minimum=1, maximum=200)
+    profitability_report_limit = _coerce_limit(profitability_report_limit, default=20, minimum=1, maximum=200)
+    branch_report_limit = _coerce_limit(branch_report_limit, default=20, minimum=1, maximum=200)
+    tax_report_limit = _coerce_limit(tax_report_limit, default=20, minimum=1, maximum=200)
+
+    company = cstr(current_profile_doc.get("company")).strip()
+    company_profiles = _get_company_profiles(company)
+    profiles_by_name = {profile.get("name"): profile for profile in company_profiles if profile.get("name")}
+
+    assigned_profile_names = _get_assigned_profiles(user, company_profiles)
+    if current_profile_name not in assigned_profile_names and not allow_all_profiles:
+        assigned_profile_names.append(current_profile_name)
+
+    available_profile_names = (
+        sorted(profiles_by_name.keys()) if allow_all_profiles else sorted(set(assigned_profile_names))
+    )
+    available_profiles = [
+        profiles_by_name[name] for name in available_profile_names if name in profiles_by_name
+    ]
+
+    if requested_scope == SCOPE_SPECIFIC:
+        target_profile = profile_filter or current_profile_name
+        if target_profile not in profiles_by_name:
+            frappe.throw(_("POS Profile {0} does not belong to company {1}.").format(target_profile, company))
+        if not allow_all_profiles and target_profile not in available_profile_names:
+            frappe.throw(
+                _("You are not permitted to view dashboard data for POS Profile {0}.").format(target_profile),
+                frappe.PermissionError,
+            )
+        selected_profile_names = [target_profile]
+    elif requested_scope == SCOPE_CURRENT:
+        selected_profile_names = [current_profile_name]
+    else:
+        selected_profile_names = available_profile_names or [current_profile_name]
+
+    selected_profiles = [
+        profiles_by_name.get(name) for name in selected_profile_names if profiles_by_name.get(name)
+    ]
+    selected_profiles = [profile for profile in selected_profiles if profile]
+
+    if not selected_profiles:
+        current_profile_fallback = profiles_by_name.get(current_profile_name) or current_profile_doc
+        if current_profile_fallback and _is_dashboard_enabled(current_profile_fallback):
+            selected_profiles = [current_profile_fallback]
+            selected_profile_names = [current_profile_name]
+
+    selected_profiles_before_override = list(selected_profiles)
+    profile_override_enabled = [profile for profile in selected_profiles if _is_dashboard_enabled(profile)]
+    selected_profiles = profile_override_enabled
+    selected_profile_names = [profile.get("name") for profile in selected_profiles]
+
+    single_profile = selected_profiles[0] if len(selected_profiles) == 1 else None
+    profile_threshold = single_profile.get("posa_low_stock_alert_threshold") if single_profile else None
+    threshold_fallback = profile_threshold or DEFAULT_LOW_STOCK_THRESHOLD
+    threshold = _coerce_threshold(low_stock_threshold, threshold_fallback)
+
+    warehouses = [
+        cstr(profile.get("warehouse")).strip()
+        for profile in selected_profiles
+        if cstr(profile.get("warehouse")).strip()
+    ]
+    if not warehouses:
+        default_warehouse = get_default_warehouse(company)
+        warehouses = [default_warehouse] if default_warehouse else []
+
+    company_currency = cstr(frappe.db.get_value("Company", company, "default_currency")).strip()
+    if single_profile:
+        currency = cstr(single_profile.get("currency")).strip() or company_currency
+    else:
+        currency = company_currency or cstr(current_profile_doc.get("currency")).strip()
+
+    current_today = getdate(nowdate())
+    month_start, report_to_date, selected_report_month = _resolve_report_month(report_month, current_today)
+    fast_moving_days = max(1, (report_to_date - month_start).days + 1)
+    enabled = bool(selected_profiles)
+    disabled_reason = None
+    if not selected_profiles:
+        disabled_reason = "profile_disabled" if selected_profiles_before_override else "no_profiles_in_scope"
+    profile_label = single_profile.get("name") if single_profile else None
+    warehouse_label = warehouses[0] if len(warehouses) == 1 else _("Multiple Warehouses")
+
+    return {
+        "enabled": enabled,
+        "disabled_reason": disabled_reason,
+        "default_scope": default_scope,
+        "requested_scope": requested_scope,
+        "allow_all_profiles": allow_all_profiles,
+        "profile_scope_enabled": profile_scope_enabled,
+        "profile_label": profile_label,
+        "selected_profile_names": selected_profile_names,
+        "available_profiles": available_profiles,
+        "company": company,
+        "warehouses": warehouses,
+        "warehouse_label": warehouse_label,
+        "currency": currency,
+        "month_start": month_start,
+        "report_to_date": report_to_date,
+        "selected_report_month": selected_report_month,
+        "fast_moving_days": fast_moving_days,
+        "fast_moving_page": fast_moving_page,
+        "fast_moving_page_size": fast_moving_page_size,
+        "fast_moving_offset": fast_moving_offset,
+        "fast_moving_search": fast_moving_search,
+        "threshold": threshold,
+        "supplier_limit": supplier_limit,
+        "low_stock_limit": low_stock_limit,
+        "item_sales_limit": item_sales_limit,
+        "category_report_limit": category_report_limit,
+        "inventory_status_limit": inventory_status_limit,
+        "stock_movement_limit": stock_movement_limit,
+        "reorder_suggestion_limit": reorder_suggestion_limit,
+        "payment_report_limit": payment_report_limit,
+        "discount_report_limit": discount_report_limit,
+        "customer_report_limit": customer_report_limit,
+        "staff_report_limit": staff_report_limit,
+        "profitability_report_limit": profitability_report_limit,
+        "branch_report_limit": branch_report_limit,
+        "tax_report_limit": tax_report_limit,
+    }
+
+
+def _build_dashboard_envelope(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Lightweight envelope returned alongside every per-section payload."""
+
+    return {
+        "enabled": ctx["enabled"],
+        "profile": ctx["profile_label"],
+        "scope": ctx["requested_scope"],
+        "default_scope": ctx["default_scope"],
+        "global_enabled": True,
+        "allow_all_profiles": ctx["allow_all_profiles"],
+        "profile_scope_enabled": ctx["profile_scope_enabled"],
+        "disabled_reason": ctx["disabled_reason"],
+        "selected_profiles": ctx["selected_profile_names"],
+        "available_profiles": [
+            {
+                "name": profile.get("name"),
+                "warehouse": profile.get("warehouse"),
+                "currency": profile.get("currency"),
+                "dashboard_enabled": profile.get("dashboard_enabled"),
+            }
+            for profile in ctx["available_profiles"]
+        ],
+        "company": ctx["company"],
+        "warehouse": ctx["warehouse_label"],
+        "currency": ctx["currency"],
+        "generated_at": now_datetime().isoformat(),
+        "date_context": {
+            "today": str(ctx["report_to_date"]),
+            "month_start": str(ctx["month_start"]),
+            "report_month": ctx["selected_report_month"],
+        },
+    }
+
+
 @frappe.whitelist()
 def get_dashboard_data(
     pos_profile=None,
@@ -4598,6 +4818,10 @@ def get_dashboard_data(
     - all: aggregates all accessible profiles in the same company.
     - current: only current POS profile.
     - specific: selected profile_filter.
+
+    Kept for backwards compatibility; prefer the per-section ``get_dashboard_*``
+    endpoints which let the frontend render sections as soon as their data
+    arrives instead of blocking on the full payload.
     """
 
     user = frappe.session.user
@@ -5224,3 +5448,382 @@ def get_dashboard_data(
     )
 
     return payload
+
+
+# ---------------------------------------------------------------------------
+# Per-section dashboard endpoints (Phase 8 split)
+#
+# Each endpoint resolves the same envelope as ``get_dashboard_data`` but only
+# computes one section. The frontend can call them in parallel via
+# ``Promise.allSettled`` so each panel paints as its data arrives instead of
+# blocking first paint on the full mega-payload.
+# ---------------------------------------------------------------------------
+
+
+def _section_response(ctx: dict[str, Any], section_key: str, section_value: Any) -> dict[str, Any]:
+    """Return ``{envelope..., <section_key>: section_value}`` shaped like the
+    matching slice of the legacy ``get_dashboard_data`` payload."""
+
+    response = _build_dashboard_envelope(ctx)
+    response[section_key] = section_value
+    return response
+
+
+@frappe.whitelist()
+def get_dashboard_sales_overview(**kwargs):
+    """Today / month sales + profit roll-up across allowed invoice sources."""
+
+    ctx = _resolve_dashboard_context(**kwargs)
+    overview = {
+        "today_sales": 0.0,
+        "today_profit": 0.0,
+        "monthly_sales": 0.0,
+        "monthly_profit": 0.0,
+        "profit_method": "invoice_item",
+    }
+    if ctx["enabled"]:
+        company = ctx["company"]
+        profile_names = ctx["selected_profile_names"]
+        report_to_date = ctx["report_to_date"]
+        month_start = ctx["month_start"]
+        for parent_doctype, child_doctype in _iter_invoice_sources():
+            today_stats = _collect_sales_and_profit(
+                parent_doctype=parent_doctype,
+                child_doctype=child_doctype,
+                profile_names=profile_names,
+                company=company,
+                date_from=str(report_to_date),
+                date_to=str(report_to_date),
+            )
+            monthly_stats = _collect_sales_and_profit(
+                parent_doctype=parent_doctype,
+                child_doctype=child_doctype,
+                profile_names=profile_names,
+                company=company,
+                date_from=str(month_start),
+                date_to=str(report_to_date),
+            )
+            overview["today_sales"] += flt(today_stats.get("sales"))
+            overview["today_profit"] += flt(today_stats.get("profit"))
+            overview["monthly_sales"] += flt(monthly_stats.get("sales"))
+            overview["monthly_profit"] += flt(monthly_stats.get("profit"))
+            if (
+                today_stats.get("profit_method") == "stock_ledger"
+                or monthly_stats.get("profit_method") == "stock_ledger"
+            ):
+                overview["profit_method"] = "stock_ledger"
+    return _section_response(ctx, "sales_overview", overview)
+
+
+@frappe.whitelist()
+def get_dashboard_daily_sales_summary(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "daily_sales_summary", {})
+    summary = _collect_daily_sales_summary(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_value=str(ctx["report_to_date"]),
+    )
+    return _section_response(ctx, "daily_sales_summary", summary)
+
+
+@frappe.whitelist()
+def get_dashboard_monthly_sales_summary(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "monthly_sales_summary", {})
+    summary = _collect_monthly_sales_summary(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+    )
+    return _section_response(ctx, "monthly_sales_summary", summary)
+
+
+@frappe.whitelist()
+def get_dashboard_payment_method_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "payment_method_report", {})
+    section = _collect_payment_method_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["payment_report_limit"],
+    )
+    return _section_response(ctx, "payment_method_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_discount_void_return_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "discount_void_return_report", {})
+    section = _collect_discount_void_return_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["discount_report_limit"],
+    )
+    return _section_response(ctx, "discount_void_return_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_customer_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "customer_report", {})
+    section = _collect_customer_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["customer_report_limit"],
+    )
+    return _section_response(ctx, "customer_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_staff_performance_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "staff_performance_report", {})
+    section = _collect_staff_cashier_performance_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["staff_report_limit"],
+    )
+    return _section_response(ctx, "staff_performance_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_profitability_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "profitability_report", {})
+    section = _collect_profitability_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["profitability_report_limit"],
+    )
+    return _section_response(ctx, "profitability_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_branch_location_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "branch_location_report", {})
+    section = _collect_branch_location_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        threshold=ctx["threshold"],
+        limit=ctx["branch_report_limit"],
+    )
+    return _section_response(ctx, "branch_location_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_tax_charges_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "tax_charges_report", {})
+    section = _collect_tax_charges_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["tax_report_limit"],
+    )
+    return _section_response(ctx, "tax_charges_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_sales_trend(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "sales_trend", {})
+    section = _collect_sales_trend(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        today=ctx["report_to_date"],
+        month_start=ctx["month_start"],
+    )
+    return _section_response(ctx, "sales_trend", section)
+
+
+@frappe.whitelist()
+def get_dashboard_item_sales_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "item_sales_report", {})
+    section = _collect_item_sales_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["item_sales_limit"],
+    )
+    return _section_response(ctx, "item_sales_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_category_brand_variant_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "category_brand_variant_report", {})
+    section = _collect_category_brand_variant_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["category_report_limit"],
+    )
+    return _section_response(ctx, "category_brand_variant_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_inventory_status_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "inventory_status_report", {})
+    section = _collect_inventory_status_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        warehouses=ctx["warehouses"],
+        threshold=ctx["threshold"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["inventory_status_limit"],
+    )
+    return _section_response(ctx, "inventory_status_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_stock_movement_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "stock_movement_report", {})
+    section = _collect_stock_movement_report(
+        company=ctx["company"],
+        warehouses=ctx["warehouses"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["stock_movement_limit"],
+    )
+    return _section_response(ctx, "stock_movement_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_reorder_purchase_suggestions(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "reorder_purchase_suggestions", {})
+    section = _collect_reorder_purchase_suggestions(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        warehouses=ctx["warehouses"],
+        threshold=ctx["threshold"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["reorder_suggestion_limit"],
+    )
+    return _section_response(ctx, "reorder_purchase_suggestions", section)
+
+
+@frappe.whitelist()
+def get_dashboard_inventory_insights(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(
+            ctx,
+            "inventory_insights",
+            {
+                "fast_moving_items": [],
+                "fast_moving_period": {
+                    "from": str(ctx["month_start"]),
+                    "to": str(ctx["report_to_date"]),
+                    "days": ctx["fast_moving_days"],
+                },
+                "fast_moving_pagination": {
+                    "page": ctx["fast_moving_page"],
+                    "page_size": ctx["fast_moving_page_size"],
+                    "total_count": 0,
+                    "total_pages": 0,
+                    "search": ctx["fast_moving_search"],
+                },
+                "low_stock_items": [],
+                "low_stock_threshold": ctx["threshold"],
+            },
+        )
+    fast_moving_items, fast_moving_total_count = _collect_fast_moving_items(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["fast_moving_page_size"],
+        offset=ctx["fast_moving_offset"],
+        search_text=ctx["fast_moving_search"],
+    )
+    low_stock_items = _collect_low_stock_items(
+        warehouses=ctx["warehouses"],
+        threshold=ctx["threshold"],
+        limit=ctx["low_stock_limit"],
+    )
+    insights = {
+        "fast_moving_items": fast_moving_items,
+        "fast_moving_period": {
+            "from": str(ctx["month_start"]),
+            "to": str(ctx["report_to_date"]),
+            "days": ctx["fast_moving_days"],
+        },
+        "fast_moving_pagination": {
+            "page": ctx["fast_moving_page"],
+            "page_size": ctx["fast_moving_page_size"],
+            "total_count": fast_moving_total_count,
+            "total_pages": (
+                int(ceil(fast_moving_total_count / ctx["fast_moving_page_size"]))
+                if fast_moving_total_count
+                else 0
+            ),
+            "search": ctx["fast_moving_search"],
+        },
+        "low_stock_items": low_stock_items,
+        "low_stock_threshold": ctx["threshold"],
+    }
+    return _section_response(ctx, "inventory_insights", insights)
+
+
+@frappe.whitelist()
+def get_dashboard_supplier_overview(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "supplier_overview", {})
+    section = _collect_supplier_overview_report(
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["supplier_limit"],
+    )
+    return _section_response(ctx, "supplier_overview", section)
+
+
+@frappe.whitelist()
+def get_dashboard_envelope(**kwargs):
+    """Just the envelope (profile/scope/date metadata) without any section data.
+
+    Used by the frontend to seed scope state and gate rendering before any
+    section payloads arrive."""
+
+    ctx = _resolve_dashboard_context(**kwargs)
+    return _build_dashboard_envelope(ctx)
