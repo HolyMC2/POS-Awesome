@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import path from "path";
 import { execSync } from "child_process";
-import { createHash } from "crypto";
 import { fileURLToPath } from "url";
 import { promises as fs } from "fs";
 import frappeVueStyle from "../frappe-vue-style";
@@ -23,13 +22,6 @@ function resolveBuildVersion() {
 	// filenames). Falling back to a timestamp keeps non-git builds
 	// working but loses the cross-rebuild stability — every dev
 	// rebuild would force every open POS client to reload mid-session.
-	//
-	// Drift guard: if the working tree is dirty when we build, the
-	// committed-SHA on its own is a lie — the bundled content reflects
-	// uncommitted edits the SHA doesn't capture. Append a short hash
-	// of the dirty source state so the `version` field on the wire
-	// always identifies the exact bytes that shipped. Ops correlating
-	// a bug report to a version string get an unambiguous label.
 	try {
 		const sha = execSync("git rev-parse --short=12 HEAD", {
 			cwd: __dirname,
@@ -38,36 +30,7 @@ function resolveBuildVersion() {
 			.toString()
 			.trim();
 		if (sha) {
-			let dirty = "";
-			try {
-				dirty = execSync("git status --porcelain --untracked-files=no", {
-					cwd: __dirname,
-					stdio: ["ignore", "pipe", "ignore"],
-				})
-					.toString()
-					.trim();
-			} catch {
-				dirty = "";
-			}
-			if (!dirty) return sha;
-			// Hash the unified diff of tracked files only; untracked
-			// files won't end up in the bundle so they shouldn't change
-			// the version label.
-			let dirtyHash = "";
-			try {
-				const diff = execSync("git diff --no-color HEAD", {
-					cwd: __dirname,
-					stdio: ["ignore", "pipe", "ignore"],
-					maxBuffer: 64 * 1024 * 1024,
-				}).toString();
-				dirtyHash = createHash("sha1")
-					.update(diff)
-					.digest("hex")
-					.slice(0, 8);
-			} catch {
-				dirtyHash = "x";
-			}
-			return `${sha}-dirty-${dirtyHash}`;
+			return sha;
 		}
 	} catch {
 		// Not a git checkout (CI tarball, sdist, etc.) — fall through.
@@ -89,34 +52,6 @@ function posawesomeBuildVersionPlugin(version) {
 				JSON.stringify(buildVersionPayload(version, bundle), null, 2),
 				"utf8",
 			);
-
-			// Stamp the build version into sw.js so the file's byte
-			// content changes on every deploy. Browsers compare SW
-			// bytes; without the per-deploy delta the new service
-			// worker never re-installs and operators keep seeing the
-			// old cached bundle even after a fresh build.
-			//
-			// The source file lives under `posawesome/www/sw.js` (the
-			// canonical version) and is served at `/sw.js`. We rewrite
-			// the source on disk so subsequent `bench build` /
-			// `dev-refresh` passes ship a byte-different copy.
-			try {
-				const swPath = path.resolve(__dirname, "../posawesome/www/sw.js");
-				const original = await fs.readFile(swPath, "utf8");
-				const stamped = original.replace(
-					/__POSA_SW_BUILD__: [^\n]*/,
-					`__POSA_SW_BUILD__: ${version}`,
-				);
-				if (stamped !== original) {
-					await fs.writeFile(swPath, stamped, "utf8");
-				}
-			} catch (err) {
-				// Stamping is best-effort: if the source moved or the
-				// marker is missing, the build still completes. Operators
-				// just keep the existing cache-bust behaviour until the
-				// marker is reintroduced.
-				console.warn("posawesome-build-version: sw.js stamp skipped", err);
-			}
 		},
 	};
 }

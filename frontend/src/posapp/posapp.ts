@@ -104,21 +104,8 @@ async function startOptionalRuntimeServices() {
 		window.location.hostname === "localhost" ||
 		window.location.hostname === "127.0.0.1"
 	) {
-		// Register under a version-tagged URL so a new build forces a
-		// fresh SW registration. The browser compares SW URLs + bytes;
-		// our sw.js content is static and reads version.json at
-		// runtime, so without the per-build URL delta the same SW
-		// instance keeps serving the old precache even after a deploy.
-		// `?v=<build>` is dropped by Frappe's static handler, so the
-		// served bytes are identical — only the registration key
-		// changes.
-		const swBuildVersion =
-			typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : "";
-		const swUrl = swBuildVersion
-			? `/sw.js?v=${encodeURIComponent(swBuildVersion)}`
-			: "/sw.js";
 		navigator.serviceWorker
-			.register(swUrl)
+			.register("/sw.js")
 			.then((registration) => {
 				console.log("SW registered successfully", registration);
 			})
