@@ -251,7 +251,37 @@ ERPNext's pricing engine is correct but slow (200 ms — 5 s per call). We fire-
 
 ---
 
-### Phase 7 — CI / regression-test harness (1 week)
+### Phase 7 — CI / regression-test harness (1 week) — **landed**
+
+Frontend CI split into `static` (type/lint/unit) + matrix `smoke`
+that runs Playwright at both `/app/posapp` and `/posapp` on every
+PR. Skips cleanly when secrets aren't configured. Web-route spec
+self-gates so the Desk leg only runs the existing global-errors
+spec. Per-leg artifact upload on failure. Commit `ebf778ce`.
+
+### Phase 8 — Dashboard mega-payload split — **landed**
+
+`get_dashboard_data` kept for back-compat. Backend extracted
+`_resolve_dashboard_context` + `_build_dashboard_envelope` and
+added 17 per-section whitelisted endpoints + `get_dashboard_envelope`.
+Frontend `dashboardService.ts` exports `fetchDashboardEnvelope` /
+`fetchDashboardSection` / `DASHBOARD_SECTION_KEYS`. `Reports.vue`
+fetches the envelope first, fans sections out via
+`Promise.allSettled` with per-section loading/error refs. Commit
+`43b57386`. Caveat: per-panel skeletons not wired (state refs
+in place, template still keys off global `loading` — cheap follow-up).
+vitest 542/542.
+
+### Phase 5 — Offline-first mutations + queue — **audited, not implemented**
+
+Audit landed in `3-SIGMA-PHASE-5-AUDIT.md` (commit `a7bb1b88`).
+Existing scaffold is more built-out than the original plan
+assumed: idempotency keys, outbox doctype, retry+backoff, server
+ledger all already shipped. Real gaps: cancel/return outbox
+routing, SW write interception, dead-letter UI, pending-sync
+indicator wired to outbox. Honest 3-day landing plan in the audit.
+
+
 
 Currently vitest (532 unit tests) + manual Playwright smoke. No regression-test loop.
 
