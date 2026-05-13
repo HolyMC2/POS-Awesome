@@ -88,6 +88,14 @@ function syncAutoFreeLines(context: any, freebiesMap: Map<string, any>) {
 	return _syncAutoFreeLines(context, freebiesMap);
 }
 
+function refreshInvoiceTotals(context: any) {
+	if (typeof context?.invoiceStore?.recalculateTotals === "function") {
+		context.invoiceStore.recalculateTotals();
+	} else if (typeof context?.invoiceStore?.triggerUpdateTotals === "function") {
+		context.invoiceStore.triggerUpdateTotals();
+	}
+}
+
 export async function _ensurePricingRules(context: any, force = false) {
 	const store = _getPricingRulesStore(context);
 	const ctx = _getPricingContext(context);
@@ -448,6 +456,10 @@ export async function _applyLocalPricingRules(context: any, force = false) {
 		}
 
 		syncAutoFreeLines(context, freebiesMap);
+		refreshInvoiceTotals(context);
+		if (typeof context.$forceUpdate === "function") {
+			context.$forceUpdate();
+		}
 	} catch (error) {
 		console.error("Failed to apply pricing rules locally", error);
 	}
@@ -608,6 +620,7 @@ export async function _applyServerPricingRules(context: any, ctx: any = {}) {
 
 	if (!paidLines.length) {
 		syncAutoFreeLines(context, freebiesMap);
+		refreshInvoiceTotals(context);
 		if (typeof context.$forceUpdate === "function") {
 			context.$forceUpdate();
 		}
@@ -1084,6 +1097,7 @@ export async function _applyServerPricingRules(context: any, ctx: any = {}) {
 	});
 
 	syncAutoFreeLines(context, freebiesMap);
+	refreshInvoiceTotals(context);
 	if (typeof context.$forceUpdate === "function") {
 		context.$forceUpdate();
 	}
