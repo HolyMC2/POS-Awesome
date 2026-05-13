@@ -70,16 +70,22 @@ async function boot() {
 	const manifest = await fetchManifest();
 	const bundleUrl = resolveBundleUrl(manifest);
 
-	let bundle: any;
 	try {
-		bundle = await import(/* @vite-ignore */ bundleUrl);
+		await import(/* @vite-ignore */ bundleUrl);
 	} catch (err) {
 		showFailure("Could not load POS bundle", err);
 		return;
 	}
 
-	if (!bundle || typeof bundle.mountPosApp !== "function") {
-		showFailure("POS bundle did not export mountPosApp");
+	// The bundle minifier renames every named export to a single letter
+	// (`export{to as _, ... Kt as z}`). The bundle pins the real
+	// `mountPosApp` reference on `window.__posaMountPosApp` as a
+	// side-effect — see posawesome.bundle.ts. Read it from there
+	// instead of the unstable named export.
+	const mount: ((pageRef: any) => unknown) | undefined = (window as any)
+		.__posaMountPosApp;
+	if (typeof mount !== "function") {
+		showFailure("POS bundle did not expose __posaMountPosApp on window");
 		return;
 	}
 
@@ -100,7 +106,7 @@ async function boot() {
 	};
 
 	try {
-		await bundle.mountPosApp(pageRef);
+		await mount(pageRef);
 	} catch (err) {
 		showFailure("POS mount failed", err);
 		return;

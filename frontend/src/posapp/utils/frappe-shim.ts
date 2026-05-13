@@ -89,9 +89,24 @@ function getCsrfToken(): string {
 	);
 }
 
-async function frappeCall(opts: CallOpts | string): Promise<any> {
-	const o: CallOpts =
-		typeof opts === "string" ? { method: opts } : { ...opts };
+async function frappeCall(
+	opts: CallOpts | string,
+	posArgs?: Record<string, unknown>,
+	callback?: (response: any) => void,
+	errback?: (err: any) => void,
+): Promise<any> {
+	// Desk's `frappe.call` accepts two shapes:
+	//   1. `frappe.call({ method, args, callback, error, type, freeze })`
+	//   2. `frappe.call("posawesome.api.foo", { arg1: 1 }, callback?, error?)`
+	// The SPA uses both. Normalize before issuing the fetch — the
+	// positional form was missing args entirely and the server saw
+	// `user=undefined`, causing the check_opening_shift 500.
+	let o: CallOpts;
+	if (typeof opts === "string") {
+		o = { method: opts, args: posArgs, callback, error: errback };
+	} else {
+		o = { ...opts };
+	}
 	const method = o.method;
 	const type = (o.type || "POST").toUpperCase();
 	const headers: Record<string, string> = {
@@ -173,8 +188,27 @@ function makeRealtime() {
 
 	async function ensureSocket(): Promise<any> {
 		if (socket) return socket;
-		const mod = await import("socket.io-client");
-		const ioFactory: any = (mod as any).io || (mod as any).default || mod;
+		// Prefer the runtime `window.io` (the socket.io server
+		// auto-serves a matching client at /socket.io/socket.io.js,
+		// which the web-route template loads BEFORE this entry
+		// runs). Fall back to a dynamic import only when running
+		// inside the Desk shell where `io` may not have been
+		// pre-loaded — Vite's `external: ["socket.io-client"]`
+		// keeps the dynamic import out of the bundle.
+		let ioFactory: any = (window as any).io;
+		if (!ioFactory) {
+			try {
+				const mod: any = await import(
+					/* @vite-ignore */ "socket.io-client"
+				);
+				ioFactory = mod.io || mod.default || mod;
+			} catch {
+				console.warn(
+					"[POSA][shim] socket.io-client unavailable; realtime disabled",
+				);
+				return null;
+			}
+		}
 		const siteName =
 			(typeof window !== "undefined" && window.posawesome_site_name) || "";
 		const namespace = siteName ? `/${siteName}` : "";
@@ -202,7 +236,9 @@ function makeRealtime() {
 				handlers.set(event, set);
 			}
 			set.add(cb);
-			ensureSocket().then((s) => s.on(event, cb));
+			ensureSocket().then((s) => {
+				if (s) s.on(event, cb);
+			});
 		},
 		off(event: string, cb?: (...args: any[]) => void) {
 			const set = handlers.get(event);
@@ -216,7 +252,9 @@ function makeRealtime() {
 			}
 		},
 		emit(event: string, ...args: any[]) {
-			ensureSocket().then((s) => s.emit(event, ...args));
+			ensureSocket().then((s) => {
+				if (s) s.emit(event, ...args);
+			});
 		},
 	};
 }
@@ -421,9 +459,89 @@ export function installFrappeShim() {
 
 	frappe.db.get_doc = (doctype: string, name: string) =>
 		frappe.client.get(doctype, name);
+	// Desk exposes a subset of client helpers under both `frappe.client.*`
+	// (server) and `frappe.db.*` (client). SPA call sites reach for
+	// either — proxy db.* through client.* so both work.
+	// Desk's `frappe.db.get_list` is overloaded:
+	//   - `frappe.db.get_list({ doctype, ...opts })`  (object form)
+	//   - `frappe.db.get_list("Customer Group", { fields: [...] })` (positional)
+	// The SPA uses both. Without the positional handling, the doctype
+	// string gets spread one character at a time into the query string
+	// (`?0=C&1=u&2=s&3=t...`) and the server returns 500.
+	frappe.db.get_list = (
+		doctypeOrOpts: string | Record<string, unknown>,
+		extra?: Record<string, unknown>,
+	) => {
+		const opts =
+			typeof doctypeOrOpts === "string"
+				? { doctype: doctypeOrOpts, ...(extra || {}) }
+				: doctypeOrOpts;
+		return frappe.client.get_list(opts);
+	};
+	frappe.db.get_value = (
+		doctype: string,
+		filters: Record<string, unknown> | string,
+		fieldname: string | string[],
+	) => frappe.client.get_value({ doctype, filters, fieldname });
 
 	(window as any).frappe = frappe;
 	(window as any).__ = (text: string, _args?: any[]) => frappe._(text);
+
+	// Desk attaches a handful of formatter/number helpers to window
+	// directly (frappe/public/js/frappe/form/formatters.js + utils).
+	// SPA modules reference them as free globals (e.g. `flt(value)`,
+	// `get_currency_symbol(currency)`); without these the SPA throws
+	// `ReferenceError: get_currency_symbol is not defined` at first
+	// reactive evaluation in Pos.vue. Mirror just the names the SPA
+	// touches today, not the whole Desk surface.
+	const utils = frappe.utils;
+	const win = window as any;
+	if (!win.flt) win.flt = utils.flt;
+	if (!win.cint) {
+		win.cint = (value: unknown) => {
+			const n = parseInt(String(value ?? 0), 10);
+			return Number.isFinite(n) ? n : 0;
+		};
+	}
+	if (!win.cstr) win.cstr = (value: unknown) => String(value ?? "");
+	if (!win.strip_html) win.strip_html = utils.strip_html;
+	if (!win.get_currency_symbol) {
+		win.get_currency_symbol = (currency?: string) => {
+			const code = String(currency || boot?.sysdefaults?.currency || "USD");
+			const symbols = (boot && boot.currency_symbols) || {};
+			if (symbols[code]) return symbols[code];
+			try {
+				const parts = new Intl.NumberFormat(undefined, {
+					style: "currency",
+					currency: code,
+				}).formatToParts(0);
+				const sym = parts.find((p) => p.type === "currency");
+				return sym ? sym.value : code;
+			} catch {
+				return code;
+			}
+		};
+	}
+	if (!win.format_number) {
+		win.format_number = (value: unknown, _format?: string, precision?: number) => {
+			const n = utils.flt(value, precision);
+			return Number.isFinite(n) ? n.toLocaleString() : String(value ?? "");
+		};
+	}
+	if (!win.format_currency) {
+		win.format_currency = (value: unknown, currency?: string, precision?: number) => {
+			const code = String(currency || boot?.sysdefaults?.currency || "USD");
+			const n = utils.flt(value, precision == null ? 2 : precision);
+			try {
+				return new Intl.NumberFormat(undefined, {
+					style: "currency",
+					currency: code,
+				}).format(Number.isFinite(n) ? n : 0);
+			} catch {
+				return `${win.get_currency_symbol(code)} ${n}`;
+			}
+		};
+	}
 }
 
 /**

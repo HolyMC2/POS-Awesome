@@ -148,8 +148,19 @@ export function resolveRouteLoadingMessage(
 	return "Loading view...";
 }
 
+// Phase 1 web route mounts the SPA at `/posapp` (no Desk shell).
+// Detect from the current pathname so vue-router doesn't immediately
+// redirect to its hard-coded `/app/posapp` base and bounce the user
+// back into Desk.
+function resolvePosAppRouterBase(): string {
+	if (typeof window === "undefined") return "/app/posapp";
+	const path = window.location.pathname || "";
+	if (path === "/posapp" || path.startsWith("/posapp/")) return "/posapp";
+	return "/app/posapp";
+}
+
 const createPosAppRouter = () => {
-	const history = createWebHistory("/app/posapp");
+	const history = createWebHistory(resolvePosAppRouterBase());
 	const router = createRouter({
 		history,
 		routes,
