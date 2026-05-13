@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  frontend:
-    name: Type-check, lint, unit, smoke
+  static:
+    name: Type-check, lint, unit
     runs-on: ubuntu-22.04
     defaults:
       run:
@@ -39,13 +39,58 @@ jobs:
       - name: Unit tests
         run: yarn test:unit
 
+  smoke:
+    # Phase 7 regression harness: run the Playwright smoke suite at
+    # both the legacy Desk route (`/app/posapp`) and the new web route
+    # (`/posapp`) on every PR + push. The two paths exercise slightly
+    # different boot machinery — Desk shell vs frappe-shim — so the
+    # matrix keeps both warm. Skips cleanly when the lab base URL +
+    # creds aren't configured (forks / external contributors).
+    name: Playwright smoke (${{ matrix.path }})
+    needs: static
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        path:
+          - /app/posapp
+          - /posapp
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install frontend dependencies
+        run: yarn install --frozen-lockfile
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
       - name: Playwright smoke
         env:
           POSA_SMOKE_BASE_URL: ${{ secrets.POSA_SMOKE_BASE_URL }}
-          POSA_SMOKE_PATH: ${{ vars.POSA_SMOKE_PATH || '/app/posapp' }}
+          POSA_SMOKE_PATH: ${{ matrix.path }}
           POSA_SMOKE_USER: ${{ secrets.POSA_SMOKE_USER }}
           POSA_SMOKE_PASSWORD: ${{ secrets.POSA_SMOKE_PASSWORD }}
+          POSA_SMOKE_OPENING: ${{ vars.POSA_SMOKE_OPENING || '1000' }}
         run: yarn test:smoke
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ strategy.job-index }}-traces
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          if-no-files-found: ignore
+          retention-days: 7

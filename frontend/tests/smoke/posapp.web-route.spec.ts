@@ -21,6 +21,14 @@ const POS_PATH = process.env.POSA_SMOKE_PATH || "/posapp";
 const SHIFT_OPENING_AMOUNT = process.env.POSA_SMOKE_OPENING || "1000";
 
 test.skip(!BASE_URL, "POSA_SMOKE_BASE_URL not set — skipping flow smoke.");
+// Phase 7: CI runs this file at both `/app/posapp` and `/posapp`.
+// The flow assertions exercise SPA-shell mechanics specific to the
+// web route; gate the file so the Desk-route matrix leg only runs
+// the existing posapp.global-errors.spec.ts.
+test.skip(
+	POS_PATH !== "/posapp" && !POS_PATH.startsWith("/posapp/"),
+	`web-route spec only runs at /posapp (current: ${POS_PATH}).`,
+);
 
 // `default` instead of `serial` so a failing test doesn't abort the rest.
 // Tests share an opened shift but each owns its own browser context.
