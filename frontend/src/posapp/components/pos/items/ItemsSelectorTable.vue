@@ -28,7 +28,7 @@
 			key-field="item_code"
 			:item-size="rowHeight"
 			:buffer="200"
-			page-mode="false"
+			:page-mode="false"
 		>
 			<template #default="{ item }">
 				<CatalogItemRow
