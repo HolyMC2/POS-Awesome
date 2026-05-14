@@ -33,6 +33,7 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 		printFormat: string;
 		letterhead: any;
 		noLetterhead: any;
+		printerName?: string;
 	}) => {
 		const { printDocumentViaQz } = await import("../../../services/qzTray");
 		return printDocumentViaQz(printOptions);
