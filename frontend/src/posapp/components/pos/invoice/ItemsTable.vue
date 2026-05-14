@@ -26,6 +26,7 @@
 						:key="(column as any).key || (column as any).value || column.title"
 						class="posa-cart-th"
 						:class="(column as any).cellClass || null"
+						:data-column-key="(column as any).key || (column as any).value"
 					>
 						{{ column.title }}
 					</th>

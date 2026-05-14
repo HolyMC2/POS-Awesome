@@ -81,8 +81,53 @@
 	max-width: 100% !important;
 	margin: 0 !important;
 	border-collapse: collapse !important;
-	table-layout: auto !important;
+	/* table-layout: fixed lets the column widths declared below
+	   actually take effect. With `auto` the browser distributes by
+	   content, which on the cart leaves Name truncated to a few words
+	   while QTY/UOM sit in oceans of empty space. */
+	table-layout: fixed !important;
 	border-spacing: 0;
+}
+
+/* Cart column widths. Name gets the lion's share so long item names
+   (e.g. "Samsung A07 -Negro-64 GB-4") stay readable; QTY is just a
+   spin-control widget so it stays tight; Rate / Amount are short
+   numerics and don't need 1/N of the row each.
+   Use both <th data-column-key> and <td data-column-key> so the
+   fixed layout reads the width from either header or first body row. */
+.posa-cart-table [data-column-key="item_name"] {
+	width: 42%;
+}
+.posa-cart-table [data-column-key="qty"] {
+	width: 130px;
+}
+.posa-cart-table [data-column-key="uom"] {
+	width: 70px;
+}
+.posa-cart-table [data-column-key="price_list_rate"] {
+	width: 110px;
+}
+.posa-cart-table [data-column-key="discount_percentage"],
+.posa-cart-table [data-column-key="discount_amount"] {
+	width: 100px;
+}
+.posa-cart-table [data-column-key="rate"] {
+	width: 110px;
+}
+.posa-cart-table [data-column-key="amount"] {
+	width: 110px;
+}
+.posa-cart-table [data-column-key="posa_is_offer"] {
+	width: 70px;
+}
+.posa-cart-table [data-column-key="actions"] {
+	width: 80px;
+}
+/* Vuetify-generated expand-arrow column on the right; the SPA passes
+   it last via DATA_TABLE_EXPAND_COLUMN. Keep it narrow. */
+.posa-cart-table th:last-child:not([data-column-key]),
+.posa-cart-table td:last-child:not([data-column-key]) {
+	width: 48px;
 }
 
 .posa-cart-empty-state {
