@@ -988,6 +988,22 @@ watch(searchFocusTrigger, () => {
 	requestItemSearchFocus();
 });
 
+// Limit-search profiles (Doco Ventas, etc.) keep the local catalog
+// empty and depend on the server for results. Without this watcher
+// the only way to trigger a server fetch is hitting Enter — operators
+// type a query, get "No items found", and assume the search is
+// broken. Mirror Vuetify v-text-field's keyup-debounce by piping
+// every search_input change through the existing 300 ms-debounced
+// `search_onchange`. For local-search profiles `displayedItems`
+// already filters reactively from `filteredItems`, so we still gate
+// on `usesLimitSearch` to avoid re-firing the server search there.
+watch(search_input, (next, prev) => {
+	if (next === prev) return;
+	if (!usesLimitSearch.value) return;
+	const fn = itemsSelectorSearch.search_onchange;
+	if (typeof fn === "function") fn();
+});
+
 watch(triggerTopItemSelection, () => {
 	if (activeView.value !== "items") {
 		uiStore.setActiveView("items");
