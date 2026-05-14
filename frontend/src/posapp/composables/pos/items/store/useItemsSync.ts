@@ -9,6 +9,7 @@ import {
 	getItemsLastSync,
 	saveItemDetailsCache,
 	saveItemUOMs,
+	saveItemUOMsBulk,
 	saveItemGroups,
 	getCachedItemGroups,
 	refreshBootstrapSnapshotFromCacheState,
@@ -131,11 +132,22 @@ export function useItemsSync() {
 			detailItems,
 		);
 
-		detailItems.forEach((item) => {
+		// Batch UOM cache writes. The per-item `saveItemUOMs` path calls
+		// `persist("uom_cache")` after every entry, and `persist` clones
+		// the WHOLE growing cache with `JSON.parse(JSON.stringify(...))`
+		// to hand to the persistence worker. On the Doco Ventas 6 645-
+		// item catalog this turned the call below into a 30+ second
+		// main-thread freeze (Page Unresponsive). Collect the entries
+		// and persist once via `saveItemUOMsBulk`.
+		const uomEntries: Array<{ itemCode: string; uoms: any }> = [];
+		for (const item of detailItems) {
 			if (Array.isArray(item.item_uoms) && item.item_uoms.length > 0) {
-				saveItemUOMs(item.item_code, item.item_uoms);
+				uomEntries.push({ itemCode: item.item_code, uoms: item.item_uoms });
 			}
-		});
+		}
+		if (uomEntries.length) {
+			saveItemUOMsBulk(uomEntries);
+		}
 	};
 
 	const cancelBackgroundSync = () => {

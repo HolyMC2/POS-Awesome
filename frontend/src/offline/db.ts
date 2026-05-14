@@ -574,7 +574,36 @@ export function scheduleIdleOfflinePruning() {
 	}
 }
 
-export function persist(key: string, value: unknown = memory[key]) {
+// Coalesce repeated `persist(key)` calls within the same tick into a
+// single write. Without this, callers that touch a large cache N times
+// in a loop (saveItemUOMs called 6 645 times during boot/price-list
+// switch) clone the WHOLE cache N times via JSON.parse(JSON.stringify)
+// — O(N²) work that on the Doco Ventas catalog spent 30+ s on the main
+// thread (operator sees "Page Unresponsive"). One scheduled flush per
+// unique key collapses that to O(N).
+const _pendingPersistKeys = new Set<string>();
+let _persistFlushScheduled = false;
+
+function _flushPendingPersists() {
+	_persistFlushScheduled = false;
+	const keys = Array.from(_pendingPersistKeys);
+	_pendingPersistKeys.clear();
+	for (const key of keys) {
+		_persistImmediate(key, memory[key]);
+	}
+}
+
+function _schedulePersistFlush() {
+	if (_persistFlushScheduled) return;
+	_persistFlushScheduled = true;
+	if (typeof queueMicrotask === "function") {
+		queueMicrotask(_flushPendingPersists);
+	} else {
+		Promise.resolve().then(_flushPendingPersists);
+	}
+}
+
+function _persistImmediate(key: string, value: unknown) {
 	if (!shouldPersistToIndexedDb(key) && !shouldPersistToLocalStorage(key)) {
 		if (typeof localStorage !== "undefined") {
 			localStorage.removeItem(`posa_${key}`);
@@ -615,6 +644,22 @@ export function persist(key: string, value: unknown = memory[key]) {
 			localStorage.removeItem(`posa_${key}`);
 		}
 	}
+}
+
+export function persist(key: string, value: unknown = memory[key]) {
+	// When the caller didn't override `value`, we already point at the
+	// canonical `memory[key]` slot — the flusher will read the latest
+	// content and only one write happens regardless of how many
+	// `persist(key)` calls landed in this tick.
+	if (arguments.length <= 1 || value === memory[key]) {
+		_pendingPersistKeys.add(key);
+		_schedulePersistFlush();
+		return;
+	}
+	// Caller passed an explicit value distinct from memory[key]. Treat
+	// it as an intentional one-shot and write immediately so we don't
+	// drop data on the floor.
+	_persistImmediate(key, value);
 }
 
 export function isOffline() {
