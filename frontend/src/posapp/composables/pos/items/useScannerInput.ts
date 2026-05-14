@@ -1,5 +1,6 @@
-import { ref, nextTick, onMounted, onUnmounted } from "vue";
+import { ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useToastStore } from "../../../stores/toastStore";
+import { debugLog } from "../../../utils/debug";
 import {
 	normalizeScaleBarcodeSettings,
 	parseScaleBarcodeSettingsResponse,
@@ -8,8 +9,6 @@ import {
 } from "../../../utils/scaleBarcode.js";
 import {
 	getScanTimestamp,
-	sanitizeClipboardText,
-	isScanCandidate,
 	isLikelyKeyboardScan,
 	isSearchFieldPrimedForScan,
 } from "../../../utils/keyboardScan.js";
@@ -18,6 +17,7 @@ import {
 	perfMarkEnd,
 	scheduleFrame,
 } from "../../../utils/perf.js";
+import { classifyClipboardScanText } from "./scannerInput/clipboardScan";
 
 declare const frappe: any;
 declare const __: (_str: string, _args?: any[]) => string;
@@ -151,6 +151,17 @@ export function useScannerInput(options: ScannerInputOptions = {}) {
 		scanErrorDialog.value = true;
 		scannerLocked.value = true;
 
+		// Self-heal: auto-release the lock after 15 s in case the dialog
+		// gets obscured by the soft keyboard or the user can't reach OK
+		// (mobile freeze repro). Cleared early by acknowledgeScanError or
+		// by the watch on scanErrorDialog below.
+		setTimeout(() => {
+			if (scannerLocked.value) {
+				console.warn("scannerLocked auto-released after 15 s timeout");
+				acknowledgeScanError();
+			}
+		}, 15000);
+
 		playScanTone("error");
 
 		if (typeof frappe !== "undefined" && frappe.show_alert) {
@@ -188,6 +199,17 @@ export function useScannerInput(options: ScannerInputOptions = {}) {
 		if (clearSearchHandler.value) clearSearchHandler.value();
 		if (focusSearchHandler.value) focusSearchHandler.value();
 	};
+
+	// Self-heal: any path that closes the error dialog (Esc, programmatic
+	// reset, parent unmount, browser back-button on mobile) drops the
+	// lock too. Without this, the lock could outlive the dialog and
+	// silently freeze every subsequent scan with only an error tone.
+	watch(scanErrorDialog, (open) => {
+		if (!open && scannerLocked.value) {
+			scannerLocked.value = false;
+			awaitingScanResult.value = false;
+		}
+	});
 
 	// --- onScan Integration ---
 	const initScanner = () => {
@@ -291,7 +313,7 @@ export function useScannerInput(options: ScannerInputOptions = {}) {
 		const runScanPipeline = async (code: string) => {
 			const mark = perfMarkStart("pos:scan-handler");
 			try {
-				console.log("Barcode scanned:", code);
+				debugLog("Barcode scanned:", code);
 				pendingScanCode.value = code;
 				searchFromScanner.value = true;
 
@@ -509,19 +531,20 @@ export function useScannerInput(options: ScannerInputOptions = {}) {
 		const pastedText = event.clipboardData.getData("text");
 		if (!pastedText) return;
 
-		const sanitized = sanitizeClipboardText(pastedText);
-		if (!sanitized) {
+		const pasteScan = classifyClipboardScanText(
+			pastedText,
+			keyboardScanMinLength,
+		);
+		if (pasteScan.shouldPreventDefault) {
 			event.preventDefault();
-			return;
 		}
 
-		if (isScanCandidate(sanitized, keyboardScanMinLength)) {
-			event.preventDefault();
+		if (pasteScan.shouldScan) {
 			if (setSearchInputHandler.value)
-				(setSearchInputHandler.value as any)(sanitized);
+				(setSearchInputHandler.value as any)(pasteScan.sanitizedText);
 
 			nextTick(() => {
-				onBarcodeScanned(sanitized);
+				onBarcodeScanned(pasteScan.sanitizedText);
 			});
 		}
 	};

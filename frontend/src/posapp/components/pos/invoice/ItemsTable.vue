@@ -9,99 +9,103 @@
 		@dragenter="onDragEnterFromSelector"
 		@dragleave="onDragLeaveFromSelector"
 	>
-		<v-data-table-virtual
-			:headers="responsiveHeaders"
-			:items="items"
-			:expanded="expanded"
-			show-expand
-			item-value="posa_row_id"
-			class="posa-cart-table elevation-2 pos-themed-card"
-			:class="tableClasses"
-			:items-per-page="virtualScrollConfig.itemsPerPage"
-			:item-height="virtualScrollConfig.itemHeight"
-			:buffer-size="virtualScrollConfig.bufferSize"
-			expand-on-click
-			fixed-header
-			:density="tableDensity"
-			hide-default-footer
-			:single-expand="true"
-			:header-props="dynamicHeaderProps"
-			@update:expanded="handleExpandedUpdate"
-			:search="itemSearch"
-			:custom-filter="customItemFilter"
+		<!--
+			Phase 2: native <table> instead of Vuetify's <v-data-table-virtual>.
+			The cart never holds more than ~15 rows; the virtual table's
+			per-row dynamic CSS rules + deep watchers + scroll machinery
+			are pure overhead on every cart edit. See 3-SIGMA.md §3.
+		-->
+		<table
+			class="posa-cart-table posa-cart-table--native elevation-2 pos-themed-card"
+			:class="[tableClasses, `density-${tableDensity}`]"
 		>
-			<template #no-data>
-				<div class="posa-cart-empty-state">
-					<div class="posa-cart-empty-state__icon-wrap">
-						<v-icon :icon="emptyStateIcon" size="42" class="posa-cart-empty-state__icon" />
-					</div>
-					<div class="posa-cart-empty-state__title">{{ emptyStateTitle }}</div>
-					<div class="posa-cart-empty-state__subtitle">{{ emptyStateSubtitle }}</div>
-				</div>
-			</template>
-
-			<template v-slot:item="{ item, toggleExpand, internalItem }">
-				<CartItemRow
-					:item="item"
-					:posProfile="pos_profile"
-					:isReturnInvoice="isReturnInvoice"
-					:invoiceType="invoiceType"
-					:displayCurrency="displayCurrency"
-					:formatFloat="memoizedFormatFloat"
-					:formatCurrency="memoizedFormatCurrency"
-					:currencySymbol="currencySymbol"
-					:isNumber="isNumber"
-					:isNegative="memoizedIsNegative"
-					:hideQtyDecimals="hide_qty_decimals"
-					:isRTL="isRtl"
-					:showUom="isColumnVisible('uom')"
-					:showPriceListRate="isColumnVisible('price_list_rate')"
-					:showDiscountPercent="isColumnVisible('discount_percentage')"
-					:showDiscountAmount="isColumnVisible('discount_amount')"
-					:showOffer="isColumnVisible('posa_is_offer')"
-					@update-qty="handleQtyUpdate"
-					@minus-click="handleMinusClick"
-					@add-one="addOne"
-					@calc-uom="calcUom"
-					@update-rate="handleRateUpdate"
-					@update-discount-percent="handleDiscountPercentUpdate"
-					@update-discount-amount="handleDiscountAmountUpdate"
-					@open-name-dialog="openNameDialog"
-					@reset-item-name="resetItemName"
-					@toggle-offer="toggleOffer"
-					@remove-item="removeItem"
-					@click="handleRowClick($event, item, toggleExpand, internalItem)"
-				/>
-			</template>
-
-			<!-- Expanded row -->
-			<template v-slot:expanded-row="{ item }">
-				<ItemsTableExpandedRow
-					:item="item"
-					:is-expanded="isItemExpanded(item.posa_row_id)"
-					:colspan="responsiveHeaders.length + 1"
-					:pos_profile="pos_profile"
-					:invoice-type="invoiceType"
-					:is-return-invoice="isReturnInvoice"
-					:invoice_doc="invoice_doc"
-					:hide_qty_decimals="hide_qty_decimals"
-					:expanded-content-classes="expandedContentClasses"
-					:format-float="memoizedFormatFloat"
-					:format-currency="memoizedFormatCurrency"
-					:currency-symbol="currencySymbol"
-					:is-number="isNumber"
-					:set-formated-currency="setFormatedCurrency"
-					:calc-prices="calcPrices"
-					:calc-uom="calcUom"
-					:change-price-list-rate="changePriceListRate"
-					:get-serial-options="getSerialOptions"
-					:set-serial-no="setSerialNo"
-					:set-batch-qty="setBatchQty"
-					:validate-due-date="validateDueDate"
-					@qty-change="handleQtyChange"
-				/>
-			</template>
-		</v-data-table-virtual>
+			<thead :class="`responsive-header container-${breakpoint}`">
+				<tr>
+					<th
+						v-for="column in finalVisibleColumns"
+						:key="(column as any).key || (column as any).value || column.title"
+						class="posa-cart-th"
+						:class="(column as any).cellClass || null"
+						:data-column-key="(column as any).key || (column as any).value"
+					>
+						{{ column.title }}
+					</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr v-if="!visibleItems.length" class="posa-cart-empty-row">
+					<td :colspan="finalVisibleColumns.length">
+						<div class="posa-cart-empty-state">
+							<div class="posa-cart-empty-state__icon-wrap">
+								<v-icon :icon="emptyStateIcon" size="42" class="posa-cart-empty-state__icon" />
+							</div>
+							<div class="posa-cart-empty-state__title">{{ emptyStateTitle }}</div>
+							<div class="posa-cart-empty-state__subtitle">{{ emptyStateSubtitle }}</div>
+						</div>
+					</td>
+				</tr>
+				<template v-for="item in visibleItems" :key="item.posa_row_id">
+					<CartItemRow
+						:item="item"
+						:visible-columns="finalVisibleColumns"
+						:posProfile="pos_profile"
+						:isReturnInvoice="isReturnInvoice"
+						:invoiceType="invoiceType"
+						:displayCurrency="displayCurrency"
+						:formatFloat="memoizedFormatFloat"
+						:formatCurrency="memoizedFormatCurrency"
+						:currencySymbol="currencySymbol"
+						:isNumber="isNumber"
+						:isNegative="memoizedIsNegative"
+						:hideQtyDecimals="hide_qty_decimals"
+						:isRTL="isRtl"
+						:is-expanded="isItemExpanded(item.posa_row_id)"
+						@update-qty="handleQtyUpdate"
+						@minus-click="handleMinusClick"
+						@add-one="addOne"
+						@calc-uom="calcUom"
+						@update-rate="handleRateUpdate"
+						@update-discount-percent="handleDiscountPercentUpdate"
+						@update-discount-amount="handleDiscountAmountUpdate"
+						@open-name-dialog="openNameDialog"
+						@reset-item-name="resetItemName"
+						@toggle-offer="toggleOffer"
+						@toggle-expand="toggleExpanded(item.posa_row_id)"
+						@remove-item="removeItem"
+						@click="toggleExpanded(item.posa_row_id)"
+					/>
+					<tr
+						v-if="isItemExpanded(item.posa_row_id)"
+						class="posa-cart-expanded-row"
+					>
+						<ItemsTableExpandedRow
+							:item="item"
+							:is-expanded="true"
+							:colspan="finalVisibleColumns.length"
+							:pos_profile="pos_profile"
+							:invoice-type="invoiceType"
+							:is-return-invoice="isReturnInvoice"
+							:invoice_doc="invoice_doc"
+							:hide_qty_decimals="hide_qty_decimals"
+							:expanded-content-classes="expandedContentClasses"
+							:format-float="memoizedFormatFloat"
+							:format-currency="memoizedFormatCurrency"
+							:currency-symbol="currencySymbol"
+							:is-number="isNumber"
+							:set-formated-currency="setFormatedCurrency"
+							:calc-prices="calcPrices"
+							:calc-uom="calcUom"
+							:change-price-list-rate="changePriceListRate"
+							:get-serial-options="getSerialOptions"
+							:set-serial-no="setSerialNo"
+							:set-batch-qty="setBatchQty"
+							:validate-due-date="validateDueDate"
+							@qty-change="handleQtyChange"
+						/>
+					</tr>
+				</template>
+			</tbody>
+		</table>
 
 		<!-- Edit name dialog -->
 		<v-dialog v-model="editNameDialog" max-width="400">
@@ -136,7 +140,10 @@ import ItemsTableExpandedRow from "./ItemsTableExpandedRow.vue";
 
 import { useItemsTableSearch } from "../../../composables/pos/items/useItemsTableSearch";
 import { useItemsTableDragDrop } from "../../../composables/pos/items/useItemsTableDragDrop";
-import { useItemsTableResponsive } from "../../../composables/pos/items/useItemsTableResponsive";
+import {
+	DATA_TABLE_EXPAND_COLUMN,
+	useItemsTableResponsive,
+} from "../../../composables/pos/items/useItemsTableResponsive";
 import { useItemsTableMerge } from "../../../composables/pos/items/useItemsTableMerge";
 import { useItemsTableNameEdit } from "../../../composables/pos/items/useItemsTableNameEdit";
 import { useFormatters } from "../../../composables/core/useFormatters";
@@ -213,6 +220,12 @@ const nameEdit = useItemsTableNameEdit();
 const items = computed(() => invoiceStore.items);
 const invoice_doc = computed(() => invoiceStore.invoiceDoc || {});
 const hasItemSearch = computed(() => !!props.itemSearch?.trim());
+const visibleItems = computed(() => {
+	const list = items.value || [];
+	const term = props.itemSearch?.trim();
+	if (!term) return list;
+	return list.filter((row: any) => customItemFilter(row, term, row));
+});
 const emptyStateIcon = computed(() => (hasItemSearch.value ? "mdi-cart-search" : "mdi-cart-outline"));
 const emptyStateTitle = computed(() =>
 	hasItemSearch.value ? __("No matching items in cart") : __("No items in cart"),
@@ -233,29 +246,14 @@ const memoizedIsNegative = computed(() => {
 const {
 	breakpoint,
 	responsiveHeaders,
-	isColumnVisible,
 	containerStyles,
 	containerClasses,
 	tableClasses,
 	expandedContentClasses,
 	tableDensity,
-	containerHeight,
 } = responsive;
 
-const dynamicHeaderProps = computed(() => ({
-	class: `responsive-header container-${breakpoint.value}`,
-}));
-
-const virtualScrollConfig = computed(() => {
-	const itemCount = items.value?.length || 0;
-	const height = containerHeight.value || 600;
-
-	return {
-		itemHeight: tableDensity.value === "compact" ? 48 : tableDensity.value === "comfortable" ? 72 : 60,
-		itemsPerPage: Math.max(20, Math.ceil(height / 60) + 5),
-		bufferSize: itemCount > 1000 ? 20 : itemCount > 500 ? 15 : 10,
-	};
-});
+const finalVisibleColumns = computed(() => [...responsiveHeaders.value, DATA_TABLE_EXPAND_COLUMN]);
 
 const hide_qty_decimals = computed(() => {
 	const opts = loadItemSelectorSettings();
@@ -264,7 +262,8 @@ const hide_qty_decimals = computed(() => {
 
 // Watchers
 watch(() => props.displayCurrency, clearFormatCache);
-watch(() => props.pos_profile, clearFormatCache, { deep: true });
+// Drop deep:true — clear format cache only on profile reassignment.
+watch(() => props.pos_profile, clearFormatCache);
 
 // Methods
 const getSerialOptions = (item: any) => {
@@ -274,9 +273,12 @@ const getSerialOptions = (item: any) => {
 	return Array.isArray(item?.serial_no_data) ? item.serial_no_data : [];
 };
 
-const handleExpandedUpdate = (val: any[]) => {
-	const mappedValues = val.map((v) => (typeof v === "object" ? v.posa_row_id : v));
-	emit("update:expanded", mappedValues);
+const toggleExpanded = (rowId: any) => {
+	const current = Array.isArray(props.expanded) ? [...props.expanded] : [];
+	const next = current.includes(rowId)
+		? current.filter((id) => id !== rowId)
+		: [...current, rowId];
+	emit("update:expanded", next);
 };
 
 const handleQtyChange = (item: any, event: any) => {
@@ -330,12 +332,6 @@ const handleDiscountAmountUpdate = (item: any, newDiscount: any) => {
 		target: { value: newDiscount },
 	});
 	props.calcPrices(item, newDiscount, { target: { id: "discount_amount" } });
-};
-
-const handleRowClick = (event: any, item: any, toggleExpand: any, internalItem: any) => {
-	if (toggleExpand) {
-		toggleExpand(internalItem);
-	}
 };
 
 const focusItemField = (index: number, field: CartShortcutField) => {

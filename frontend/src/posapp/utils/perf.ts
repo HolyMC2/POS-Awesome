@@ -2,6 +2,8 @@
  * Performance profiling utilities for the POS application.
  */
 
+import { trackCustomMark } from "./telemetry";
+
 const hasWindow = typeof window !== "undefined";
 const hasPerformance = typeof performance !== "undefined";
 
@@ -68,17 +70,37 @@ export function perfMarkEnd(label: string, startMark?: string | null): void {
 /**
  * Wraps a function with performance measurement.
  */
+// Telemetry sampling threshold for `withPerf`. Marks under this
+// duration are dropped before the telemetry buffer push. Hot loops
+// that wrap a fast helper (e.g. a O(1) lookup) would otherwise queue
+// hundreds of events per second; the dashboard only cares about
+// expensive paths.
+const TELEMETRY_SAMPLE_MIN_MS = 1;
+
 export function withPerf<T extends (..._args: any[]) => any>(
 	label: string,
 	fn: T,
 ): T {
 	return function withPerfWrapper(this: any, ...args: any[]) {
+		const startedAt = hasPerformance ? performance.now() : Date.now();
 		const start = perfMarkStart(label);
+		const settle = () => {
+			perfMarkEnd(label, start);
+			const elapsed =
+				(hasPerformance ? performance.now() : Date.now()) - startedAt;
+			if (elapsed >= TELEMETRY_SAMPLE_MIN_MS) {
+				try {
+					trackCustomMark(label, elapsed);
+				} catch {
+					// Telemetry must never raise from a wrapped path.
+				}
+			}
+		};
 		const result = fn.apply(this, args);
 		if (result && typeof result.then === "function") {
-			return result.finally(() => perfMarkEnd(label, start));
+			return result.finally(settle);
 		}
-		perfMarkEnd(label, start);
+		settle();
 		return result;
 	} as T;
 }

@@ -1,9 +1,17 @@
-import { ref } from "vue";
+import { shallowRef } from "vue";
 import type { Item, POSProfile } from "../../../../types/models";
 
 export function useItemsSearch() {
-	const itemsMap = ref(new Map<string, Item>()); // O(1) lookup by item_code
-	const barcodeIndex = ref(new Map<string, Item>()); // O(1) barcode lookup
+	// `shallowRef(new Map())` instead of deep `ref(new Map())`. The
+	// item lookup map is mutated on every catalog chunk + every
+	// `update_items_details` patch; deep reactivity wraps every
+	// single `Map.set()` in dependency notifications and turns
+	// every value into a Vue proxy. With 5 k+ items this dominated
+	// the main-thread blocking time on slow devices. Lookups still
+	// work; mutations no longer fire reactivity (callers don't
+	// watch these maps anyway — they read on demand).
+	const itemsMap = shallowRef(new Map<string, Item>()); // O(1) lookup by item_code
+	const barcodeIndex = shallowRef(new Map<string, Item>()); // O(1) barcode lookup
 
 	const normalizeBooleanSetting = (value: any): boolean => {
 		if (typeof value === "string") {

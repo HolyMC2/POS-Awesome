@@ -1,5 +1,6 @@
 import stockCoordinator from "../../../utils/stockCoordinator";
 import { isOffline } from "../../../../offline/index";
+import { syncReturnDiscountProration } from "./return_discount";
 
 declare const __: (_text: string, _args?: any[]) => string;
 declare const frappe: any;
@@ -834,20 +835,31 @@ export async function flushBackgroundUpdates(context: any) {
 
 	if (itemsToUpdate.length === 0) return;
 
-	try {
-		if (context.update_items_details)
-			await context.update_items_details(itemsToUpdate);
-
-		itemsToUpdate.forEach((item) => {
-			item._needs_update = false;
-			item._detailSynced = true;
+	// Background flush. Fire the detail-fetch as truly async so the
+	// flush invocation returns immediately; mark items synced + kick
+	// the pricing pass once the response lands. Awaiting here meant
+	// the 2 s `triggerBackgroundFlush` debounce ended with a UI
+	// freeze of 1-5 s while the network responded — the operator
+	// experienced "frozen after the second item add". The flush is
+	// best-effort: if the network fails, items keep their local
+	// state and a later flush retries.
+	if (!context.update_items_details) return;
+	Promise.resolve(context.update_items_details(itemsToUpdate))
+		.then(() => {
+			itemsToUpdate.forEach((item) => {
+				item._needs_update = false;
+				item._detailSynced = true;
+			});
+			if (context.schedulePricingRuleApplication) {
+				context.schedulePricingRuleApplication();
+			}
+		})
+		.catch((e: unknown) => {
+			console.warn(
+				"[POSA][BackgroundFlush] detail refresh failed; will retry on next flush",
+				e,
+			);
 		});
-
-		if (context.schedulePricingRuleApplication)
-			context.schedulePricingRuleApplication();
-	} catch (e) {
-		console.error("Background flush failed", e);
-	}
 }
 
 export function _normalizeReturnDocTotals(context: any, doc: any) {
@@ -890,48 +902,8 @@ export function _normalizeReturnDocTotals(context: any, doc: any) {
 }
 
 export function applyReturnDiscountProration(context: any) {
-	if (
-		!context ||
-		!context.isReturnInvoice ||
-		context.pos_profile?.posa_use_percentage_discount ||
-		!context.return_doc ||
-		typeof context.return_doc !== "object"
-	) {
-		return;
-	}
-
-	const returnDoc = context.return_doc;
-	const originalDiscount = Math.abs(
-		Number(context.return_discount_base_amount || returnDoc.discount_amount || 0),
+	syncReturnDiscountProration(
+		context,
+		"[POSA][Returns] Hook auto-prorate discount",
 	);
-	const originalTotal = Math.abs(
-		Number(
-			context.return_discount_base_total ??
-				returnDoc.total ??
-				returnDoc.net_total ??
-				returnDoc.grand_total ??
-				0,
-		),
-	);
-	const returnTotal = Math.abs(Number(context.Total || 0));
-
-	if (!originalDiscount || !originalTotal || !returnTotal) {
-		return;
-	}
-
-	const ratio = Math.min(1, returnTotal / originalTotal);
-	const prorated = -Math.abs(originalDiscount * ratio);
-	const current = Number(context.additional_discount || 0);
-	if (Math.abs(current - prorated) > 0.0001) {
-		console.log("[POSA][Returns] Hook auto-prorate discount", {
-			originalDiscount,
-			originalTotal,
-			returnTotal,
-			ratio,
-			prorated,
-		});
-		context.additional_discount = prorated;
-		context.discount_amount = prorated;
-		context.additional_discount_percentage = 0;
-	}
 }

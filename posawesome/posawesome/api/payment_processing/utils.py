@@ -1,6 +1,7 @@
 import frappe
 from erpnext.accounts.doctype.journal_entry.journal_entry import get_default_bank_cash_account
 
+
 def get_party_account(party_type, party, company):
     try:
         # First try to get from Party Account
@@ -29,6 +30,7 @@ def get_party_account(party_type, party, company):
         frappe.log_error(f"Error getting party account: {str(e)}")
         return None
 
+
 def get_bank_cash_account(company, mode_of_payment, bank_account=None):
     bank = get_default_bank_cash_account(
         company, "Bank", mode_of_payment=mode_of_payment, account=bank_account
@@ -40,6 +42,7 @@ def get_bank_cash_account(company, mode_of_payment, bank_account=None):
         )
 
     return bank
+
 
 def set_paid_amount_and_received_amount(
     party_account_currency,
@@ -69,12 +72,14 @@ def set_paid_amount_and_received_amount(
 
     return paid_amount, received_amount
 
+
 @frappe.whitelist()
 def get_mode_of_payment_accounts(company, mode_of_payments):
     import json
+
     if isinstance(mode_of_payments, str):
         mode_of_payments = json.loads(mode_of_payments)
-    
+
     currency_map = {}
     for mode in mode_of_payments:
         account = get_bank_cash_account(company, mode)

@@ -167,21 +167,16 @@
 					<!-- Action buttons -->
 					<v-row class="mt-2 mb-2 returns-actions">
 						<v-col cols="12" sm="4" md="auto">
-							<v-btn
-							block
-							variant="text"
-							color="primary"
-							@click="search_invoices"
-						>
-							<v-icon start>mdi-magnify</v-icon>
-							{{ __("Search") }}
-						</v-btn>
+							<v-btn block variant="text" color="primary" @click="search_invoices">
+								<v-icon start>mdi-magnify</v-icon>
+								{{ __("Search") }}
+							</v-btn>
 						</v-col>
 						<v-col cols="12" sm="4" md="auto">
-						<v-btn block variant="text" color="warning" @click="clear_search">
-							<v-icon start>mdi-refresh</v-icon>
-							{{ __("Clear") }}
-						</v-btn>
+							<v-btn block variant="text" color="warning" @click="clear_search">
+								<v-icon start>mdi-refresh</v-icon>
+								{{ __("Clear") }}
+							</v-btn>
 						</v-col>
 						<v-col
 							cols="12"
@@ -189,14 +184,9 @@
 							md="auto"
 							v-if="pos_profile.posa_allow_return_without_invoice == 1"
 						>
-						<v-btn
-							block
-							variant="text"
-							color="secondary"
-							@click="return_without_invoice"
-						>
-							{{ __("Return without Invoice") }}
-						</v-btn>
+							<v-btn block variant="text" color="secondary" @click="return_without_invoice">
+								{{ __("Return without Invoice") }}
+							</v-btn>
 						</v-col>
 					</v-row>
 
@@ -221,11 +211,15 @@
 											<span>{{ item.name }}</span>
 										</div>
 										<div class="returns-result-card__amount">
-											{{ currencySymbol(item.currency) }}{{ formatCurrency(item.grand_total) }}
+											{{ currencySymbol(item.currency)
+											}}{{ formatCurrency(item.grand_total) }}
 										</div>
 									</div>
 									<div class="returns-result-card__meta">
-										<span>{{ __("Date") }}: {{ formatDateDisplay(item.posting_date) }}</span>
+										<span
+											>{{ __("Date") }}:
+											{{ formatDateDisplay(item.posting_date) }}</span
+										>
 										<span v-if="item.posa_return_valid_upto">
 											{{ __("Valid until") }}:
 											{{ formatDateDisplay(item.posa_return_valid_upto) }}
@@ -320,11 +314,7 @@
 					<v-btn color="error" variant="tonal" @click="close_dialog">
 						{{ __("Close") }}
 					</v-btn>
-					<v-btn
-						v-if="selected.length"
-						color="success"
-						@click="submit_dialog"
-					>
+					<v-btn v-if="selected.length" color="success" @click="submit_dialog">
 						{{ __("Select") }}
 					</v-btn>
 				</v-card-actions>
@@ -342,6 +332,12 @@ import { useResponsive } from "../../../composables/core/useResponsive";
 import { useTheme } from "../../../composables/core/useTheme";
 
 export default {
+	props: {
+		openRequest: {
+			type: Object,
+			default: null,
+		},
+	},
 	mixins: [format],
 	setup() {
 		const invoiceStore = useInvoiceStore();
@@ -422,6 +418,13 @@ export default {
 	}),
 	computed: {},
 	watch: {
+		openRequest: {
+			handler(request) {
+				if (!request) return;
+				this.open_dialog(request.company);
+			},
+			immediate: true,
+		},
 		from_date() {
 			this.formatFromDate();
 		},
@@ -430,6 +433,26 @@ export default {
 		},
 	},
 	methods: {
+		open_dialog(data) {
+			this.invoicesDialog = true;
+			this.company = data;
+			this.invoice_name = "";
+			this.customer_name = "";
+			this.customer_id = "";
+			this.mobile_no = "";
+			this.tax_id = "";
+			this.from_date = null;
+			this.to_date = null;
+			this.from_date_formatted = null;
+			this.to_date_formatted = null;
+			this.min_amount = "";
+			this.max_amount = "";
+			this.dialog_data = [];
+			this.selected = [];
+			this.page = 1;
+			this.has_more_invoices = false;
+			this.searched_once = false;
+		},
 		isSelectedInvoice(item) {
 			return Array.isArray(this.selected) && this.selected.some((entry) => entry?.name === item?.name);
 		},
@@ -784,11 +807,18 @@ export default {
 				invoice_doc.customer = return_doc.customer;
 				invoice_doc.discount_amount = return_doc.discount_amount;
 				invoice_doc.additional_discount_percentage = return_doc.additional_discount_percentage;
+				const normalizeRefundAmount = (value) => {
+					const amount = this.flt(value || 0, this.currency_precision);
+					return amount ? -Math.abs(amount) : 0;
+				};
 				invoice_doc.payments = Array.isArray(return_doc.payments)
 					? return_doc.payments.map((payment) => ({
 							mode_of_payment: payment.mode_of_payment,
-							amount: payment.amount,
-							base_amount: payment.base_amount,
+							amount: normalizeRefundAmount(payment.amount),
+							base_amount:
+								payment.base_amount !== undefined
+									? normalizeRefundAmount(payment.base_amount)
+									: payment.base_amount,
 							default: payment.default,
 							account: payment.account,
 							type: payment.type,
@@ -818,24 +848,7 @@ export default {
 	},
 	created: function () {
 		this.eventBus.on("open_returns", (data) => {
-			this.invoicesDialog = true;
-			this.company = data;
-			this.invoice_name = "";
-			this.customer_name = "";
-			this.customer_id = "";
-			this.mobile_no = "";
-			this.tax_id = "";
-			this.from_date = null;
-			this.to_date = null;
-			this.from_date_formatted = null;
-			this.to_date_formatted = null;
-			this.min_amount = "";
-			this.max_amount = "";
-			this.dialog_data = [];
-			this.selected = [];
-			this.page = 1;
-			this.has_more_invoices = false;
-			this.searched_once = false;
+			this.open_dialog(data);
 		});
 
 		this.$watch(

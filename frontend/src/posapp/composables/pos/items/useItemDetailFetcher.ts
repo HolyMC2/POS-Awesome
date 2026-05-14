@@ -13,6 +13,8 @@ import {
 	isOffline,
 } from "../../../../offline/index";
 import { scheduleFrame } from "../../../utils/perf.js";
+import { debugLog } from "../../../utils/debug";
+import { buildItemDetailsRequestIdentity } from "./detailFetcher/requestIdentity";
 
 declare const frappe: any;
 
@@ -79,35 +81,6 @@ export function useItemDetailFetcher() {
 		return `${profileName}_${warehouse}`;
 	}
 
-	function buildItemDetailsRequestKey(
-		items: any[],
-		priceListOverride: string | null = null,
-	) {
-		const effectivePriceList =
-			typeof priceListOverride === "string" &&
-			priceListOverride.trim().length
-				? priceListOverride.trim()
-				: ctx.active_price_list || "";
-		const itemCodes = Array.from(
-			new Set(
-				items
-					.map((item) => item?.item_code)
-					.filter(
-						(code) =>
-							code !== undefined && code !== null && code !== "",
-					),
-			),
-		)
-			.map((code) => String(code))
-			.sort();
-
-		return [
-			ctx.pos_profile?.name || "",
-			effectivePriceList,
-			itemCodes.join(","),
-		].join(":");
-	}
-
 	function cancelItemDetailsRequest() {
 		if (abortController.value) {
 			abortController.value.abort();
@@ -133,12 +106,12 @@ export function useItemDetailFetcher() {
 			return [];
 		}
 
-		const effectivePriceList =
-			typeof priceListOverride === "string" &&
-			priceListOverride.trim().length
-				? priceListOverride.trim()
-				: ctx.active_price_list || "";
-		const key = buildItemDetailsRequestKey(items, effectivePriceList);
+		const { effectivePriceList, key } = buildItemDetailsRequestIdentity({
+			posProfileName: ctx.pos_profile?.name,
+			activePriceList: ctx.active_price_list,
+			priceListOverride,
+			items,
+		});
 
 		if (
 			!bypassRequestCache &&
@@ -349,13 +322,14 @@ export function useItemDetailFetcher() {
 		options: { forceRefresh?: boolean; priceListOverride?: string | null } = {},
 	) {
 		const { forceRefresh = false, priceListOverride = null } = options;
-		const effectivePriceList =
-			typeof priceListOverride === "string" &&
-			priceListOverride.trim().length
-				? priceListOverride.trim()
-				: ctx.active_price_list || "";
-
 		if (!items || !items.length) return;
+
+		const { effectivePriceList } = buildItemDetailsRequestIdentity({
+			posProfileName: ctx.pos_profile?.name,
+			activePriceList: ctx.active_price_list,
+			priceListOverride,
+			items,
+		});
 
 		// reset any pending retry timer
 		if (itemDetailsRetryTimeout.value) {
@@ -713,7 +687,7 @@ export function useItemDetailFetcher() {
 			const cache = getLocalStockCache();
 			const cacheSize = Object.keys(cache).length;
 			if (isStockCacheReady() && cacheSize >= items.length) {
-				console.debug("Stock cache already initialized");
+				debugLog("Stock cache already initialized");
 				return;
 			}
 			if (items.length > 500) {

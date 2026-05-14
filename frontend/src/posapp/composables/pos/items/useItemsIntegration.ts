@@ -6,6 +6,7 @@
 import { computed, watch, onMounted, onUnmounted } from "vue";
 import { useItemsStore } from "../../../stores/itemsStore.js";
 import { storeToRefs } from "pinia";
+import { debugLog } from "../../../utils/debug";
 
 type IntegrationOptions = {
 	enableDebounce?: boolean;
@@ -32,6 +33,7 @@ export function useItemsIntegration(options: IntegrationOptions = {}) {
 		isLoading,
 		isBackgroundLoading,
 		loadProgress,
+		syncedItemsCount,
 		totalItemCount,
 		itemsLoaded,
 		searchTerm,
@@ -95,6 +97,32 @@ export function useItemsIntegration(options: IntegrationOptions = {}) {
 		});
 	};
 
+	// Lean server-side search: capped page, no images, merges into the
+	// existing items list. Used by the search-fallback so a single
+	// missing-item retry never re-pulls the entire catalog.
+	//
+	// Accepts an explicit term: the search-input wiring writes to its
+	// own `search_input` / `first_search` refs and does NOT sync to
+	// `itemsStore.searchTerm` on every keystroke (that store ref is
+	// only set via the `search` computed used by the legacy adapter).
+	// Without the override the caller's typed query never reaches the
+	// server fallback during background load — operator sees an empty
+	// catalog until the full sync completes.
+	const search_items_lean = async (termOverride?: string) => {
+		if (!posProfile.value || !posProfile.value.name) return [];
+		const term =
+			typeof termOverride === "string" && termOverride.length
+				? termOverride
+				: searchTerm.value;
+		if (!term || term.trim().length < 2) return [];
+		return await itemsStore.loadItems({
+			forceServer: true,
+			searchValue: term,
+			groupFilter: itemGroup.value,
+			lean: true,
+		});
+	};
+
 	const forceReloadItems = async () => {
 		return await itemsStore.refreshItems();
 	};
@@ -137,8 +165,7 @@ export function useItemsIntegration(options: IntegrationOptions = {}) {
 	};
 
 	const update_items_details = async (_itemList: unknown[]) => {
-		// This is now handled automatically by the store in background
-		// Keep for compatibility but don't need to do anything
+		// Compatibility shim: item detail refresh now runs through the store-managed path.
 		return Promise.resolve(undefined);
 	};
 
@@ -169,7 +196,7 @@ export function useItemsIntegration(options: IntegrationOptions = {}) {
 		);
 
 		// Initialization complete
-		console.log("Items store initialized:", {
+		debugLog("Items store initialized:", {
 			itemsCount: totalItemCount.value,
 			cacheHealth: cacheHealth.value,
 		});
@@ -205,7 +232,7 @@ export function useItemsIntegration(options: IntegrationOptions = {}) {
 	// Cache management
 	const clearAllCaches = async () => {
 		await itemsStore.clearAllCaches();
-		console.log("All caches cleared");
+		debugLog("All caches cleared");
 	};
 
 	const assessCacheHealth = async () => {
@@ -238,7 +265,7 @@ export function useItemsIntegration(options: IntegrationOptions = {}) {
 	// Watch for important changes
 	watch(itemsLoaded, (loaded) => {
 		if (loaded) {
-			console.log("Items loaded:", {
+			debugLog("Items loaded:", {
 				count: totalItemCount.value,
 				cached: cacheHealth.value.items === "healthy",
 			});
@@ -246,14 +273,14 @@ export function useItemsIntegration(options: IntegrationOptions = {}) {
 	});
 
 	watch(filteredItems, (newItems) => {
-		console.debug("Filtered items updated:", {
+		debugLog("Filtered items updated:", {
 			count: newItems.length,
 			total: totalItemCount.value,
 		});
 	});
 
 	watch(isLoading, (loading) => {
-		console.debug("Loading state changed:", loading);
+		debugLog("Loading state changed:", loading);
 	});
 
 	// Return interface compatible with existing component
@@ -267,6 +294,7 @@ export function useItemsIntegration(options: IntegrationOptions = {}) {
 		isLoading,
 		isBackgroundLoading,
 		loadProgress,
+		syncedItemsCount,
 		totalItemCount,
 		itemsLoaded,
 		searchTerm,
@@ -309,6 +337,7 @@ export function useItemsIntegration(options: IntegrationOptions = {}) {
 
 		// Legacy method adapters
 		get_items,
+		search_items_lean,
 		forceReloadItems,
 		get_items_groups,
 		search_onchange,

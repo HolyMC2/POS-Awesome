@@ -1,0 +1,99 @@
+{#
+  POSAwesome SPA — web-route shell.
+
+  Renders OUTSIDE the Frappe Desk shell. Only carries:
+    - the asset preload tags
+    - a single boot-payload <script> seeding window.posawesome_boot
+    - the entry script that installs the frappe-shim then mounts the SPA
+
+  No Desk navbar / sidebar / workspace icons / global search / forms /
+  notifications panel mount on this route. The DOM baseline is ~5 k
+  nodes vs ~150 k inside Desk.
+#}
+<!doctype html>
+<html lang="{{ language or 'en' }}">
+<head>
+	<meta charset="utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+	<meta name="theme-color" content="#0f172a" />
+	<title>{{ title }}</title>
+	<link rel="icon" type="image/png" href="/assets/posawesome/dist/js/pos-BuGonphY.png" />
+	<link rel="manifest" href="/manifest.json" />
+
+	{# Cache-busted CSS bundle (build-manifest emits the hashed path). #}
+	<link id="posa-posapp-css" rel="stylesheet" href="{{ asset_css }}" />
+
+	<style>
+		/* Reset Desk's own injected CSS reset side effects. The web
+		   route doesn't load Desk, but if browsers cached the Desk
+		   stylesheet from a prior /app/posapp visit, normalize the
+		   visible body so the SPA renders against a clean slate. */
+		html, body {
+			margin: 0;
+			padding: 0;
+			height: 100%;
+			background: #0f172a;
+			color: #e2e8f0;
+			font-family: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+			overflow: hidden;
+		}
+		#posa-app, #posa-app > * {
+			height: 100%;
+			width: 100%;
+		}
+		#posa-app-loading {
+			position: fixed;
+			inset: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			color: #94a3b8;
+			font-size: 14px;
+			background: #0f172a;
+			z-index: 1;
+		}
+	</style>
+</head>
+<body>
+	<div id="posa-app-loading">Loading POS Awesome…</div>
+	{# `main-section` class is required by PosAppController.make_body()
+	   which does `$(document).find(".main-section")` to locate its mount
+	   node (Desk supplies that class on the page body). Add it here so
+	   the SPA mounts cleanly without changes to posapp.ts. #}
+	<div id="posa-app" class="main-section"></div>
+
+	{# Seed the SPA before the entry script runs. The shim reads
+	   window.posawesome_boot to populate frappe.boot, frappe.session,
+	   and frappe.csrf_token without an extra round-trip. #}
+	<script>
+		window.posawesome_boot = {{ boot_json | safe }};
+		window.posawesome_csrf_token = {{ csrf_token | tojson }};
+		window.posawesome_build_version = {{ build_version | tojson }};
+		window.posawesome_site_name = {{ site_name | tojson }};
+	</script>
+
+	{# Frappe ships jQuery as a desk global; the SPA bundle (and
+	   loader.ts at line 334) calls `$()` directly assuming Desk
+	   provides it. Cheaper to load Frappe's bundled jQuery here
+	   than to refactor the SPA to drop the dependency. ~30 kB
+	   gzipped, cached after first load. Loaded synchronously
+	   BEFORE the module entry so window.$ is set when the bundle
+	   executes top-level code. #}
+	<script src="/assets/frappe/js/lib/jquery/jquery.min.js"></script>
+
+	{# socket.io-client is marked `external` in vite.config.js
+	   (Desk provides `window.io`). Outside Desk we load the
+	   client the socket.io server itself serves at
+	   /socket.io/socket.io.js. The frappe-shim's `realtime` impl
+	   reads `window.io` first, falling back to a dynamic import
+	   only if absent. Synchronous load so window.io is set before
+	   the entry module runs. #}
+	<script src="/socket.io/socket.io.js"></script>
+
+	{# Entry chunk — installs the frappe-shim + mounts Vue. The chunk
+	   is built by Vite as a separate Rollup input; its hashed URL
+	   comes from build-manifest.json. #}
+	<script type="module" src="{{ asset_web_entry }}"></script>
+</body>
+</html>

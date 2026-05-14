@@ -1,14 +1,27 @@
 {
   "name": "posawesome",
-  "version": "15.26.0",
+  "version": "15.29.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/defendicon/POS-Awesome-V15.git"
+  },
+  "homepage": "https://github.com/defendicon/POS-Awesome-V15",
+  "bugs": {
+    "url": "https://github.com/defendicon/POS-Awesome-V15/issues"
+  },
   "main": "electron/main.js",
   "scripts": {
     "dev": "cd frontend && yarn dev",
     "build": "cd frontend && yarn install && yarn build",
+    "lint": "eslint .",
+    "test:build-verify": "node scripts/verify_build_artifacts.test.mjs",
+    "verify:build": "node scripts/verify_build_artifacts.mjs",
     "electron:dev": "electron .",
+    "electron:smoke": "node scripts/electron_smoke_check.mjs",
     "electron:build": "electron-builder",
     "electron:build:linux": "electron-builder --linux",
     "electron:build:win": "electron-builder --win",
+    "release:verify": "yarn verify:build && yarn electron:smoke --require-artifact",
     "format": "prettier --write \"**/*.{js,vue,css,scss,html}\""
   },
   "dependencies": {

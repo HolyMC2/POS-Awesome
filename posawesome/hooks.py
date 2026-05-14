@@ -1,29 +1,23 @@
-from posawesome.utils import get_build_version
-
 app_name = "posawesome"
 app_title = "POS Awesome"
-app_publisher = "Youssef Restom"
+app_publisher = "defendicon"
 app_description = "POS Awesome"
 app_icon = "octicon octicon-file-directory"
 app_color = "grey"
-app_email = "youssef@totrox.com"
+app_email = "defendicon@github.com"
 app_license = "GPLv3"
+app_url = "https://github.com/defendicon/POS-Awesome-V15"
+app_source_link = "https://github.com/defendicon/POS-Awesome-V15"
+source_link = "https://github.com/defendicon/POS-Awesome-V15"
 
 # Includes in <head>
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/posawesome/css/posawesome.css"
-# app_include_js = "/assets/posawesome/js/posawesome.js"
-_asset_version = get_build_version()
-
-app_include_js = [
-    f"/assets/posawesome/dist/js/loader.js?v={_asset_version}",
-]
-
-app_include_css = [
-    f"/assets/posawesome/dist/js/posawesome.css?v={_asset_version}",
-]
+# POS assets are loaded on-demand from the POS page bootstrap so the Desk shell
+# does not retain stale bundles across bench builds.
+app_include_js = []
+app_include_css = []
 
 # include js, css files in header of web template
 # web_include_css = "/assets/posawesome/css/posawesome.css"
@@ -80,6 +74,12 @@ after_migrate = [
     "posawesome.patches.add_dashboard_settings.execute",
     "posawesome.patches.add_dashboard_global_settings.execute",
     "posawesome.patches.reorganize_pos_profile_sections.execute",
+    "posawesome.patches.add_gift_card_pos_profile_settings.execute",
+    "posawesome.patches.add_gift_card_invoice_redemption_fields.execute",
+    "posawesome.patches.add_gift_card_to_workspace.execute",
+    "posawesome.patches.add_submission_ledger_to_workspace.execute",
+    "posawesome.patches.migrate_pos_supervisor_to_role.execute",
+    "posawesome.patches.remove_item_barcode_posa_uom.execute",
 ]
 
 # Desk Notifications
@@ -109,11 +109,13 @@ doc_events = {
         "validate": "posawesome.posawesome.api.invoice.validate",
         "before_submit": "posawesome.posawesome.api.invoice.before_submit",
         "before_cancel": "posawesome.posawesome.api.invoice.before_cancel",
+        "on_cancel": "posawesome.posawesome.api.invoice.on_cancel",
     },
     "POS Invoice": {
         "validate": "posawesome.posawesome.api.invoice.validate",
         "before_submit": "posawesome.posawesome.api.invoice.before_submit",
         "before_cancel": "posawesome.posawesome.api.invoice.before_cancel",
+        "on_cancel": "posawesome.posawesome.api.invoice.on_cancel",
     },
     "Customer": {
         "validate": "posawesome.posawesome.api.customer.validate",
@@ -123,28 +125,40 @@ doc_events = {
         "after_insert": "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
         "on_update": "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
     },
+    # Phase 6: bust the Redis cache for `get_active_pricing_rules`
+    # whenever a rule is written, renamed, or deleted. Cheap (one
+    # namespace flush); operator sees rule changes on the next POS
+    # call instead of waiting for the 5-min TTL.
+    "Pricing Rule": {
+        "on_update": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "on_trash": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "after_rename": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+    },
+    "Pricing Rule Item Code": {
+        "on_update": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "on_trash": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+    },
+    "Pricing Rule Item Group": {
+        "on_update": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "on_trash": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+    },
+    "Pricing Rule Brand": {
+        "on_update": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "on_trash": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+    },
 }
 
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"posawesome.tasks.all"
-# 	],
-# 	"daily": [
-# 		"posawesome.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"posawesome.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"posawesome.tasks.weekly"
-# 	]
-# 	"monthly": [
-# 		"posawesome.tasks.monthly"
-# 	]
-# }
+scheduler_events = {
+    "daily": [
+        # Prune browser RUM events older than 30 days.
+        # Telemetry is keep-it-cheap; we don't need historical retention
+        # beyond the rolling window the dashboard reads from.
+        "posawesome.posawesome.api.telemetry.prune_old_events",
+    ],
+}
 
 # Testing
 # -------
@@ -185,7 +199,6 @@ fixtures = [
                 (
                     "Sales Invoice-posa_pos_opening_shift",
                     "POS Invoice-posa_pos_opening_shift",
-                    "Item Barcode-posa_uom",
                     "POS Profile-posa_pos_awesome_settings",
                     "POS Profile-posa_section_pricing_controls",
                     "POS Profile-posa_section_sales_returns",
@@ -216,6 +229,10 @@ fixtures = [
                     "POS Profile-posa_force_server_items",
                     "POS Profile-posa_cash_mode_of_payment",
                     "POS Profile-use_customer_credit",
+                    "POS Profile-posa_use_gift_cards",
+                    "POS Profile-posa_allow_supervisor_manage_gift_cards",
+                    "Sales Invoice-gift_card_redemptions",
+                    "POS Invoice-gift_card_redemptions",
                     "POS Profile-use_cashback",
                     "POS Profile-posa_hide_closing_shift",
                     "Customer-posa_discount",
@@ -289,6 +306,7 @@ fixtures = [
                     "POS Profile-posa_display_item_code",
                     "POS Profile-posa_allow_zero_rated_items",
                     "POS Profile-posa_allow_print_draft_invoices",
+                    "POS Profile-posa_allow_select_print_format_in_payments",
                     "Address-posa_delivery_charges",
                     "Sales Invoice-posa_delivery_charges",
                     "Sales Invoice-posa_delivery_charges_rate",
@@ -305,6 +323,7 @@ fixtures = [
                     "POS Profile-column_break_dqsba",
                     "POS Profile-posa_use_server_cache",
                     "POS Profile-posa_server_cache_duration",
+                    "POS Profile-posa_use_web_route",
                     "POS Profile-posa_allow_duplicate_customer_names",
                     "POS Profile-column_break_anyol",
                     "POS Profile-pose_use_limit_search",
@@ -345,9 +364,14 @@ fixtures = [
                     "POS Settings-posa_dashboard_low_stock_alert_threshold",
                     "POS Invoice-posa_return_valid_upto",
                     "Sales Invoice-posa_return_valid_upto",
+                    "User-posa_pos_pin",
                 ),
             ]
         ],
+    },
+    {
+        "doctype": "Role",
+        "filters": [["name", "in", ("POS Awesome Supervisor",)]],
     },
     {
         "doctype": "Property Setter",

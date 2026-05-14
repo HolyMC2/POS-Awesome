@@ -210,9 +210,7 @@ export default {
 			);
 			const toRemove = [];
 			this.pos_offers.forEach((pos_offer) => {
-				const offer = incoming.find(
-					(offer) => this.getOfferId(offer) === this.getOfferId(pos_offer),
-				);
+				const offer = incoming.find((offer) => this.getOfferId(offer) === this.getOfferId(pos_offer));
 				if (!offer) {
 					toRemove.push(this.getOfferId(pos_offer));
 				}
@@ -275,12 +273,8 @@ export default {
 			});
 		},
 		removeOffers(offers_id_list) {
-			const normalized = new Set(
-				(offers_id_list || []).map((id) => this.normalizeOfferRowId(id)),
-			);
-			this.pos_offers = this.pos_offers.filter(
-				(offer) => !normalized.has(this.getOfferId(offer)),
-			);
+			const normalized = new Set((offers_id_list || []).map((id) => this.normalizeOfferRowId(id)));
+			this.pos_offers = this.pos_offers.filter((offer) => !normalized.has(this.getOfferId(offer)));
 		},
 		handelOffers() {
 			const applyedOffers = this.pos_offers.filter((offer) => offer.offer_applied);
@@ -340,7 +334,8 @@ export default {
 
 	watch: {
 		pos_offers: {
-			deep: true,
+			// Drop deep:true — handler reacts to array
+			// reassignments only.
 			handler() {
 				this.handelOffers();
 				this.updateCounters();
@@ -361,7 +356,7 @@ export default {
 			(profile) => {
 				if (profile) this.pos_profile = profile;
 			},
-			{ deep: true, immediate: true },
+			{ immediate: true },
 		);
 		this.$watch(
 			() => this.uiStore.applicableOffers,
@@ -370,7 +365,7 @@ export default {
 					this.updatePosOffers(offers);
 				}
 			},
-			{ deep: true, immediate: true },
+			{ immediate: true },
 		);
 
 		/*
@@ -389,6 +384,16 @@ export default {
 		this.eventBus.on("set_all_items", (data) => {
 			this.allItems = data;
 		});
+	},
+	beforeUnmount() {
+		// Cleanup eventBus listeners to prevent the leak that
+		// accumulated thousands of subscribers across customer-change
+		// remount cycles.
+		if (this.eventBus) {
+			this.eventBus.off("update_pos_offers");
+			this.eventBus.off("update_discount_percentage_offer_name");
+			this.eventBus.off("set_all_items");
+		}
 	},
 };
 </script>

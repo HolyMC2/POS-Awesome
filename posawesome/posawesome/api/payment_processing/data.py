@@ -7,6 +7,11 @@ from erpnext.controllers.accounts_controller import get_advance_payment_entries_
 MAX_OUTSTANDING_PAGE_LENGTH = 500
 
 
+def _resolve_party_inputs(customer=None, party=None, party_type=None):
+    resolved_party = party if party is not None else customer
+    return resolved_party, (party_type or "Customer")
+
+
 def _get_open_sales_invoices(
     customer,
     company,
@@ -40,6 +45,42 @@ def _get_open_sales_invoices(
             "currency",
             "pos_profile",
             "customer_name",
+            "conversion_rate",
+        ],
+        order_by="posting_date desc, name desc",
+    )
+
+
+def _get_open_purchase_invoices(
+    supplier,
+    company,
+    currency=None,
+    include_all_currencies=False,
+):
+    filters = {
+        "supplier": supplier,
+        "company": company,
+        "docstatus": 1,
+        "outstanding_amount": (">", 0),
+    }
+    if currency and not include_all_currencies:
+        filters["currency"] = currency
+
+    return frappe.get_list(
+        "Purchase Invoice",
+        filters=filters,
+        fields=[
+            "name",
+            "posting_date",
+            "due_date",
+            "outstanding_amount",
+            "rounded_total",
+            "base_rounded_total",
+            "grand_total",
+            "base_grand_total",
+            "currency",
+            "supplier_name",
+            "conversion_rate",
         ],
         order_by="posting_date desc, name desc",
     )
@@ -92,16 +133,27 @@ def _coerce_bool(value, default=False):
 
 
 @frappe.whitelist()
-def get_outstanding_invoices(customer=None, company=None, currency=None, pos_profile=None,
-                             include_all_currencies=False, page_start=0, page_length=None):
+def get_outstanding_invoices(
+    customer=None,
+    company=None,
+    currency=None,
+    pos_profile=None,
+    include_all_currencies=False,
+    page_start=0,
+    page_length=None,
+    party=None,
+    party_type="Customer",
+):
     """
     Fetch outstanding invoices with optional multi-currency support.
-    
+
     Args:
         include_all_currencies (bool): If True, returns invoices in ALL currencies instead of filtering
     """
     try:
         customer = _coerce_text_filter(customer, _("Customer"))
+        party = _coerce_text_filter(party, _("Party"))
+        customer, party_type = _resolve_party_inputs(customer=customer, party=party, party_type=party_type)
         company = _coerce_text_filter(company, _("Company"))
         currency = _coerce_text_filter(currency, _("Currency"))
         pos_profile = _coerce_text_filter(pos_profile, _("POS Profile"))
@@ -115,41 +167,74 @@ def get_outstanding_invoices(customer=None, company=None, currency=None, pos_pro
         if page_length:
             page_length = min(page_length, MAX_OUTSTANDING_PAGE_LENGTH)
 
-        customer_name = frappe.get_cached_value("Customer", customer, "customer_name")
+        label_doctype = "Supplier" if party_type == "Supplier" else "Customer"
+        label_field = "supplier_name" if party_type == "Supplier" else "customer_name"
+        customer_name = frappe.get_cached_value(label_doctype, customer, label_field)
+
+        invoice_rows = (
+            _get_open_purchase_invoices(
+                supplier=customer,
+                company=company,
+                currency=currency,
+                include_all_currencies=include_all_currencies,
+            )
+            if party_type == "Supplier"
+            else _get_open_sales_invoices(
+                customer=customer,
+                company=company,
+                currency=currency,
+                pos_profile=pos_profile,
+                include_all_currencies=include_all_currencies,
+            )
+        )
 
         normalized_rows = []
-        for invoice in _get_open_sales_invoices(
-            customer=customer,
-            company=company,
-            currency=currency,
-            pos_profile=pos_profile,
-            include_all_currencies=include_all_currencies,
-        ):
-            outstanding_amount = flt(invoice.get("outstanding_amount"))
+        for invoice in invoice_rows:
+            invoice_outstanding = flt(invoice.get("outstanding_amount"))
+            conversion_rate = flt(invoice.get("conversion_rate")) or 1
+
+            outstanding_amount = invoice_outstanding
+
             if outstanding_amount <= 0:
                 continue
 
             row_currency = invoice.get("currency") or currency
 
+            outstanding_in_invoice_currency = flt(outstanding_amount / conversion_rate, 2) if conversion_rate > 0 else outstanding_amount
+            invoice_total = flt(
+                invoice.get("rounded_total")
+                or invoice.get("grand_total")
+                or outstanding_in_invoice_currency
+            )
+
             normalized_rows.append(
                 frappe._dict(
                     {
                         "voucher_no": invoice.get("name"),
-                        "voucher_type": "Sales Invoice",
+                        "voucher_type": "Purchase Invoice" if party_type == "Supplier" else "Sales Invoice",
                         "outstanding_amount": outstanding_amount,
-                        "invoice_amount": flt(
-                            invoice.get("rounded_total")
-                            or invoice.get("base_rounded_total")
-                            or invoice.get("grand_total")
-                            or invoice.get("base_grand_total")
-                            or outstanding_amount
-                        ),
+                        "outstanding_amount_in_invoice_currency": outstanding_in_invoice_currency,
+                        "invoice_amount": invoice_total,
                         "due_date": invoice.get("due_date") or invoice.get("posting_date"),
                         "posting_date": invoice.get("posting_date"),
                         "currency": row_currency,
-                        "pos_profile": invoice.get("pos_profile"),
+                        "pos_profile": invoice.get("pos_profile") if party_type == "Customer" else None,
                         "customer": customer,
-                        "customer_name": invoice.get("customer_name") or customer_name,
+                        "customer_name": (
+                            invoice.get("supplier_name")
+                            if party_type == "Supplier"
+                            else invoice.get("customer_name")
+                        )
+                        or customer_name,
+                        "party": customer,
+                        "party_name": (
+                            invoice.get("supplier_name")
+                            if party_type == "Supplier"
+                            else invoice.get("customer_name")
+                        )
+                        or customer_name,
+                        "party_type": party_type,
+                        "conversion_rate": conversion_rate,
                     }
                 )
             )
@@ -164,7 +249,7 @@ def get_outstanding_invoices(customer=None, company=None, currency=None, pos_pro
         )
 
         if page_length:
-            return normalized_rows[page_start: page_start + page_length]
+            return normalized_rows[page_start : page_start + page_length]
 
         return normalized_rows
     except Exception as e:
@@ -179,8 +264,12 @@ def get_unallocated_payments(
     currency=None,
     mode_of_payment=None,
     include_all_currencies=False,
+    party=None,
+    party_type="Customer",
 ):
     customer = _coerce_text_filter(customer, _("Customer"))
+    party = _coerce_text_filter(party, _("Party"))
+    customer, party_type = _resolve_party_inputs(customer=customer, party=party, party_type=party_type)
     company = _coerce_text_filter(company, _("Company"))
     currency = _coerce_text_filter(currency, _("Currency"))
     mode_of_payment = _coerce_text_filter(mode_of_payment, _("Mode of Payment"))
@@ -189,19 +278,23 @@ def get_unallocated_payments(
     if not customer or not company:
         return []
 
-    customer_name = frappe.get_cached_value("Customer", customer, "customer_name")
-    party_account = get_party_account("Customer", customer, company)
+    label_doctype = "Supplier" if party_type == "Supplier" else "Customer"
+    label_field = "supplier_name" if party_type == "Supplier" else "customer_name"
+    customer_name = frappe.get_cached_value(label_doctype, customer, label_field)
+    party_account = get_party_account(party_type, customer, company)
 
     filters = {
         "party": customer,
         "company": company,
         "docstatus": 1,
-        "party_type": "Customer",
-        "payment_type": "Receive",
+        "party_type": party_type,
+        "payment_type": "Pay" if party_type == "Supplier" else "Receive",
         "unallocated_amount": [">", 0],
     }
     if currency and not include_all_currencies:
-        filters["paid_from_account_currency"] = currency
+        filters["paid_to_account_currency" if party_type == "Supplier" else "paid_from_account_currency"] = (
+            currency
+        )
     if mode_of_payment:
         filters.update({"mode_of_payment": mode_of_payment})
     unallocated_payment = frappe.get_list(
@@ -215,21 +308,24 @@ def get_unallocated_payments(
             "posting_date",
             "unallocated_amount",
             "mode_of_payment",
-            "paid_from_account_currency as currency",
-            "paid_from as account",
+            (
+                "paid_to_account_currency as currency"
+                if party_type == "Supplier"
+                else "paid_from_account_currency as currency"
+            ),
+            ("paid_to as account" if party_type == "Supplier" else "paid_from as account"),
         ],
         order_by="posting_date asc",
     )
 
-    # Keep POSPay parity with ERPNext reconciliation tool: if strict currency
-    # filter produced no rows, fallback to all currencies for visibility.
-    if (
-        not include_all_currencies
-        and currency
-        and not unallocated_payment
-    ):
+    # If strict currency filtering produces no rows, fall back to all
+    # currencies for visibility.
+    if not include_all_currencies and currency and not unallocated_payment:
         fallback_filters = dict(filters)
-        fallback_filters.pop("paid_from_account_currency", None)
+        fallback_filters.pop(
+            "paid_to_account_currency" if party_type == "Supplier" else "paid_from_account_currency",
+            None,
+        )
         unallocated_payment = frappe.get_list(
             "Payment Entry",
             filters=fallback_filters,
@@ -241,17 +337,26 @@ def get_unallocated_payments(
                 "posting_date",
                 "unallocated_amount",
                 "mode_of_payment",
-                "paid_from_account_currency as currency",
-                "paid_from as account",
+                (
+                    "paid_to_account_currency as currency"
+                    if party_type == "Supplier"
+                    else "paid_from_account_currency as currency"
+                ),
+                ("paid_to as account" if party_type == "Supplier" else "paid_from as account"),
             ],
             order_by="posting_date asc",
         )
     for payment in unallocated_payment:
         payment["voucher_type"] = "Payment Entry"
         payment["is_credit_note"] = 0
+        payment["party_type"] = party_type
+        payment["party_name"] = payment.get("customer_name")
 
-    # ERPNext-style reconciliation fetch (includes advances linked to Sales Order,
-    # not only Payment Entries with unallocated_amount > 0).
+    if party_type == "Supplier":
+        return unallocated_payment
+
+    # Reconciliation fetch that also includes advances linked to Sales Order,
+    # not only Payment Entries with unallocated_amount > 0.
     condition = frappe._dict(
         {
             "company": company,
@@ -292,6 +397,7 @@ def get_unallocated_payments(
                 "paid_amount": amount,
                 "received_amount": amount,
                 "customer_name": customer_name,
+                "party_name": customer_name,
                 "posting_date": row.get("posting_date"),
                 "unallocated_amount": amount,
                 "mode_of_payment": mode_of_payment_label,
@@ -365,6 +471,7 @@ def get_unallocated_payments(
                 "paid_amount": amount,
                 "received_amount": amount,
                 "customer_name": customer_name,
+                "party_name": customer_name,
                 "posting_date": journal.get("posting_date"),
                 "unallocated_amount": amount,
                 "mode_of_payment": _("Journal Entry"),
@@ -414,6 +521,7 @@ def get_unallocated_payments(
                 "paid_amount": outstanding_credit,
                 "received_amount": outstanding_credit,
                 "customer_name": note.customer_name,
+                "party_name": note.customer_name,
                 "posting_date": note.posting_date,
                 "unallocated_amount": outstanding_credit,
                 "mode_of_payment": _("Credit Note"),
@@ -436,6 +544,7 @@ def get_unallocated_payments(
     )
 
     return unallocated_payment
+
 
 @frappe.whitelist()
 def get_available_pos_profiles(company, currency):

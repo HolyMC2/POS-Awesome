@@ -1,4 +1,9 @@
 import { isOffline } from "../../../../offline/index";
+import {
+	fetchDocumentSourceRecords,
+	getDefaultDocumentSource,
+	loadDocumentSourceRecord,
+} from "../../../utils/documentSources";
 
 declare const __: (_text: string, _args?: any[]) => string;
 declare const frappe: any;
@@ -153,41 +158,52 @@ export async function show_payment(context: any) {
 	}
 }
 
-export async function get_draft_invoices(context: any) {
+export async function get_draft_invoices(
+	context: any,
+	source?: "invoice" | "order" | "quote",
+	options?: { quiet?: boolean },
+) {
+	const quiet = options?.quiet === true;
 	try {
-		const { message } = await frappe.call({
-			method: "posawesome.posawesome.api.invoices.get_draft_invoices",
-			args: {
-				pos_opening_shift: context.pos_opening_shift.name,
-				doctype: context.pos_profile.create_pos_invoice_instead_of_sales_invoice
-					? "POS Invoice"
-					: "Sales Invoice",
-			},
+		const selectedSource = getDefaultDocumentSource(
+			context.pos_profile,
+			source ?? context.uiStore?.draftSource,
+		);
+		const drafts = await fetchDocumentSourceRecords({
+			source: selectedSource,
+			posOpeningShift: context.pos_opening_shift,
+			posProfile: context.pos_profile,
+			currentInvoiceDoctype: context.pos_profile?.create_pos_invoice_instead_of_sales_invoice
+				? "POS Invoice"
+				: "Sales Invoice",
 		});
-		if (message) {
-			context.uiStore.openDrafts(message);
+		context.uiStore.setDraftSource?.(selectedSource);
+		context.uiStore.setDraftsData?.(drafts);
+		context.uiStore.setParkedOrders?.(drafts);
+		if (!quiet) {
+			context.uiStore.closeDrafts?.();
+		}
+
+		if (typeof context.$nextTick === "function") {
+			await context.$nextTick();
+		}
+		if (!quiet && drafts.length > 0) {
+			context.$refs?.invoiceSummary?.openDraftsSurface?.();
 		}
 	} catch (error) {
 		console.error("Error fetching draft invoices:", error);
-		context.toastStore.show({
-			title: __("Unable to fetch draft invoices"),
-			color: "error",
-		});
+		if (!quiet) {
+			context.toastStore.show({
+				title: __("Unable to fetch documents"),
+				color: "error",
+			});
+		}
 	}
 }
 
 export async function get_draft_orders(context: any) {
 	try {
-		const { message } = await frappe.call({
-			method: "posawesome.posawesome.api.sales_orders.search_orders",
-			args: {
-				company: context.pos_profile.company,
-				currency: context.pos_profile.currency,
-			},
-		});
-		if (message) {
-			context.uiStore.openOrders(message);
-		}
+		context.uiStore?.openInvoiceManagement?.("drafts", "order");
 	} catch (error) {
 		console.error("Error fetching draft orders:", error);
 		context.toastStore.show({
@@ -202,8 +218,47 @@ export function open_returns(context: any) {
 	context.eventBus.emit("open_returns", context.pos_profile.company);
 }
 
-export function open_invoice_management(context: any) {
-	context.uiStore?.openInvoiceManagement?.();
+export function open_invoice_management(
+	context: any,
+	targetTab: string = "history",
+	draftSource?: "invoice" | "order" | "quote",
+) {
+	const selectedSource = draftSource || context.uiStore?.draftSource || "invoice";
+	context.uiStore?.openInvoiceManagement?.(
+		targetTab,
+		selectedSource,
+	);
+}
+
+export function open_invoice_management_with_source(
+	context: any,
+	targetTab: string = "history",
+	draftSource: "invoice" | "order" | "quote" = "invoice",
+) {
+	context.uiStore?.setInvoiceManagementDraftSource?.(draftSource);
+	return open_invoice_management(context, targetTab, draftSource);
+}
+
+export async function load_draft_source_record(context: any, draft: any) {
+	try {
+		const selectedSource = draft?.source || context.uiStore?.draftSource || "invoice";
+		const message = await loadDocumentSourceRecord({
+			source: selectedSource,
+			record: draft,
+			posProfile: context.pos_profile,
+			currentInvoiceDoctype: context.pos_profile?.create_pos_invoice_instead_of_sales_invoice
+				? "POS Invoice"
+				: "Sales Invoice",
+			invoiceStore: context.invoiceStore,
+			uiStore: context.uiStore,
+			closeDrafts: false,
+			closeInvoiceManagement: false,
+		});
+		return message;
+	} catch (error) {
+		console.error("Error loading source record:", error);
+		throw error;
+	}
 }
 
 export function close_payments(context: any) {

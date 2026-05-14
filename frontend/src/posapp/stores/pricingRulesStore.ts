@@ -1,5 +1,40 @@
+/**
+ * Offline pricing-rules snapshot with context-scoped indexes and staleness tracking.
+ *
+ * **Interfaces**
+ * - `PricingRule` — a single rule record with optional `item_code`, `item_group`,
+ *   `brand`, discount/rate fields, `specificity` (computed), and `priority`.
+ * - `RuleContext` — lookup scope: `company`, `price_list`, `currency`, `customer`,
+ *   `customer_group`, `territory`, `date`.
+ *
+ * **Specificity and sorting**
+ * `normaliseRule` attaches a `specificity` score (item_code=3, item_group=2,
+ * brand=1, general=0). `compareRules` sorts by specificity → priority →
+ * `benefitScore` (max of discount/margin/freebies) → name. All index buckets are
+ * sorted on write so callers always receive the highest-priority rule first.
+ *
+ * **Four inverted indexes**
+ * `indexRules()` partitions the rule list into `indexes.byItem`, `indexes.byGroup`,
+ * `indexes.byBrand`, and `indexes.general`. These are rebuilt synchronously on
+ * every `setSnapshot` call and on hydration.
+ *
+ * **Staleness (`HOURS_STALE = 24`)**
+ * `staleAt` stores an ISO timestamp 24 hours after the last sync. `isStale`
+ * returns true when `Date.now()` exceeds that timestamp. The snapshot is
+ * preserved without refresh when the device is offline, even if stale.
+ *
+ * **Offline persistence**
+ * The snapshot is saved to IndexedDB via `savePricingRulesSnapshot` on every
+ * `setSnapshot` call. `hydrateFromCache()` is called at store creation to
+ * restore the snapshot without a network round-trip.
+ *
+ * **`ensureActiveRules(ctx, { force? })`**
+ * Idempotent — skips the server fetch if the context key matches and the snapshot
+ * is not stale (unless `force: true`). Context key is the JSON-serialised
+ * `RuleContext`; a mismatch triggers `invalidateIfContextChanges`.
+ */
 import { defineStore } from "pinia";
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, shallowRef, markRaw } from "vue";
 // @ts-ignore
 import {
 	isOffline,
@@ -100,18 +135,27 @@ const normaliseRule = (rule: any = {}): PricingRule => {
 export const usePricingRulesStore = defineStore("pricing-rules", () => {
 	const ready = ref(false);
 	const loading = ref(false);
-	const rules = ref<PricingRule[]>([]);
-	const indexes = reactive({
-		byItem: new Map<string, PricingRule[]>(),
-		byGroup: new Map<string, PricingRule[]>(),
-		byBrand: new Map<string, PricingRule[]>(),
+	// `shallowRef` + `markRaw` per row. With hundreds of pricing
+	// rules each Pinia previously wrapped them as Vue proxies and
+	// every `_applyPricingToLine` lookup walked the proxy traps.
+	// On a customer-change with a foreign price-list + a cart with
+	// 5+ pricing-rule items this dominated the 24 s INP click
+	// delay seen on the cart cell.
+	const rules = shallowRef<PricingRule[]>([]);
+	// Index Maps wrapped in `markRaw` — they're populated on
+	// `setSnapshot` and read on every cart edit; reactivity is not
+	// needed (consumers re-read on demand).
+	const indexes = {
+		byItem: markRaw(new Map<string, PricingRule[]>()),
+		byGroup: markRaw(new Map<string, PricingRule[]>()),
+		byBrand: markRaw(new Map<string, PricingRule[]>()),
 		general: [] as PricingRule[],
-	});
+	};
 	const contextKey = ref<string | null>(null);
 	const lastSyncedAt = ref<string | null>(null);
 	const staleAt = ref<string | null>(null);
 
-	const hasSnapshot = computed(() => rules.value.length > 0);
+	const hasSnapshot = computed(() => !!contextKey.value && !!lastSyncedAt.value);
 	const isStale = computed(() => {
 		if (!staleAt.value) return false;
 		const ts = new Date(staleAt.value).getTime();
@@ -155,9 +199,13 @@ export const usePricingRulesStore = defineStore("pricing-rules", () => {
 		}
 		general.sort(compareRules);
 
-		indexes.byItem = itemMap;
-		indexes.byGroup = groupMap;
-		indexes.byBrand = brandMap;
+		// Wrap freshly-built Maps in `markRaw` to keep them consistent
+		// with the shallowRef + markRaw pattern used for `rules`. Otherwise
+		// every `setSnapshot()` would assign plain Maps that any future
+		// reactive consumer could pull into the proxy graph.
+		indexes.byItem = markRaw(itemMap);
+		indexes.byGroup = markRaw(groupMap);
+		indexes.byBrand = markRaw(brandMap);
 		indexes.general = general;
 	};
 
@@ -168,7 +216,9 @@ export const usePricingRulesStore = defineStore("pricing-rules", () => {
 		try {
 			const cached = getCachedPricingRulesSnapshot();
 			if (cached) {
-				rules.value = Array.isArray(cached.snapshot) ? cached.snapshot.map(normaliseRule) : [];
+				rules.value = Array.isArray(cached.snapshot)
+					? cached.snapshot.map((r) => markRaw(normaliseRule(r)))
+					: [];
 				contextKey.value = cached.context || null;
 				lastSyncedAt.value = cached.lastSync || null;
 				staleAt.value = cached.staleAt || null;
@@ -184,7 +234,9 @@ export const usePricingRulesStore = defineStore("pricing-rules", () => {
 	hydrateFromCache();
 
 	const setSnapshot = (snapshot: any[], ctxKey: string) => {
-		rules.value = Array.isArray(snapshot) ? snapshot.map(normaliseRule) : [];
+		rules.value = Array.isArray(snapshot)
+			? snapshot.map((r) => markRaw(normaliseRule(r)))
+			: [];
 		contextKey.value = ctxKey;
 		lastSyncedAt.value = new Date().toISOString();
 		staleAt.value = computeStaleTimestamp(lastSyncedAt.value);

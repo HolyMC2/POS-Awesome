@@ -1,13 +1,12 @@
 import { unref, type Ref } from "vue";
-import renderOfflineInvoiceHTML from "../../../../offline_print_template";
 import {
 	appendDebugPrintParam,
 	isDebugPrintEnabled,
 	silentPrint,
 	watchPrintWindow,
 } from "../../../plugins/print";
-import { printDocumentViaQz } from "../../../services/qzTray";
 import { isOffline } from "../../../../offline/index";
+import { resolvePaymentPrintDoctype } from "../../../utils/paymentPrintDoctype";
 
 declare const frappe: any;
 
@@ -21,6 +20,24 @@ export interface PaymentPrintingOptions {
 export function usePaymentPrinting(options: PaymentPrintingOptions) {
 	const { invoiceDoc, posProfile, invoiceType, printFormat } = options;
 
+	const renderOfflineInvoice = async (invoice: any) => {
+		const { default: renderOfflineInvoiceHTML } = await import(
+			"../../../../offline_print_template"
+		);
+		return renderOfflineInvoiceHTML(invoice);
+	};
+
+	const printViaQz = async (printOptions: {
+		doctype: string;
+		name: string;
+		printFormat: string;
+		letterhead: any;
+		noLetterhead: any;
+	}) => {
+		const { printDocumentViaQz } = await import("../../../services/qzTray");
+		return printDocumentViaQz(printOptions);
+	};
+
 	const resolvePrintContext = (input: { doc?: any; doctype?: string } = {}) => {
 		const doc = input.doc || unref(invoiceDoc);
 		const profile = unref(posProfile);
@@ -31,21 +48,11 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 			profile.print_format_for_online ||
 			profile.print_format;
 		const letter_head = profile.letter_head || 0;
-		let doctype: string;
-
-		if (input.doctype) {
-			doctype = input.doctype;
-		} else if (input.doc?.doctype) {
-			doctype = input.doc.doctype;
-		} else if (type === "Quotation") {
-			doctype = "Quotation";
-		} else if (type === "Order" && profile.posa_create_only_sales_order) {
-			doctype = "Sales Order";
-		} else if (profile.create_pos_invoice_instead_of_sales_invoice) {
-			doctype = "POS Invoice";
-		} else {
-			doctype = "Sales Invoice";
-		}
+		const doctype = resolvePaymentPrintDoctype({
+			profile,
+			invoiceType: type,
+			explicitDoctype: input.doctype || input.doc?.doctype,
+		});
 
 		return {
 			doc,
@@ -61,7 +68,7 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 		{ debugPrint = false, printFormatStr = "" } = {},
 	) => {
 		if (!invoice) return;
-		const html = await renderOfflineInvoiceHTML(invoice);
+		const html = await renderOfflineInvoice(invoice);
 		const win = window.open("", "_blank");
 		if (!win) return;
 		win.document.write(html);
@@ -81,7 +88,7 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 
 	const printOfflineInvoice = async (invoice: any) => {
 		if (!invoice) return;
-		const html = await renderOfflineInvoiceHTML(invoice);
+		const html = await renderOfflineInvoice(invoice);
 		const win = window.open("", "_blank");
 		if (!win) return;
 		win.document.write(html);
@@ -160,7 +167,7 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 		if (profile.posa_silent_print) {
 			if (!isOffline()) {
 				try {
-					await printDocumentViaQz({
+					await printViaQz({
 						doctype,
 						name: doc.name,
 						printFormat: print_format || "Standard",

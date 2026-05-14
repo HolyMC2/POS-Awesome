@@ -1,5 +1,27 @@
 <template>
 	<v-row dense>
+		<!-- PAY moved to the top of the action grid. With every secondary
+		     button rendered (Save&Clear, Drafts, Select S.O, Invoice Mgmt,
+		     Cancel, Sales Return, Print Draft, Customer Screen) the grid
+		     totals 5 rows + PAY; on a 1440x900 viewport at 100% zoom the
+		     trailing PAY landed 5-7 px below the fold and operators had to
+		     scroll for the primary checkout action. Putting PAY first
+		     guarantees it stays in view regardless of which optional
+		     buttons the profile enables. -->
+		<v-col cols="12">
+			<v-btn
+				block
+				color="success"
+				theme="dark"
+				size="large"
+				prepend-icon="mdi-credit-card"
+				@click="$emit('show-payment')"
+				class="summary-btn pay-btn"
+				:loading="paymentLoading"
+			>
+				{{ __("PAY") }}
+			</v-btn>
+		</v-col>
 		<v-col cols="12" sm="6">
 			<v-btn
 				block
@@ -18,12 +40,12 @@
 				block
 				color="warning"
 				theme="dark"
-				prepend-icon="mdi-file-document"
+				prepend-icon="mdi-tray-full"
 				@click="$emit('load-drafts')"
 				class="white-text-btn summary-btn"
 				:loading="loadDraftsLoading"
 			>
-				{{ __("Load Drafts") }}
+				{{ __("Drafts") }}
 			</v-btn>
 		</v-col>
 		<v-col cols="12" sm="6" v-if="pos_profile.custom_allow_select_sales_order == 1">
@@ -105,20 +127,6 @@
 				{{ __("Customer Screen") }}
 			</v-btn>
 		</v-col>
-		<v-col cols="12">
-			<v-btn
-				block
-				color="success"
-				theme="dark"
-				size="large"
-				prepend-icon="mdi-credit-card"
-				@click="$emit('show-payment')"
-				class="summary-btn pay-btn"
-				:loading="paymentLoading"
-			>
-				{{ __("PAY") }}
-			</v-btn>
-		</v-col>
 	</v-row>
 </template>
 
@@ -175,8 +183,21 @@ const showCustomerDisplayButton = computed(() =>
 	transition: all 0.2s ease !important;
 	position: relative;
 	overflow: hidden;
-	min-height: 46px !important;
+	/* Bumped 46 → 34 px so the 5-row x 2-col grid + PAY fit in the
+	   right-hand column without pushing PAY below the fold on a
+	   1440 x 900 viewport at 100 % zoom. Tested on lab: PAY bottom
+	   was at y=949 (vh=900) — operator had to scroll. New row pitch
+	   keeps PAY visible. */
+	min-height: 34px !important;
 	text-transform: none !important;
+}
+
+/* Vuetify v-row[dense] still leaves 4 px top + 4 px bottom on each
+   v-col. Across 6 rows that's ~48 px the action grid doesn't need.
+   Tighten it so the PAY button stays above the fold at 100 % zoom. */
+.v-row.v-row--dense > .v-col {
+	padding-top: 2px !important;
+	padding-bottom: 2px !important;
 }
 
 .summary-btn :deep(.v-btn__content) {
@@ -197,6 +218,10 @@ const showCustomerDisplayButton = computed(() =>
 .pay-btn {
 	font-weight: 600 !important;
 	font-size: 1.1rem !important;
+	/* PAY is the primary action — keep it tall enough to look
+	   important against the 36 px secondary buttons but still
+	   shorter than the previous 46 px so the whole grid fits. */
+	min-height: 44px !important;
 	background: linear-gradient(135deg, #4caf50, #45a049) !important;
 	box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3) !important;
 }

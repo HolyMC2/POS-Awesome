@@ -1,302 +1,190 @@
-// Include onscan.js
+const POSA_VERSION_ENDPOINT = "/assets/posawesome/dist/js/version.json";
+const POSA_LOADER_LEGACY_URL = "/assets/posawesome/dist/js/loader.js";
+const POSA_LOADER_SCRIPT_ID = "posa-loader-script";
+
+const fetchPosBuildManifest = async () => {
+	try {
+		const response = await fetch(`${POSA_VERSION_ENDPOINT}?t=${Date.now()}`, {
+			cache: "no-store",
+		});
+		if (!response.ok) {
+			return null;
+		}
+		const payload = await response.json();
+		const version = payload?.version || payload?.buildVersion;
+		const assets = payload?.assets && typeof payload.assets === "object" ? payload.assets : {};
+		return {
+			version: typeof version === "string" && version.trim().length ? version.trim() : null,
+			assets,
+		};
+	} catch (error) {
+		console.warn("Unable to fetch POS build manifest", error);
+		return null;
+	}
+};
+
+const buildVersionedLoaderUrl = (version) =>
+	version ? `${POSA_LOADER_LEGACY_URL}?v=${encodeURIComponent(version)}` : POSA_LOADER_LEGACY_URL;
+
+const resolveLoaderUrl = (manifest) => {
+	// Prefer the hashed loader URL published in version.json. Falls
+	// back to the legacy un-hashed path (with `?v=`) for transitional
+	// deploys where an old build is still serving the manifest.
+	const fromAssets = manifest?.assets?.loader;
+	if (typeof fromAssets === "string" && fromAssets.trim().length) {
+		return fromAssets.trim();
+	}
+	return buildVersionedLoaderUrl(manifest?.version);
+};
+
+const ensurePosBootController = async () => {
+	const manifest = await fetchPosBuildManifest();
+	const version = manifest?.version || "";
+	const loaderUrl = resolveLoaderUrl(manifest);
+	const existingScript = document.getElementById(POSA_LOADER_SCRIPT_ID);
+
+	// `data-build-version` survives across page mounts; reuse the in-flight
+	// boot controller when the requested version + URL match.
+	if (
+		existingScript &&
+		existingScript.getAttribute("data-build-version") === version &&
+		existingScript.getAttribute("src") === loaderUrl &&
+		typeof window.startPosBoot === "function"
+	) {
+		return;
+	}
+
+	if (existingScript) {
+		existingScript.remove();
+	}
+
+	await new Promise((resolve, reject) => {
+		const script = document.createElement("script");
+		script.id = POSA_LOADER_SCRIPT_ID;
+		script.type = "module";
+		script.async = true;
+		script.src = loaderUrl;
+		script.setAttribute("data-build-version", version);
+		script.onload = () => resolve();
+		script.onerror = () =>
+			reject(new Error(`Failed to load POS boot controller (${version || "unversioned"})`));
+		document.head.appendChild(script);
+	});
+};
+
+// Phase 1.F: when any POS Profile the user is assigned to has the
+// `posa_use_web_route` flag set, surface a "POS has moved to /posapp"
+// banner and auto-navigate after 10 s. Users on the legacy boot path
+// see no change. We check the flag via the same call the SPA itself
+// uses (cheap; cached server-side) so toggling it from the POS
+// Profile form takes effect on the next /app/posapp load.
+const WEB_ROUTE_DEST = "/posapp";
+const REDIRECT_DELAY_MS = 10_000;
+
+const userOptedIntoWebRoute = async () => {
+	try {
+		const r = await frappe.call({
+			method: "posawesome.posawesome.api.utilities.posa_user_opted_into_web_route",
+			args: {},
+		});
+		return Boolean(r?.message);
+	} catch (e) {
+		// Pre-deploy of the helper endpoint, or any error → stay on
+		// the legacy boot path. The flag is opt-in; failing closed is
+		// the right default.
+		return false;
+	}
+};
+
+const showWebRouteRedirectNotice = (pageRef) => {
+	const wrapper = pageRef?.wrapper || document.querySelector(".page-container");
+	if (!wrapper) return;
+	const banner = document.createElement("div");
+	banner.id = "posa-web-route-redirect-banner";
+	banner.style.cssText = [
+		"position:relative",
+		"margin:8px 0",
+		"padding:10px 14px",
+		"background:#1e293b",
+		"color:#e2e8f0",
+		"border-left:4px solid #38bdf8",
+		"border-radius:4px",
+		"font-size:13px",
+		"display:flex",
+		"align-items:center",
+		"gap:12px",
+	].join(";");
+	const text = document.createElement("div");
+	text.style.flex = "1";
+	text.innerHTML =
+		'<strong>POS Awesome has moved.</strong> Redirecting to <code>/posapp</code> in <span data-countdown>10</span> s — ' +
+		'<a href="#" data-cancel style="color:#7dd3fc">stay here</a>.';
+	const goBtn = document.createElement("button");
+	goBtn.textContent = "Go now";
+	goBtn.style.cssText =
+		"padding:4px 10px;border:1px solid #475569;background:#0f172a;color:#e2e8f0;border-radius:4px;cursor:pointer;font-size:12px";
+	banner.appendChild(text);
+	banner.appendChild(goBtn);
+	wrapper.insertBefore(banner, wrapper.firstChild);
+
+	let cancelled = false;
+	const counter = text.querySelector("[data-countdown]");
+	const cancelLink = text.querySelector("[data-cancel]");
+	const startedAt = Date.now();
+	const tick = () => {
+		if (cancelled) return;
+		const left = Math.max(
+			0,
+			Math.ceil((REDIRECT_DELAY_MS - (Date.now() - startedAt)) / 1000),
+		);
+		if (counter) counter.textContent = String(left);
+		if (left <= 0) {
+			window.location.href = WEB_ROUTE_DEST;
+			return;
+		}
+		setTimeout(tick, 250);
+	};
+	tick();
+
+	const cancel = (e) => {
+		if (e) e.preventDefault();
+		cancelled = true;
+		banner.remove();
+	};
+	cancelLink?.addEventListener("click", cancel);
+	goBtn.addEventListener("click", () => {
+		cancelled = true;
+		window.location.href = WEB_ROUTE_DEST;
+	});
+};
+
 frappe.pages["posapp"].on_page_load = async function (wrapper) {
-	var page = frappe.ui.make_app_page({
+	const page = frappe.ui.make_app_page({
 		parent: wrapper,
 		title: "POS Awesome",
 		single_column: true,
 	});
 	const pageRef = (wrapper && wrapper.page) || page;
-	const BOOT_RETRY_KEY = "posa_boot_retry_once";
-	const BOOT_CACHE_RECOVERY_KEY = "posa_boot_cache_recovery_once";
-	const detectBootFailureCode = (error) => {
-		const message =
-			(error && error.message ? String(error.message) : String(error || ""))
-				.toLowerCase()
-				.trim();
 
-		if (message.includes("timed out waiting for frappe.posapp.posapp")) {
-			return "posa_boot_timeout";
-		}
-		if (
-			message.includes("failed to fetch dynamically imported module") ||
-			message.includes("loading chunk") ||
-			message.includes("chunkloaderror")
-		) {
-			return "posa_bundle_load_failed";
-		}
-		if (message.includes("networkerror")) {
-			return "posa_network_error";
-		}
-		return "posa_boot_unknown";
-	};
-	const isAssetRecoveryFailure = (failureCode) =>
-		failureCode === "posa_boot_timeout" ||
-		failureCode === "posa_bundle_load_failed";
+	// Check the flag first. If opted in, show the banner and let the
+	// legacy boot continue in parallel so the user can still cancel
+	// the redirect without seeing a broken page.
+	userOptedIntoWebRoute().then((opted) => {
+		if (opted) showWebRouteRedirectNotice(pageRef);
+	});
 
-	const clearBootstrapState = () => {
-		try {
-			window.sessionStorage.removeItem(BOOT_RETRY_KEY);
-			window.sessionStorage.removeItem(BOOT_CACHE_RECOVERY_KEY);
-		} catch (err) {
-			console.warn("Unable to clear boot recovery state", err);
-		}
-	};
-
-	const performAssetRecovery = async () => {
-		try {
-			if (
-				typeof navigator !== "undefined" &&
-				navigator.serviceWorker &&
-				typeof navigator.serviceWorker.getRegistrations === "function"
-			) {
-				const registrations = await navigator.serviceWorker.getRegistrations();
-				await Promise.all(
-					registrations.map(async (registration) => {
-						try {
-							registration.active?.postMessage({
-								type: "CLIENT_FORCE_UNREGISTER",
-							});
-						} catch (messageErr) {
-							console.warn("Failed to notify active service worker", messageErr);
-						}
-						try {
-							registration.waiting?.postMessage({
-								type: "CLIENT_FORCE_UNREGISTER",
-							});
-						} catch (messageErr) {
-							console.warn("Failed to notify waiting service worker", messageErr);
-						}
-						try {
-							registration.installing?.postMessage({
-								type: "CLIENT_FORCE_UNREGISTER",
-							});
-						} catch (messageErr) {
-							console.warn("Failed to notify installing service worker", messageErr);
-						}
-						await registration.unregister();
-					}),
-				);
-			}
-		} catch (err) {
-			console.warn("POS App recovery failed during service worker cleanup", err);
-		}
-
-		try {
-			if (typeof caches !== "undefined") {
-				const cacheKeys = await caches.keys();
-				await Promise.all(cacheKeys.map((key) => caches.delete(key)));
-			}
-		} catch (err) {
-			console.warn("POS App recovery failed during Cache API cleanup", err);
-		}
-
-		try {
-			window.localStorage.removeItem("posawesome_version");
-			window.localStorage.removeItem("posawesome_update_dismissed");
-			window.localStorage.removeItem("posawesome_update_last_check");
-			window.sessionStorage.removeItem("posawesome_update_snooze_until");
-		} catch (err) {
-			console.warn("POS App recovery failed during storage cleanup", err);
-		}
-	};
-
-	const waitForPosApp = (timeoutMs = 15000) => {
-		return new Promise((resolve, reject) => {
-			const startedAt = Date.now();
-			const interval = setInterval(() => {
-				if (frappe.PosApp && frappe.PosApp.posapp) {
-					clearInterval(interval);
-					resolve();
-					return;
-				}
-
-				if (Date.now() - startedAt >= timeoutMs) {
-					clearInterval(interval);
-					reject(new Error("Timed out waiting for frappe.PosApp.posapp"));
-				}
-			}, 100);
-		});
-	};
-
-	const handleBootstrapFailure = async (error) => {
-		const failureCode = detectBootFailureCode(error);
-		const failureDetail =
-			error && error.message ? String(error.message) : String(error || "");
-		console.error("POS App bootstrap failed", {
-			failureCode,
-			failureDetail,
-			error,
-			pathname: window.location.pathname,
-			search: window.location.search,
-		});
-		let alreadyRetried = false;
-		try {
-			alreadyRetried = window.sessionStorage.getItem(BOOT_RETRY_KEY) === "1";
-		} catch (err) {
-			console.warn("Unable to read boot retry state", err);
-		}
-		let alreadyRecovered = false;
-		try {
-			alreadyRecovered =
-				window.sessionStorage.getItem(BOOT_CACHE_RECOVERY_KEY) === "1";
-		} catch (err) {
-			console.warn("Unable to read boot recovery state", err);
-		}
-
-		if (!alreadyRetried) {
-			try {
-				window.sessionStorage.setItem(BOOT_RETRY_KEY, "1");
-			} catch (err) {
-				console.warn("Unable to persist boot retry state", err);
-			}
-			window.location.replace(`/app/posapp?_posa_boot_retry=${Date.now()}`);
-			return;
-		}
-
-		if (isAssetRecoveryFailure(failureCode) && !alreadyRecovered) {
-			try {
-				window.sessionStorage.setItem(BOOT_CACHE_RECOVERY_KEY, "1");
-			} catch (err) {
-				console.warn("Unable to persist boot recovery state", err);
-			}
-			await performAssetRecovery();
-			window.location.replace(`/app/posapp?_posa_asset_recovery=${Date.now()}`);
-			return;
-		}
-
-		clearBootstrapState();
-
+	try {
+		await ensurePosBootController();
+		await window.startPosBoot({ pageRef });
+	} catch (error) {
+		console.error("Unable to start POS boot controller", error);
 		frappe.msgprint({
 			title: "POS Awesome",
 			indicator: "red",
 			message:
-				`POS app failed to start (${failureCode}). Automatic cache recovery was attempted. If the problem persists, reload /app/posapp or use the in-app cache clear shortcut.`,
+				"POS app failed to start before the boot controller could run. Reload /app/posapp and try again.",
 		});
-	};
-
-	try {
-		if (
-			typeof window !== "undefined" &&
-			window.__posawesomeBundlePromise &&
-			typeof window.__posawesomeBundlePromise.then === "function"
-		) {
-			await window.__posawesomeBundlePromise;
-		}
-
-		await waitForPosApp();
-	} catch (error) {
-		await handleBootstrapFailure(error);
-		return;
 	}
-
-	clearBootstrapState();
-
-	if (!pageRef.$PosApp) {
-		pageRef.$PosApp = new frappe.PosApp.posapp(pageRef);
-	}
-
-	$("div.navbar-fixed-top").find(".container").css("padding", "0");
-
-	$("head").append(
-		"<link href='/assets/posawesome/node_modules/vuetify/dist/vuetify.min.css' rel='stylesheet'>",
-	);
-
-	if (
-		pageRef._posaTaxInclusiveHandler &&
-		frappe.realtime &&
-		typeof frappe.realtime.off === "function"
-	) {
-		frappe.realtime.off("pos_profile_registered", pageRef._posaTaxInclusiveHandler);
-	}
-
-	// Listen for POS Profile registration
-	pageRef._posaTaxInclusiveHandler = () => {
-		const update_totals_based_on_tax_inclusive = () => {
-			console.log("Updating totals based on tax inclusive settings");
-			const posProfile = pageRef.$PosApp && pageRef.$PosApp.pos_profile;
-
-			if (!posProfile) {
-				console.error("POS Profile is not set.");
-				return;
-			}
-
-			const cacheKey = "posa_tax_inclusive";
-			const cachedValue = localStorage.getItem(cacheKey);
-
-			const applySetting = (taxInclusive) => {
-				const totalAmountField = document.getElementById("input-v-25");
-				const grandTotalField = document.getElementById("input-v-29");
-
-				if (totalAmountField && grandTotalField) {
-					if (taxInclusive) {
-						totalAmountField.value = grandTotalField.value;
-						console.log("Total amount copied from grand total:", grandTotalField.value);
-					} else {
-						totalAmountField.value = "";
-						console.log("Total amount cleared because checkbox is unchecked.");
-					}
-				} else {
-					console.error("Could not find total amount or grand total field by ID.");
-				}
-			};
-
-			const fetchAndCache = () => {
-				frappe.call({
-					method: "posawesome.posawesome.api.utilities.get_pos_profile_tax_inclusive",
-					args: {
-						pos_profile: posProfile,
-					},
-					callback: function (response) {
-						if (response.message !== undefined) {
-							const posa_tax_inclusive = response.message;
-							try {
-								localStorage.setItem(cacheKey, JSON.stringify(posa_tax_inclusive));
-							} catch (err) {
-								console.warn("Failed to cache tax inclusive setting", err);
-							}
-							applySetting(posa_tax_inclusive);
-							import("/assets/posawesome/dist/js/offline/index.js")
-								.then((m) => {
-									if (m && m.setTaxInclusiveSetting) {
-										m.setTaxInclusiveSetting(posa_tax_inclusive);
-									}
-								})
-								.catch(() => {});
-						} else {
-							console.error("Error fetching POS Profile or POS Profile not found.");
-						}
-					},
-				});
-			};
-
-			if (navigator.onLine) {
-				fetchAndCache();
-				return;
-			}
-
-			if (cachedValue !== null) {
-				try {
-					const val = JSON.parse(cachedValue);
-					applySetting(val);
-					import("/assets/posawesome/dist/js/offline/index.js")
-						.then((m) => {
-							if (m && m.setTaxInclusiveSetting) {
-								m.setTaxInclusiveSetting(val);
-							}
-						})
-						.catch(() => {});
-				} catch (e) {
-					console.warn("Failed to parse cached tax inclusive value", e);
-				}
-				return;
-			}
-
-			fetchAndCache();
-		};
-
-		update_totals_based_on_tax_inclusive();
-	};
-	frappe.realtime.on("pos_profile_registered", pageRef._posaTaxInclusiveHandler);
 };
 
 frappe.pages["posapp"].on_page_unload = function (wrapper) {
@@ -311,9 +199,12 @@ frappe.pages["posapp"].on_page_unload = function (wrapper) {
 		wrapper.page._posaTaxInclusiveHandler = null;
 	}
 
-	// Only unmount if this specific page's app instance exists
-	// This prevents interference when navigating within ERPNext outside POS
-	if (wrapper && wrapper.page && wrapper.page.$PosApp && typeof wrapper.page.$PosApp.unmount === "function") {
+	if (
+		wrapper &&
+		wrapper.page &&
+		wrapper.page.$PosApp &&
+		typeof wrapper.page.$PosApp.unmount === "function"
+	) {
 		wrapper.page.$PosApp.unmount();
 		wrapper.page.$PosApp = null;
 	}

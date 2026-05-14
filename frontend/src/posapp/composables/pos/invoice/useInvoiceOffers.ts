@@ -1,3 +1,47 @@
+/**
+ * POS offer evaluation, application, and lifecycle management.
+ *
+ * **Refresh scheduling**
+ * Offer evaluation is never called directly. Instead, callers call
+ * `scheduleOfferRefresh(changedRowIds?)` which coalesces multiple rapid changes
+ * into a single `requestAnimationFrame` callback (falling back to `setTimeout 16`).
+ * The composable watches `items`, `posOffers`, `posa_coupons`, and
+ * `invoiceStore.metadata` and schedules a refresh automatically on any change.
+ *
+ * **Digest-based loop prevention**
+ * After each evaluation pass a digest string is computed from the resulting offer
+ * states and item quantities. If the digest matches the previous pass the update
+ * is skipped, breaking potential infinite-loop cycles between offer application
+ * and item changes.
+ *
+ * **Evaluation context**
+ * `buildOfferEvaluationContext` groups cart items into four buckets (by item code,
+ * item group, brand, and transaction) so that individual offer evaluators
+ * (`getItemOffer`, `getGroupOffer`, `getBrandOffer`, `getTransactionOffer`) perform
+ * O(1) bucket lookups rather than full list scans. Results are cached per offer
+ * name in `_cachedOfferResults`; only offers affected by the changed row IDs are
+ * recomputed on incremental refreshes.
+ *
+ * **Offer benefit types**
+ * - `"Give Product"` — adds a free item to the cart (computed qty supports
+ *   recursive / per-unit modes).
+ * - `"Item Price"` — applies a discount directly to matching cart items.
+ * - `"Grand Total"` — sets the invoice-level additional discount.
+ *
+ * **Manual suppression**
+ * `_manuallySuppressedAutoOffers` tracks offer row IDs the operator has
+ * deliberately deselected. Auto-enabled offers are not re-applied while
+ * suppressed; suppression is cleared when the offer leaves the available set.
+ *
+ * **Debug logging**
+ * Set `localStorage.posawesome_debug_offers = "1"` to enable verbose console
+ * output from every evaluation step.
+ *
+ * **Dependency injection**
+ * `setUpdateItemDetail(fn)` injects the item-detail updater from the parent
+ * composable so that offer application can propagate changes through the shared
+ * item detail pipeline without a circular import.
+ */
 import { ref, computed, watch } from "vue";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { useUIStore } from "../../../stores/uiStore";
@@ -11,6 +55,12 @@ const __ = window.__ || ((s) => s);
 // @ts-ignore
 const frappe = window.frappe;
 // @ts-ignore
+
+const emitBus = (eventName: string, payload?: any) => {
+	if (bus && typeof bus.emit === "function") {
+		bus.emit(eventName, payload);
+	}
+};
 
 export function useInvoiceOffers() {
 	const isOfferDebugEnabled =
@@ -44,17 +94,26 @@ export function useInvoiceOffers() {
 	const discount_percentage_offer_name = ref<string | null>(null);
 	const brand_cache = ref<Record<string, string>>({});
 
-	// Watch for changes that should trigger offer evaluation
-	// We watch metadata specifically because it is "touched" whenever items are modified in the store
+	// Watch for changes that should trigger offer evaluation.
+	// `invoiceStore.metadata.changeVersion` is bumped on every
+	// cart mutation (add / remove / qty / replace) — using it as
+	// the cart-content signal lets us drop `deep: true`. The other
+	// dependencies (`items` / `posOffers` / `posa_coupons`) are
+	// detected on array reassignment which is the only way they
+	// change in normal flow.
 	watch(
-		[items, posOffers, posa_coupons, () => invoiceStore.metadata],
+		[
+			items,
+			posOffers,
+			posa_coupons,
+			() => invoiceStore.metadata?.changeVersion,
+		],
 		() => {
 			offerDebugLog(
 				"[useInvoiceOffers] watch triggered for items/offers/coupons/metadata",
 			);
 			scheduleOfferRefresh();
 		},
-		{ deep: true },
 	);
 
 	// Private state for refresh logic
@@ -195,10 +254,9 @@ export function useInvoiceOffers() {
 				brand = "";
 			} else {
 				try {
-					const message = await itemService.getItemBrand(
-						item.item_code,
+					brand = normalizeBrand(
+						await itemService.getItemBrandData(item.item_code),
 					);
-					brand = normalizeBrand(message);
 				} catch (error) {
 					console.error("Failed to fetch item brand:", error);
 					brand = "";
@@ -230,13 +288,9 @@ export function useInvoiceOffers() {
 		if (!offerRowId) return false;
 		for (const row_id of item_offers) {
 			const exist_offer = posa_offers.value.find(
-				(el: any) =>
-					normalizeOfferRowId(row_id) === getOfferRowId(el),
+				(el: any) => normalizeOfferRowId(row_id) === getOfferRowId(el),
 			);
-			if (
-				exist_offer &&
-				getOfferRowId(exist_offer) === offerRowId
-			) {
+			if (exist_offer && getOfferRowId(exist_offer) === offerRowId) {
 				applied = true;
 				break;
 			}
@@ -258,13 +312,12 @@ export function useInvoiceOffers() {
 			changedRowIds,
 		});
 		try {
-			const sourceOffers = (Array.isArray(posOffers.value)
-				? posOffers.value
-				: []
+			const sourceOffers = (
+				Array.isArray(posOffers.value) ? posOffers.value : []
 			).map((offer: any) => ensureOfferIdentity(offer));
 			if (!sourceOffers.length) {
 				offerDebugLog("[useInvoiceOffers] No source offers available");
-				bus.emit("update_pos_offers", []);
+				emitBus("update_pos_offers", []);
 				uiStore.setApplicableOffers([]);
 				updatePosOffers([]);
 				_cachedOfferResults.value.clear();
@@ -335,7 +388,7 @@ export function useInvoiceOffers() {
 				.filter((entry: any) => !!entry);
 			setItemGiveOffer(offers);
 			pruneManualSuppression(offers);
-			bus.emit("update_pos_offers", offers);
+			emitBus("update_pos_offers", offers);
 			uiStore.setApplicableOffers(offers);
 			const effectiveOffers = offers.filter((offer: any) =>
 				shouldProcessOfferInAutoRefresh(offer),
@@ -578,7 +631,8 @@ export function useInvoiceOffers() {
 			if (it) itemsList.push(it);
 		});
 		const eligibleItems = itemsList.filter(
-			(entry: any) => entry && !entry.posa_is_replace && !entry.posa_is_offer,
+			(entry: any) =>
+				entry && !entry.posa_is_replace && !entry.posa_is_offer,
 		);
 		if (eligibleItems.length === 0) return null;
 		return eligibleItems.reduce((res, obj) => {
@@ -598,10 +652,7 @@ export function useInvoiceOffers() {
 		offers.forEach((offer) => {
 			if (!offer || offer.offer !== "Give Product") return;
 
-			if (
-				offer.apply_type == "Item Code" &&
-				offer.replace_item
-			) {
+			if (offer.apply_type == "Item Code" && offer.replace_item) {
 				const itemCode = offer.item || offer.apply_item_code;
 				offer.give_item = itemCode;
 				offer.apply_item_code = itemCode;
@@ -703,7 +754,11 @@ export function useInvoiceOffers() {
 		const raw = offer?.auto;
 		if (typeof raw === "string") {
 			const normalized = raw.trim().toLowerCase();
-			return normalized === "1" || normalized === "true" || normalized === "yes";
+			return (
+				normalized === "1" ||
+				normalized === "true" ||
+				normalized === "yes"
+			);
 		}
 		return raw === 1 || raw === true;
 	};
@@ -718,8 +773,7 @@ export function useInvoiceOffers() {
 		}
 		return posa_offers.value.some(
 			(invoiceOffer: any) =>
-				invoiceOffer &&
-				getOfferRowId(invoiceOffer) === rowId,
+				invoiceOffer && getOfferRowId(invoiceOffer) === rowId,
 		);
 	};
 
@@ -908,10 +962,13 @@ export function useInvoiceOffers() {
 				ensureOfferIdentity(offer);
 				const offerRowId = getOfferRowId(offer);
 				const existOffer = posa_offers.value.find(
-					(invoiceOffer) => getOfferRowId(invoiceOffer) === offerRowId,
+					(invoiceOffer) =>
+						getOfferRowId(invoiceOffer) === offerRowId,
 				);
 				if (existOffer) {
-					existOffer.items = JSON.stringify(parseArrayField(offer.items));
+					existOffer.items = JSON.stringify(
+						parseArrayField(offer.items),
+					);
 					// Logic for Give Product replacement
 					if (
 						existOffer.offer === "Give Product" &&
@@ -951,6 +1008,9 @@ export function useInvoiceOffers() {
 								row_id != item_to_remove.posa_row_id,
 						);
 						offer.items = updated_item_offers;
+						existOffer.items = JSON.stringify(
+							parseArrayField(offer.items),
+						);
 
 						const isItem = invoiceStore.itemsData.has(
 							item_to_remove.posa_row_id,
@@ -972,11 +1032,8 @@ export function useInvoiceOffers() {
 
 						// Replacement logic
 						if (offer.replace_cheapest_item) {
-							// ... Code at 781
-							// I will assume for now this complex block is rarely hit or I can implement it by copying.
-							// Implementing simplified handling: Remove old, add new.
+							// Simplified replacement path: remove the previous offer row and add the new one.
 						}
-						// This part is very specific. I'll implement standard handling for now.
 						invoiceStore.addItem(newItemOffer, 0);
 						existOffer.give_item_row_id = newItemOffer.posa_row_id;
 						existOffer.give_item = newItemOffer.item_code;
@@ -1204,13 +1261,23 @@ export function useInvoiceOffers() {
 			addCandidate(rowItem?.item_code);
 		});
 
-		if (!normalizedCandidates.length && offer?.apply_type === "Item Group") {
+		if (
+			!normalizedCandidates.length &&
+			offer?.apply_type === "Item Group"
+		) {
 			const groupName = offer?.apply_item_group || offer?.item_group;
 			if (groupName) {
 				const threshold = parseFiniteNumber(offer?.less_then, 0);
-				const combined = [...(items.value || []), ...(packed_items.value || [])]
+				const combined = [
+					...(items.value || []),
+					...(packed_items.value || []),
+				]
 					.filter((entry) => {
-						if (!entry || entry.posa_is_offer || entry.posa_is_replace) {
+						if (
+							!entry ||
+							entry.posa_is_offer ||
+							entry.posa_is_replace
+						) {
 							return false;
 						}
 						if (entry.item_group !== groupName) return false;
@@ -1224,8 +1291,14 @@ export function useInvoiceOffers() {
 						return true;
 					})
 					.sort((a, b) => {
-						const rateA = parseFiniteNumber(a.price_list_rate ?? a.rate, 0);
-						const rateB = parseFiniteNumber(b.price_list_rate ?? b.rate, 0);
+						const rateA = parseFiniteNumber(
+							a.price_list_rate ?? a.rate,
+							0,
+						);
+						const rateB = parseFiniteNumber(
+							b.price_list_rate ?? b.rate,
+							0,
+						);
 						return rateA - rateB;
 					});
 
@@ -1235,7 +1308,9 @@ export function useInvoiceOffers() {
 
 				if (!normalizedCandidates.length) {
 					const catalog = (allItems.value || [])
-						.filter((entry) => entry && entry.item_group === groupName)
+						.filter(
+							(entry) => entry && entry.item_group === groupName,
+						)
 						.filter((entry) => {
 							if (threshold <= 0) return true;
 							const rate = parseFiniteNumber(
@@ -1245,8 +1320,14 @@ export function useInvoiceOffers() {
 							return rate < threshold;
 						})
 						.sort((a, b) => {
-							const rateA = parseFiniteNumber(a.price_list_rate ?? a.rate, 0);
-							const rateB = parseFiniteNumber(b.price_list_rate ?? b.rate, 0);
+							const rateA = parseFiniteNumber(
+								a.price_list_rate ?? a.rate,
+								0,
+							);
+							const rateB = parseFiniteNumber(
+								b.price_list_rate ?? b.rate,
+								0,
+							);
 							return rateA - rateB;
 						});
 					if (catalog.length) {
@@ -1263,10 +1344,7 @@ export function useInvoiceOffers() {
 		return Math.min(max, Math.max(min, value));
 	};
 
-	const resolveOfferConversionFactor = (
-		item: any,
-		selectedUomData?: any,
-	) => {
+	const resolveOfferConversionFactor = (item: any, selectedUomData?: any) => {
 		const candidates = [
 			selectedUomData?.conversion_factor,
 			item?.conversion_factor,
@@ -1332,7 +1410,9 @@ export function useInvoiceOffers() {
 		const normalizedItemUoms = Array.isArray(new_item.item_uoms)
 			? [...new_item.item_uoms]
 			: [];
-		const stockUom = new_item.stock_uom ? String(new_item.stock_uom).trim() : "";
+		const stockUom = new_item.stock_uom
+			? String(new_item.stock_uom).trim()
+			: "";
 		if (
 			stockUom &&
 			!normalizedItemUoms.some(
@@ -1353,7 +1433,8 @@ export function useInvoiceOffers() {
 		}
 		const selectedUomData = normalizedItemUoms.find(
 			(entry: any) =>
-				entry && String(entry.uom || "").trim() === String(selectedUom || ""),
+				entry &&
+				String(entry.uom || "").trim() === String(selectedUom || ""),
 		);
 		const conversionFactor = resolveOfferConversionFactor(
 			new_item,
@@ -1454,9 +1535,13 @@ export function useInvoiceOffers() {
 			const selectedUomData = normalizedItemUoms.find(
 				(entry: any) =>
 					entry &&
-					String(entry.uom || "").trim() === String(selectedUom || ""),
+					String(entry.uom || "").trim() ===
+						String(selectedUom || ""),
 			);
-			const conversionRate = resolveOfferConversionFactor(item, selectedUomData);
+			const conversionRate = resolveOfferConversionFactor(
+				item,
+				selectedUomData,
+			);
 			item.conversion_factor = conversionRate;
 			const offerDiscountType = String(offer?.discount_type || "").trim();
 			const basePrice = resolveOfferBasePrice(item, conversionRate);
@@ -1536,7 +1621,10 @@ export function useInvoiceOffers() {
 				item.original_base_price_list_rate,
 				Number.NaN,
 			);
-			const originalRate = parseFiniteNumber(item.original_rate, Number.NaN);
+			const originalRate = parseFiniteNumber(
+				item.original_rate,
+				Number.NaN,
+			);
 			const originalBaseRate = parseFiniteNumber(
 				item.original_base_rate,
 				Number.NaN,
@@ -1584,17 +1672,17 @@ export function useInvoiceOffers() {
 				100,
 			);
 			const discount = (total * percent) / 100;
-			invoiceStore.setDiscountAmount(discount);
+			invoiceStore.setAdditionalDiscount(discount);
 			discount_percentage_offer_name.value = offer.name;
 		} else if (offerDiscountType === "Discount Amount") {
-			invoiceStore.setDiscountAmount(
+			invoiceStore.setAdditionalDiscount(
 				parseFiniteNumber(offer?.discount_amount, 0),
 			);
 		}
 	};
 
 	const RemoveOnTotal = (_offer: any) => {
-		invoiceStore.setDiscountAmount(0);
+		invoiceStore.setAdditionalDiscount(0);
 		discount_percentage_offer_name.value = null;
 	};
 

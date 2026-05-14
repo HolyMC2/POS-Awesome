@@ -80,7 +80,9 @@
 							class="invoice-section-card pos-themed-card"
 						>
 							<div class="invoice-section-heading">
-								<h3 class="invoice-section-heading__title">{{ __("Posting and Price List") }}</h3>
+								<h3 class="invoice-section-heading__title">
+									{{ __("Posting and Price List") }}
+								</h3>
 							</div>
 							<PostingDateRow
 								ref="postingDateComponent"
@@ -190,7 +192,9 @@
 								@update:expanded="handleExpandedUpdate"
 								@reorder-items="handleItemReorder"
 								@add-item-from-drag="handleItemDrop"
-								@show-drop-feedback="(isDragging) => showDropFeedback(isDragging, itemsTableRef)"
+								@show-drop-feedback="
+									(isDragging) => showDropFeedback(isDragging, itemsTableRef)
+								"
 								@item-dropped="showDropFeedback(false, itemsTableRef)"
 								@view-packed="openPackedItems"
 							/>
@@ -253,6 +257,7 @@
 			@print-draft="print_draft_invoice"
 			@show-payment="handleShowPaymentRequest"
 			@open-customer-display="handleOpenCustomerDisplayRequest"
+			@resume-parked-order="resume_parked_order"
 		/>
 	</div>
 </template>
@@ -280,7 +285,9 @@ import { useToastStore } from "../../stores/toastStore.js";
 import { useUIStore } from "../../stores/uiStore.js";
 import { storeToRefs } from "pinia";
 import stockCoordinator from "../../utils/stockCoordinator";
-import { ref } from "vue";
+import { getCurrentInstance, ref } from "vue";
+import { save_and_clear_invoice as saveAndClearInvoiceAction } from "./invoice_utils/actions";
+import { fetchDraftInvoices } from "../../utils/draftInvoices";
 
 // Composables
 import { useOnlineStatus } from "../../composables/core/useOnlineStatus";
@@ -290,6 +297,7 @@ import { useInvoiceOffers } from "../../composables/pos/invoice/useInvoiceOffers
 import { useInvoiceUI } from "../../composables/pos/invoice/useInvoiceUI";
 import { useInvoicePrinting } from "../../composables/pos/invoice/useInvoicePrinting";
 import { useInvoiceStock } from "../../composables/pos/invoice/useInvoiceStock";
+import { usePaymentPrinting } from "../../composables/pos/payments/usePaymentPrinting";
 import {
 	createInvoiceShortcutListeners,
 	registerInvoiceShortcutListener,
@@ -300,19 +308,22 @@ export default {
 	name: "POSInvoice",
 	mixins: [format],
 	setup() {
+		const instance = getCurrentInstance();
 		const uiStore = useUIStore();
 		const invoiceStore = useInvoiceStore();
 		const customersStore = useCustomersStore();
 		const toastStore = useToastStore();
 		const { isOnline } = useOnlineStatus();
 
-		const { activeView } = storeToRefs(uiStore);
+		const { activeView, posProfile: livePosProfile } = storeToRefs(uiStore);
 		const { selectedCustomer, refreshToken: customerRefreshToken } = storeToRefs(customersStore);
 		const {
 			items,
 			packedItems: packed_items,
 			invoiceDoc: invoice_doc,
 			invoiceType,
+			flowToLoad,
+			flowContext,
 		} = storeToRefs(invoiceStore);
 		const itemsTableRef = ref(null);
 		const currencyState = useInvoiceCurrency({}, {});
@@ -321,14 +332,22 @@ export default {
 
 		// New composables
 		const uiLogic = useInvoiceUI();
+		const { loadPrintPage } = usePaymentPrinting({
+			invoiceDoc: invoice_doc,
+			posProfile: livePosProfile,
+			invoiceType,
+		});
 		const printingLogic = useInvoicePrinting(
-			ref(uiStore.posProfile),
-			(name) => uiStore.loadPrintPage(name), // Assuming this exists or passed via mixin/store
-			itemActions.save_and_clear_invoice, // Need to verify if this is available
+			livePosProfile,
+			loadPrintPage,
+			() => {
+				if (!instance?.proxy) {
+					return Promise.resolve(null);
+				}
+				return saveAndClearInvoiceAction(instance.proxy);
+			},
 			invoice_doc,
 		);
-		// Note: save_and_clear_invoice might be in methods mixin, not composable.
-		// We'll keep print logic partly in component if dependencies are complex.
 
 		const stockLogic = useInvoiceStock(items, packed_items, uiStore.eventBus, () => {});
 
@@ -342,6 +361,8 @@ export default {
 			selectedCustomer,
 			customerRefreshToken,
 			invoiceType,
+			flowToLoad,
+			flowContext,
 			itemsTableRef,
 			...currencyState,
 			...itemActions,
@@ -467,22 +488,14 @@ export default {
 			},
 		},
 		return_discount_meta() {
-			if (
-				!this.isReturnInvoice ||
-				!this.return_doc ||
-				this.pos_profile?.posa_use_percentage_discount
-			) {
+			if (!this.isReturnInvoice || !this.return_doc || this.pos_profile?.posa_use_percentage_discount) {
 				return null;
 			}
 
-			const originalDiscount = Math.abs(
-				Number(this.return_discount_base_amount || 0),
-			);
+			const originalDiscount = Math.abs(Number(this.return_discount_base_amount || 0));
 			if (!originalDiscount) return null;
 
-			const originalTotal = Math.abs(
-				Number(this.return_discount_base_total || 0),
-			);
+			const originalTotal = Math.abs(Number(this.return_discount_base_total || 0));
 			if (!originalTotal) return null;
 
 			const returnTotal = Math.abs(Number(this.Total || 0));
@@ -573,12 +586,8 @@ export default {
 				return;
 			}
 
-			const originalDiscount = Math.abs(
-				Number(this.return_discount_base_amount || 0),
-			);
-			const originalTotal = Math.abs(
-				Number(this.return_discount_base_total || 0),
-			);
+			const originalDiscount = Math.abs(Number(this.return_discount_base_amount || 0));
+			const originalTotal = Math.abs(Number(this.return_discount_base_total || 0));
 			const returnTotal = Math.abs(Number(this.Total || 0));
 
 			if (!originalDiscount || !originalTotal || !returnTotal) {
@@ -642,7 +651,6 @@ export default {
 			if (!date) return;
 			this.posting_date = date;
 			this.invoiceStore.setPostingDate(date);
-			this.$forceUpdate();
 		},
 
 		update_exchange_rate() {
@@ -721,6 +729,23 @@ export default {
 			this.fetch_price_lists();
 			this.update_price_list();
 			this.fetch_available_currencies();
+			this.refresh_parked_orders();
+		},
+		async refresh_parked_orders() {
+			if (!this.pos_profile || !this.pos_opening_shift?.name) {
+				this.uiStore.setParkedOrders([]);
+				return;
+			}
+
+			try {
+				const drafts = await fetchDraftInvoices({
+					posOpeningShift: this.pos_opening_shift,
+					posProfile: this.pos_profile,
+				});
+				this.uiStore.setParkedOrders(drafts);
+			} catch (error) {
+				console.error("Error refreshing parked orders:", error);
+			}
 		},
 		handleClearInvoice() {
 			this.clear_invoice();
@@ -732,22 +757,41 @@ export default {
 		handleLoadOrder(data) {
 			this.new_order(data);
 		},
+		handleLoadFlow(flow) {
+			if (!flow?.prepared_doc) {
+				return;
+			}
+
+			this.invoiceStore.setFlowContext?.(flow.flow_context || null);
+			const action = flow?.action || flow?.flow_context?.prepared_action;
+			const targetDoctype = flow?.flow_context?.target_doctype || flow?.prepared_doc?.doctype || "";
+
+			if (targetDoctype === "Quotation" || action === "quote_edit_draft") {
+				this.invoiceType = "Quotation";
+				this.invoiceTypes = ["Invoice", "Order", "Quotation"];
+			} else if (
+				targetDoctype === "Sales Order" ||
+				action === "order_load" ||
+				action === "quote_to_order"
+			) {
+				this.invoiceType = "Order";
+				this.invoiceTypes = ["Invoice", "Order", "Quotation"];
+			} else {
+				this.invoiceType = "Invoice";
+				this.invoiceTypes = ["Invoice", "Order", "Quotation"];
+			}
+
+			this.load_invoice(flow.prepared_doc, { preserveStickies: true });
+		},
 
 		calcProratedReturnDiscount(returnDoc) {
 			if (!returnDoc) return 0;
 
-			const originalDiscount = Math.abs(
-				Number(returnDoc.discount_amount || 0),
-			);
+			const originalDiscount = Math.abs(Number(returnDoc.discount_amount || 0));
 			if (!originalDiscount) return 0;
 
 			const originalTotal = Math.abs(
-				Number(
-					returnDoc.total ??
-						returnDoc.net_total ??
-						returnDoc.grand_total ??
-						0,
-				),
+				Number(returnDoc.total ?? returnDoc.net_total ?? returnDoc.grand_total ?? 0),
 			);
 			if (!originalTotal) return 0;
 
@@ -780,6 +824,16 @@ export default {
 			this.invoiceType = "Return";
 			this.invoiceTypes = ["Return"];
 			this.invoice_doc.is_return = 1;
+			if (Array.isArray(this.invoice_doc.payments)) {
+				this.invoice_doc.payments.forEach((payment) => {
+					const amount = this.flt(payment.amount || 0, this.currency_precision);
+					payment.amount = amount ? -Math.abs(amount) : 0;
+					if (payment.base_amount !== undefined) {
+						const baseAmount = this.flt(payment.base_amount || 0, this.currency_precision);
+						payment.base_amount = baseAmount ? -Math.abs(baseAmount) : 0;
+					}
+				});
+			}
 			if (this.items && this.items.length) {
 				this.items.forEach((item) => {
 					if (item.qty > 0) item.qty = -Math.abs(item.qty);
@@ -789,9 +843,7 @@ export default {
 			if (data.return_doc) {
 				this.return_doc = data.return_doc;
 				this.invoice_doc.return_against = data.return_doc.name;
-				this.return_discount_base_amount = Math.abs(
-					Number(data.return_doc.discount_amount || 0),
-				);
+				this.return_discount_base_amount = Math.abs(Number(data.return_doc.discount_amount || 0));
 				this.return_discount_base_total = Math.abs(
 					Number(
 						data.return_doc.total ??
@@ -802,32 +854,25 @@ export default {
 				);
 				console.log("[POSA][Returns] Loaded return doc", {
 					return_against: data.return_doc.name,
-					is_percentage:
-						!!this.pos_profile?.posa_use_percentage_discount,
+					is_percentage: !!this.pos_profile?.posa_use_percentage_discount,
 					discount_amount: data.return_doc.discount_amount,
-					discount_percentage:
-						data.return_doc.additional_discount_percentage,
+					discount_percentage: data.return_doc.additional_discount_percentage,
 					original_total:
-						data.return_doc.total ??
-						data.return_doc.net_total ??
-						data.return_doc.grand_total,
+						data.return_doc.total ?? data.return_doc.net_total ?? data.return_doc.grand_total,
 					base_total: this.return_discount_base_total,
 					base_discount: this.return_discount_base_amount,
 				});
 
 				if (this.pos_profile?.posa_use_percentage_discount) {
-					if (
-						data.return_doc.additional_discount_percentage !==
-						undefined
-					) {
-						this.additional_discount_percentage =
-							data.return_doc.additional_discount_percentage || 0;
+					if (data.return_doc.additional_discount_percentage !== undefined) {
+						this.additional_discount_percentage = this.flt(
+							data.return_doc.additional_discount_percentage || 0,
+							this.float_precision,
+						);
 					}
 					this.update_discount_umount();
 				} else {
-					const prorated = this.calcProratedReturnDiscount(
-						data.return_doc,
-					);
+					const prorated = this.calcProratedReturnDiscount(data.return_doc);
 					this.discount_amount = prorated;
 					this.additional_discount = prorated;
 					this.additional_discount_percentage = 0;
@@ -844,6 +889,20 @@ export default {
 		handleShowPaymentRequest() {
 			this.show_payment();
 		},
+		async resume_parked_order(draft) {
+			try {
+				const message = await this.load_draft_source_record(draft);
+				if (message) {
+					this.uiStore?.closeDrafts?.();
+				}
+			} catch (error) {
+				console.error("Error loading parked order:", error);
+				this.toastStore.show({
+					title: __("Unable to load parked order"),
+					color: "error",
+				});
+			}
+		},
 		handleOpenCustomerDisplayRequest() {
 			if (this.eventBus && typeof this.eventBus.emit === "function") {
 				this.eventBus.emit("open_customer_display");
@@ -854,11 +913,8 @@ export default {
 				this.price_list_rate_dialog_resolver(null);
 			}
 
-			this.price_list_rate_dialog_initial_rate =
-				initialRate == null ? "" : String(initialRate);
-			this.price_list_rate_dialog_item_label = String(
-				item?.item_name || item?.item_code || "",
-			);
+			this.price_list_rate_dialog_initial_rate = initialRate == null ? "" : String(initialRate);
+			this.price_list_rate_dialog_item_label = String(item?.item_name || item?.item_code || "");
 			this.price_list_rate_dialog_open = true;
 
 			return new Promise((resolve) => {
@@ -890,6 +946,17 @@ export default {
 		this.loadColumnPreferences();
 		this.loadInvoiceHeight();
 
+		// Watch the IDENTITY of `posProfile` + `offers` (the
+		// reference itself), not their deep contents. The previous
+		// `deep: true` configuration walked the entire 100-key
+		// profile object + offers array on every reactive tick —
+		// which on a busy POS with a foreign price-list +
+		// pricing rules + stock updates fired thousands of times,
+		// dominating the click-input freeze (27 s INP on the search
+		// box). Internal field mutations inside `posProfile` /
+		// `offers` are state we already own; the handler only needs
+		// to re-fire when the WHOLE object is replaced (i.e.
+		// `setPosProfile(newProfile)` / `setOffers(newOffers)`).
 		this.$watch(
 			() => this.uiStore.posProfile,
 			(profile) => {
@@ -902,7 +969,7 @@ export default {
 					});
 				}
 			},
-			{ deep: true, immediate: true },
+			{ immediate: true },
 		);
 
 		this.$watch(
@@ -912,7 +979,7 @@ export default {
 					this.handleSetOffers(offers);
 				}
 			},
-			{ deep: true, immediate: true },
+			{ immediate: true },
 		);
 
 		this.$watch(
@@ -930,6 +997,22 @@ export default {
 			(doc) => {
 				if (doc) {
 					this.handleLoadOrder(doc);
+				}
+			},
+			{ deep: false },
+		);
+
+		this.$watch(
+			() => this.invoiceStore.flowToLoad,
+			(flow) => {
+				if (flow?.prepared_doc) {
+					this.handleLoadFlow(flow);
+				} else if (flow) {
+					this.handleLoadFlow({
+						action: this.invoiceStore.flowContext?.prepared_action,
+						prepared_doc: flow,
+						flow_context: this.invoiceStore.flowContext,
+					});
 				}
 			},
 			{ deep: false },
@@ -964,11 +1047,20 @@ export default {
 			load_return_invoice: this.handleLoadReturnInvoice,
 			set_new_line: this.handleSetNewLine,
 			calc_uom: this.calc_uom,
-			recalculate_return_discount: (payload) =>
-				this.applyReturnDiscountProration(payload),
+			recalculate_return_discount: (payload) => this.applyReturnDiscountProration(payload),
 			reset_invoice_type_to_invoice: () => {
 				this.invoiceType = "Invoice";
 				this.invoiceTypes = ["Invoice", "Order", "Quotation"];
+			},
+			// Phase 1.H: silently refresh the drafts panel after Save & Clear so
+			// the count badge + in-place preview update without the operator
+			// having to click "Manage all". Keeps the lazy "Manage all" path
+			// intact for flaky-network manual refresh.
+			draft_saved: () => {
+				if (typeof this.get_draft_invoices === "function") {
+					const source = this.uiStore?.draftSource || "invoice";
+					this.get_draft_invoices(source, { quiet: true });
+				}
 			},
 		};
 
@@ -1034,20 +1126,14 @@ export default {
 		this._shortcutHandlers.handleInvoiceShortcut = createInvoiceShortcutListeners(
 			this.handleInvoiceShortcut.bind(this),
 		);
-		registerInvoiceShortcutListener(
-			document,
-			this._shortcutHandlers.handleInvoiceShortcut,
-		);
+		registerInvoiceShortcutListener(document, this._shortcutHandlers.handleInvoiceShortcut);
 	},
 	unmounted() {
 		if (!this._shortcutHandlers) {
 			return;
 		}
 
-		unregisterInvoiceShortcutListener(
-			document,
-			this._shortcutHandlers.handleInvoiceShortcut,
-		);
+		unregisterInvoiceShortcutListener(document, this._shortcutHandlers.handleInvoiceShortcut);
 
 		this._shortcutHandlers = {};
 	},

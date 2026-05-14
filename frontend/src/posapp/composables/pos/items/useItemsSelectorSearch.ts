@@ -1,6 +1,7 @@
 import _ from "lodash";
 import { shouldReloadOnSearchClear } from "../../../utils/searchUtils.js";
 import { isOffline } from "../../../../offline/index";
+import { resolveBooleanSetting } from "./selectorSearch/resolveBooleanSetting";
 
 declare const flt: (_value: unknown) => number;
 
@@ -26,17 +27,6 @@ export const useItemsSelectorSearch = ({
 	clearHighlightedItem,
 }: SearchDeps) => {
 	const getVm = (): any => (typeof getVM === "function" ? getVM() : null);
-
-	const resolveBooleanSetting = (value: unknown): boolean => {
-		if (typeof value === "string") {
-			const normalized = value.trim().toLowerCase();
-			return normalized === "1" || normalized === "true" || normalized === "yes";
-		}
-		if (typeof value === "number") {
-			return value === 1;
-		}
-		return Boolean(value);
-	};
 
 	const usesLimitSearch = (vm: any): boolean => {
 		if (typeof isLimitSearchEnabled === "function") {
@@ -203,7 +193,12 @@ export const useItemsSelectorSearch = ({
 
 		const searchTerm = scannedCode || vm.first_search;
 		await scannerInput.ensureScaleBarcodeSettings();
-		if (!vm.displayedItems.length || !searchTerm) {
+		// `displayedItems` may be undefined during early mount or after
+		// a cache reset (the bulk loader has not assigned the array yet
+		// when the user presses Enter on a fresh / cleared POS). Guard
+		// the read so we bail cleanly instead of crashing the whole
+		// scripted-scan / Enter pipeline.
+		if (!vm.displayedItems?.length || !searchTerm) {
 			return;
 		}
 
@@ -223,7 +218,7 @@ export const useItemsSelectorSearch = ({
 		if (Array.isArray(new_item.item_barcode)) {
 			new_item.item_barcode.forEach((element) => {
 				if (search === element.barcode) {
-					new_item.uom = element.posa_uom;
+					new_item.uom = element.uom;
 					match = true;
 				}
 			});
@@ -316,10 +311,15 @@ export const useItemsSelectorSearch = ({
 			return;
 		}
 
-		// If background loading is in progress, defer the search without changing the active query
+		// If background loading is in progress, queue the term so the loader
+		// can re-apply it when it finishes — BUT don't return early. Letting
+		// the local + lean-server fallback path below still run means the
+		// operator sees results immediately instead of staring at a blank
+		// catalog while the (possibly minute-long) full sync grinds through
+		// 3 k+ items. The cooldown gate inside the fallback prevents
+		// keystroke-storming the server.
 		if (vm.isBackgroundLoading) {
 			vm.pendingItemSearch = trimmedQuery;
-			return;
 		}
 
 		vm.search = trimmedQuery;
@@ -345,6 +345,67 @@ export const useItemsSelectorSearch = ({
 			const loadVisibleItems = getVisibleItemsLoader(vm);
 			if (loadVisibleItems) {
 				await loadVisibleItems(true);
+			}
+			// Server fallback: when the local IDB cache hasn't fully
+			// synced AND the operator typed a non-trivial query
+			// (≥ 3 chars), hit the server. Fixes:
+			//  1. Newly-created item invisible until manual reload.
+			//  2. Operator typing e.g. "rev" for "revision" while
+			//     the item lives in a not-yet-loaded chunk of a
+			//     large catalog. Even when the local list happens
+			//     to surface OTHER matches for the same prefix, the
+			//     specific item the operator wants may still be
+			//     missing — fire the lean server search regardless.
+			//
+			// Gates:
+			//  - itemsLoaded is false (full catalog not local) OR
+			//    the cache is genuinely tiny (bootstrap state)
+			//  - per-term cooldown (10 s) so backspace-edits don't
+			//    storm the server, but switching to a different
+			//    term re-queries immediately.
+			const fullCatalogLocal =
+				vm.itemsLoaded === true &&
+				Array.isArray(vm.items) &&
+				vm.items.length > 50;
+			vm._lastSearchServerRetryByTerm =
+				vm._lastSearchServerRetryByTerm || new Map<string, number>();
+			const lastRetry: number =
+				vm._lastSearchServerRetryByTerm.get(trimmedQuery) || 0;
+			const cooledDown = Date.now() - lastRetry > 10_000;
+			if (
+				!fullCatalogLocal &&
+				cooledDown &&
+				trimmedQuery.length >= 3
+			) {
+				vm._lastSearchServerRetryByTerm.set(trimmedQuery, Date.now());
+				// LRU-evict to keep the Map bounded across long shifts.
+				// A unique-term-per-keystroke pattern (operator types many
+				// distinct queries) would otherwise grow this Map without
+				// bound; 100 entries cover well past the cooldown window.
+				const RETRY_TERM_CAP = 100;
+				if (vm._lastSearchServerRetryByTerm.size > RETRY_TERM_CAP) {
+					const oldestKey = vm._lastSearchServerRetryByTerm
+						.keys()
+						.next().value;
+					if (oldestKey !== undefined) {
+						vm._lastSearchServerRetryByTerm.delete(oldestKey);
+					}
+				}
+				// Prefer the lean server-side search (capped 50 rows,
+				// no images, merges into the existing items list)
+				// over the legacy `getItems(true)` path which used to
+				// re-pull the entire catalog and froze the UI for
+				// 10-20 s on big stores. Fall back to the legacy
+				// loader only when the lean adapter isn't wired.
+				const lean = vm.search_items_lean || vm.itemsIntegration?.search_items_lean;
+				const fallback = typeof lean === "function"
+					? lean.call(vm.itemsIntegration || vm, trimmedQuery)
+					: getItemsLoader(vm)?.(true);
+				if (fallback && typeof (fallback as Promise<unknown>).then === "function") {
+					Promise.resolve(fallback).catch((err) => {
+						console.warn("[POSA][SearchFallback] server retry failed", err);
+					});
+				}
 			}
 			triggerEnterEvent(vm);
 		} else {

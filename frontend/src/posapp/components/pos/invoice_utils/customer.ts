@@ -1,6 +1,8 @@
 import {
 	getStoredCustomer,
 	getCachedPriceListItems,
+	setCustomerStorage,
+	saveStoredValueSnapshot,
 } from "../../../../offline/index";
 
 declare const frappe: any;
@@ -26,7 +28,14 @@ export async function fetch_customer_details(context: any) {
 
 		const r = await frappe.call({
 			method: "posawesome.posawesome.api.customers.get_customer_info",
-			args: { customer },
+			args: {
+				customer,
+				company:
+					context?.pos_profile?.company ||
+					context?.company?.name ||
+					context?.company ||
+					null,
+			},
 		});
 
 		if (
@@ -35,6 +44,22 @@ export async function fetch_customer_details(context: any) {
 			context.customer.trim() === requestedCustomer
 		) {
 			context.customer_info = r.message;
+			await setCustomerStorage([r.message]);
+			if (context?.pos_profile?.company) {
+				const totalCredit = Number(r.message?.stored_value_balance || 0);
+				saveStoredValueSnapshot(
+					customer,
+					context.pos_profile.company,
+					totalCredit > 0 ? [
+						{
+							type: "Snapshot",
+							credit_origin: "offline-customer-cache",
+							total_credit: totalCredit,
+							source_type: "Stored Value Snapshot",
+						},
+					] : [],
+				);
+			}
 			const resolvedPriceList =
 				context.customer_info.customer_price_list ||
 				context.customer_info.customer_group_price_list ||
@@ -56,11 +81,23 @@ export async function fetch_customer_details(context: any) {
 				context.price_list_currency = context.pos_profile.currency;
 			}
 
-			// If we have items with default rates (rate=0 or rate not set), re-apply price list
-			// Or if we need to enforce customer price list
-			if (context.items.length > 0) {
-				if (context.update_items_details)
-					await context.update_items_details(context.items);
+			// If the cart has lines, re-pull their server-side
+			// detail (rate / batch / stock) for the new customer's
+			// price list. Fire-and-forget — awaiting here serialised
+			// the operator's customer-change behind a 1-5 s server
+			// round-trip per cart line, freezing the SPA on slow
+			// connections. The cart already shows the local
+			// `apply_cached_price_list` result; the fresh details
+			// patch in on the next render once the response lands.
+			if (context.items.length > 0 && context.update_items_details) {
+				Promise.resolve(
+					context.update_items_details(context.items),
+				).catch((err: unknown) => {
+					console.warn(
+						"[POSA][Customer] background detail refresh failed",
+						err,
+					);
+				});
 			}
 		}
 	} catch (error) {

@@ -7,6 +7,7 @@ vi.mock("../src/posapp/stores/toastStore", () => ({
 }));
 
 import { useItemAddition } from "../src/posapp/composables/pos/items/useItemAddition";
+import { useBatchSerial } from "../src/posapp/composables/pos/shared/useBatchSerial";
 
 const createItem = () => ({
 	item_code: "ITEM-001",
@@ -85,6 +86,50 @@ describe("useItemAddition new line behavior", () => {
 		expect(context.items).toHaveLength(2);
 		expect(context.items[0].qty).toBe(1);
 		expect(context.items[1].qty).toBe(1);
+	});
+
+	it("auto-selects the FEFO batch and applies its batch price on add", async () => {
+		const api = useItemAddition();
+		const context = createContext(false) as any;
+		const batchSerial = useBatchSerial();
+		context.pos_profile.posa_auto_set_batch = 1;
+		context.price_list_currency = "USD";
+		context.selected_currency = "USD";
+		context.exchange_rate = 1;
+		context.currency_precision = 2;
+		context.flt = (value: any) => Number(value);
+		context.forceUpdate = vi.fn();
+		context.setBatchQty = (line: any, value: any, update?: boolean) =>
+			batchSerial.setBatchQty(line, value, update, context);
+
+		const item = {
+			...createItem(),
+			has_batch_no: 1,
+			batch_no_data: [
+				{
+					batch_no: "B-FEFO",
+					batch_qty: 5,
+					batch_price: 7,
+					expiry_date: "2026-04-01",
+					is_expired: false,
+				},
+				{
+					batch_no: "B-LATER",
+					batch_qty: 5,
+					batch_price: 9,
+					expiry_date: "2026-05-01",
+					is_expired: false,
+				},
+			],
+		};
+
+		await api.prepareItemForCart(item, 1, context);
+		await api.addItem(item, context);
+
+		expect(context.items).toHaveLength(1);
+		expect(context.items[0].batch_no).toBe("B-FEFO");
+		expect(context.items[0].rate).toBe(7);
+		expect(context.items[0].price_list_rate).toBe(7);
 	});
 
 	it("resets return invoice type back to Invoice on clear", () => {

@@ -1,3 +1,31 @@
+/**
+ * Frappe realtime WebSocket listener store for background invoice processing.
+ *
+ * `init()` must be called once at application startup. It attaches five
+ * `frappe.realtime` listeners that cover the full background-submission lifecycle:
+ *
+ * | Event | Effect |
+ * |---|---|
+ * | `pos_invoice_processed` | Resolves `waitForInvoiceProcessed`; shows success or "processing payments" toast |
+ * | `pos_invoice_submit_error` | Rejects `waitForInvoiceProcessed`; shows error toast + `frappe.msgprint` |
+ * | `pos_post_submit_payments_started` | Shows loading toast |
+ * | `pos_post_submit_payments_completed` | Resolves `waitForPostSubmitPayments`; updates toast to success |
+ * | `pos_post_submit_payments_failed` | Rejects `waitForPostSubmitPayments`; shows error toast |
+ * | `posa_stock_changed` | Forwards payload to `dispatchRealtimeStockPayload` |
+ *
+ * **Promise-based waiting**
+ * `waitForInvoiceProcessed(invoice, timeoutMs?)` and
+ * `waitForPostSubmitPayments(invoice, timeoutMs?)` return Promises that resolve or
+ * reject when the corresponding realtime event arrives for that specific invoice
+ * name. Both default to a 45-second timeout. If the event has already been
+ * received (stored in `processedInvoices` / `postSubmitPayments`) the Promise
+ * settles synchronously without registering a waiter.
+ *
+ * **`has_post_submit_payment_work` flag**
+ * When `pos_invoice_processed` includes `has_post_submit_payment_work: true`, a
+ * persistent loading toast is shown and callers should also await
+ * `waitForPostSubmitPayments` before marking the transaction complete.
+ */
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { useToastStore } from "./toastStore";
@@ -104,8 +132,20 @@ export const useSocketStore = defineStore("socket", () => {
     return withTimeout<PostSubmitPaymentState>(paymentWaiters, invoice, timeoutMs);
   };
 
+  let initialised = false;
+
   function init() {
     if (typeof frappe === "undefined" || !frappe.realtime) return;
+    // Guard against double-registration. Each call to `init()` was
+    // attaching another set of 6 `frappe.realtime.on(...)` handlers
+    // with no `.off()` cleanup. Pos.vue (re)mounts on customer
+    // change re-ran init via Payments.vue's `useSocketStore()`
+    // chain, so listeners climbed 6 per mount → 22k+ in minutes,
+    // visible in Firefox Performance as a 2 k → 22 k listener
+    // count and 27 s `vendor-CF6GND7R.js f` self-time (Vue's reactive
+    // trigger walking the bloated subscriber list).
+    if (initialised) return;
+    initialised = true;
 
     // Global listener for background submission errors
     frappe.realtime.on("pos_invoice_submit_error", (data: InvoiceProcessingPayload) => {

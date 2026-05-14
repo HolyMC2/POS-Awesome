@@ -12,6 +12,7 @@ from erpnext.accounts.doctype.loyalty_program.loyalty_program import (
 )
 from frappe.utils.caching import redis_cache
 from .utils import fetch_sales_person_names
+from .stored_value import get_stored_value_summary
 
 
 def get_customer_groups(pos_profile):
@@ -22,9 +23,7 @@ def get_customer_groups(pos_profile):
             group_name = data.get("customer_group") if data else None
             if not group_name:
                 continue
-            customer_groups.extend(
-                [d.get("name") for d in get_child_nodes("Customer Group", group_name)]
-            )
+            customer_groups.extend([d.get("name") for d in get_child_nodes("Customer Group", group_name)])
 
     return list(set(customer_groups))
 
@@ -116,6 +115,7 @@ def get_customer_names(pos_profile, limit=None, offset=None, start_after=None, m
             filters=filters,
             fields=[
                 "name",
+                "modified",
                 "mobile_no",
                 "email_id",
                 "tax_id",
@@ -145,7 +145,63 @@ def get_customers_count(pos_profile):
 
 
 @frappe.whitelist()
-def get_customer_info(customer=None):
+def search_customers(pos_profile, search_term, limit=20):
+    """
+    Server-side fallback for the SPA customer dialog.
+
+    Returns customers whose customer_name / name / mobile_no / email_id /
+    tax_id match `search_term` (substring, case-insensitive), scoped by
+    the POS Profile's customer_groups. Used when the local IDB cache
+    is empty / stale / mid-sync — the SPA hits this so an operator
+    typing a customer name never sees an empty dropdown when the
+    customer demonstrably exists on the server.
+    """
+    if not search_term:
+        return []
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 20
+    limit = max(1, min(limit, 50))
+
+    profile_data = json.loads(pos_profile) if isinstance(pos_profile, str) else pos_profile
+    filters = [["disabled", "=", 0]]
+    customer_groups = get_customer_groups(profile_data)
+    if customer_groups:
+        filters.append(["customer_group", "in", customer_groups])
+
+    term = cstr(search_term).strip()
+    if not term:
+        return []
+    like = f"%{term}%"
+    or_filters = [
+        ["customer_name", "like", like],
+        ["name", "like", like],
+        ["mobile_no", "like", like],
+        ["email_id", "like", like],
+        ["tax_id", "like", like],
+    ]
+
+    return frappe.get_all(
+        "Customer",
+        filters=filters,
+        or_filters=or_filters,
+        fields=[
+            "name",
+            "modified",
+            "mobile_no",
+            "email_id",
+            "tax_id",
+            "customer_name",
+            "primary_address",
+        ],
+        order_by="customer_name asc",
+        limit_page_length=limit,
+    )
+
+
+@frappe.whitelist()
+def get_customer_info(customer=None, company=None):
     customer = cstr(customer or "").strip()
     if not customer:
         return {}
@@ -172,14 +228,9 @@ def get_customer_info(customer=None):
         "Customer Group", customer.customer_group, "default_price_list"
     )
 
-    effective_price_list = (
-        res.get("customer_price_list")
-        or res.get("customer_group_price_list")
-    )
+    effective_price_list = res.get("customer_price_list") or res.get("customer_group_price_list")
     if effective_price_list:
-        res["price_list_currency"] = frappe.get_value(
-            "Price List", effective_price_list, "currency"
-        )
+        res["price_list_currency"] = frappe.get_value("Price List", effective_price_list, "currency")
     else:
         res["price_list_currency"] = None
 
@@ -192,6 +243,15 @@ def get_customer_info(customer=None):
         )
         res["loyalty_points"] = lp_details.get("loyalty_points")
         res["conversion_factor"] = lp_details.get("conversion_factor")
+
+    company = cstr(company or "").strip()
+    if company:
+        stored_value = get_stored_value_summary(customer=customer.name, company=company)
+        res["stored_value_balance"] = stored_value.get("available_amount", 0)
+        res["stored_value_sources"] = stored_value.get("source_count", 0)
+    else:
+        res["stored_value_balance"] = 0
+        res["stored_value_sources"] = 0
 
     addresses = frappe.db.sql(
         """

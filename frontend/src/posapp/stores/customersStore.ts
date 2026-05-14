@@ -1,20 +1,31 @@
 import { defineStore } from "pinia";
-import { ref, computed } from "vue";
+import { ref, shallowRef, markRaw, computed } from "vue";
 
 declare const frappe: any;
 declare const __: any;
-import type { Customer, POSProfile } from "../types/models";
+import type {
+	CustomerInfo,
+	CustomerSummary,
+	POSProfile,
+	StoredCustomer,
+} from "../types/models";
+import {
+	customerMatchesSearchTerm,
+	normalizeCustomerSearchTerm,
+} from "./customers/customerSearch";
 // @ts-ignore
 import {
 	db,
 	checkDbHealth,
 	setCustomerStorage,
+	saveStoredValueSnapshot,
 	memoryInitPromise,
 	getCustomersLastSync,
 	setCustomersLastSync,
 	getCustomerStorageCount,
 	clearCustomerStorage,
 	isOffline,
+	refreshBootstrapSnapshotFromCacheState,
 } from "../../offline/index";
 
 const PAGE_SIZE = 1000;
@@ -45,22 +56,28 @@ function setStoredCustomerScope(scope: string): void {
 	localStorage.removeItem(CUSTOMER_SCOPE_STORAGE_KEY);
 }
 
-function normalizeSearchTerm(term: string | null | undefined): string {
-	if (typeof term !== "string") {
-		return "";
-	}
-	return term.trim();
+function getStringField(
+	source: Record<string, unknown>,
+	field: string,
+): string | undefined {
+	const value = source[field];
+	return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-function normalizeProfile(profile: any): POSProfile | null {
+function normalizeProfile(profile: unknown): POSProfile | null {
 	if (!profile) {
 		return null;
 	}
 
-	let resolved = profile;
+	let resolved: unknown = profile;
 
-	if (profile.pos_profile) {
-		resolved = profile.pos_profile;
+	if (
+		typeof profile === "object" &&
+		profile !== null &&
+		"pos_profile" in profile &&
+		(profile as { pos_profile?: unknown }).pos_profile
+	) {
+		resolved = (profile as { pos_profile?: unknown }).pos_profile;
 	}
 
 	if (typeof resolved === "string") {
@@ -71,7 +88,7 @@ function normalizeProfile(profile: any): POSProfile | null {
 
 		if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
 			try {
-				return JSON.parse(trimmed);
+				return JSON.parse(trimmed) as POSProfile;
 			} catch (err) {
 				console.error("Failed to parse POS profile JSON", err);
 				return null;
@@ -84,7 +101,7 @@ function normalizeProfile(profile: any): POSProfile | null {
 	return resolved as POSProfile;
 }
 
-function getSerializedProfile(profile: any): string | null {
+function getSerializedProfile(profile: unknown): string | null {
 	if (!profile) {
 		return null;
 	}
@@ -100,14 +117,23 @@ function getSerializedProfile(profile: any): string | null {
 		return JSON.stringify({ name: trimmed });
 	}
 
-	let fallbackName = null;
+	let fallbackName: string | null = null;
 	if (typeof profile === "object" && profile !== null) {
-		if (typeof profile.name === "string") {
-			fallbackName = profile.name;
-		} else if (typeof profile.pos_profile === "string") {
-			fallbackName = profile.pos_profile;
-		} else if (profile.pos_profile?.name) {
-			fallbackName = profile.pos_profile.name;
+		const typedProfile = profile as {
+			name?: unknown;
+			pos_profile?: unknown;
+		};
+		if (typeof typedProfile.name === "string") {
+			fallbackName = typedProfile.name;
+		} else if (typeof typedProfile.pos_profile === "string") {
+			fallbackName = typedProfile.pos_profile;
+		} else if (
+			typeof typedProfile.pos_profile === "object" &&
+			typedProfile.pos_profile !== null &&
+			"name" in typedProfile.pos_profile &&
+			typeof (typedProfile.pos_profile as { name?: unknown }).name === "string"
+		) {
+			fallbackName = (typedProfile.pos_profile as { name: string }).name;
 		}
 	}
 
@@ -123,9 +149,22 @@ function getSerializedProfile(profile: any): string | null {
 }
 
 export const useCustomersStore = defineStore("customers", () => {
-	const customers = ref<Customer[]>([]);
+	// Same shape as itemsStore.items — `shallowRef` + `markRaw`
+	// per row. Profiles with 4 k+ customers were the dominant
+	// source of the keyboard-input freeze on the search box; every
+	// pagination chunk re-wrapped the entire growing list in Vue
+	// proxies. Customer summaries are display-only here (the
+	// dropdown reads name / mobile / email / etc. and never mutates
+	// the entries in-place); marking them raw is safe.
+	const customers = shallowRef<CustomerSummary[]>([]);
+	const markRawCustomers = (
+		list: CustomerSummary[] | undefined | null,
+	): CustomerSummary[] =>
+		Array.isArray(list)
+			? list.map((c) => (c && typeof c === "object" ? markRaw(c) : c))
+			: [];
 	const selectedCustomer = ref<string | null>(null);
-	const customerInfo = ref<Record<string, any>>({});
+	const customerInfo = ref<CustomerInfo>({});
 	const searchTerm = ref("");
 	const page = ref(0);
 	const hasMore = ref(true);
@@ -141,7 +180,7 @@ export const useCustomersStore = defineStore("customers", () => {
 	const customerProfileScope = ref("");
 	const refreshToken = ref(0);
 	const isUpdateCustomerDialogOpen = ref(false);
-	const customerToUpdate = ref<Customer | null>(null);
+	const customerToUpdate = ref<StoredCustomer | null>(null);
 	let customerFetchPromise: Promise<void> | null = null;
 	const customerLoadLogState = {
 		local: false,
@@ -174,7 +213,19 @@ export const useCustomersStore = defineStore("customers", () => {
 		customerLoadLogState.final = true;
 	}
 
-	const filteredCustomers = computed(() => customers.value);
+	// Cap the dropdown payload aggressively. Vuetify's
+	// v-autocomplete mounts a v-list-item per bound row (each with
+	// 5 v-html subtitles) regardless of virtual-scroll state on
+	// first open. Heap analysis showed 252k attached DOM nodes
+	// dominated by these mounts; 50 is more than the visible
+	// viewport ever shows, deeper matches still come via the
+	// server search-fallback (`search_customers`).
+	const FILTERED_CUSTOMERS_VIEW_CAP = 50;
+	const filteredCustomers = computed(() =>
+		customers.value.length > FILTERED_CUSTOMERS_VIEW_CAP
+			? customers.value.slice(0, FILTERED_CUSTOMERS_VIEW_CAP)
+			: customers.value,
+	);
 
 	const isLoadComplete = computed(
 		() => customersLoaded.value && loadProgress.value >= 100,
@@ -194,7 +245,7 @@ export const useCustomersStore = defineStore("customers", () => {
 		customers.value = [];
 	}
 
-	function setPosProfile(profile: any) {
+	function setPosProfile(profile: unknown) {
 		posProfile.value = normalizeProfile(profile);
 		customerProfileScope.value = getCustomerProfileScope(posProfile.value);
 	}
@@ -203,12 +254,87 @@ export const useCustomersStore = defineStore("customers", () => {
 		selectedCustomer.value = name || null;
 	}
 
-	function setCustomerInfo(info: Record<string, any>) {
+	function upsertCustomerSummaryFromInfo(info: CustomerInfo) {
+		const customerName = getStringField(info, "name") || getStringField(info, "customer");
+		if (!customerName) {
+			return;
+		}
+
+		const existingIndex = customers.value.findIndex(
+			(customer) => customer.name === customerName,
+		);
+		const existing =
+			existingIndex >= 0 ? customers.value[existingIndex] : null;
+		const summary: CustomerSummary = {
+			...(existing || {}),
+			name: customerName,
+			customer_name:
+				getStringField(info, "customer_name") ||
+				existing?.customer_name ||
+				customerName,
+		};
+		const email = getStringField(info, "email_id");
+		const mobile = getStringField(info, "mobile_no");
+		const primaryAddress =
+			getStringField(info, "primary_address") ||
+			getStringField(info, "customer_address");
+		const taxId = getStringField(info, "tax_id");
+		if (email) summary.email_id = email;
+		if (mobile) summary.mobile_no = mobile;
+		if (primaryAddress) summary.primary_address = primaryAddress;
+		if (taxId) summary.tax_id = taxId;
+
+		const rawSummary = markRaw(summary);
+		if (existingIndex >= 0) {
+			const updated = [...customers.value];
+			updated.splice(existingIndex, 1, rawSummary);
+			customers.value = updated;
+			return;
+		}
+
+		customers.value = [...customers.value, rawSummary];
+	}
+
+	function setCustomerInfo(info: CustomerInfo) {
 		customerInfo.value = info || {};
+		upsertCustomerSummaryFromInfo(customerInfo.value);
+		const customerName =
+			getStringField(customerInfo.value, "name") ||
+			getStringField(customerInfo.value, "customer");
+		if (customerName) {
+			void setCustomerStorage([{ ...customerInfo.value, name: customerName }]);
+		}
+		if (
+			customerName &&
+			posProfile.value?.company &&
+			typeof info?.stored_value_balance !== "undefined"
+		) {
+			const totalCredit = Number(info.stored_value_balance || 0);
+			saveStoredValueSnapshot(
+				customerName,
+				posProfile.value.company,
+				totalCredit > 0
+					? [
+							{
+								type: "Snapshot",
+								credit_origin: "offline-customer-cache",
+								total_credit: totalCredit,
+								source_type: "Stored Value Snapshot",
+							},
+						]
+					: [],
+			);
+		}
 	}
 
 	function requestCustomerRefresh() {
 		refreshToken.value += 1;
+	}
+
+	function syncBootstrapCustomerReadiness(count: number | boolean) {
+		refreshBootstrapSnapshotFromCacheState({
+			customersCount: count,
+		});
 	}
 
 	async function ensureCustomerScopeIsolation() {
@@ -232,41 +358,18 @@ export const useCustomersStore = defineStore("customers", () => {
 		totalCustomerCount.value = 0;
 		loadedCustomerCount.value = 0;
 		nextCustomerStart.value = null;
+		syncBootstrapCustomerReadiness(0);
 	}
 
 	async function performSearch({ append = false } = {}) {
 		await ensureDatabase();
 
 		let collection = db.table("customers");
-		const normalizedTerm = normalizeSearchTerm(searchTerm.value);
+		const normalizedTerm = normalizeCustomerSearchTerm(searchTerm.value);
 		if (normalizedTerm) {
-			const searchParts = normalizedTerm
-				.toLowerCase()
-				.split(/\s+/)
-				.filter(Boolean);
-			collection = collection.filter((customer: Customer) => {
-				if (!customer) {
-					return false;
-				}
-
-				const values = [
-					customer.customer_name,
-					customer.name,
-					customer.mobile_no,
-					customer.email_id,
-					customer.tax_id,
-				]
-					.filter((value) => value !== null && value !== undefined)
-					.map((value) => String(value).toLowerCase());
-
-				if (!searchParts.length) {
-					return true;
-				}
-
-				return searchParts.every((part) =>
-					values.some((value) => value.includes(part)),
-				);
-			});
+			collection = collection.filter((customer: CustomerSummary) =>
+				customerMatchesSearchTerm(customer, normalizedTerm),
+			);
 		}
 
 		const offset = page.value * PAGE_SIZE;
@@ -275,10 +378,11 @@ export const useCustomersStore = defineStore("customers", () => {
 			.limit(PAGE_SIZE)
 			.toArray();
 
+		const rawResults = markRawCustomers(results);
 		if (append) {
-			customers.value = [...customers.value, ...results];
+			customers.value = [...customers.value, ...rawResults];
 		} else {
-			customers.value = results;
+			customers.value = rawResults;
 		}
 
 		hasMore.value = results.length === PAGE_SIZE;
@@ -286,19 +390,79 @@ export const useCustomersStore = defineStore("customers", () => {
 			page.value += 1;
 		}
 
+		// Server fallback: when the IDB query returns nothing for a
+		// non-trivial term on the first page, hit the
+		// `search_customers` endpoint. Mirrors the item-search
+		// fallback pattern (commit 10246649). Fixes the dialog
+		// showing "no customers" right after a price-list change /
+		// in-flight customer sync — the operator types a name they
+		// know exists, but the IDB hasn't caught up yet.
+		// `page.value === 0` here because `resetPagination()` runs
+		// at the start of `searchCustomers` for non-append calls
+		// and the `hasMore` branch above only increments `page` when
+		// the IDB returned a FULL page (i.e. results.length>=PAGE_SIZE).
+		const MIN_TERM_LENGTH = 2;
+		if (
+			!append &&
+			page.value === 0 &&
+			results.length === 0 &&
+			normalizedTerm &&
+			normalizedTerm.length >= MIN_TERM_LENGTH &&
+			isOnline()
+		) {
+			const serializedProfile = getSerializedProfile(posProfile.value);
+			if (serializedProfile) {
+				try {
+					const response = await (frappe.call as any)({
+						method:
+							"posawesome.posawesome.api.customers.search_customers",
+						args: {
+							pos_profile: serializedProfile,
+							search_term: normalizedTerm,
+							limit: 25,
+						},
+					});
+					const remote: CustomerSummary[] = Array.isArray(
+						response?.message,
+					)
+						? response.message
+						: [];
+					if (remote.length > 0) {
+						customers.value = markRawCustomers(remote);
+						hasMore.value = false;
+						return remote.length;
+					}
+				} catch (err) {
+					// Best-effort fallback — keep the empty IDB result.
+					console.warn(
+						"[POSA][CustomerSearch] server fallback failed",
+						err,
+					);
+				}
+			}
+		}
+
 		return results.length;
+	}
+
+	function isOnline(): boolean {
+		try {
+			return !isOffline();
+		} catch {
+			return typeof navigator !== "undefined" ? navigator.onLine : true;
+		}
 	}
 
 	async function searchCustomers(term = "", append = false) {
 		if (!append) {
-			searchTerm.value = normalizeSearchTerm(term);
+			searchTerm.value = normalizeCustomerSearchTerm(term);
 			resetPagination();
 		}
 		return performSearch({ append });
 	}
 
 	async function queueSearch(term: string) {
-		const normalized = normalizeSearchTerm(term);
+		const normalized = normalizeCustomerSearchTerm(term);
 		if (isCustomerBackgroundLoading.value) {
 			pendingCustomerSearch.value = normalized;
 			return null;
@@ -328,7 +492,7 @@ export const useCustomersStore = defineStore("customers", () => {
 		startAfter: string | null,
 		modifiedAfter: string | null,
 		limit: number,
-	): Promise<Customer[]> {
+	): Promise<CustomerSummary[]> {
 		const serializedProfile = getSerializedProfile(posProfile.value);
 		return new Promise((resolve, reject) => {
 			if (!serializedProfile) {
@@ -368,7 +532,7 @@ export const useCustomersStore = defineStore("customers", () => {
 		try {
 			let cursor: string | null = startAfter;
 			while (cursor) {
-				const rows: Customer[] = await fetchCustomerPage(
+				const rows: CustomerSummary[] = await fetchCustomerPage(
 					cursor,
 					syncSince,
 					limit,
@@ -376,6 +540,7 @@ export const useCustomersStore = defineStore("customers", () => {
 				if (rows.length) {
 					await setCustomerStorage(rows);
 					loadedCustomerCount.value += rows.length;
+					syncBootstrapCustomerReadiness(loadedCustomerCount.value);
 					if (totalCustomerCount.value) {
 						const progress = Math.min(
 							100,
@@ -397,6 +562,7 @@ export const useCustomersStore = defineStore("customers", () => {
 					setCustomersLastSync(new Date().toISOString());
 					loadProgress.value = 100;
 					customersLoaded.value = true;
+					syncBootstrapCustomerReadiness(loadedCustomerCount.value);
 					logFinalLoadedCustomerCount();
 				}
 			}
@@ -437,13 +603,14 @@ export const useCustomersStore = defineStore("customers", () => {
 			logServerCustomerCount(serverCount);
 			totalCustomerCount.value = serverCount;
 			loadedCustomerCount.value = localCount;
+			syncBootstrapCustomerReadiness(localCount);
 			loadProgress.value = serverCount
 				? Math.round((localCount / serverCount) * 100)
 				: 0;
 
 			if (serverCount > localCount) {
 				const syncSince = getCustomersLastSync();
-				const rows: Customer[] = await fetchCustomerPage(
+				const rows: CustomerSummary[] = await fetchCustomerPage(
 					null,
 					syncSince,
 					PAGE_SIZE,
@@ -451,6 +618,7 @@ export const useCustomersStore = defineStore("customers", () => {
 				if (rows.length) {
 					await setCustomerStorage(rows);
 					loadedCustomerCount.value += rows.length;
+					syncBootstrapCustomerReadiness(loadedCustomerCount.value);
 					if (totalCustomerCount.value) {
 						loadProgress.value = Math.min(
 							100,
@@ -472,12 +640,14 @@ export const useCustomersStore = defineStore("customers", () => {
 					setCustomersLastSync(new Date().toISOString());
 					loadProgress.value = 100;
 					customersLoaded.value = true;
+					syncBootstrapCustomerReadiness(loadedCustomerCount.value);
 					logFinalLoadedCustomerCount();
 				}
 				await searchCustomers(searchTerm.value);
 			} else if (serverCount < localCount) {
 				await clearCustomerStorage();
 				setCustomersLastSync(null);
+				syncBootstrapCustomerReadiness(0);
 				resetPagination();
 				await load_customer_names_internal();
 			} else {
@@ -504,6 +674,7 @@ export const useCustomersStore = defineStore("customers", () => {
 		await ensureDatabase();
 		const localCount = await getCustomerStorageCount();
 		logLocalCustomerCount(localCount);
+		syncBootstrapCustomerReadiness(localCount);
 
 		if (localCount > 0) {
 			customersLoaded.value = true;
@@ -541,7 +712,7 @@ export const useCustomersStore = defineStore("customers", () => {
 				totalCustomerCount.value = 0;
 			}
 
-			const rows: Customer[] = await fetchCustomerPage(
+			const rows: CustomerSummary[] = await fetchCustomerPage(
 				null,
 				syncSince,
 				PAGE_SIZE,
@@ -551,6 +722,7 @@ export const useCustomersStore = defineStore("customers", () => {
 				await setCustomerStorage(rows);
 			}
 			loadedCustomerCount.value = rows.length;
+			syncBootstrapCustomerReadiness(loadedCustomerCount.value);
 			if (totalCustomerCount.value) {
 				loadProgress.value = Math.min(
 					100,
@@ -570,6 +742,7 @@ export const useCustomersStore = defineStore("customers", () => {
 				setCustomersLastSync(new Date().toISOString());
 				loadProgress.value = 100;
 				customersLoaded.value = true;
+				syncBootstrapCustomerReadiness(loadedCustomerCount.value);
 				logFinalLoadedCustomerCount();
 			}
 			customersLoaded.value = true;
@@ -594,21 +767,23 @@ export const useCustomersStore = defineStore("customers", () => {
 		return customerFetchPromise;
 	}
 
-	async function addOrUpdateCustomer(customer: Customer) {
+	async function addOrUpdateCustomer(customer: StoredCustomer) {
 		if (!customer || !customer.name) {
 			return;
 		}
 		const existingIndex = customers.value.findIndex(
 			(c) => c.name === customer.name,
 		);
+		const rawCustomer = markRaw(customer);
 		if (existingIndex !== -1) {
 			const updated = [...customers.value];
-			updated.splice(existingIndex, 1, customer);
+			updated.splice(existingIndex, 1, rawCustomer);
 			customers.value = updated;
 		} else {
-			customers.value = [...customers.value, customer];
+			customers.value = [...customers.value, rawCustomer];
 		}
 		await setCustomerStorage([customer]);
+		syncBootstrapCustomerReadiness(Math.max(customers.value.length, 1));
 		setSelectedCustomer(customer.name);
 		requestCustomerRefresh();
 	}
@@ -622,6 +797,7 @@ export const useCustomersStore = defineStore("customers", () => {
 		clearLocalState();
 		await clearCustomerStorage();
 		setCustomersLastSync(null);
+		syncBootstrapCustomerReadiness(0);
 
 		await get_customer_names();
 
@@ -630,7 +806,7 @@ export const useCustomersStore = defineStore("customers", () => {
 		}
 	}
 
-	function openUpdateCustomerDialog(customer: Customer | null = null) {
+	function openUpdateCustomerDialog(customer: StoredCustomer | null = null) {
 		customerToUpdate.value = customer;
 		isUpdateCustomerDialogOpen.value = true;
 	}

@@ -321,8 +321,12 @@ const invoiceItemMethods: Record<string, unknown> &
 	show_payment() {
 		return Dialogs.show_payment(this);
 	},
-	get_draft_invoices() {
-		return Dialogs.get_draft_invoices(this);
+	get_draft_invoices(source = "invoice", options?: { quiet?: boolean }) {
+		return Dialogs.get_draft_invoices(
+			this,
+			source as "invoice" | "order" | "quote",
+			options,
+		);
 	},
 	get_draft_orders() {
 		return Dialogs.get_draft_orders(this);
@@ -330,8 +334,15 @@ const invoiceItemMethods: Record<string, unknown> &
 	open_returns() {
 		return Dialogs.open_returns(this);
 	},
-	open_invoice_management() {
-		return Dialogs.open_invoice_management(this);
+	open_invoice_management(targetTab = "history", draftSource = "invoice") {
+		return Dialogs.open_invoice_management_with_source(
+			this,
+			targetTab,
+			draftSource as "invoice" | "order" | "quote",
+		);
+	},
+	load_draft_source_record(draft) {
+		return Dialogs.load_draft_source_record(this, draft);
 	},
 	close_payments() {
 		return Dialogs.close_payments(this);
@@ -371,13 +382,19 @@ const invoiceItemMethods: Record<string, unknown> &
 		return Discounts.calc_item_price(this, item);
 	},
 
-	// Debounced Methods
+	// Debounced Methods. Bumped 150 → 350 ms: a single user action
+	// (add item, change customer, apply price list) bumps `changeVersion`
+	// multiple times within a few ticks (set price, mark raw, batch
+	// stock data); at 150 ms each bump escapes the debounce window and
+	// queues a fresh pricing pass that the inflight one then has to
+	// re-enter via `_pendingPricingRules`. 350 ms coalesces the burst
+	// into a single pass without the operator perceiving lag.
 	schedulePricingRuleApplication: debounce(function (
 		this: InvoiceItemMethodsVm,
 		force = false,
 	) {
 		this.applyPricingRulesForCart(force);
-	}, 150),
+	}, 350),
 
 	triggerBackgroundFlush: debounce(function (this: InvoiceItemMethodsVm) {
 		// flushBackgroundUpdates was added to ItemUpdates?

@@ -8,6 +8,7 @@ import {
 	normalizeBackgroundSyncInterval,
 	shouldRunBackgroundSync,
 } from "../../../utils/backgroundSync.js";
+import { debugLog } from "../../../utils/debug";
 
 /**
  * useItemSync Composable
@@ -64,7 +65,7 @@ export function useItemSync() {
 	const ctx: ItemSyncContext = {
 		pos_profile: null,
 		enable_background_sync: true,
-		background_sync_interval: 30,
+		background_sync_interval: 60,
 		usesLimitSearch: false,
 		itemsPageLimit: 100,
 		// Methods to be provided via context
@@ -94,7 +95,7 @@ export function useItemSync() {
 
 	function startBackgroundSyncScheduler() {
 		stopBackgroundSyncScheduler();
-		console.debug(`${BG_SYNC_LOG} scheduler start requested`, {
+		debugLog(`${BG_SYNC_LOG} scheduler start requested`, {
 			enabled: ctx.enable_background_sync,
 			intervalSeconds: normalizeBackgroundSyncInterval(
 				ctx.background_sync_interval,
@@ -114,26 +115,55 @@ export function useItemSync() {
 			normalizeBackgroundSyncInterval(ctx.background_sync_interval) *
 			1000;
 		background_sync_timer.value = setInterval(() => {
+			// Skip while the tab is hidden — operators on cheap Android
+			// devices accumulated visible main-thread jank from sync runs
+			// firing in background tabs that the user wasn't even on.
+			// The next visibility change triggers an immediate catch-up
+			// run via the listener below.
+			if (typeof document !== "undefined" && document.hidden) {
+				return;
+			}
 			performBackgroundSync({ source: "interval" });
 		}, intervalMs);
-		console.debug(`${BG_SYNC_LOG} scheduler active`, { intervalMs });
+		debugLog(`${BG_SYNC_LOG} scheduler active`, { intervalMs });
 
 		performBackgroundSync({ source: "initial" });
+		bindVisibilityListener();
 	}
 
 	function stopBackgroundSyncScheduler() {
 		if (background_sync_timer.value) {
 			clearInterval(background_sync_timer.value);
 			background_sync_timer.value = null;
-			console.debug(`${BG_SYNC_LOG} scheduler stopped`);
+			debugLog(`${BG_SYNC_LOG} scheduler stopped`);
 		}
+		unbindVisibilityListener();
+	}
+
+	// Visibility listener: pause syncs when the tab is hidden, run a
+	// single catch-up sync when the operator returns. Saves several
+	// MB of allocations per minute on multi-tab Chrome sessions.
+	let _visibilityHandler: (() => void) | null = null;
+	function bindVisibilityListener() {
+		if (typeof document === "undefined" || _visibilityHandler) return;
+		_visibilityHandler = () => {
+			if (!document.hidden && ctx.enable_background_sync) {
+				performBackgroundSync({ source: "visibility" });
+			}
+		};
+		document.addEventListener("visibilitychange", _visibilityHandler);
+	}
+	function unbindVisibilityListener() {
+		if (typeof document === "undefined" || !_visibilityHandler) return;
+		document.removeEventListener("visibilitychange", _visibilityHandler);
+		_visibilityHandler = null;
 	}
 
 	async function ensureBackgroundSyncBaseline() {
 		const lastSync = getItemsLastSync();
 		if (lastSync) {
 			last_background_sync_time.value = lastSync;
-			console.debug(`${BG_SYNC_LOG} baseline loaded from local cache`, {
+			debugLog(`${BG_SYNC_LOG} baseline loaded from local cache`, {
 				lastSync,
 			});
 			return lastSync;
@@ -144,14 +174,14 @@ export function useItemSync() {
 			if (serverTimestamp) {
 				setItemsLastSync(serverTimestamp);
 				last_background_sync_time.value = serverTimestamp;
-				console.debug(`${BG_SYNC_LOG} baseline fetched from server`, {
+				debugLog(`${BG_SYNC_LOG} baseline fetched from server`, {
 					serverTimestamp,
 				});
 				return serverTimestamp;
 			}
 		}
 
-		console.debug(`${BG_SYNC_LOG} baseline unavailable`);
+		debugLog(`${BG_SYNC_LOG} baseline unavailable`);
 		return null;
 	}
 
@@ -184,7 +214,7 @@ export function useItemSync() {
 				usesLimitSearch: ctx.usesLimitSearch,
 			})
 		) {
-			console.debug(`${BG_SYNC_LOG} skipped`, { source, skipReasons });
+			debugLog(`${BG_SYNC_LOG} skipped`, { source, skipReasons });
 			return;
 		}
 
@@ -241,6 +271,11 @@ export function useItemSync() {
 				setItemsLastSync(deltaCursor);
 			}
 			last_background_sync_time.value = completedAt;
+			// Stash on window for the PerfBadge diagnostic overlay
+			// (see components/PerfBadge.vue). No-op when not enabled.
+			if (typeof window !== "undefined") {
+				(window as any).__posa_last_sync = completedAt;
+			}
 			console.info(`${BG_SYNC_LOG} completed`, {
 				source,
 				modifiedCount,
