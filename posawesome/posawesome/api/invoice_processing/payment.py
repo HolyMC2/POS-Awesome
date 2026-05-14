@@ -9,7 +9,10 @@ from frappe.utils import (
 from erpnext.accounts.utils import reconcile_against_document
 from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_account
 from posawesome.posawesome.api.payment_processing.utils import get_party_account
-from posawesome.posawesome.api.payment_processing.utils import get_bank_cash_account as get_bank_account_processing
+from posawesome.posawesome.api.payment_processing.utils import (
+    get_bank_cash_account as get_bank_account_processing,
+)
+
 
 def _create_change_payment_entries(
     invoice_doc, data, pos_profile=None, cash_account=None, receive_entries=None

@@ -3,10 +3,23 @@ const VERSION_URL = "/assets/posawesome/dist/js/version.json";
 const DEFAULT_CACHE_VERSION = "default";
 const MAX_CACHE_ITEMS = 1000;
 
+// HTML shell for the web-route SPA mount (Phase 1). The Vue
+// router uses /posapp as its base, so any deep-link beneath that
+// (e.g. /posapp/pay) must resolve back to this same shell when
+// offline. The navigation handler matches by pathname and falls
+// back to the cached /posapp entry below.
+const POSAPP_WEB_ROUTE = "/posapp";
+
 const STATIC_PRECACHE_URLS = [
 	"/app/posapp",
+	POSAPP_WEB_ROUTE,
 	"/assets/posawesome/dist/js/posapp/workers/itemWorker.js",
 	"/assets/posawesome/dist/js/libs/dexie.min.js",
+	// Frappe-bundled jQuery is loaded synchronously by posapp.html
+	// (the SPA bundle calls `$()` at top-level assuming Desk
+	// provides it). Without precaching, a cold offline reload of
+	// /posapp blocks on a network 404 and the SPA never boots.
+	"/assets/frappe/js/lib/jquery/jquery.min.js",
 	"/manifest.json",
 	"/offline.html",
 ];
@@ -15,21 +28,38 @@ function buildVersionedAssetUrl(url, version) {
 	return `${url}?v=${encodeURIComponent(version || DEFAULT_CACHE_VERSION)}`;
 }
 
+function pickAssetUrl(assets, key, fallbackPath, version) {
+	// Entries are now content-hashed at build time (see
+	// build-manifest.js). The hashed filename is published in
+	// version.json -> assets[key]; fall back to the legacy un-hashed
+	// path for transitional rollouts where an old version.json is
+	// still being served.
+	const value = typeof assets?.[key] === "string" ? assets[key].trim() : "";
+	if (value) {
+		return value;
+	}
+	return buildVersionedAssetUrl(fallbackPath, version);
+}
+
 function getPrecacheUrls(version, assets = {}) {
-	const offlineIndexUrl =
-		typeof assets.offlineIndex === "string" && assets.offlineIndex
-			? assets.offlineIndex
-			: buildVersionedAssetUrl(
-					"/assets/posawesome/dist/js/offline/index.js",
-					version,
-				);
 	return [
-		buildVersionedAssetUrl("/assets/posawesome/dist/js/loader.js", version),
-		buildVersionedAssetUrl("/assets/posawesome/dist/js/posawesome.css", version),
-		buildVersionedAssetUrl("/assets/posawesome/dist/js/posawesome.js", version),
-		offlineIndexUrl,
+		pickAssetUrl(assets, "loader", "/assets/posawesome/dist/js/loader.js", version),
+		pickAssetUrl(assets, "css", "/assets/posawesome/dist/js/posawesome.css", version),
+		pickAssetUrl(assets, "posawesome", "/assets/posawesome/dist/js/posawesome.js", version),
+		pickAssetUrl(assets, "offlineIndex", "/assets/posawesome/dist/js/offline/index.js", version),
+		// `web_entry` is the SPA's entry chunk for the /posapp web
+		// route (Phase 1). Hashed filename comes from version.json
+		// just like the other entry chunks.
+		pickAssetUrl(assets, "web_entry", "/assets/posawesome/dist/js/web-entry.js", version),
 		...STATIC_PRECACHE_URLS,
 	];
+}
+
+function isPosappWebRouteRequest(url) {
+	// Vue router uses /posapp as base, so /posapp/<anything> deep
+	// links must all hit the same cached shell offline.
+	const pathname = url && url.pathname ? url.pathname : "";
+	return pathname === POSAPP_WEB_ROUTE || pathname.startsWith(`${POSAPP_WEB_ROUTE}/`);
 }
 
 let cachedCacheName = null;
@@ -57,7 +87,11 @@ async function precacheUrls(cacheName, version, assets = {}) {
 
 async function cleanupObsoleteCaches(activeCacheName) {
 	const keys = await caches.keys();
-	await Promise.all(keys.filter((key) => key !== activeCacheName).map((key) => caches.delete(key)));
+	await Promise.all(
+		keys
+			.filter((key) => key.startsWith(CACHE_PREFIX) && key !== activeCacheName)
+			.map((key) => caches.delete(key)),
+	);
 }
 
 function postVersionMessage(target) {
@@ -74,15 +108,11 @@ function postVersionMessage(target) {
 
 function extractBuildVersion(payload) {
 	const version = payload?.version || payload?.buildVersion;
-	return typeof version === "string" && version.trim().length
-		? version.trim()
-		: DEFAULT_CACHE_VERSION;
+	return typeof version === "string" && version.trim().length ? version.trim() : DEFAULT_CACHE_VERSION;
 }
 
 function extractBuildAssets(payload) {
-	return payload?.assets && typeof payload.assets === "object"
-		? payload.assets
-		: {};
+	return payload?.assets && typeof payload.assets === "object" ? payload.assets : {};
 }
 
 // Listen for version check messages
@@ -153,8 +183,7 @@ async function getCacheName(forceRefresh = false, resolvedMetadata = null) {
 		return cacheNameInFlight;
 	}
 	cacheNameInFlight = (async () => {
-		const metadata =
-			resolvedMetadata || (await resolveBuildMetadata(forceRefresh));
+		const metadata = resolvedMetadata || (await resolveBuildMetadata(forceRefresh));
 		const version = metadata?.version || DEFAULT_CACHE_VERSION;
 		const name = `${CACHE_PREFIX}${version}`;
 		if (version !== DEFAULT_CACHE_VERSION) {
@@ -196,7 +225,11 @@ async function forceUnregisterServiceWorker() {
 	currentVersion = null;
 	currentAssets = {};
 	const keys = await caches.keys();
-	await Promise.all(keys.map((key) => caches.delete(key)));
+	await Promise.all(
+		keys
+			.filter((key) => key.startsWith(CACHE_PREFIX))
+			.map((key) => caches.delete(key)),
+	);
 	await self.registration.unregister();
 }
 
@@ -216,11 +249,7 @@ self.addEventListener("activate", (event) => {
 		(async () => {
 			const metadata = await resolveBuildMetadata();
 			const activeCacheName = await getCacheName(false, metadata);
-			await precacheUrls(
-				activeCacheName,
-				metadata.version,
-				metadata.assets,
-			);
+			await precacheUrls(activeCacheName, metadata.version, metadata.assets);
 			await cleanupObsoleteCaches(activeCacheName);
 			const cache = await caches.open(activeCacheName);
 			await enforceCacheLimit(cache);
@@ -249,14 +278,43 @@ self.addEventListener("fetch", (event) => {
 	}
 
 	if (isNavigation) {
+		const isPosappWebRoute = isPosappWebRouteRequest(url);
 		event.respondWith(
 			(async () => {
 				try {
-					return await fetch(event.request);
+					const response = await fetch(event.request);
+					// Stale-while-revalidate the /posapp HTML shell.
+					// The boot payload is seeded server-side, so the
+					// shell MUST be re-fetched while online; we only
+					// keep the cached copy as an offline fallback.
+					if (isPosappWebRoute && response && response.ok) {
+						try {
+							const cacheName = await getCacheName();
+							const cache = await caches.open(cacheName);
+							// Always store under the bare /posapp key so
+							// deep-link reloads (vue-router pushes under
+							// /posapp/<sub>) all resolve to the same shell
+							// offline.
+							await cache.put(POSAPP_WEB_ROUTE, response.clone());
+						} catch (cacheError) {
+							console.warn("SW posapp shell cache put failed", cacheError);
+						}
+					}
+					return response;
 				} catch (err) {
+					// Offline path. Order: exact URL → /posapp shell
+					// (covers deep links) → /app/posapp Desk shell →
+					// /offline.html → network error.
 					const cached = await caches.match(event.request, { ignoreSearch: true });
 					if (cached) {
 						return cached;
+					}
+
+					if (isPosappWebRoute) {
+						const posappShell = await caches.match(POSAPP_WEB_ROUTE);
+						if (posappShell) {
+							return posappShell;
+						}
 					}
 
 					const appShell = await caches.match("/app/posapp");

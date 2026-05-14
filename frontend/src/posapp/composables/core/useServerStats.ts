@@ -53,11 +53,39 @@ export function useServerStats(pollInterval = 10000, windowSize = 60) {
 		}
 	}
 
-	fetchServerStats();
-	timer = window.setInterval(fetchServerStats, pollInterval);
+	const start = () => {
+		if (timer !== null) return;
+		timer = window.setInterval(fetchServerStats, pollInterval);
+	};
+	const stop = () => {
+		if (timer !== null) {
+			clearInterval(timer);
+			timer = null;
+		}
+	};
+	const onVisibility = () => {
+		if (typeof document === "undefined") return;
+		if (document.hidden) {
+			stop();
+		} else {
+			void fetchServerStats();
+			start();
+		}
+	};
+
+	void fetchServerStats();
+	if (typeof document === "undefined" || !document.hidden) {
+		start();
+	}
+	if (typeof document !== "undefined") {
+		document.addEventListener("visibilitychange", onVisibility);
+	}
 
 	onUnmounted(() => {
-		if (timer) clearInterval(timer);
+		stop();
+		if (typeof document !== "undefined") {
+			document.removeEventListener("visibilitychange", onVisibility);
+		}
 	});
 
 	return {

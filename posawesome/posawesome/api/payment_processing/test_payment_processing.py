@@ -62,7 +62,9 @@ def _install_framework_stubs():
     frappe_module.get_doc = lambda *args, **kwargs: None
     frappe_module.get_cached_doc = lambda *args, **kwargs: None
     frappe_module.new_doc = lambda *args, **kwargs: None
-    frappe_module.db = types.SimpleNamespace(sql=lambda *args, **kwargs: [], get_value=lambda *args, **kwargs: None)
+    frappe_module.db = types.SimpleNamespace(
+        sql=lambda *args, **kwargs: [], get_value=lambda *args, **kwargs: None
+    )
     frappe_module.utils = frappe_utils
 
     sys.modules["frappe"] = frappe_module
@@ -106,9 +108,9 @@ def _install_framework_stubs():
         "erpnext.accounts.doctype.payment_reconciliation.payment_reconciliation"
     )
     payment_reconciliation_module.reconcile_dr_cr_note = lambda *args, **kwargs: None
-    sys.modules[
-        "erpnext.accounts.doctype.payment_reconciliation.payment_reconciliation"
-    ] = payment_reconciliation_module
+    sys.modules["erpnext.accounts.doctype.payment_reconciliation.payment_reconciliation"] = (
+        payment_reconciliation_module
+    )
 
     accounts_controller_module = types.ModuleType("erpnext.controllers.accounts_controller")
     accounts_controller_module.get_advance_payment_entries_for_regional = lambda *args, **kwargs: []
@@ -320,9 +322,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
             "Supp-001",
         )
 
-    @patch(
-        "posawesome.posawesome.api.payment_processing.processor.find_payment_entries_by_client_request_id"
-    )
+    @patch("posawesome.posawesome.api.payment_processing.processor.find_payment_entries_by_client_request_id")
     @patch("posawesome.posawesome.api.payment_processing.processor.create_payment_entry")
     @patch("posawesome.posawesome.api.payment_processing.processor.frappe")
     def test_process_pos_payment_returns_existing_entries_for_same_client_request_id(
@@ -378,9 +378,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
         self.assertEqual(result["new_payments_entry"][0]["name"], "ACC-PAY-IDEMP-0001")
         mock_create_payment_entry.assert_not_called()
 
-    @patch(
-        "posawesome.posawesome.api.payment_processing.processor.find_payment_entries_by_client_request_id"
-    )
+    @patch("posawesome.posawesome.api.payment_processing.processor.find_payment_entries_by_client_request_id")
     @patch("posawesome.posawesome.api.payment_processing.processor.create_payment_entry")
     @patch("posawesome.posawesome.api.payment_processing.processor.frappe")
     def test_process_pos_payment_finishes_partial_replay_before_returning_cached_result(
@@ -456,9 +454,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
             ["ACC-PAY-IDEMP-0001", "ACC-PAY-IDEMP-0002"],
         )
 
-    @patch(
-        "posawesome.posawesome.api.payment_processing.processor.find_payment_entries_by_client_request_id"
-    )
+    @patch("posawesome.posawesome.api.payment_processing.processor.find_payment_entries_by_client_request_id")
     @patch("posawesome.posawesome.api.payment_processing.processor.create_payment_entry")
     @patch("posawesome.posawesome.api.payment_processing.processor.frappe")
     def test_process_pos_payment_rejects_retries_when_matching_draft_entries_exist(
@@ -514,9 +510,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
 
         mock_create_payment_entry.assert_not_called()
 
-    @patch(
-        "posawesome.posawesome.api.payment_processing.processor.find_payment_entries_by_client_request_id"
-    )
+    @patch("posawesome.posawesome.api.payment_processing.processor.find_payment_entries_by_client_request_id")
     @patch("posawesome.posawesome.api.payment_processing.processor.frappe")
     def test_process_pos_payment_keeps_first_time_reconciliation_validation_active(
         self,
@@ -570,9 +564,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
             result["errors"],
         )
 
-    @patch(
-        "posawesome.posawesome.api.payment_processing.processor.find_payment_entries_by_client_request_id"
-    )
+    @patch("posawesome.posawesome.api.payment_processing.processor.find_payment_entries_by_client_request_id")
     @patch("posawesome.posawesome.api.payment_processing.processor.frappe")
     def test_process_pos_payment_replay_preserves_completed_reconciliation_summary(
         self,
@@ -804,9 +796,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
             "pay-fixed-004",
         )
 
-    @patch(
-        "posawesome.posawesome.api.payment_processing.data.get_advance_payment_entries_for_regional"
-    )
+    @patch("posawesome.posawesome.api.payment_processing.data.get_advance_payment_entries_for_regional")
     @patch("posawesome.posawesome.api.payment_processing.data.get_party_account")
     @patch("posawesome.posawesome.api.payment_processing.data.frappe")
     def test_get_unallocated_payments_excludes_pay_type_customer_entries(

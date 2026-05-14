@@ -43,13 +43,9 @@ class FakePaymentEntry:
 def _install_stubs():
     frappe_module = types.ModuleType("frappe")
     frappe_utils = types.ModuleType("frappe.utils")
-    sales_invoice_module = types.ModuleType(
-        "erpnext.accounts.doctype.sales_invoice.sales_invoice"
-    )
+    sales_invoice_module = types.ModuleType("erpnext.accounts.doctype.sales_invoice.sales_invoice")
     accounts_utils_module = types.ModuleType("erpnext.accounts.utils")
-    payment_utils_module = types.ModuleType(
-        "posawesome.posawesome.api.payment_processing.utils"
-    )
+    payment_utils_module = types.ModuleType("posawesome.posawesome.api.payment_processing.utils")
 
     created_entries = []
     reconcile_calls = []
@@ -58,9 +54,7 @@ def _install_stubs():
         pass
 
     frappe_utils.cint = lambda value: int(value or 0)
-    frappe_utils.flt = lambda value, precision=None: round(
-        float(value or 0), precision or 2
-    )
+    frappe_utils.flt = lambda value, precision=None: round(float(value or 0), precision or 2)
     frappe_utils.getdate = lambda value: value
     frappe_utils.nowdate = lambda: "2026-03-26"
 
@@ -96,34 +90,22 @@ def _install_stubs():
     frappe_module.get_doc = _get_doc
     frappe_module.scrub = lambda value: str(value or "").strip().lower().replace(" ", "_")
 
-    sales_invoice_module.get_bank_cash_account = (
-        lambda *_args, **_kwargs: {"account": "Cash"}
+    sales_invoice_module.get_bank_cash_account = lambda *_args, **_kwargs: {"account": "Cash"}
+    accounts_utils_module.reconcile_against_document = lambda args, *extra, **kwargs: reconcile_calls.append(
+        {
+            "args": [dict(row) for row in args],
+            "extra": extra,
+            "kwargs": kwargs,
+        }
     )
-    accounts_utils_module.reconcile_against_document = (
-        lambda args, *extra, **kwargs: reconcile_calls.append(
-            {
-                "args": [dict(row) for row in args],
-                "extra": extra,
-                "kwargs": kwargs,
-            }
-        )
-    )
-    payment_utils_module.get_party_account = (
-        lambda *_args, **_kwargs: "Debtors - TC"
-    )
-    payment_utils_module.get_bank_cash_account = (
-        lambda *_args, **_kwargs: {"account": "Cash"}
-    )
+    payment_utils_module.get_party_account = lambda *_args, **_kwargs: "Debtors - TC"
+    payment_utils_module.get_bank_cash_account = lambda *_args, **_kwargs: {"account": "Cash"}
 
     sys.modules["frappe"] = frappe_module
     sys.modules["frappe.utils"] = frappe_utils
-    sys.modules[
-        "erpnext.accounts.doctype.sales_invoice.sales_invoice"
-    ] = sales_invoice_module
+    sys.modules["erpnext.accounts.doctype.sales_invoice.sales_invoice"] = sales_invoice_module
     sys.modules["erpnext.accounts.utils"] = accounts_utils_module
-    sys.modules[
-        "posawesome.posawesome.api.payment_processing.utils"
-    ] = payment_utils_module
+    sys.modules["posawesome.posawesome.api.payment_processing.utils"] = payment_utils_module
 
     return created_entries, reconcile_calls
 
@@ -145,14 +127,7 @@ def _install_package_stubs():
 
 def _load_module():
     module_name = "posawesome.posawesome.api.invoice_processing.payment"
-    file_path = (
-        REPO_ROOT
-        / "posawesome"
-        / "posawesome"
-        / "api"
-        / "invoice_processing"
-        / "payment.py"
-    )
+    file_path = REPO_ROOT / "posawesome" / "posawesome" / "api" / "invoice_processing" / "payment.py"
     spec = importlib.util.spec_from_file_location(module_name, file_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module

@@ -74,7 +74,7 @@
 						<strong>{{ balance }}</strong>
 					</div>
 					<div class="gift-card-dialog__stat">
-						<span>{{ mode === 'redeem' ? __("Applying") : __("Amount") }}</span>
+						<span>{{ mode === "redeem" ? __("Applying") : __("Amount") }}</span>
 						<strong>{{ redeemAmountDisplay }}</strong>
 					</div>
 				</div>
@@ -100,7 +100,11 @@
 				/>
 
 				<p v-if="mode === 'redeem'" class="gift-card-dialog__hint">
-					{{ __("Apply only the amount you want to redeem on this invoice. The remaining balance stays on the card.") }}
+					{{
+						__(
+							"Apply only the amount you want to redeem on this invoice. The remaining balance stays on the card.",
+						)
+					}}
 				</p>
 
 				<p v-if="errorMessage" class="gift-card-dialog__error">{{ errorMessage }}</p>

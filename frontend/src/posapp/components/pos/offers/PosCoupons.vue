@@ -119,7 +119,9 @@ export default {
 		},
 		add_coupon(new_coupon, options = {}) {
 			const silentDuplicate = !!options.silentDuplicate;
-			const normalizedCoupon = String(new_coupon || "").trim().toUpperCase();
+			const normalizedCoupon = String(new_coupon || "")
+				.trim()
+				.toUpperCase();
 			if (!this.customer || !normalizedCoupon) {
 				this.toastStore.show({
 					title: __("Select a customer to use coupon"),
@@ -129,7 +131,10 @@ export default {
 			}
 			const coupons = this.posa_coupons || [];
 			const exist = coupons.find(
-				(el) => String(el.coupon_code || "").trim().toUpperCase() == normalizedCoupon,
+				(el) =>
+					String(el.coupon_code || "")
+						.trim()
+						.toUpperCase() == normalizedCoupon,
 			);
 			if (exist) {
 				if (!silentDuplicate) {
@@ -250,7 +255,7 @@ export default {
 
 	watch: {
 		posa_coupons: {
-			deep: true,
+			// Drop deep:true; handler reacts to array reassignments only.
 			handler() {
 				this.updateInvoice();
 				this.updateCounters();
@@ -291,7 +296,7 @@ export default {
 			(profile) => {
 				if (profile) this.pos_profile = profile;
 			},
-			{ deep: true, immediate: true },
+			{ immediate: true },
 		);
 		/*
 		this.$nextTick(function () {
@@ -306,6 +311,12 @@ export default {
 		this.eventBus.on("set_pos_coupons", (data) => {
 			this.posa_coupons = data;
 		});
+	},
+	beforeUnmount() {
+		if (this.eventBus) {
+			this.eventBus.off("update_pos_coupons");
+			this.eventBus.off("set_pos_coupons");
+		}
 	},
 };
 </script>

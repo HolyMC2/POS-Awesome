@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { shallowMount } from "@vue/test-utils";
 
 import NavbarMenu from "../src/posapp/components/navbar/NavbarMenu.vue";
+import NavbarCashierPinForm from "../src/posapp/components/navbar/NavbarCashierPinForm.vue";
 import { useEmployeeStore } from "../src/posapp/stores/employeeStore";
 
 const flushPromises = async () => {
@@ -84,6 +85,27 @@ describe("NavbarMenu cashier pin management", () => {
 			},
 		});
 
+	const mountPinForm = (overrides: Record<string, any> = {}) =>
+		shallowMount(NavbarCashierPinForm, {
+			props: {
+				posProfile: { name: "Main POS", ...overrides.posProfile },
+				currentCashier: {
+					user: "cashier@example.com",
+					full_name: "Main Cashier",
+					is_supervisor: false,
+					...overrides.currentCashier,
+				},
+				currentCashierDisplay: "Main Cashier",
+				showBack: false,
+				...overrides.props,
+			},
+			global: {
+				mocks: {
+					__: (value: string) => value,
+				},
+			},
+		});
+
 	it("surfaces a cashier-first quick actions panel and grouped settings sections", async () => {
 		const employeeStore = useEmployeeStore();
 		employeeStore.setCurrentCashier({
@@ -144,13 +166,6 @@ describe("NavbarMenu cashier pin management", () => {
 	});
 
 	it("creates a cashier pin without requiring a current pin when none exists", async () => {
-		const employeeStore = useEmployeeStore();
-		employeeStore.setCurrentCashier({
-			user: "cashier@example.com",
-			full_name: "Main Cashier",
-			is_supervisor: false,
-		});
-
 		(window as any).frappe.call = vi.fn(async ({ method, args }: { method: string; args: any }) => {
 			if (method === "posawesome.posawesome.api.utilities.get_current_user_language") {
 				return {
@@ -182,14 +197,17 @@ describe("NavbarMenu cashier pin management", () => {
 			throw new Error(`Unexpected method: ${method} ${JSON.stringify(args)}`);
 		});
 
-		const wrapper = mountMenu();
+		const wrapper = mountPinForm();
 
+		await vi.waitFor(() =>
+			expect(wrapper.find('[data-test="cashier-pin-message"]').text()).toBe(
+				"No cashier PIN is set yet. Create one now.",
+			),
+		);
+		await wrapper.find('[data-test="cashier-pin-new-input"] input').setValue("5678");
+		await wrapper.find('[data-test="cashier-pin-confirm-input"] input').setValue("5678");
+		await wrapper.find('[data-test="cashier-pin-save"]').trigger("click");
 		await flushPromises();
-		await (wrapper.vm as any).openPinDialog();
-		expect((wrapper.vm as any).pinDialogTitle).toBe("Create Cashier PIN");
-		(wrapper.vm as any).pinForm.new_pin = "5678";
-		(wrapper.vm as any).pinForm.confirm_pin = "5678";
-		await (wrapper.vm as any).saveCashierPin();
 
 		expect((window as any).frappe.call).toHaveBeenCalledWith({
 			method: "posawesome.posawesome.api.employees.save_cashier_pin",
@@ -203,13 +221,6 @@ describe("NavbarMenu cashier pin management", () => {
 	});
 
 	it("requires the current pin before allowing an existing cashier pin to change", async () => {
-		const employeeStore = useEmployeeStore();
-		employeeStore.setCurrentCashier({
-			user: "cashier@example.com",
-			full_name: "Main Cashier",
-			is_supervisor: false,
-		});
-
 		const frappeCall = vi.fn(async ({ method }: { method: string }) => {
 			if (method === "posawesome.posawesome.api.utilities.get_current_user_language") {
 				return {
@@ -233,16 +244,19 @@ describe("NavbarMenu cashier pin management", () => {
 		});
 		(window as any).frappe.call = frappeCall;
 
-		const wrapper = mountMenu();
+		const wrapper = mountPinForm();
 
+		await vi.waitFor(() =>
+			expect(wrapper.find('[data-test="cashier-pin-current-input"]').exists()).toBe(true),
+		);
+		await wrapper.find('[data-test="cashier-pin-new-input"] input').setValue("7890");
+		await wrapper.find('[data-test="cashier-pin-confirm-input"] input').setValue("7890");
+		await wrapper.find('[data-test="cashier-pin-save"]').trigger("click");
 		await flushPromises();
-		await (wrapper.vm as any).openPinDialog();
-		(wrapper.vm as any).pinForm.new_pin = "7890";
-		(wrapper.vm as any).pinForm.confirm_pin = "7890";
-		await (wrapper.vm as any).saveCashierPin();
 
-		expect((wrapper.vm as any).pinDialogTitle).toBe("Change Cashier PIN");
-		expect((wrapper.vm as any).pinMessage).toBe("Enter the current PIN first.");
+		expect(wrapper.find('[data-test="cashier-pin-message"]').text()).toBe(
+			"Enter the current PIN first.",
+		);
 		expect(frappeCall).not.toHaveBeenCalledWith(
 			expect.objectContaining({
 				method: "posawesome.posawesome.api.employees.save_cashier_pin",

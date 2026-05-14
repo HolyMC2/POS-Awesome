@@ -178,8 +178,7 @@ const toNumber = (value) => {
 
 const totalDiscountAmount = computed(
 	() =>
-		Math.abs(toNumber(props.itemDiscountTotal)) +
-		Math.abs(toNumber(props.invoice_doc?.discount_amount)),
+		Math.abs(toNumber(props.itemDiscountTotal)) + Math.abs(toNumber(props.invoice_doc?.discount_amount)),
 );
 
 const discountHelpText = computed(

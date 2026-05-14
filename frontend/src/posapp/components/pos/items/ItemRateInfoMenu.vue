@@ -25,11 +25,7 @@
 		</template>
 
 		<div class="item-rate-info-menu" @click.stop>
-			<div
-				v-for="row in rows"
-				:key="row.key"
-				class="item-rate-info-row"
-			>
+			<div v-for="row in rows" :key="row.key" class="item-rate-info-row">
 				<div class="item-rate-info-row__label">{{ row.label }}</div>
 				<div class="item-rate-info-row__value" :class="{ 'is-muted': !row.info.available }">
 					<template v-if="row.info.available">

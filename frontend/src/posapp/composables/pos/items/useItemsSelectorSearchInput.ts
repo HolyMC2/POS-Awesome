@@ -61,6 +61,14 @@ export function useItemsSelectorSearchInput({
 		const normalized = String(value ?? "");
 		searchInput.value = normalized;
 		firstSearch.value = normalized;
+		// Arm the focus-clear guard while the operator is actively
+		// typing so any focus event Vuetify fires in the next 800 ms
+		// (clear-button hit-test re-focus, autofocus chip rebind after
+		// a render pass) doesn't blow away the in-progress query.
+		// Pairs with `handleItemSearchFocus`'s non-empty fast path.
+		if (normalized) {
+			searchFocusGuard.armPreserveNextFocusClear();
+		}
 		scannerInput.handleSearchInput?.(normalized);
 	};
 
@@ -98,6 +106,19 @@ export function useItemsSelectorSearchInput({
 
 	const handleItemSearchFocus = () => {
 		if (!searchFocusGuard.shouldClearSearchOnFocus()) {
+			requestItemSearchFocus();
+			return;
+		}
+		// Don't clearSearch if the operator is actively typing — Vuetify
+		// v-text-field can emit `@focus` mid-keystroke (e.g. clear-button
+		// hit-test re-focus, or the autofocus chip rebind after a render
+		// pass). When `searchInput.value` already holds typed content,
+		// blowing it away here desyncs the Vue ref from the DOM input
+		// (the input keeps "samsung", the ref goes ""), and
+		// displayedItems renders the unfiltered first page even though
+		// the operator typed a query. Only clear when there's nothing
+		// to lose.
+		if (searchInput.value) {
 			requestItemSearchFocus();
 			return;
 		}

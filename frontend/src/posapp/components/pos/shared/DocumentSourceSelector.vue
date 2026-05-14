@@ -55,9 +55,7 @@ function isActive(key: string) {
 
 function focusTabButton(event: KeyboardEvent, index: number) {
 	const container = (event.currentTarget as HTMLElement | null)?.parentElement;
-	const buttons = Array.from(
-		container?.querySelectorAll<HTMLElement>("[role='tab']") || [],
-	);
+	const buttons = Array.from(container?.querySelectorAll<HTMLElement>("[role='tab']") || []);
 	nextTick(() => {
 		buttons[index]?.focus();
 	});

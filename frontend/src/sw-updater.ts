@@ -106,6 +106,7 @@ export function resolveActiveVersionTransition({
 }
 
 if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+	try {
 	setActivePinia(pinia);
 	const updateStore = useUpdateStore();
 	updateStore.initializeFromStorage();
@@ -457,5 +458,8 @@ if (typeof window !== "undefined" && "serviceWorker" in navigator) {
 			console.warn("Failed to trigger service worker update", err);
 			clearReloadState();
 		}
+	}
+	} catch (err) {
+		console.warn("POS service worker updater disabled during startup", err);
 	}
 }

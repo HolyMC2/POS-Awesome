@@ -243,6 +243,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { QrcodeStream } from "vue-qrcode-reader";
 import opencvProcessor from "../../../utils/opencvProcessor";
+import { debugLog } from "../../../utils/debug";
 
 const __ = typeof window !== "undefined" && window.__ ? window.__ : (text) => text;
 
@@ -451,7 +452,7 @@ const onCameraReady = (capabilities = {}) => {
 	errorMessage.value = "";
 	cameraPermissionDenied.value = false;
 	isScanning.value = true;
-	console.log("Camera ready for scanning", {
+	debugLog("Camera ready for scanning", {
 		deviceId: selectedDeviceId.value,
 		torch: Boolean(cameraCapabilities.value?.torch),
 		basicMode: useBasicConstraints.value,
@@ -566,9 +567,7 @@ const onError = (error) => {
 			"Camera started but the video stream did not load in time. Please try again.",
 		);
 	} else if (error.name === "InsecureContextError") {
-		errorMessage.value = __(
-			"Secure context (HTTPS or localhost) is required for camera access.",
-		);
+		errorMessage.value = __("Secure context (HTTPS or localhost) is required for camera access.");
 	} else if (error.name === "NotSupportedError") {
 		errorMessage.value = __(
 			"Secure context (HTTPS) required for camera access. Please use HTTPS to access the camera.",
@@ -589,7 +588,7 @@ const onError = (error) => {
 };
 
 const tryFallbackCamera = async () => {
-	console.log("Trying fallback camera settings...");
+	debugLog("Trying fallback camera settings...");
 	try {
 		if (useBasicConstraints.value) {
 			throw new Error("Fallback constraints already active");
@@ -651,7 +650,7 @@ const toggleOpenCVProcessing = async () => {
 	if (nextEnabledState) {
 		const isReady = await initializeOpenCV({ showAlertOnFailure: true });
 		if (isReady) {
-			console.log("OpenCV processing enabled");
+			debugLog("OpenCV processing enabled");
 		}
 	} else {
 		openCVReady.value = false;
@@ -660,9 +659,10 @@ const toggleOpenCVProcessing = async () => {
 	if (typeof frappe !== "undefined" && frappe.show_alert) {
 		frappe.show_alert(
 			{
-				message: openCVEnabled.value && openCVReady.value
-					? __("OpenCV image processing enabled - Enhanced barcode detection")
-					: __("OpenCV processing disabled"),
+				message:
+					openCVEnabled.value && openCVReady.value
+						? __("OpenCV image processing enabled - Enhanced barcode detection")
+						: __("OpenCV processing disabled"),
 				indicator: openCVEnabled.value && openCVReady.value ? "green" : "blue",
 			},
 			3,
@@ -724,7 +724,7 @@ onBeforeUnmount(async () => {
 	try {
 		openCVReady.value = false;
 		await opencvProcessor.destroy();
-		console.log("OpenCV Web Worker cleaned up successfully");
+		debugLog("OpenCV Web Worker cleaned up successfully");
 	} catch (error) {
 		console.warn("Error cleaning up OpenCV Web Worker:", error);
 	}

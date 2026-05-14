@@ -57,10 +57,7 @@ def _remove_gift_card_content(workspace):
         for block in content
         if not (
             block.get("id") == CARD_BLOCK_ID
-            or (
-                block.get("type") == "card"
-                and (block.get("data") or {}).get("card_name") == CARD_LABEL
-            )
+            or (block.get("type") == "card" and (block.get("data") or {}).get("card_name") == CARD_LABEL)
         )
     ]
 
@@ -81,10 +78,7 @@ def _ensure_workspace_content(workspace):
 
     has_gift_card = any(
         block.get("id") == CARD_BLOCK_ID
-        or (
-            block.get("type") == "card"
-            and (block.get("data") or {}).get("card_name") == CARD_LABEL
-        )
+        or (block.get("type") == "card" and (block.get("data") or {}).get("card_name") == CARD_LABEL)
         for block in content
     )
     if has_gift_card:

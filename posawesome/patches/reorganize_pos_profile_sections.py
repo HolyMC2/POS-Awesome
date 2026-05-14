@@ -116,6 +116,7 @@ ORDERED_CHAIN = [
     "posa_search_batch_no",
     "posa_search_serial_no",
     "posa_block_sale_beyond_available_qty",
+    "posa_allow_offline_sale_without_stock_verification",
     "posa_allow_line_item_name_override",
     "posa_show_custom_name_marker_on_print",
     "posa_allow_zero_rated_items",

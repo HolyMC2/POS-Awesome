@@ -250,9 +250,7 @@ export default {
 		const showCustomerLoadProgress = computed(
 			() => loadingCustomers.value || isCustomerBackgroundLoading.value,
 		);
-		const isCustomerSearchLocked = computed(
-			() => loadingCustomers.value && customers.value.length === 0,
-		);
+		const isCustomerSearchLocked = computed(() => loadingCustomers.value && customers.value.length === 0);
 		const customerLoadPercent = computed(() =>
 			Math.max(0, Math.min(100, Math.round(loadProgress.value || 0))),
 		);
@@ -509,11 +507,12 @@ export default {
 			await customersStore.searchCustomers("");
 
 			watch(
+				// Drop deep:true — react to profile reassignment only.
 				() => uiStore.posProfile,
 				async (profile) => {
 					await ensureCustomersForProfile(profile);
 				},
-				{ deep: true, immediate: true },
+				{ immediate: true },
 			);
 
 			// registerBus("set_customer", (customer) => {

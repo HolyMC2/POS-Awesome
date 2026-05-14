@@ -69,7 +69,13 @@
 					</v-btn>
 				</div>
 
-				<v-alert v-if="!selectedPrinter" type="warning" variant="tonal" density="compact" class="mt-3">
+				<v-alert
+					v-if="!selectedPrinter"
+					type="warning"
+					variant="tonal"
+					density="compact"
+					class="mt-3"
+				>
 					{{ __("Select a printer to use QZ silent printing.") }}
 				</v-alert>
 
@@ -202,9 +208,7 @@ const certificateStatusText = computed(() => {
 	if (status === "untrusted") {
 		return __("Certificate is missing or not trusted. QZ may show confirmation dialogs.");
 	}
-	return __(
-		"Generate and install the certificate to allow fully silent printing without trust prompts.",
-	);
+	return __("Generate and install the certificate to allow fully silent printing without trust prompts.");
 });
 
 function __(text: string, args?: string[]) {

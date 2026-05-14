@@ -4,7 +4,10 @@
 			<div class="gift-card-entry__copy">
 				<div class="gift-card-entry__label-row">
 					<p class="gift-card-entry__label">{{ __("Gift Card") }}</p>
-					<span class="gift-card-entry__state" :class="{ 'gift-card-entry__state--applied': appliedAmount > 0 }">
+					<span
+						class="gift-card-entry__state"
+						:class="{ 'gift-card-entry__state--applied': appliedAmount > 0 }"
+					>
 						{{ appliedAmount > 0 ? __("Applied") : __("Ready") }}
 					</span>
 				</div>
@@ -26,12 +29,7 @@
 				</div>
 			</div>
 			<div class="gift-card-entry__actions">
-				<v-btn
-					data-test="gift-card-toggle"
-					color="primary"
-					variant="flat"
-					@click="emit('toggle')"
-				>
+				<v-btn data-test="gift-card-toggle" color="primary" variant="flat" @click="emit('toggle')">
 					{{ expanded ? __("Hide Gift Card") : actionLabel }}
 				</v-btn>
 			</div>

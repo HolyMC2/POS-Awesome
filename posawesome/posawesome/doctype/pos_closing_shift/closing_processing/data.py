@@ -1,6 +1,9 @@
 import frappe
 from frappe.utils import cint
-from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.invoices import submit_printed_invoices
+from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.invoices import (
+    submit_printed_invoices,
+)
+
 
 @frappe.whitelist()
 def get_cashiers(doctype, txt, searchfield, start, page_len, filters):
@@ -64,6 +67,7 @@ def get_payments_entries(pos_opening_shift):
             "target_exchange_rate",
             "reference_no",
             "posting_date",
+            "party_type",
             "party",
             "payment_type",
         ],

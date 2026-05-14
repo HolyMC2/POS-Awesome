@@ -14,7 +14,9 @@
 					</v-col>
 					<v-col
 						cols="12"
-						v-if="posProfile.posa_allow_write_off_change && diffPayment > 0 && !invoiceDoc.is_return"
+						v-if="
+							posProfile.posa_allow_write_off_change && diffPayment > 0 && !invoiceDoc.is_return
+						"
 					>
 						<v-switch
 							:model-value="isWriteOffChange"
@@ -119,14 +121,19 @@
 
 				<div v-else-if="redeemCustomerCredit" class="payment-options-panel__note">
 					<h4>{{ $frappe._("Available Customer Redeemable Balance") }}</h4>
-					<p>{{ $frappe._("Available customer redeemable balance") }}: {{ formatCurrency(availableCustomerCredit) }}</p>
+					<p>
+						{{ $frappe._("Available customer redeemable balance") }}:
+						{{ formatCurrency(availableCustomerCredit) }}
+					</p>
 					<p>{{ $frappe._("Applied now") }}: {{ formatCurrency(redeemedCustomerCredit) }}</p>
 					<p>{{ customerCreditSources }} {{ $frappe._("source(s) will be used in order.") }}</p>
 				</div>
 
 				<div v-else-if="invoiceDoc.is_return && isCreditReturn" class="payment-options-panel__note">
 					<h4>{{ $frappe._("Customer Credit Return Active") }}</h4>
-					<p>{{ $frappe._("This return will be saved as customer credit instead of cashback.") }}</p>
+					<p>
+						{{ $frappe._("This return will be saved as customer credit instead of cashback.") }}
+					</p>
 				</div>
 
 				<div v-else-if="invoiceDoc.is_return && isCashback" class="payment-options-panel__note">

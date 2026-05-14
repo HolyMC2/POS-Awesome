@@ -9,7 +9,13 @@
 			:theme="isDarkTheme ? 'dark' : 'light'"
 			content-class="invoice-management-dialog-content"
 		>
-			<v-card :class="['pos-themed-card invoice-management-card', isDarkTheme ? 'invoice-management-card--dark' : 'invoice-management-card--light']" variant="flat">
+			<v-card
+				:class="[
+					'pos-themed-card invoice-management-card',
+					isDarkTheme ? 'invoice-management-card--dark' : 'invoice-management-card--light',
+				]"
+				variant="flat"
+			>
 				<v-card-title class="invoice-management-header">
 					<div>
 						<div class="text-h5 text-primary">{{ __("Invoice Management") }}</div>
@@ -73,25 +79,33 @@
 						<v-tab value="history">
 							<div class="invoice-tab-label">
 								<span>{{ __("History") }}</span>
-								<v-chip size="x-small" variant="flat" color="primary">{{ filteredHistoryInvoices.length }}</v-chip>
+								<v-chip size="x-small" variant="flat" color="primary">{{
+									filteredHistoryInvoices.length
+								}}</v-chip>
 							</div>
 						</v-tab>
 						<v-tab value="partial">
 							<div class="invoice-tab-label">
 								<span>{{ __("Unpaid") }}</span>
-								<v-chip size="x-small" variant="flat" color="warning">{{ filteredUnpaidInvoices.length }}</v-chip>
+								<v-chip size="x-small" variant="flat" color="warning">{{
+									filteredUnpaidInvoices.length
+								}}</v-chip>
 							</div>
 						</v-tab>
 						<v-tab value="drafts">
 							<div class="invoice-tab-label">
 								<span>{{ __("Drafts") }}</span>
-								<v-chip size="x-small" variant="flat" color="secondary">{{ filteredDraftInvoices.length }}</v-chip>
+								<v-chip size="x-small" variant="flat" color="secondary">{{
+									filteredDraftInvoices.length
+								}}</v-chip>
 							</div>
 						</v-tab>
 						<v-tab value="returns">
 							<div class="invoice-tab-label">
 								<span>{{ __("Returns") }}</span>
-								<v-chip size="x-small" variant="flat" color="error">{{ filteredReturnInvoices.length }}</v-chip>
+								<v-chip size="x-small" variant="flat" color="error">{{
+									filteredReturnInvoices.length
+								}}</v-chip>
 							</div>
 						</v-tab>
 					</v-tabs>
@@ -145,10 +159,17 @@
 									:color="historyShowRepairCandidatesOnly ? 'warning' : undefined"
 									:variant="historyShowRepairCandidatesOnly ? 'flat' : 'outlined'"
 									prepend-icon="mdi-wrench-check-outline"
-									@click="historyShowRepairCandidatesOnly = !historyShowRepairCandidatesOnly"
+									@click="
+										historyShowRepairCandidatesOnly = !historyShowRepairCandidatesOnly
+									"
 								>
 									{{ __("Show Repair Candidates") }}
-									<v-chip size="x-small" variant="flat" :color="historyShowRepairCandidatesOnly ? 'white' : 'warning'" class="ms-2">
+									<v-chip
+										size="x-small"
+										variant="flat"
+										:color="historyShowRepairCandidatesOnly ? 'white' : 'warning'"
+										class="ms-2"
+									>
 										{{ historyRepairCandidateCount }}
 									</v-chip>
 								</v-btn>
@@ -157,34 +178,48 @@
 							<div class="summary-grid mb-4">
 								<div class="summary-tile summary-tile--history">
 									<div class="summary-tile__label">{{ __("Invoices") }}</div>
-									<div class="summary-tile__value">{{ filteredHistoryInvoices.length }}</div>
-									<div class="summary-tile__meta">{{ __("Completed and active sales in this range") }}</div>
+									<div class="summary-tile__value">
+										{{ filteredHistoryInvoices.length }}
+									</div>
+									<div class="summary-tile__meta">
+										{{ __("Completed and active sales in this range") }}
+									</div>
 								</div>
 								<div class="summary-tile summary-tile--primary">
 									<div class="summary-tile__label">{{ __("Gross Sales") }}</div>
 									<div class="summary-tile__value">
-										{{ currencySymbol(posProfile?.currency) }} {{ formatCurrency(historyTotals.gross) }}
+										{{ currencySymbol(posProfile?.currency) }}
+										{{ formatCurrency(historyTotals.gross) }}
 									</div>
-									<div class="summary-tile__meta">{{ __("Before any return workflow") }}</div>
+									<div class="summary-tile__meta">
+										{{ __("Before any return workflow") }}
+									</div>
 								</div>
 								<div class="summary-tile summary-tile--success">
 									<div class="summary-tile__label">{{ __("Tendered") }}</div>
 									<div class="summary-tile__value">
-										{{ currencySymbol(posProfile?.currency) }} {{ formatCurrency(historyTotals.paid) }}
+										{{ currencySymbol(posProfile?.currency) }}
+										{{ formatCurrency(historyTotals.paid) }}
 									</div>
-									<div class="summary-tile__meta">{{ __("Amount received from customer") }}</div>
+									<div class="summary-tile__meta">
+										{{ __("Amount received from customer") }}
+									</div>
 								</div>
 								<div class="summary-tile summary-tile--danger">
 									<div class="summary-tile__label">{{ __("Change Return") }}</div>
 									<div class="summary-tile__value">
-										{{ currencySymbol(posProfile?.currency) }} {{ formatCurrency(historyTotals.change_return) }}
+										{{ currencySymbol(posProfile?.currency) }}
+										{{ formatCurrency(historyTotals.change_return) }}
 									</div>
-									<div class="summary-tile__meta">{{ __("Cash returned after payment") }}</div>
+									<div class="summary-tile__meta">
+										{{ __("Cash returned after payment") }}
+									</div>
 								</div>
 								<div class="summary-tile summary-tile--warning">
 									<div class="summary-tile__label">{{ __("Outstanding") }}</div>
 									<div class="summary-tile__value">
-										{{ currencySymbol(posProfile?.currency) }} {{ formatCurrency(historyTotals.outstanding) }}
+										{{ currencySymbol(posProfile?.currency) }}
+										{{ formatCurrency(historyTotals.outstanding) }}
 									</div>
 									<div class="summary-tile__meta">{{ __("Balances still pending") }}</div>
 								</div>
@@ -196,10 +231,16 @@
 							</div>
 
 							<div v-else-if="!filteredHistoryInvoices.length" class="empty-state">
-								<v-icon size="42" color="medium-emphasis">mdi-receipt-text-clock-outline</v-icon>
+								<v-icon size="42" color="medium-emphasis"
+									>mdi-receipt-text-clock-outline</v-icon
+								>
 								<div class="empty-state__title">{{ __("No invoices found") }}</div>
 								<div class="empty-state__subtitle">
-									{{ historyShowRepairCandidatesOnly ? __("No change-allocation invoices match the current filters.") : __("Try changing the date range or status filter.") }}
+									{{
+										historyShowRepairCandidatesOnly
+											? __("No change-allocation invoices match the current filters.")
+											: __("Try changing the date range or status filter.")
+									}}
 								</div>
 							</div>
 
@@ -212,14 +253,33 @@
 								:items-per-page="-1"
 								hide-default-footer
 							>
-								<template #item.posting_date="{ item }">{{ formatDateTime(item.posting_date, item.posting_time) }}</template>
-								<template #item.grand_total="{ item }">{{ currencySymbol(item.currency) }} {{ formatCurrency(item.grand_total) }}</template>
-								<template #item.paid_amount="{ item }">{{ currencySymbol(item.currency) }} {{ formatCurrency(item.paid_amount || 0) }}</template>
-								<template #item.change_amount="{ item }">{{ currencySymbol(item.currency) }} {{ formatCurrency(item.change_amount || 0) }}</template>
-								<template #item.outstanding_amount="{ item }">{{ currencySymbol(item.currency) }} {{ formatCurrency(item.outstanding_amount || 0) }}</template>
+								<template #item.posting_date="{ item }">{{
+									formatDateTime(item.posting_date, item.posting_time)
+								}}</template>
+								<template #item.grand_total="{ item }"
+									>{{ currencySymbol(item.currency) }}
+									{{ formatCurrency(item.grand_total) }}</template
+								>
+								<template #item.paid_amount="{ item }"
+									>{{ currencySymbol(item.currency) }}
+									{{ formatCurrency(item.paid_amount || 0) }}</template
+								>
+								<template #item.change_amount="{ item }"
+									>{{ currencySymbol(item.currency) }}
+									{{ formatCurrency(item.change_amount || 0) }}</template
+								>
+								<template #item.outstanding_amount="{ item }"
+									>{{ currencySymbol(item.currency) }}
+									{{ formatCurrency(item.outstanding_amount || 0) }}</template
+								>
 								<template #item.status="{ item }">
 									<div class="d-flex flex-wrap ga-1">
-										<v-chip size="small" :color="statusColor(item.status)" variant="tonal">{{ __(item.status || "Draft") }}</v-chip>
+										<v-chip
+											size="small"
+											:color="statusColor(item.status)"
+											variant="tonal"
+											>{{ __(item.status || "Draft") }}</v-chip
+										>
 										<v-chip
 											v-if="changeAllocationRepairState(item)"
 											size="small"
@@ -232,9 +292,32 @@
 								</template>
 								<template #item.actions="{ item }">
 									<div class="d-flex justify-end ga-1">
-										<v-btn icon="mdi-eye-outline" variant="text" size="small" :title="__('View Details')" :aria-label="__('View invoice details')" @click="viewInvoice(item)" />
-										<v-btn icon="mdi-printer-outline" variant="text" size="small" :title="__('Print')" :aria-label="__('Print invoice')" @click="printInvoice(item)" />
-										<v-btn v-if="posProfile?.posa_allow_return == 1" icon="mdi-backup-restore" variant="text" size="small" color="warning" :title="__('Create Return')" :aria-label="__('Create return from invoice')" @click="createReturn(item)" />
+										<v-btn
+											icon="mdi-eye-outline"
+											variant="text"
+											size="small"
+											:title="__('View Details')"
+											:aria-label="__('View invoice details')"
+											@click="viewInvoice(item)"
+										/>
+										<v-btn
+											icon="mdi-printer-outline"
+											variant="text"
+											size="small"
+											:title="__('Print')"
+											:aria-label="__('Print invoice')"
+											@click="printInvoice(item)"
+										/>
+										<v-btn
+											v-if="posProfile?.posa_allow_return == 1"
+											icon="mdi-backup-restore"
+											variant="text"
+											size="small"
+											color="warning"
+											:title="__('Create Return')"
+											:aria-label="__('Create return from invoice')"
+											@click="createReturn(item)"
+										/>
 									</div>
 								</template>
 							</v-data-table>
@@ -243,33 +326,53 @@
 								<v-card
 									v-for="invoice in paginatedHistoryInvoices"
 									:key="invoice.name"
-									:class="['invoice-record-card', `invoice-record-card--${toneFromStatus(invoice.status)}`]"
+									:class="[
+										'invoice-record-card',
+										`invoice-record-card--${toneFromStatus(invoice.status)}`,
+									]"
 									variant="flat"
 								>
 									<div class="invoice-record-card__hero">
 										<div>
 											<div class="invoice-record-card__title-row">
-												<div class="invoice-record-card__title">{{ invoice.name }}</div>
-												<v-chip size="small" :color="statusColor(invoice.status)" variant="flat">
+												<div class="invoice-record-card__title">
+													{{ invoice.name }}
+												</div>
+												<v-chip
+													size="small"
+													:color="statusColor(invoice.status)"
+													variant="flat"
+												>
 													{{ __(invoice.status || "Draft") }}
 												</v-chip>
 												<v-chip
 													v-if="changeAllocationRepairState(invoice)"
 													size="small"
-													:color="repairStateColor(changeAllocationRepairState(invoice))"
+													:color="
+														repairStateColor(changeAllocationRepairState(invoice))
+													"
 													variant="flat"
 												>
-													{{ repairStateLabel(changeAllocationRepairState(invoice)) }}
+													{{
+														repairStateLabel(changeAllocationRepairState(invoice))
+													}}
 												</v-chip>
 											</div>
 											<div class="invoice-record-card__subtitle">
-												{{ invoice.customer_name || invoice.customer || __("Walk-in Customer") }}
+												{{
+													invoice.customer_name ||
+													invoice.customer ||
+													__("Walk-in Customer")
+												}}
 											</div>
 										</div>
 										<div class="invoice-record-card__amount-block">
-											<div class="invoice-record-card__amount-label">{{ __("Grand Total") }}</div>
+											<div class="invoice-record-card__amount-label">
+												{{ __("Grand Total") }}
+											</div>
 											<div class="invoice-record-card__amount">
-												{{ currencySymbol(invoice.currency) }} {{ formatCurrency(invoice.grand_total) }}
+												{{ currencySymbol(invoice.currency) }}
+												{{ formatCurrency(invoice.grand_total) }}
 											</div>
 										</div>
 									</div>
@@ -278,36 +381,68 @@
 										<div class="meta-pair-grid">
 											<div class="meta-pair">
 												<div class="meta-pair__label">{{ __("Posting") }}</div>
-												<div class="meta-pair__value">{{ formatDateTime(invoice.posting_date, invoice.posting_time) }}</div>
+												<div class="meta-pair__value">
+													{{
+														formatDateTime(
+															invoice.posting_date,
+															invoice.posting_time,
+														)
+													}}
+												</div>
 											</div>
 											<div class="meta-pair">
 												<div class="meta-pair__label">{{ __("Tendered") }}</div>
 												<div class="meta-pair__value meta-pair__value--success">
-													{{ currencySymbol(invoice.currency) }} {{ formatCurrency(invoice.paid_amount || 0) }}
+													{{ currencySymbol(invoice.currency) }}
+													{{ formatCurrency(invoice.paid_amount || 0) }}
 												</div>
 											</div>
 											<div class="meta-pair">
 												<div class="meta-pair__label">{{ __("Change Return") }}</div>
 												<div class="meta-pair__value meta-pair__value--warning">
-													{{ currencySymbol(invoice.currency) }} {{ formatCurrency(invoice.change_amount || 0) }}
+													{{ currencySymbol(invoice.currency) }}
+													{{ formatCurrency(invoice.change_amount || 0) }}
 												</div>
 											</div>
 											<div class="meta-pair">
 												<div class="meta-pair__label">{{ __("Outstanding") }}</div>
-												<div class="meta-pair__value" :class="{ 'meta-pair__value--warning': Number(invoice.outstanding_amount || 0) > 0 }">
-													{{ currencySymbol(invoice.currency) }} {{ formatCurrency(invoice.outstanding_amount || 0) }}
+												<div
+													class="meta-pair__value"
+													:class="{
+														'meta-pair__value--warning':
+															Number(invoice.outstanding_amount || 0) > 0,
+													}"
+												>
+													{{ currencySymbol(invoice.currency) }}
+													{{ formatCurrency(invoice.outstanding_amount || 0) }}
 												</div>
 											</div>
 											<div class="meta-pair">
 												<div class="meta-pair__label">{{ __("Payment State") }}</div>
-												<div class="meta-pair__value">{{ __(invoice.status || "Draft") }}</div>
+												<div class="meta-pair__value">
+													{{ __(invoice.status || "Draft") }}
+												</div>
 											</div>
 										</div>
 									</div>
 
 									<div class="invoice-record-card__actions">
-										<v-btn icon="mdi-eye-outline" size="small" variant="text" :title="__('View Details')" :aria-label="__('View invoice details')" @click="viewInvoice(invoice)" />
-										<v-btn icon="mdi-printer-outline" size="small" variant="text" :title="__('Print')" :aria-label="__('Print invoice')" @click="printInvoice(invoice)" />
+										<v-btn
+											icon="mdi-eye-outline"
+											size="small"
+											variant="text"
+											:title="__('View Details')"
+											:aria-label="__('View invoice details')"
+											@click="viewInvoice(invoice)"
+										/>
+										<v-btn
+											icon="mdi-printer-outline"
+											size="small"
+											variant="text"
+											:title="__('Print')"
+											:aria-label="__('Print invoice')"
+											@click="printInvoice(invoice)"
+										/>
 										<v-btn
 											v-if="posProfile?.posa_allow_return == 1"
 											icon="mdi-backup-restore"
@@ -321,8 +456,13 @@
 								</v-card>
 							</div>
 
-							<div v-if="!loading && filteredHistoryInvoices.length && historyPageCount > 1" class="tab-pagination">
-								<div class="tab-pagination__meta">{{ paginationCaption(filteredHistoryInvoices.length, "history") }}</div>
+							<div
+								v-if="!loading && filteredHistoryInvoices.length && historyPageCount > 1"
+								class="tab-pagination"
+							>
+								<div class="tab-pagination__meta">
+									{{ paginationCaption(filteredHistoryInvoices.length, "history") }}
+								</div>
 								<v-pagination
 									:model-value="tabPages.history"
 									:length="historyPageCount"
@@ -375,16 +515,36 @@
 							</div>
 
 							<div class="status-strip mb-4">
-								<v-btn :variant="partialStatus === 'All' ? 'flat' : 'outlined'" :color="partialStatus === 'All' ? 'warning' : undefined" size="small" @click="partialStatus = 'All'">
+								<v-btn
+									:variant="partialStatus === 'All' ? 'flat' : 'outlined'"
+									:color="partialStatus === 'All' ? 'warning' : undefined"
+									size="small"
+									@click="partialStatus = 'All'"
+								>
 									{{ __("All") }} ({{ unpaidStatusCounts.all }})
 								</v-btn>
-								<v-btn :variant="partialStatus === 'Partly Paid' ? 'flat' : 'outlined'" :color="partialStatus === 'Partly Paid' ? 'warning' : undefined" size="small" @click="partialStatus = 'Partly Paid'">
+								<v-btn
+									:variant="partialStatus === 'Partly Paid' ? 'flat' : 'outlined'"
+									:color="partialStatus === 'Partly Paid' ? 'warning' : undefined"
+									size="small"
+									@click="partialStatus = 'Partly Paid'"
+								>
 									{{ __("Partly Paid") }} ({{ unpaidStatusCounts.partial }})
 								</v-btn>
-								<v-btn :variant="partialStatus === 'Unpaid' ? 'flat' : 'outlined'" :color="partialStatus === 'Unpaid' ? 'warning' : undefined" size="small" @click="partialStatus = 'Unpaid'">
+								<v-btn
+									:variant="partialStatus === 'Unpaid' ? 'flat' : 'outlined'"
+									:color="partialStatus === 'Unpaid' ? 'warning' : undefined"
+									size="small"
+									@click="partialStatus = 'Unpaid'"
+								>
 									{{ __("Unpaid") }} ({{ unpaidStatusCounts.unpaid }})
 								</v-btn>
-								<v-btn :variant="partialStatus === 'Overdue' ? 'flat' : 'outlined'" :color="partialStatus === 'Overdue' ? 'error' : undefined" size="small" @click="partialStatus = 'Overdue'">
+								<v-btn
+									:variant="partialStatus === 'Overdue' ? 'flat' : 'outlined'"
+									:color="partialStatus === 'Overdue' ? 'error' : undefined"
+									size="small"
+									@click="partialStatus = 'Overdue'"
+								>
 									{{ __("Overdue") }} ({{ unpaidStatusCounts.overdue }})
 								</v-btn>
 							</div>
@@ -393,31 +553,49 @@
 								<div class="summary-tile summary-tile--warning">
 									<div class="summary-tile__label">{{ __("Invoices") }}</div>
 									<div class="summary-tile__value">{{ filteredUnpaidSummary.count }}</div>
-									<div class="summary-tile__meta">{{ __("Invoices still carrying balances") }}</div>
+									<div class="summary-tile__meta">
+										{{ __("Invoices still carrying balances") }}
+									</div>
 								</div>
 								<div class="summary-tile summary-tile--success">
 									<div class="summary-tile__label">{{ __("Paid") }}</div>
 									<div class="summary-tile__value">
-										{{ currencySymbol(posProfile?.currency) }} {{ formatCurrency(filteredUnpaidSummary.total_paid) }}
+										{{ currencySymbol(posProfile?.currency) }}
+										{{ formatCurrency(filteredUnpaidSummary.total_paid) }}
 									</div>
 									<div class="summary-tile__meta">{{ __("Amount already received") }}</div>
 								</div>
 								<div class="summary-tile summary-tile--warning-strong">
 									<div class="summary-tile__label">{{ __("Outstanding") }}</div>
 									<div class="summary-tile__value">
-										{{ currencySymbol(posProfile?.currency) }} {{ formatCurrency(filteredUnpaidSummary.total_outstanding) }}
+										{{ currencySymbol(posProfile?.currency) }}
+										{{ formatCurrency(filteredUnpaidSummary.total_outstanding) }}
 									</div>
 									<div class="summary-tile__meta">{{ __("Open balance to collect") }}</div>
 								</div>
 								<div class="summary-tile summary-tile--danger">
 									<div class="summary-tile__label">{{ __("Overdue") }}</div>
-									<div class="summary-tile__value">{{ filteredUnpaidSummary.overdue_count }}</div>
-									<div class="summary-tile__meta">{{ __("Invoices already past due date") }}</div>
+									<div class="summary-tile__value">
+										{{ filteredUnpaidSummary.overdue_count }}
+									</div>
+									<div class="summary-tile__meta">
+										{{ __("Invoices already past due date") }}
+									</div>
 								</div>
 							</div>
 
-							<v-alert v-if="isOffline()" type="warning" variant="tonal" density="compact" class="mb-4">
-								{{ __("You are offline. Add Payment will work again when the connection is restored.") }}
+							<v-alert
+								v-if="isOffline()"
+								type="warning"
+								variant="tonal"
+								density="compact"
+								class="mb-4"
+							>
+								{{
+									__(
+										"You are offline. Add Payment will work again when the connection is restored.",
+									)
+								}}
 							</v-alert>
 
 							<div v-if="loading && activeTab === 'partial'" class="tab-loader">
@@ -428,7 +606,9 @@
 							<div v-else-if="!filteredUnpaidInvoices.length" class="empty-state">
 								<v-icon size="42" color="success">mdi-cash-check</v-icon>
 								<div class="empty-state__title">{{ __("No unpaid invoices") }}</div>
-								<div class="empty-state__subtitle">{{ __("All visible invoices are fully settled.") }}</div>
+								<div class="empty-state__subtitle">
+									{{ __("All visible invoices are fully settled.") }}
+								</div>
 							</div>
 
 							<v-data-table
@@ -440,17 +620,57 @@
 								:items-per-page="-1"
 								hide-default-footer
 							>
-								<template #item.posting_date="{ item }">{{ formatDateTime(item.posting_date, item.posting_time) }}</template>
-								<template #item.due_date="{ item }">{{ formatDateForDisplay(item.due_date) || "-" }}</template>
-								<template #item.grand_total="{ item }">{{ currencySymbol(item.currency) }} {{ formatCurrency(item.grand_total) }}</template>
-								<template #item.paid_amount="{ item }">{{ currencySymbol(item.currency) }} {{ formatCurrency(item.paid_amount || 0) }}</template>
-								<template #item.outstanding_amount="{ item }">{{ currencySymbol(item.currency) }} {{ formatCurrency(item.outstanding_amount || 0) }}</template>
-								<template #item.status="{ item }"><v-chip size="small" :color="statusColor(item.status)" variant="tonal">{{ __(item.status || "Unpaid") }}</v-chip></template>
+								<template #item.posting_date="{ item }">{{
+									formatDateTime(item.posting_date, item.posting_time)
+								}}</template>
+								<template #item.due_date="{ item }">{{
+									formatDateForDisplay(item.due_date) || "-"
+								}}</template>
+								<template #item.grand_total="{ item }"
+									>{{ currencySymbol(item.currency) }}
+									{{ formatCurrency(item.grand_total) }}</template
+								>
+								<template #item.paid_amount="{ item }"
+									>{{ currencySymbol(item.currency) }}
+									{{ formatCurrency(item.paid_amount || 0) }}</template
+								>
+								<template #item.outstanding_amount="{ item }"
+									>{{ currencySymbol(item.currency) }}
+									{{ formatCurrency(item.outstanding_amount || 0) }}</template
+								>
+								<template #item.status="{ item }"
+									><v-chip size="small" :color="statusColor(item.status)" variant="tonal">{{
+										__(item.status || "Unpaid")
+									}}</v-chip></template
+								>
 								<template #item.actions="{ item }">
 									<div class="d-flex justify-end ga-1">
-										<v-btn icon="mdi-cash-plus" variant="text" size="small" color="warning" :disabled="isOffline()" :title="__('Add Payment')" :aria-label="__('Add payment to invoice')" @click="openAddPayment(item)" />
-										<v-btn icon="mdi-eye-outline" variant="text" size="small" :title="__('View Details')" :aria-label="__('View invoice details')" @click="viewInvoice(item)" />
-										<v-btn icon="mdi-printer-outline" variant="text" size="small" :title="__('Print')" :aria-label="__('Print invoice')" @click="printInvoice(item)" />
+										<v-btn
+											icon="mdi-cash-plus"
+											variant="text"
+											size="small"
+											color="warning"
+											:disabled="isOffline()"
+											:title="__('Add Payment')"
+											:aria-label="__('Add payment to invoice')"
+											@click="openAddPayment(item)"
+										/>
+										<v-btn
+											icon="mdi-eye-outline"
+											variant="text"
+											size="small"
+											:title="__('View Details')"
+											:aria-label="__('View invoice details')"
+											@click="viewInvoice(item)"
+										/>
+										<v-btn
+											icon="mdi-printer-outline"
+											variant="text"
+											size="small"
+											:title="__('Print')"
+											:aria-label="__('Print invoice')"
+											@click="printInvoice(item)"
+										/>
 									</div>
 								</template>
 							</v-data-table>
@@ -459,19 +679,33 @@
 								<v-card
 									v-for="invoice in paginatedUnpaidInvoices"
 									:key="invoice.name"
-									:class="['invoice-record-card', 'invoice-record-card--unpaid', `invoice-record-card--${toneFromStatus(invoice.status)}`]"
+									:class="[
+										'invoice-record-card',
+										'invoice-record-card--unpaid',
+										`invoice-record-card--${toneFromStatus(invoice.status)}`,
+									]"
 									variant="flat"
 								>
 									<div class="invoice-record-card__hero invoice-record-card__hero--warm">
 										<div>
 											<div class="invoice-record-card__title-row">
-												<div class="invoice-record-card__title">{{ invoice.name }}</div>
-												<v-chip size="small" :color="statusColor(invoice.status)" variant="flat">
+												<div class="invoice-record-card__title">
+													{{ invoice.name }}
+												</div>
+												<v-chip
+													size="small"
+													:color="statusColor(invoice.status)"
+													variant="flat"
+												>
 													{{ __(invoice.status || "Unpaid") }}
 												</v-chip>
 											</div>
 											<div class="invoice-record-card__subtitle">
-												{{ invoice.customer_name || invoice.customer || __("Walk-in Customer") }}
+												{{
+													invoice.customer_name ||
+													invoice.customer ||
+													__("Walk-in Customer")
+												}}
 											</div>
 										</div>
 										<div class="d-flex flex-column align-end ga-2">
@@ -479,9 +713,12 @@
 												{{ dueLabel(invoice) }}
 											</v-chip>
 											<div class="invoice-record-card__amount-block">
-												<div class="invoice-record-card__amount-label">{{ __("Outstanding") }}</div>
+												<div class="invoice-record-card__amount-label">
+													{{ __("Outstanding") }}
+												</div>
 												<div class="invoice-record-card__amount">
-													{{ currencySymbol(invoice.currency) }} {{ formatCurrency(invoice.outstanding_amount || 0) }}
+													{{ currencySymbol(invoice.currency) }}
+													{{ formatCurrency(invoice.outstanding_amount || 0) }}
 												</div>
 											</div>
 										</div>
@@ -491,22 +728,33 @@
 										<div class="meta-pair-grid meta-pair-grid--compact">
 											<div class="meta-pair">
 												<div class="meta-pair__label">{{ __("Posting") }}</div>
-												<div class="meta-pair__value">{{ formatDateTime(invoice.posting_date, invoice.posting_time) }}</div>
+												<div class="meta-pair__value">
+													{{
+														formatDateTime(
+															invoice.posting_date,
+															invoice.posting_time,
+														)
+													}}
+												</div>
 											</div>
 											<div class="meta-pair">
 												<div class="meta-pair__label">{{ __("Due Date") }}</div>
-												<div class="meta-pair__value">{{ formatDateForDisplay(invoice.due_date) || "-" }}</div>
+												<div class="meta-pair__value">
+													{{ formatDateForDisplay(invoice.due_date) || "-" }}
+												</div>
 											</div>
 											<div class="meta-pair">
 												<div class="meta-pair__label">{{ __("Grand Total") }}</div>
 												<div class="meta-pair__value">
-													{{ currencySymbol(invoice.currency) }} {{ formatCurrency(invoice.grand_total) }}
+													{{ currencySymbol(invoice.currency) }}
+													{{ formatCurrency(invoice.grand_total) }}
 												</div>
 											</div>
 											<div class="meta-pair">
 												<div class="meta-pair__label">{{ __("Paid") }}</div>
 												<div class="meta-pair__value meta-pair__value--success">
-													{{ currencySymbol(invoice.currency) }} {{ formatCurrency(invoice.paid_amount || 0) }}
+													{{ currencySymbol(invoice.currency) }}
+													{{ formatCurrency(invoice.paid_amount || 0) }}
 												</div>
 											</div>
 										</div>
@@ -516,22 +764,54 @@
 												<span>{{ __("Payment Progress") }}</span>
 												<span>{{ formatFloat(paymentProgress(invoice)) }}%</span>
 											</div>
-											<v-progress-linear :model-value="paymentProgress(invoice)" color="success" bg-color="grey-lighten-2" height="8" rounded />
+											<v-progress-linear
+												:model-value="paymentProgress(invoice)"
+												color="success"
+												bg-color="grey-lighten-2"
+												height="8"
+												rounded
+											/>
 										</div>
 									</div>
 
 									<div class="invoice-record-card__actions">
-										<v-btn prepend-icon="mdi-cash-plus" size="small" variant="flat" color="warning" :disabled="isOffline()" @click="openAddPayment(invoice)">
+										<v-btn
+											prepend-icon="mdi-cash-plus"
+											size="small"
+											variant="flat"
+											color="warning"
+											:disabled="isOffline()"
+											@click="openAddPayment(invoice)"
+										>
 											{{ __("Add Payment") }}
 										</v-btn>
-										<v-btn icon="mdi-eye-outline" size="small" variant="text" :title="__('View Details')" :aria-label="__('View invoice details')" @click="viewInvoice(invoice)" />
-										<v-btn icon="mdi-printer-outline" size="small" variant="text" :title="__('Print')" :aria-label="__('Print invoice')" @click="printInvoice(invoice)" />
+										<v-btn
+											icon="mdi-eye-outline"
+											size="small"
+											variant="text"
+											:title="__('View Details')"
+											:aria-label="__('View invoice details')"
+											@click="viewInvoice(invoice)"
+										/>
+										<v-btn
+											icon="mdi-printer-outline"
+											size="small"
+											variant="text"
+											:title="__('Print')"
+											:aria-label="__('Print invoice')"
+											@click="printInvoice(invoice)"
+										/>
 									</div>
 								</v-card>
 							</div>
 
-							<div v-if="!loading && filteredUnpaidInvoices.length && partialPageCount > 1" class="tab-pagination">
-								<div class="tab-pagination__meta">{{ paginationCaption(filteredUnpaidInvoices.length, "partial") }}</div>
+							<div
+								v-if="!loading && filteredUnpaidInvoices.length && partialPageCount > 1"
+								class="tab-pagination"
+							>
+								<div class="tab-pagination__meta">
+									{{ paginationCaption(filteredUnpaidInvoices.length, "partial") }}
+								</div>
 								<v-pagination
 									:model-value="tabPages.partial"
 									:length="partialPageCount"
@@ -591,14 +871,33 @@
 							</div>
 
 							<div v-else-if="!filteredDraftInvoices.length" class="empty-state">
-								<v-icon size="42" :color="currentDraftSourceOption.color">{{ currentDraftSourceOption.icon }}</v-icon>
-								<div class="empty-state__title">{{ __(currentDraftSourceOption.emptyTitle) }}</div>
-								<div class="empty-state__subtitle">{{ __(currentDraftSourceOption.emptySubtitle) }}</div>
+								<v-icon size="42" :color="currentDraftSourceOption.color">{{
+									currentDraftSourceOption.icon
+								}}</v-icon>
+								<div class="empty-state__title">
+									{{ __(currentDraftSourceOption.emptyTitle) }}
+								</div>
+								<div class="empty-state__subtitle">
+									{{ __(currentDraftSourceOption.emptySubtitle) }}
+								</div>
 							</div>
 
-							<v-data-table v-else-if="viewMode === 'list'" :headers="draftHeaders" :items="paginatedDraftInvoices" item-value="name" class="elevation-1" :items-per-page="-1" hide-default-footer>
-								<template #item.posting_date="{ item }">{{ formatDateTime(item.posting_date, item.posting_time) }}</template>
-								<template #item.grand_total="{ item }">{{ currencySymbol(item.currency) }} {{ formatCurrency(item.grand_total) }}</template>
+							<v-data-table
+								v-else-if="viewMode === 'list'"
+								:headers="draftHeaders"
+								:items="paginatedDraftInvoices"
+								item-value="name"
+								class="elevation-1"
+								:items-per-page="-1"
+								hide-default-footer
+							>
+								<template #item.posting_date="{ item }">{{
+									formatDateTime(item.posting_date, item.posting_time)
+								}}</template>
+								<template #item.grand_total="{ item }"
+									>{{ currencySymbol(item.currency) }}
+									{{ formatCurrency(item.grand_total) }}</template
+								>
 								<template #item.actions="{ item }">
 									<div class="d-flex justify-end ga-1">
 										<v-btn
@@ -637,19 +936,32 @@
 									<div class="invoice-record-card__hero invoice-record-card__hero--draft">
 										<div>
 											<div class="invoice-record-card__title-row">
-												<div class="invoice-record-card__title">{{ invoice.name }}</div>
-												<v-chip size="small" :color="currentDraftSourceOption.color" variant="flat">
+												<div class="invoice-record-card__title">
+													{{ invoice.name }}
+												</div>
+												<v-chip
+													size="small"
+													:color="currentDraftSourceOption.color"
+													variant="flat"
+												>
 													{{ draftSourceChipLabel(invoice) }}
 												</v-chip>
 											</div>
 											<div class="invoice-record-card__subtitle">
-												{{ invoice.customer_name || invoice.customer || __("Walk-in Customer") }}
+												{{
+													invoice.customer_name ||
+													invoice.customer ||
+													__("Walk-in Customer")
+												}}
 											</div>
 										</div>
 										<div class="invoice-record-card__amount-block">
-											<div class="invoice-record-card__amount-label">{{ __("Total") }}</div>
+											<div class="invoice-record-card__amount-label">
+												{{ __("Total") }}
+											</div>
 											<div class="invoice-record-card__amount">
-												{{ currencySymbol(invoice.currency) }} {{ formatCurrency(invoice.grand_total) }}
+												{{ currencySymbol(invoice.currency) }}
+												{{ formatCurrency(invoice.grand_total) }}
 											</div>
 										</div>
 									</div>
@@ -658,11 +970,22 @@
 										<div class="meta-pair-grid">
 											<div class="meta-pair">
 												<div class="meta-pair__label">{{ __("Posting") }}</div>
-												<div class="meta-pair__value">{{ formatDateTime(invoice.posting_date, invoice.posting_time) }}</div>
+												<div class="meta-pair__value">
+													{{
+														formatDateTime(
+															invoice.posting_date,
+															invoice.posting_time,
+														)
+													}}
+												</div>
 											</div>
 											<div class="meta-pair">
-												<div class="meta-pair__label">{{ draftSecondaryMetaLabel(invoice).label }}</div>
-												<div class="meta-pair__value">{{ draftSecondaryMetaLabel(invoice).value }}</div>
+												<div class="meta-pair__label">
+													{{ draftSecondaryMetaLabel(invoice).label }}
+												</div>
+												<div class="meta-pair__value">
+													{{ draftSecondaryMetaLabel(invoice).value }}
+												</div>
 											</div>
 										</div>
 									</div>
@@ -692,8 +1015,13 @@
 								</v-card>
 							</div>
 
-							<div v-if="!loading && filteredDraftInvoices.length && draftsPageCount > 1" class="tab-pagination">
-								<div class="tab-pagination__meta">{{ paginationCaption(filteredDraftInvoices.length, "drafts") }}</div>
+							<div
+								v-if="!loading && filteredDraftInvoices.length && draftsPageCount > 1"
+								class="tab-pagination"
+							>
+								<div class="tab-pagination__meta">
+									{{ paginationCaption(filteredDraftInvoices.length, "drafts") }}
+								</div>
 								<v-pagination
 									:model-value="tabPages.drafts"
 									:length="draftsPageCount"
@@ -744,17 +1072,48 @@
 							<div v-else-if="!filteredReturnInvoices.length" class="empty-state">
 								<v-icon size="42" color="error">mdi-backup-restore</v-icon>
 								<div class="empty-state__title">{{ __("No return invoices found") }}</div>
-								<div class="empty-state__subtitle">{{ __("Completed returns will appear here.") }}</div>
+								<div class="empty-state__subtitle">
+									{{ __("Completed returns will appear here.") }}
+								</div>
 							</div>
 
-							<v-data-table v-else-if="viewMode === 'list'" :headers="returnHeaders" :items="paginatedReturnInvoices" item-value="name" class="elevation-1" :items-per-page="-1" hide-default-footer>
-								<template #item.posting_date="{ item }">{{ formatDateTime(item.posting_date, item.posting_time) }}</template>
-								<template #item.grand_total="{ item }">{{ currencySymbol(item.currency) }} {{ formatCurrency(item.grand_total) }}</template>
-								<template #item.return_against="{ item }">{{ item.return_against || "-" }}</template>
+							<v-data-table
+								v-else-if="viewMode === 'list'"
+								:headers="returnHeaders"
+								:items="paginatedReturnInvoices"
+								item-value="name"
+								class="elevation-1"
+								:items-per-page="-1"
+								hide-default-footer
+							>
+								<template #item.posting_date="{ item }">{{
+									formatDateTime(item.posting_date, item.posting_time)
+								}}</template>
+								<template #item.grand_total="{ item }"
+									>{{ currencySymbol(item.currency) }}
+									{{ formatCurrency(item.grand_total) }}</template
+								>
+								<template #item.return_against="{ item }">{{
+									item.return_against || "-"
+								}}</template>
 								<template #item.actions="{ item }">
 									<div class="d-flex justify-end ga-1">
-										<v-btn icon="mdi-eye-outline" variant="text" size="small" :title="__('View Details')" :aria-label="__('View invoice details')" @click="viewInvoice(item)" />
-										<v-btn icon="mdi-printer-outline" variant="text" size="small" :title="__('Print')" :aria-label="__('Print invoice')" @click="printInvoice(item)" />
+										<v-btn
+											icon="mdi-eye-outline"
+											variant="text"
+											size="small"
+											:title="__('View Details')"
+											:aria-label="__('View invoice details')"
+											@click="viewInvoice(item)"
+										/>
+										<v-btn
+											icon="mdi-printer-outline"
+											variant="text"
+											size="small"
+											:title="__('Print')"
+											:aria-label="__('Print invoice')"
+											@click="printInvoice(item)"
+										/>
 									</div>
 								</template>
 							</v-data-table>
@@ -769,17 +1128,28 @@
 									<div class="invoice-record-card__hero invoice-record-card__hero--return">
 										<div>
 											<div class="invoice-record-card__title-row">
-												<div class="invoice-record-card__title">{{ invoice.name }}</div>
-												<v-chip size="small" color="error" variant="flat">{{ __("Return") }}</v-chip>
+												<div class="invoice-record-card__title">
+													{{ invoice.name }}
+												</div>
+												<v-chip size="small" color="error" variant="flat">{{
+													__("Return")
+												}}</v-chip>
 											</div>
 											<div class="invoice-record-card__subtitle">
-												{{ invoice.customer_name || invoice.customer || __("Walk-in Customer") }}
+												{{
+													invoice.customer_name ||
+													invoice.customer ||
+													__("Walk-in Customer")
+												}}
 											</div>
 										</div>
 										<div class="invoice-record-card__amount-block">
-											<div class="invoice-record-card__amount-label">{{ __("Total") }}</div>
+											<div class="invoice-record-card__amount-label">
+												{{ __("Total") }}
+											</div>
 											<div class="invoice-record-card__amount">
-												{{ currencySymbol(invoice.currency) }} {{ formatCurrency(invoice.grand_total) }}
+												{{ currencySymbol(invoice.currency) }}
+												{{ formatCurrency(invoice.grand_total) }}
 											</div>
 										</div>
 									</div>
@@ -788,24 +1158,52 @@
 										<div class="meta-pair-grid">
 											<div class="meta-pair">
 												<div class="meta-pair__label">{{ __("Posting") }}</div>
-												<div class="meta-pair__value">{{ formatDateTime(invoice.posting_date, invoice.posting_time) }}</div>
+												<div class="meta-pair__value">
+													{{
+														formatDateTime(
+															invoice.posting_date,
+															invoice.posting_time,
+														)
+													}}
+												</div>
 											</div>
 											<div class="meta-pair">
 												<div class="meta-pair__label">{{ __("Against") }}</div>
-												<div class="meta-pair__value">{{ invoice.return_against || "-" }}</div>
+												<div class="meta-pair__value">
+													{{ invoice.return_against || "-" }}
+												</div>
 											</div>
 										</div>
 									</div>
 
 									<div class="invoice-record-card__actions">
-										<v-btn icon="mdi-eye-outline" size="small" variant="text" :title="__('View Details')" :aria-label="__('View invoice details')" @click="viewInvoice(invoice)" />
-										<v-btn icon="mdi-printer-outline" size="small" variant="text" :title="__('Print')" :aria-label="__('Print invoice')" @click="printInvoice(invoice)" />
+										<v-btn
+											icon="mdi-eye-outline"
+											size="small"
+											variant="text"
+											:title="__('View Details')"
+											:aria-label="__('View invoice details')"
+											@click="viewInvoice(invoice)"
+										/>
+										<v-btn
+											icon="mdi-printer-outline"
+											size="small"
+											variant="text"
+											:title="__('Print')"
+											:aria-label="__('Print invoice')"
+											@click="printInvoice(invoice)"
+										/>
 									</div>
 								</v-card>
 							</div>
 
-							<div v-if="!loading && filteredReturnInvoices.length && returnsPageCount > 1" class="tab-pagination">
-								<div class="tab-pagination__meta">{{ paginationCaption(filteredReturnInvoices.length, "returns") }}</div>
+							<div
+								v-if="!loading && filteredReturnInvoices.length && returnsPageCount > 1"
+								class="tab-pagination"
+							>
+								<div class="tab-pagination__meta">
+									{{ paginationCaption(filteredReturnInvoices.length, "returns") }}
+								</div>
 								<v-pagination
 									:model-value="tabPages.returns"
 									:length="returnsPageCount"
@@ -827,14 +1225,27 @@
 	</v-row>
 
 	<v-dialog v-model="detailDialog" max-width="1040px" scrollable :theme="isDarkTheme ? 'dark' : 'light'">
-		<v-card :class="['invoice-detail-card', isDarkTheme ? 'invoice-detail-card--dark' : 'invoice-detail-card--light']">
+		<v-card
+			:class="[
+				'invoice-detail-card',
+				isDarkTheme ? 'invoice-detail-card--dark' : 'invoice-detail-card--light',
+			]"
+		>
 			<v-card-title class="d-flex align-center justify-space-between flex-wrap ga-3">
 				<div>
 					<div class="text-h6">{{ selectedInvoiceDetail?.name || __("Invoice Details") }}</div>
-					<div class="text-subtitle-2 text-medium-emphasis">{{ selectedInvoiceDetail?.customer_name || selectedInvoiceDetail?.customer || "" }}</div>
+					<div class="text-subtitle-2 text-medium-emphasis">
+						{{ selectedInvoiceDetail?.customer_name || selectedInvoiceDetail?.customer || "" }}
+					</div>
 				</div>
 				<div class="d-flex align-center ga-2">
-					<v-chip v-if="selectedInvoiceDetail?.status" size="small" :color="statusColor(selectedInvoiceDetail.status)" variant="tonal">{{ __(selectedInvoiceDetail.status) }}</v-chip>
+					<v-chip
+						v-if="selectedInvoiceDetail?.status"
+						size="small"
+						:color="statusColor(selectedInvoiceDetail.status)"
+						variant="tonal"
+						>{{ __(selectedInvoiceDetail.status) }}</v-chip
+					>
 					<v-chip
 						v-if="selectedInvoiceDetail && changeAllocationRepairState(selectedInvoiceDetail)"
 						size="small"
@@ -843,28 +1254,89 @@
 					>
 						{{ repairStateLabel(changeAllocationRepairState(selectedInvoiceDetail)) }}
 					</v-chip>
-					<v-btn icon="mdi-close" variant="text" :aria-label="__('Close invoice details dialog')" @click="detailDialog = false" />
+					<v-btn
+						icon="mdi-close"
+						variant="text"
+						:aria-label="__('Close invoice details dialog')"
+						@click="detailDialog = false"
+					/>
 				</div>
 			</v-card-title>
 			<v-divider />
 			<v-card-text v-if="selectedInvoiceDetail">
 				<div class="summary-grid mb-4">
-					<div class="summary-tile"><div class="summary-tile__label">{{ __("Posting") }}</div><div class="summary-tile__value">{{ formatDateTime(selectedInvoiceDetail.posting_date, selectedInvoiceDetail.posting_time) }}</div></div>
-					<div class="summary-tile"><div class="summary-tile__label">{{ __("Grand Total") }}</div><div class="summary-tile__value">{{ currencySymbol(selectedInvoiceDetail.currency) }} {{ formatCurrency(selectedInvoiceDetail.grand_total) }}</div></div>
-					<div class="summary-tile"><div class="summary-tile__label">{{ __("Outstanding") }}</div><div class="summary-tile__value">{{ currencySymbol(selectedInvoiceDetail.currency) }} {{ formatCurrency(selectedInvoiceDetail.outstanding_amount || 0) }}</div></div>
-					<div class="summary-tile"><div class="summary-tile__label">{{ __("Items") }}</div><div class="summary-tile__value">{{ (selectedInvoiceDetail.items || []).length }}</div></div>
+					<div class="summary-tile">
+						<div class="summary-tile__label">{{ __("Posting") }}</div>
+						<div class="summary-tile__value">
+							{{
+								formatDateTime(
+									selectedInvoiceDetail.posting_date,
+									selectedInvoiceDetail.posting_time,
+								)
+							}}
+						</div>
+					</div>
+					<div class="summary-tile">
+						<div class="summary-tile__label">{{ __("Grand Total") }}</div>
+						<div class="summary-tile__value">
+							{{ currencySymbol(selectedInvoiceDetail.currency) }}
+							{{ formatCurrency(selectedInvoiceDetail.grand_total) }}
+						</div>
+					</div>
+					<div class="summary-tile">
+						<div class="summary-tile__label">{{ __("Outstanding") }}</div>
+						<div class="summary-tile__value">
+							{{ currencySymbol(selectedInvoiceDetail.currency) }}
+							{{ formatCurrency(selectedInvoiceDetail.outstanding_amount || 0) }}
+						</div>
+					</div>
+					<div class="summary-tile">
+						<div class="summary-tile__label">{{ __("Items") }}</div>
+						<div class="summary-tile__value">
+							{{ (selectedInvoiceDetail.items || []).length }}
+						</div>
+					</div>
 				</div>
 				<div class="detail-section__title">{{ __("Items") }}</div>
-				<v-data-table :headers="detailHeaders" :items="selectedInvoiceDetail.items || []" item-value="item_code" :items-per-page="10" class="elevation-1">
+				<v-data-table
+					:headers="detailHeaders"
+					:items="selectedInvoiceDetail.items || []"
+					item-value="item_code"
+					:items-per-page="10"
+					class="elevation-1"
+				>
 					<template #item.qty="{ item }">{{ formatFloat(item.qty || 0) }}</template>
-					<template #item.rate="{ item }">{{ currencySymbol(selectedInvoiceDetail.currency) }} {{ formatCurrency(item.rate) }}</template>
-					<template #item.amount="{ item }">{{ currencySymbol(selectedInvoiceDetail.currency) }} {{ formatCurrency(item.amount) }}</template>
+					<template #item.rate="{ item }"
+						>{{ currencySymbol(selectedInvoiceDetail.currency) }}
+						{{ formatCurrency(item.rate) }}</template
+					>
+					<template #item.amount="{ item }"
+						>{{ currencySymbol(selectedInvoiceDetail.currency) }}
+						{{ formatCurrency(item.amount) }}</template
+					>
 				</v-data-table>
 				<div class="detail-section__title mt-4">{{ __("Payment History") }}</div>
-				<v-data-table :headers="paymentHeaders" :items="selectedInvoiceDetail.payments || []" item-value="mode_of_payment" :items-per-page="5" class="elevation-1">
-					<template #item.amount="{ item }">{{ currencySymbol(selectedInvoiceDetail.currency) }} {{ formatCurrency(item.amount || 0) }}</template>
+				<v-data-table
+					:headers="paymentHeaders"
+					:items="selectedInvoiceDetail.payments || []"
+					item-value="mode_of_payment"
+					:items-per-page="5"
+					class="elevation-1"
+				>
+					<template #item.amount="{ item }"
+						>{{ currencySymbol(selectedInvoiceDetail.currency) }}
+						{{ formatCurrency(item.amount || 0) }}</template
+					>
 				</v-data-table>
-				<div v-if="!Array.isArray(selectedInvoiceDetail.payments) || !selectedInvoiceDetail.payments.length" class="text-caption text-medium-emphasis mt-2">{{ __("No payment rows available on this invoice.") }}</div>
+				<div
+					v-if="
+						!Array.isArray(selectedInvoiceDetail.payments) ||
+						!selectedInvoiceDetail.payments.length
+					"
+					class="text-caption text-medium-emphasis mt-2"
+				>
+					{{ __("No payment rows available on this invoice.") }}
+				</div>
 			</v-card-text>
 			<v-card-actions>
 				<v-spacer />
@@ -879,8 +1351,22 @@
 				>
 					{{ __("Repair Change Allocation") }}
 				</v-btn>
-				<v-btn v-if="selectedInvoiceDetail && Number(selectedInvoiceDetail.outstanding_amount || 0) > 0" color="warning" variant="text" prepend-icon="mdi-cash-plus" @click="openAddPayment(selectedInvoiceDetail)">{{ __("Add Payment") }}</v-btn>
-				<v-btn v-if="selectedInvoiceDetail" color="primary" variant="text" prepend-icon="mdi-printer-outline" @click="printInvoice(selectedInvoiceDetail)">{{ __("Print") }}</v-btn>
+				<v-btn
+					v-if="selectedInvoiceDetail && Number(selectedInvoiceDetail.outstanding_amount || 0) > 0"
+					color="warning"
+					variant="text"
+					prepend-icon="mdi-cash-plus"
+					@click="openAddPayment(selectedInvoiceDetail)"
+					>{{ __("Add Payment") }}</v-btn
+				>
+				<v-btn
+					v-if="selectedInvoiceDetail"
+					color="primary"
+					variant="text"
+					prepend-icon="mdi-printer-outline"
+					@click="printInvoice(selectedInvoiceDetail)"
+					>{{ __("Print") }}</v-btn
+				>
 			</v-card-actions>
 		</v-card>
 	</v-dialog>
@@ -899,7 +1385,12 @@ import { useUIStore } from "../../../stores/uiStore";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { useCustomersStore } from "../../../stores/customersStore";
 import { useEmployeeStore } from "../../../stores/employeeStore";
-import { appendDebugPrintParam, isDebugPrintEnabled, silentPrint, watchPrintWindow } from "../../../plugins/print";
+import {
+	appendDebugPrintParam,
+	isDebugPrintEnabled,
+	silentPrint,
+	watchPrintWindow,
+} from "../../../plugins/print";
 import { printDocumentViaQz } from "../../../services/qzTray";
 import { isOffline } from "../../../../offline/index";
 import DocumentSourceSelector from "../shared/DocumentSourceSelector.vue";
@@ -941,7 +1432,8 @@ export default {
 		const invoiceManagementDialogMaxWidth = computed(() =>
 			responsive.windowWidth.value < 1100 ? "100vw" : "1420px",
 		);
-		const { invoiceManagementDialog, invoiceManagementTargetTab, posProfile, posOpeningShift } = storeToRefs(uiStore);
+		const { invoiceManagementDialog, invoiceManagementTargetTab, posProfile, posOpeningShift } =
+			storeToRefs(uiStore);
 		const { currentCashier } = storeToRefs(employeeStore);
 		return {
 			uiStore,
@@ -1009,14 +1501,55 @@ export default {
 		selectedInvoiceDetail: null,
 		partialStatusItems: ["All", "Partly Paid", "Unpaid", "Overdue"],
 		historyStatusItems: ["All", "Paid", "Partly Paid", "Unpaid", "Overdue", "Credit Note Issued"],
-		partialHeaders: [{ title: __("Invoice"), key: "name" }, { title: __("Customer"), key: "customer_name" }, { title: __("Posting"), key: "posting_date" }, { title: __("Due Date"), key: "due_date" }, { title: __("Status"), key: "status" }, { title: __("Total"), key: "grand_total", align: "end" }, { title: __("Paid"), key: "paid_amount", align: "end" }, { title: __("Outstanding"), key: "outstanding_amount", align: "end" }, { title: __("Actions"), key: "actions", align: "end", sortable: false }],
-		historyHeaders: [{ title: __("Invoice"), key: "name" }, { title: __("Customer"), key: "customer_name" }, { title: __("Posting"), key: "posting_date" }, { title: __("Status"), key: "status" }, { title: __("Total"), key: "grand_total", align: "end" }, { title: __("Tendered"), key: "paid_amount", align: "end" }, { title: __("Change Return"), key: "change_amount", align: "end" }, { title: __("Outstanding"), key: "outstanding_amount", align: "end" }, { title: __("Actions"), key: "actions", align: "end", sortable: false }],
-		returnHeaders: [{ title: __("Invoice"), key: "name" }, { title: __("Customer"), key: "customer_name" }, { title: __("Posting"), key: "posting_date" }, { title: __("Against"), key: "return_against" }, { title: __("Total"), key: "grand_total", align: "end" }, { title: __("Actions"), key: "actions", align: "end", sortable: false }],
-		detailHeaders: [{ title: __("Item"), key: "item_name" }, { title: __("Code"), key: "item_code" }, { title: __("Qty"), key: "qty", align: "end" }, { title: __("Rate"), key: "rate", align: "end" }, { title: __("Amount"), key: "amount", align: "end" }],
-		paymentHeaders: [{ title: __("Mode"), key: "mode_of_payment" }, { title: __("Amount"), key: "amount", align: "end" }, { title: __("Account"), key: "account" }],
+		partialHeaders: [
+			{ title: __("Invoice"), key: "name" },
+			{ title: __("Customer"), key: "customer_name" },
+			{ title: __("Posting"), key: "posting_date" },
+			{ title: __("Due Date"), key: "due_date" },
+			{ title: __("Status"), key: "status" },
+			{ title: __("Total"), key: "grand_total", align: "end" },
+			{ title: __("Paid"), key: "paid_amount", align: "end" },
+			{ title: __("Outstanding"), key: "outstanding_amount", align: "end" },
+			{ title: __("Actions"), key: "actions", align: "end", sortable: false },
+		],
+		historyHeaders: [
+			{ title: __("Invoice"), key: "name" },
+			{ title: __("Customer"), key: "customer_name" },
+			{ title: __("Posting"), key: "posting_date" },
+			{ title: __("Status"), key: "status" },
+			{ title: __("Total"), key: "grand_total", align: "end" },
+			{ title: __("Tendered"), key: "paid_amount", align: "end" },
+			{ title: __("Change Return"), key: "change_amount", align: "end" },
+			{ title: __("Outstanding"), key: "outstanding_amount", align: "end" },
+			{ title: __("Actions"), key: "actions", align: "end", sortable: false },
+		],
+		returnHeaders: [
+			{ title: __("Invoice"), key: "name" },
+			{ title: __("Customer"), key: "customer_name" },
+			{ title: __("Posting"), key: "posting_date" },
+			{ title: __("Against"), key: "return_against" },
+			{ title: __("Total"), key: "grand_total", align: "end" },
+			{ title: __("Actions"), key: "actions", align: "end", sortable: false },
+		],
+		detailHeaders: [
+			{ title: __("Item"), key: "item_name" },
+			{ title: __("Code"), key: "item_code" },
+			{ title: __("Qty"), key: "qty", align: "end" },
+			{ title: __("Rate"), key: "rate", align: "end" },
+			{ title: __("Amount"), key: "amount", align: "end" },
+		],
+		paymentHeaders: [
+			{ title: __("Mode"), key: "mode_of_payment" },
+			{ title: __("Amount"), key: "amount", align: "end" },
+			{ title: __("Account"), key: "account" },
+		],
 	}),
 	computed: {
-		currentInvoiceDoctype() { return this.posProfile?.create_pos_invoice_instead_of_sales_invoice ? "POS Invoice" : "Sales Invoice"; },
+		currentInvoiceDoctype() {
+			return this.posProfile?.create_pos_invoice_instead_of_sales_invoice
+				? "POS Invoice"
+				: "Sales Invoice";
+		},
 		availableDraftSources() {
 			return getAvailableCommercialDocumentSources(this.posProfile);
 		},
@@ -1056,13 +1589,25 @@ export default {
 			);
 			return [
 				{ title: __("All"), value: "All" },
-				...Array.from(profileNames).sort((left, right) => String(left).localeCompare(String(right))).map((profileName) => ({
-					title: profileName,
-					value: profileName,
-				})),
+				...Array.from(profileNames)
+					.sort((left, right) => String(left).localeCompare(String(right)))
+					.map((profileName) => ({
+						title: profileName,
+						value: profileName,
+					})),
 			];
 		},
-		filteredUnpaidInvoices() { return this.sortInvoicesByLatest(this.filterCollection(this.unpaidInvoices, this.partialSearch, this.partialStatus, this.partialDateFrom, this.partialDateTo)); },
+		filteredUnpaidInvoices() {
+			return this.sortInvoicesByLatest(
+				this.filterCollection(
+					this.unpaidInvoices,
+					this.partialSearch,
+					this.partialStatus,
+					this.partialDateFrom,
+					this.partialDateTo,
+				),
+			);
+		},
 		filteredHistoryInvoices() {
 			const visibleInvoices = this.historyInvoices.filter((invoice) => !invoice.is_return);
 			const candidateScopedInvoices = this.historyShowRepairCandidatesOnly
@@ -1080,42 +1625,73 @@ export default {
 		},
 		historyRepairCandidateCount() {
 			return this.filterCollection(
-				this.historyInvoices.filter((invoice) => !invoice.is_return && this.changeAllocationRepairState(invoice) !== null),
+				this.historyInvoices.filter(
+					(invoice) => !invoice.is_return && this.changeAllocationRepairState(invoice) !== null,
+				),
 				this.historySearch,
 				this.historyStatus,
 				this.historyDateFrom,
 				this.historyDateTo,
 			).length;
 		},
-		filteredDraftInvoices() { return this.sortInvoicesByLatest(this.filterCollection(this.draftRecords, this.draftSearch, "All", this.draftDateFrom, this.draftDateTo)); },
-		filteredReturnInvoices() { return this.sortInvoicesByLatest(this.filterCollection(this.historyInvoices.filter((d) => d.is_return), this.returnSearch, "All", this.returnDateFrom, this.returnDateTo)); },
+		filteredDraftInvoices() {
+			return this.sortInvoicesByLatest(
+				this.filterCollection(
+					this.draftRecords,
+					this.draftSearch,
+					"All",
+					this.draftDateFrom,
+					this.draftDateTo,
+				),
+			);
+		},
+		filteredReturnInvoices() {
+			return this.sortInvoicesByLatest(
+				this.filterCollection(
+					this.historyInvoices.filter((d) => d.is_return),
+					this.returnSearch,
+					"All",
+					this.returnDateFrom,
+					this.returnDateTo,
+				),
+			);
+		},
 		filteredUnpaidSummary() {
-			return this.filteredUnpaidInvoices.reduce((accumulator, invoice) => {
-				accumulator.count += 1;
-				accumulator.total_paid += Number(invoice.paid_amount || 0);
-				accumulator.total_outstanding += Number(invoice.outstanding_amount || 0);
-				if (this.isOverdue(invoice)) accumulator.overdue_count += 1;
-				return accumulator;
-			}, { count: 0, total_paid: 0, total_outstanding: 0, overdue_count: 0 });
+			return this.filteredUnpaidInvoices.reduce(
+				(accumulator, invoice) => {
+					accumulator.count += 1;
+					accumulator.total_paid += Number(invoice.paid_amount || 0);
+					accumulator.total_outstanding += Number(invoice.outstanding_amount || 0);
+					if (this.isOverdue(invoice)) accumulator.overdue_count += 1;
+					return accumulator;
+				},
+				{ count: 0, total_paid: 0, total_outstanding: 0, overdue_count: 0 },
+			);
 		},
 		historyTotals() {
-			return this.filteredHistoryInvoices.reduce((accumulator, invoice) => {
-				accumulator.gross += Number(invoice.grand_total || 0);
-				accumulator.paid += Number(invoice.paid_amount || 0);
-				accumulator.change_return += Number(invoice.change_amount || 0);
-				accumulator.outstanding += Number(invoice.outstanding_amount || 0);
-				return accumulator;
-			}, { gross: 0, paid: 0, change_return: 0, outstanding: 0 });
+			return this.filteredHistoryInvoices.reduce(
+				(accumulator, invoice) => {
+					accumulator.gross += Number(invoice.grand_total || 0);
+					accumulator.paid += Number(invoice.paid_amount || 0);
+					accumulator.change_return += Number(invoice.change_amount || 0);
+					accumulator.outstanding += Number(invoice.outstanding_amount || 0);
+					return accumulator;
+				},
+				{ gross: 0, paid: 0, change_return: 0, outstanding: 0 },
+			);
 		},
 		unpaidStatusCounts() {
-			return this.unpaidInvoices.reduce((accumulator, invoice) => {
-				accumulator.all += 1;
-				const status = String(invoice.status || "");
-				if (status === "Partly Paid") accumulator.partial += 1;
-				if (status === "Unpaid") accumulator.unpaid += 1;
-				if (this.isOverdue(invoice)) accumulator.overdue += 1;
-				return accumulator;
-			}, { all: 0, partial: 0, unpaid: 0, overdue: 0 });
+			return this.unpaidInvoices.reduce(
+				(accumulator, invoice) => {
+					accumulator.all += 1;
+					const status = String(invoice.status || "");
+					if (status === "Partly Paid") accumulator.partial += 1;
+					if (status === "Unpaid") accumulator.unpaid += 1;
+					if (this.isOverdue(invoice)) accumulator.overdue += 1;
+					return accumulator;
+				},
+				{ all: 0, partial: 0, unpaid: 0, overdue: 0 },
+			);
 		},
 		paginatedHistoryInvoices() {
 			return this.paginateCollection(this.filteredHistoryInvoices, "history");
@@ -1153,8 +1729,7 @@ export default {
 				this.initializeSupervisorProfileScope();
 				this.loadSupervisorPosProfiles();
 				this.refreshAll();
-			}
-			else this.resetPagination();
+			} else this.resetPagination();
 		},
 		activeTab() {
 			this.refreshActiveTab();
@@ -1173,10 +1748,10 @@ export default {
 		},
 		selectedSupervisorPosProfile(value, previousValue) {
 			if (
-				value !== previousValue
-				&& this.invoiceManagementDialog
-				&& this.isSupervisorScope()
-				&& !this.suppressSupervisorProfileRefresh
+				value !== previousValue &&
+				this.invoiceManagementDialog &&
+				this.isSupervisorScope() &&
+				!this.suppressSupervisorProfileRefresh
 			) {
 				this.refreshAll();
 			}
@@ -1191,9 +1766,10 @@ export default {
 				if (!this.invoiceManagementDialog) return;
 
 				const profileChanged =
-					value?.name !== previousValue?.name
-					|| value?.company !== previousValue?.company
-					|| value?.create_pos_invoice_instead_of_sales_invoice !== previousValue?.create_pos_invoice_instead_of_sales_invoice;
+					value?.name !== previousValue?.name ||
+					value?.company !== previousValue?.company ||
+					value?.create_pos_invoice_instead_of_sales_invoice !==
+						previousValue?.create_pos_invoice_instead_of_sales_invoice;
 
 				if (!profileChanged) return;
 
@@ -1247,9 +1823,13 @@ export default {
 			const end = Math.min(total, page * perPage);
 			return __("Showing {0}-{1} of {2}", [start, end, total]);
 		},
-		normalizeDate(value) { return value ? String(value).slice(0, 10) : ""; },
+		normalizeDate(value) {
+			return value ? String(value).slice(0, 10) : "";
+		},
 		normalizePostingTime(value) {
-			const raw = String(value || "").split(".")[0].trim();
+			const raw = String(value || "")
+				.split(".")[0]
+				.trim();
 			if (!raw) return "00:00:00";
 
 			const parts = raw.split(":").map((part) => part.trim());
@@ -1301,7 +1881,9 @@ export default {
 			return true;
 		},
 		filterCollection(items, search, status, fromDate, toDate) {
-			const needle = String(search || "").trim().toLowerCase();
+			const needle = String(search || "")
+				.trim()
+				.toLowerCase();
 			return items.filter((item) => {
 				if (needle) {
 					const haystack = [
@@ -1315,11 +1897,17 @@ export default {
 						item.modified_by,
 						item.custom_created_by_name,
 						item.custom_submitted_by_name,
-					].filter(Boolean).map((entry) => String(entry).toLowerCase());
+					]
+						.filter(Boolean)
+						.map((entry) => String(entry).toLowerCase());
 					if (!haystack.some((entry) => entry.includes(needle))) return false;
 				}
 				if (status && status !== "All" && String(item.status || "") !== status) return false;
-				return this.inRange(item.posting_date, this.normalizeDate(fromDate), this.normalizeDate(toDate));
+				return this.inRange(
+					item.posting_date,
+					this.normalizeDate(fromDate),
+					this.normalizeDate(toDate),
+				);
 			});
 		},
 		resolveSupervisorProfileScope() {
@@ -1337,11 +1925,11 @@ export default {
 			const currentProfile = this.posProfile?.name || null;
 			this.suppressSupervisorProfileRefresh = true;
 			if (
-				!this.selectedSupervisorPosProfile
-				|| (
-					this.selectedSupervisorPosProfile !== "All"
-					&& ![currentProfile, ...(this.supervisorPosProfiles || [])].filter(Boolean).includes(this.selectedSupervisorPosProfile)
-				)
+				!this.selectedSupervisorPosProfile ||
+				(this.selectedSupervisorPosProfile !== "All" &&
+					![currentProfile, ...(this.supervisorPosProfiles || [])]
+						.filter(Boolean)
+						.includes(this.selectedSupervisorPosProfile))
 			) {
 				this.selectedSupervisorPosProfile = currentProfile;
 			}
@@ -1376,10 +1964,10 @@ export default {
 		},
 		matchesRepairCandidatePattern(invoice) {
 			return Boolean(
-				invoice
-				&& !Number(invoice?.is_return || 0)
-				&& Number(invoice?.change_amount || 0) > 0
-				&& Number(invoice?.outstanding_amount || 0) < 0,
+				invoice &&
+					!Number(invoice?.is_return || 0) &&
+					Number(invoice?.change_amount || 0) > 0 &&
+					Number(invoice?.outstanding_amount || 0) < 0,
 			);
 		},
 		async refreshRepairCandidates(invoices = this.historyInvoices) {
@@ -1416,21 +2004,19 @@ export default {
 						return message || {};
 					}),
 				);
-				this.repairCandidateInvoiceNames = responses.flatMap((message) => (
+				this.repairCandidateInvoiceNames = responses.flatMap((message) =>
 					Array.isArray(message?.matched)
-						? message.matched
-							.map((entry) => entry?.invoice)
-							.filter(Boolean)
-						: []
-				));
-				this.repairedChangeAllocationInvoiceNames = responses.flatMap((message) => (
+						? message.matched.map((entry) => entry?.invoice).filter(Boolean)
+						: [],
+				);
+				this.repairedChangeAllocationInvoiceNames = responses.flatMap((message) =>
 					Array.isArray(message?.skipped)
 						? message.skipped
-							.filter((entry) => entry?.reason === "already_allocated")
-							.map((entry) => entry.invoice)
-							.filter(Boolean)
-						: []
-				));
+								.filter((entry) => entry?.reason === "already_allocated")
+								.map((entry) => entry.invoice)
+								.filter(Boolean)
+						: [],
+				);
 				this.repairCandidateScopeReady = true;
 			} catch (error) {
 				console.error("Error refreshing repair candidates:", error);
@@ -1450,9 +2036,10 @@ export default {
 			const filters = { ...baseFilters, docstatus: 1 };
 			if (this.isSupervisorScope()) {
 				filters.company = this.posProfile.company;
-				const scopedProfile = typeof this.resolveSupervisorProfileScope === "function"
-					? this.resolveSupervisorProfileScope()
-					: null;
+				const scopedProfile =
+					typeof this.resolveSupervisorProfileScope === "function"
+						? this.resolveSupervisorProfileScope()
+						: null;
 				if (scopedProfile) filters.pos_profile = scopedProfile;
 				else delete filters.pos_profile;
 				delete filters.posa_pos_opening_shift;
@@ -1480,7 +2067,9 @@ export default {
 			];
 		},
 		sortInvoicesByLatest(items) {
-			return [...items].sort((left, right) => this.invoiceSortValue(right) - this.invoiceSortValue(left));
+			return [...items].sort(
+				(left, right) => this.invoiceSortValue(right) - this.invoiceSortValue(left),
+			);
 		},
 		invoiceSortValue(invoice) {
 			const postingDate = this.normalizeDate(invoice?.posting_date) || "0000-00-00";
@@ -1544,19 +2133,20 @@ export default {
 			return Math.max(0, Math.min(100, (Number(invoice?.paid_amount || 0) / grandTotal) * 100));
 		},
 		changeAllocationRepairState(invoice) {
-			const matchesRepairPattern = typeof this.matchesRepairCandidatePattern === "function"
-				? this.matchesRepairCandidatePattern(invoice)
-				: Boolean(
-					invoice
-					&& !Number(invoice?.is_return || 0)
-					&& Number(invoice?.change_amount || 0) > 0
-					&& Number(invoice?.outstanding_amount || 0) < 0,
-				);
+			const matchesRepairPattern =
+				typeof this.matchesRepairCandidatePattern === "function"
+					? this.matchesRepairCandidatePattern(invoice)
+					: Boolean(
+							invoice &&
+								!Number(invoice?.is_return || 0) &&
+								Number(invoice?.change_amount || 0) > 0 &&
+								Number(invoice?.outstanding_amount || 0) < 0,
+						);
 			if (!matchesRepairPattern) return null;
 			if (this.repairCandidateScopeReady) {
 				if (
-					Array.isArray(this.repairedChangeAllocationInvoiceNames)
-					&& this.repairedChangeAllocationInvoiceNames.includes(invoice?.name)
+					Array.isArray(this.repairedChangeAllocationInvoiceNames) &&
+					this.repairedChangeAllocationInvoiceNames.includes(invoice?.name)
 				) {
 					return "repaired";
 				}
@@ -1575,13 +2165,13 @@ export default {
 			return "primary";
 		},
 		isRepairCandidate(invoice) {
-			const repairState = typeof this.changeAllocationRepairState === "function"
-				? this.changeAllocationRepairState(invoice)
-				: (
-					typeof this.matchesRepairCandidatePattern === "function" && this.matchesRepairCandidatePattern(invoice)
+			const repairState =
+				typeof this.changeAllocationRepairState === "function"
+					? this.changeAllocationRepairState(invoice)
+					: typeof this.matchesRepairCandidatePattern === "function" &&
+						  this.matchesRepairCandidatePattern(invoice)
 						? "candidate"
-						: null
-				);
+						: null;
 			return repairState === "candidate";
 		},
 		async runRepairChangeAllocation(invoice, dryRun = true) {
@@ -1599,15 +2189,21 @@ export default {
 			return response?.message || {};
 		},
 		async repairChangeAllocation(invoice) {
-			const repairState = typeof this.changeAllocationRepairState === "function"
-				? this.changeAllocationRepairState(invoice)
-				: (typeof this.isRepairCandidate === "function" && this.isRepairCandidate(invoice) ? "candidate" : null);
+			const repairState =
+				typeof this.changeAllocationRepairState === "function"
+					? this.changeAllocationRepairState(invoice)
+					: typeof this.isRepairCandidate === "function" && this.isRepairCandidate(invoice)
+						? "candidate"
+						: null;
 			if (repairState === "repaired") {
 				this.toastStore.show({ title: __("This invoice is already repaired"), color: "info" });
 				return;
 			}
 			if (repairState !== "candidate") {
-				this.toastStore.show({ title: __("This invoice does not need change-allocation repair"), color: "info" });
+				this.toastStore.show({
+					title: __("This invoice does not need change-allocation repair"),
+					color: "info",
+				});
 				return;
 			}
 			if (isOffline()) {
@@ -1618,8 +2214,15 @@ export default {
 			this.repairChangeLoading = true;
 			try {
 				const preview = await this.runRepairChangeAllocation(invoice, true);
-				if (!Array.isArray(preview?.matched) || preview.matched.length !== 1 || (preview?.skipped || []).length) {
-					this.toastStore.show({ title: __("No exact repair match found for this invoice"), color: "warning" });
+				if (
+					!Array.isArray(preview?.matched) ||
+					preview.matched.length !== 1 ||
+					(preview?.skipped || []).length
+				) {
+					this.toastStore.show({
+						title: __("No exact repair match found for this invoice"),
+						color: "warning",
+					});
 					return;
 				}
 
@@ -1663,9 +2266,7 @@ export default {
 			};
 		},
 		draftActions(invoice) {
-			return getDocumentFlowActionsForRecord(
-				invoice || { source: this.currentDraftSource },
-			);
+			return getDocumentFlowActionsForRecord(invoice || { source: this.currentDraftSource });
 		},
 		draftActionLabel(action) {
 			return __(getDocumentFlowActionLabel(action));
@@ -1673,7 +2274,11 @@ export default {
 		draftActionColor(action) {
 			if (action === "quote_submit") return "warning";
 			if (action === "order_to_delivery_note") return "success";
-			if (action === "order_to_invoice" || action === "quote_to_invoice" || action === "delivery_to_invoice") {
+			if (
+				action === "order_to_invoice" ||
+				action === "quote_to_invoice" ||
+				action === "delivery_to_invoice"
+			) {
 				return "primary";
 			}
 			if (action === "quote_to_order" || action === "order_load" || action === "quote_edit_draft") {
@@ -1775,7 +2380,9 @@ export default {
 						limit_page_length: 0,
 					},
 				});
-				this.unpaidInvoices = Array.isArray(message) ? message.map((entry) => ({ ...entry, doctype: this.currentInvoiceDoctype })) : [];
+				this.unpaidInvoices = Array.isArray(message)
+					? message.map((entry) => ({ ...entry, doctype: this.currentInvoiceDoctype }))
+					: [];
 			} catch (error) {
 				console.error("Error loading unpaid invoices:", error);
 				this.toastStore.show({ title: __("Unable to fetch unpaid invoices"), color: "error" });
@@ -1794,24 +2401,31 @@ export default {
 			this.loading = true;
 			try {
 				const filters = this.buildInvoiceFilters();
-				const doctypes = typeof this.historyInvoiceDoctypes === "function"
-					? this.historyInvoiceDoctypes()
-					: (this.currentInvoiceDoctype === "POS Invoice"
-						? ["POS Invoice", "Sales Invoice"]
-						: [this.currentInvoiceDoctype || "Sales Invoice"]);
-				const results = await Promise.all(doctypes.map(async (doctype) => {
-					const { message } = await frappe.call({
-						method: "frappe.client.get_list",
-						args: {
-							doctype,
-							filters,
-							fields: this.getInvoiceListFields(["change_amount", "is_return", "return_against"]),
-							order_by: "posting_date desc, posting_time desc, modified desc",
-							limit_page_length: 0,
-						},
-					});
-					return Array.isArray(message) ? message.map((entry) => ({ ...entry, doctype })) : [];
-				}));
+				const doctypes =
+					typeof this.historyInvoiceDoctypes === "function"
+						? this.historyInvoiceDoctypes()
+						: this.currentInvoiceDoctype === "POS Invoice"
+							? ["POS Invoice", "Sales Invoice"]
+							: [this.currentInvoiceDoctype || "Sales Invoice"];
+				const results = await Promise.all(
+					doctypes.map(async (doctype) => {
+						const { message } = await frappe.call({
+							method: "frappe.client.get_list",
+							args: {
+								doctype,
+								filters,
+								fields: this.getInvoiceListFields([
+									"change_amount",
+									"is_return",
+									"return_against",
+								]),
+								order_by: "posting_date desc, posting_time desc, modified desc",
+								limit_page_length: 0,
+							},
+						});
+						return Array.isArray(message) ? message.map((entry) => ({ ...entry, doctype })) : [];
+					}),
+				);
 				this.historyInvoices = results.flat();
 				if (typeof this.refreshRepairCandidates === "function") {
 					await this.refreshRepairCandidates(this.historyInvoices);
@@ -1860,7 +2474,10 @@ export default {
 		},
 		async viewInvoice(invoice) {
 			try {
-				const { message } = await frappe.call({ method: "frappe.client.get", args: { doctype: invoice.doctype || this.currentInvoiceDoctype, name: invoice.name } });
+				const { message } = await frappe.call({
+					method: "frappe.client.get",
+					args: { doctype: invoice.doctype || this.currentInvoiceDoctype, name: invoice.name },
+				});
 				this.selectedInvoiceDetail = message || null;
 				this.detailDialog = !!message;
 			} catch (error) {
@@ -1889,7 +2506,10 @@ export default {
 			if (!this.canDeleteActiveDraftSource) return;
 			if (!window.confirm(__("Delete draft invoice {0}?", [invoice.name]))) return;
 			try {
-				await frappe.call({ method: "posawesome.posawesome.api.invoices.delete_invoice", args: { invoice: invoice.name } });
+				await frappe.call({
+					method: "posawesome.posawesome.api.invoices.delete_invoice",
+					args: { invoice: invoice.name },
+				});
 				this.toastStore.show({ title: __("Draft invoice deleted"), color: "success" });
 				await this.loadDrafts();
 			} catch (error) {
@@ -1899,10 +2519,20 @@ export default {
 		},
 		async createReturn(invoice) {
 			try {
-				const { message } = await frappe.call({ method: "posawesome.posawesome.api.invoices.get_invoice_for_return", args: { invoice_name: invoice.name, pos_profile: this.posProfile?.name, doctype: invoice.doctype || this.currentInvoiceDoctype } });
+				const { message } = await frappe.call({
+					method: "posawesome.posawesome.api.invoices.get_invoice_for_return",
+					args: {
+						invoice_name: invoice.name,
+						pos_profile: this.posProfile?.name,
+						doctype: invoice.doctype || this.currentInvoiceDoctype,
+					},
+				});
 				const returnDoc = message;
 				if (!returnDoc || !Array.isArray(returnDoc.items) || !returnDoc.items.length) {
-					this.toastStore.show({ title: __("No returnable items found for this invoice"), color: "warning" });
+					this.toastStore.show({
+						title: __("No returnable items found for this invoice"),
+						color: "warning",
+					});
 					return;
 				}
 				const invoiceDoc = {
@@ -1929,13 +2559,28 @@ export default {
 					customer: returnDoc.customer,
 					discount_amount: returnDoc.discount_amount,
 					additional_discount_percentage: returnDoc.additional_discount_percentage,
-					payments: Array.isArray(returnDoc.payments) ? returnDoc.payments.map((payment) => ({ mode_of_payment: payment.mode_of_payment, amount: payment.amount, base_amount: payment.base_amount, default: payment.default, account: payment.account, type: payment.type, currency: payment.currency, conversion_rate: payment.conversion_rate })) : [],
-					grand_total: returnDoc.grand_total > 0 ? returnDoc.grand_total * -1 : returnDoc.grand_total,
+					payments: Array.isArray(returnDoc.payments)
+						? returnDoc.payments.map((payment) => ({
+								mode_of_payment: payment.mode_of_payment,
+								amount: payment.amount,
+								base_amount: payment.base_amount,
+								default: payment.default,
+								account: payment.account,
+								type: payment.type,
+								currency: payment.currency,
+								conversion_rate: payment.conversion_rate,
+							}))
+						: [],
+					grand_total:
+						returnDoc.grand_total > 0 ? returnDoc.grand_total * -1 : returnDoc.grand_total,
 					update_stock: 1,
 					pos_profile: this.posProfile?.name,
 					company: this.posProfile?.company,
 				};
-				this.eventBus?.emit("load_return_invoice", { invoice_doc: invoiceDoc, return_doc: returnDoc });
+				this.eventBus?.emit("load_return_invoice", {
+					invoice_doc: invoiceDoc,
+					return_doc: returnDoc,
+				});
 				this.uiStore.closeInvoiceManagement();
 			} catch (error) {
 				console.error("Error creating return invoice:", error);
@@ -1949,7 +2594,11 @@ export default {
 				return;
 			}
 			this.customersStore.setSelectedCustomer(customer);
-			this.uiStore.setPaymentRouteTarget({ invoiceName: invoice.name, customer, currency: invoice.currency || this.posProfile?.currency || null });
+			this.uiStore.setPaymentRouteTarget({
+				invoiceName: invoice.name,
+				customer,
+				currency: invoice.currency || this.posProfile?.currency || null,
+			});
 			this.detailDialog = false;
 			this.uiStore.closeInvoiceManagement();
 			this.router.push("/payments");
@@ -1962,13 +2611,28 @@ export default {
 			const letterHead = profile.letter_head || 0;
 			const debugPrint = isDebugPrintEnabled();
 			const useSilentPrint = !!profile.posa_silent_print;
-			let url = frappe.urllib.get_base_url() + "/printview?doctype=" + encodeURIComponent(doctype) + "&name=" + encodeURIComponent(invoice.name) + "&trigger_print=1&format=" + encodeURIComponent(printFormat) + "&no_letterhead=" + (letterHead ? "0" : "1");
+			let url =
+				frappe.urllib.get_base_url() +
+				"/printview?doctype=" +
+				encodeURIComponent(doctype) +
+				"&name=" +
+				encodeURIComponent(invoice.name) +
+				"&trigger_print=1&format=" +
+				encodeURIComponent(printFormat) +
+				"&no_letterhead=" +
+				(letterHead ? "0" : "1");
 			if (letterHead) url += "&letterhead=" + encodeURIComponent(letterHead);
 			url = appendDebugPrintParam(url, debugPrint);
 			const printOptions = { allowOfflineFallback: isOffline(), triggerPrint: "1", debugPrint };
 			if (useSilentPrint && !isOffline()) {
 				try {
-					await printDocumentViaQz({ doctype, name: invoice.name, printFormat, letterhead: letterHead || null, noLetterhead: letterHead ? "0" : "1" });
+					await printDocumentViaQz({
+						doctype,
+						name: invoice.name,
+						printFormat,
+						letterhead: letterHead || null,
+						noLetterhead: letterHead ? "0" : "1",
+					});
 					return;
 				} catch (error) {
 					console.warn("QZ Tray print failed, falling back to browser print", error);
@@ -1986,7 +2650,9 @@ export default {
 </script>
 
 <style scoped>
-.invoice-management-dialog-content { background: transparent !important; }
+.invoice-management-dialog-content {
+	background: transparent !important;
+}
 
 .invoice-management-card {
 	background:
@@ -2016,7 +2682,9 @@ export default {
 	padding-bottom: 10px;
 }
 
-.invoice-tabs-shell { padding: 0 8px 8px; }
+.invoice-tabs-shell {
+	padding: 0 8px 8px;
+}
 
 .view-toggle-group {
 	display: inline-flex;
@@ -2087,12 +2755,24 @@ export default {
 	color: var(--pos-text-primary);
 }
 
-.summary-tile--history { background: linear-gradient(145deg, rgba(239, 246, 255, 0.98), rgba(219, 234, 254, 0.88)); }
-.summary-tile--primary { background: linear-gradient(145deg, rgba(224, 231, 255, 0.98), rgba(199, 210, 254, 0.88)); }
-.summary-tile--success { background: linear-gradient(145deg, rgba(236, 253, 245, 0.98), rgba(209, 250, 229, 0.88)); }
-.summary-tile--warning { background: linear-gradient(145deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.88)); }
-.summary-tile--warning-strong { background: linear-gradient(145deg, rgba(255, 247, 237, 0.98), rgba(254, 215, 170, 0.9)); }
-.summary-tile--danger { background: linear-gradient(145deg, rgba(254, 242, 242, 0.98), rgba(254, 202, 202, 0.88)); }
+.summary-tile--history {
+	background: linear-gradient(145deg, rgba(239, 246, 255, 0.98), rgba(219, 234, 254, 0.88));
+}
+.summary-tile--primary {
+	background: linear-gradient(145deg, rgba(224, 231, 255, 0.98), rgba(199, 210, 254, 0.88));
+}
+.summary-tile--success {
+	background: linear-gradient(145deg, rgba(236, 253, 245, 0.98), rgba(209, 250, 229, 0.88));
+}
+.summary-tile--warning {
+	background: linear-gradient(145deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.88));
+}
+.summary-tile--warning-strong {
+	background: linear-gradient(145deg, rgba(255, 247, 237, 0.98), rgba(254, 215, 170, 0.9));
+}
+.summary-tile--danger {
+	background: linear-gradient(145deg, rgba(254, 242, 242, 0.98), rgba(254, 202, 202, 0.88));
+}
 
 .history-repair-toggle {
 	min-height: 40px;
@@ -2213,10 +2893,18 @@ export default {
 	gap: 16px;
 }
 
-.invoice-record-grid--history { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-.invoice-record-grid--unpaid { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
-.invoice-record-grid--drafts { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-.invoice-record-grid--returns { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.invoice-record-grid--history {
+	grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.invoice-record-grid--unpaid {
+	grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+}
+.invoice-record-grid--drafts {
+	grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.invoice-record-grid--returns {
+	grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
 
 .tab-pagination {
 	margin-top: 16px;
@@ -2251,9 +2939,15 @@ export default {
 	border-bottom: 1px solid rgba(148, 163, 184, 0.14);
 }
 
-.invoice-record-card__hero--warm { background: linear-gradient(135deg, rgba(255, 247, 237, 0.98), rgba(255, 237, 213, 0.9)); }
-.invoice-record-card__hero--draft { background: linear-gradient(135deg, rgba(245, 243, 255, 0.98), rgba(233, 213, 255, 0.9)); }
-.invoice-record-card__hero--return { background: linear-gradient(135deg, rgba(254, 242, 242, 0.98), rgba(254, 202, 202, 0.9)); }
+.invoice-record-card__hero--warm {
+	background: linear-gradient(135deg, rgba(255, 247, 237, 0.98), rgba(255, 237, 213, 0.9));
+}
+.invoice-record-card__hero--draft {
+	background: linear-gradient(135deg, rgba(245, 243, 255, 0.98), rgba(233, 213, 255, 0.9));
+}
+.invoice-record-card__hero--return {
+	background: linear-gradient(135deg, rgba(254, 242, 242, 0.98), rgba(254, 202, 202, 0.9));
+}
 
 .invoice-record-card__title-row {
 	display: flex;
@@ -2274,7 +2968,9 @@ export default {
 	color: var(--pos-text-secondary);
 }
 
-.invoice-record-card__amount-block { text-align: right; }
+.invoice-record-card__amount-block {
+	text-align: right;
+}
 
 .invoice-record-card__amount-label {
 	font-size: 0.72rem;
@@ -2290,7 +2986,9 @@ export default {
 	font-weight: 800;
 }
 
-.invoice-record-card__content { padding: 18px 20px; }
+.invoice-record-card__content {
+	padding: 18px 20px;
+}
 
 .invoice-record-card__actions {
 	display: flex;
@@ -2353,7 +3051,9 @@ export default {
 	gap: 14px;
 }
 
-.meta-pair-grid--compact { margin-bottom: 16px; }
+.meta-pair-grid--compact {
+	margin-bottom: 16px;
+}
 
 .meta-pair {
 	padding: 12px 14px;
@@ -2377,8 +3077,12 @@ export default {
 	line-height: 1.35;
 }
 
-.meta-pair__value--success { color: rgb(22, 163, 74); }
-.meta-pair__value--warning { color: rgb(217, 119, 6); }
+.meta-pair__value--success {
+	color: rgb(22, 163, 74);
+}
+.meta-pair__value--warning {
+	color: rgb(217, 119, 6);
+}
 
 .payment-progress-block {
 	padding: 14px 16px;
@@ -2403,10 +3107,18 @@ export default {
 	font-weight: 700;
 }
 
-.invoice-record-card--success .invoice-record-card__hero { background: linear-gradient(135deg, rgba(236, 253, 245, 0.98), rgba(209, 250, 229, 0.9)); }
-.invoice-record-card--warning .invoice-record-card__hero { background: linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.9)); }
-.invoice-record-card--error .invoice-record-card__hero { background: linear-gradient(135deg, rgba(254, 242, 242, 0.98), rgba(254, 202, 202, 0.9)); }
-.invoice-record-card--info .invoice-record-card__hero { background: linear-gradient(135deg, rgba(240, 249, 255, 0.98), rgba(224, 242, 254, 0.9)); }
+.invoice-record-card--success .invoice-record-card__hero {
+	background: linear-gradient(135deg, rgba(236, 253, 245, 0.98), rgba(209, 250, 229, 0.9));
+}
+.invoice-record-card--warning .invoice-record-card__hero {
+	background: linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.9));
+}
+.invoice-record-card--error .invoice-record-card__hero {
+	background: linear-gradient(135deg, rgba(254, 242, 242, 0.98), rgba(254, 202, 202, 0.9));
+}
+.invoice-record-card--info .invoice-record-card__hero {
+	background: linear-gradient(135deg, rgba(240, 249, 255, 0.98), rgba(224, 242, 254, 0.9));
+}
 
 .detail-section__title {
 	font-size: 0.95rem;
@@ -2445,19 +3157,34 @@ export default {
 		border-radius: 0;
 	}
 
-	.invoice-record-card__hero { flex-direction: column; }
-	.invoice-record-card__amount-block { text-align: left; }
+	.invoice-record-card__hero {
+		flex-direction: column;
+	}
+	.invoice-record-card__amount-block {
+		text-align: left;
+	}
 	.invoice-management-footer {
 		padding-inline: 16px;
 		justify-content: stretch;
 	}
-	.invoice-management-footer :deep(.v-btn) { flex: 1; }
+	.invoice-management-footer :deep(.v-btn) {
+		flex: 1;
+	}
 }
 
 @media (max-width: 640px) {
-	.meta-pair-grid { grid-template-columns: 1fr; }
-	.invoice-record-card__actions { justify-content: stretch; }
-	.tab-pagination { justify-content: center; }
-	.tab-pagination__meta { width: 100%; text-align: center; }
+	.meta-pair-grid {
+		grid-template-columns: 1fr;
+	}
+	.invoice-record-card__actions {
+		justify-content: stretch;
+	}
+	.tab-pagination {
+		justify-content: center;
+	}
+	.tab-pagination__meta {
+		width: 100%;
+		text-align: center;
+	}
 }
 </style>

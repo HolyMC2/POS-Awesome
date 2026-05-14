@@ -12,7 +12,6 @@ from erpnext.accounts.party import get_party_account
 from .utils import get_active_pos_profile, get_default_warehouse
 
 
-
 def _resolve_pos_profile(pos_profile):
     if isinstance(pos_profile, dict):
         return pos_profile
@@ -56,9 +55,7 @@ def _resolve_supplier(supplier_value):
     if frappe.db.exists("Supplier", supplier):
         return supplier
 
-    supplier_by_label = frappe.db.get_value(
-        "Supplier", {"supplier_name": supplier}, "name"
-    )
+    supplier_by_label = frappe.db.get_value("Supplier", {"supplier_name": supplier}, "name")
     if supplier_by_label:
         return supplier_by_label
 
@@ -189,7 +186,7 @@ def _create_purchase_receipt(po_doc, payload, default_warehouse, transaction_dat
             "supplier": po_doc.supplier,
             "company": po_doc.company,
             "posting_date": receipt_date,
-			"currency": po_doc.currency,
+            "currency": po_doc.currency,
         }
     )
     if default_warehouse:
@@ -199,7 +196,11 @@ def _create_purchase_receipt(po_doc, payload, default_warehouse, transaction_dat
 
     for po_item in po_doc.items:
         payload_row = _resolve_input_row(items_by_code, po_item.item_code)
-        if payload.get("receive") and not payload_row.get("received_qty") and not payload_row.get("receive_qty"):
+        if (
+            payload.get("receive")
+            and not payload_row.get("received_qty")
+            and not payload_row.get("receive_qty")
+        ):
             payload_row["receive_qty"] = po_item.qty
             payload_row["received_qty"] = po_item.qty
         received_qty = flt(
@@ -227,7 +228,7 @@ def _create_purchase_receipt(po_doc, payload, default_warehouse, transaction_dat
                 "schedule_date": po_item.schedule_date,
             },
         )
- 
+
     if not receipt.items:
         frappe.throw(_("No items to receive. Please enter received quantities."))
 
@@ -358,9 +359,7 @@ def get_last_buying_rate(supplier, item_codes, company=None):
             if code and code not in result:
                 price_list_currency = row.get("currency")
                 if not price_list_currency and buying_price_list:
-                    price_list_currency = frappe.db.get_value(
-                        "Price List", buying_price_list, "currency"
-                    )
+                    price_list_currency = frappe.db.get_value("Price List", buying_price_list, "currency")
                 result[code] = {
                     "rate": row.get("price_list_rate", 0),
                     "currency": price_list_currency,
@@ -448,9 +447,7 @@ def create_purchase_item(data):
     if existing:
         return frappe.get_doc("Item", item_code).as_dict()
 
-    item_group = payload.get("item_group") or frappe.db.get_value(
-        "Item Group", {"is_group": 0}, "name"
-    )
+    item_group = payload.get("item_group") or frappe.db.get_value("Item Group", {"is_group": 0}, "name")
     item_group = item_group or "All Item Groups"
 
     barcode = payload.get("barcode")
@@ -515,9 +512,7 @@ def _get_mode_of_payment_account(mode, company):
     )
     if not account:
         frappe.throw(
-            _("Please set default account for Mode of Payment {0} in company {1}").format(
-                mode, company
-            )
+            _("Please set default account for Mode of Payment {0} in company {1}").format(mode, company)
         )
     return account
 
@@ -563,26 +558,29 @@ def _create_payment_entry(reference_doc, payments, company, transaction_date):
         # Fetch party account
         pe.paid_to = get_party_account("Supplier", reference_doc.supplier, company)
         if not pe.paid_to:
-             frappe.throw(_("Please set Default Payable Account in Company {0}").format(company))
+            frappe.throw(_("Please set Default Payable Account in Company {0}").format(company))
 
         pe.paid_amount = amount
-        pe.received_amount = amount 
-        # Note: If currencies differ, conversion handling is needed. 
+        pe.received_amount = amount
+        # Note: If currencies differ, conversion handling is needed.
         # Assuming base currency for simplified POS flow or that user enters converted amount.
-        
+
         # References
         # Allocate only up to outstanding amount
         allocated_amount = 0
         if outstanding_amount > 0:
             allocated_amount = min(amount, outstanding_amount)
             outstanding_amount -= allocated_amount
-        
+
         if allocated_amount > 0:
-            pe.append("references", {
-                "reference_doctype": ref_doctype,
-                "reference_name": ref_name,
-                "allocated_amount": allocated_amount
-            })
+            pe.append(
+                "references",
+                {
+                    "reference_doctype": ref_doctype,
+                    "reference_name": ref_name,
+                    "allocated_amount": allocated_amount,
+                },
+            )
 
         pe.flags.ignore_permissions = True
         pe.insert()
@@ -637,23 +635,23 @@ def create_purchase_order(data):
     # If currencies don't match, try to find a matching one
     if price_list_currency and price_list_currency != supplier_currency:
         alternative_price_list = frappe.db.get_value(
-            "Price List",
-            {"currency": supplier_currency, "buying": 1, "enabled": 1},
-            "name"
+            "Price List", {"currency": supplier_currency, "buying": 1, "enabled": 1}, "name"
         )
         if alternative_price_list:
             buying_price_list = alternative_price_list
 
-    po_doc = frappe.get_doc({
-        "doctype": "Purchase Order",
-        "supplier": supplier,
-        "company": company,
-        "transaction_date": transaction_date,
-        "schedule_date": schedule_date,
-        "currency": supplier_currency,
-        "buying_price_list": buying_price_list,
-    })
-    
+    po_doc = frappe.get_doc(
+        {
+            "doctype": "Purchase Order",
+            "supplier": supplier,
+            "company": company,
+            "transaction_date": transaction_date,
+            "schedule_date": schedule_date,
+            "currency": supplier_currency,
+            "buying_price_list": buying_price_list,
+        }
+    )
+
     if warehouse:
         po_doc.set_warehouse = warehouse
 
@@ -742,9 +740,7 @@ def create_purchase_order(data):
         frappe.db.rollback()
         frappe.log_error(frappe.get_traceback(), "POS Awesome PO Submit Flow Failed")
         frappe.throw(
-            _("Purchase Order {0} has been saved as Draft. Error: {1}").format(
-                po_doc.name, str(err)
-            )
+            _("Purchase Order {0} has been saved as Draft. Error: {1}").format(po_doc.name, str(err))
         )
 
 
@@ -816,9 +812,9 @@ def _create_purchase_invoice(po_doc, payload, default_warehouse, transaction_dat
         invoice.set_warehouse = default_warehouse
 
     items_by_code = _build_items_map(payload.get("items"))
-    receipt_items = {
-        item.purchase_order_item: item for item in (receipt_doc.items or [])
-    } if receipt_doc else {}
+    receipt_items = (
+        {item.purchase_order_item: item for item in (receipt_doc.items or [])} if receipt_doc else {}
+    )
     for po_item in po_doc.items:
         payload_row = _resolve_input_row(items_by_code, po_item.item_code)
         qty = flt(payload_row.get("qty") or po_item.qty)

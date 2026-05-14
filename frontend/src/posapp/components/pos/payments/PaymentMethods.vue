@@ -7,7 +7,10 @@
 					<h4 class="payment-method-card__title">{{ payment.mode_of_payment }}</h4>
 				</div>
 				<div class="payment-method-card__badges">
-					<span v-if="isReturn" class="payment-method-card__badge payment-method-card__badge--refund">
+					<span
+						v-if="isReturn"
+						class="payment-method-card__badge payment-method-card__badge--refund"
+					>
 						{{ __("Refund") }}
 					</span>
 					<span v-if="payment.default === 1" class="payment-method-card__badge">
@@ -43,11 +46,7 @@
 							:data-test="`payment-method-action-${payment.mode_of_payment}`"
 							@click="handlePrimaryAction(payment)"
 						>
-							{{ 
-								isGiftCardPayment(payment)
-									? __("Redeem / Scan")
-									: payment.mode_of_payment
-							}}
+							{{ isGiftCardPayment(payment) ? __("Redeem / Scan") : payment.mode_of_payment }}
 						</v-btn>
 					</div>
 				</v-col>

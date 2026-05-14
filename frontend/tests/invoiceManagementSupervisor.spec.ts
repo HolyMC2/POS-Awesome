@@ -197,9 +197,12 @@ describe("InvoiceManagement supervisor scope", () => {
 			resolveSupervisorProfileScope: (InvoiceManagement as any).methods.resolveSupervisorProfileScope,
 			buildInvoiceFilters: (InvoiceManagement as any).methods.buildInvoiceFilters,
 			getInvoiceListFields: (InvoiceManagement as any).methods.getInvoiceListFields,
+			currentDraftSource: "invoice",
+			draftRecordsBySource: {},
 			draftInvoices: [],
 			loading: false,
 			toastStore: { show: vi.fn() },
+			uiStore: { setInvoiceManagementDraftSource: vi.fn() },
 			inRange: (InvoiceManagement as any).methods.inRange,
 			normalizeDate: (InvoiceManagement as any).methods.normalizeDate,
 		};
@@ -208,15 +211,19 @@ describe("InvoiceManagement supervisor scope", () => {
 
 		expect(callMock).toHaveBeenCalledWith(
 			expect.objectContaining({
-				method: "posawesome.posawesome.api.invoices.get_draft_invoices",
+				method: "posawesome.posawesome.api.commercial_flow.list_source_documents",
 				args: {
+					source: "invoice",
 					pos_opening_shift: "POSA-OS-26-0000007",
 					doctype: "Sales Invoice",
-					limit_page_length: 0,
 					company: "Farooq Chemicals",
 					pos_profile: "Main POS",
 					cashier: null,
 					is_supervisor: 1,
+					search: undefined,
+					currency: undefined,
+					include_draft: 1,
+					include_submitted: 1,
 				},
 			}),
 		);
@@ -260,6 +267,8 @@ describe("InvoiceManagement supervisor scope", () => {
 			posProfile: { name: "Main POS", company: "Farooq Chemicals" },
 			currentCashier: { is_supervisor: true },
 			selectedSupervisorPosProfile: "Main POS",
+			draftSource: "invoice",
+			uiStore: { invoiceManagementDraftSource: "invoice" },
 			initializeSupervisorProfileScope: vi.fn(),
 			loadSupervisorPosProfiles: vi.fn().mockResolvedValue(undefined),
 			refreshAll: vi.fn().mockResolvedValue(undefined),

@@ -31,7 +31,7 @@
  * - `triggerTopItemSelection` (via `selectTopItem()`) — selects the first item in the list.
  */
 import { defineStore } from "pinia";
-import { ref, computed } from "vue";
+import { ref, shallowRef, computed } from "vue";
 import type { POSProfile } from "../types/models";
 
 export const useUIStore = defineStore("ui", () => {
@@ -52,12 +52,17 @@ export const useUIStore = defineStore("ui", () => {
   const invoiceManagementTargetTab = ref<string>("history");
   const invoiceManagementDraftSource = ref<string>("invoice");
   const draftsDialog = ref(false);
-  const draftsData = ref<any[]>([]);
-  const parkedOrders = ref<any[]>([]);
+  // Switched to `shallowRef` — these arrays hold full draft /
+  // order documents and are mutated on every dialog open. Pinia
+  // wrapping them as deep proxies caused per-row dep tracking
+  // and contributed to the renderer OOM (Chrome "Aw, Snap!"
+  // Error code 5) over long sessions with many customer changes.
+  const draftsData = shallowRef<any[]>([]);
+  const parkedOrders = shallowRef<any[]>([]);
   const draftSource = ref<string>("invoice");
 
   const ordersDialog = ref(false);
-  const ordersData = ref<any[]>([]);
+  const ordersData = shallowRef<any[]>([]);
 
   const setActiveView = (view: string) => {
     activeView.value = view;
@@ -188,11 +193,11 @@ export const useUIStore = defineStore("ui", () => {
     lastStockAdjustment.value = doc;
   }
 
-  const offers = ref<any[]>([]);
+  const offers = shallowRef<any[]>([]);
   function setOffers(data: any[]) {
     offers.value = data || [];
   }
-  const applicableOffers = ref<any[]>([]);
+  const applicableOffers = shallowRef<any[]>([]);
   function setApplicableOffers(data: any[]) {
     applicableOffers.value = data || [];
   }

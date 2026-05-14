@@ -731,3 +731,78 @@ export function fetchDashboardData(args: DashboardRequest = {}) {
 		args,
 	);
 }
+
+/**
+ * Phase 8 — per-section dashboard endpoints.
+ *
+ * Each call returns the same envelope (enabled, scope, profiles, currency,
+ * date_context, etc.) plus exactly one section slice of the legacy
+ * ``DashboardResponse``. The frontend can request all sections in parallel
+ * via ``Promise.allSettled`` so each panel paints as its data arrives instead
+ * of blocking on the full mega-payload.
+ */
+
+export type DashboardEnvelope = Pick<
+	DashboardResponse,
+	| "enabled"
+	| "profile"
+	| "scope"
+	| "default_scope"
+	| "global_enabled"
+	| "allow_all_profiles"
+	| "profile_scope_enabled"
+	| "disabled_reason"
+	| "selected_profiles"
+	| "available_profiles"
+	| "company"
+	| "warehouse"
+	| "currency"
+	| "generated_at"
+	| "date_context"
+>;
+
+export type DashboardSectionKey = Exclude<keyof DashboardResponse, keyof DashboardEnvelope>;
+
+export type DashboardSectionResponse<K extends DashboardSectionKey> = DashboardEnvelope &
+	Partial<Pick<DashboardResponse, K>>;
+
+const SECTION_METHOD: Record<DashboardSectionKey, string> = {
+	sales_overview: "posawesome.posawesome.api.dashboard.get_dashboard_sales_overview",
+	daily_sales_summary: "posawesome.posawesome.api.dashboard.get_dashboard_daily_sales_summary",
+	monthly_sales_summary: "posawesome.posawesome.api.dashboard.get_dashboard_monthly_sales_summary",
+	payment_method_report: "posawesome.posawesome.api.dashboard.get_dashboard_payment_method_report",
+	discount_void_return_report:
+		"posawesome.posawesome.api.dashboard.get_dashboard_discount_void_return_report",
+	customer_report: "posawesome.posawesome.api.dashboard.get_dashboard_customer_report",
+	staff_performance_report:
+		"posawesome.posawesome.api.dashboard.get_dashboard_staff_performance_report",
+	profitability_report: "posawesome.posawesome.api.dashboard.get_dashboard_profitability_report",
+	branch_location_report: "posawesome.posawesome.api.dashboard.get_dashboard_branch_location_report",
+	tax_charges_report: "posawesome.posawesome.api.dashboard.get_dashboard_tax_charges_report",
+	sales_trend: "posawesome.posawesome.api.dashboard.get_dashboard_sales_trend",
+	item_sales_report: "posawesome.posawesome.api.dashboard.get_dashboard_item_sales_report",
+	category_brand_variant_report:
+		"posawesome.posawesome.api.dashboard.get_dashboard_category_brand_variant_report",
+	inventory_status_report: "posawesome.posawesome.api.dashboard.get_dashboard_inventory_status_report",
+	stock_movement_report: "posawesome.posawesome.api.dashboard.get_dashboard_stock_movement_report",
+	reorder_purchase_suggestions:
+		"posawesome.posawesome.api.dashboard.get_dashboard_reorder_purchase_suggestions",
+	inventory_insights: "posawesome.posawesome.api.dashboard.get_dashboard_inventory_insights",
+	supplier_overview: "posawesome.posawesome.api.dashboard.get_dashboard_supplier_overview",
+};
+
+export const DASHBOARD_SECTION_KEYS = Object.keys(SECTION_METHOD) as DashboardSectionKey[];
+
+export function fetchDashboardSection<K extends DashboardSectionKey>(
+	section: K,
+	args: DashboardRequest = {},
+) {
+	return api.call<DashboardSectionResponse<K>>(SECTION_METHOD[section], args);
+}
+
+export function fetchDashboardEnvelope(args: DashboardRequest = {}) {
+	return api.call<DashboardEnvelope>(
+		"posawesome.posawesome.api.dashboard.get_dashboard_envelope",
+		args,
+	);
+}

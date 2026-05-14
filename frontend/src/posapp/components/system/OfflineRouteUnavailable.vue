@@ -8,10 +8,18 @@
 					</v-card-title>
 					<v-card-text>
 						<p class="mb-3">
-							{{ __("This POS page could not be opened offline because its code was not cached on this terminal yet.") }}
+							{{
+								__(
+									"This POS page could not be opened offline because its code was not cached on this terminal yet.",
+								)
+							}}
 						</p>
 						<p class="mb-3">
-							{{ __("Reconnect and open this page once while online, then offline refreshes will be able to restore it.") }}
+							{{
+								__(
+									"Reconnect and open this page once while online, then offline refreshes will be able to restore it.",
+								)
+							}}
 						</p>
 						<p v-if="targetRoute" class="offline-route-unavailable__target">
 							{{ __("Requested route: {0}", [targetRoute]) }}
@@ -41,9 +49,7 @@ const __ =
 	typeof window !== "undefined" && typeof window.__ === "function"
 		? window.__
 		: (value, args = []) =>
-				args.length
-					? value.replace(/\{(\d+)\}/g, (_, index) => String(args[index] ?? ""))
-					: value;
+				args.length ? value.replace(/\{(\d+)\}/g, (_, index) => String(args[index] ?? "")) : value;
 
 const targetRoute = computed(() => {
 	const rawTarget = route.query.target;

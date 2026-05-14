@@ -1,11 +1,14 @@
 app_name = "posawesome"
 app_title = "POS Awesome"
-app_publisher = "Youssef Restom"
+app_publisher = "defendicon"
 app_description = "POS Awesome"
 app_icon = "octicon octicon-file-directory"
 app_color = "grey"
-app_email = "youssef@totrox.com"
+app_email = "defendicon@github.com"
 app_license = "GPLv3"
+app_url = "https://github.com/defendicon/POS-Awesome-V15"
+app_source_link = "https://github.com/defendicon/POS-Awesome-V15"
+source_link = "https://github.com/defendicon/POS-Awesome-V15"
 
 # Includes in <head>
 # ------------------
@@ -74,6 +77,9 @@ after_migrate = [
     "posawesome.patches.add_gift_card_pos_profile_settings.execute",
     "posawesome.patches.add_gift_card_invoice_redemption_fields.execute",
     "posawesome.patches.add_gift_card_to_workspace.execute",
+    "posawesome.patches.add_submission_ledger_to_workspace.execute",
+    "posawesome.patches.migrate_pos_supervisor_to_role.execute",
+    "posawesome.patches.remove_item_barcode_posa_uom.execute",
 ]
 
 # Desk Notifications
@@ -119,28 +125,40 @@ doc_events = {
         "after_insert": "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
         "on_update": "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
     },
+    # Phase 6: bust the Redis cache for `get_active_pricing_rules`
+    # whenever a rule is written, renamed, or deleted. Cheap (one
+    # namespace flush); operator sees rule changes on the next POS
+    # call instead of waiting for the 5-min TTL.
+    "Pricing Rule": {
+        "on_update": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "on_trash": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "after_rename": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+    },
+    "Pricing Rule Item Code": {
+        "on_update": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "on_trash": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+    },
+    "Pricing Rule Item Group": {
+        "on_update": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "on_trash": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+    },
+    "Pricing Rule Brand": {
+        "on_update": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+        "on_trash": "posawesome.posawesome.api.pricing_rules.invalidate_pricing_rules_cache",
+    },
 }
 
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"posawesome.tasks.all"
-# 	],
-# 	"daily": [
-# 		"posawesome.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"posawesome.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"posawesome.tasks.weekly"
-# 	]
-# 	"monthly": [
-# 		"posawesome.tasks.monthly"
-# 	]
-# }
+scheduler_events = {
+    "daily": [
+        # Prune browser RUM events older than 30 days.
+        # Telemetry is keep-it-cheap; we don't need historical retention
+        # beyond the rolling window the dashboard reads from.
+        "posawesome.posawesome.api.telemetry.prune_old_events",
+    ],
+}
 
 # Testing
 # -------
@@ -181,7 +199,6 @@ fixtures = [
                 (
                     "Sales Invoice-posa_pos_opening_shift",
                     "POS Invoice-posa_pos_opening_shift",
-                    "Item Barcode-posa_uom",
                     "POS Profile-posa_pos_awesome_settings",
                     "POS Profile-posa_section_pricing_controls",
                     "POS Profile-posa_section_sales_returns",
@@ -306,6 +323,7 @@ fixtures = [
                     "POS Profile-column_break_dqsba",
                     "POS Profile-posa_use_server_cache",
                     "POS Profile-posa_server_cache_duration",
+                    "POS Profile-posa_use_web_route",
                     "POS Profile-posa_allow_duplicate_customer_names",
                     "POS Profile-column_break_anyol",
                     "POS Profile-pose_use_limit_search",
@@ -347,10 +365,13 @@ fixtures = [
                     "POS Invoice-posa_return_valid_upto",
                     "Sales Invoice-posa_return_valid_upto",
                     "User-posa_pos_pin",
-                    "User-posa_is_pos_supervisor",
                 ),
             ]
         ],
+    },
+    {
+        "doctype": "Role",
+        "filters": [["name", "in", ("POS Awesome Supervisor",)]],
     },
     {
         "doctype": "Property Setter",

@@ -16,10 +16,8 @@
 					variant="tonal"
 					class="summary-field summary-field--alert"
 				>
-					{{ __("Prorated return discount") }}:
-					{{ formatRatio(return_discount_meta.ratio) }} -
-					{{ __("Original") }}:
-					{{ formatCurrency(return_discount_meta.original_discount) }},
+					{{ __("Prorated return discount") }}: {{ formatRatio(return_discount_meta.ratio) }} -
+					{{ __("Original") }}: {{ formatCurrency(return_discount_meta.original_discount) }},
 					{{ __("Applied") }}:
 					{{ formatCurrency(return_discount_meta.prorated_discount) }}
 				</v-alert>
@@ -31,9 +29,13 @@
 							{{ currencySymbol(displayCurrency) }}{{ formatCurrency(subtotal) }}
 						</strong>
 						<div class="summary-hero__meta">
-							<span>{{ formatFloat(total_qty, hide_qty_decimals ? 0 : undefined) }} {{ __("qty") }}</span>
+							<span
+								>{{ formatFloat(total_qty, hide_qty_decimals ? 0 : undefined) }}
+								{{ __("qty") }}</span
+							>
 							<span>
-								{{ currencySymbol(displayCurrency) }}{{ formatCurrency(total_items_discount_amount) }}
+								{{ currencySymbol(displayCurrency)
+								}}{{ formatCurrency(total_items_discount_amount) }}
 								{{ __("discount") }}
 							</span>
 						</div>
@@ -145,13 +147,7 @@
 		</div>
 	</v-navigation-drawer>
 
-	<v-dialog
-		v-else
-		v-model="mobileDraftsDialog"
-		max-width="680"
-		scrollable
-		data-test="mobile-drafts-dialog"
-	>
+	<v-dialog v-else v-model="mobileDraftsDialog" max-width="680" scrollable data-test="mobile-drafts-dialog">
 		<v-card class="pos-themed-card">
 			<v-card-title class="d-flex align-center justify-space-between">
 				<span>{{ __(currentDraftSourceOption.panelTitle) }}</span>
@@ -270,9 +266,7 @@ const showReturnDiscountAlert = computed(
 );
 const allDrafts = computed(() => (Array.isArray(parkedOrders.value) ? parkedOrders.value : []));
 const availableDraftSources = computed(() => getAvailableDocumentSources(props.pos_profile));
-const showDraftSourceSelector = computed(() =>
-	shouldShowDocumentSourceSelector(availableDraftSources.value),
-);
+const showDraftSourceSelector = computed(() => shouldShowDocumentSourceSelector(availableDraftSources.value));
 const currentDraftSource = computed({
 	get() {
 		return getDefaultDocumentSource(props.pos_profile, draftSource.value);
@@ -287,9 +281,7 @@ const currentDraftSource = computed({
 		await emit("load-drafts", nextSource);
 	},
 });
-const currentDraftSourceOption = computed(() =>
-	getDocumentSourceOption(currentDraftSource.value),
-);
+const currentDraftSourceOption = computed(() => getDocumentSourceOption(currentDraftSource.value));
 
 const hide_qty_decimals = computed(() => {
 	const opts = loadItemSelectorSettings();
@@ -297,6 +289,7 @@ const hide_qty_decimals = computed(() => {
 });
 
 watch(
+	// Drop deep:true — only need to react to profile reassignment.
 	() => props.pos_profile,
 	() => {
 		const nextSource = getDefaultDocumentSource(props.pos_profile, draftSource.value);
@@ -304,7 +297,7 @@ watch(
 			uiStore.setDraftSource(nextSource);
 		}
 	},
-	{ deep: true, immediate: true },
+	{ immediate: true },
 );
 
 watch(
@@ -340,10 +333,7 @@ function normalizeAdditionalDiscountDisplay(value) {
 	if (value === 0 || value === "0") {
 		return "";
 	}
-	if (
-		props.return_discount_meta &&
-		!props.pos_profile?.posa_use_percentage_discount
-	) {
+	if (props.return_discount_meta && !props.pos_profile?.posa_use_percentage_discount) {
 		const proratedValue = Number(props.return_discount_meta.prorated_discount);
 		if (Number.isFinite(proratedValue)) {
 			return Math.abs(proratedValue);
@@ -357,17 +347,12 @@ function normalizeAdditionalDiscountDisplay(value) {
 }
 
 function normalizeAdditionalDiscountInput(value) {
-	if (
-		props.return_discount_meta &&
-		!props.pos_profile?.posa_use_percentage_discount
-	) {
+	if (props.return_discount_meta && !props.pos_profile?.posa_use_percentage_discount) {
 		const numericValue = Number(value);
 		if (Number.isFinite(numericValue)) {
 			const originalStoredValue = Number(props.additional_discount);
 			const sign = Math.sign(
-				Number.isFinite(originalStoredValue) && originalStoredValue !== 0
-					? originalStoredValue
-					: -1,
+				Number.isFinite(originalStoredValue) && originalStoredValue !== 0 ? originalStoredValue : -1,
 			);
 			return sign * Math.abs(numericValue);
 		}

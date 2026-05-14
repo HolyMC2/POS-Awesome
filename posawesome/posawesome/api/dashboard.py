@@ -212,9 +212,7 @@ def _get_assigned_profiles(user: str, company_profiles: list[dict[str, Any]]) ->
         return []
 
     company_profile_names = {profile.get("name") for profile in company_profiles}
-    return sorted(
-        [name for name in allowed_profiles if name in company_profile_names]
-    )
+    return sorted([name for name in allowed_profiles if name in company_profile_names])
 
 
 def _iter_invoice_sources() -> list[tuple[str, str]]:
@@ -264,9 +262,7 @@ def _collect_sales_and_profit(
     if parent_amount_field or parent_net_field:
         sales_expression = f"sum(coalesce(inv.{parent_amount_field}, 0))" if parent_amount_field else "0"
         profit_sales_expression = (
-            f"sum(coalesce(inv.{parent_net_field}, 0))"
-            if parent_net_field
-            else sales_expression
+            f"sum(coalesce(inv.{parent_net_field}, 0))" if parent_net_field else sales_expression
         )
         sales_row = frappe.db.sql(
             f"""
@@ -409,8 +405,7 @@ def _classify_tax_charge_bucket(account_head: str, description: str, charge_type
     if any(token in normalized for token in ("fee", "levy", "surcharge", "cess", "commission")):
         return "fee"
     if any(
-        token in normalized
-        for token in ("tax", "gst", "vat", "sst", "hst", "tds", "withholding", "excise")
+        token in normalized for token in ("tax", "gst", "vat", "sst", "hst", "tds", "withholding", "excise")
     ):
         return "tax"
     if any(token in normalized for token in ("on net total", "on previous row", "on item quantity")):
@@ -468,9 +463,7 @@ def _get_cash_modes(profile_names: list[str]) -> set[str]:
         pluck="posa_cash_mode_of_payment",
     )
     cash_modes.update(
-        cstr(mode_name).strip()
-        for mode_name in configured_cash_modes
-        if cstr(mode_name).strip()
+        cstr(mode_name).strip() for mode_name in configured_cash_modes if cstr(mode_name).strip()
     )
     return cash_modes
 
@@ -518,7 +511,9 @@ def _collect_sales_summary(
     closing_actual_by_mode: dict[str, float] = defaultdict(float)
     mode_names: set[str] = set(cash_modes)
 
-    if frappe.db.exists("DocType", "POS Opening Shift") and frappe.db.exists("DocType", "POS Opening Shift Detail"):
+    if frappe.db.exists("DocType", "POS Opening Shift") and frappe.db.exists(
+        "DocType", "POS Opening Shift Detail"
+    ):
         opening_rows = frappe.db.sql(
             f"""
             select
@@ -544,7 +539,9 @@ def _collect_sales_summary(
             opening_by_mode[mode_name] += amount
             summary["opening_amount"] += amount
 
-    if frappe.db.exists("DocType", "POS Closing Shift") and frappe.db.exists("DocType", "POS Closing Shift Detail"):
+    if frappe.db.exists("DocType", "POS Closing Shift") and frappe.db.exists(
+        "DocType", "POS Closing Shift Detail"
+    ):
         closing_rows = frappe.db.sql(
             f"""
             select
@@ -589,7 +586,9 @@ def _collect_sales_summary(
                 "additional_discount_amount",
             ],
         )
-        tax_field = _pick_first_column(parent_doctype, ["base_total_taxes_and_charges", "total_taxes_and_charges"])
+        tax_field = _pick_first_column(
+            parent_doctype, ["base_total_taxes_and_charges", "total_taxes_and_charges"]
+        )
         change_field = _pick_first_column(parent_doctype, ["base_change_amount", "change_amount"])
 
         amount_expression = f"coalesce(inv.{amount_field}, 0)" if amount_field else "0"
@@ -773,9 +772,7 @@ def _collect_sales_summary(
 
     summary["cash_variance"] = flt(summary["actual_cash"] - summary["expected_cash"])
     invoice_count = cint(summary.get("invoice_count"))
-    summary["average_invoice_value"] = (
-        flt(summary["net_sales"] / invoice_count) if invoice_count > 0 else 0.0
-    )
+    summary["average_invoice_value"] = flt(summary["net_sales"] / invoice_count) if invoice_count > 0 else 0.0
     return summary
 
 
@@ -848,7 +845,9 @@ def _collect_payment_method_report(
             "ifnull(inv.is_return, 0)" if frappe.db.has_column(parent_doctype, "is_return") else "0"
         )
         paid_field = _pick_first_column(parent_doctype, ["base_paid_amount", "paid_amount"])
-        outstanding_field = _pick_first_column(parent_doctype, ["base_outstanding_amount", "outstanding_amount"])
+        outstanding_field = _pick_first_column(
+            parent_doctype, ["base_outstanding_amount", "outstanding_amount"]
+        )
         grand_total_field = _pick_first_column(parent_doctype, ["base_grand_total", "grand_total"])
 
         paid_expression = f"coalesce(inv.{paid_field}, 0)" if paid_field else "0"
@@ -1013,7 +1012,9 @@ def _collect_payment_method_report(
         "other": {"category": "other", "label": _("Other"), "amount": 0.0, "invoice_count": 0},
     }
     method_rows: list[dict[str, Any]] = []
-    for mode_name in sorted(payment_totals.keys(), key=lambda name: abs(flt(payment_totals.get(name))), reverse=True):
+    for mode_name in sorted(
+        payment_totals.keys(), key=lambda name: abs(flt(payment_totals.get(name))), reverse=True
+    ):
         amount = flt(payment_totals.get(mode_name))
         invoice_count = cint(payment_invoice_counts.get(mode_name))
         category = _classify_payment_mode(mode_name, mode_type_map.get(mode_name, ""), cash_modes)
@@ -1039,9 +1040,7 @@ def _collect_payment_method_report(
     method_rows = method_rows[: _coerce_limit(limit, default=20, minimum=1, maximum=200)]
     for row in method_rows:
         row["share_pct"] = (
-            flt((flt(row.get("amount")) / total_collected) * 100)
-            if abs(total_collected) > 0.00001
-            else 0.0
+            flt((flt(row.get("amount")) / total_collected) * 100) if abs(total_collected) > 0.00001 else 0.0
         )
 
     category_rows: list[dict[str, Any]] = []
@@ -1054,9 +1053,7 @@ def _collect_payment_method_report(
                 "label": row.get("label"),
                 "amount": amount,
                 "invoice_count": cint(row.get("invoice_count")),
-                "share_pct": flt((amount / total_collected) * 100)
-                if abs(total_collected) > 0.00001
-                else 0.0,
+                "share_pct": flt((amount / total_collected) * 100) if abs(total_collected) > 0.00001 else 0.0,
             }
         )
 
@@ -1288,11 +1285,7 @@ def _collect_discount_void_return_report(
                     if item_name_field
                     else "item.item_code"
                 )
-                stock_uom_expression = (
-                    f"coalesce(item.{stock_uom_field}, '')"
-                    if stock_uom_field
-                    else "''"
-                )
+                stock_uom_expression = f"coalesce(item.{stock_uom_field}, '')" if stock_uom_field else "''"
                 return_item_rows = frappe.db.sql(
                     f"""
                     select
@@ -1623,13 +1616,9 @@ def _collect_customer_report(
         )
 
     customer_count = len(customer_rows)
-    repeat_customer_rate = (
-        flt((repeat_customer_count / customer_count) * 100) if customer_count > 0 else 0.0
-    )
+    repeat_customer_rate = flt((repeat_customer_count / customer_count) * 100) if customer_count > 0 else 0.0
     average_purchase_frequency = (
-        flt(sum(repeat_frequency_values) / len(repeat_frequency_values))
-        if repeat_frequency_values
-        else None
+        flt(sum(repeat_frequency_values) / len(repeat_frequency_values)) if repeat_frequency_values else None
     )
 
     report["summary"] = {
@@ -1836,7 +1825,9 @@ def _collect_staff_cashier_performance_report(
                 summary["items_sold"] += flt(row.get("items_sold"))
 
         if not parent_discount_field:
-            item_discount_field = _pick_first_column(child_doctype, ["base_discount_amount", "discount_amount"])
+            item_discount_field = _pick_first_column(
+                child_doctype, ["base_discount_amount", "discount_amount"]
+            )
             if item_discount_field:
                 item_discount_rows = frappe.db.sql(
                     f"""
@@ -1920,9 +1911,7 @@ def _collect_staff_cashier_performance_report(
         return_rate_pct = (
             flt((return_count / total_activity_count) * 100) if total_activity_count > 0 else 0.0
         )
-        void_rate_pct = (
-            flt((void_count / total_activity_count) * 100) if total_activity_count > 0 else 0.0
-        )
+        void_rate_pct = flt((void_count / total_activity_count) * 100) if total_activity_count > 0 else 0.0
         staff_rows.append(
             {
                 "cashier": row.get("cashier"),
@@ -2036,9 +2025,7 @@ def _collect_profitability_report(
             filters={"name": ["in", item_codes]},
             fields=["name", "item_group"],
         )
-        item_meta = {
-            cstr(row.get("name")).strip(): row for row in item_rows if cstr(row.get("name")).strip()
-        }
+        item_meta = {cstr(row.get("name")).strip(): row for row in item_rows if cstr(row.get("name")).strip()}
 
     summary = report["summary"]
     item_rows_out: list[dict[str, Any]] = []
@@ -2607,8 +2594,12 @@ def _collect_tax_charges_report(
     for parent_doctype, _child_doctype in _iter_invoice_sources():
         grand_total_field = _pick_first_column(parent_doctype, ["base_grand_total", "grand_total"])
         net_total_field = _pick_first_column(parent_doctype, ["base_net_total", "net_total"])
-        tax_total_field = _pick_first_column(parent_doctype, ["base_total_taxes_and_charges", "total_taxes_and_charges"])
-        round_off_field = _pick_first_column(parent_doctype, ["base_rounding_adjustment", "rounding_adjustment"])
+        tax_total_field = _pick_first_column(
+            parent_doctype, ["base_total_taxes_and_charges", "total_taxes_and_charges"]
+        )
+        round_off_field = _pick_first_column(
+            parent_doctype, ["base_rounding_adjustment", "rounding_adjustment"]
+        )
         adjustment_field = _pick_first_column(
             parent_doctype,
             [
@@ -2628,21 +2619,11 @@ def _collect_tax_charges_report(
         round_off_expression = f"coalesce(inv.{round_off_field}, 0)" if round_off_field else "0"
         adjustment_expression = f"coalesce(inv.{adjustment_field}, 0)" if adjustment_field else "0"
 
-        signed_grand_total = (
-            f"case when {is_return_expression} = 1 then -abs({grand_total_expression}) else abs({grand_total_expression}) end"
-        )
-        signed_net_total = (
-            f"case when {is_return_expression} = 1 then -abs({net_total_expression}) else abs({net_total_expression}) end"
-        )
-        signed_tax_total = (
-            f"case when {is_return_expression} = 1 then -abs({tax_total_expression}) else abs({tax_total_expression}) end"
-        )
-        signed_adjustment = (
-            f"case when {is_return_expression} = 1 then -abs({adjustment_expression}) else abs({adjustment_expression}) end"
-        )
-        signed_round_off = (
-            f"case when {is_return_expression} = 1 then -abs({round_off_expression}) else {round_off_expression} end"
-        )
+        signed_grand_total = f"case when {is_return_expression} = 1 then -abs({grand_total_expression}) else abs({grand_total_expression}) end"
+        signed_net_total = f"case when {is_return_expression} = 1 then -abs({net_total_expression}) else abs({net_total_expression}) end"
+        signed_tax_total = f"case when {is_return_expression} = 1 then -abs({tax_total_expression}) else abs({tax_total_expression}) end"
+        signed_adjustment = f"case when {is_return_expression} = 1 then -abs({adjustment_expression}) else abs({adjustment_expression}) end"
+        signed_round_off = f"case when {is_return_expression} = 1 then -abs({round_off_expression}) else {round_off_expression} end"
 
         totals_rows = frappe.db.sql(
             f"""
@@ -2880,9 +2861,11 @@ def _collect_tax_charges_report(
                 "label": row.get("label"),
                 "amount": flt(row.get("amount")),
                 "invoice_count": cint(row.get("invoice_count")),
-                "share_pct": flt((flt(row.get("amount")) / total_tax_base) * 100)
-                if abs(total_tax_base) > 0.00001
-                else 0.0,
+                "share_pct": (
+                    flt((flt(row.get("amount")) / total_tax_base) * 100)
+                    if abs(total_tax_base) > 0.00001
+                    else 0.0
+                ),
             }
             for row in tax_head_buckets.values()
             if abs(flt(row.get("amount"))) > 0.00001
@@ -2903,9 +2886,9 @@ def _collect_tax_charges_report(
                 "category": row.get("category"),
                 "amount": flt(row.get("amount")),
                 "invoice_count": cint(row.get("invoice_count")),
-                "share_pct": flt((flt(row.get("amount")) / charge_base) * 100)
-                if abs(charge_base) > 0.00001
-                else 0.0,
+                "share_pct": (
+                    flt((flt(row.get("amount")) / charge_base) * 100) if abs(charge_base) > 0.00001 else 0.0
+                ),
             }
             for row in charge_head_buckets.values()
             if abs(flt(row.get("amount"))) > 0.00001
@@ -3075,9 +3058,7 @@ def _collect_sales_trend(
                 not entry.get("week_start") or start_candidate < cstr(entry.get("week_start"))
             ):
                 entry["week_start"] = start_candidate
-            if end_candidate and (
-                not entry.get("week_end") or end_candidate > cstr(entry.get("week_end"))
-            ):
+            if end_candidate and (not entry.get("week_end") or end_candidate > cstr(entry.get("week_end"))):
                 entry["week_end"] = end_candidate
 
         month_rows = frappe.db.sql(
@@ -3123,9 +3104,7 @@ def _collect_sales_trend(
                 not entry.get("month_start") or start_candidate < cstr(entry.get("month_start"))
             ):
                 entry["month_start"] = start_candidate
-            if end_candidate and (
-                not entry.get("month_end") or end_candidate > cstr(entry.get("month_end"))
-            ):
+            if end_candidate and (not entry.get("month_end") or end_candidate > cstr(entry.get("month_end"))):
                 entry["month_end"] = end_candidate
 
         hour_expression = None
@@ -3172,7 +3151,9 @@ def _collect_sales_trend(
     day_map = {cstr(row.get("date")): flt(row.get("sales")) for row in day_points}
     today_key = str(today)
     yesterday_key = str(today - timedelta(days=1))
-    trend["highlights"]["day_growth_pct"] = _pct_change(day_map.get(today_key, 0.0), day_map.get(yesterday_key, 0.0))
+    trend["highlights"]["day_growth_pct"] = _pct_change(
+        day_map.get(today_key, 0.0), day_map.get(yesterday_key, 0.0)
+    )
 
     if len(week_points) >= 2:
         trend["highlights"]["week_growth_pct"] = _pct_change(
@@ -3355,12 +3336,8 @@ def _collect_item_sales_report(
             continue
 
         estimated_margin = flt(sales_amount - estimated_cost)
-        margin_pct = (
-            flt((estimated_margin / sales_amount) * 100) if abs(sales_amount) > 0.00001 else None
-        )
-        discount_frequency_pct = (
-            flt((discounted_lines / total_lines) * 100) if total_lines > 0 else 0.0
-        )
+        margin_pct = flt((estimated_margin / sales_amount) * 100) if abs(sales_amount) > 0.00001 else None
+        discount_frequency_pct = flt((discounted_lines / total_lines) * 100) if total_lines > 0 else 0.0
 
         items.append(
             {
@@ -3467,10 +3444,22 @@ def _collect_category_brand_variant_report(
     }
 
     category_buckets: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"label": "", "sold_qty": 0.0, "sales_amount": 0.0, "discount_amount": 0.0, "item_codes": set()}
+        lambda: {
+            "label": "",
+            "sold_qty": 0.0,
+            "sales_amount": 0.0,
+            "discount_amount": 0.0,
+            "item_codes": set(),
+        }
     )
     brand_buckets: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"label": "", "sold_qty": 0.0, "sales_amount": 0.0, "discount_amount": 0.0, "item_codes": set()}
+        lambda: {
+            "label": "",
+            "sold_qty": 0.0,
+            "sales_amount": 0.0,
+            "discount_amount": 0.0,
+            "item_codes": set(),
+        }
     )
     variant_buckets: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
@@ -3862,7 +3851,9 @@ def _collect_inventory_status_report(
         sold_qty = flt(sales_row.get("sold_qty"))
         sales_amount = flt(sales_row.get("sales_amount"))
         avg_daily_sales = flt(sold_qty / period_days) if period_days > 0 else 0.0
-        stock_cover_days = flt(actual_qty / avg_daily_sales) if avg_daily_sales > 0 and actual_qty > 0 else None
+        stock_cover_days = (
+            flt(actual_qty / avg_daily_sales) if avg_daily_sales > 0 and actual_qty > 0 else None
+        )
 
         base_entry = {
             "item_code": item_code,
@@ -4033,8 +4024,7 @@ def _collect_stock_movement_report(
         {
             cstr(row.get("voucher_no")).strip()
             for row in sle_rows
-            if cstr(row.get("voucher_type")).strip() == "Stock Entry"
-            and cstr(row.get("voucher_no")).strip()
+            if cstr(row.get("voucher_type")).strip() == "Stock Entry" and cstr(row.get("voucher_no")).strip()
         }
     )
     stock_entry_purpose_map: dict[str, str] = {}
@@ -4054,11 +4044,7 @@ def _collect_stock_movement_report(
         }
 
     item_codes = sorted(
-        {
-            cstr(row.get("item_code")).strip()
-            for row in sle_rows
-            if cstr(row.get("item_code")).strip()
-        }
+        {cstr(row.get("item_code")).strip() for row in sle_rows if cstr(row.get("item_code")).strip()}
     )
     item_name_map: dict[str, str] = {}
     if item_codes and frappe.db.exists("DocType", "Item"):
@@ -4165,7 +4151,9 @@ def _collect_stock_movement_report(
 
     report["day_wise"] = sorted(day_buckets.values(), key=lambda row: cstr(row.get("date")))
     report["recent_movements"] = recent_movements
-    report["summary"] = {key: flt(value) if isinstance(value, float) else value for key, value in summary.items()}
+    report["summary"] = {
+        key: flt(value) if isinstance(value, float) else value for key, value in summary.items()
+    }
     report["summary"]["movement_count"] = cint(summary.get("movement_count"))
     return report
 
@@ -4206,9 +4194,7 @@ def _collect_reorder_purchase_suggestions(
         return report
 
     valuation_expression = (
-        "max(coalesce(item.valuation_rate, 0))"
-        if frappe.db.has_column("Item", "valuation_rate")
-        else "0"
+        "max(coalesce(item.valuation_rate, 0))" if frappe.db.has_column("Item", "valuation_rate") else "0"
     )
     stock_rows = frappe.db.sql(
         f"""
@@ -4233,11 +4219,7 @@ def _collect_reorder_purchase_suggestions(
 
     period_days = max(1, (getdate(date_to) - getdate(date_from)).days + 1)
     item_codes = sorted(
-        {
-            cstr(row.get("item_code")).strip()
-            for row in stock_rows
-            if cstr(row.get("item_code")).strip()
-        }
+        {cstr(row.get("item_code")).strip() for row in stock_rows if cstr(row.get("item_code")).strip()}
     )
     if not item_codes:
         return report
@@ -4261,9 +4243,7 @@ def _collect_reorder_purchase_suggestions(
         filters={"name": ["in", item_codes]},
         fields=item_fields,
     )
-    item_map = {
-        cstr(row.get("name")).strip(): row for row in item_rows if cstr(row.get("name")).strip()
-    }
+    item_map = {cstr(row.get("name")).strip(): row for row in item_rows if cstr(row.get("name")).strip()}
 
     reorder_map: dict[str, dict[str, float]] = {}
     if frappe.db.exists("DocType", "Item Reorder"):
@@ -4357,9 +4337,7 @@ def _collect_reorder_purchase_suggestions(
         if current_qty <= 0:
             urgency = "critical"
         else:
-            stock_cover_days = (
-                flt(current_qty / avg_daily_sales) if avg_daily_sales > 0 else None
-            )
+            stock_cover_days = flt(current_qty / avg_daily_sales) if avg_daily_sales > 0 else None
             if stock_cover_days is not None and stock_cover_days < lead_time_days:
                 urgency = "high"
             elif current_qty <= threshold:
@@ -4459,9 +4437,7 @@ def _collect_supplier_overview_report(
     )
 
     supplier_name_field = (
-        "supplier_name"
-        if frappe.db.has_column("Purchase Invoice", "supplier_name")
-        else "supplier"
+        "supplier_name" if frappe.db.has_column("Purchase Invoice", "supplier_name") else "supplier"
     )
     amount_expression = f"coalesce({amount_field}, 0)"
     paid_expression = f"coalesce({paid_field}, 0)" if paid_field else "0"
@@ -4499,9 +4475,7 @@ def _collect_supplier_overview_report(
     purchase_amount = flt(summary.get("purchase_amount"))
     summary["avg_invoice_value"] = flt(purchase_amount / purchase_count) if purchase_count else 0.0
     summary["pending_ratio_pct"] = (
-        flt((flt(summary["pending_amount"]) / purchase_amount) * 100)
-        if purchase_amount > 0.00001
-        else 0.0
+        flt((flt(summary["pending_amount"]) / purchase_amount) * 100) if purchase_amount > 0.00001 else 0.0
     )
 
     supplier_rows = frappe.db.sql(
@@ -4539,10 +4513,12 @@ def _collect_supplier_overview_report(
                 "paid_amount": flt(row.get("paid_amount")),
                 "pending_amount": pending_amount,
                 "avg_invoice_value": flt(supplier_amount / supplier_count) if supplier_count else 0.0,
-                "share_pct": flt((supplier_amount / purchase_amount) * 100) if purchase_amount > 0.00001 else 0.0,
-                "pending_ratio_pct": flt((pending_amount / supplier_amount) * 100)
-                if supplier_amount > 0.00001
-                else 0.0,
+                "share_pct": (
+                    flt((supplier_amount / purchase_amount) * 100) if purchase_amount > 0.00001 else 0.0
+                ),
+                "pending_ratio_pct": (
+                    flt((pending_amount / supplier_amount) * 100) if supplier_amount > 0.00001 else 0.0
+                ),
                 "last_purchase_date": row.get("last_purchase_date"),
             }
         )
@@ -4590,6 +4566,226 @@ def _collect_supplier_overview_report(
     return report
 
 
+def _resolve_dashboard_context(
+    pos_profile=None,
+    scope=None,
+    profile_filter=None,
+    report_month=None,
+    low_stock_threshold=None,
+    fast_moving_limit: int = 10,
+    fast_moving_page: int = 1,
+    fast_moving_page_size=None,
+    fast_moving_search=None,
+    item_sales_limit: int = 20,
+    category_report_limit: int = 12,
+    inventory_status_limit: int = 20,
+    stock_movement_limit: int = 50,
+    reorder_suggestion_limit: int = 25,
+    payment_report_limit: int = 20,
+    discount_report_limit: int = 20,
+    customer_report_limit: int = 20,
+    staff_report_limit: int = 20,
+    profitability_report_limit: int = 20,
+    branch_report_limit: int = 20,
+    tax_report_limit: int = 20,
+    supplier_limit: int = 8,
+    low_stock_limit: int = 20,
+) -> dict[str, Any]:
+    """Resolve profile/scope/date context shared by all dashboard endpoints.
+
+    Centralises permission checks, scope normalisation, limit coercion, and
+    available-profile resolution so each per-section endpoint avoids redoing
+    that work and produces identical envelope metadata.
+    """
+
+    user = frappe.session.user
+    current_profile_doc = _resolve_profile(pos_profile)
+    current_profile_name = cstr(current_profile_doc.get("name")).strip()
+    _check_profile_permission(current_profile_name)
+
+    profile_scope_enabled = True
+    if frappe.db.has_column("POS Profile", "posa_allow_company_dashboard_scope"):
+        profile_scope_enabled = _to_bool_setting(
+            current_profile_doc.get("posa_allow_company_dashboard_scope"), True
+        )
+
+    default_scope = DEFAULT_DASHBOARD_SCOPE
+    allow_all_profiles = _user_can_view_all_profiles(user) and profile_scope_enabled
+    requested_scope = _normalize_scope(scope, default_scope, allow_all_profiles)
+    profile_filter = cstr(profile_filter).strip()
+
+    requested_fast_moving_page_size = (
+        fast_moving_page_size if fast_moving_page_size is not None else fast_moving_limit
+    )
+    fast_moving_page_size = _coerce_limit(requested_fast_moving_page_size, default=10, minimum=1, maximum=100)
+    fast_moving_page = _coerce_page(fast_moving_page, default=1)
+    fast_moving_offset = (fast_moving_page - 1) * fast_moving_page_size
+    fast_moving_search = cstr(fast_moving_search).strip()
+    supplier_limit = _coerce_limit(supplier_limit, default=8, minimum=1, maximum=25)
+    low_stock_limit = _coerce_limit(low_stock_limit, default=20, minimum=1, maximum=100)
+    item_sales_limit = _coerce_limit(item_sales_limit, default=20, minimum=1, maximum=100)
+    category_report_limit = _coerce_limit(category_report_limit, default=12, minimum=1, maximum=100)
+    inventory_status_limit = _coerce_limit(inventory_status_limit, default=20, minimum=1, maximum=100)
+    stock_movement_limit = _coerce_limit(stock_movement_limit, default=50, minimum=1, maximum=200)
+    reorder_suggestion_limit = _coerce_limit(reorder_suggestion_limit, default=25, minimum=1, maximum=200)
+    payment_report_limit = _coerce_limit(payment_report_limit, default=20, minimum=1, maximum=200)
+    discount_report_limit = _coerce_limit(discount_report_limit, default=20, minimum=1, maximum=200)
+    customer_report_limit = _coerce_limit(customer_report_limit, default=20, minimum=1, maximum=200)
+    staff_report_limit = _coerce_limit(staff_report_limit, default=20, minimum=1, maximum=200)
+    profitability_report_limit = _coerce_limit(profitability_report_limit, default=20, minimum=1, maximum=200)
+    branch_report_limit = _coerce_limit(branch_report_limit, default=20, minimum=1, maximum=200)
+    tax_report_limit = _coerce_limit(tax_report_limit, default=20, minimum=1, maximum=200)
+
+    company = cstr(current_profile_doc.get("company")).strip()
+    company_profiles = _get_company_profiles(company)
+    profiles_by_name = {profile.get("name"): profile for profile in company_profiles if profile.get("name")}
+
+    assigned_profile_names = _get_assigned_profiles(user, company_profiles)
+    if current_profile_name not in assigned_profile_names and not allow_all_profiles:
+        assigned_profile_names.append(current_profile_name)
+
+    available_profile_names = (
+        sorted(profiles_by_name.keys()) if allow_all_profiles else sorted(set(assigned_profile_names))
+    )
+    available_profiles = [
+        profiles_by_name[name] for name in available_profile_names if name in profiles_by_name
+    ]
+
+    if requested_scope == SCOPE_SPECIFIC:
+        target_profile = profile_filter or current_profile_name
+        if target_profile not in profiles_by_name:
+            frappe.throw(_("POS Profile {0} does not belong to company {1}.").format(target_profile, company))
+        if not allow_all_profiles and target_profile not in available_profile_names:
+            frappe.throw(
+                _("You are not permitted to view dashboard data for POS Profile {0}.").format(target_profile),
+                frappe.PermissionError,
+            )
+        selected_profile_names = [target_profile]
+    elif requested_scope == SCOPE_CURRENT:
+        selected_profile_names = [current_profile_name]
+    else:
+        selected_profile_names = available_profile_names or [current_profile_name]
+
+    selected_profiles = [
+        profiles_by_name.get(name) for name in selected_profile_names if profiles_by_name.get(name)
+    ]
+    selected_profiles = [profile for profile in selected_profiles if profile]
+
+    if not selected_profiles:
+        current_profile_fallback = profiles_by_name.get(current_profile_name) or current_profile_doc
+        if current_profile_fallback and _is_dashboard_enabled(current_profile_fallback):
+            selected_profiles = [current_profile_fallback]
+            selected_profile_names = [current_profile_name]
+
+    selected_profiles_before_override = list(selected_profiles)
+    profile_override_enabled = [profile for profile in selected_profiles if _is_dashboard_enabled(profile)]
+    selected_profiles = profile_override_enabled
+    selected_profile_names = [profile.get("name") for profile in selected_profiles]
+
+    single_profile = selected_profiles[0] if len(selected_profiles) == 1 else None
+    profile_threshold = single_profile.get("posa_low_stock_alert_threshold") if single_profile else None
+    threshold_fallback = profile_threshold or DEFAULT_LOW_STOCK_THRESHOLD
+    threshold = _coerce_threshold(low_stock_threshold, threshold_fallback)
+
+    warehouses = [
+        cstr(profile.get("warehouse")).strip()
+        for profile in selected_profiles
+        if cstr(profile.get("warehouse")).strip()
+    ]
+    if not warehouses:
+        default_warehouse = get_default_warehouse(company)
+        warehouses = [default_warehouse] if default_warehouse else []
+
+    company_currency = cstr(frappe.db.get_value("Company", company, "default_currency")).strip()
+    if single_profile:
+        currency = cstr(single_profile.get("currency")).strip() or company_currency
+    else:
+        currency = company_currency or cstr(current_profile_doc.get("currency")).strip()
+
+    current_today = getdate(nowdate())
+    month_start, report_to_date, selected_report_month = _resolve_report_month(report_month, current_today)
+    fast_moving_days = max(1, (report_to_date - month_start).days + 1)
+    enabled = bool(selected_profiles)
+    disabled_reason = None
+    if not selected_profiles:
+        disabled_reason = "profile_disabled" if selected_profiles_before_override else "no_profiles_in_scope"
+    profile_label = single_profile.get("name") if single_profile else None
+    warehouse_label = warehouses[0] if len(warehouses) == 1 else _("Multiple Warehouses")
+
+    return {
+        "enabled": enabled,
+        "disabled_reason": disabled_reason,
+        "default_scope": default_scope,
+        "requested_scope": requested_scope,
+        "allow_all_profiles": allow_all_profiles,
+        "profile_scope_enabled": profile_scope_enabled,
+        "profile_label": profile_label,
+        "selected_profile_names": selected_profile_names,
+        "available_profiles": available_profiles,
+        "company": company,
+        "warehouses": warehouses,
+        "warehouse_label": warehouse_label,
+        "currency": currency,
+        "month_start": month_start,
+        "report_to_date": report_to_date,
+        "selected_report_month": selected_report_month,
+        "fast_moving_days": fast_moving_days,
+        "fast_moving_page": fast_moving_page,
+        "fast_moving_page_size": fast_moving_page_size,
+        "fast_moving_offset": fast_moving_offset,
+        "fast_moving_search": fast_moving_search,
+        "threshold": threshold,
+        "supplier_limit": supplier_limit,
+        "low_stock_limit": low_stock_limit,
+        "item_sales_limit": item_sales_limit,
+        "category_report_limit": category_report_limit,
+        "inventory_status_limit": inventory_status_limit,
+        "stock_movement_limit": stock_movement_limit,
+        "reorder_suggestion_limit": reorder_suggestion_limit,
+        "payment_report_limit": payment_report_limit,
+        "discount_report_limit": discount_report_limit,
+        "customer_report_limit": customer_report_limit,
+        "staff_report_limit": staff_report_limit,
+        "profitability_report_limit": profitability_report_limit,
+        "branch_report_limit": branch_report_limit,
+        "tax_report_limit": tax_report_limit,
+    }
+
+
+def _build_dashboard_envelope(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Lightweight envelope returned alongside every per-section payload."""
+
+    return {
+        "enabled": ctx["enabled"],
+        "profile": ctx["profile_label"],
+        "scope": ctx["requested_scope"],
+        "default_scope": ctx["default_scope"],
+        "global_enabled": True,
+        "allow_all_profiles": ctx["allow_all_profiles"],
+        "profile_scope_enabled": ctx["profile_scope_enabled"],
+        "disabled_reason": ctx["disabled_reason"],
+        "selected_profiles": ctx["selected_profile_names"],
+        "available_profiles": [
+            {
+                "name": profile.get("name"),
+                "warehouse": profile.get("warehouse"),
+                "currency": profile.get("currency"),
+                "dashboard_enabled": profile.get("dashboard_enabled"),
+            }
+            for profile in ctx["available_profiles"]
+        ],
+        "company": ctx["company"],
+        "warehouse": ctx["warehouse_label"],
+        "currency": ctx["currency"],
+        "generated_at": now_datetime().isoformat(),
+        "date_context": {
+            "today": str(ctx["report_to_date"]),
+            "month_start": str(ctx["month_start"]),
+            "report_month": ctx["selected_report_month"],
+        },
+    }
+
+
 @frappe.whitelist()
 def get_dashboard_data(
     pos_profile=None,
@@ -4622,6 +4818,10 @@ def get_dashboard_data(
     - all: aggregates all accessible profiles in the same company.
     - current: only current POS profile.
     - specific: selected profile_filter.
+
+    Kept for backwards compatibility; prefer the per-section ``get_dashboard_*``
+    endpoints which let the frontend render sections as soon as their data
+    arrives instead of blocking on the full payload.
     """
 
     user = frappe.session.user
@@ -4643,9 +4843,7 @@ def get_dashboard_data(
     requested_fast_moving_page_size = (
         fast_moving_page_size if fast_moving_page_size is not None else fast_moving_limit
     )
-    fast_moving_page_size = _coerce_limit(
-        requested_fast_moving_page_size, default=10, minimum=1, maximum=100
-    )
+    fast_moving_page_size = _coerce_limit(requested_fast_moving_page_size, default=10, minimum=1, maximum=100)
     fast_moving_page = _coerce_page(fast_moving_page, default=1)
     fast_moving_offset = (fast_moving_page - 1) * fast_moving_page_size
     fast_moving_search = cstr(fast_moving_search).strip()
@@ -4660,9 +4858,7 @@ def get_dashboard_data(
     discount_report_limit = _coerce_limit(discount_report_limit, default=20, minimum=1, maximum=200)
     customer_report_limit = _coerce_limit(customer_report_limit, default=20, minimum=1, maximum=200)
     staff_report_limit = _coerce_limit(staff_report_limit, default=20, minimum=1, maximum=200)
-    profitability_report_limit = _coerce_limit(
-        profitability_report_limit, default=20, minimum=1, maximum=200
-    )
+    profitability_report_limit = _coerce_limit(profitability_report_limit, default=20, minimum=1, maximum=200)
     branch_report_limit = _coerce_limit(branch_report_limit, default=20, minimum=1, maximum=200)
     tax_report_limit = _coerce_limit(tax_report_limit, default=20, minimum=1, maximum=200)
 
@@ -4678,9 +4874,7 @@ def get_dashboard_data(
         sorted(profiles_by_name.keys()) if allow_all_profiles else sorted(set(assigned_profile_names))
     )
     available_profiles = [
-        profiles_by_name[name]
-        for name in available_profile_names
-        if name in profiles_by_name
+        profiles_by_name[name] for name in available_profile_names if name in profiles_by_name
     ]
 
     if requested_scope == SCOPE_SPECIFIC:
@@ -4710,9 +4904,7 @@ def get_dashboard_data(
             selected_profile_names = [current_profile_name]
 
     selected_profiles_before_override = list(selected_profiles)
-    profile_override_enabled = [
-        profile for profile in selected_profiles if _is_dashboard_enabled(profile)
-    ]
+    profile_override_enabled = [profile for profile in selected_profiles if _is_dashboard_enabled(profile)]
     selected_profiles = profile_override_enabled
     selected_profile_names = [profile.get("name") for profile in selected_profiles]
 
@@ -4745,11 +4937,7 @@ def get_dashboard_data(
     enabled = bool(selected_profiles)
     disabled_reason = None
     if not selected_profiles:
-        disabled_reason = (
-            "profile_disabled"
-            if selected_profiles_before_override
-            else "no_profiles_in_scope"
-        )
+        disabled_reason = "profile_disabled" if selected_profiles_before_override else "no_profiles_in_scope"
     profile_label = single_profile.get("name") if single_profile else None
     warehouse_label = warehouses[0] if len(warehouses) == 1 else _("Multiple Warehouses")
 
@@ -5242,9 +5430,9 @@ def get_dashboard_data(
         "page": fast_moving_page,
         "page_size": fast_moving_page_size,
         "total_count": fast_moving_total_count,
-        "total_pages": int(ceil(fast_moving_total_count / fast_moving_page_size))
-        if fast_moving_total_count
-        else 0,
+        "total_pages": (
+            int(ceil(fast_moving_total_count / fast_moving_page_size)) if fast_moving_total_count else 0
+        ),
         "search": fast_moving_search,
     }
     payload["inventory_insights"]["low_stock_items"] = _collect_low_stock_items(
@@ -5260,3 +5448,382 @@ def get_dashboard_data(
     )
 
     return payload
+
+
+# ---------------------------------------------------------------------------
+# Per-section dashboard endpoints (Phase 8 split)
+#
+# Each endpoint resolves the same envelope as ``get_dashboard_data`` but only
+# computes one section. The frontend can call them in parallel via
+# ``Promise.allSettled`` so each panel paints as its data arrives instead of
+# blocking first paint on the full mega-payload.
+# ---------------------------------------------------------------------------
+
+
+def _section_response(ctx: dict[str, Any], section_key: str, section_value: Any) -> dict[str, Any]:
+    """Return ``{envelope..., <section_key>: section_value}`` shaped like the
+    matching slice of the legacy ``get_dashboard_data`` payload."""
+
+    response = _build_dashboard_envelope(ctx)
+    response[section_key] = section_value
+    return response
+
+
+@frappe.whitelist()
+def get_dashboard_sales_overview(**kwargs):
+    """Today / month sales + profit roll-up across allowed invoice sources."""
+
+    ctx = _resolve_dashboard_context(**kwargs)
+    overview = {
+        "today_sales": 0.0,
+        "today_profit": 0.0,
+        "monthly_sales": 0.0,
+        "monthly_profit": 0.0,
+        "profit_method": "invoice_item",
+    }
+    if ctx["enabled"]:
+        company = ctx["company"]
+        profile_names = ctx["selected_profile_names"]
+        report_to_date = ctx["report_to_date"]
+        month_start = ctx["month_start"]
+        for parent_doctype, child_doctype in _iter_invoice_sources():
+            today_stats = _collect_sales_and_profit(
+                parent_doctype=parent_doctype,
+                child_doctype=child_doctype,
+                profile_names=profile_names,
+                company=company,
+                date_from=str(report_to_date),
+                date_to=str(report_to_date),
+            )
+            monthly_stats = _collect_sales_and_profit(
+                parent_doctype=parent_doctype,
+                child_doctype=child_doctype,
+                profile_names=profile_names,
+                company=company,
+                date_from=str(month_start),
+                date_to=str(report_to_date),
+            )
+            overview["today_sales"] += flt(today_stats.get("sales"))
+            overview["today_profit"] += flt(today_stats.get("profit"))
+            overview["monthly_sales"] += flt(monthly_stats.get("sales"))
+            overview["monthly_profit"] += flt(monthly_stats.get("profit"))
+            if (
+                today_stats.get("profit_method") == "stock_ledger"
+                or monthly_stats.get("profit_method") == "stock_ledger"
+            ):
+                overview["profit_method"] = "stock_ledger"
+    return _section_response(ctx, "sales_overview", overview)
+
+
+@frappe.whitelist()
+def get_dashboard_daily_sales_summary(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "daily_sales_summary", {})
+    summary = _collect_daily_sales_summary(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_value=str(ctx["report_to_date"]),
+    )
+    return _section_response(ctx, "daily_sales_summary", summary)
+
+
+@frappe.whitelist()
+def get_dashboard_monthly_sales_summary(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "monthly_sales_summary", {})
+    summary = _collect_monthly_sales_summary(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+    )
+    return _section_response(ctx, "monthly_sales_summary", summary)
+
+
+@frappe.whitelist()
+def get_dashboard_payment_method_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "payment_method_report", {})
+    section = _collect_payment_method_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["payment_report_limit"],
+    )
+    return _section_response(ctx, "payment_method_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_discount_void_return_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "discount_void_return_report", {})
+    section = _collect_discount_void_return_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["discount_report_limit"],
+    )
+    return _section_response(ctx, "discount_void_return_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_customer_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "customer_report", {})
+    section = _collect_customer_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["customer_report_limit"],
+    )
+    return _section_response(ctx, "customer_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_staff_performance_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "staff_performance_report", {})
+    section = _collect_staff_cashier_performance_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["staff_report_limit"],
+    )
+    return _section_response(ctx, "staff_performance_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_profitability_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "profitability_report", {})
+    section = _collect_profitability_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["profitability_report_limit"],
+    )
+    return _section_response(ctx, "profitability_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_branch_location_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "branch_location_report", {})
+    section = _collect_branch_location_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        threshold=ctx["threshold"],
+        limit=ctx["branch_report_limit"],
+    )
+    return _section_response(ctx, "branch_location_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_tax_charges_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "tax_charges_report", {})
+    section = _collect_tax_charges_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["tax_report_limit"],
+    )
+    return _section_response(ctx, "tax_charges_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_sales_trend(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "sales_trend", {})
+    section = _collect_sales_trend(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        today=ctx["report_to_date"],
+        month_start=ctx["month_start"],
+    )
+    return _section_response(ctx, "sales_trend", section)
+
+
+@frappe.whitelist()
+def get_dashboard_item_sales_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "item_sales_report", {})
+    section = _collect_item_sales_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["item_sales_limit"],
+    )
+    return _section_response(ctx, "item_sales_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_category_brand_variant_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "category_brand_variant_report", {})
+    section = _collect_category_brand_variant_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["category_report_limit"],
+    )
+    return _section_response(ctx, "category_brand_variant_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_inventory_status_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "inventory_status_report", {})
+    section = _collect_inventory_status_report(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        warehouses=ctx["warehouses"],
+        threshold=ctx["threshold"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["inventory_status_limit"],
+    )
+    return _section_response(ctx, "inventory_status_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_stock_movement_report(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "stock_movement_report", {})
+    section = _collect_stock_movement_report(
+        company=ctx["company"],
+        warehouses=ctx["warehouses"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["stock_movement_limit"],
+    )
+    return _section_response(ctx, "stock_movement_report", section)
+
+
+@frappe.whitelist()
+def get_dashboard_reorder_purchase_suggestions(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "reorder_purchase_suggestions", {})
+    section = _collect_reorder_purchase_suggestions(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        warehouses=ctx["warehouses"],
+        threshold=ctx["threshold"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["reorder_suggestion_limit"],
+    )
+    return _section_response(ctx, "reorder_purchase_suggestions", section)
+
+
+@frappe.whitelist()
+def get_dashboard_inventory_insights(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(
+            ctx,
+            "inventory_insights",
+            {
+                "fast_moving_items": [],
+                "fast_moving_period": {
+                    "from": str(ctx["month_start"]),
+                    "to": str(ctx["report_to_date"]),
+                    "days": ctx["fast_moving_days"],
+                },
+                "fast_moving_pagination": {
+                    "page": ctx["fast_moving_page"],
+                    "page_size": ctx["fast_moving_page_size"],
+                    "total_count": 0,
+                    "total_pages": 0,
+                    "search": ctx["fast_moving_search"],
+                },
+                "low_stock_items": [],
+                "low_stock_threshold": ctx["threshold"],
+            },
+        )
+    fast_moving_items, fast_moving_total_count = _collect_fast_moving_items(
+        profile_names=ctx["selected_profile_names"],
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["fast_moving_page_size"],
+        offset=ctx["fast_moving_offset"],
+        search_text=ctx["fast_moving_search"],
+    )
+    low_stock_items = _collect_low_stock_items(
+        warehouses=ctx["warehouses"],
+        threshold=ctx["threshold"],
+        limit=ctx["low_stock_limit"],
+    )
+    insights = {
+        "fast_moving_items": fast_moving_items,
+        "fast_moving_period": {
+            "from": str(ctx["month_start"]),
+            "to": str(ctx["report_to_date"]),
+            "days": ctx["fast_moving_days"],
+        },
+        "fast_moving_pagination": {
+            "page": ctx["fast_moving_page"],
+            "page_size": ctx["fast_moving_page_size"],
+            "total_count": fast_moving_total_count,
+            "total_pages": (
+                int(ceil(fast_moving_total_count / ctx["fast_moving_page_size"]))
+                if fast_moving_total_count
+                else 0
+            ),
+            "search": ctx["fast_moving_search"],
+        },
+        "low_stock_items": low_stock_items,
+        "low_stock_threshold": ctx["threshold"],
+    }
+    return _section_response(ctx, "inventory_insights", insights)
+
+
+@frappe.whitelist()
+def get_dashboard_supplier_overview(**kwargs):
+    ctx = _resolve_dashboard_context(**kwargs)
+    if not ctx["enabled"]:
+        return _section_response(ctx, "supplier_overview", {})
+    section = _collect_supplier_overview_report(
+        company=ctx["company"],
+        date_from=str(ctx["month_start"]),
+        date_to=str(ctx["report_to_date"]),
+        limit=ctx["supplier_limit"],
+    )
+    return _section_response(ctx, "supplier_overview", section)
+
+
+@frappe.whitelist()
+def get_dashboard_envelope(**kwargs):
+    """Just the envelope (profile/scope/date metadata) without any section data.
+
+    Used by the frontend to seed scope state and gate rendering before any
+    section payloads arrive."""
+
+    ctx = _resolve_dashboard_context(**kwargs)
+    return _build_dashboard_envelope(ctx)

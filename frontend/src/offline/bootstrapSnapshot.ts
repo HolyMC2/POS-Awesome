@@ -54,7 +54,7 @@ export type BootstrapPrerequisiteCollectionInput = {
 	itemsCount?: number | boolean | null;
 	customersCount?: number | boolean | null;
 	itemGroups?: unknown[] | null;
-	pricingSnapshotCount?: number | null;
+	pricingSnapshotCount?: number | boolean | null;
 	pricingContext?: unknown;
 	taxInclusive?: boolean | null;
 	printTemplate?: string | null;
@@ -758,7 +758,9 @@ export function collectBootstrapPrerequisites(
 			? "ready"
 			: "missing",
 		item_groups: hasNonEmptyArray(input?.itemGroups) ? "ready" : "missing",
-		pricing_rules_snapshot: Number(input?.pricingSnapshotCount || 0) > 0
+		pricing_rules_snapshot: hasPositiveCountOrReadyFlag(
+			input?.pricingSnapshotCount,
+		)
 			? "ready"
 			: "missing",
 		pricing_rules_context: hasTruthyValue(input?.pricingContext)
@@ -847,7 +849,9 @@ function collectBootstrapPrerequisitePatch(
 	}
 
 	if (hasOwnKey(input, "pricingSnapshotCount")) {
-		patch.pricing_rules_snapshot = Number(input?.pricingSnapshotCount || 0) > 0
+		patch.pricing_rules_snapshot = hasPositiveCountOrReadyFlag(
+			input?.pricingSnapshotCount,
+		)
 			? "ready"
 			: "missing";
 	}

@@ -42,14 +42,7 @@ def _restore_modules(original_modules):
 
 def _load_module():
     module_name = "test_barcode_target"
-    file_path = (
-        REPO_ROOT
-        / "posawesome"
-        / "posawesome"
-        / "api"
-        / "item_processing"
-        / "barcode.py"
-    )
+    file_path = REPO_ROOT / "posawesome" / "posawesome" / "api" / "item_processing" / "barcode.py"
     spec = importlib.util.spec_from_file_location(module_name, file_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
@@ -67,7 +60,7 @@ class TestBarcodeProcessing(unittest.TestCase):
     def tearDownClass(cls):
         _restore_modules(cls.original_modules)
 
-    def test_get_items_from_barcode_uses_standard_uom_when_posa_uom_empty(self):
+    def test_get_items_from_barcode_uses_standard_uom_even_when_posa_uom_exists(self):
         calls = []
 
         class Db:
@@ -78,7 +71,7 @@ class TestBarcodeProcessing(unittest.TestCase):
                         {
                             "item_code": "ITEM-001",
                             "uom": "Box",
-                            "posa_uom": None,
+                            "posa_uom": "Nos",
                         }
                     )
                 if doctype == "Item Price":

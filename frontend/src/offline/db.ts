@@ -46,7 +46,9 @@ const BASE_SCHEMA = {
 	keyval: "&key",
 	queue: "&key",
 	write_queue:
-		"++queue_id,entity_type,status,created_at,last_attempt_at,retry_count,&idempotency_key,[entity_type+status]",
+		"++queue_id,entity_type,status,resource,next_attempt_at,created_at,last_attempt_at,retry_count,&idempotency_key,[entity_type+status],[status+next_attempt_at]",
+	invoice_outbox:
+		"++outbox_id,&client_request_id,status,resource,created_at,next_retry_at,nextAttemptAt,retry_count,[status+next_retry_at],[resource+status],[status+nextAttemptAt]",
 	cache: "&key",
 	items: "&item_code,item_name,item_group,*barcodes,*name_keywords,*serials,*batches",
 	item_prices: "&[price_list+item_code],price_list,item_code",
@@ -59,7 +61,7 @@ const BASE_SCHEMA = {
 	translations: "&key",
 	pricing_rules: "&key",
 	settings: "&key",
-	sync_state: "&key",
+	sync_state: "&key,resourceId,status,nextRetryAt,lastAttemptAt,updated_at",
 };
 
 export const KEY_TABLE_MAP: Record<string, string> = {
@@ -89,6 +91,7 @@ export const KEY_TABLE_MAP: Record<string, string> = {
 	cache_ready: "settings",
 	stock_cache_ready: "settings",
 	manual_offline: "settings",
+	invoice_outbox_mode: "settings",
 	bootstrap_snapshot: "settings",
 	bootstrap_snapshot_status: "settings",
 	bootstrap_limited_mode: "settings",
@@ -107,6 +110,7 @@ const LARGE_KEYS = new Set([
 
 const LOCAL_STORAGE_KEYS = new Set([
 	"manual_offline",
+	"invoice_outbox_mode",
 	"bootstrap_snapshot",
 	"bootstrap_snapshot_status",
 	"bootstrap_limited_mode",
@@ -116,9 +120,7 @@ const LOCAL_STORAGE_KEYS = new Set([
 	"tax_inclusive",
 ]);
 
-const MEMORY_ONLY_KEYS = new Set([
-	"customer_storage",
-]);
+const MEMORY_ONLY_KEYS = new Set(["customer_storage"]);
 
 export const PENDING_OFFLINE_QUEUE_KEYS = Object.freeze([
 	"offline_invoices",
@@ -224,6 +226,8 @@ db.version(8).stores(BASE_SCHEMA);
 db.version(9).stores(BASE_SCHEMA);
 db.version(10).stores(BASE_SCHEMA);
 db.version(11).stores(BASE_SCHEMA);
+db.version(12).stores(BASE_SCHEMA);
+db.version(13).stores(BASE_SCHEMA);
 
 let persistWorker: Worker | null = null;
 if (typeof Worker !== "undefined") {
@@ -243,6 +247,7 @@ const MEMORY_DEFAULTS: AnyRecord = {
 	offline_customers: [],
 	offline_payments: [],
 	offline_cash_movements: [],
+	invoice_outbox_mode: "off",
 	pos_last_sync_totals: { pending: 0, synced: 0, drafted: 0 },
 	uom_cache: {},
 	offers_cache: [],
@@ -326,16 +331,28 @@ function removeLocalStorageMirror(key: string) {
 async function deletePersistedKey(key: string) {
 	const primaryTable = tableForKey(key);
 	const deletePrimary = () =>
-		db.table(primaryTable).delete(key).catch((error) => {
-			console.warn(`Failed to delete ${key} from ${primaryTable}`, error);
-		});
+		db
+			.table(primaryTable)
+			.delete(key)
+			.catch((error) => {
+				console.warn(
+					`Failed to delete ${key} from ${primaryTable}`,
+					error,
+				);
+			});
 	const tasks = [deletePrimary()];
 
 	if (primaryTable !== "keyval") {
 		tasks.push(
-			db.table("keyval").delete(key).catch((error) => {
-				console.warn(`Failed to delete ${key} fallback from keyval`, error);
-			}),
+			db
+				.table("keyval")
+				.delete(key)
+				.catch((error) => {
+					console.warn(
+						`Failed to delete ${key} fallback from keyval`,
+						error,
+					);
+				}),
 		);
 	}
 
@@ -378,6 +395,7 @@ export const initPromise = new Promise<void>((resolve) => {
 		} catch (e) {
 			console.error("Failed to initialize offline DB", e);
 		} finally {
+			scheduleIdleOfflinePruning();
 			resolve();
 		}
 	};
@@ -389,7 +407,203 @@ export const initPromise = new Promise<void>((resolve) => {
 	}
 });
 
-export function persist(key: string, value: unknown = memory[key]) {
+export async function withDbTransaction<T>(
+	mode: "r" | "rw",
+	tableNames: string | string[],
+	callback: () => Promise<T> | T,
+): Promise<T> {
+	const tables = (Array.isArray(tableNames) ? tableNames : [tableNames]).map(
+		(tableName) => db.table(tableName),
+	);
+	return db.transaction(mode, tables, callback);
+}
+
+export async function safeBulkPut<T extends AnyRecord>(
+	tableName: string,
+	rows: T[],
+): Promise<void> {
+	if (!rows.length) {
+		return;
+	}
+
+	const table = db.table(tableName);
+	try {
+		await db.transaction("rw", table, async () => {
+			await table.bulkPut(rows);
+		});
+	} catch (error) {
+		console.warn(
+			`bulkPut failed for ${tableName}; retrying row-by-row`,
+			error,
+		);
+		await db.transaction("rw", table, async () => {
+			for (const row of rows) {
+				await table.put(row);
+			}
+		});
+	}
+}
+
+export async function safeBulkDelete(
+	tableName: string,
+	keys: Array<string | number>,
+): Promise<void> {
+	if (!keys.length) {
+		return;
+	}
+	await db.table(tableName).bulkDelete(keys as any[]);
+}
+
+function toEpoch(value: unknown) {
+	if (!value) {
+		return Number.NaN;
+	}
+	const epoch = Date.parse(String(value));
+	return Number.isFinite(epoch) ? epoch : Number.NaN;
+}
+
+function isOlderThan(value: unknown, cutoff: number) {
+	const epoch = toEpoch(value);
+	return Number.isFinite(epoch) && epoch < cutoff;
+}
+
+export type OfflinePruneResult = {
+	invoiceOutbox: number;
+	writeQueue: number;
+	syncState: number;
+	tombstones: number;
+	localTelemetry: number;
+};
+
+export async function pruneOfflineStorage(
+	options: { now?: number; maxAgeDays?: number } = {},
+): Promise<OfflinePruneResult> {
+	await quickDbHealthCheck();
+	const now = options.now || Date.now();
+	const cutoff = now - (options.maxAgeDays || 30) * 24 * 60 * 60 * 1000;
+	const result: OfflinePruneResult = {
+		invoiceOutbox: 0,
+		writeQueue: 0,
+		syncState: 0,
+		tombstones: 0,
+		localTelemetry: 0,
+	};
+
+	await withDbTransaction(
+		"rw",
+		["invoice_outbox", "write_queue", "sync_state", "keyval"],
+		async () => {
+			const outboxRows = (await db.table("invoice_outbox").toArray()) as AnyRecord[];
+			const outboxIds = outboxRows
+				.filter(
+					(row) =>
+						["acknowledged", "dead_letter"].includes(row.status) &&
+						isOlderThan(row.acknowledged_at || row.updated_at || row.created_at, cutoff),
+				)
+				.map((row) => row.outbox_id)
+				.filter((key): key is number => Number.isFinite(Number(key)));
+			if (outboxIds.length) {
+				await db.table("invoice_outbox").bulkDelete(outboxIds);
+				result.invoiceOutbox = outboxIds.length;
+			}
+
+			const writeQueueRows = (await db.table("write_queue").toArray()) as AnyRecord[];
+			const writeQueueIds = writeQueueRows
+				.filter(
+					(row) =>
+						row.status === "synced" &&
+						isOlderThan(row.last_attempt_at || row.created_at, cutoff),
+				)
+				.map((row) => row.queue_id)
+				.filter((key): key is number => Number.isFinite(Number(key)));
+			if (writeQueueIds.length) {
+				await db.table("write_queue").bulkDelete(writeQueueIds);
+				result.writeQueue = writeQueueIds.length;
+			}
+
+			const syncRows = (await db.table("sync_state").toArray()) as AnyRecord[];
+			const syncKeys = syncRows
+				.filter((row) => isOlderThan(row.updated_at || row.value?.lastSyncedAt, cutoff))
+				.map((row) => row.key)
+				.filter(Boolean);
+			if (syncKeys.length) {
+				await db.table("sync_state").bulkDelete(syncKeys);
+				result.syncState = syncKeys.length;
+			}
+
+			const keyvalRows = (await db.table("keyval").toArray()) as AnyRecord[];
+			const tombstoneKeys = keyvalRows
+				.filter((row) => String(row.key || "").startsWith("tombstone:"))
+				.filter((row) => isOlderThan(row.value?.created_at || row.value?.updated_at, cutoff))
+				.map((row) => row.key);
+			if (tombstoneKeys.length) {
+				await db.table("keyval").bulkDelete(tombstoneKeys);
+				result.tombstones = tombstoneKeys.length;
+			}
+
+			const telemetryKeys = keyvalRows
+				.filter((row) => String(row.key || "").startsWith("local_telemetry:"))
+				.filter((row) => isOlderThan(row.value?.created_at || row.value?.updated_at, cutoff))
+				.map((row) => row.key);
+			if (telemetryKeys.length) {
+				await db.table("keyval").bulkDelete(telemetryKeys);
+				result.localTelemetry = telemetryKeys.length;
+			}
+		},
+	);
+
+	return result;
+}
+
+let idlePruneScheduled = false;
+
+export function scheduleIdleOfflinePruning() {
+	if (idlePruneScheduled || typeof window === "undefined") {
+		return;
+	}
+	idlePruneScheduled = true;
+	const run = () => {
+		void pruneOfflineStorage().catch((error) => {
+			console.warn("Offline DB idle pruning failed", error);
+		});
+	};
+	if (typeof requestIdleCallback === "function") {
+		requestIdleCallback(run, { timeout: 10_000 });
+	} else {
+		window.setTimeout(run, 5_000);
+	}
+}
+
+// Coalesce repeated `persist(key)` calls within the same tick into a
+// single write. Without this, callers that touch a large cache N times
+// in a loop (saveItemUOMs called 6 645 times during boot/price-list
+// switch) clone the WHOLE cache N times via JSON.parse(JSON.stringify)
+// — O(N²) work that on the Doco Ventas catalog spent 30+ s on the main
+// thread (operator sees "Page Unresponsive"). One scheduled flush per
+// unique key collapses that to O(N).
+const _pendingPersistKeys = new Set<string>();
+let _persistFlushScheduled = false;
+
+function _flushPendingPersists() {
+	_persistFlushScheduled = false;
+	const keys = Array.from(_pendingPersistKeys);
+	_pendingPersistKeys.clear();
+	for (const key of keys) {
+		_persistImmediate(key, memory[key]);
+	}
+}
+
+function _schedulePersistFlush() {
+	if (_persistFlushScheduled) return;
+	_persistFlushScheduled = true;
+	if (typeof queueMicrotask === "function") {
+		queueMicrotask(_flushPendingPersists);
+	} else {
+		Promise.resolve().then(_flushPendingPersists);
+	}
+}
+
+function _persistImmediate(key: string, value: unknown) {
 	if (!shouldPersistToIndexedDb(key) && !shouldPersistToLocalStorage(key)) {
 		if (typeof localStorage !== "undefined") {
 			localStorage.removeItem(`posa_${key}`);
@@ -430,6 +644,22 @@ export function persist(key: string, value: unknown = memory[key]) {
 			localStorage.removeItem(`posa_${key}`);
 		}
 	}
+}
+
+export function persist(key: string, value: unknown = memory[key]) {
+	// When the caller didn't override `value`, we already point at the
+	// canonical `memory[key]` slot — the flusher will read the latest
+	// content and only one write happens regardless of how many
+	// `persist(key)` calls landed in this tick.
+	if (arguments.length <= 1 || value === memory[key]) {
+		_pendingPersistKeys.add(key);
+		_schedulePersistFlush();
+		return;
+	}
+	// Caller passed an explicit value distinct from memory[key]. Treat
+	// it as an intentional one-shot and write immediately so we don't
+	// drop data on the floor.
+	_persistImmediate(key, value);
 }
 
 export function isOffline() {
@@ -501,6 +731,7 @@ export async function clearAllCache() {
 	memory.offline_customers = [];
 	memory.offline_payments = [];
 	memory.offline_cash_movements = [];
+	memory.invoice_outbox_mode = "off";
 	memory.pos_last_sync_totals = { pending: 0, synced: 0, drafted: 0 };
 	memory.uom_cache = {};
 	memory.offers_cache = [];
@@ -551,31 +782,39 @@ export async function clearDerivedOfflineCaches() {
 
 		await Promise.all(
 			DERIVED_OFFLINE_TABLES_TO_CLEAR.map((tableName) =>
-				db.table(tableName).clear().catch((error) => {
-					console.warn(`Failed to clear derived table ${tableName}`, error);
-				}),
+				db
+					.table(tableName)
+					.clear()
+					.catch((error) => {
+						console.warn(
+							`Failed to clear derived table ${tableName}`,
+							error,
+						);
+					}),
 			),
 		);
 
 		await Promise.all(
-			[...DERIVED_OFFLINE_CACHE_KEYS, ...DERIVED_OFFLINE_METADATA_KEYS].map(
-				(key) => deletePersistedKey(key),
-			),
+			[
+				...DERIVED_OFFLINE_CACHE_KEYS,
+				...DERIVED_OFFLINE_METADATA_KEYS,
+			].map((key) => deletePersistedKey(key)),
 		);
 	} catch (error) {
 		console.error("Failed to clear derived offline caches", error);
 		throw error;
 	} finally {
-		[...DERIVED_OFFLINE_CACHE_KEYS, ...DERIVED_OFFLINE_METADATA_KEYS].forEach(
-			(key) => {
-				resetMemoryKey(key);
-				removeLocalStorageMirror(key);
-			},
-		);
+		[
+			...DERIVED_OFFLINE_CACHE_KEYS,
+			...DERIVED_OFFLINE_METADATA_KEYS,
+		].forEach((key) => {
+			resetMemoryKey(key);
+			removeLocalStorageMirror(key);
+		});
 	}
 }
 
-export async function checkDbHealth() {
+export async function quickDbHealthCheck() {
 	try {
 		if (!db.isOpen()) {
 			await db.open();
@@ -583,27 +822,39 @@ export async function checkDbHealth() {
 		await db.table(tableForKey("health_check")).get("health_check");
 		return true;
 	} catch (e) {
-		console.error("DB Health Check Failed", e);
-		try {
-			if (db.isOpen()) {
-				db.close();
-			}
-			await db.open();
-			return true;
-		} catch (reopenError) {
-			console.error("DB reopen failed", reopenError);
-			if (isCorruptionError(reopenError)) {
-				try {
-					await Dexie.delete("posawesome_offline");
-					await db.open();
-					return true;
-				} catch (recreateError) {
-					console.error("DB recreate failed", recreateError);
-				}
-			}
-		}
+		console.warn("DB quick health check failed", e);
 		return false;
 	}
+}
+
+export async function repairDbAfterFailedHealthCheck(error?: unknown) {
+	try {
+		if (db.isOpen()) {
+			db.close();
+		}
+		await db.open();
+		return true;
+	} catch (reopenError) {
+		console.error("DB reopen failed", reopenError);
+		if (isCorruptionError(reopenError) || isCorruptionError(error)) {
+			try {
+				await Dexie.delete("posawesome_offline");
+				await db.open();
+				return true;
+			} catch (recreateError) {
+				console.error("DB recreate failed", recreateError);
+			}
+		}
+	}
+	return false;
+}
+
+export async function checkDbHealth() {
+	const healthy = await quickDbHealthCheck();
+	if (healthy) {
+		return true;
+	}
+	return repairDbAfterFailedHealthCheck();
 }
 
 export function queueHealthCheck() {

@@ -13,7 +13,9 @@
 						{{ __("POS controls and maintenance") }}
 					</div>
 					<div class="navbar-settings-panel__subtitle">
-						{{ __("Manage offline tools, terminal controls, and maintenance from one workspace.") }}
+						{{
+							__("Manage offline tools, terminal controls, and maintenance from one workspace.")
+						}}
 					</div>
 				</div>
 				<button
@@ -144,15 +146,21 @@
 										<span :class="['mdi', action.icon]" aria-hidden="true"></span>
 									</span>
 									<span class="navbar-settings-panel__action-copy">
-										<span class="navbar-settings-panel__action-title">{{ action.label }}</span>
-										<span class="navbar-settings-panel__action-subtitle">{{ action.subtitle }}</span>
+										<span class="navbar-settings-panel__action-title">{{
+											action.label
+										}}</span>
+										<span class="navbar-settings-panel__action-subtitle">{{
+											action.subtitle
+										}}</span>
 									</span>
 								</button>
 							</div>
 						</div>
 
 						<div v-if="!activeAction" class="navbar-settings-panel__tip-card">
-							<div class="navbar-settings-panel__tip-title">{{ __("How this section works") }}</div>
+							<div class="navbar-settings-panel__tip-title">
+								{{ __("How this section works") }}
+							</div>
 							<div class="navbar-settings-panel__tip-copy">
 								{{ getSectionTip(activeSection.id) }}
 							</div>
@@ -212,31 +220,39 @@ const SECTION_META = {
 	"offline-sync": {
 		icon: "mdi-cloud-sync-outline",
 		tone: "warning",
-		tip: __("Use this section when cached prerequisite data needs a refresh, rebuild, or diagnostics review."),
+		tip: __(
+			"Use this section when cached prerequisite data needs a refresh, rebuild, or diagnostics review.",
+		),
 	},
 	"terminal-devices": {
 		icon: "mdi-monitor-dashboard",
 		tone: "primary",
-		tip: __("Terminal tools affect this checkout station, customer-facing displays, and future printer/device controls."),
+		tip: __(
+			"Terminal tools affect this checkout station, customer-facing displays, and future printer/device controls.",
+		),
 	},
 	personal: {
 		icon: "mdi-account-circle-outline",
 		tone: "secondary",
-		tip: __("Personal preferences adjust the current cashier experience without changing the active POS route."),
+		tip: __(
+			"Personal preferences adjust the current cashier experience without changing the active POS route.",
+		),
 	},
 	"system-diagnostics": {
 		icon: "mdi-cog-outline",
 		tone: "neutral",
-		tip: __("System actions are low-frequency maintenance controls such as app info, support diagnostics, and session controls."),
+		tip: __(
+			"System actions are low-frequency maintenance controls such as app info, support diagnostics, and session controls.",
+		),
 	},
 };
 
-const activeSection = computed(() =>
-	props.sections.find((section) => section.id === activeSectionId.value) || props.sections[0] || null,
+const activeSection = computed(
+	() => props.sections.find((section) => section.id === activeSectionId.value) || props.sections[0] || null,
 );
 
-const activeAction = computed(() =>
-	activeSection.value?.actions?.find((action) => action.id === activeActionId.value) || null,
+const activeAction = computed(
+	() => activeSection.value?.actions?.find((action) => action.id === activeActionId.value) || null,
 );
 
 watch(
@@ -284,7 +300,10 @@ function getSectionTone(sectionId) {
 }
 
 function getSectionTip(sectionId) {
-	return SECTION_META[sectionId]?.tip || __("Settings in this section update the POS workspace without changing the current route.");
+	return (
+		SECTION_META[sectionId]?.tip ||
+		__("Settings in this section update the POS workspace without changing the current route.")
+	);
 }
 
 function getDetailIcon() {
@@ -389,8 +408,7 @@ function handleEmbeddedActionSaved() {
 	padding: 18px;
 	border-right: 1px solid var(--pos-border);
 	background:
-		linear-gradient(180deg, rgba(25, 118, 210, 0.06), rgba(25, 118, 210, 0.02)),
-		var(--pos-card-bg);
+		linear-gradient(180deg, rgba(25, 118, 210, 0.06), rgba(25, 118, 210, 0.02)), var(--pos-card-bg);
 	display: grid;
 	align-content: start;
 	gap: 14px;
@@ -418,7 +436,11 @@ function handleEmbeddedActionSaved() {
 	gap: 12px;
 	text-align: left;
 	width: 100%;
-	transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+	transition:
+		transform 0.18s ease,
+		border-color 0.18s ease,
+		box-shadow 0.18s ease,
+		background 0.18s ease;
 }
 
 .navbar-settings-panel__category:hover {
@@ -566,7 +588,10 @@ function handleEmbeddedActionSaved() {
 	gap: 12px;
 	width: 100%;
 	text-align: left;
-	transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+	transition:
+		transform 0.18s ease,
+		border-color 0.18s ease,
+		box-shadow 0.18s ease;
 }
 
 .navbar-settings-panel__action:hover {

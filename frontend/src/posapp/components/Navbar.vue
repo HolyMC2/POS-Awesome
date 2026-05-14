@@ -135,13 +135,7 @@
 			@update:modelValue="(val) => !val && toastStore.onSnackbarClosed()"
 		>
 			<div class="d-flex align-center ga-3">
-				<v-progress-circular
-					v-if="toastLoading"
-					indeterminate
-					size="18"
-					width="2"
-					color="white"
-				/>
+				<v-progress-circular v-if="toastLoading" indeterminate size="18" width="2" color="white" />
 				<span>{{ text }}</span>
 			</div>
 			<template v-slot:actions>
@@ -190,7 +184,15 @@ export default {
 		const employeeStore = useEmployeeStore();
 		const offlineSyncStore = useOfflineSyncStore();
 		// Extract reactive refs
-		const { visible, text, color, timeout, loading: toastLoading, history, unreadCount } = storeToRefs(toastStore);
+		const {
+			visible,
+			text,
+			color,
+			timeout,
+			loading: toastLoading,
+			history,
+			unreadCount,
+		} = storeToRefs(toastStore);
 		const { isFrozen, freezeTitle, freezeMessage } = storeToRefs(uiStore);
 		const { currentCashier, currentCashierDisplay } = storeToRefs(employeeStore);
 		const { panelOpen: offlinePanelOpen } = storeToRefs(offlineSyncStore);
@@ -785,13 +787,10 @@ export default {
 				messages: warningMessages,
 			});
 			this.offlineSyncStore.setCapabilitySummaries(
-				Array.isArray(this.bootstrapCapabilities)
-					? this.bootstrapCapabilities
-					: [],
+				Array.isArray(this.bootstrapCapabilities) ? this.bootstrapCapabilities : [],
 			);
 
-			const shouldInjectFallback =
-				this.offlineSyncStore.resourceStates.length === 0;
+			const shouldInjectFallback = this.offlineSyncStore.resourceStates.length === 0;
 			if (shouldInjectFallback) {
 				if (this.bootstrapWarningActive) {
 					this.offlineSyncStore.setResourceStates([

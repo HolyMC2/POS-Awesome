@@ -39,7 +39,7 @@ export interface Item {
 /**
  * An {@link Item} that has been added to the active invoice.
  * Carries per-line pricing and discount state alongside the item's catalogue data.
- * `posa_row_id` is the stable row key used by {@link useInvoiceStore} — it is NOT the
+ * `posa_row_id` is the stable row key used by `useInvoiceStore` — it is NOT the
  * ERPNext `name` field and is generated client-side.
  */
 export interface CartItem extends Item {
@@ -62,7 +62,7 @@ export interface CartItem extends Item {
 
 /**
  * The active POS Invoice document, mirroring the ERPNext POS Invoice doctype.
- * This is the root object managed by {@link useInvoiceStore}.
+ * This is the root object managed by `useInvoiceStore`.
  * Return invoices use negative `qty` and negative totals throughout.
  */
 export interface InvoiceDoc {

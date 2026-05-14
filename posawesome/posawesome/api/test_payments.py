@@ -67,9 +67,7 @@ def _install_stubs():
     frappe_utils = types.ModuleType("frappe.utils")
     accounts_party = types.ModuleType("erpnext.accounts.party")
     accounts_utils = types.ModuleType("erpnext.accounts.utils")
-    payment_request_module = types.ModuleType(
-        "erpnext.accounts.doctype.payment_request.payment_request"
-    )
+    payment_request_module = types.ModuleType("erpnext.accounts.doctype.payment_request.payment_request")
     utilities_module = types.ModuleType("posawesome.posawesome.api.utilities")
 
     created_docs = []
@@ -79,14 +77,10 @@ def _install_stubs():
     reconcile_calls = []
 
     frappe_utils.nowdate = lambda: "2026-03-26"
-    frappe_utils.flt = lambda value, precision=None: round(
-        float(value or 0), precision or 2
-    )
+    frappe_utils.flt = lambda value, precision=None: round(float(value or 0), precision or 2)
 
     frappe_module._ = lambda text: text
-    frappe_module._dict = lambda payload=None, **kwargs: FakeChildRow(
-        dict(payload or {}, **kwargs)
-    )
+    frappe_module._dict = lambda payload=None, **kwargs: FakeChildRow(dict(payload or {}, **kwargs))
     frappe_module.throw = lambda message: (_ for _ in ()).throw(Exception(message))
     frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
     frappe_module.flags = types.SimpleNamespace(ignore_account_permission=False)
@@ -136,6 +130,7 @@ def _install_stubs():
         return doc
 
     frappe_module.get_doc = _get_doc
+
     def _reconcile_against_document(args, *extra, **kwargs):
         for row in args:
             # Mirror ERPNext's attribute-style access contract.
@@ -153,18 +148,14 @@ def _install_stubs():
 
     accounts_party.get_party_bank_account = lambda *args, **kwargs: None
     payment_request_module.get_dummy_message = lambda *_args, **_kwargs: ""
-    payment_request_module.get_existing_payment_request_amount = (
-        lambda *_args, **_kwargs: 0
-    )
+    payment_request_module.get_existing_payment_request_amount = lambda *_args, **_kwargs: 0
     utilities_module.ensure_child_doctype = lambda *_args, **_kwargs: None
 
     sys.modules["frappe"] = frappe_module
     sys.modules["frappe.utils"] = frappe_utils
     sys.modules["erpnext.accounts.party"] = accounts_party
     sys.modules["erpnext.accounts.utils"] = accounts_utils
-    sys.modules[
-        "erpnext.accounts.doctype.payment_request.payment_request"
-    ] = payment_request_module
+    sys.modules["erpnext.accounts.doctype.payment_request.payment_request"] = payment_request_module
     sys.modules["posawesome.posawesome.api.utilities"] = utilities_module
 
     return created_docs, get_all_responses, sql_responses, get_doc_responses, reconcile_calls
@@ -513,7 +504,9 @@ class TestRedeemingCustomerCredit(unittest.TestCase):
         self.assertEqual(result["skipped"], [])
         self.assertEqual(self.reconcile_calls, [])
 
-    def test_repair_overpayment_change_allocations_matches_unallocated_pay_entry_even_with_other_references(self):
+    def test_repair_overpayment_change_allocations_matches_unallocated_pay_entry_even_with_other_references(
+        self,
+    ):
         self.get_all_responses["Sales Invoice"] = [
             types.SimpleNamespace(
                 name="ACC-SINV-2026-08540",
@@ -644,7 +637,9 @@ class TestRedeemingCustomerCredit(unittest.TestCase):
             ],
         )
 
-    def test_repair_overpayment_change_allocations_requires_fully_allocated_signature_for_repaired_state(self):
+    def test_repair_overpayment_change_allocations_requires_fully_allocated_signature_for_repaired_state(
+        self,
+    ):
         self.get_all_responses["Sales Invoice"] = [
             types.SimpleNamespace(
                 name="ACC-SINV-2026-08542",

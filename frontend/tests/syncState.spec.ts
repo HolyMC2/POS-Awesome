@@ -44,10 +44,16 @@ describe("sync state helpers", () => {
 
 		await setSyncResourceState(state);
 
-		expect(syncStateTable.put).toHaveBeenCalledWith({
-			key: buildSyncStateStorageKey("items"),
-			value: state,
-		});
+		expect(syncStateTable.put).toHaveBeenCalledWith(
+			expect.objectContaining({
+				key: buildSyncStateStorageKey("items"),
+				resourceId: "items",
+				status: "fresh",
+				nextRetryAt: null,
+				lastAttemptAt: null,
+				value: state,
+			}),
+		);
 		expect(window.localStorage.getItem(buildSyncStateStorageKey("items"))).toBeNull();
 	});
 

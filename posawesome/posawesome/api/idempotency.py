@@ -10,9 +10,7 @@ def extract_invoice_client_request_id(invoice=None, data=None):
     invoice = invoice or {}
     data = data or {}
     return normalize_client_request_id(
-        invoice.get("posa_client_request_id")
-        or data.get("idempotency_key")
-        or data.get("client_request_id")
+        invoice.get("posa_client_request_id") or data.get("idempotency_key") or data.get("client_request_id")
     )
 
 
@@ -45,9 +43,7 @@ def find_invoice_by_client_request_id(client_request_id, preferred_doctype=None)
     doctypes = []
     if preferred_doctype:
         doctypes.append(preferred_doctype)
-    doctypes.extend(
-        doctype for doctype in ("Sales Invoice", "POS Invoice") if doctype not in doctypes
-    )
+    doctypes.extend(doctype for doctype in ("Sales Invoice", "POS Invoice") if doctype not in doctypes)
 
     for doctype in doctypes:
         if not doctype_supports_client_request_id(doctype):

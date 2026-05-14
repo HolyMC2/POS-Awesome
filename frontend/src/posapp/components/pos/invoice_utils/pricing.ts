@@ -316,11 +316,46 @@ export function _applyPricingToLine(
 }
 
 export async function applyPricingRulesForCart(context: any, force = false) {
+	const t0 =
+		typeof performance !== "undefined" && performance.now
+			? performance.now()
+			: 0;
+	const recordPhase = (label: string, start: number) => {
+		if (typeof window === "undefined") return;
+		const dur =
+			typeof performance !== "undefined" && performance.now
+				? performance.now() - start
+				: 0;
+		const w = window as any;
+		w.__pricingPhases = w.__pricingPhases || [];
+		w.__pricingPhases.push({ label, dur, at: Date.now() });
+		// Cap log so a runaway loop doesn't grow the array without bound.
+		if (w.__pricingPhases.length > 200) w.__pricingPhases.shift();
+		if (dur > 1000) {
+			console.warn(`[POSA][Pricing] slow phase ${label}: ${Math.round(dur)}ms`);
+		}
+	};
+
 	if (context.isReturnInvoice) {
+		recordPhase("bail:returnInvoice", t0);
 		return;
 	}
 	if (context._applyingPricingRules) {
 		context._pendingPricingRules = true;
+		recordPhase("bail:inflight", t0);
+		return;
+	}
+	// Cart-empty fast path. Without items to score against, the entire
+	// pass is wasted work — including `_ensurePricingRules` which on a
+	// cold cache hits the server, and `_applyServerPricingRules` which
+	// posts an empty cart. On the Doco Ventas profile the changeVersion
+	// watcher fires whenever the customer changes (cart cleared) or
+	// price list applied — both happen before any item is added — so
+	// the cold-cache server pass kept landing on an empty cart and
+	// stretching the click latency.
+	const items = Array.isArray(context.items) ? context.items : [];
+	if (!items.length) {
+		recordPhase("bail:emptyCart", t0);
 		return;
 	}
 
@@ -330,19 +365,69 @@ export async function applyPricingRulesForCart(context: any, force = false) {
 
 	context._applyingPricingRules = true;
 	try {
+		// Local pricing first — pure in-memory pass over cached
+		// pricing-rule indexes, no server round-trip. Operator sees
+		// discounts / freebies applied within ~10 ms.
+		const tLocal = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
 		await _applyLocalPricingRules(context, force);
+		recordPhase("local", tLocal);
+
+		// Server pricing reconciles rules that depend on data the
+		// client doesn't see (campaign quotas, cross-shift coupons).
+		// Run it async so cart edits don't serialise behind the
+		// network — but keep `_applyingPricingRules = true` for the
+		// duration of the response-mutation phase so the cart-change
+		// watcher does NOT re-trigger pricing on the server's own
+		// mutations. Without this guard the cart flickers
+		// indefinitely on every cart edit involving a pricing rule:
+		//   add item → local apply → server apply (fire-and-forget)
+		//   server response mutates cart → watcher fires → local
+		//   apply → server apply → ...
 		if (hasServerContext) {
-			await _applyServerPricingRules(context, ctx);
+			// Hold the guard until the server pass settles. The
+			// release lives inside the .finally below so the cart
+			// watcher stays muted throughout the server response.
+			//
+			// Race the server call against a 5s wall-clock timeout.
+			// Without this, a hung network request never resolves
+			// the promise; `_applyingPricingRules` stays true; every
+			// subsequent cart edit early-returns at the guard and
+			// pricing never re-applies until the component remounts.
+			const SERVER_PRICING_TIMEOUT_MS = 5000;
+			let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+			const timeoutPromise = new Promise<void>((resolve) => {
+				timeoutHandle = setTimeout(() => {
+					console.warn(
+						"[POSA][Pricing] server pricing pass timed out; releasing guard",
+					);
+					resolve();
+				}, SERVER_PRICING_TIMEOUT_MS);
+			});
+			const serverPass = Promise.resolve()
+				.then(() => _applyServerPricingRules(context, ctx))
+				.catch((error) => {
+					console.warn(
+						"[POSA][Pricing] server pricing rules pass failed (cart kept local result)",
+						error,
+					);
+				});
+			Promise.race([serverPass, timeoutPromise]).finally(() => {
+				if (timeoutHandle) clearTimeout(timeoutHandle);
+				context._applyingPricingRules = false;
+				if (context._pendingPricingRules) {
+					context._pendingPricingRules = false;
+					applyPricingRulesForCart(context, force);
+				}
+			});
+			return;
 		}
 	} catch (error) {
-		console.error("Failed to apply pricing rules via server", error);
-		await _applyLocalPricingRules(context, force);
-	} finally {
-		context._applyingPricingRules = false;
-		if (context._pendingPricingRules) {
-			context._pendingPricingRules = false;
-			applyPricingRulesForCart(context, force);
-		}
+		console.error("Failed to apply pricing rules locally", error);
+	}
+	context._applyingPricingRules = false;
+	if (context._pendingPricingRules) {
+		context._pendingPricingRules = false;
+		applyPricingRulesForCart(context, force);
 	}
 }
 
@@ -363,9 +448,6 @@ export async function _applyLocalPricingRules(context: any, force = false) {
 		}
 
 		syncAutoFreeLines(context, freebiesMap);
-		if (typeof context.$forceUpdate === "function") {
-			context.$forceUpdate();
-		}
 	} catch (error) {
 		console.error("Failed to apply pricing rules locally", error);
 	}

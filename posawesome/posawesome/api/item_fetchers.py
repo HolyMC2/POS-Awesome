@@ -184,7 +184,7 @@ def _fetch_barcodes(item_codes: Tuple[str, ...]):
         return []
     return frappe.get_all(
         "Item Barcode",
-        fields=["parent", "barcode", "uom", "posa_uom"],
+        fields=["parent", "barcode", "uom"],
         filters={"parent": ["in", item_codes]},
     )
 
@@ -412,11 +412,7 @@ def _fetch_bom_costs(meta_rows: Tuple[Tuple[str, Optional[str]], ...]):
 
     unresolved_items = tuple(
         sorted(
-            {
-                item_code
-                for item_code, _default_bom in meta_rows
-                if item_code and item_code not in resolved
-            }
+            {item_code for item_code, _default_bom in meta_rows if item_code and item_code not in resolved}
         )
     )
     if unresolved_items:
@@ -444,9 +440,7 @@ def _fetch_bom_costs(meta_rows: Tuple[Tuple[str, Optional[str]], ...]):
 
 def get_bom_costs(meta_rows: Sequence[frappe._dict], ttl: Optional[int] = None):
     normalized_rows = tuple(
-        (str(row.get("name") or ""), row.get("default_bom"))
-        for row in (meta_rows or [])
-        if row.get("name")
+        (str(row.get("name") or ""), row.get("default_bom")) for row in (meta_rows or []) if row.get("name")
     )
     cached = _cache_wrapper(_bom_cache, ttl, _fetch_bom_costs)
     return cached(normalized_rows)
@@ -518,11 +512,7 @@ def merge_item_row(
     batch_rows = lookup_data.batch_map.get(item_code, [])
     actual_qty = lookup_data.stock_map.get(item_code, 0) or 0
     if meta.get("has_batch_no") and batch_rows:
-        actual_qty = sum(
-            flt(batch.get("batch_qty"))
-            for batch in batch_rows
-            if not batch.get("is_expired")
-        )
+        actual_qty = sum(flt(batch.get("batch_qty")) for batch in batch_rows if not batch.get("is_expired"))
 
     row = dict(item)
     row.update(
@@ -661,19 +651,19 @@ class ItemDetailAggregator:
             uom_rows = _fetch_uoms(item_codes_tuple)
             barcode_rows = _fetch_barcodes(item_codes_tuple)
             bom_map = _fetch_bom_costs(
-                tuple((str(row.get("name") or ""), row.get("default_bom")) for row in meta_rows if row.get("name"))
+                tuple(
+                    (str(row.get("name") or ""), row.get("default_bom"))
+                    for row in meta_rows
+                    if row.get("name")
+                )
             )
 
         batch_items = [row.name for row in meta_rows if row.get("has_batch_no")]
         serial_items = [row.name for row in meta_rows if row.get("has_serial_no")]
 
         if use_cache:
-            batch_rows = get_batches(
-                self.warehouse, _normalize_codes(batch_items), ttl=self.cache_ttl
-            )
-            serial_rows = get_serials(
-                self.warehouse, _normalize_codes(serial_items), ttl=self.cache_ttl
-            )
+            batch_rows = get_batches(self.warehouse, _normalize_codes(batch_items), ttl=self.cache_ttl)
+            serial_rows = get_serials(self.warehouse, _normalize_codes(serial_items), ttl=self.cache_ttl)
         else:
             batch_rows = _fetch_batches(self.warehouse, _normalize_codes(batch_items))
             serial_rows = _fetch_serials(self.warehouse, _normalize_codes(serial_items))
@@ -693,9 +683,7 @@ class ItemDetailAggregator:
 
         barcode_map: Dict[str, List[Dict[str, object]]] = {}
         for row in barcode_rows:
-            barcode_map.setdefault(row.parent, []).append(
-                {"barcode": row.barcode, "uom": row.uom, "posa_uom": row.posa_uom}
-            )
+            barcode_map.setdefault(row.parent, []).append({"barcode": row.barcode, "uom": row.uom})
 
         batch_map: Dict[str, List[Dict[str, object]]] = {}
         for row in batch_rows:

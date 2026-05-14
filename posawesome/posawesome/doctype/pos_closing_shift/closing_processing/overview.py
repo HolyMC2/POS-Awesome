@@ -8,6 +8,7 @@ from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.data imp
     get_payments_entries,
 )
 
+
 @frappe.whitelist()
 def get_closing_shift_overview(pos_opening_shift):
     """Return invoice and payment totals for the provided POS Opening Shift."""
@@ -698,6 +699,7 @@ def get_closing_shift_overview(pos_opening_shift):
         },
     }
 
+
 @frappe.whitelist()
 def get_payment_reconciliation_details(closing_shift_doc):
     company_currency = frappe.get_cached_value("Company", closing_shift_doc.company, "default_currency")
@@ -719,7 +721,8 @@ def get_payment_reconciliation_details(closing_shift_doc):
             row["currencies"][currency] += flt(amount)
 
     cash_mode_of_payment = (
-        frappe.db.get_value("POS Profile", closing_shift_doc.pos_profile, "posa_cash_mode_of_payment") or "Cash"
+        frappe.db.get_value("POS Profile", closing_shift_doc.pos_profile, "posa_cash_mode_of_payment")
+        or "Cash"
     )
 
     for row in closing_shift_doc.get("pos_transactions", []):

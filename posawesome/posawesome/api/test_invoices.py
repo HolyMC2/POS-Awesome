@@ -16,17 +16,11 @@ def _install_frappe_stub():
     frappe_module.get_list = lambda *args, **kwargs: []
     sys.modules["frappe"] = frappe_module
 
-    erpnext_sales_order = types.ModuleType(
-        "erpnext.selling.doctype.sales_order.sales_order"
-    )
+    erpnext_sales_order = types.ModuleType("erpnext.selling.doctype.sales_order.sales_order")
     erpnext_sales_order.make_sales_invoice = lambda *args, **kwargs: None
-    sys.modules[
-        "erpnext.selling.doctype.sales_order.sales_order"
-    ] = erpnext_sales_order
+    sys.modules["erpnext.selling.doctype.sales_order.sales_order"] = erpnext_sales_order
 
-    invoice_processing_utils = types.ModuleType(
-        "posawesome.posawesome.api.invoice_processing.utils"
-    )
+    invoice_processing_utils = types.ModuleType("posawesome.posawesome.api.invoice_processing.utils")
     invoice_processing_utils._get_return_validity_settings = lambda *args, **kwargs: (False, 0)
     invoice_processing_utils._build_invoice_remarks = lambda *args, **kwargs: ""
     invoice_processing_utils._set_return_valid_upto = lambda *args, **kwargs: None
@@ -34,13 +28,9 @@ def _install_frappe_stub():
     invoice_processing_utils.get_latest_rate = lambda *args, **kwargs: (1, "2026-04-04")
     invoice_processing_utils.get_price_list_currency = lambda *args, **kwargs: "PKR"
     invoice_processing_utils.get_available_currencies = lambda *args, **kwargs: ["PKR"]
-    sys.modules[
-        "posawesome.posawesome.api.invoice_processing.utils"
-    ] = invoice_processing_utils
+    sys.modules["posawesome.posawesome.api.invoice_processing.utils"] = invoice_processing_utils
 
-    invoice_processing_stock = types.ModuleType(
-        "posawesome.posawesome.api.invoice_processing.stock"
-    )
+    invoice_processing_stock = types.ModuleType("posawesome.posawesome.api.invoice_processing.stock")
     invoice_processing_stock._strip_client_freebies_from_payload = lambda *args, **kwargs: None
     invoice_processing_stock._validate_stock_on_invoice = lambda *args, **kwargs: None
     invoice_processing_stock._apply_item_name_overrides = lambda *args, **kwargs: None
@@ -49,46 +39,29 @@ def _install_frappe_stub():
     invoice_processing_stock._auto_set_return_batches = lambda *args, **kwargs: None
     invoice_processing_stock._collect_stock_errors = lambda *args, **kwargs: []
     invoice_processing_stock._should_block = lambda *args, **kwargs: False
-    sys.modules[
-        "posawesome.posawesome.api.invoice_processing.stock"
-    ] = invoice_processing_stock
+    sys.modules["posawesome.posawesome.api.invoice_processing.stock"] = invoice_processing_stock
 
-    invoice_processing_creation = types.ModuleType(
-        "posawesome.posawesome.api.invoice_processing.creation"
-    )
+    invoice_processing_creation = types.ModuleType("posawesome.posawesome.api.invoice_processing.creation")
     invoice_processing_creation.update_invoice = lambda *args, **kwargs: None
     invoice_processing_creation.submit_invoice = lambda *args, **kwargs: None
     invoice_processing_creation.submit_in_background_job = lambda *args, **kwargs: None
+    invoice_processing_creation.repair_invoice_submission = lambda *args, **kwargs: None
     invoice_processing_creation.validate_cart_items = lambda *args, **kwargs: None
-    sys.modules[
-        "posawesome.posawesome.api.invoice_processing.creation"
-    ] = invoice_processing_creation
+    sys.modules["posawesome.posawesome.api.invoice_processing.creation"] = invoice_processing_creation
 
-    invoice_processing_returns = types.ModuleType(
-        "posawesome.posawesome.api.invoice_processing.returns"
-    )
+    invoice_processing_returns = types.ModuleType("posawesome.posawesome.api.invoice_processing.returns")
     invoice_processing_returns.search_invoices_for_return = lambda *args, **kwargs: []
     invoice_processing_returns.validate_return_items = lambda *args, **kwargs: None
     invoice_processing_returns.get_invoice_for_return = lambda *args, **kwargs: None
-    sys.modules[
-        "posawesome.posawesome.api.invoice_processing.returns"
-    ] = invoice_processing_returns
+    sys.modules["posawesome.posawesome.api.invoice_processing.returns"] = invoice_processing_returns
 
-    invoice_processing_payment = types.ModuleType(
-        "posawesome.posawesome.api.invoice_processing.payment"
-    )
+    invoice_processing_payment = types.ModuleType("posawesome.posawesome.api.invoice_processing.payment")
     invoice_processing_payment._create_change_payment_entries = lambda *args, **kwargs: None
-    sys.modules[
-        "posawesome.posawesome.api.invoice_processing.payment"
-    ] = invoice_processing_payment
+    sys.modules["posawesome.posawesome.api.invoice_processing.payment"] = invoice_processing_payment
 
-    invoice_processing_data = types.ModuleType(
-        "posawesome.posawesome.api.invoice_processing.data"
-    )
+    invoice_processing_data = types.ModuleType("posawesome.posawesome.api.invoice_processing.data")
     invoice_processing_data.get_last_invoice_rates = lambda *args, **kwargs: []
-    sys.modules[
-        "posawesome.posawesome.api.invoice_processing.data"
-    ] = invoice_processing_data
+    sys.modules["posawesome.posawesome.api.invoice_processing.data"] = invoice_processing_data
 
     utils_module = types.ModuleType("posawesome.posawesome.api.utils")
     utils_module.log_perf_event = lambda *args, **kwargs: None

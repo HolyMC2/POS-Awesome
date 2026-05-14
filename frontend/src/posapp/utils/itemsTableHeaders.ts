@@ -48,16 +48,27 @@ export function getItemsTableHeaders(context: "pos" | "purchase" | string, posPr
             align: "start",
             sortable: true,
             key: "item_name",
+            // Item names are the primary read target; squeezing them
+            // into 1/5 of the row leaves operators staring at
+            // "Bocina Auricula…". Give Name the lion's share so long
+            // names like "Bocina Auricular para iPhone XR" fit.
+            width: "38%",
         },
         {
             title: __("Code"),
             align: "start",
             sortable: true,
             key: "item_code",
+            width: "18%",
         },
-        { title: __("Rate"), key: "rate", align: "start" },
-        { title: __("Available QTY"), key: "actual_qty", align: "start" },
-        { title: __("UOM"), key: "stock_uom", align: "start" },
+        { title: __("Rate"), key: "rate", align: "start", width: "18%" },
+        {
+            title: __("Available QTY"),
+            key: "actual_qty",
+            align: "start",
+            width: "14%",
+        },
+        { title: __("UOM"), key: "stock_uom", align: "start", width: "12%" },
     ];
 
     // Remove item code column if configured

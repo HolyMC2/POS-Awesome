@@ -35,10 +35,7 @@
 					{{ statusText }}
 				</div>
 				<div
-					v-if="
-						props.bootstrapWarningActive &&
-						bootstrapWarningTooltipLines.length
-					"
+					v-if="props.bootstrapWarningActive && bootstrapWarningTooltipLines.length"
 					class="status-tooltip__warning"
 				>
 					<div

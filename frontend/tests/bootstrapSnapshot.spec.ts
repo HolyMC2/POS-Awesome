@@ -8,10 +8,12 @@ import {
 	validateBootstrapSnapshot,
 } from "../src/offline/bootstrapSnapshot";
 import {
+	clearPricingRulesSnapshot,
 	getBootstrapSnapshot,
 	saveCoupons,
 	saveItemGroups,
 	saveOffers,
+	savePricingRulesSnapshot,
 	setBootstrapSnapshot,
 	setPrintTemplate,
 	setTaxInclusiveSetting,
@@ -30,6 +32,7 @@ describe("bootstrap snapshot", () => {
 		setTermsAndConditions("");
 		setTaxInclusiveSetting(false);
 		setStockCacheReady(false);
+		clearPricingRulesSnapshot();
 		setBootstrapSnapshot(null);
 	});
 
@@ -195,6 +198,58 @@ describe("bootstrap snapshot", () => {
 		expect(prerequisites.price_list_meta_cache).toBe("ready");
 		expect(prerequisites.customer_addresses_cache).toBe("ready");
 		expect(prerequisites.payment_method_currency_cache).toBe("ready");
+	});
+
+	it("treats a synced empty pricing rules snapshot as ready", () => {
+		const prerequisites = collectBootstrapPrerequisites({
+			profileName: "POS-1",
+			openingShiftName: "SHIFT-1",
+			openingShiftUser: "test@example.com",
+			paymentMethods: [{ mode_of_payment: "Cash" }],
+			itemsCount: 25,
+			customersCount: 3,
+			pricingSnapshotCount: true,
+			pricingContext: { profile_name: "POS-1" },
+			taxInclusive: false,
+		});
+
+		expect(prerequisites.pricing_rules_snapshot).toBe("ready");
+		expect(prerequisites.pricing_rules_context).toBe("ready");
+		expect(prerequisites.tax_inclusive).toBe("ready");
+	});
+
+	it("marks pricing ready when the persisted pricing snapshot has no active rules", () => {
+		setBootstrapSnapshot(
+			buildBootstrapSnapshot({
+				buildVersion: "build-2",
+				profileName: "POS-1",
+				profileModified: "2026-04-08 10:00:00",
+				openingShiftName: "SHIFT-1",
+				openingShiftUser: "test@example.com",
+				prerequisites: {
+					pos_profile: "ready",
+					pos_opening_shift: "ready",
+					payment_methods: "ready",
+					items_cache_ready: "ready",
+					customers_cache_ready: "ready",
+				},
+			}),
+		);
+
+		savePricingRulesSnapshot(
+			[],
+			JSON.stringify({
+				company: "Company",
+				price_list: "Standard Selling",
+				currency: "PKR",
+			}),
+			"2026-04-09T10:00:00.000Z",
+		);
+
+		const snapshot = getBootstrapSnapshot();
+
+		expect(snapshot.prerequisites.pricing_rules_snapshot).toBe("ready");
+		expect(snapshot.prerequisites.pricing_rules_context).toBe("ready");
 	});
 
 	it("formats new prerequisite warning messages explicitly", () => {

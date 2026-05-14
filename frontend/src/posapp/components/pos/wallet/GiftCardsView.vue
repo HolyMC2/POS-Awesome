@@ -27,7 +27,11 @@
 						<p class="gift-cards-view__section-label">{{ __("Scan-Ready") }}</p>
 						<h3>{{ __("Manual codes, barcode scans, and QR scans work in the same field") }}</h3>
 						<p>
-							{{ __("Use one workflow for balance checks, new issuance, and top ups without leaving POS.") }}
+							{{
+								__(
+									"Use one workflow for balance checks, new issuance, and top ups without leaving POS.",
+								)
+							}}
 						</p>
 					</div>
 					<div class="gift-cards-view__highlights">
@@ -76,7 +80,9 @@
 						<p class="gift-cards-view__section-label">{{ currentModeLabel }}</p>
 						<h3 class="gift-cards-view__form-title">{{ currentModeTitle }}</h3>
 					</div>
-					<span class="gift-cards-view__mini-note">{{ __("Scan or paste the card code below.") }}</span>
+					<span class="gift-cards-view__mini-note">{{
+						__("Scan or paste the card code below.")
+					}}</span>
 				</div>
 
 				<v-text-field
@@ -114,7 +120,9 @@
 				</div>
 				<div class="gift-cards-view__stat">
 					<span>{{ __("Access") }}</span>
-					<strong>{{ isSupervisor ? __("Issue, top up, and check") : __("Check balance only") }}</strong>
+					<strong>{{
+						isSupervisor ? __("Issue, top up, and check") : __("Check balance only")
+					}}</strong>
 					<small>{{ __("Supervisor permissions unlock issuance and reloads") }}</small>
 				</div>
 			</div>
@@ -480,8 +488,7 @@ const topUpCard = async () => {
 	border-radius: 16px;
 	border: 1px solid rgba(var(--v-theme-primary), 0.1);
 	background:
-		linear-gradient(180deg, rgba(var(--v-theme-primary), 0.04), transparent 32%),
-		var(--pos-surface-muted);
+		linear-gradient(180deg, rgba(var(--v-theme-primary), 0.04), transparent 32%), var(--pos-surface-muted);
 }
 
 .gift-cards-view__stat span {

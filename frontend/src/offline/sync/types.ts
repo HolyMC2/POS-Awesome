@@ -13,6 +13,7 @@ export type SyncResourceId =
 	| "item_prices"
 	| "stock"
 	| "customers"
+	| "invoice_outbox"
 	| "customer_addresses"
 	| "delivery_charges";
 
@@ -66,7 +67,7 @@ export type SyncLifecycleState =
 
 /**
  * Static definition of a single sync resource. Registered in `resourceRegistry.ts`
- * and consumed by {@link SyncCoordinator}.
+ * and consumed by `SyncCoordinator`.
  */
 export interface SyncResourceDefinition {
 	/** Unique identifier. */
@@ -91,32 +92,27 @@ export interface SyncResourceDefinition {
 
 /**
  * Runtime state of a single sync resource, persisted across page loads.
- * Returned by {@link SyncCoordinator.getResourceState} and {@link SyncCoordinator.getResourceStates}.
+ * Returned by `SyncCoordinator.getResourceState()` and
+ * `SyncCoordinator.getResourceStates()`.
+ *
+ * Timestamp fields use ISO-8601 strings. `watermark` stores the next delta cursor
+ * or timestamp, `lastSuccessHash` skips no-op writes, failure fields drive retry
+ * backoff, `scopeSignature` detects profile/company changes, and `schemaVersion`
+ * triggers full resyncs after data-model changes.
  */
 export interface SyncResourceState {
 	resourceId: SyncResourceId;
 	status: SyncLifecycleState;
-	/** ISO-8601 timestamp of the last successful sync. `null` if never synced. */
 	lastSyncedAt: string | null;
-	/** Opaque cursor or timestamp used for the next delta request. */
 	watermark: string | null;
-	/** Hash of the last successfully applied payload — used to skip no-op writes. */
 	lastSuccessHash: string | null;
-	/** Human-readable error from the most recent failed attempt. */
 	lastError: string | null;
-	/** Number of consecutive failures since the last success. Reset on success. */
 	consecutiveFailures: number;
-	/** ISO-8601 timestamp of the last sync attempt, successful or not. */
 	lastAttemptAt?: string | null;
-	/** ISO-8601 timestamp when the next retry becomes eligible after backoff. */
 	nextRetryAt?: string | null;
-	/** Cooldown/backoff duration applied after the last failure. */
 	cooldownMs?: number | null;
-	/** Trigger that last touched this resource state. */
 	lastTrigger?: SyncTrigger | null;
-	/** Serialised representation of the scope at last sync. Used to detect profile/company changes. */
 	scopeSignature: string | null;
-	/** Schema version of the stored data. Used to trigger a full resync after data-model changes. */
 	schemaVersion: string | null;
 }
 

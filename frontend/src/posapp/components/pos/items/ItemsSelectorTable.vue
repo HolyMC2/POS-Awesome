@@ -1,116 +1,73 @@
 <template>
-	<div class="items-table-container">
-		<v-data-table-virtual
-			ref="tableRef"
-			:headers="headers"
-			:items="displayedItems"
-			class="sleek-data-table overflow-y-auto"
-			:style="{ height: 'calc(100% - 80px)' }"
-			item-key="item_code"
-			fixed-header
-			height="100%"
-			:header-props="headerProps"
-			:no-data-text="noDataText"
-			@click:row="handleRowClick"
-			:item-class="itemClass"
-			:row-props="rowProps"
-			@scroll.passive="handleListScroll"
+	<div class="items-table-container sleek-data-table">
+		<div
+			class="posa-catalog-header"
+			:style="gridTemplateStyle"
+			role="row"
 		>
-			<template v-slot:item.rate="{ item }">
-				<div v-if="context !== 'purchase'">
-					<div class="text-primary rate-cell-primary">
-						<div>
-							{{
-								currencySymbol(
-									item.original_currency ||
-										item.currency ||
-										item.price_list_currency ||
-										posProfile.currency,
-								)
-							}}
-							{{
-								formatCurrency(
-									item.original_rate ?? item.rate ?? 0,
-									item.original_currency ||
-										item.currency ||
-										item.price_list_currency ||
-										posProfile.currency,
-									ratePrecision(item.original_rate ?? item.rate ?? 0),
-								)
-							}}
-						</div>
-						<ItemRateInfoMenu
-							v-if="showRateInfo"
-							:rate-info="getItemRateInfo(item)"
-							:currency-symbol="currencySymbol"
-							:format-currency="formatCurrency"
-							:rate-precision="ratePrecision"
-						/>
-					</div>
-					<div
-						v-if="
-							posProfile.posa_allow_multi_currency &&
-							selectedCurrency &&
-							selectedCurrency !==
-								(item.original_currency ||
-									item.currency ||
-									item.price_list_currency ||
-									posProfile.currency)
-						"
-						class="text-success"
-					>
-						{{ currencySymbol(selectedCurrency) }}
-						{{ formatCurrency(item.rate, selectedCurrency, ratePrecision(item.rate)) }}
-					</div>
-				</div>
-				<div v-else>
-					<div class="text-primary rate-cell-primary">
-						<div>
-							{{
-								currencySymbol(
-									item.original_currency ||
-										item.currency ||
-										item.price_list_currency ||
-										posProfile.currency,
-								)
-							}}
-							{{
-								formatCurrency(
-									item.original_rate ?? item.rate ?? item.standard_rate ?? 0,
-									item.original_currency ||
-										item.currency ||
-										item.price_list_currency ||
-										posProfile.currency,
-									ratePrecision(item.original_rate ?? item.rate ?? item.standard_rate ?? 0),
-								)
-							}}
-						</div>
-						<ItemRateInfoMenu
-							v-if="showRateInfo"
-							:rate-info="getItemRateInfo(item)"
-							:currency-symbol="currencySymbol"
-							:format-currency="formatCurrency"
-							:rate-precision="ratePrecision"
-						/>
-					</div>
-				</div>
+			<div
+				v-for="column in headers"
+				:key="column.key"
+				:class="['posa-catalog-header-cell', alignClass(column.align)]"
+				role="columnheader"
+			>
+				{{ column.title }}
+			</div>
+		</div>
+		<div
+			v-if="!displayedItems.length"
+			class="posa-catalog-empty"
+		>
+			{{ noDataText || "No items match your search." }}
+		</div>
+		<RecycleScroller
+			v-else
+			ref="scrollerRef"
+			class="posa-catalog-scroller"
+			:items="displayedItems"
+			key-field="item_code"
+			:item-size="rowHeight"
+			:buffer="200"
+			:page-mode="false"
+		>
+			<template #default="{ item }">
+				<CatalogItemRow
+					:item="item"
+					:columns="headers"
+					:context="context"
+					:pos-profile="posProfile"
+					:selected-currency="selectedCurrency"
+					:hide-qty-decimals="hideQtyDecimals"
+					:show-rate-info="showRateInfo"
+					:highlighted="rowHighlighted(item)"
+					:row-class="rowClassFor(item)"
+					:currency-symbol="currencySymbol"
+					:format-currency="formatCurrency"
+					:format-number="formatNumber"
+					:rate-precision="ratePrecision"
+					:get-item-rate-info="getItemRateInfo"
+					:is-negative="isNegative"
+					:style="{ height: rowHeight + 'px' }"
+					@click="handleRowClick"
+				/>
 			</template>
-			<template v-slot:item.actual_qty="{ item }">
-				<span class="golden--text" :class="{ 'negative-number': isNegative(item.actual_qty) }">
-					{{ formatActualQty(item.actual_qty) }}
-				</span>
-			</template>
-		</v-data-table-virtual>
+		</RecycleScroller>
 	</div>
 </template>
 
 <script setup>
-import { ref } from "vue";
-import ItemRateInfoMenu from "./ItemRateInfoMenu.vue";
+import { computed, nextTick, onMounted, onBeforeUnmount, ref } from "vue";
+import { RecycleScroller } from "vue-virtual-scroller";
+import "vue-virtual-scroller/dist/vue-virtual-scroller.css";
+import CatalogItemRow from "./CatalogItemRow.vue";
 
 const props = defineProps({
 	displayedItems: { type: Array, default: () => [] },
 	headers: { type: Array, default: () => [] },
+	// Kept for prop-shape compatibility with the previous
+	// v-data-table-virtual implementation. Not used by the
+	// RecycleScroller-based layout, but consumers (and the smoke spec)
+	// may still pass it; ignoring it is a no-op.
 	headerProps: { type: Object, default: () => ({}) },
 	context: { type: String, default: "pos" },
 	posProfile: { type: Object, default: () => ({}) },
@@ -130,177 +87,181 @@ const props = defineProps({
 
 const emit = defineEmits(["row-click", "list-scroll"]);
 
-const handleRowClick = (event, data) => {
-	emit("row-click", event, data);
+// Fixed row height — chosen to accommodate the dual-line rate cell
+// (primary currency line + optional secondary multi-currency line).
+// Single-line rows pad to the same height for a uniform grid.
+const rowHeight = computed(() => (props.posProfile?.posa_allow_multi_currency ? 72 : 56));
+
+const gridTemplateStyle = computed(() => ({
+	gridTemplateColumns: props.headers.map((c) => c.width || "1fr").join(" "),
+}));
+
+const alignClass = (align) => {
+	if (align === "end") return "text-end";
+	if (align === "center") return "text-center";
+	return "text-start";
 };
 
-const handleListScroll = (event) => {
-	emit("list-scroll", event);
+// `itemClass` may be a string or a function `(item) => string`. Mirror
+// the Vuetify v-data-table API so callers (`getItemRowClass`) keep
+// working without change.
+const rowClassFor = (item) => {
+	if (typeof props.itemClass === "function") return props.itemClass(item) || "";
+	return props.itemClass || "";
 };
 
-const formatActualQty = (value) => {
-	const numericQty = Number(value ?? 0);
-	if (!Number.isFinite(numericQty)) {
-		return 0;
+// `rowProps` similarly is object or function. v-data-table emitted the
+// returned object as element attributes; for highlight purposes the
+// existing caller returns `{ class: "item-row-highlighted" }` for the
+// keyboard-highlighted row. Detect that to flip `highlighted` on the
+// child component (which has dedicated styles).
+const rowHighlighted = (item) => {
+	let resolved = props.rowProps;
+	if (typeof resolved === "function") {
+		try {
+			resolved = resolved({ item });
+		} catch {
+			return false;
+		}
 	}
-	if (props.hideQtyDecimals) {
-		return props.formatNumber(Math.round(numericQty), 0);
+	if (!resolved || typeof resolved !== "object") return false;
+	const cls = resolved.class;
+	if (typeof cls === "string") return cls.includes("item-row-highlighted");
+	if (Array.isArray(cls)) return cls.some((c) => typeof c === "string" && c.includes("item-row-highlighted"));
+	return false;
+};
+
+const handleRowClick = (event, item) => {
+	// Re-shape to the v-data-table-virtual payload `{ item }` so the
+	// consumer's `click_item_row(e, data)` keeps reading
+	// `data.item` without change.
+	emit("row-click", event, { item });
+};
+
+const scrollerRef = ref(null);
+
+let scrollTarget = null;
+const onScroll = (event) => emit("list-scroll", event);
+
+const attachScrollListener = () => {
+	const el = scrollerRef.value?.$el;
+	if (!el || el === scrollTarget) return;
+	if (scrollTarget) scrollTarget.removeEventListener("scroll", onScroll);
+	scrollTarget = el;
+	scrollTarget.addEventListener("scroll", onScroll, { passive: true });
+};
+
+onMounted(() => {
+	nextTick(attachScrollListener);
+});
+
+onBeforeUnmount(() => {
+	if (scrollTarget) {
+		scrollTarget.removeEventListener("scroll", onScroll);
+		scrollTarget = null;
 	}
-	return props.formatNumber(numericQty, 4);
-};
-
-const tableRef = ref(null);
-
-const getTableElement = () => {
-	const ref = tableRef.value;
-	return ref?.$el || ref;
-};
+});
 
 const scrollToIndex = (index) => {
-	const ref = tableRef.value;
-	const scrollToIndexFn = ref?.scrollToIndex || ref?.$?.exposed?.scrollToIndex;
-	if (scrollToIndexFn) {
-		scrollToIndexFn(index);
+	const ref = scrollerRef.value;
+	if (ref?.scrollToItem) {
+		ref.scrollToItem(index);
 		return true;
 	}
-
-	const tableEl = getTableElement();
-	const wrapper = tableEl?.querySelector?.(".v-table__wrapper");
-	const rows = tableEl?.querySelectorAll?.("tbody tr");
-	if (wrapper && rows && rows.length > 0) {
-		const targetRow = rows[index];
-		if (targetRow) {
-			wrapper.scrollTop = targetRow.offsetTop;
-		}
+	const el = ref?.$el;
+	if (el && typeof index === "number") {
+		el.scrollTop = index * rowHeight.value;
 		return true;
 	}
 	return false;
 };
 
-defineExpose({ scrollToIndex, getTableElement, tableRef });
+const getTableElement = () => scrollerRef.value?.$el || null;
+
+defineExpose({ scrollToIndex, getTableElement, tableRef: scrollerRef });
 </script>
 
 <style scoped>
-:deep(.item-row-highlighted) {
-	background-color: rgba(var(--v-theme-primary), 0.32);
-}
-
-:deep(.item-row-highlighted td) {
-	font-weight: 600;
-	color: rgb(var(--v-theme-primary));
-	background-color: rgba(var(--v-theme-primary), 0.32);
-}
-
-.rate-cell-primary {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-}
-
-.sleek-data-table {
+.items-table-container {
+	display: flex;
+	flex-direction: column;
+	height: calc(100% - 80px);
+	min-height: 400px;
 	margin: 0;
 	background-color: transparent;
 	border-radius: var(--pos-radius-md);
 	overflow: hidden;
 	border: 1px solid var(--pos-border-light);
-	height: 100%;
-	display: flex;
-	flex-direction: column;
-	transition: all 0.3s ease;
+	transition: box-shadow 0.3s ease;
 }
 
-.sleek-data-table:hover {
+.items-table-container:hover {
 	box-shadow: 0 12px 24px var(--pos-shadow-light) !important;
 }
 
-.sleek-data-table :deep(th) {
+.posa-catalog-header {
+	display: grid;
+	align-items: center;
+	background: var(--pos-surface-muted);
+	border-bottom: 1px solid var(--pos-border-light);
+	color: var(--pos-text-secondary);
 	font-weight: 700;
 	font-size: 0.8rem;
 	text-transform: none;
 	letter-spacing: 0.02em;
-	padding: 14px 16px;
-	transition: all 0.3s ease;
-	border-bottom: 1px solid var(--pos-border-light);
-	background: var(--pos-surface-muted);
-	color: var(--pos-text-secondary);
-	position: sticky !important;
-	top: 0 !important;
-	z-index: 10 !important;
+	position: sticky;
+	top: 0;
+	z-index: 10;
 	backdrop-filter: blur(8px);
 	-webkit-backdrop-filter: blur(8px);
-	box-shadow: none;
-	text-shadow: none;
+	min-height: 48px;
 	font-family:
 		"SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",
 		sans-serif;
 	font-variant-numeric: lining-nums tabular-nums;
-	font-feature-settings:
-		"tnum" 1,
-		"lnum" 1,
-		"kern" 1;
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
 }
 
-:deep([data-theme="dark"]) .sleek-data-table th,
-:deep(.v-theme--dark) .sleek-data-table th {
-	background: var(--pos-surface-muted) !important;
-	border-bottom: 1px solid var(--pos-border-light);
+.posa-catalog-header-cell {
+	padding: 14px 16px;
+	line-height: 1.25;
+	display: flex;
+	align-items: center;
+	min-height: 48px;
+	box-sizing: border-box;
+}
+
+.posa-catalog-empty {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	color: var(--pos-text-secondary);
-	text-shadow: none;
-	box-shadow: none;
+	font-size: 0.9rem;
+	padding: 24px;
 }
 
-.sleek-data-table :deep(.v-data-table__wrapper),
-.sleek-data-table :deep(.v-table__wrapper) {
-	border-radius: var(--pos-radius-md);
+.posa-catalog-scroller {
+	flex: 1 1 auto;
+	min-height: 0;
 	height: 100%;
 	overflow-y: auto;
+	overflow-x: hidden;
+	background-color: transparent;
 	scrollbar-width: thin;
 	position: relative;
 }
 
-.sleek-data-table :deep(.v-data-table) {
-	height: 100%;
-	display: flex;
-	flex-direction: column;
-}
-
-.sleek-data-table :deep(.v-data-table__wrapper tbody) {
-	overflow-y: auto;
-	max-height: calc(100% - 60px);
-}
-
-.sleek-data-table :deep(tr) {
-	transition: all 0.2s ease;
-	border-bottom: 1px solid var(--pos-border-light);
-	background-color: var(--pos-surface-raised);
-}
-
-.sleek-data-table :deep(tr:hover) {
-	background-color: rgba(var(--v-theme-primary), 0.05);
-	transform: none;
-	box-shadow: none;
-}
-
-.sleek-data-table :deep(tbody tr:nth-child(even)) {
+.posa-catalog-scroller :deep(.vue-recycle-scroller__item-view:nth-child(even) .posa-catalog-row) {
 	background-color: rgba(var(--v-theme-on-surface), 0.015);
 }
 
-.sleek-data-table :deep(td) {
-	padding: 14px 16px;
-	vertical-align: middle;
-	color: var(--pos-text-primary);
-	font-family:
-		"SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",
-		sans-serif;
-	font-variant-numeric: lining-nums tabular-nums;
-	font-feature-settings:
-		"tnum" 1,
-		"lnum" 1,
-		"kern" 1;
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
-	letter-spacing: 0.01em;
+.text-start {
+	text-align: start;
+}
+.text-end {
+	text-align: end;
+}
+.text-center {
+	text-align: center;
 }
 </style>

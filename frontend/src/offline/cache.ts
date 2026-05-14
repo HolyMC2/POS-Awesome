@@ -467,6 +467,39 @@ export function saveItemUOMs(itemCode, uoms) {
 	}
 }
 
+/**
+ * Bulk variant — write N items into `uom_cache` and persist ONCE at
+ * the end. The per-item `saveItemUOMs` calls `persist("uom_cache")`
+ * each time, and `persist` JSON.stringifies the WHOLE growing cache
+ * to clone it for the worker (or to localStorage). With N items, the
+ * total clone cost is O(N²): on a 6 645-item catalog this turns boot
+ * + price-list switch into a 30+ second main-thread freeze ("Page
+ * Unresponsive"), reproduced live on Doco Ventas. Call this instead
+ * of looping `saveItemUOMs` from any code that touches more than a
+ * handful of items.
+ */
+export function saveItemUOMsBulk(
+	entries: Array<{ itemCode: string; uoms: any }>,
+) {
+	if (!Array.isArray(entries) || entries.length === 0) return;
+	try {
+		const cache = memory.uom_cache || {};
+		for (let i = 0; i < entries.length; i++) {
+			const entry = entries[i];
+			if (!entry || !entry.itemCode) continue;
+			try {
+				cache[entry.itemCode] = JSON.parse(JSON.stringify(entry.uoms));
+			} catch {
+				// Keep going on individual serialization failure.
+			}
+		}
+		memory.uom_cache = cache;
+		persist("uom_cache");
+	} catch (e) {
+		console.error("Failed to bulk-cache UOMs", e);
+	}
+}
+
 export function getItemUOMs(itemCode) {
 	try {
 		const cache = memory.uom_cache || {};
@@ -1158,9 +1191,7 @@ export function savePricingRulesSnapshot(
 	persist("pricing_rules_last_sync");
 	persist("pricing_rules_stale_at");
 	refreshBootstrapSnapshotFromCacheState({
-		pricingSnapshotCount: Array.isArray(memory.pricing_rules_snapshot)
-			? memory.pricing_rules_snapshot.length
-			: 0,
+		pricingSnapshotCount: true,
 		pricingContext: memory.pricing_rules_context,
 	});
 }

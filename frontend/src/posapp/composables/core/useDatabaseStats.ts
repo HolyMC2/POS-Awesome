@@ -30,11 +30,39 @@ export function useDatabaseStats(pollInterval = 10000, windowSize = 60) {
 		}
 	}
 
-	fetchDatabaseStats();
-	timer = window.setInterval(fetchDatabaseStats, pollInterval);
+	const start = () => {
+		if (timer !== null) return;
+		timer = window.setInterval(fetchDatabaseStats, pollInterval);
+	};
+	const stop = () => {
+		if (timer !== null) {
+			clearInterval(timer);
+			timer = null;
+		}
+	};
+	const onVisibility = () => {
+		if (typeof document === "undefined") return;
+		if (document.hidden) {
+			stop();
+		} else {
+			void fetchDatabaseStats();
+			start();
+		}
+	};
+
+	void fetchDatabaseStats();
+	if (typeof document === "undefined" || !document.hidden) {
+		start();
+	}
+	if (typeof document !== "undefined") {
+		document.addEventListener("visibilitychange", onVisibility);
+	}
 
 	onUnmounted(() => {
-		if (timer) clearInterval(timer);
+		stop();
+		if (typeof document !== "undefined") {
+			document.removeEventListener("visibilitychange", onVisibility);
+		}
 	});
 
 	return { dbStats, history, loading, error };

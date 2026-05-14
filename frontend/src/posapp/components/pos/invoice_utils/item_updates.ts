@@ -835,20 +835,31 @@ export async function flushBackgroundUpdates(context: any) {
 
 	if (itemsToUpdate.length === 0) return;
 
-	try {
-		if (context.update_items_details)
-			await context.update_items_details(itemsToUpdate);
-
-		itemsToUpdate.forEach((item) => {
-			item._needs_update = false;
-			item._detailSynced = true;
+	// Background flush. Fire the detail-fetch as truly async so the
+	// flush invocation returns immediately; mark items synced + kick
+	// the pricing pass once the response lands. Awaiting here meant
+	// the 2 s `triggerBackgroundFlush` debounce ended with a UI
+	// freeze of 1-5 s while the network responded — the operator
+	// experienced "frozen after the second item add". The flush is
+	// best-effort: if the network fails, items keep their local
+	// state and a later flush retries.
+	if (!context.update_items_details) return;
+	Promise.resolve(context.update_items_details(itemsToUpdate))
+		.then(() => {
+			itemsToUpdate.forEach((item) => {
+				item._needs_update = false;
+				item._detailSynced = true;
+			});
+			if (context.schedulePricingRuleApplication) {
+				context.schedulePricingRuleApplication();
+			}
+		})
+		.catch((e: unknown) => {
+			console.warn(
+				"[POSA][BackgroundFlush] detail refresh failed; will retry on next flush",
+				e,
+			);
 		});
-
-		if (context.schedulePricingRuleApplication)
-			context.schedulePricingRuleApplication();
-	} catch (e) {
-		console.error("Background flush failed", e);
-	}
 }
 
 export function _normalizeReturnDocTotals(context: any, doc: any) {

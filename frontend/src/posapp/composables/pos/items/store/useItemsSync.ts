@@ -9,6 +9,7 @@ import {
 	getItemsLastSync,
 	saveItemDetailsCache,
 	saveItemUOMs,
+	saveItemUOMsBulk,
 	saveItemGroups,
 	getCachedItemGroups,
 	refreshBootstrapSnapshotFromCacheState,
@@ -57,7 +58,7 @@ export function useItemsSync() {
 				saveItemGroups(groups);
 			} else {
 				// Fallback to API
-				const response = await itemService.getItemGroups();
+				const response = await itemService.getItemGroupsData();
 
 				if (response) {
 					const groups = ["ALL"];
@@ -110,12 +111,16 @@ export function useItemsSync() {
 		posProfile: POSProfile | null,
 		activePriceList: string,
 	) => {
-		if (!Array.isArray(itemList) || itemList.length === 0 || !posProfile?.name) {
+		if (
+			!Array.isArray(itemList) ||
+			itemList.length === 0 ||
+			!posProfile?.name
+		) {
 			return;
 		}
 
-		const detailItems = itemList.filter(
-			(item): item is Item => Boolean(item?.item_code),
+		const detailItems = itemList.filter((item): item is Item =>
+			Boolean(item?.item_code),
 		);
 		if (!detailItems.length) {
 			return;
@@ -127,11 +132,22 @@ export function useItemsSync() {
 			detailItems,
 		);
 
-		detailItems.forEach((item) => {
+		// Batch UOM cache writes. The per-item `saveItemUOMs` path calls
+		// `persist("uom_cache")` after every entry, and `persist` clones
+		// the WHOLE growing cache with `JSON.parse(JSON.stringify(...))`
+		// to hand to the persistence worker. On the Doco Ventas 6 645-
+		// item catalog this turned the call below into a 30+ second
+		// main-thread freeze (Page Unresponsive). Collect the entries
+		// and persist once via `saveItemUOMsBulk`.
+		const uomEntries: Array<{ itemCode: string; uoms: any }> = [];
+		for (const item of detailItems) {
 			if (Array.isArray(item.item_uoms) && item.item_uoms.length > 0) {
-				saveItemUOMs(item.item_code, item.item_uoms);
+				uomEntries.push({ itemCode: item.item_code, uoms: item.item_uoms });
 			}
-		});
+		}
+		if (uomEntries.length) {
+			saveItemUOMsBulk(uomEntries);
+		}
 	};
 
 	const cancelBackgroundSync = () => {
@@ -337,7 +353,9 @@ export function useItemsSync() {
 				if (remainingCatalogEstimate > 0) {
 					loadProgress.value = Math.min(
 						99,
-						Math.round((syncedCount / remainingCatalogEstimate) * 100),
+						Math.round(
+							(syncedCount / remainingCatalogEstimate) * 100,
+						),
 					);
 				} else if (syncedCount > 0) {
 					loadProgress.value = Math.min(

@@ -145,7 +145,12 @@
 						>
 							mdi-account-switch-outline
 						</v-icon>
-						<span :class="['profile-chip__content', isRtl ? 'rtl-profile-text' : 'ltr-profile-text']">
+						<span
+							:class="[
+								'profile-chip__content',
+								isRtl ? 'rtl-profile-text' : 'ltr-profile-text',
+							]"
+						>
 							<span class="pos-text-primary profile-chip__title">
 								{{ cashierChipLabel }}
 							</span>

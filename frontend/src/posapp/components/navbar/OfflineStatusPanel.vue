@@ -15,12 +15,7 @@
 						{{ summaryMessage }}
 					</div>
 				</div>
-				<v-chip
-					size="small"
-					variant="tonal"
-					:color="chipColor"
-					class="offline-status-panel__chip"
-				>
+				<v-chip size="small" variant="tonal" :color="chipColor" class="offline-status-panel__chip">
 					{{ connectivityLabel }}
 				</v-chip>
 			</div>
@@ -57,10 +52,7 @@
 				<div class="offline-status-panel__section-title">
 					{{ __("Offline Capabilities") }}
 				</div>
-				<div
-					v-if="capabilitySummaries.length"
-					class="offline-status-panel__resources"
-				>
+				<div v-if="capabilitySummaries.length" class="offline-status-panel__resources">
 					<div
 						v-for="capability in capabilitySummaries"
 						:key="capability.id"
@@ -78,10 +70,7 @@
 						<div class="offline-status-panel__resource-detail">
 							{{ capability.message }}
 						</div>
-						<div
-							v-if="capability.action"
-							class="offline-status-panel__resource-id"
-						>
+						<div v-if="capability.action" class="offline-status-panel__resource-id">
 							{{ capability.action }}
 						</div>
 					</div>
@@ -95,10 +84,7 @@
 				<div class="offline-status-panel__section-title">
 					{{ __("Resource Health") }}
 				</div>
-				<div
-					v-if="sortedResources.length"
-					class="offline-status-panel__resources"
-				>
+				<div v-if="sortedResources.length" class="offline-status-panel__resources">
 					<div
 						v-for="resource in sortedResources"
 						:key="resource.resourceId"
@@ -116,10 +102,7 @@
 						<div class="offline-status-panel__resource-id">
 							{{ resource.resourceId }}
 						</div>
-						<div
-							v-if="resource.lastError"
-							class="offline-status-panel__resource-detail"
-						>
+						<div v-if="resource.lastError" class="offline-status-panel__resource-detail">
 							{{ resource.lastError }}
 						</div>
 					</div>
@@ -334,7 +317,9 @@ const cacheUsageLabel = computed(() => `${summary.value.cacheUsage || 0}%`);
 	padding: 8px 12px;
 	font-size: 12px;
 	font-weight: 600;
-	transition: background 0.18s ease, border-color 0.18s ease,
+	transition:
+		background 0.18s ease,
+		border-color 0.18s ease,
 		transform 0.18s ease;
 }
 
@@ -346,7 +331,9 @@ const cacheUsageLabel = computed(() => `${summary.value.cacheUsage || 0}%`);
 
 .offline-status-panel-fade-enter-active,
 .offline-status-panel-fade-leave-active {
-	transition: opacity 0.18s ease, transform 0.18s ease;
+	transition:
+		opacity 0.18s ease,
+		transform 0.18s ease;
 }
 
 .offline-status-panel-fade-enter-from,

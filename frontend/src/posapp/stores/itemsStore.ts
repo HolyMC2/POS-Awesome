@@ -4,7 +4,7 @@
  */
 
 import { defineStore } from "pinia";
-import { ref, computed, watch } from "vue";
+import { ref, shallowRef, triggerRef, markRaw, computed, watch } from "vue";
 import type { Item, POSProfile } from "../types/models";
 import itemService from "../services/itemService";
 import { refreshBootstrapSnapshotFromCacheState } from "../../offline/index";
@@ -12,6 +12,13 @@ import { refreshBootstrapSnapshotFromCacheState } from "../../offline/index";
 // Composables
 import { useItemsCache } from "../composables/pos/items/store/useItemsCache";
 import { useItemsSearch } from "../composables/pos/items/store/useItemsSearch";
+import {
+	isSearchWorkerEnabled,
+	patchSearchIndex,
+	searchViaWorker,
+	setSearchIndex,
+	type SearchIndexEntry,
+} from "../composables/pos/items/useSearchWorker";
 import { useItemsSync } from "../composables/pos/items/store/useItemsSync";
 import { useItemsPagination } from "../composables/pos/items/store/useItemsPagination";
 import { useItemsMetrics } from "../composables/pos/items/store/useItemsMetrics";
@@ -99,8 +106,20 @@ export const useItemsStore = defineStore("items", () => {
 	};
 
 	// Core State
-	const items = ref<Item[]>([]);
-	const filteredItems = ref<Item[]>([]);
+	// `shallowRef` + `markRaw(item)` on insert so the catalog (often
+	// 5 k+ rows on busy stores) does NOT get wrapped in per-property
+	// Vue proxies. Mutations to individual `item.*` fields stop
+	// firing reactivity automatically — call `triggerRef(items)` /
+	// `triggerRef(filteredItems)` after a batch of mutations to
+	// re-render consumers. The chunked background sync was the
+	// dominant 30-60 s freeze on low-end devices because each chunk
+	// re-wrapped the entire growing array as new proxies.
+	const items = shallowRef<Item[]>([]);
+	const filteredItems = shallowRef<Item[]>([]);
+	const markRawItems = (list: Item[]): Item[] =>
+		Array.isArray(list)
+			? list.map((it) => (it && typeof it === "object" ? markRaw(it) : it))
+			: [];
 	const totalItemCount = ref(0);
 	const itemsLoaded = ref(false);
 	const searchTerm = ref("");
@@ -136,6 +155,29 @@ export const useItemsStore = defineStore("items", () => {
 		getItemByCode,
 		getItemByBarcode,
 	} = useItemsSearch();
+
+	// Phase 3: convert the catalog into the lean payload the search
+	// Worker holds. Worker only needs the item_code + the precomputed
+	// `_search_index` string + the item_group for group-filter
+	// scoping. Cheap (single allocation per item; no deep clone).
+	function toWorkerIndexEntries(list: Item[]): SearchIndexEntry[] {
+		const out: SearchIndexEntry[] = [];
+		for (const item of list || []) {
+			if (!item?.item_code) continue;
+			const idx =
+				(item as any)._search_index ||
+				[item.item_code, item.item_name, (item as any).barcode]
+					.filter(Boolean)
+					.join(" ")
+					.toLowerCase();
+			out.push({
+				code: item.item_code,
+				idx,
+				group: item.item_group,
+			});
+		}
+		return out;
+	}
 
 	const {
 		isLoading,
@@ -237,16 +279,61 @@ export const useItemsStore = defineStore("items", () => {
 		newItems: Item[],
 		options: { append?: boolean; totalCount?: number } = {},
 	) => {
+		const _sRec = (label: string, t: number) => {
+			if (typeof window === "undefined") return;
+			const w = window as any;
+			w.__setItemsPhases = w.__setItemsPhases || [];
+			w.__setItemsPhases.push({ label, dur: performance.now() - t, count: Array.isArray(newItems) ? newItems.length : 0, at: Date.now() });
+			if (w.__setItemsPhases.length > 200) w.__setItemsPhases.shift();
+			if (performance.now() - t > 500) {
+				console.warn(`[POSA][setItems] slow ${label}: ${Math.round(performance.now() - t)}ms (n=${Array.isArray(newItems) ? newItems.length : 0})`);
+			}
+		};
 		const { append = false, totalCount: totalOverride } = options;
 		const normalizedGroup =
 			typeof itemGroup.value === "string" && itemGroup.value.length > 0
 				? itemGroup.value
 				: "ALL";
 
+		// Safety cap: loading > 3000 items into a fully-reactive Pinia
+		// store + building per-item `_search_index` strings + persisting
+		// to IndexedDB synchronously regularly crashes Chrome tabs on
+		// low-RAM operator devices. Profiles that intentionally hold a
+		// big catalog locally should set `pose_use_limit_search = 1`
+		// (server-side pagination). When we see a mass-load arriving
+		// despite limit-search being off, downgrade gracefully: keep
+		// the first 3000 items locally so the catalog still works, and
+		// log loudly so ops can fix the profile config. The legacy
+		// behaviour silently OOM'd the tab and the operator was left
+		// staring at a "Page Unresponsive" prompt.
+		const SAFE_LOCAL_ITEM_CAP = 3000;
+		const incomingArray = Array.isArray(newItems) ? newItems : [];
+		const cappedNewItems =
+			!append && incomingArray.length > SAFE_LOCAL_ITEM_CAP
+				? incomingArray.slice(0, SAFE_LOCAL_ITEM_CAP)
+				: incomingArray;
+		if (cappedNewItems.length !== incomingArray.length) {
+			console.warn(
+				`[POSA][setItems] item count ${incomingArray.length} exceeds safe cap ${SAFE_LOCAL_ITEM_CAP}; truncating. Enable 'pose_use_limit_search' on the POS Profile to use server-side search instead of mass-loading.`,
+			);
+		}
+
 		if (!append) {
-			items.value = Array.isArray(newItems) ? [...newItems] : [];
+			const tA = performance.now();
+			items.value = markRawItems(cappedNewItems);
+			_sRec("markRawAssign", tA);
+			const tB = performance.now();
 			resetIndexes();
+			_sRec("resetIndexes", tB);
+			const tC = performance.now();
 			updateIndexes(items.value, posProfile.value);
+			_sRec("updateIndexes", tC);
+			// Phase 3: mirror the index into the search Worker so the
+			// flag-gated worker path has matching data when it runs.
+			// No-op (cheap) when the flag is off.
+			if (isSearchWorkerEnabled()) {
+				void setSearchIndex(toWorkerIndexEntries(items.value));
+			}
 		} else if (Array.isArray(newItems) && newItems.length) {
 			const additions: Item[] = [];
 			newItems.forEach((item) => {
@@ -257,13 +344,15 @@ export const useItemsStore = defineStore("items", () => {
 				) {
 					return;
 				}
-				additions.push(item);
+				additions.push(markRaw(item));
 			});
 
 			if (additions.length) {
 				items.value = [...items.value, ...additions];
-				const appendedItems = items.value.slice(-additions.length);
-				updateIndexes(appendedItems, posProfile.value);
+				updateIndexes(additions, posProfile.value);
+				if (isSearchWorkerEnabled()) {
+					void patchSearchIndex(toWorkerIndexEntries(additions));
+				}
 			}
 		}
 
@@ -478,6 +567,7 @@ export const useItemsStore = defineStore("items", () => {
 				effectivePriceList,
 				isInitialBootstrapRequest,
 				args,
+				lean,
 			} = buildLoadItemsRequest({
 				options,
 				posProfile: posProfile.value,
@@ -513,9 +603,10 @@ export const useItemsStore = defineStore("items", () => {
 					cachedPagination.value.total = cachedResult.length;
 					cachedPagination.value.loading = false;
 					if (!searchValue && shouldPersistItems()) {
-						const storedCount = await getStoredItemsCountByScopeCompat(
-							getStorageScope(),
-						).catch(() => 0);
+						const storedCount =
+							await getStoredItemsCountByScopeCompat(
+								getStorageScope(),
+							).catch(() => 0);
 						if (!storedCount && cachedResult.length) {
 							await persistItemsToStorage(
 								cachedResult,
@@ -535,7 +626,10 @@ export const useItemsStore = defineStore("items", () => {
 						}
 						if (normalizedGroup === "ALL") {
 							syncBootstrapItemReadiness(
-								Math.max(Number(storedCount || 0), cachedResult.length),
+								Math.max(
+									Number(storedCount || 0),
+									cachedResult.length,
+								),
 							);
 						}
 					}
@@ -553,13 +647,58 @@ export const useItemsStore = defineStore("items", () => {
 				return [];
 			}
 
-			const fetchedItems = await itemService.getItems(
+			const fetchedItems = await itemService.getItemsData(
 				args,
 				abortController.signal,
 			);
 
 			if (requestToken.value !== currentRequestToken) {
 				return;
+			}
+
+			if (lean) {
+				// Lean search merges (de-dupe by item_code) into the
+				// existing in-memory list — never replaces it. The
+				// search-fallback fires once per missing-term and
+				// should NOT clobber the catalog the operator has
+				// already loaded.
+				//
+				// Skip the merge entirely when the active price list
+				// has changed since the request was dispatched: the
+				// items in `fetchedItems` carry prices for the old
+				// list, and merging them would surface stale rates
+				// in the SPA. The detail cache still gets primed so
+				// the next per-item refresh can hit it.
+				const currentEffectivePriceList =
+					customerPriceList.value ||
+					posProfile.value?.selling_price_list ||
+					"";
+				const priceListStillActive =
+					!effectivePriceList ||
+					effectivePriceList === currentEffectivePriceList;
+				if (
+					Array.isArray(fetchedItems) &&
+					fetchedItems.length &&
+					priceListStillActive
+				) {
+					const knownCodes = new Set(
+						items.value.map((i: any) => i.item_code),
+					);
+					const additions = fetchedItems
+						.filter((it: any) => it && !knownCodes.has(it.item_code))
+						.map((it: any) => markRaw(it));
+					if (additions.length) {
+						items.value = [...items.value, ...additions];
+						updateIndexes(additions, posProfile.value);
+					}
+					primeItemDetailsCache(
+						fetchedItems,
+						posProfile.value,
+						effectivePriceList,
+					);
+				}
+				updatePerformanceMetrics(startTime);
+				return fetchedItems;
 			}
 
 			cachedPagination.value.enabled = false;
@@ -766,11 +905,37 @@ export const useItemsStore = defineStore("items", () => {
 				const sourceItems = canRefineSearch
 					? filteredItems.value
 					: items.value;
-				searchResults = performLocalSearch(
-					term,
-					sourceItems,
-					itemGroup.value,
-				);
+
+				// Phase 3: try the search Worker first (flag-gated). The
+				// worker returns matching item_codes; map them back via
+				// the existing itemsMap so we still hand the caller real
+				// Item objects. If the worker is off, not ready, errored,
+				// or times out, `searchViaWorker` resolves null and we
+				// fall through to the main-thread filter.
+				let workerCodes: string[] | null = null;
+				if (isSearchWorkerEnabled()) {
+					workerCodes = await searchViaWorker(term, itemGroup.value);
+				}
+				if (Array.isArray(workerCodes)) {
+					const lookup = canRefineSearch
+						? new Map(
+								(sourceItems as Item[]).map(
+									(item: Item) => [item.item_code, item] as const,
+								),
+							)
+						: itemsMap.value;
+					searchResults = [];
+					for (const code of workerCodes) {
+						const hit = lookup.get(code);
+						if (hit) searchResults.push(hit);
+					}
+				} else {
+					searchResults = performLocalSearch(
+						term,
+						sourceItems,
+						itemGroup.value,
+					);
+				}
 
 				if (searchResults.length === 0 && term.length >= 3) {
 					await loadItems({
@@ -778,6 +943,12 @@ export const useItemsStore = defineStore("items", () => {
 						groupFilter: itemGroup.value,
 						forceServer: true,
 					});
+					// Server reload widened items.value; re-run local
+					// filter against the fresh set. We deliberately skip
+					// the worker here — the worker still holds the old
+					// index until the loadItems append above mirrors the
+					// delta, and the main-thread filter is fast enough
+					// on a freshly hydrated slice.
 					searchResults = performLocalSearch(
 						term,
 						items.value,
@@ -914,26 +1085,96 @@ export const useItemsStore = defineStore("items", () => {
 
 			if (priceData && priceData.length > 0) {
 				applyPriceListToItems(priceData);
-			} else {
-				await loadItems({
-					forceServer: true,
-					priceList: newPriceList,
-				});
+				return;
 			}
+
+			// No cached price-list snapshot for this list. Previously we
+			// fell back to `loadItems({ forceServer: true })` here, which
+			// re-pulled the entire item catalog from the server and froze
+			// the UI for 10-60s when the catalog is large + the customer
+			// happens to be on a price list the cache has not seen.
+			//
+			// Drop the eager full reload: the watcher in invoiceWatchers
+			// already marks every cart line `_detailSynced = false` and
+			// clears the per-item detail/stock caches, so the next render
+			// (or the next user interaction with each line) will lazily
+			// fetch fresh prices via `useItemDetailFetcher` for just the
+			// items the operator actually touches. The catalog list keeps
+			// its previous prices on screen for a moment, then converges
+			// as detail fetches resolve.
 		} catch (error) {
 			console.error("Failed to update price list:", error);
 		}
 	};
 
+	let applyPriceListInflight: number | null = null;
+	let applyPriceListGeneration = 0;
+	const CHUNK_SIZE = 400;
+
 	const applyPriceListToItems = (priceListItems: any[]) => {
-		const priceMap = new Map();
+		const _phaseStart =
+			typeof performance !== "undefined" && performance.now
+				? performance.now()
+				: 0;
+		const _recordPhase = (label: string, start: number) => {
+			if (typeof window === "undefined") return;
+			const dur =
+				typeof performance !== "undefined" && performance.now
+					? performance.now() - start
+					: 0;
+			const w = window as any;
+			w.__pricelistPhases = w.__pricelistPhases || [];
+			w.__pricelistPhases.push({ label, dur, at: Date.now() });
+			if (w.__pricelistPhases.length > 200)
+				w.__pricelistPhases.shift();
+			if (dur > 1000) {
+				console.warn(
+					`[POSA][PriceList] slow phase ${label}: ${Math.round(dur)}ms`,
+				);
+			}
+		};
+		// Chunk + yield to the event loop between slices so big
+		// catalogs don't block the main thread long enough
+		// for Firefox to show the "page slowing down" banner.
+		const priceMap = new Map<string, any>();
 		priceListItems.forEach((item) => {
 			priceMap.set(item.item_code, item);
 		});
+		_recordPhase("buildPriceMap", _phaseStart);
 
-		items.value.forEach((item) => {
-			const priceItem = priceMap.get(item.item_code);
-			if (priceItem) {
+		// Bump generation. Any in-flight chunk loop captures the
+		// previous generation in `myGeneration` and bails on the
+		// next iteration when it sees the bump. This prevents the
+		// previous price-list's partial mutations from continuing
+		// to land after a newer price-list has taken over (which
+		// would leave the cart in a mixed-rate state until the
+		// next full apply cycle).
+		const myGeneration = ++applyPriceListGeneration;
+
+		if (applyPriceListInflight != null) {
+			const cancel =
+				(window as any).cancelIdleCallback ||
+				((id: number) =>
+					clearTimeout(id as unknown as ReturnType<typeof setTimeout>));
+			cancel(applyPriceListInflight);
+			applyPriceListInflight = null;
+		}
+
+		const itemsRef = items.value;
+		const total = itemsRef.length;
+		let cursor = 0;
+
+		const processChunk = () => {
+			applyPriceListInflight = null;
+			if (myGeneration !== applyPriceListGeneration) {
+				return;
+			}
+			const end = Math.min(cursor + CHUNK_SIZE, total);
+			for (let i = cursor; i < end; i++) {
+				const item = itemsRef[i];
+				if (!item) continue;
+				const priceItem = priceMap.get(item.item_code);
+				if (!priceItem) continue;
 				const nextRate =
 					priceItem.price_list_rate || priceItem.rate || 0;
 				const nextCurrency =
@@ -948,21 +1189,57 @@ export const useItemsStore = defineStore("items", () => {
 				item.original_currency = nextCurrency;
 				item.currency = nextCurrency;
 			}
-		});
-		clearSearchCache();
+			cursor = end;
+			if (cursor < total) {
+				const idle = (window as any).requestIdleCallback as
+					| ((cb: () => void, opts?: { timeout?: number }) => number)
+					| undefined;
+				applyPriceListInflight = idle
+					? idle(processChunk, { timeout: 200 })
+					: (setTimeout(
+							processChunk,
+							0,
+						) as unknown as number);
+				return;
+			}
+			// Done — items are markRaw, so per-property mutations
+			// inside the chunk loop don't fire reactivity. Replace
+			// the array reference + clearSearchCache once at the end
+			// so virtual scrollers + filteredItems re-evaluate.
+			const _finalStart =
+				typeof performance !== "undefined" && performance.now
+					? performance.now()
+					: 0;
+			items.value = [...items.value];
+			_recordPhase("finalArraySwap", _finalStart);
+			const _cacheStart =
+				typeof performance !== "undefined" && performance.now
+					? performance.now()
+					: 0;
+			clearSearchCache();
+			_recordPhase("clearSearchCache", _cacheStart);
+			const _filterStart =
+				typeof performance !== "undefined" && performance.now
+					? performance.now()
+					: 0;
+			if (searchTerm.value) {
+				filteredItems.value = performLocalSearch(
+					searchTerm.value,
+					items.value,
+					itemGroup.value,
+				);
+				_recordPhase("performLocalSearch", _filterStart);
+			} else {
+				filteredItems.value = filterItemsByGroup(
+					items.value,
+					itemGroup.value,
+				);
+				_recordPhase("filterItemsByGroup", _filterStart);
+			}
+			_recordPhase("total", _phaseStart);
+		};
 
-		if (searchTerm.value) {
-			filteredItems.value = performLocalSearch(
-				searchTerm.value,
-				items.value,
-				itemGroup.value,
-			);
-		} else {
-			filteredItems.value = filterItemsByGroup(
-				items.value,
-				itemGroup.value,
-			);
-		}
+		processChunk();
 	};
 
 	const refreshItems = async () => {
@@ -977,7 +1254,7 @@ export const useItemsStore = defineStore("items", () => {
 		if (item) return item;
 
 		try {
-			const newItem: any = await itemService.getItemsFromBarcode({
+			const newItem: any = await itemService.getItemsFromBarcodeData({
 				selling_price_list: activePriceList.value,
 				currency: posProfile.value?.currency || "",
 				barcode: barcode,
@@ -1004,8 +1281,9 @@ export const useItemsStore = defineStore("items", () => {
 					}
 				}
 
-				items.value.push(newItem);
-				updateIndexes([newItem], posProfile.value);
+				const rawItem = markRaw(newItem);
+				items.value = [...items.value, rawItem];
+				updateIndexes([rawItem], posProfile.value);
 
 				if (searchTerm.value) {
 					await searchItems(searchTerm.value);
@@ -1026,7 +1304,9 @@ export const useItemsStore = defineStore("items", () => {
 		}
 	};
 
-	const refreshModifiedItems = async (priceListOverride: string | null = null) => {
+	const refreshModifiedItems = async (
+		priceListOverride: string | null = null,
+	) => {
 		if (!itemsLoaded.value) return { size: 0, count: 0, items: [] };
 		const resolvedPriceList =
 			typeof priceListOverride === "string" &&
@@ -1083,10 +1363,7 @@ export const useItemsStore = defineStore("items", () => {
 				) {
 					(update as any).original_rate = syncedRate;
 				}
-				if (
-					update.currency &&
-					update.original_currency === undefined
-				) {
+				if (update.currency && update.original_currency === undefined) {
 					(update as any).original_currency = update.currency;
 				}
 				additions.push(update);
@@ -1094,14 +1371,15 @@ export const useItemsStore = defineStore("items", () => {
 		});
 
 		if (additions.length > 0) {
-			items.value = [...items.value, ...additions];
-			const appendedItems = items.value.slice(-additions.length);
-			updateIndexes(appendedItems, posProfile.value);
+			const rawAdditions = additions.map((it: any) => markRaw(it));
+			items.value = [...items.value, ...rawAdditions];
+			updateIndexes(rawAdditions, posProfile.value);
 		}
 
 		if (touchedItems.length > 0) {
-			// Force a shallow array refresh so virtualized tables/cards re-render
-			// even when rows are updated in-place.
+			// In-place mutations on `markRaw`'d items don't trigger
+			// the shallowRef. Replace the array reference so virtual
+			// scrollers + computed `filteredItems` re-evaluate.
 			items.value = [...items.value];
 			updateIndexes(touchedItems, posProfile.value);
 		}

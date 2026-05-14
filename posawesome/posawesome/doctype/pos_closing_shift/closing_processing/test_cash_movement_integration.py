@@ -26,7 +26,9 @@ class DummyClosingShift:
 class TestClosingShiftCashMovementIntegration(unittest.TestCase):
     @patch("posawesome.posawesome.doctype.pos_closing_shift.closing_processing.creation.get_payments_entries")
     @patch("posawesome.posawesome.doctype.pos_closing_shift.closing_processing.creation.get_pos_invoices")
-    @patch("posawesome.posawesome.doctype.pos_closing_shift.closing_processing.creation.submit_printed_invoices")
+    @patch(
+        "posawesome.posawesome.doctype.pos_closing_shift.closing_processing.creation.submit_printed_invoices"
+    )
     @patch("posawesome.posawesome.doctype.pos_closing_shift.closing_processing.creation.frappe")
     def test_make_closing_shift_deducts_cash_movements_from_cash_expected(
         self,

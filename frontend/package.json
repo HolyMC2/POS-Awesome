@@ -8,8 +8,10 @@
 		"serve": "vite preview",
 		"build": "vue-tsc --noEmit && vite build",
 		"type-check": "vue-tsc --noEmit",
+		"lint": "eslint .",
 		"format": "prettier --write \"**/*.{js,vue,css,scss,html}\"",
 		"test": "vitest",
+		"test:unit": "vitest run",
 		"test:smoke": "playwright test --config=playwright.config.ts",
 		"test:smoke:headed": "playwright test --config=playwright.config.ts --headed",
 		"docs:generate": "typedoc --options typedoc.json",
@@ -37,7 +39,7 @@
 		"vue-qrcode-reader": "^5.7.2",
 		"vue-router": "^4.6.4",
 		"vue-virtual-scroller": "^2.0.0-beta.8",
-		"vuetify": "^3.7.5"
+		"vuetify": "^3.12.6"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.16.0",

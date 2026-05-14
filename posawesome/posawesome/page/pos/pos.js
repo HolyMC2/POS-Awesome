@@ -2,24 +2,12 @@ const POS_ALIAS_BASE_PATH = "/app/pos";
 const POS_CANONICAL_BASE_PATH = "/app/posapp";
 
 function buildCanonicalPosAppUrl() {
-	const pathname =
-		typeof window !== "undefined" && window.location
-			? window.location.pathname || ""
-			: "";
-	const search =
-		typeof window !== "undefined" && window.location
-			? window.location.search || ""
-			: "";
-	const hash =
-		typeof window !== "undefined" && window.location
-			? window.location.hash || ""
-			: "";
+	const pathname = typeof window !== "undefined" && window.location ? window.location.pathname || "" : "";
+	const search = typeof window !== "undefined" && window.location ? window.location.search || "" : "";
+	const hash = typeof window !== "undefined" && window.location ? window.location.hash || "" : "";
 
 	let suffix = "";
-	if (
-		pathname &&
-		pathname.toLowerCase().startsWith(`${POS_ALIAS_BASE_PATH.toLowerCase()}/`)
-	) {
+	if (pathname && pathname.toLowerCase().startsWith(`${POS_ALIAS_BASE_PATH.toLowerCase()}/`)) {
 		suffix = pathname.slice(POS_ALIAS_BASE_PATH.length);
 	}
 

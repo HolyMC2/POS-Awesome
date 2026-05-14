@@ -44,7 +44,9 @@
 								@click="$emit('start-camera')"
 								:aria-label="
 									scannerLocked
-										? __('Camera scanner is locked until the current error is acknowledged')
+										? __(
+												'Camera scanner is locked until the current error is acknowledged',
+											)
 										: __('Scan with camera')
 								"
 								:title="
@@ -82,16 +84,11 @@
 						<div class="search-sync-progress__meta">
 							<span class="search-sync-progress__label">
 								{{ syncStatus || __("Syncing items in background") }}
-								<span
-									v-if="normalizedSyncItemsCount > 0"
-									class="search-sync-progress__count"
-								>
+								<span v-if="normalizedSyncItemsCount > 0" class="search-sync-progress__count">
 									{{ syncItemsCountLabel }}
 								</span>
 							</span>
-							<span class="search-sync-progress__value">
-								{{ clampedSyncProgress }}%
-							</span>
+							<span class="search-sync-progress__value"> {{ clampedSyncProgress }}% </span>
 						</div>
 					</div>
 				</div>
@@ -152,10 +149,7 @@
 					</v-btn>
 				</div>
 				<div class="tools-panel__meta">
-					<span
-						v-if="syncStatus"
-						class="text-caption text-info font-weight-bold sync-status-label"
-					>
+					<span v-if="syncStatus" class="text-caption text-info font-weight-bold sync-status-label">
 						{{ syncStatus }}
 					</span>
 					<span
@@ -221,12 +215,10 @@ const normalizedSyncItemsCount = computed(() => {
 	}
 	return Math.round(normalized);
 });
-const translate = (value) =>
-	typeof globalThis.__ === "function" ? globalThis.__(value) : value;
+const translate = (value) => (typeof globalThis.__ === "function" ? globalThis.__(value) : value);
 const syncItemsCountLabel = computed(() => {
 	const count = normalizedSyncItemsCount.value;
-	const itemLabel =
-		count === 1 ? translate("item synced") : translate("items synced");
+	const itemLabel = count === 1 ? translate("item synced") : translate("items synced");
 	return `${count.toLocaleString()} ${itemLabel}`;
 });
 

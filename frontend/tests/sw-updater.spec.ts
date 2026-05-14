@@ -218,4 +218,38 @@ describe("sw updater runtime safety", () => {
 		expect(updateStore.setCurrentVersion).not.toHaveBeenCalledWith("", expect.anything());
 		expect(updateStore.currentVersion).toBe("build-1000");
 	});
+
+	it("does not reject module loading when updater store startup is unavailable", async () => {
+		vi.doMock("pinia", () => ({
+			setActivePinia: vi.fn(() => {
+				throw new TypeError("Cannot read properties of undefined (reading 'has')");
+			}),
+		}));
+		vi.doMock("../src/posapp/stores/index.js", () => ({
+			pinia: {},
+			useUpdateStore: vi.fn(),
+		}));
+
+		const serviceWorker = new EventTarget() as EventTarget & {
+			controller: null;
+			ready: Promise<any>;
+			getRegistration: ReturnType<typeof vi.fn>;
+		};
+		serviceWorker.controller = null;
+		serviceWorker.ready = Promise.resolve(null);
+		serviceWorker.getRegistration = vi.fn();
+
+		Object.defineProperty(navigator, "serviceWorker", {
+			configurable: true,
+			value: serviceWorker,
+		});
+
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+		await expect(import("../src/sw-updater")).resolves.toBeTruthy();
+		expect(warnSpy).toHaveBeenCalledWith(
+			"POS service worker updater disabled during startup",
+			expect.any(TypeError),
+		);
+	});
 });

@@ -143,9 +143,7 @@ def _install_stubs():
                 posa_is_pos_supervisor=0,
             ),
         },
-        "invoices": {
-            "ACC-SINV-0001": FakeInvoice()
-        },
+        "invoices": {"ACC-SINV-0001": FakeInvoice()},
         "pos_profiles": {
             "Main POS": types.SimpleNamespace(
                 name="Main POS",
@@ -212,16 +210,13 @@ def _install_stubs():
 
     frappe_module.new_doc = _new_doc
     frappe_module.get_doc = _get_doc
-    frappe_module.get_cached_doc = (
-        lambda doctype, name: state["pos_profiles"][name]
-        if doctype == "POS Profile"
-        else state["companies"][name]
+    frappe_module.get_cached_doc = lambda doctype, name: (
+        state["pos_profiles"][name] if doctype == "POS Profile" else state["companies"][name]
     )
-    frappe_module.get_value = (
-        lambda doctype, name, fieldname:
-            getattr(state["pos_profiles"][name], fieldname, None)
-            if doctype == "POS Profile"
-            else getattr(state["companies"][name], fieldname, None)
+    frappe_module.get_value = lambda doctype, name, fieldname: (
+        getattr(state["pos_profiles"][name], fieldname, None)
+        if doctype == "POS Profile"
+        else getattr(state["companies"][name], fieldname, None)
     )
     frappe_module.flags = types.SimpleNamespace(ignore_account_permission=False)
     frappe_module.db = types.SimpleNamespace(
@@ -238,7 +233,9 @@ def _install_stubs():
     )
 
     employees_module._resolve_profile_name = lambda pos_profile=None: str(pos_profile or "").strip()
-    employees_module._ensure_terminal_user = lambda profile_name, user: state["terminal_users"].get(profile_name, [])
+    employees_module._ensure_terminal_user = lambda profile_name, user: state["terminal_users"].get(
+        profile_name, []
+    )
     employees_module._get_user_doc = lambda user: state["user_docs"][user]
     employees_module._is_pos_supervisor = lambda user_doc: bool(
         getattr(user_doc, "posa_is_pos_supervisor", 0)
@@ -385,7 +382,9 @@ class TestGiftCardApi(unittest.TestCase):
         self.assertEqual(invoice_doc.gift_card_redemptions, [])
         self.assertEqual(invoice_doc.payments, [])
 
-    def test_apply_invoice_gift_card_redemptions_requires_liability_account_when_redemption_is_attempted(self):
+    def test_apply_invoice_gift_card_redemptions_requires_liability_account_when_redemption_is_attempted(
+        self,
+    ):
         existing = FakeGiftCard(code="GC-0006", balance=300, status="Active")
         self.state["cards"][existing.gift_card_code] = existing
         profile_doc = self.state["pos_profiles"]["Main POS"]

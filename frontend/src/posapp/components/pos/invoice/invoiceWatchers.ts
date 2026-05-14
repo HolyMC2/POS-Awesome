@@ -1,5 +1,6 @@
 import { clearPriceListCache } from "../../../../offline/index";
 import { useCustomersStore } from "../../../stores/customersStore.js";
+import { debugLog } from "../../../utils/debug";
 
 interface WatcherItem {
 	posa_row_id?: string | number;
@@ -85,7 +86,7 @@ const applyReturnDiscountProration = (context: InvoiceWatchersVm) => {
 	const prorated = -Math.abs(originalDiscount * ratio);
 	const current = Number(context.additional_discount || 0);
 	if (Math.abs(current - prorated) > 0.0001) {
-		console.log("[POSA][Returns] Auto-prorate discount", {
+		debugLog("[POSA][Returns] Auto-prorate discount", {
 			originalDiscount,
 			originalTotal,
 			returnTotal,
@@ -256,26 +257,57 @@ const invoiceWatchers: Record<string, unknown> & ThisType<InvoiceWatchersVm> = {
 			});
 		}
 
-		if (Array.isArray(this.items)) {
-			this.items.forEach((item) => {
-				item._detailSynced = false;
-			});
+		// Defer the cache-invalidation pass off the watcher's
+		// synchronous tick. The two `forEach`es plus the cache
+		// resets used to run inline; with thousands of items in the
+		// catalog this single watcher tick froze the UI for 1-3s
+		// (and far longer when paired with the `updatePriceList`
+		// fallback that previously re-pulled the full catalog).
+		//
+		// Now: queue the work via `requestIdleCallback` (or
+		// `setTimeout(0)` as a fallback) and coalesce repeated
+		// price-list changes within ~200ms — rapidly switching
+		// customers no longer multiplies the work.
+		const scheduler = this as InvoiceWatchersVm & {
+			_priceListInvalidationHandle?: number | null;
+		};
+		if (scheduler._priceListInvalidationHandle != null) {
+			const cancel =
+				(window as any).cancelIdleCallback ||
+				((id: number) => clearTimeout(id as unknown as ReturnType<typeof setTimeout>));
+			cancel(scheduler._priceListInvalidationHandle as number);
+			scheduler._priceListInvalidationHandle = null;
 		}
-		if (Array.isArray(this.packed_items)) {
-			this.packed_items.forEach((item) => {
-				item._detailSynced = false;
-			});
-		}
-
-		if (typeof this.clearItemDetailCache === "function") {
-			this.clearItemDetailCache();
-		}
-		if (typeof this.clearItemStockCache === "function") {
-			this.clearItemStockCache();
-		}
-		if (this.available_stock_cache) {
-			this.available_stock_cache = {};
-		}
+		const run = () => {
+			scheduler._priceListInvalidationHandle = null;
+			// Mark cart lines stale so their NEXT detail fetch picks
+			// up the new price-list rate. We deliberately DO NOT call
+			// `clearItemDetailCache()` / `clearItemStockCache()` /
+			// reset `available_stock_cache` — wiping the IDB caches
+			// here forces every subsequent add-to-cart to re-issue
+			// `get_items_details` from scratch (5 s timeout per add)
+			// instead of hitting the in-memory request cache. The
+			// detail fetcher already keys its cache by
+			// `(profile, price_list, items)` so old-price-list
+			// entries naturally fall out of use; we don't need to
+			// nuke them.
+			if (Array.isArray(this.items)) {
+				this.items.forEach((item) => {
+					item._detailSynced = false;
+				});
+			}
+			if (Array.isArray(this.packed_items)) {
+				this.packed_items.forEach((item) => {
+					item._detailSynced = false;
+				});
+			}
+		};
+		const idle = (window as any).requestIdleCallback as
+			| ((cb: () => void, opts?: { timeout?: number }) => number)
+			| undefined;
+		scheduler._priceListInvalidationHandle = idle
+			? idle(run, { timeout: 250 })
+			: (setTimeout(run, 0) as unknown as number);
 	},
 
 	// Reactively update item prices when currency changes

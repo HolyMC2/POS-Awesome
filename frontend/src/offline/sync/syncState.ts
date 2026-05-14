@@ -1,4 +1,4 @@
-import { db } from "../db";
+import { db, safeBulkPut } from "../db";
 import type { SyncResourceId, SyncResourceState } from "./types";
 
 const SYNC_STATE_KEY_PREFIX = "posa_sync_state::";
@@ -46,8 +46,29 @@ export async function setSyncResourceState(state: SyncResourceState) {
 	const key = buildSyncStateStorageKey(clonedState.resourceId);
 	await db.table("sync_state").put({
 		key,
+		resourceId: clonedState.resourceId,
+		status: clonedState.status,
+		nextRetryAt: clonedState.nextRetryAt || null,
+		lastAttemptAt: clonedState.lastAttemptAt || null,
+		updated_at: new Date().toISOString(),
 		value: clonedState,
 	});
+}
+
+export async function setSyncResourceStates(states: SyncResourceState[]) {
+	const rows = (states || [])
+		.map((state) => cloneSyncState(state))
+		.filter((state): state is SyncResourceState => !!state?.resourceId)
+		.map((state) => ({
+			key: buildSyncStateStorageKey(state.resourceId),
+			resourceId: state.resourceId,
+			status: state.status,
+			nextRetryAt: state.nextRetryAt || null,
+			lastAttemptAt: state.lastAttemptAt || null,
+			updated_at: new Date().toISOString(),
+			value: state,
+		}));
+	await safeBulkPut("sync_state", rows);
 }
 
 export async function getSyncResourceState(

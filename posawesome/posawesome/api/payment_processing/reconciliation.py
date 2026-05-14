@@ -6,11 +6,14 @@ from erpnext.accounts.utils import reconcile_against_document
 from erpnext.accounts.doctype.payment_reconciliation.payment_reconciliation import reconcile_dr_cr_note
 from posawesome.posawesome.api.payment_processing.data import (
     get_outstanding_invoices,
-    get_unallocated_payments
+    get_unallocated_payments,
 )
 
+
 @frappe.whitelist()
-def auto_reconcile_customer_invoices(customer, company, currency=None, pos_profile=None, party_type="Customer"):
+def auto_reconcile_customer_invoices(
+    customer, company, currency=None, pos_profile=None, party_type="Customer"
+):
     """Automatically reconcile all unallocated payments against outstanding invoices for a customer.
 
     Fetch all outstanding invoices and available payments, then allocate them in
@@ -234,9 +237,7 @@ def auto_reconcile_customer_invoices(customer, company, currency=None, pos_profi
             invoice_allocations = []
             party_account = payment.get("account") or get_party_account(party_type, customer, company)
             dr_or_cr = (
-                "credit_in_account_currency"
-                if party_type == "Customer"
-                else "debit_in_account_currency"
+                "credit_in_account_currency" if party_type == "Customer" else "debit_in_account_currency"
             )
 
             for invoice in outstanding_invoices:
@@ -362,22 +363,21 @@ def auto_reconcile_customer_invoices(customer, company, currency=None, pos_profi
 
             entry_list.append(
                 frappe._dict(
-                        {
-                            "voucher_type": "Payment Entry",
-                            "voucher_no": payment_name,
-                            "voucher_detail_no": payment.get("reference_row"),
-                            "against_voucher_type": invoice.get("voucher_type") or "Sales Invoice",
-                            "against_voucher": invoice.get("voucher_no"),
-                            "account": payment.get("account") or (
-                                pe_doc.paid_to if party_type == "Supplier" else pe_doc.paid_from
-                            ),
-                            "party_type": party_type,
-                            "party": customer,
-                            "dr_or_cr": (
-                                "credit_in_account_currency"
-                                if party_type == "Customer"
-                                else "debit_in_account_currency"
-                            ),
+                    {
+                        "voucher_type": "Payment Entry",
+                        "voucher_no": payment_name,
+                        "voucher_detail_no": payment.get("reference_row"),
+                        "against_voucher_type": invoice.get("voucher_type") or "Sales Invoice",
+                        "against_voucher": invoice.get("voucher_no"),
+                        "account": payment.get("account")
+                        or (pe_doc.paid_to if party_type == "Supplier" else pe_doc.paid_from),
+                        "party_type": party_type,
+                        "party": customer,
+                        "dr_or_cr": (
+                            "credit_in_account_currency"
+                            if party_type == "Customer"
+                            else "debit_in_account_currency"
+                        ),
                         "unreconciled_amount": unallocated_before,
                         "unadjusted_amount": unallocated_before,
                         "allocated_amount": allocation,

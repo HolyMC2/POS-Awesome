@@ -48,7 +48,8 @@ loadLocalEnvFile();
 const baseURL = process.env.POSA_SMOKE_BASE_URL || "http://127.0.0.1:8000";
 
 export default defineConfig({
-	testDir: "./tests/smoke",
+	testDir: "./tests",
+	testMatch: ["smoke/**/*.spec.ts", "e2e/**/*.spec.ts"],
 	timeout: 120000,
 	fullyParallel: false,
 	forbidOnly: !!process.env.CI,
@@ -61,5 +62,8 @@ export default defineConfig({
 		trace: "retain-on-failure",
 		screenshot: "only-on-failure",
 		video: "retain-on-failure",
+		// Lab + dev sites use self-signed certs; production runs land
+		// on a real CA so this only loosens the local/lab path.
+		ignoreHTTPSErrors: true,
 	},
 });

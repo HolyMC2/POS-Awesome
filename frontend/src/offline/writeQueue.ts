@@ -22,9 +22,11 @@ export type OfflineQueueStatus =
 export interface OfflineQueueEntry {
 	queue_id?: number;
 	entity_type: OfflineEntityType;
+	resource?: OfflineEntityType;
 	payload: AnyRecord;
 	created_at: string;
 	last_attempt_at: string | null;
+	next_attempt_at?: string | null;
 	retry_count: number;
 	status: OfflineQueueStatus;
 	idempotency_key: string;
@@ -356,9 +358,11 @@ async function enqueueWriteQueueEntryInternal(
 
 		const entry: OfflineQueueEntry = {
 			entity_type: entityType,
+			resource: entityType,
 			payload: normalizedPayload,
 			created_at: nowIso(),
 			last_attempt_at: null,
+			next_attempt_at: null,
 			retry_count: 0,
 			status: "pending",
 			idempotency_key: idempotencyKey,
@@ -448,6 +452,7 @@ export async function claimRetryableQueueEntries(entityType: OfflineEntityType) 
 				...entry,
 				status: "syncing",
 				last_attempt_at: claimTimestamp,
+				next_attempt_at: null,
 				last_error:
 					entry.status === "syncing" && isStaleSyncLease(entry)
 						? entry.last_error || "Recovered stale sync lease"
@@ -511,6 +516,7 @@ export async function markWriteQueueEntrySynced(
 			status: "synced",
 			last_error: null,
 			last_attempt_at: current.last_attempt_at || expectedLastAttemptAt || nowIso(),
+			next_attempt_at: null,
 		}),
 	);
 }
@@ -537,6 +543,7 @@ export async function markWriteQueueEntryFailed(
 				status: nextStatus,
 				retry_count: nextRetryCount,
 				last_attempt_at: nowIso(),
+				next_attempt_at: null,
 				last_error: toErrorMessage(error),
 			};
 		},

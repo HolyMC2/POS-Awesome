@@ -29,6 +29,8 @@ describe("offline write queue durability", () => {
 		memory.offline_customers = [];
 		memory.offline_payments = [];
 		memory.offline_cash_movements = [];
+		memory.local_stock_cache = {};
+		memory.pos_opening_storage = null;
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		(globalThis as any).frappe = {
 			call: vi.fn(),
@@ -111,6 +113,103 @@ describe("offline write queue durability", () => {
 		expect(queued).toHaveLength(1);
 		expect(dbRows).toHaveLength(1);
 		expect(dbRows[0]?.idempotency_key).toBe("invoice:inv-fixed-queue-001");
+	});
+
+	it("blocks offline stock-updating invoices when local stock is insufficient", async () => {
+		memory.pos_opening_storage = {
+			stock_settings: { allow_negative_stock: 0 },
+			pos_profile: {
+				posa_block_sale_beyond_available_qty: 1,
+				posa_allow_offline_sale_without_stock_verification: 0,
+			},
+		};
+		memory.local_stock_cache = {
+			"ITEM-STOCK": { actual_qty: 2 },
+		};
+
+		await expect(
+			saveOfflineInvoice({
+				invoice: {
+					doctype: "POS Invoice",
+					name: "OFFLINE-STOCK-BLOCK",
+					customer: "CUST-STOCK",
+					items: [
+						{
+							item_code: "ITEM-STOCK",
+							item_name: "Stock Item",
+							is_stock_item: 1,
+							qty: 3,
+						},
+					],
+				},
+				data: {},
+			}),
+		).rejects.toThrow("Not enough stock for Stock Item");
+	});
+
+	it("allows offline invoice saving without stock verification when profile permits it", async () => {
+		memory.pos_opening_storage = {
+			stock_settings: { allow_negative_stock: 0 },
+			pos_profile: {
+				posa_block_sale_beyond_available_qty: 1,
+				posa_allow_offline_sale_without_stock_verification: 1,
+			},
+		};
+		memory.local_stock_cache = {
+			"ITEM-STOCK": { actual_qty: 0 },
+		};
+
+		await saveOfflineInvoice({
+			invoice: {
+				doctype: "POS Invoice",
+				name: "OFFLINE-STOCK-BYPASS",
+				customer: "CUST-STOCK",
+				items: [
+					{
+						item_code: "ITEM-STOCK",
+						item_name: "Stock Item",
+						is_stock_item: 1,
+						qty: 5,
+					},
+				],
+			},
+			data: {},
+		});
+
+		expect(getOfflineInvoices()).toHaveLength(1);
+	});
+
+	it("does not apply offline stock gates or local stock reduction for sales orders", async () => {
+		memory.pos_opening_storage = {
+			stock_settings: { allow_negative_stock: 0 },
+			pos_profile: {
+				posa_block_sale_beyond_available_qty: 1,
+				posa_allow_offline_sale_without_stock_verification: 0,
+			},
+		};
+		memory.local_stock_cache = {
+			"ITEM-SO": { actual_qty: 1 },
+		};
+
+		await saveOfflineInvoice({
+			invoice: {
+				doctype: "Sales Order",
+				name: "OFFLINE-SO-1",
+				customer: "CUST-SO",
+				items: [
+					{
+						item_code: "ITEM-SO",
+						item_name: "Order Item",
+						is_stock_item: 1,
+						qty: 10,
+					},
+				],
+			},
+			data: {},
+		});
+
+		expect(getOfflineInvoices()).toHaveLength(1);
+		expect(memory.local_stock_cache["ITEM-SO"].actual_qty).toBe(1);
 	});
 
 	it("prevents duplicate queue entries for the same idempotent payment", async () => {
