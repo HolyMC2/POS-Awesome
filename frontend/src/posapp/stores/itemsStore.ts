@@ -279,16 +279,55 @@ export const useItemsStore = defineStore("items", () => {
 		newItems: Item[],
 		options: { append?: boolean; totalCount?: number } = {},
 	) => {
+		const _sRec = (label: string, t: number) => {
+			if (typeof window === "undefined") return;
+			const w = window as any;
+			w.__setItemsPhases = w.__setItemsPhases || [];
+			w.__setItemsPhases.push({ label, dur: performance.now() - t, count: Array.isArray(newItems) ? newItems.length : 0, at: Date.now() });
+			if (w.__setItemsPhases.length > 200) w.__setItemsPhases.shift();
+			if (performance.now() - t > 500) {
+				console.warn(`[POSA][setItems] slow ${label}: ${Math.round(performance.now() - t)}ms (n=${Array.isArray(newItems) ? newItems.length : 0})`);
+			}
+		};
 		const { append = false, totalCount: totalOverride } = options;
 		const normalizedGroup =
 			typeof itemGroup.value === "string" && itemGroup.value.length > 0
 				? itemGroup.value
 				: "ALL";
 
+		// Safety cap: loading > 3000 items into a fully-reactive Pinia
+		// store + building per-item `_search_index` strings + persisting
+		// to IndexedDB synchronously regularly crashes Chrome tabs on
+		// low-RAM operator devices. Profiles that intentionally hold a
+		// big catalog locally should set `pose_use_limit_search = 1`
+		// (server-side pagination). When we see a mass-load arriving
+		// despite limit-search being off, downgrade gracefully: keep
+		// the first 3000 items locally so the catalog still works, and
+		// log loudly so ops can fix the profile config. The legacy
+		// behaviour silently OOM'd the tab and the operator was left
+		// staring at a "Page Unresponsive" prompt.
+		const SAFE_LOCAL_ITEM_CAP = 3000;
+		const incomingArray = Array.isArray(newItems) ? newItems : [];
+		const cappedNewItems =
+			!append && incomingArray.length > SAFE_LOCAL_ITEM_CAP
+				? incomingArray.slice(0, SAFE_LOCAL_ITEM_CAP)
+				: incomingArray;
+		if (cappedNewItems.length !== incomingArray.length) {
+			console.warn(
+				`[POSA][setItems] item count ${incomingArray.length} exceeds safe cap ${SAFE_LOCAL_ITEM_CAP}; truncating. Enable 'pose_use_limit_search' on the POS Profile to use server-side search instead of mass-loading.`,
+			);
+		}
+
 		if (!append) {
-			items.value = markRawItems(Array.isArray(newItems) ? newItems : []);
+			const tA = performance.now();
+			items.value = markRawItems(cappedNewItems);
+			_sRec("markRawAssign", tA);
+			const tB = performance.now();
 			resetIndexes();
+			_sRec("resetIndexes", tB);
+			const tC = performance.now();
 			updateIndexes(items.value, posProfile.value);
+			_sRec("updateIndexes", tC);
 			// Phase 3: mirror the index into the search Worker so the
 			// flag-gated worker path has matching data when it runs.
 			// No-op (cheap) when the flag is off.
