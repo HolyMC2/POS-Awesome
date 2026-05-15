@@ -1,8 +1,36 @@
 import qz from "qz-tray";
 import { ref } from "vue";
 import { useUIStore } from "../stores/uiStore";
+import { track } from "../utils/telemetry";
 
 declare const frappe: any;
+
+// Capped failure-emitter so a wedged QZ Tray doesn't drown the
+// telemetry pipeline. We only need a few rows per terminal per session
+// to diagnose; after that the rest are dropped silently.
+let _qzFailureCount = 0;
+const QZ_FAILURE_REPORT_CAP = 10;
+function reportQzFailure(stage: string, error: unknown, meta: Record<string, unknown> = {}) {
+	if (_qzFailureCount >= QZ_FAILURE_REPORT_CAP) return;
+	_qzFailureCount += 1;
+	const message =
+		error instanceof Error
+			? error.message
+			: typeof error === "string"
+				? error
+				: String(error);
+	try {
+		track("qz:failure", 1, {
+			stage,
+			message: message.slice(0, 280),
+			cert: qzCertStatus.value,
+			ws_active: qzConnected.value,
+			...meta,
+		});
+	} catch {
+		// telemetry dispatch must never bubble
+	}
+}
 
 export type QzCertStatus = "unknown" | "trusted" | "untrusted";
 
@@ -247,6 +275,7 @@ function setupSecurity() {
 				} else {
 					certificateProvided = false;
 					qzCertStatus.value = "untrusted";
+					reportQzFailure("cert_empty", new Error("get_certificate returned empty"));
 				}
 				resolve(certificate || undefined);
 			})
@@ -254,6 +283,7 @@ function setupSecurity() {
 				console.warn("Unable to fetch QZ certificate", error);
 				certificateProvided = false;
 				qzCertStatus.value = "untrusted";
+				reportQzFailure("cert_fetch", error);
 				resolve(undefined);
 			});
 	});
@@ -271,12 +301,16 @@ function setupSecurity() {
 						saveCertReady(true);
 					} else {
 						qzCertStatus.value = "untrusted";
+						if (!signature) {
+							reportQzFailure("sign_empty", new Error("sign_message returned empty"));
+						}
 					}
 					resolve(signature || undefined);
 				})
 				.catch((error) => {
 					console.warn("Unable to sign QZ payload", error);
 					qzCertStatus.value = "untrusted";
+					reportQzFailure("sign_fetch", error);
 					resolve(undefined);
 				});
 		};
@@ -531,24 +565,49 @@ export async function printDocumentViaQz(options: QzPrintDocumentOptions) {
 	const noLetterhead =
 		options.letterhead && String(options.letterhead).trim() ? 0 : options.noLetterhead ?? 1;
 
-	const response = await frappe.call({
-		method: "frappe.www.printview.get_html_and_style",
-		args: {
-			doc: options.doctype,
+	let html: string | undefined;
+	let style = "";
+	try {
+		const response = await frappe.call({
+			method: "frappe.www.printview.get_html_and_style",
+			args: {
+				doc: options.doctype,
+				name: options.name,
+				print_format: printFormat,
+				no_letterhead: noLetterhead,
+				letterhead: options.letterhead || undefined,
+			},
+		});
+		html = response?.html || response?.message?.html;
+		style = response?.style || response?.message?.style || "";
+	} catch (err) {
+		reportQzFailure("fetch_html", err, {
+			doctype: options.doctype,
 			name: options.name,
 			print_format: printFormat,
-			no_letterhead: noLetterhead,
-			letterhead: options.letterhead || undefined,
-		},
-	});
-
-	const html = response?.html || response?.message?.html;
-	const style = response?.style || response?.message?.style || "";
-
-	if (!html) {
-		throw new Error("Unable to load print HTML from server.");
+		});
+		throw err;
 	}
 
-	const inlinedHtml = await inlineImagesForQz(html);
-	await printHtmlViaQz(buildPrintHtml(inlinedHtml, style, options.widthMm || 80), options);
+	if (!html) {
+		const err = new Error("Unable to load print HTML from server.");
+		reportQzFailure("empty_html", err, {
+			doctype: options.doctype,
+			name: options.name,
+			print_format: printFormat,
+		});
+		throw err;
+	}
+
+	try {
+		const inlinedHtml = await inlineImagesForQz(html);
+		await printHtmlViaQz(buildPrintHtml(inlinedHtml, style, options.widthMm || 80), options);
+	} catch (err) {
+		reportQzFailure("send_to_printer", err, {
+			doctype: options.doctype,
+			name: options.name,
+			printer: options.printerName || selectedQzPrinter.value || "",
+		});
+		throw err;
+	}
 }
