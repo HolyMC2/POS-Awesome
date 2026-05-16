@@ -575,12 +575,6 @@ function changeUom(direction) {
 	}
 
 	const newUom = uoms[newIndex];
-	debugLog("[CartItemRow] changeUom", {
-		item: props.item.item_code,
-		direction,
-		old_uom: props.item.uom,
-		new_uom: newUom,
-	});
 	if (newUom !== props.item.uom) {
 		emit("calc-uom", props.item, newUom);
 	}
@@ -588,11 +582,6 @@ function changeUom(direction) {
 
 function handleUomSelect(newUom) {
 	if (disableUomEdit.value) return;
-	debugLog("[CartItemRow] handleUomSelect", {
-		item: props.item.item_code,
-		old_uom: props.item.uom,
-		new_uom: newUom,
-	});
 	if (newUom && newUom !== props.item.uom) {
 		emit("calc-uom", props.item, newUom);
 	}

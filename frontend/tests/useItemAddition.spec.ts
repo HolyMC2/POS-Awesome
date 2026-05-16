@@ -51,6 +51,7 @@ describe("useItemAddition new line behavior", () => {
 	beforeEach(() => {
 		(globalThis as any).__ = (text: string) => text;
 		(globalThis as any).frappe = {
+			call: vi.fn(async () => ({ message: [] })),
 			datetime: {
 				nowdate: () => "2026-03-05",
 			},

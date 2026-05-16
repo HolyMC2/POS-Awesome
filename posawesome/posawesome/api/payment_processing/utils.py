@@ -123,8 +123,16 @@ def get_party_account_info(party_type, party, company):
     if not account:
         return None
 
-    currency = frappe.get_cached_value("Account", account, "account_currency")
-    account_name = frappe.get_cached_value("Account", account, "account_name")
+    account_values = frappe.get_cached_value(
+        "Account",
+        account,
+        ["account_currency", "account_name"],
+    )
+    if isinstance(account_values, dict):
+        currency = account_values.get("account_currency")
+        account_name = account_values.get("account_name")
+    else:
+        currency, account_name = account_values or (None, None)
     return {
         "account": account,
         "account_name": account_name,

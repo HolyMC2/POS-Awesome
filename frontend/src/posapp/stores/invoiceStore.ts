@@ -178,6 +178,7 @@ export const useInvoiceStore = defineStore("invoice", () => {
 		if (updateTimer) return;
 		updateTimer = setTimeout(() => {
 			recalculateTotals();
+			touch();
 			updateTimer = null;
 		}, 50);
 	};

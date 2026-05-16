@@ -12,7 +12,7 @@ describe("large cart performance guards", () => {
 			"utf8",
 		);
 
-		expect(source).not.toMatch(/console\.log\(\`\[CartItemRow\]/);
+		expect(source).not.toMatch(/console\.log\(\s*[`'"]\[CartItemRow\]/);
 	});
 
 	it("does not deep-watch every cart item for offer refreshes", () => {

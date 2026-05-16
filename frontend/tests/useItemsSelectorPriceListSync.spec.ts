@@ -38,6 +38,23 @@ describe("useItemsSelectorPriceListSync", () => {
 
 		await sync.syncSelectorPriceList("  ");
 
+		expect(sync.resolveIncomingPriceList("  ")).toBe("Retail");
+		expect(updatePriceList).not.toHaveBeenCalled();
+	});
+
+	it("skips redundant updates after trimming the incoming price list", async () => {
+		const activePriceList = ref("Wholesale");
+		const updatePriceList = vi.fn();
+
+		const sync = useItemsSelectorPriceListSync({
+			activePriceList,
+			getDefaultPriceList: () => "Retail",
+			updatePriceList,
+		});
+
+		await sync.syncSelectorPriceList(" Wholesale ");
+
+		expect(sync.resolveIncomingPriceList(" Wholesale ")).toBe("Wholesale");
 		expect(updatePriceList).not.toHaveBeenCalled();
 		expect(getItems).toHaveBeenCalledWith(true);
 	});

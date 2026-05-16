@@ -84,9 +84,9 @@ def create_payment_entry(
 
     # Set bank account if available
     if pe.party_type in ["Customer", "Supplier"]:
-        bank_account = get_party_bank_account(pe.party_type, pe.party)
-        if bank_account:
-            pe.bank_account = bank_account
+        party_bank_account = get_party_bank_account(pe.party_type, pe.party)
+        if party_bank_account:
+            pe.bank_account = party_bank_account
             pe.set_bank_account_data()
 
     # Let ERPNext fill missing metadata (party name, contact, defaults)
