@@ -229,7 +229,7 @@ def _partition_completed_reconciliations(selected_payments):
     return completed_docs, pending_payments
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def process_pos_payment(payload):
     data = json.loads(payload)
     data = frappe._dict(data)

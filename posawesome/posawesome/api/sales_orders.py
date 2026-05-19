@@ -17,7 +17,7 @@ def _payment_entry_job(order_name, payments):
     _create_payment_entries(so_doc, payments)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def search_orders(company, currency, order_name=None):
     filters = {
         "billing_status": ["in", ["Not Billed", "Partly Billed"]],
@@ -83,7 +83,7 @@ def _map_delivery_dates(data):
             item.setdefault("posa_delivery_date", item_delivery)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_sales_order(data):
     """Create or update a Sales Order document."""
     data = json.loads(data)
@@ -136,7 +136,7 @@ def _create_payment_entries(so_doc, payments):
         pe.submit()
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def submit_sales_order(order):
     """Submit sales order and create payment entries."""
     order = json.loads(order)

@@ -132,7 +132,7 @@ def _coerce_bool(value, default=False):
     return default
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_outstanding_invoices(
     customer=None,
     company=None,
@@ -257,7 +257,7 @@ def get_outstanding_invoices(
         return []
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_unallocated_payments(
     customer,
     company,
@@ -546,7 +546,7 @@ def get_unallocated_payments(
     return unallocated_payment
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_available_pos_profiles(company, currency):
     pos_profiles_list = frappe.get_list(
         "POS Profile",
@@ -557,7 +557,7 @@ def get_available_pos_profiles(company, currency):
     return pos_profiles_list
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_unreconciled_entries(
     customer,
     company,

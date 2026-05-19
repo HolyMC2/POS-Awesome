@@ -84,7 +84,7 @@ def _collect_delta_item_codes(pos_profile, modified_after, price_list, limit):
     return changed_codes
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_delta_items(
     pos_profile,
     modified_after=None,
@@ -218,7 +218,7 @@ def build_item_cache(item_code):
     pass
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_item_brand(item_code):
     """Return normalized brand for an item, falling back to its template's brand."""
     if not item_code:

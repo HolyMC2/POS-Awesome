@@ -10,7 +10,7 @@ from posawesome.posawesome.api.payment_processing.data import (
 )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def auto_reconcile_customer_invoices(
     customer, company, currency=None, pos_profile=None, party_type="Customer"
 ):

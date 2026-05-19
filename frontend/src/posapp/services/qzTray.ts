@@ -38,6 +38,14 @@ export interface QzPrintHtmlOptions {
 	printerName?: string;
 	widthMm?: number;
 	orientation?: "portrait" | "landscape";
+	// Rasterizer interpolation. Default `nearest-neighbor` causes
+	// banding on 203 DPI thermal printers when HTML rasterizes at
+	// ~150 DPI; `bicubic` smooths it out. POS Profile field
+	// `posa_qz_interpolation` controls per-tenant choice.
+	interpolation?: "nearest-neighbor" | "bilinear" | "bicubic";
+	// Output density in DPI; matches printer native (e.g. 203).
+	// Undefined → QZ auto-detect (often ~150 — root cause of stripes).
+	density?: number | string;
 }
 
 export interface QzPrintDocumentOptions extends QzPrintHtmlOptions {
@@ -370,6 +378,17 @@ export async function connectQzTray(options: { userInitiated?: boolean } = {}): 
 			qzConnected.value = false;
 			qzConnecting.value = false;
 			qzCertStatus.value = "unknown";
+			// Re-prewarm. QZ Tray's WS drops on long idles + machine
+			// sleep; without re-prewarm the next print pays the full
+			// handshake (cert fetch + sign + ws connect = several
+			// seconds), which is the dominant tail of the print-lag
+			// pathology. Fire-and-forget; if reconnect fails the next
+			// print falls through to its own connect attempt as before.
+			if (!qzReconnectPaused.value) {
+				setTimeout(() => {
+					connectQzTray().catch(() => undefined);
+				}, 2000);
+			}
 		});
 
 		try {
@@ -532,7 +551,7 @@ export async function printHtmlViaQz(html: string, options: QzPrintHtmlOptions =
 		throw new Error("No QZ printer selected.");
 	}
 
-	const config = qz.configs.create(printer, {
+	const configOptions: Record<string, any> = {
 		size: {
 			width: options.widthMm || 80,
 			height: null,
@@ -541,8 +560,12 @@ export async function printHtmlViaQz(html: string, options: QzPrintHtmlOptions =
 		orientation: options.orientation || "portrait",
 		margins: { top: 0, right: 0, bottom: 0, left: 0 },
 		colorType: "grayscale",
-		interpolation: "nearest-neighbor",
-	});
+		interpolation: options.interpolation || "nearest-neighbor",
+	};
+	if (options.density !== undefined && options.density !== null && options.density !== "") {
+		configOptions.density = options.density;
+	}
+	const config = qz.configs.create(printer, configOptions);
 
 	const data = [
 		{
@@ -556,14 +579,51 @@ export async function printHtmlViaQz(html: string, options: QzPrintHtmlOptions =
 	await qz.print(config, data);
 }
 
+// In-flight registry. Closes the "two paper copies" bug at the
+// services layer too — if any caller (`useLastInvoicePrinting`,
+// `PrintMenu.vue`, `NavbarMenu.vue`, etc.) re-invokes
+// `printDocumentViaQz` for the same (doctype, name) while a print
+// is mid-flight, the second invocation joins the existing promise
+// instead of starting a new job.
+const _qzPrintInFlight = new Map<string, Promise<void>>();
+
 export async function printDocumentViaQz(options: QzPrintDocumentOptions) {
 	if (!options?.doctype || !options?.name) {
 		throw new Error("Invalid print document details.");
 	}
 
+	const dedupeKey = `${options.doctype}:${options.name}:${options.printFormat || ""}`;
+	const inflight = _qzPrintInFlight.get(dedupeKey);
+	if (inflight) {
+		return inflight;
+	}
+
 	const printFormat = options.printFormat || DEFAULT_PRINT_FORMAT;
 	const noLetterhead =
 		options.letterhead && String(options.letterhead).trim() ? 0 : options.noLetterhead ?? 1;
+
+	// Read per-POS-Profile rasterizer hints (Q3). When absent we
+	// preserve legacy `nearest-neighbor` + QZ auto-density so this
+	// fix is opt-in via the POS Profile fields.
+	if (options.interpolation === undefined || options.density === undefined) {
+		try {
+			const uiStore = useUIStore();
+			const profile = uiStore.posProfile as any;
+			if (profile) {
+				if (options.interpolation === undefined && profile.posa_qz_interpolation) {
+					options.interpolation = profile.posa_qz_interpolation;
+				}
+				if (options.density === undefined && profile.posa_qz_density) {
+					options.density = profile.posa_qz_density;
+				}
+			}
+		} catch {
+			// Pinia not initialised in some test harnesses — ignore.
+		}
+	}
+
+	const startedAt = performance.now();
+	const exec = (async (): Promise<void> => {
 
 	let html: string | undefined;
 	let style = "";
@@ -609,5 +669,27 @@ export async function printDocumentViaQz(options: QzPrintDocumentOptions) {
 			printer: options.printerName || selectedQzPrinter.value || "",
 		});
 		throw err;
+	}
+	})();
+
+	_qzPrintInFlight.set(dedupeKey, exec);
+	try {
+		await exec;
+		// Q4 — emit `perf:qz_print` with end-to-end duration so we
+		// can split fetch-html / inline / send-to-printer in later
+		// dashboards. End-to-end first; per-stage instrumentation is
+		// a follow-up.
+		try {
+			track("perf:qz_print", Math.round(performance.now() - startedAt), {
+				doctype: options.doctype,
+				print_format: printFormat,
+				interpolation: options.interpolation || "nearest-neighbor",
+				density: options.density ?? null,
+			});
+		} catch {
+			// telemetry dispatch must never bubble
+		}
+	} finally {
+		_qzPrintInFlight.delete(dedupeKey);
 	}
 }

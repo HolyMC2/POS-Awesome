@@ -12,7 +12,7 @@ from posawesome.posawesome.api.invoice_processing.utils import _get_return_valid
 from posawesome.posawesome.api.utils import log_perf_event
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def search_invoices_for_return(
     invoice_name,
     company,
@@ -217,7 +217,7 @@ def search_invoices_for_return(
     return result
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_invoice_for_return(invoice_name, pos_profile=None, doctype="Sales Invoice"):
     """Return one invoice with returnable item quantities after past returns."""
     started_at = time.perf_counter()
@@ -339,7 +339,7 @@ def get_invoice_for_return(invoice_name, pos_profile=None, doctype="Sales Invoic
     return invoice
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def validate_return_items(original_invoice_name, return_items, doctype="Sales Invoice"):
     """
     Ensure that return items do not exceed the quantity from the original invoice.

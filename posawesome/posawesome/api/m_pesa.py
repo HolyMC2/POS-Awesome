@@ -74,7 +74,7 @@ def validation(**kwargs):
     return dict(context)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_mpesa_mode_of_payment(company):
     modes = frappe.get_all(
         "Mpesa C2B Register URL",
@@ -88,7 +88,7 @@ def get_mpesa_mode_of_payment(company):
     return modes_of_payment
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_mpesa_draft_payments(
     company,
     mode_of_payment=None,
@@ -125,7 +125,7 @@ def get_mpesa_draft_payments(
     return payments
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def submit_mpesa_payment(mpesa_payment, customer):
     doc = frappe.get_doc("Mpesa Payment Register", mpesa_payment)
     doc.customer = customer

@@ -2,7 +2,7 @@ import frappe
 from frappe import _
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_last_invoice_rates(customer, item_codes, company=None):
     """
     Get the last invoice rate for a list of items for a specific customer.

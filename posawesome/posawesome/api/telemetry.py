@@ -182,7 +182,7 @@ def _quantile(values: List[float], q: float) -> float:
     return values[lo] + (values[hi] - values[lo]) * frac
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_pos_telemetry_summary(
     profile: Optional[str] = None,
     since: Optional[str] = None,

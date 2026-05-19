@@ -102,7 +102,7 @@ def _create_cash_movement(payload, movement_type):
     return movement_doc.as_dict()
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_cash_movement_context(pos_profile=None, pos_opening_shift=None):
     profile_name = pos_profile
     if not profile_name and pos_opening_shift:
@@ -145,17 +145,17 @@ def get_cash_movement_context(pos_profile=None, pos_opening_shift=None):
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_pos_expense(payload):
     return _create_cash_movement(payload, "Expense")
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_cash_deposit(payload):
     return _create_cash_movement(payload, "Deposit")
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_shift_cash_movements(
     pos_opening_shift,
     movement_type=None,
@@ -175,7 +175,7 @@ def get_shift_cash_movements(
     )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_submitted_expenses(pos_opening_shift, limit_start=0, limit_page_length=50):
     _enforce_shift_access(pos_opening_shift)
     return query_submitted_expenses(
@@ -185,7 +185,7 @@ def get_submitted_expenses(pos_opening_shift, limit_start=0, limit_page_length=5
     )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def cancel_cash_movement(name):
     movement_doc = frappe.get_doc("POS Cash Movement", name)
     ensure_owner_or_manager(movement_doc)
@@ -201,7 +201,7 @@ def cancel_cash_movement(name):
     return {"name": movement_doc.name, "docstatus": movement_doc.docstatus}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_cash_movement(name):
     movement_doc = frappe.get_doc("POS Cash Movement", name)
     ensure_owner_or_manager(movement_doc)
@@ -216,7 +216,7 @@ def delete_cash_movement(name):
     return {"deleted": name}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def duplicate_cash_movement(name, posting_date=None):
     movement_doc = frappe.get_doc("POS Cash Movement", name)
     ensure_owner_or_manager(movement_doc)

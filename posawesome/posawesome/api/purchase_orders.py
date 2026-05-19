@@ -243,7 +243,7 @@ def _create_purchase_receipt(po_doc, payload, default_warehouse, transaction_dat
     return receipt.name
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_supplier(data):
     payload = json.loads(data) if isinstance(data, str) else data
     profile = _resolve_pos_profile(payload.get("pos_profile"))
@@ -279,7 +279,7 @@ def create_supplier(data):
     return supplier.as_dict()
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def search_suppliers(search_text=None, limit=20):
     filters = {"disabled": 0}
     or_filters = None
@@ -301,12 +301,12 @@ def search_suppliers(search_text=None, limit=20):
     return suppliers
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_buying_price_list():
     return _resolve_buying_price_list()
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_supplier_info(supplier):
     """Get supplier details including the effective buying price list."""
     supplier = _resolve_supplier(supplier)
@@ -330,7 +330,7 @@ def get_supplier_info(supplier):
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_last_buying_rate(supplier, item_codes, company=None):
     """Get the last buying rate for items from supplier price lists or recent Purchase Invoices."""
     if isinstance(item_codes, str):
@@ -433,7 +433,7 @@ def get_last_buying_rate(supplier, item_codes, company=None):
     return result
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_purchase_item(data):
     payload = json.loads(data) if isinstance(data, str) else data
     profile = _resolve_pos_profile(payload.get("pos_profile"))
@@ -596,7 +596,7 @@ def _create_payment_entry(reference_doc, payments, company, transaction_date):
     return created_payments
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_purchase_order(data):
 
     payload = json.loads(data) if isinstance(data, str) else data
@@ -751,7 +751,7 @@ def create_purchase_order(data):
         )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def search_items(search_text=None, limit=20):
     filters = {"disabled": 0}
     or_filters = None

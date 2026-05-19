@@ -66,7 +66,7 @@ def _collect_stock_rows(profile, watermark, start_after, limit):
     return deduped
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def sync_stock(
     pos_profile=None,
     watermark=None,

@@ -33,7 +33,7 @@ def get_stock_availability(item_code, warehouse):
     return flt(rows[0].actual_qty) if rows else 0.0
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_bulk_stock_availability(items):
     """
     Fetch available stock for a list of items.
@@ -111,7 +111,7 @@ def get_bulk_stock_availability(items):
     return results
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_available_qty(items):
     """Return available stock quantity for given items.
 

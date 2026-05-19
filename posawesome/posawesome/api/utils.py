@@ -236,7 +236,7 @@ def _ensure_pos_profile(pos_profile):
     return profile_dict, profile_json
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_active_pos_profile(user=None):
     """Return the active POS profile for the given user."""
     user = user or frappe.session.user
@@ -248,7 +248,7 @@ def get_active_pos_profile(user=None):
     return frappe.get_doc("POS Profile", profile).as_dict()
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_default_warehouse(company=None):
     """Return the default warehouse for the given company."""
     company = company or frappe.defaults.get_default("company")

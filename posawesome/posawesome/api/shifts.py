@@ -10,7 +10,7 @@ from frappe import _
 from .utilities import get_version
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_opening_dialog_data():
     data = {}
 
@@ -56,7 +56,7 @@ def get_opening_dialog_data():
     return data
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_opening_voucher(pos_profile, company, balance_details):
     balance_details = json.loads(balance_details)
 
@@ -80,7 +80,7 @@ def create_opening_voucher(pos_profile, company, balance_details):
     return data
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def check_opening_shift(user):
     open_vouchers = frappe.db.get_all(
         "POS Opening Shift",

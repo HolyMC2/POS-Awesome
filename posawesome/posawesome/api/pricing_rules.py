@@ -104,7 +104,7 @@ def invalidate_pricing_rules_cache(*_args, **_kwargs):
             pass
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def flush_pricing_rules_cache():
     """Operator-facing endpoint: 'I just edited a rule, refresh now.'"""
     if not frappe.has_permission("Pricing Rule", "write"):
@@ -269,7 +269,7 @@ def _normalise_rule(doc: frappe._dict) -> frappe._dict:
 # Public API
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_active_pricing_rules(params: dict | None = None, **kwargs):
     """Return active selling pricing rules for the POS context."""
 
@@ -494,7 +494,7 @@ def _collect_freebies(accumulator: Dict[Tuple[str, str], Dict[str, frappe._dict]
         record.qty = flt(record.get("qty") or 0) + flt(entry.get("qty") or 0)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def reconcile_line_prices(cart_payload: dict | str | None = None):
     """Recalculate line prices with ERPNext logic and return diffs."""
 

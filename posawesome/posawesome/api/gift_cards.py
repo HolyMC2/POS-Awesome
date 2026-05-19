@@ -432,7 +432,7 @@ def _create_redemption_entry(profile_doc, invoice_doc, amount, cashier):
     )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def issue_gift_card(
     pos_profile=None,
     cashier=None,
@@ -485,7 +485,7 @@ def issue_gift_card(
     return _serialize_gift_card(gift_card_doc)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def top_up_gift_card(pos_profile=None, cashier=None, gift_card_code=None, amount=0):
     profile_name, cashier, _user_doc = _require_supervisor(pos_profile, cashier)
     profile_doc = _get_profile_doc(profile_name)
@@ -520,7 +520,7 @@ def top_up_gift_card(pos_profile=None, cashier=None, gift_card_code=None, amount
     return _serialize_gift_card(gift_card_doc)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def check_gift_card_balance(gift_card_code=None, company=None):
     gift_card_doc = _get_gift_card(gift_card_code)
     if company and getattr(gift_card_doc, "company", None) != company:

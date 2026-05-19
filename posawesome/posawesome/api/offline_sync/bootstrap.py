@@ -33,7 +33,7 @@ def _should_include(modified, watermark):
     return modified > watermark
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def sync_bootstrap_config(
     pos_profile=None,
     watermark=None,

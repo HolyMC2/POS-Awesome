@@ -245,7 +245,7 @@ def _parse_scale_barcode_data(barcode: str) -> Optional[Dict[str, Any]]:
     return data
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def parse_scale_barcode(barcode: str):
     """Public API to parse a scale barcode and return decoded data."""
 
@@ -263,7 +263,7 @@ def parse_scale_barcode(barcode: str):
     return data
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def build_scale_barcode(
     barcode_template: Optional[str] = None,
     item_code: Optional[str] = None,
@@ -386,7 +386,7 @@ def build_scale_barcode(
     return result
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_items_from_barcode(selling_price_list, currency, barcode):
     scale_data = _parse_scale_barcode_data(barcode)
     item_code = None
@@ -453,7 +453,7 @@ def get_items_from_barcode(selling_price_list, currency, barcode):
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def search_serial_or_batch_or_barcode_number(search_value, search_serial_no=None, search_batch_no=None):
     """Search for items by serial number, batch number, or barcode."""
     # Search by barcode

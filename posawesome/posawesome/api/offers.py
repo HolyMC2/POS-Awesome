@@ -12,13 +12,13 @@ from posawesome.posawesome.doctype.delivery_charges.delivery_charges import (
 )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_pos_coupon(coupon, customer, company):
     res = check_coupon_code(coupon, customer, company)
     return res
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_active_gift_coupons(customer, company):
     coupons = []
     today = getdate(nowdate())
@@ -49,7 +49,7 @@ def _is_coupon_active(coupon_data, today):
     return True
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_offers(profile):
     pos_profile = frappe.get_doc("POS Profile", profile)
     company = pos_profile.company
@@ -102,7 +102,7 @@ def get_offers(profile):
     return data + promotional_scheme_offers
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_applicable_delivery_charges(company, pos_profile, customer, shipping_address_name=None):
     return _get_applicable_delivery_charges(company, pos_profile, customer, shipping_address_name)
 

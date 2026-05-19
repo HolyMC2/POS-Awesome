@@ -14,7 +14,7 @@ def _normalize_amount(value):
         return 0.0
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_available_stored_value(customer=None, company=None):
     if not customer:
         frappe.throw(frappe._("Customer is required to fetch stored value."))
@@ -24,7 +24,7 @@ def get_available_stored_value(customer=None, company=None):
     return get_available_credit(customer=customer, company=company)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_stored_value_summary(customer=None, company=None):
     sources = get_available_stored_value(customer=customer, company=company)
     available_amount = sum(_normalize_amount(row.get("total_credit")) for row in sources)

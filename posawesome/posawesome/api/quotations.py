@@ -53,7 +53,7 @@ def _normalize_quotation_row(row):
     return row
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def search_quotations(
     company,
     currency,
@@ -112,7 +112,7 @@ def search_quotations(
     return [_normalize_quotation_row(dict(row)) for row in quotations]
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_quotation(data):
     """Create or update a Quotation document."""
     data = json.loads(data)
@@ -131,7 +131,7 @@ def update_quotation(data):
     return doc
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def submit_quotation(order):
     """Submit quotation document."""
     order = json.loads(order)

@@ -561,7 +561,7 @@ def _prepare_item_groups(profile_name: Optional[str], item_groups) -> ItemGroupC
     return ItemGroupContext(groups=groups, groups_tuple=groups_tuple)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_items(
     pos_profile,
     price_list=None,
@@ -664,7 +664,7 @@ def get_items(
     return result
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_items_groups():
     return frappe.db.sql(
         """select name from `tabItem Group`
@@ -673,7 +673,7 @@ def get_items_groups():
     )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_items_count(pos_profile, item_groups=None):
     pos_profile, _ = _ensure_pos_profile(pos_profile)
     if isinstance(item_groups, str):

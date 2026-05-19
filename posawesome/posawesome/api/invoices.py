@@ -42,7 +42,7 @@ from posawesome.posawesome.api.invoice_processing.data import get_last_invoice_r
 from posawesome.posawesome.api.utils import log_perf_event
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_draft_invoices(
     pos_opening_shift=None,
     doctype="Sales Invoice",
@@ -104,7 +104,7 @@ def get_draft_invoices(
     return invoices_list
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_draft_invoice_doc(invoice_name, doctype="Sales Invoice"):
     started_at = time.perf_counter()
     doc = frappe.get_cached_doc(doctype, invoice_name)
@@ -118,7 +118,7 @@ def get_draft_invoice_doc(invoice_name, doctype="Sales Invoice"):
     return doc
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_invoice(invoice):
     from frappe import _
     from posawesome.posawesome.api.invoice import delete_invoice_submission_ledger_entries_for_invoice
@@ -139,7 +139,7 @@ def delete_invoice(invoice):
     return _("Invoice {0} Deleted").format(invoice)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def fetch_exchange_rate_pair(from_currency, to_currency):
     """Return exchange rate payload expected by POS multi-currency UI."""
 
@@ -161,7 +161,7 @@ def fetch_exchange_rate_pair(from_currency, to_currency):
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_sales_invoice_from_order(sales_order):
     """Backward-compatible facade for legacy frontend method path."""
 
@@ -178,7 +178,7 @@ def create_sales_invoice_from_order(sales_order):
     return invoice_doc
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def delete_sales_invoice(sales_invoice):
     """Backward-compatible facade for legacy frontend method path."""
 
@@ -190,7 +190,7 @@ def delete_sales_invoice(sales_invoice):
     return True
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_invoice_from_order(data):
     """Backward-compatible facade used by order-to-invoice flow."""
 

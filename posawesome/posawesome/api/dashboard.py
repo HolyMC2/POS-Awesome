@@ -4786,7 +4786,7 @@ def _build_dashboard_envelope(ctx: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_data(
     pos_profile=None,
     scope=None,
@@ -5469,7 +5469,7 @@ def _section_response(ctx: dict[str, Any], section_key: str, section_value: Any)
     return response
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_sales_overview(**kwargs):
     """Today / month sales + profit roll-up across allowed invoice sources."""
 
@@ -5515,7 +5515,7 @@ def get_dashboard_sales_overview(**kwargs):
     return _section_response(ctx, "sales_overview", overview)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_daily_sales_summary(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5528,7 +5528,7 @@ def get_dashboard_daily_sales_summary(**kwargs):
     return _section_response(ctx, "daily_sales_summary", summary)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_monthly_sales_summary(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5542,7 +5542,7 @@ def get_dashboard_monthly_sales_summary(**kwargs):
     return _section_response(ctx, "monthly_sales_summary", summary)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_payment_method_report(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5557,7 +5557,7 @@ def get_dashboard_payment_method_report(**kwargs):
     return _section_response(ctx, "payment_method_report", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_discount_void_return_report(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5572,7 +5572,7 @@ def get_dashboard_discount_void_return_report(**kwargs):
     return _section_response(ctx, "discount_void_return_report", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_customer_report(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5587,7 +5587,7 @@ def get_dashboard_customer_report(**kwargs):
     return _section_response(ctx, "customer_report", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_staff_performance_report(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5602,7 +5602,7 @@ def get_dashboard_staff_performance_report(**kwargs):
     return _section_response(ctx, "staff_performance_report", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_profitability_report(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5617,7 +5617,7 @@ def get_dashboard_profitability_report(**kwargs):
     return _section_response(ctx, "profitability_report", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_branch_location_report(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5633,7 +5633,7 @@ def get_dashboard_branch_location_report(**kwargs):
     return _section_response(ctx, "branch_location_report", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_tax_charges_report(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5648,7 +5648,7 @@ def get_dashboard_tax_charges_report(**kwargs):
     return _section_response(ctx, "tax_charges_report", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_sales_trend(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5662,7 +5662,7 @@ def get_dashboard_sales_trend(**kwargs):
     return _section_response(ctx, "sales_trend", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_item_sales_report(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5677,7 +5677,7 @@ def get_dashboard_item_sales_report(**kwargs):
     return _section_response(ctx, "item_sales_report", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_category_brand_variant_report(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5692,7 +5692,7 @@ def get_dashboard_category_brand_variant_report(**kwargs):
     return _section_response(ctx, "category_brand_variant_report", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_inventory_status_report(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5709,7 +5709,7 @@ def get_dashboard_inventory_status_report(**kwargs):
     return _section_response(ctx, "inventory_status_report", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_stock_movement_report(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5724,7 +5724,7 @@ def get_dashboard_stock_movement_report(**kwargs):
     return _section_response(ctx, "stock_movement_report", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_reorder_purchase_suggestions(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5741,7 +5741,7 @@ def get_dashboard_reorder_purchase_suggestions(**kwargs):
     return _section_response(ctx, "reorder_purchase_suggestions", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_inventory_insights(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5804,7 +5804,7 @@ def get_dashboard_inventory_insights(**kwargs):
     return _section_response(ctx, "inventory_insights", insights)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_supplier_overview(**kwargs):
     ctx = _resolve_dashboard_context(**kwargs)
     if not ctx["enabled"]:
@@ -5818,7 +5818,7 @@ def get_dashboard_supplier_overview(**kwargs):
     return _section_response(ctx, "supplier_overview", section)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_dashboard_envelope(**kwargs):
     """Just the envelope (profile/scope/date metadata) without any section data.
 

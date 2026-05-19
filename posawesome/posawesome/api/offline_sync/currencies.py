@@ -66,7 +66,7 @@ def _normalize_pairs(currency_pairs, profile):
     return []
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def sync_currency_scope(
     pos_profile=None,
     watermark=None,

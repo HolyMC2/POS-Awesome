@@ -165,7 +165,7 @@ def get_company_domain(company):
     return frappe.get_cached_value("Company", cstr(company), "domain")
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_selling_price_lists():
     """Return all selling price lists"""
     return frappe.get_all(
@@ -176,7 +176,7 @@ def get_selling_price_lists():
     )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_app_info() -> Dict[str, List[Dict[str, str]]]:
     """
     Return a list of installed apps and their versions.
@@ -224,7 +224,7 @@ def _get_git_commit_info(app_name: str = "posawesome") -> Dict[str, Any]:
         return {}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_build_info() -> Dict[str, Any]:
     """Return build version + latest git commit info for update prompts."""
     data: Dict[str, Any] = {"build_version": get_build_version(), **_get_update_metadata()}
@@ -359,7 +359,7 @@ def _get_current_branch(app_path: str) -> str:
         return ""
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_remote_update_info() -> Dict[str, Any]:
     data: Dict[str, Any] = {"build_version": get_build_version(), **_get_update_metadata()}
     base = _get_git_commit_info("posawesome")
@@ -404,12 +404,12 @@ def ensure_child_doctype(doc, table_field, child_doctype):
             row.doctype = child_doctype
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_sales_person_names(pos_profile=None):
     return fetch_sales_person_names(pos_profile=pos_profile)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_language_options():
     """Return newline separated language codes from translations directories of all apps.
 
@@ -442,7 +442,7 @@ def get_language_options():
     return "\n".join(sorted(languages))
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_translation_dict(lang: str) -> dict:
     """Return translations for the given language from all installed apps."""
     from frappe.translate import get_translations_from_csv
@@ -477,7 +477,7 @@ def get_translation_dict(lang: str) -> dict:
     return translations
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_pos_profile_tax_inclusive(pos_profile: str):
     """Return the 'posa_tax_inclusive' setting for the given POS Profile."""
     if not pos_profile:
@@ -485,7 +485,7 @@ def get_pos_profile_tax_inclusive(pos_profile: str):
     return frappe.get_cached_value("POS Profile", pos_profile, "posa_tax_inclusive")
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_database_usage():
     db_size = None
     db_connections = None
@@ -572,7 +572,7 @@ def get_database_usage():
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_server_usage():
     global _PSUTIL_MISSING_LOGGED
 
@@ -738,7 +738,7 @@ def _update_language_cache(languages):
     _LANGUAGE_CACHE["last_updated"] = get_datetime()
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_available_languages():
     """Get list of available languages with caching."""
     # Return cached data if valid
@@ -790,7 +790,7 @@ def _get_user_language_cached(user):
     return frappe.get_cached_value("User", user, "language") or "en"
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_current_user_language():
     """Get current user's language with optimized caching."""
     try:
@@ -824,7 +824,7 @@ def get_current_user_language():
         return {"success": False, "message": "Failed to get language"}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def set_current_user_language(lang_code):
     """Set language with optimized database operations."""
     try:
@@ -865,7 +865,7 @@ def set_current_user_language(lang_code):
         return {"success": False, "message": "Failed to set language"}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_language_info(lang_code):
     """Get detailed information about a specific language."""
     try:
@@ -900,7 +900,7 @@ def get_language_info(lang_code):
         return {"success": False, "message": "Failed to get language info"}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def log_client_error(payload=None):
     """Capture frontend runtime errors in server logs for debugging."""
     try:
@@ -929,7 +929,7 @@ def log_client_error(payload=None):
         return {"ok": False}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def posa_user_opted_into_web_route() -> bool:
     """Return True if the current user has any POS Profile with the
     `posa_use_web_route` flag set. Phase 1.F uses this from the Desk

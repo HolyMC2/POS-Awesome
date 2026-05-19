@@ -240,7 +240,7 @@ def _build_flow_context(
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def list_source_documents(
     source,
     company=None,
@@ -285,7 +285,7 @@ def list_source_documents(
     return _search_delivery_notes(company=company, currency=currency, delivery_note_name=search)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def prepare_document_flow_action(
     action,
     source_doctype,
@@ -373,7 +373,7 @@ def prepare_document_flow_action(
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def commit_document_flow_action(
     action,
     source_doctype,

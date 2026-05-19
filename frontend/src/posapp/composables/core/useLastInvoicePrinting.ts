@@ -9,6 +9,14 @@ import { printDocumentViaQz } from "../../services/qzTray";
 
 declare const frappe: any;
 
+// Module-scope in-flight guard. Closes the "two paper copies" bug:
+// operators tap the navbar print button while a print is mid-flight
+// (the silent print or new-tab open hasn't returned yet), the second
+// tap races the first and both jobs reach the printer. The guard
+// makes the function reentrant-safe: subsequent calls become no-ops
+// until the in-flight print resolves or rejects.
+let _printLastInvoiceInFlight = false;
+
 export function useLastInvoicePrinting() {
 	const uiStore = useUIStore();
 
@@ -23,6 +31,29 @@ export function useLastInvoicePrinting() {
 	}
 
 	async function printLastInvoice() {
+		// Re-entrancy guard — see `_printLastInvoiceInFlight` at top of
+		// file. Drops the second concurrent press so the printer
+		// receives one job, not two.
+		if (_printLastInvoiceInFlight) {
+			frappe?.show_alert?.(
+				{
+					message: "Print already in flight; ignoring duplicate request.",
+					indicator: "orange",
+				},
+				3,
+			);
+			return;
+		}
+		_printLastInvoiceInFlight = true;
+
+		try {
+			await _printLastInvoiceImpl();
+		} finally {
+			_printLastInvoiceInFlight = false;
+		}
+	}
+
+	async function _printLastInvoiceImpl() {
 		const lastInvoiceId = uiStore.lastInvoiceId;
 		const posProfile = uiStore.posProfile;
 

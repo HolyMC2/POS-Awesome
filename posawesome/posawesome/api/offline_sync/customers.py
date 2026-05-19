@@ -51,7 +51,7 @@ def _collect_deleted_customers(profile, watermark, limit):
     ]
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def sync_customers(
     pos_profile=None,
     watermark=None,

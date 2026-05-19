@@ -4,7 +4,7 @@ from frappe.utils import flt
 from posawesome.posawesome.api.item_processing.barcode import _parse_scale_barcode_data
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_price_list_rate(item_code, price_list, rate, uom=None):
     """Create or update Item Price for the given item and price list."""
     if not item_code or not price_list:
@@ -39,7 +39,7 @@ def update_price_list_rate(item_code, price_list, rate, uom=None):
     return _("Item Price has been added or updated")
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_price_for_uom(item_code, price_list, uom):
     """Return Item Price for the given item, price list and UOM if it exists."""
     if not (item_code and price_list and uom):

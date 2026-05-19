@@ -60,12 +60,12 @@ def validate_referral_code(doc):
             frappe.throw(_("This Referral Code {0} not exists").format(referral_code))
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_customer_balance(customer):
     return customers.get_customer_balance(customer)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_customer(*args, **kwargs):
     """Backward compatible wrapper for ``api.customers.create_customer``."""
     return customers.create_customer(*args, **kwargs)

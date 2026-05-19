@@ -4,7 +4,7 @@ import frappe
 from frappe import _
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_bundle_components(bundles):
     """Return component items for Product Bundles.
 

@@ -20,7 +20,7 @@ def get_posawesome_credit_redeem_remark(invoice_name):
     return _("POS Awesome credit redemption for Sales Invoice {0}").format(invoice_name)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_payment_request(doc):
     doc = json.loads(doc)
     for pay in doc.get("payments"):
@@ -345,7 +345,7 @@ def redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, c
     return created_receive_payment_entries
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_available_credit(customer, company):
     total_credit = []
 
@@ -532,7 +532,7 @@ def _is_exact_repaired_change_allocation(
     )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def repair_overpayment_change_allocations(
     invoice_names=None,
     doctype="Sales Invoice",

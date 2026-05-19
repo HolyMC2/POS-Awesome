@@ -73,7 +73,7 @@ def set_paid_amount_and_received_amount(
     return paid_amount, received_amount
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_mode_of_payment_accounts(company, mode_of_payments):
     import json
 

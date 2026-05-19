@@ -106,7 +106,7 @@ def _validate_new_pin(new_pin: str) -> str:
     return pin
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_terminal_employees(pos_profile=None):
     profile_name = _resolve_profile_name(pos_profile)
     if not profile_name:
@@ -148,7 +148,7 @@ def get_terminal_employees(pos_profile=None):
     return employees
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def verify_terminal_employee_pin(pos_profile=None, user=None, pin=None):
     profile_name = _resolve_profile_name(pos_profile)
     if not profile_name:
@@ -174,7 +174,7 @@ def verify_terminal_employee_pin(pos_profile=None, user=None, pin=None):
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_cashier_pin_status(pos_profile=None, user=None):
     profile_name = _resolve_profile_name(pos_profile)
     if not profile_name:
@@ -196,7 +196,7 @@ def get_cashier_pin_status(pos_profile=None, user=None):
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def save_cashier_pin(pos_profile=None, user=None, new_pin=None, current_pin=None):
     profile_name = _resolve_profile_name(pos_profile)
     if not profile_name:

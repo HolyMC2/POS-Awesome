@@ -66,7 +66,7 @@ def get_customer_group_condition(pos_profile):
     return cond
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_customer_balance(customer):
     if not customer:
         return {"balance": 0, "customer_name": None}
@@ -94,7 +94,7 @@ def get_customer_balance(customer):
         return {"balance": 0, "customer_name": None}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_customer_names(pos_profile, limit=None, offset=None, start_after=None, modified_after=None):
     _pos_profile = json.loads(pos_profile)
     ttl = _pos_profile.get("posa_server_cache_duration")
@@ -147,7 +147,7 @@ def get_customer_names(pos_profile, limit=None, offset=None, start_after=None, m
         return _get_customer_names(pos_profile, limit, offset, start_after, modified_after)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_customers_count(pos_profile):
     pos_profile = json.loads(pos_profile)
     filters = {"disabled": 0}
@@ -157,7 +157,7 @@ def get_customers_count(pos_profile):
     return frappe.db.count("Customer", filters)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def search_customers(pos_profile, search_term, limit=20):
     """
     Server-side fallback for the SPA customer dialog.
@@ -213,7 +213,7 @@ def search_customers(pos_profile, search_term, limit=20):
     )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_customer_info(customer=None, company=None):
     customer = cstr(customer or "").strip()
     if not customer:
@@ -302,7 +302,7 @@ def get_customer_info(customer=None, company=None):
     return res
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_customer(
     customer_name,
     company,
@@ -455,7 +455,7 @@ def create_customer(
         return customer_doc
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def set_customer_info(customer, fieldname, value="", pos_profile_doc=None, company=None):
     _assert_customer_write_allowed(pos_profile_doc, company=company)
 
@@ -492,7 +492,7 @@ def set_customer_info(customer, fieldname, value="", pos_profile_doc=None, compa
         frappe.set_value("Customer", customer, "customer_primary_contact", contact_doc.name)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_customer_addresses(customer):
     return frappe.db.sql(
         """
@@ -518,7 +518,7 @@ def get_customer_addresses(customer):
     )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def make_address(args):
     args = _load_json_arg(args)
     _assert_customer_write_allowed(args.get("pos_profile_doc"), company=args.get("company"))
@@ -541,6 +541,6 @@ def make_address(args):
     return address
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_sales_person_names(pos_profile=None):
     return fetch_sales_person_names(pos_profile=pos_profile)

@@ -8,7 +8,7 @@ import json
 import time
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_items_details(pos_profile, items_data, price_list=None, customer=None):
     """Bulk fetch item details for a list of items."""
 
@@ -40,7 +40,7 @@ def get_items_details(pos_profile, items_data, price_list=None, customer=None):
     return result
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=None):
     from erpnext.stock.get_item_details import get_item_details
 
@@ -191,7 +191,7 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
     return res
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_item_variants(pos_profile, parent_item_code, price_list=None, customer=None):
     """Return variants of an item along with attribute metadata."""
     pos_profile, pos_profile_json = _ensure_pos_profile(pos_profile)
@@ -278,7 +278,7 @@ def get_item_optional_attributes(item_code):
     )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_item_attributes(item_code):
     """Get item attributes."""
     return frappe.get_all(

@@ -709,7 +709,7 @@ def _normalize_return_payment_rows(invoice_doc, conversion_rate=1):
     invoice_doc.base_paid_amount = flt(sum(p.base_amount for p in invoice_doc.payments or []))
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def update_invoice(data):
     currency_cache = {}
     data = json.loads(data)
@@ -935,7 +935,7 @@ def update_invoice(data):
     return response
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def submit_invoice(invoice, data, submit_in_background=False):
     data = json.loads(data)
     invoice = json.loads(invoice)
@@ -1315,7 +1315,7 @@ def submit_in_background_job(kwargs):
         )
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def repair_invoice_submission(client_request_id, company, pos_profile, document_type="Sales Invoice"):
     """Reconcile an incomplete durable submission ledger row without creating a new invoice."""
 
@@ -1390,7 +1390,7 @@ def repair_invoice_submission(client_request_id, company, pos_profile, document_
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def validate_cart_items(items, pos_profile=None):
     """Validate cart items for available stock.
 

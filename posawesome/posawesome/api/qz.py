@@ -65,7 +65,7 @@ def _require_cryptography():
     return x509, hashes, serialization, padding, rsa, NameOID
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_certificate() -> str:
     """Return the public QZ certificate PEM.
 
@@ -78,7 +78,7 @@ def get_certificate() -> str:
     return _read_text(cert_path)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_certificate_download() -> dict[str, str]:
     """Return certificate PEM + default company name for file naming."""
     cert_path = _cert_path()
@@ -141,7 +141,7 @@ def sign_message(message: str) -> str:
     return base64.b64encode(signature).decode("utf-8")
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def setup_qz_certificate() -> dict[str, str]:
     """Generate self-signed certificate + private key for QZ Tray signing."""
     frappe.only_for("System Manager")

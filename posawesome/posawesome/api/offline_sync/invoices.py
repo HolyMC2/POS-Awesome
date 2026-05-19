@@ -26,7 +26,7 @@ def _invoice_identity(response):
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def submit_invoice_outbox_entry(client_request_id, invoice, data=None):
     client_request_id = (client_request_id or "").strip()
     if not client_request_id:
@@ -54,7 +54,7 @@ def submit_invoice_outbox_entry(client_request_id, invoice, data=None):
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def reconcile_invoice_outbox_entry(
     client_request_id,
     company,
@@ -77,7 +77,7 @@ def reconcile_invoice_outbox_entry(
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def repair_invoice_outbox_entry(
     client_request_id,
     company,

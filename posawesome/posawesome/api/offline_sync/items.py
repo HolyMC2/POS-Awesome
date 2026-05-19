@@ -82,7 +82,7 @@ def _collect_deleted_items(profile, watermark, limit):
     ]
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def sync_items(
     pos_profile=None,
     watermark=None,

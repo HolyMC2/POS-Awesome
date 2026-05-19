@@ -6,7 +6,7 @@ from __future__ import unicode_literals
 import frappe
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["GET", "POST"])
 def get_print_formats(doctype):
     print_formats = frappe.get_all("Print Format", filters={"doc_type": doctype}, fields=["name"])
     return [p.name for p in print_formats]
