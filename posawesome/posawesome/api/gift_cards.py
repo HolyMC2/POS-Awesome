@@ -451,6 +451,14 @@ def issue_gift_card(
     if not company:
         frappe.throw(frappe._("Company is required."))
 
+    # Scope: gift card creation involves a JE/PE; caller's session user
+    # must be assigned to the profile + allowed to act on the company
+    # (REVIEW2/03 §2.1 row gift_cards.py:120).
+    from posawesome.posawesome.api._scope import assert_company, assert_profile
+    if profile_name:
+        assert_profile(frappe.session.user, profile_name)
+    assert_company(frappe.session.user, company)
+
     code = _normalize_code(gift_card_code)
     if frappe.db.exists("POS Gift Card", {"gift_card_code": code}):
         frappe.throw(frappe._("Gift card {0} already exists.").format(code))
@@ -497,6 +505,14 @@ def top_up_gift_card(pos_profile=None, cashier=None, gift_card_code=None, amount
     gift_card_doc = _get_gift_card(gift_card_code)
     if getattr(gift_card_doc, "status", "Active") != "Active":
         frappe.throw(frappe._("Only active gift cards can be topped up."))
+
+    # Scope: caller must own profile + the gift card's company. Top-up
+    # writes a JE — same blast radius as issue
+    # (REVIEW2/03 §2.1 row gift_cards.py:120).
+    from posawesome.posawesome.api._scope import assert_company, assert_profile
+    if profile_name:
+        assert_profile(frappe.session.user, profile_name)
+    assert_company(frappe.session.user, _doc_value(gift_card_doc, "company"))
 
     _create_issue_or_top_up_entry(
         profile_doc,

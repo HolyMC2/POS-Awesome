@@ -87,6 +87,19 @@ def _map_delivery_dates(data):
 def update_sales_order(data):
     """Create or update a Sales Order document."""
     data = json.loads(data)
+    # Scope: SO is a financial commitment — caller's company + profile
+    # (when present) + customer (when present) must all be in their POS
+    # Profile membership (REVIEW2/03 §2.1 row sales_orders.py).
+    from posawesome.posawesome.api._scope import (
+        assert_company,
+        assert_customer_in_profile,
+        assert_profile,
+    )
+    pos_profile = data.get("pos_profile") or data.get("posa_pos_profile")
+    if pos_profile:
+        assert_profile(frappe.session.user, pos_profile)
+    assert_company(frappe.session.user, data.get("company"))
+    assert_customer_in_profile(frappe.session.user, data.get("customer"), pos_profile)
     _map_delivery_dates(data)
     if data.get("name") and frappe.db.exists("Sales Order", data.get("name")):
         so_doc = frappe.get_doc("Sales Order", data.get("name"))
@@ -140,6 +153,19 @@ def _create_payment_entries(so_doc, payments):
 def submit_sales_order(order):
     """Submit sales order and create payment entries."""
     order = json.loads(order)
+    # Scope mirrors update_sales_order — submit creates payment entries
+    # via _create_payment_entries which writes journal entries; gating
+    # here is mandatory (REVIEW2/03 §2.1 row sales_orders.py).
+    from posawesome.posawesome.api._scope import (
+        assert_company,
+        assert_customer_in_profile,
+        assert_profile,
+    )
+    pos_profile = order.get("pos_profile") or order.get("posa_pos_profile")
+    if pos_profile:
+        assert_profile(frappe.session.user, pos_profile)
+    assert_company(frappe.session.user, order.get("company"))
+    assert_customer_in_profile(frappe.session.user, order.get("customer"), pos_profile)
     _map_delivery_dates(order)
     if order.get("name") and frappe.db.exists("Sales Order", order.get("name")):
         so_doc = frappe.get_doc("Sales Order", order.get("name"))

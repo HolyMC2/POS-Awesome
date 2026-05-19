@@ -6,6 +6,11 @@
 import frappe
 import time
 from erpnext.selling.doctype.sales_order.sales_order import make_sales_invoice
+from posawesome.posawesome.api._scope import (
+    assert_company,
+    assert_customer_in_profile,
+    assert_profile,
+)
 from posawesome.posawesome.api.invoice_processing.utils import (
     _get_return_validity_settings,
     _build_invoice_remarks,
@@ -129,6 +134,17 @@ def delete_invoice(invoice):
     elif not frappe.db.exists("Sales Invoice", invoice):
         frappe.throw(_("Invoice {0} does not exist").format(invoice))
 
+    # Scope: caller must own the company + profile this draft belongs to.
+    # Without this gate, any logged-in user could pass an arbitrary invoice
+    # name and nuke a draft from another tenant (REVIEW2/03 §2.1 row
+    # invoices.py:121).
+    has_profile = frappe.db.has_column(doctype, "pos_profile")
+    fields = ["company", "pos_profile"] if has_profile else ["company"]
+    row = frappe.db.get_value(doctype, invoice, fields, as_dict=True) or {}
+    assert_company(frappe.session.user, row.get("company"))
+    if has_profile and row.get("pos_profile"):
+        assert_profile(frappe.session.user, row.get("pos_profile"))
+
     if frappe.db.has_column(doctype, "posa_is_printed") and frappe.get_value(
         doctype, invoice, "posa_is_printed"
     ):
@@ -171,6 +187,13 @@ def create_sales_invoice_from_order(sales_order):
     if not frappe.db.exists("Sales Order", sales_order):
         frappe.throw(f"Sales Order {sales_order} does not exist")
 
+    # Scope: the SO must belong to a company the caller can act on. Without
+    # this, a cashier could pass any SO name and the make_sales_invoice
+    # call would gleefully build an invoice draft from another tenant
+    # (REVIEW2/03 §2.1 row invoices.py:164).
+    so_company = frappe.db.get_value("Sales Order", sales_order, "company")
+    assert_company(frappe.session.user, so_company)
+
     invoice_doc = make_sales_invoice(sales_order)
     invoice_doc.flags.ignore_permissions = True
     invoice_doc.run_method("set_missing_values")
@@ -186,6 +209,10 @@ def delete_sales_invoice(sales_invoice):
         frappe.throw("sales_invoice is required")
 
     if frappe.db.exists("Sales Invoice", sales_invoice):
+        # Scope before destroy. delete_doc(force=1) is irreversible
+        # (REVIEW2/03 §2.1 row invoices.py:181).
+        si_company = frappe.db.get_value("Sales Invoice", sales_invoice, "company")
+        assert_company(frappe.session.user, si_company)
         frappe.delete_doc("Sales Invoice", sales_invoice, force=1)
     return True
 

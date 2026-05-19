@@ -721,6 +721,19 @@ def update_invoice(data):
     _strip_client_freebies_from_payload(data)
     # Determine doctype based on POS Profile setting
     pos_profile = data.get("pos_profile")
+    # Scope: payload's pos_profile + company + customer must all be in
+    # the caller's POS Profile membership (REVIEW2/03 §2.3 §10 PR-1).
+    # This is the central trust gate — without it, a cashier could send
+    # any pos_profile/company/customer in the JSON and update_invoice
+    # would `flags.ignore_permissions = True` its way to a DB write.
+    from posawesome.posawesome.api._scope import (
+        assert_company,
+        assert_customer_in_profile,
+        assert_profile,
+    )
+    assert_profile(frappe.session.user, pos_profile)
+    assert_company(frappe.session.user, data.get("company"))
+    assert_customer_in_profile(frappe.session.user, data.get("customer"), pos_profile)
     doctype = "Sales Invoice"
     if pos_profile and frappe.db.get_value(
         "POS Profile", pos_profile, "create_pos_invoice_instead_of_sales_invoice"
@@ -945,6 +958,19 @@ def submit_invoice(invoice, data, submit_in_background=False):
     submit_in_background = cint(submit_in_background)
     _strip_client_freebies_from_payload(invoice)
     pos_profile = invoice.get("pos_profile")
+    # Scope — must match update_invoice. submit re-validates because
+    # the request is independent (a caller can submit without an
+    # intervening update; e.g. retry-on-failure) and we don't want
+    # update_invoice's gate to be skippable
+    # (REVIEW2/03 §2.3 §10 PR-1).
+    from posawesome.posawesome.api._scope import (
+        assert_company,
+        assert_customer_in_profile,
+        assert_profile,
+    )
+    assert_profile(frappe.session.user, pos_profile)
+    assert_company(frappe.session.user, invoice.get("company"))
+    assert_customer_in_profile(frappe.session.user, invoice.get("customer"), pos_profile)
     doctype = "Sales Invoice"
     if pos_profile and frappe.db.get_value(
         "POS Profile", pos_profile, "create_pos_invoice_instead_of_sales_invoice"
