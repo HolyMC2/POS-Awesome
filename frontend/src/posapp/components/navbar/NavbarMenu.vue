@@ -281,6 +281,7 @@
 	</v-dialog>
 
 	<QzTrayDialog v-model="showQzTrayDialog" />
+	<QzTestPrintDialog v-model="showQzTestPrintDialog" />
 
 	<!-- Notification Snackbars -->
 	<v-snackbar
@@ -311,11 +312,13 @@ import { useUpdateStore } from "../../stores/updateStore";
 import { useEmployeeStore } from "../../stores/employeeStore";
 import { storeToRefs } from "pinia";
 import QzTrayDialog from "./QzTrayDialog.vue";
+import QzTestPrintDialog from "../settings/QzTestPrintDialog.vue";
 
 export default {
 	name: "NavbarMenu",
 	components: {
 		QzTrayDialog,
+		QzTestPrintDialog,
 	},
 	props: {
 		posProfile: { type: Object, default: () => ({}) },
@@ -337,6 +340,7 @@ export default {
 			activePanel: "main",
 			showLanguageDialog: false,
 			showQzTrayDialog: false,
+			showQzTestPrintDialog: false,
 			selectedLanguage: "en",
 			currentLanguage: "en",
 			availableLanguages: FALLBACK_LANGUAGES,
@@ -499,6 +503,17 @@ export default {
 									handler: "openQzTraySetup",
 								}
 							: null,
+						this.isEnabledSetting(this.posProfile?.posa_silent_print) &&
+						this.currentCashier?.is_supervisor
+							? {
+									id: "qz-test-print",
+									label: __("QZ Test Print (A/B)"),
+									subtitle: __("Compare interpolation × density on paper"),
+									icon: "mdi-printer-pos",
+									tone: "info",
+									handler: "openQzTestPrint",
+								}
+							: null,
 					].filter(Boolean),
 				},
 				{
@@ -654,6 +669,10 @@ export default {
 				case "openQzTraySetup":
 					this.closeMenu();
 					this.showQzTrayDialog = true;
+					break;
+				case "openQzTestPrint":
+					this.closeMenu();
+					this.showQzTestPrintDialog = true;
 					break;
 				case "clearCacheAction":
 					this.closeMenu();

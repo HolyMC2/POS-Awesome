@@ -2821,6 +2821,11 @@
 					</v-col>
 				</v-row>
 			</template>
+
+			<!-- Q10 — QZ Tray print telemetry. Self-fetching; always
+			     rendered so dashboard envelope outages don't hide
+			     print health. -->
+			<QzTelemetryPanel />
 		</v-container>
 	</div>
 </template>
@@ -2828,6 +2833,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useUIStore } from "@/posapp/stores/uiStore";
+import QzTelemetryPanel from "@/posapp/components/reports/QzTelemetryPanel.vue";
 import { useEmployeeStore } from "@/posapp/stores/employeeStore";
 import {
 	type BranchLocationRow,

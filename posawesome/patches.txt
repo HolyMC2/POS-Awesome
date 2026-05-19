@@ -18,4 +18,4 @@ posawesome.patches.add_gift_card_to_workspace
 posawesome.patches.add_submission_ledger_to_workspace
 posawesome.patches.add_p0_perf_indexes
 posawesome.patches.add_qz_print_quality_fields
-</content>
+posawesome.patches.set_doco_qz_print_defaults

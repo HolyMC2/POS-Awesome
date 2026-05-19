@@ -54,6 +54,13 @@ export interface QzPrintDocumentOptions extends QzPrintHtmlOptions {
 	printFormat?: string;
 	letterhead?: string | null;
 	noLetterhead?: string | number | null;
+	// Q8 — opt-in escape hatch for the in-flight dedupe guard at the
+	// bottom of this module. Default behaviour (undefined / false) is
+	// unchanged: same `(doctype, name, printFormat)` collapses into a
+	// single promise. Test-print A/B helpers and any future caller
+	// that legitimately needs back-to-back prints of the same document
+	// can pass `bypassDedupe: true`.
+	bypassDedupe?: boolean;
 }
 
 const PRINTER_STORAGE_KEY = "posa_qz_printer_name";
@@ -127,10 +134,27 @@ async function fetchImageAsDataUrl(url: string, timeoutMs = 5000): Promise<strin
 	const cached = inlinedImageCache.get(url);
 	if (cached) return cached;
 
+	// Q5 — same-origin gate. The legacy `credentials: "include"` sent
+	// the Frappe session cookie to ANY image URL embedded in the print
+	// format Jinja — including attacker-controlled CDN URLs. Switch to
+	// `omit` for cross-origin so the cookie never leaves our domain.
+	// Same-origin requests still carry the cookie (needed for private
+	// /files/ uploads gated by Frappe auth).
+	let sameOrigin = true;
+	try {
+		sameOrigin = new URL(url, window.location.href).origin === window.location.origin;
+	} catch {
+		// Malformed URL — treat as cross-origin (defensive).
+		sameOrigin = false;
+	}
+
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timeoutMs);
 	try {
-		const response = await fetch(url, { credentials: "include", signal: controller.signal });
+		const response = await fetch(url, {
+			credentials: sameOrigin ? "include" : "omit",
+			signal: controller.signal,
+		});
 		if (!response.ok) return null;
 		const blob = await response.blob();
 		const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -593,9 +617,11 @@ export async function printDocumentViaQz(options: QzPrintDocumentOptions) {
 	}
 
 	const dedupeKey = `${options.doctype}:${options.name}:${options.printFormat || ""}`;
-	const inflight = _qzPrintInFlight.get(dedupeKey);
-	if (inflight) {
-		return inflight;
+	if (!options.bypassDedupe) {
+		const inflight = _qzPrintInFlight.get(dedupeKey);
+		if (inflight) {
+			return inflight;
+		}
 	}
 
 	const printFormat = options.printFormat || DEFAULT_PRINT_FORMAT;
@@ -623,10 +649,20 @@ export async function printDocumentViaQz(options: QzPrintDocumentOptions) {
 	}
 
 	const startedAt = performance.now();
+	// Q9 — per-stage timing. Populated inside the IIFE on each
+	// successful stage; emitted alongside the end-to-end
+	// `perf:qz_print` rollup after the full pipeline returns. NaN
+	// means the stage didn't complete (we don't emit those events).
+	const stageMs = {
+		fetch_html: NaN,
+		inline: NaN,
+		send: NaN,
+	};
 	const exec = (async (): Promise<void> => {
 
 	let html: string | undefined;
 	let style = "";
+	const tFetchStart = performance.now();
 	try {
 		const response = await frappe.call({
 			method: "frappe.www.printview.get_html_and_style",
@@ -640,6 +676,7 @@ export async function printDocumentViaQz(options: QzPrintDocumentOptions) {
 		});
 		html = response?.html || response?.message?.html;
 		style = response?.style || response?.message?.style || "";
+		stageMs.fetch_html = performance.now() - tFetchStart;
 	} catch (err) {
 		reportQzFailure("fetch_html", err, {
 			doctype: options.doctype,
@@ -660,8 +697,12 @@ export async function printDocumentViaQz(options: QzPrintDocumentOptions) {
 	}
 
 	try {
+		const tInlineStart = performance.now();
 		const inlinedHtml = await inlineImagesForQz(html);
+		stageMs.inline = performance.now() - tInlineStart;
+		const tSendStart = performance.now();
 		await printHtmlViaQz(buildPrintHtml(inlinedHtml, style, options.widthMm || 80), options);
+		stageMs.send = performance.now() - tSendStart;
 	} catch (err) {
 		reportQzFailure("send_to_printer", err, {
 			doctype: options.doctype,
@@ -672,24 +713,38 @@ export async function printDocumentViaQz(options: QzPrintDocumentOptions) {
 	}
 	})();
 
-	_qzPrintInFlight.set(dedupeKey, exec);
+	if (!options.bypassDedupe) {
+		_qzPrintInFlight.set(dedupeKey, exec);
+	}
 	try {
 		await exec;
-		// Q4 — emit `perf:qz_print` with end-to-end duration so we
-		// can split fetch-html / inline / send-to-printer in later
-		// dashboards. End-to-end first; per-stage instrumentation is
-		// a follow-up.
+		// Q4 + Q9 — emit per-stage + end-to-end timing. Per-stage
+		// events let the dashboard split where the lag lives
+		// (server-side Jinja → image inlining → QZ Tray send). The
+		// end-to-end rollup stays as the primary SLO signal.
+		const baseMeta = {
+			doctype: options.doctype,
+			print_format: printFormat,
+			interpolation: options.interpolation || "nearest-neighbor",
+			density: options.density ?? null,
+		};
 		try {
-			track("perf:qz_print", Math.round(performance.now() - startedAt), {
-				doctype: options.doctype,
-				print_format: printFormat,
-				interpolation: options.interpolation || "nearest-neighbor",
-				density: options.density ?? null,
-			});
+			if (Number.isFinite(stageMs.fetch_html)) {
+				track("perf:qz_fetch_html_ms", Math.round(stageMs.fetch_html), baseMeta);
+			}
+			if (Number.isFinite(stageMs.inline)) {
+				track("perf:qz_inline_ms", Math.round(stageMs.inline), baseMeta);
+			}
+			if (Number.isFinite(stageMs.send)) {
+				track("perf:qz_send_ms", Math.round(stageMs.send), baseMeta);
+			}
+			track("perf:qz_print", Math.round(performance.now() - startedAt), baseMeta);
 		} catch {
 			// telemetry dispatch must never bubble
 		}
 	} finally {
-		_qzPrintInFlight.delete(dedupeKey);
+		if (!options.bypassDedupe) {
+			_qzPrintInFlight.delete(dedupeKey);
+		}
 	}
 }
