@@ -15,10 +15,22 @@
 <head>
 	<meta charset="utf-8" />
 	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
-	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes" />
 	<meta name="theme-color" content="#0f172a" />
+	<meta name="color-scheme" content="dark light" />
+
+	{# iOS PWA hooks: status-bar + standalone capability + Home-Screen icon.
+	   Apple still parses these legacy meta names alongside the W3C
+	   `mobile-web-app-capable` (which iOS Safari ignores). Keep both. #}
+	<meta name="mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-title" content="POS Awesome" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+	<meta name="format-detection" content="telephone=no" />
+
 	<title>{{ title }}</title>
 	<link rel="icon" type="image/png" href="/assets/posawesome/dist/js/pos-BuGonphY.png" />
+	<link rel="apple-touch-icon" sizes="180x180" href="/assets/posawesome/icons/logo-512.png" />
 	<link rel="manifest" href="/manifest.json" />
 
 	{# Cache-busted CSS bundle (build-manifest emits the hashed path). #}

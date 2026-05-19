@@ -1,20 +1,53 @@
 {
   "name": "POS Awesome",
   "short_name": "POS",
-  "start_url": "/app/posapp",
+  "id": "/posapp",
+  "start_url": "/posapp",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#FFFFFF",
-  "theme_color": "#0097A7",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "orientation": "any",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "description": "POS Awesome — fast, offline-capable point-of-sale for Frappe/ERPNext.",
   "icons": [
-    {
-      "src": "/assets/posawesome/icons/logo-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    },
     {
       "src": "/assets/posawesome/icons/logo-144.png",
       "sizes": "144x144",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/posawesome/icons/logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open POS",
+      "short_name": "POS",
+      "description": "Start a new sale",
+      "url": "/posapp/pos",
+      "icons": [{ "src": "/assets/posawesome/icons/logo-144.png", "sizes": "144x144" }]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Today's KPIs",
+      "url": "/posapp/dashboard",
+      "icons": [{ "src": "/assets/posawesome/icons/logo-144.png", "sizes": "144x144" }]
+    },
+    {
+      "name": "Cash Movement",
+      "short_name": "Cash",
+      "description": "Open / close till + cash in/out",
+      "url": "/posapp/cash-movement",
+      "icons": [{ "src": "/assets/posawesome/icons/logo-144.png", "sizes": "144x144" }]
     }
   ],
   "screenshots": [

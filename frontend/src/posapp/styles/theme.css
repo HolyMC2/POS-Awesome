@@ -104,6 +104,11 @@
 	--pos-margin-end: 0;
 	--pos-padding-start: 0;
 	--pos-padding-end: 0;
+
+	/* Touch + Focus Tokens (WCAG 2.5.5 / Apple HIG / Material) */
+	--pos-touch-target-min: 44px;
+	--pos-focus-ring: 0 0 0 2px rgb(99 102 241 / 0.8);
+
 	color-scheme: light;
 }
 
@@ -715,4 +720,51 @@ body[data-page-route="posapp"] #body {
 /* Ensure no residual sidebar space */
 body[data-page-route="posapp"] .desk-container {
 	padding-left: 0 !important;
+}
+
+/* ==========================================================================
+   M4 — Eliminate iOS 300ms tap delay on every Vuetify button.
+   `touch-action: manipulation` opts the element out of double-tap-to-zoom,
+   so Safari fires `click` immediately. Safe everywhere — pinch-zoom on the
+   surrounding page is unaffected.
+   ========================================================================== */
+.posapp .v-btn,
+.posapp .qty-control-btn,
+.posapp .posa-cart-table__qty-btn,
+.posapp .action-btn,
+.posapp .action-btn-consistent,
+.posapp .view-toggle-btn,
+.posapp .mobile-pos-dock__item,
+.posapp [role="button"] {
+	touch-action: manipulation;
+}
+
+/* ==========================================================================
+   M1 — Coarse-pointer (touch) tap-target floor at 44×44 CSS px (WCAG 2.5.5).
+   Only applied when `pointer: coarse` so desktop/cashier-monitor density
+   is preserved. Mirrors upstream feat-ui-ux-improvements direction; lands
+   on the actual selectors REVIEW2/05_mobile_ux.md §1 calls out.
+   Follow-ups still hardcoded (audit them in a later pass):
+     - ItemActionToolbar.vue:L90  .action-btn-consistent = 36 (overridden here)
+     - NavbarAppBar.vue:L652-662  .nav-icon                = 40 (overridden here)
+     - CartItemRow.vue v-btn x-small / small (Vuetify-internal sizing)
+   ========================================================================== */
+@media (pointer: coarse) {
+	.posapp .qty-control-btn,
+	.posapp .posa-cart-table__qty-btn,
+	.posapp .posa-cart-table__qty-display,
+	.posapp .action-btn,
+	.posapp .action-btn-consistent,
+	.posapp .view-toggle-btn,
+	.posapp .nav-icon,
+	.posapp .posa-customer-icon {
+		min-width: max(var(--pos-touch-target-min), 44px) !important;
+		min-height: max(var(--pos-touch-target-min), 44px) !important;
+	}
+
+	/* Quantity display is a flex 1 1 auto cell — only lift its height,
+	   leave width to the flex layout so the cart row doesn't reflow. */
+	.posapp .posa-cart-table__qty-display {
+		height: auto !important;
+	}
 }
