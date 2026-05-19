@@ -30,6 +30,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 from frappe.utils import cint, flt, getdate, now_datetime
 
 MAX_EVENTS_PER_BATCH = 200
@@ -108,12 +109,17 @@ def _sanitise_event(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 
 @frappe.whitelist(methods=["POST"])
+@rate_limit(limit=10, seconds=1)
 def ingest(events=None):
     """Accept a JSON array of telemetry events.
 
     Returns ``{"accepted": N, "dropped": M}``. Errors on individual rows
     don't fail the batch — we drop bad rows and continue. Callers
     should NOT retry on partial success.
+
+    Rate-limited to 10 batches/second per session (200 events/batch =
+    2,000 events/sec ceiling). A runaway SPA tab gets 429'd before it
+    can pollute the Telemetry Event table.
     """
     parsed: List[Any]
     if isinstance(events, str):

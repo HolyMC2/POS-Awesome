@@ -11,8 +11,21 @@ from erpnext.accounts.doctype.loyalty_program.loyalty_program import (
     get_loyalty_program_details_with_points,
 )
 from frappe.utils.caching import redis_cache
-from .utils import fetch_sales_person_names
+from .utils import assert_pos_profile_write_allowed, fetch_sales_person_names
 from .stored_value import get_stored_value_summary
+
+
+def _load_json_arg(value):
+    if isinstance(value, str):
+        return json.loads(value)
+    return value
+
+
+def _assert_customer_write_allowed(pos_profile_doc=None, company=None):
+    if pos_profile_doc:
+        return assert_pos_profile_write_allowed(pos_profile_doc, company=company)
+
+    return assert_pos_profile_write_allowed(None)
 
 
 def get_customer_groups(pos_profile):
@@ -309,7 +322,8 @@ def create_customer(
     city=None,
     country=None,
 ):
-    pos_profile = json.loads(pos_profile_doc)
+    _assert_customer_write_allowed(pos_profile_doc, company=company)
+    pos_profile = _load_json_arg(pos_profile_doc)
 
     # Format birthday to MySQL compatible format (YYYY-MM-DD) if provided
     formatted_birthday = None
@@ -366,6 +380,8 @@ def create_customer(
                     "state": "",
                     "pincode": "",
                     "country": country or "",
+                    "company": company,
+                    "pos_profile_doc": pos_profile_doc,
                 }
                 make_address(json.dumps(args))
 
@@ -387,9 +403,21 @@ def create_customer(
 
         # ensure contact details are synced correctly
         if mobile_no:
-            set_customer_info(customer_doc.name, "mobile_no", mobile_no)
+            set_customer_info(
+                customer_doc.name,
+                "mobile_no",
+                mobile_no,
+                pos_profile_doc=pos_profile_doc,
+                company=company,
+            )
         if email_id:
-            set_customer_info(customer_doc.name, "email_id", email_id)
+            set_customer_info(
+                customer_doc.name,
+                "email_id",
+                email_id,
+                pos_profile_doc=pos_profile_doc,
+                company=company,
+            )
 
         existing_address_name = frappe.db.get_value(
             "Dynamic Link",
@@ -419,6 +447,8 @@ def create_customer(
                     "state": "",
                     "pincode": "",
                     "country": country or "",
+                    "company": company,
+                    "pos_profile_doc": pos_profile_doc,
                 }
                 make_address(json.dumps(args))
 
@@ -426,7 +456,9 @@ def create_customer(
 
 
 @frappe.whitelist()
-def set_customer_info(customer, fieldname, value=""):
+def set_customer_info(customer, fieldname, value="", pos_profile_doc=None, company=None):
+    _assert_customer_write_allowed(pos_profile_doc, company=company)
+
     if fieldname == "loyalty_program":
         frappe.db.set_value("Customer", customer, "loyalty_program", value)
 
@@ -488,7 +520,9 @@ def get_customer_addresses(customer):
 
 @frappe.whitelist()
 def make_address(args):
-    args = json.loads(args)
+    args = _load_json_arg(args)
+    _assert_customer_write_allowed(args.get("pos_profile_doc"), company=args.get("company"))
+
     address = frappe.get_doc(
         {
             "doctype": "Address",

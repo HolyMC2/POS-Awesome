@@ -6,11 +6,23 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
 from datetime import datetime, timedelta, timezone
 
 import frappe
 from frappe import _
+
+# Roles allowed to call `sign_message`. Any logged-in user with one of
+# these can request a QZ Tray signature; users without them get 403.
+# Without this gate the endpoint was an unbounded RSA signing oracle
+# against the site's QZ Tray private key.
+_QZ_SIGN_ROLES = (
+    "POS User",
+    "POS Manager",
+    "POS Awesome Supervisor",
+    "System Manager",
+)
 
 
 def _qz_dir() -> str:
@@ -82,12 +94,39 @@ def get_certificate_download() -> dict[str, str]:
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def sign_message(message: str) -> str:
     """Return base64 encoded RSA-PKCS1v15-SHA512 signature.
 
     Returns empty string when key is not configured yet.
+
+    Hardening (P0 security):
+      - POST only; closes the GET-based oracle vector.
+      - Role-gated (`_QZ_SIGN_ROLES`); a non-POS logged-in user can no
+        longer request signatures.
+      - Envelope-validated; the message must be a JSON envelope whose
+        `call` field starts with `qz.` (the only shape QZ Tray's client
+        ever signs). Closes the "sign anything" oracle path.
     """
+    frappe.only_for(list(_QZ_SIGN_ROLES))
+
+    if not isinstance(message, str) or not message:
+        frappe.throw(_("sign_message requires a non-empty JSON envelope"))
+
+    envelope: object = None
+    try:
+        envelope = json.loads(message)
+    except (ValueError, TypeError):
+        frappe.throw(_("sign_message expects a JSON envelope"))
+
+    if not isinstance(envelope, dict):
+        frappe.throw(_("sign_message envelope must be a JSON object"))
+        return ""  # unreachable; placates type checkers about envelope below
+
+    call = envelope.get("call")
+    if not isinstance(call, str) or not call.startswith("qz."):
+        frappe.throw(_("sign_message envelope must carry call=qz.*"))
+
     key_path = _key_path()
     if not os.path.exists(key_path):
         return ""
@@ -95,7 +134,7 @@ def sign_message(message: str) -> str:
     _x509, hashes, serialization, padding, _rsa, _name_oid = _require_cryptography()
     private_key = serialization.load_pem_private_key(_read_bytes(key_path), password=None)
     signature = private_key.sign(
-        (message or "").encode("utf-8"),
+        message.encode("utf-8"),
         padding.PKCS1v15(),
         hashes.SHA512(),
     )

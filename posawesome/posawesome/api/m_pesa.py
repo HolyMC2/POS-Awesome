@@ -17,8 +17,30 @@ def get_token(app_key, app_secret, base_url):
     return r.json()["access_token"]
 
 
-@frappe.whitelist(allow_guest=True)
+def _assert_mpesa_enabled() -> None:
+    """Reject the request unless the site explicitly opts into M-Pesa.
+
+    Without this gate the `confirmation` + `validation` endpoints
+    accept guest POSTs and insert an `Mpesa Payment Register` doc with
+    `ignore_permissions=True` — a webhook-spam / data-injection vector
+    for any site that does NOT use Safaricom M-Pesa.
+
+    To opt in (typical Safaricom integration):
+        bench --site <site> set-config -p posa_mpesa_enabled 1
+
+    Full HMAC + IP-allowlist hardening lands in PR-SEC4
+    (`REVIEW2/03 §1.2`); this kill-switch is the P0 minimum.
+    """
+    if not frappe.conf.get("posa_mpesa_enabled"):
+        frappe.throw(
+            _("M-Pesa is not enabled on this site"),
+            frappe.PermissionError,
+        )
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 def confirmation(**kwargs):
+    _assert_mpesa_enabled()
     try:
         args = frappe._dict(kwargs)
         doc = frappe.new_doc("Mpesa Payment Register")
@@ -45,8 +67,9 @@ def confirmation(**kwargs):
         return dict(context)
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 def validation(**kwargs):
+    _assert_mpesa_enabled()
     context = {"ResultCode": 0, "ResultDesc": "Accepted"}
     return dict(context)
 
