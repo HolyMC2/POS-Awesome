@@ -145,6 +145,10 @@ import { storeToRefs } from "pinia";
 import { useResponsive } from "../../../composables/core/useResponsive";
 import { useTheme } from "../../../composables/core/useTheme";
 import { loadDocumentSourceRecord } from "../../../utils/documentSources";
+import {
+	extractServerErrorMessage,
+	showServerErrorToast,
+} from "../../../utils/serverErrorToast";
 export default {
 	// props: ["draftsDialog"],
 	mixins: [format],
@@ -291,7 +295,10 @@ export default {
 				this.uiStore.closeOrders();
 			} catch (error) {
 				console.error("Failed to submit sales order:", error);
-				this.errorMessage = __("Unable to load the selected sales order");
+				const message = extractServerErrorMessage(error);
+				this.errorMessage =
+					message || __("Unable to load the selected sales order");
+				showServerErrorToast(error, __("Could not load sales order"));
 			} finally {
 				this.isSubmitting = false;
 			}

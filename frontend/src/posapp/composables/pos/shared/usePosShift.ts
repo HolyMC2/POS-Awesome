@@ -245,6 +245,43 @@ export function usePosShift(openDialog?: () => void) {
 			})
 			.catch((err: unknown) => {
 				console.error("Failed to submit closing shift", err);
+				// Surface the Frappe error to the operator. Without this
+				// the close-shift button silently no-ops, leaving the
+				// operator confused — e.g. ERPNext throws
+				// "missing valuation rate for items …" but until this
+				// catch wired the toast, the error only landed in the
+				// browser console + bench error log. Closing the shift
+				// is a quasi-financial event; silent failure is the
+				// worst possible UX.
+				const anyErr = err as any;
+				let message = "";
+				// Frappe puts user-facing exception messages in
+				// `_server_messages` (JSON-encoded array of objects).
+				const sm = anyErr?._server_messages || anyErr?.responseJSON?._server_messages;
+				if (sm) {
+					try {
+						const parsed = JSON.parse(sm);
+						if (Array.isArray(parsed) && parsed.length) {
+							const first = parsed[0];
+							const obj = typeof first === "string" ? JSON.parse(first) : first;
+							message = obj?.message || obj?.title || String(first);
+						}
+					} catch {
+						message = String(sm);
+					}
+				}
+				if (!message) {
+					message = anyErr?.message || anyErr?.exc || String(err) || "Close-shift failed.";
+				}
+				// Strip HTML — Frappe throws sometimes include <strong>/
+				// <br/> markup that toastStore renders as plain text.
+				message = message.replace(/<[^>]+>/g, "").trim();
+				toastStore.show({
+					title: "Could not close shift",
+					message,
+					color: "error",
+					timeout: 12000,
+				});
 			});
 	}
 

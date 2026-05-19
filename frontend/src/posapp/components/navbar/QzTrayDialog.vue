@@ -117,6 +117,7 @@
 import { computed, ref, watch } from "vue";
 import { useToastStore } from "../../stores/toastStore";
 import { useUIStore } from "../../stores/uiStore";
+import { extractServerErrorMessage } from "../../utils/serverErrorToast";
 import {
 	checkQzCertificateOnce,
 	connectQzTray,
@@ -317,7 +318,8 @@ async function handleSaveProfilePrinter() {
 		notify("Selected printer saved as the POS Profile default.", "success");
 	} catch (error: any) {
 		console.error("Failed to save QZ profile printer", error);
-		notify(error?.message || "Failed to save POS Profile printer.", "error");
+		const message = extractServerErrorMessage(error);
+		notify(message || "Failed to save POS Profile printer.", "error");
 	} finally {
 		savingProfilePrinter.value = false;
 	}
@@ -334,7 +336,8 @@ async function handleGenerateCertificate() {
 		}
 	} catch (error: any) {
 		console.error("Failed to generate QZ certificate", error);
-		notify(error?.message || "Failed to generate certificate.", "error");
+		const message = extractServerErrorMessage(error);
+		notify(message || "Failed to generate certificate.", "error");
 	} finally {
 		certificateLoading.value = false;
 	}

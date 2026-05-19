@@ -86,6 +86,10 @@
 <script setup>
 import { inject, ref, watch } from "vue";
 import { formatUtils } from "../../../format";
+import {
+	extractServerErrorMessage,
+	showServerErrorToast,
+} from "../../../utils/serverErrorToast";
 
 defineOptions({
 	name: "MpesaPayments",
@@ -211,7 +215,10 @@ async function submit_dialog() {
 		dialog.value = false;
 	} catch (error) {
 		console.error("Failed to submit M-Pesa payment:", error);
-		errorMessage.value = __("Unable to submit the selected payment");
+		const message = extractServerErrorMessage(error);
+		errorMessage.value =
+			message || __("Unable to submit the selected payment");
+		showServerErrorToast(error, __("Could not submit M-Pesa payment"));
 	} finally {
 		isSubmitting.value = false;
 	}

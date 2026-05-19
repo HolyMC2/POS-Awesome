@@ -69,6 +69,11 @@
 </template>
 
 <script>
+import {
+	extractServerErrorMessage,
+	showServerErrorToast,
+} from "../../../../utils/serverErrorToast";
+
 export default {
 	props: {
 		modelValue: Boolean,
@@ -127,7 +132,11 @@ export default {
 				this.$emit("update:modelValue", false);
 			} catch (error) {
 				console.error("Failed to create supplier:", error);
-				this.$emit("error", __("Failed to create supplier"));
+				const serverMessage = extractServerErrorMessage(error);
+				const finalMessage =
+					serverMessage || __("Failed to create supplier");
+				this.$emit("error", finalMessage);
+				showServerErrorToast(error, __("Could not create supplier"));
 			} finally {
 				this.loading = false;
 			}
