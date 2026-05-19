@@ -47,6 +47,9 @@ from posawesome.posawesome.api.invoice_processing.data import get_last_invoice_r
 from posawesome.posawesome.api.utils import log_perf_event
 
 
+_SUPERVISOR_ROLES = ("POS Manager", "Sales Manager", "Accounts Manager", "System Manager")
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def get_draft_invoices(
     pos_opening_shift=None,
@@ -65,11 +68,24 @@ def get_draft_invoices(
     if limit_page_length < 0:
         limit_page_length = 0
 
-    supervisor_scope = int(is_supervisor or 0)
+    # Supervisor branch is NOT a client-supplied flag — that was the
+    # original tampering window. Cashier sends `is_supervisor=1` →
+    # sees every draft in the company (REVIEW2/03 §2.1 row
+    # invoices.py:45-104). Compute server-side from roles instead.
+    requested_supervisor = int(is_supervisor or 0)
+    actual_roles = set(frappe.get_roles(frappe.session.user))
+    is_supervisor_session = bool(actual_roles.intersection(_SUPERVISOR_ROLES))
+    supervisor_scope = 1 if (requested_supervisor and is_supervisor_session) else 0
+
     filters = {
         "docstatus": 0,
     }
     if supervisor_scope and company:
+        # Confirm the supervisor's session can act on the requested
+        # company + profile before broadening scope.
+        assert_company(frappe.session.user, company)
+        if pos_profile:
+            assert_profile(frappe.session.user, pos_profile)
         filters["company"] = company
         if pos_profile:
             filters["pos_profile"] = pos_profile
@@ -113,6 +129,10 @@ def get_draft_invoices(
 def get_draft_invoice_doc(invoice_name, doctype="Sales Invoice"):
     started_at = time.perf_counter()
     doc = frappe.get_cached_doc(doctype, invoice_name)
+    # Scope: any logged-in user could pass an arbitrary invoice name
+    # and read full doc (line items, customer, totals) without this
+    # gate. REVIEW2/03 §2.1 row invoices.py:107-118.
+    assert_company(frappe.session.user, getattr(doc, "company", None))
     log_perf_event(
         "get_draft_invoice_doc",
         started_at,
