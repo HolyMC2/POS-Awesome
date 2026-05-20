@@ -410,6 +410,24 @@ export async function connectQzTray(options: { userInitiated?: boolean } = {}): 
 		setupSecurity();
 		qzConnecting.value = true;
 
+		// Pre-fetch the signing cert into cachedCertificate BEFORE
+		// qz.websocket.connect() opens the socket. The cert promise
+		// in setupSecurity is async (network round-trip to
+		// posawesome.api.qz.get_certificate); without this pre-warm
+		// the qz-tray.js library sends the first signed request
+		// before the cert resolves → QZ Tray sees `certificate: null`
+		// → treats the request as anonymous → shows the "Allow this
+		// site?" dialog every session (root cause of the
+		// every-boot prompt operators complained about).
+		try {
+			await checkQzCertificateOnce();
+		} catch (error) {
+			// non-fatal — the cert promise inside setupSecurity will
+			// retry on first sign call; we just lose the pre-warm
+			// optimization on this connect.
+			console.warn("QZ cert pre-fetch failed", error);
+		}
+
 		qz.websocket.setClosedCallbacks(() => {
 			qzConnected.value = false;
 			qzConnecting.value = false;
