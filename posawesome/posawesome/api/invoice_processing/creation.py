@@ -50,6 +50,33 @@ STATE_FAILED = "FAILED"
 FINAL_LEDGER_STATES = {STATE_SUBMITTED, STATE_POST_SUBMIT_DONE}
 
 
+def _posa_publish_dual(event, message, user=None, doctype=None, docname=None):
+    """Publish a realtime event to BOTH the user room and the doc room.
+
+    Frappe's `publish_realtime(..., user=...)` only routes to the
+    `user:<email>` room. Desk's bundled `socketio_client.js` auto-joins
+    that room from the session cookie; the POSAwesome web-route
+    (`/posapp/pos`) uses a thin shim in `frontend/src/posapp/utils/
+    frappe-shim.ts` that doesn't reliably auto-join — instead the SPA
+    explicitly subscribes to `doc:<doctype>/<docname>` via
+    `doctype_subscribe`.
+
+    Publish to both rooms so the Desk path keeps working AND the
+    web-route SPA receives the event. Frappe will dedupe at the redis
+    layer if the client is in both rooms.
+
+    Why two publishes vs one with both fields:
+      Frappe's publish_realtime if-elif chain picks the FIRST matching
+      target (event-specific → task → user → doc → site). When `user`
+      is set it never falls through to the doc room. So we explicitly
+      issue two publishes.
+    """
+    if user:
+        frappe.publish_realtime(event, message, user=user)
+    if doctype and docname:
+        frappe.publish_realtime(event, message, doctype=doctype, docname=docname)
+
+
 def _json_dumps(value):
     try:
         return json.dumps(value or {}, default=str)
@@ -302,13 +329,15 @@ def _process_post_submit_payments(
     if run_async:
         user = user or getattr(getattr(frappe, "session", None), "user", None)
         if user and hasattr(frappe, "publish_realtime"):
-            frappe.publish_realtime(
-                "pos_post_submit_payments_started",
-                {
+            _posa_publish_dual(
+                event="pos_post_submit_payments_started",
+                message={
                     "invoice": invoice_doc.name,
                     "doctype": invoice_doc.doctype,
                 },
                 user=user,
+                doctype=invoice_doc.doctype,
+                docname=invoice_doc.name,
             )
         enqueue(
             method=process_post_submit_payments_job,
@@ -358,13 +387,15 @@ def process_post_submit_payments_job(kwargs):
             _update_submission_ledger_by_name(ledger_name, STATE_POST_SUBMIT_DONE)
         user = kwargs.get("user")
         if user and hasattr(frappe, "publish_realtime"):
-            frappe.publish_realtime(
-                "pos_post_submit_payments_completed",
-                {
+            _posa_publish_dual(
+                event="pos_post_submit_payments_completed",
+                message={
                     "invoice": invoice,
                     "doctype": doctype,
                 },
                 user=user,
+                doctype=doctype,
+                docname=invoice,
             )
     except Exception as e:
         frappe.db.rollback()
@@ -380,10 +411,12 @@ def process_post_submit_payments_job(kwargs):
         frappe.log_error(f"POS Post Submit Payment Processing Failed for {invoice}: {error_msg}")
         user = kwargs.get("user")
         if user and hasattr(frappe, "publish_realtime"):
-            frappe.publish_realtime(
-                "pos_post_submit_payments_failed",
-                {"invoice": invoice, "error": error_msg},
+            _posa_publish_dual(
+                event="pos_post_submit_payments_failed",
+                message={"invoice": invoice, "error": error_msg},
                 user=user,
+                doctype=kwargs.get("doctype") or "Sales Invoice",
+                docname=invoice,
             )
 
 

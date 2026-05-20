@@ -110,6 +110,28 @@ export const useSocketStore = defineStore("socket", () => {
       registry.set(key, waiters);
     });
 
+  // Backend `_posa_publish_dual` (api/invoice_processing/creation.py)
+  // publishes the post-submit lifecycle events to BOTH the user room
+  // (Desk's session-cookie auto-join) AND the doc room
+  // (`doc:Sales Invoice/<name>`). The web-route SPA goes through
+  // frappe-shim which doesn't reliably auto-join user rooms, so we
+  // explicitly subscribe to the doc room via socket.io's
+  // `doctype_subscribe` event before listening.
+  function subscribeToInvoiceDoc(invoice: string, doctype = "Sales Invoice") {
+    try {
+      if (typeof frappe === "undefined" || !frappe.realtime) return;
+      const realtime: any = frappe.realtime;
+      if (typeof realtime.emit === "function") {
+        realtime.emit("doctype_subscribe", { doctype, docname: invoice });
+      } else if (realtime.socket && typeof realtime.socket.emit === "function") {
+        realtime.socket.emit("doctype_subscribe", { doctype, docname: invoice });
+      }
+    } catch {
+      // Subscribe failure is non-fatal — the user room may still
+      // deliver if the official socketio_client is in use.
+    }
+  }
+
   const waitForInvoiceProcessed = async (invoice: string, timeoutMs = 45000) => {
     const existing = processedInvoices.value[invoice];
     if (existing?.status === "processed") {
@@ -118,6 +140,7 @@ export const useSocketStore = defineStore("socket", () => {
     if (existing?.status === "failed") {
       throw new Error(existing.error || `Invoice ${invoice} failed to submit`);
     }
+    subscribeToInvoiceDoc(invoice);
     return withTimeout<InvoiceProcessingState>(invoiceWaiters, invoice, timeoutMs);
   };
 
@@ -129,6 +152,7 @@ export const useSocketStore = defineStore("socket", () => {
     if (existing?.status === "failed") {
       throw new Error(existing.error || `Post-submit payment processing failed for ${invoice}`);
     }
+    subscribeToInvoiceDoc(invoice);
     return withTimeout<PostSubmitPaymentState>(paymentWaiters, invoice, timeoutMs);
   };
 
