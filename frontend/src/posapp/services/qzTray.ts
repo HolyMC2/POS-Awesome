@@ -1,5 +1,6 @@
 import qz from "qz-tray";
 import { ref } from "vue";
+import { useToastStore } from "../stores/toastStore";
 import { useUIStore } from "../stores/uiStore";
 import { track } from "../utils/telemetry";
 
@@ -480,6 +481,7 @@ export async function findQzPrinters(): Promise<string[]> {
 
 		qzPrinters.value = printers;
 		setResolvedQzPrinter(resolvePreferredPrinter(printers));
+		validateProfilePinnedPrinter(printers);
 
 		return printers;
 	} catch (error) {
@@ -487,6 +489,53 @@ export async function findQzPrinters(): Promise<string[]> {
 		qzPrinters.value = [];
 		return [];
 	}
+}
+
+// Tracks the last warned pin so a tab that re-fetches printers (every
+// dialog open + every print) doesn't spam toasts.
+let _lastWarnedMissingPin: string | null = null;
+
+function validateProfilePinnedPrinter(printers: string[]) {
+	// Catches the silent-queue pathology: POS Profile's
+	// posa_qz_printer_name pins a printer that doesn't exist on this
+	// terminal (or is uninstalled/renamed). Without this gate the SPA
+	// falls back to printers[0] and the operator sees "print succeeded"
+	// while paper never moves. Surface via toast + qz:failure
+	// telemetry row so it shows on the Q10 panel.
+	const pinned = getProfileDefaultPrinterName();
+	if (!pinned) return;
+	if (printers.includes(pinned)) {
+		_lastWarnedMissingPin = null;
+		return;
+	}
+	if (_lastWarnedMissingPin === pinned) return;
+	_lastWarnedMissingPin = pinned;
+
+	const t = (s: string) =>
+		typeof window !== "undefined" && (window as any).__
+			? (window as any).__(s)
+			: s;
+	const message = t(
+		"POS Profile pins printer {0} but it is not installed on this terminal. " +
+			"Receipts will be sent to {1} instead.",
+	)
+		.replace("{0}", pinned)
+		.replace("{1}", printers[0] || t("(no printer available)"));
+	try {
+		useToastStore().show({
+			title: t("Printer mismatch"),
+			message,
+			color: "warning",
+			timeout: 14000,
+		});
+	} catch {
+		// toast store may not be ready during boot; the telemetry row
+		// below survives.
+	}
+	reportQzFailure("profile_printer_missing", new Error(message), {
+		pinned,
+		available: printers.slice(0, 6),
+	});
 }
 
 export async function checkQzCertificateOnce() {
