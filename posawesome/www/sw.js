@@ -268,7 +268,23 @@ self.addEventListener("fetch", (event) => {
 
 	if (event.request.url.includes("socket.io")) return;
 
-	const assetDestinations = ["style", "script", "worker", "font", "image"];
+	// Recurring "broken font" pathology: SW caches the hashed CSS
+	// chunk, which embeds absolute `url(/assets/.../<hash>.woff2)`
+	// references to fonts. Old caches deleted on activate, but the
+	// browser may already be reading old CSS from its own memory or
+	// disk cache, asking for font hashes that no longer exist on
+	// disk → CSS @font-face fails → Vuetify/Roboto/MDI glyphs fall
+	// back to system fonts (tofu icons + chunky text).
+	//
+	// Fix: don't intercept font requests. Fonts are content-hashed,
+	// so URL collisions are impossible; the browser's HTTP cache
+	// (Cache-Control: max-age + Etag from Frappe) keeps them warm
+	// without our SW being able to wedge stale entries.
+	if (event.request.destination === "font") return;
+	const isFontByPath = /\.(woff2?|ttf|eot|otf)(\?|$)/i.test(url.pathname);
+	if (isFontByPath) return;
+
+	const assetDestinations = ["style", "script", "worker", "image"];
 	const isAssetRequest = assetDestinations.includes(event.request.destination);
 	const isPosawesomeAsset = url.pathname.startsWith("/assets/posawesome/");
 	const isNavigation = event.request.mode === "navigate";
