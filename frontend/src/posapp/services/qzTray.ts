@@ -661,16 +661,26 @@ export async function printHtmlViaQz(html: string, options: QzPrintHtmlOptions =
 	];
 
 	// Cutter: append raw ESC/POS bytes after the rendered raster.
-	// QZ Tray supports mixed pixel + raw in a single print job. Default
-	// command is GS V B 0 = partial cut with 1 line feed; safe across
-	// Epson / Star / SNBC thermal heads.
+	// QZ Tray supports mixed pixel + raw in a single print job.
+	//
+	// Encoded as `hex` flavor not `plain` — JS string serialization to
+	// the QZ websocket transport can mangle high-bit bytes (0x1D, 0x56)
+	// through UTF-8 conversion, leaving the printer with garbage that
+	// it ignores. Hex bypasses any string-encoding round-trip.
+	//
+	// Default sequence breakdown:
+	//   0A 0A 0A   = 3 line feeds (push paper past the cutter blade)
+	//   1D 56 42 00 = GS V B 0 = partial cut (1mm strip remaining)
+	// Safe across Epson TM-T20/T88, Star TSP100/TSP143, SNBC heads.
+	// Operators needing FULL cut can pass cutCommand="0A0A0A1D564100"
+	// (GS V A 0). Legacy printers: "0A0A0A1B6942" (ESC i B).
 	if (options.cutAfterPrint) {
-		const cmd = options.cutCommand || "\n\n\n\x1D\x56\x42\x00";
+		const hexCmd = options.cutCommand || "0A0A0A1D564200";
 		data.push({
 			type: "raw",
 			format: "command",
-			flavor: "plain",
-			data: cmd,
+			flavor: "hex",
+			data: hexCmd,
 		});
 	}
 
