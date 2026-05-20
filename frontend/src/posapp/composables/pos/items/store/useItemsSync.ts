@@ -380,6 +380,21 @@ export function useItemsSync() {
 				if (batch.length < limit) {
 					break;
 				}
+
+				// Yield to the main thread between batches so user-input
+				// event handlers (search keystrokes, cart clicks) can run.
+				// Without this, the rapid sync loop monopolizes the JS
+				// thread on slow CPUs and the catalog search input eats
+				// keystrokes. requestIdleCallback gives us the longest
+				// pause when the user is actively interacting; setTimeout
+				// fallback for Safari which still doesn't ship rIC.
+				await new Promise<void>((resolve) => {
+					if (typeof requestIdleCallback === "function") {
+						requestIdleCallback(() => resolve(), { timeout: 250 });
+					} else {
+						setTimeout(resolve, 0);
+					}
+				});
 			}
 
 			if (backgroundSyncState.value.token === token) {
