@@ -827,20 +827,17 @@ def update_invoice(data):
 
     _deduplicate_free_items(invoice_doc)
 
-    # Server-side invariants (REVIEW2/03 §3.3). Run BEFORE
-    # set_missing_values so a tampered rate is rejected before Frappe
-    # blesses it. Discount cap + rate-band catch the high-blast surface;
-    # payment-vs-total runs AFTER calculate_taxes_and_totals lower
-    # because grand_total isn't final yet.
-    from posawesome.posawesome.api._reprice import (
-        assert_rates_within_band,
-        enforce_discount_limit,
-    )
+    # Server-side discount cap on draft save (REVIEW2/03 §3.3).
+    # Rate-band + payment-match are SUBMIT-ONLY — drafts mid-build
+    # legitimately have evolving rates / no payments yet. Wire those
+    # only in submit_invoice; here we only catch the irreversible
+    # cap (operator can't exceed POS Profile max discount on draft
+    # save either).
+    from posawesome.posawesome.api._reprice import enforce_discount_limit
     profile_doc_for_caps = (
         frappe.get_cached_doc("POS Profile", pos_profile) if pos_profile else None
     )
     enforce_discount_limit(invoice_doc, profile_doc_for_caps)
-    assert_rates_within_band(invoice_doc, profile_doc_for_caps)
 
     # Set missing values first
     invoice_doc.set_missing_values()
@@ -862,11 +859,12 @@ def update_invoice(data):
                 item.update(locked)
         invoice_doc.calculate_taxes_and_totals()
 
-    # Payment-vs-total invariant runs after totals are computed
-    # (REVIEW2/03 §3.3). Catches "client sends $0 payments for $1000
-    # cart" attack on the draft save path.
-    from posawesome.posawesome.api._reprice import assert_payments_match_grand_total
-    assert_payments_match_grand_total(invoice_doc)
+    # Payment-vs-total invariant — DRAFT phase exempt.
+    # update_invoice is called repeatedly during cart-build (every
+    # item add / qty change) BEFORE the cashier hits PAY. Drafts
+    # legitimately have empty payments[] + is_pos=1. The check
+    # belongs on submit_invoice only, where payments must match.
+    # See REVIEW2/03 §3.3 — original spec targeted "submit" path.
 
     company_currency = (
         frappe.get_cached_value("Company", invoice_doc.company, "default_currency") or invoice_doc.currency
