@@ -44,9 +44,20 @@ export interface QzPrintHtmlOptions {
 	// ~150 DPI; `bicubic` smooths it out. POS Profile field
 	// `posa_qz_interpolation` controls per-tenant choice.
 	interpolation?: "nearest-neighbor" | "bilinear" | "bicubic";
-	// Output density in DPI; matches printer native (e.g. 203).
-	// Undefined → QZ auto-detect (often ~150 — root cause of stripes).
+	// Output density in DPI; matches printer native (e.g. 203 for
+	// Epson TM-T88, 180 for TM-T20III). Undefined → QZ auto-detect
+	// (often ~150 — root cause of stripes). POS Profile field
+	// `posa_qz_density` controls per-tenant choice.
 	density?: number | string;
+	// Append an ESC/POS cut command after the rendered HTML. Needed
+	// when the CUPS PPD driver doesn't auto-cut between jobs (common
+	// for generic-text drivers). POS Profile field
+	// `posa_qz_cut_after_print` controls per-tenant choice.
+	cutAfterPrint?: boolean | number;
+	// ESC/POS cut command bytes. Default GS V B 0 = partial cut with
+	// 1 line feed. Override if printer needs full cut (\x1Di) or
+	// different feed (\x0A * n) before the cut byte.
+	cutCommand?: string;
 }
 
 export interface QzPrintDocumentOptions extends QzPrintHtmlOptions {
@@ -640,7 +651,7 @@ export async function printHtmlViaQz(html: string, options: QzPrintHtmlOptions =
 	}
 	const config = qz.configs.create(printer, configOptions);
 
-	const data = [
+	const data: any[] = [
 		{
 			type: "pixel",
 			format: "html",
@@ -648,6 +659,20 @@ export async function printHtmlViaQz(html: string, options: QzPrintHtmlOptions =
 			data: html,
 		},
 	];
+
+	// Cutter: append raw ESC/POS bytes after the rendered raster.
+	// QZ Tray supports mixed pixel + raw in a single print job. Default
+	// command is GS V B 0 = partial cut with 1 line feed; safe across
+	// Epson / Star / SNBC thermal heads.
+	if (options.cutAfterPrint) {
+		const cmd = options.cutCommand || "\n\n\n\x1D\x56\x42\x00";
+		data.push({
+			type: "raw",
+			format: "command",
+			flavor: "plain",
+			data: cmd,
+		});
+	}
 
 	await qz.print(config, data);
 }
@@ -680,7 +705,11 @@ export async function printDocumentViaQz(options: QzPrintDocumentOptions) {
 	// Read per-POS-Profile rasterizer hints (Q3). When absent we
 	// preserve legacy `nearest-neighbor` + QZ auto-density so this
 	// fix is opt-in via the POS Profile fields.
-	if (options.interpolation === undefined || options.density === undefined) {
+	if (
+		options.interpolation === undefined ||
+		options.density === undefined ||
+		options.cutAfterPrint === undefined
+	) {
 		try {
 			const uiStore = useUIStore();
 			const profile = uiStore.posProfile as any;
@@ -690,6 +719,12 @@ export async function printDocumentViaQz(options: QzPrintDocumentOptions) {
 				}
 				if (options.density === undefined && profile.posa_qz_density) {
 					options.density = profile.posa_qz_density;
+				}
+				if (
+					options.cutAfterPrint === undefined &&
+					profile.posa_qz_cut_after_print !== undefined
+				) {
+					options.cutAfterPrint = profile.posa_qz_cut_after_print;
 				}
 			}
 		} catch {
