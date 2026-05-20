@@ -41,7 +41,9 @@ export function useItemAddition() {
 	const { expandBundle } = useItemBundles() as any;
 	const sharedBatchSerial = useBatchSerial();
 	const logBatchFlow = (message: string, payload?: any) => {
-		debugLog(`[POS BatchFlow] ${message}`, payload || {});
+		if ((globalThis as any).__POSAWESOME_DEBUG_BATCH_FLOW__ === true) {
+			console.debug(`[POS BatchFlow] ${message}`, payload || {});
+		}
 	};
 
 	const callSetBatchQty = (
@@ -227,11 +229,6 @@ export function useItemAddition() {
 		for (const [rowId, data] of currentUpdates) {
 			const item = context.invoiceStore.updateItemWithTotals
 				? context.invoiceStore.updateItemWithTotals(rowId, (line) => {
-					debugLog("[useItemAddition] Merging item qty (fast path)", {
-						item_code: line.item_code,
-						old_qty: line.qty,
-						added: data.qty,
-					});
 					line.qty += data.qty;
 					calcStockQty(line, line.qty);
 
@@ -266,9 +263,6 @@ export function useItemAddition() {
 
 		// 2. Process Additions
 		if (currentItems.length) {
-			debugLog("[useItemAddition] Adding new items to store", {
-				count: currentItems.length,
-			});
 			const addedItems = context.invoiceStore.addItems(currentItems, 0); // Prepend to top
 
 			addedItems.forEach((item, index) => {
@@ -670,10 +664,6 @@ export function useItemAddition() {
 
 						// Handle extra items from batch splitting
 						if (extra_items && extra_items.length > 0) {
-							debugLog(
-								"[useItemAddition] Adding split batch items",
-								extra_items.length,
-							);
 							extra_items.forEach((split_item) => {
 								context.items.unshift(split_item);
 								// Replicate basic setup for split items
