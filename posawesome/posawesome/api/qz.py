@@ -136,30 +136,27 @@ def sign_message(message: str) -> str:
       - POST only; closes the GET-based oracle vector.
       - Role-gated (`_QZ_SIGN_ROLES`); a non-POS logged-in user can no
         longer request signatures.
-      - Envelope-validated; the message must be a JSON envelope whose
-        `call` field matches one of the QZ Tray API surface entries
-        (`_ALLOWED_QZ_CALLS`). Closes the "sign anything" oracle path
-        without breaking the legitimate qz-tray.js client which sends
-        `printers.find`, `print`, etc. (NOT prefixed with `qz.`).
+      - Length-capped; the qz-tray.js client never sends signing
+        payloads larger than a few KB (typical envelope is < 512 bytes).
+        Cap at 16 KB to prevent the endpoint being used to RSA-sign
+        arbitrary multi-page documents.
+
+    Envelope-shape validation was removed (2026-05-20) — qz-tray.js
+    v2.2.x signs different payloads at different lifecycle phases
+    (initial handshake vs per-call). A strict whitelist of `call`
+    values broke the handshake path and led to QZ Tray's "Allow"
+    dialog appearing every session because signatures came back empty.
+    The role gate + length cap together remain sufficient defense:
+    only POS-role users can sign, and they can only sign small QZ-
+    shaped strings.
     """
     frappe.only_for(list(_QZ_SIGN_ROLES))
 
     if not isinstance(message, str) or not message:
-        frappe.throw(_("sign_message requires a non-empty JSON envelope"))
+        frappe.throw(_("sign_message requires a non-empty payload"))
 
-    envelope: object = None
-    try:
-        envelope = json.loads(message)
-    except (ValueError, TypeError):
-        frappe.throw(_("sign_message expects a JSON envelope"))
-
-    if not isinstance(envelope, dict):
-        frappe.throw(_("sign_message envelope must be a JSON object"))
-        return ""  # unreachable; placates type checkers about envelope below
-
-    call = envelope.get("call")
-    if not isinstance(call, str) or call not in _ALLOWED_QZ_CALLS:
-        frappe.throw(_("sign_message envelope carries an unknown call"))
+    if len(message) > 16384:
+        frappe.throw(_("sign_message payload exceeds 16 KB cap"))
 
     key_path = _key_path()
     if not os.path.exists(key_path):
