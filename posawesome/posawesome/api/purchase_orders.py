@@ -237,9 +237,10 @@ def _create_purchase_receipt(po_doc, payload, default_warehouse, transaction_dat
         frappe.throw(_("No items to receive. Please enter received quantities."))
 
     receipt.flags.ignore_permissions = True
-    frappe.flags.ignore_account_permission = True
-    receipt.insert()
-    receipt.submit()
+    from posawesome.posawesome.api._perms import account_perm_bypass
+    with account_perm_bypass():
+        receipt.insert()
+        receipt.submit()
     return receipt.name
 
 
@@ -709,8 +710,9 @@ def create_purchase_order(data):
         frappe.throw(_("Purchase order requires at least one item with quantity."))
 
     po_doc.flags.ignore_permissions = True
-    frappe.flags.ignore_account_permission = True
-    po_doc.save()
+    from posawesome.posawesome.api._perms import account_perm_bypass
+    with account_perm_bypass():
+        po_doc.save()
 
     # Persist a safe draft first so if any downstream step fails (submit/PR/PI/payment),
     # the operator does not lose the created PO.
@@ -850,7 +852,8 @@ def _create_purchase_invoice(po_doc, payload, default_warehouse, transaction_dat
         frappe.throw(_("No items to invoice. Please ensure there are items on the Purchase Order."))
 
     invoice.flags.ignore_permissions = True
-    frappe.flags.ignore_account_permission = True
-    invoice.insert()
-    invoice.submit()
+    from posawesome.posawesome.api._perms import account_perm_bypass
+    with account_perm_bypass():
+        invoice.insert()
+        invoice.submit()
     return invoice.name

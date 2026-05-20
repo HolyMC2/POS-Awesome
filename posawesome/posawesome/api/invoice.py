@@ -160,9 +160,10 @@ def create_sales_order(doc):
         if sales_order_doc:
             sales_order_doc.posa_notes = getattr(doc, "posa_notes", None)
             sales_order_doc.flags.ignore_permissions = True
-            sales_order_doc.flags.ignore_account_permission = True
-            sales_order_doc.save()
-            sales_order_doc.submit()
+            from posawesome.posawesome.api._perms import doc_account_perm_bypass
+            with doc_account_perm_bypass(sales_order_doc):
+                sales_order_doc.save()
+                sales_order_doc.submit()
             url = frappe.utils.get_url_to_form(sales_order_doc.doctype, sales_order_doc.name)
             msgprint = f"Sales Order Created at <a href='{url}'>{sales_order_doc.name}</a>"
             frappe.msgprint(_(msgprint), title="Sales Order Created", indicator="green", alert=True)

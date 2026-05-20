@@ -108,9 +108,10 @@ def update_sales_order(data):
         so_doc = frappe.get_doc(data)
 
     so_doc.flags.ignore_permissions = True
-    frappe.flags.ignore_account_permission = True
     so_doc.docstatus = 0
-    so_doc.save()
+    from posawesome.posawesome.api._perms import account_perm_bypass
+    with account_perm_bypass():
+        so_doc.save()
     return so_doc
 
 
@@ -144,9 +145,10 @@ def _create_payment_entries(so_doc, payments):
         )
 
         pe.flags.ignore_permissions = True
-        frappe.flags.ignore_account_permission = True
-        pe.save()
-        pe.submit()
+        from posawesome.posawesome.api._perms import account_perm_bypass
+        with account_perm_bypass():
+            pe.save()
+            pe.submit()
 
 
 @frappe.whitelist(methods=["POST"])
@@ -176,9 +178,10 @@ def submit_sales_order(order):
     payments = order.get("payments")
 
     so_doc.flags.ignore_permissions = True
-    frappe.flags.ignore_account_permission = True
-    so_doc.save()
-    so_doc.submit()
+    from posawesome.posawesome.api._perms import account_perm_bypass
+    with account_perm_bypass():
+        so_doc.save()
+        so_doc.submit()
 
     if payments:
         frappe.enqueue(

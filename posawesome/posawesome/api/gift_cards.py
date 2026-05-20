@@ -117,11 +117,12 @@ def _create_gift_card_journal_entry(company, posting_date, remark, accounts):
 
     ensure_child_doctype(je_doc, "accounts", "Journal Entry Account")
     je_doc.flags.ignore_permissions = True
-    frappe.flags.ignore_account_permission = True
     je_doc.user_remark = remark
     je_doc.set_missing_values()
-    je_doc.save()
-    je_doc.submit()
+    from posawesome.posawesome.api._perms import account_perm_bypass
+    with account_perm_bypass():
+        je_doc.save()
+        je_doc.submit()
     return je_doc
 
 

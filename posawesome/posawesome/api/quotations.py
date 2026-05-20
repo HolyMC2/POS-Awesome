@@ -125,9 +125,10 @@ def update_quotation(data):
         doc = frappe.get_doc(data)
 
     doc.flags.ignore_permissions = True
-    frappe.flags.ignore_account_permission = True
     doc.docstatus = 0
-    doc.save()
+    from posawesome.posawesome.api._perms import account_perm_bypass
+    with account_perm_bypass():
+        doc.save()
     return doc
 
 
@@ -144,8 +145,9 @@ def submit_quotation(order):
         doc = frappe.get_doc(order)
 
     doc.flags.ignore_permissions = True
-    frappe.flags.ignore_account_permission = True
-    doc.save()
-    doc.submit()
+    from posawesome.posawesome.api._perms import account_perm_bypass
+    with account_perm_bypass():
+        doc.save()
+        doc.submit()
 
     return {"name": doc.name, "status": doc.docstatus}

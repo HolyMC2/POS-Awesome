@@ -257,9 +257,10 @@ def _create_change_payment_entries(
             advance_payment_entry.reference_date = posting_date
 
         advance_payment_entry.flags.ignore_permissions = True
-        frappe.flags.ignore_account_permission = True
-        advance_payment_entry.save()
-        advance_payment_entry.submit()
+        from posawesome.posawesome.api._perms import account_perm_bypass
+        with account_perm_bypass():
+            advance_payment_entry.save()
+            advance_payment_entry.submit()
 
     if paid_change_amount > 0:
         source_receive_payment_entry = _get_matching_receive_payment_entry(paid_change_amount)
@@ -287,9 +288,10 @@ def _create_change_payment_entries(
         change_payment_entry.set_amounts()
 
         change_payment_entry.flags.ignore_permissions = True
-        frappe.flags.ignore_account_permission = True
-        change_payment_entry.save()
-        change_payment_entry.submit()
+        from posawesome.posawesome.api._perms import account_perm_bypass
+        with account_perm_bypass():
+            change_payment_entry.save()
+            change_payment_entry.submit()
 
         if source_receive_payment_entry:
             _reconcile_change_against_receive_payment_entry(

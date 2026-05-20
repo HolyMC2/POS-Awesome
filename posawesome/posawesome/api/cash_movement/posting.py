@@ -52,9 +52,10 @@ def create_journal_entry(
     )
 
     je.flags.ignore_permissions = True
-    frappe.flags.ignore_account_permission = True
-    je.save()
-    je.submit()
+    from posawesome.posawesome.api._perms import account_perm_bypass
+    with account_perm_bypass():
+        je.save()
+        je.submit()
     return je.name
 
 
@@ -70,5 +71,6 @@ def cancel_journal_entry(journal_entry_name):
         je.flags.ignore_permissions = True
         # Cash movement keeps a hard link to JE for audit trail; allow JE cancel from this controlled path.
         je.flags.ignore_links = True
-        frappe.flags.ignore_account_permission = True
-        je.cancel()
+        from posawesome.posawesome.api._perms import account_perm_bypass
+        with account_perm_bypass():
+            je.cancel()
