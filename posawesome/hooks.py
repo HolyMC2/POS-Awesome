@@ -19,6 +19,20 @@ source_link = "https://github.com/defendicon/POS-Awesome-V15"
 app_include_js = []
 app_include_css = []
 
+# ------------------
+# Website route rules
+# ------------------
+# SPA history-mode fallback. The web-route module `www/posapp.py` only
+# claims the exact path `/posapp`. Vue Router uses `createWebHistory`
+# (see `frontend/src/posapp/router/index.ts`), which means refreshes /
+# direct hits on client-side routes like `/posapp/app`, `/posapp/pos`,
+# `/posapp/sales-orders`, etc. would 404 against Frappe's web router.
+# Route every `/posapp/<rest>` back to the `posapp` template so the
+# SPA can resolve the path client-side on first paint.
+website_route_rules = [
+	{"from_route": "/posapp/<path:rest>", "to_route": "posapp"},
+]
+
 # include js, css files in header of web template
 # web_include_css = "/assets/posawesome/css/posawesome.css"
 # web_include_js = "/assets/posawesome/js/posawesome.js"
