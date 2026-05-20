@@ -138,6 +138,21 @@ export const useSocketStore = defineStore("socket", () => {
     }
   }
 
+  // Check whether the realtime socket has actually completed its
+  // handshake. The frappe-shim's `makeRealtime` lazily creates the
+  // socket on first `.on()`, but if the handshake fails (namespace
+  // mismatch, cookie absent, etc.) `connected` stays false forever.
+  // In that state ANY `withTimeout` wait will burn the full 45 s
+  // budget before falling through — making prints feel frozen.
+  function isRealtimeConnected(): boolean {
+    try {
+      const s: any = (frappe as any)?.realtime?.socket;
+      return Boolean(s?.connected);
+    } catch {
+      return false;
+    }
+  }
+
   const waitForInvoiceProcessed = async (invoice: string, timeoutMs = 45000) => {
     const existing = processedInvoices.value[invoice];
     if (existing?.status === "processed") {
@@ -145,6 +160,15 @@ export const useSocketStore = defineStore("socket", () => {
     }
     if (existing?.status === "failed") {
       throw new Error(existing.error || `Invoice ${invoice} failed to submit`);
+    }
+    // No live socket → the lifecycle event will never arrive.
+    // Resolve optimistically; the caller's fallback path
+    // (`fetchSubmittedInvoiceDoc`) will hit the DB and confirm.
+    if (!isRealtimeConnected()) {
+      return {
+        status: "processed" as const,
+        updatedAt: Date.now(),
+      };
     }
     subscribeToInvoiceDoc(invoice);
     return withTimeout<InvoiceProcessingState>(invoiceWaiters, invoice, timeoutMs);
@@ -157,6 +181,16 @@ export const useSocketStore = defineStore("socket", () => {
     }
     if (existing?.status === "failed") {
       throw new Error(existing.error || `Post-submit payment processing failed for ${invoice}`);
+    }
+    // Invoice is already submitted by the time this wait fires; the
+    // bg job only creates Payment Entries. Without a live socket
+    // we'd block print 45 s for events that can't reach us. Skip
+    // the wait — payment entries will land in the DB regardless.
+    if (!isRealtimeConnected()) {
+      return {
+        status: "completed" as const,
+        updatedAt: Date.now(),
+      };
     }
     subscribeToInvoiceDoc(invoice);
     return withTimeout<PostSubmitPaymentState>(paymentWaiters, invoice, timeoutMs);
