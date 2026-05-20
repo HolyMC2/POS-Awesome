@@ -24,6 +24,38 @@ _QZ_SIGN_ROLES = (
     "System Manager",
 )
 
+# Whitelist of QZ Tray API calls the client legitimately signs.
+# qz-tray.js sends these unprefixed (NOT `qz.printers.find` — just
+# `printers.find`). Anything outside this set is rejected by
+# sign_message so the endpoint can't be used as a generic RSA
+# signing oracle against unrelated payloads.
+_ALLOWED_QZ_CALLS = frozenset({
+    # connection lifecycle
+    "getVersion",
+    "websocket.getNetworkInfo",
+    # printers
+    "printers.find",
+    "printers.getDefault",
+    "printers.detail",
+    "printers.startListening",
+    "printers.stopListening",
+    "printers.getStatus",
+    # print
+    "print",
+    # serial / hid (unused today but covered for future)
+    "serial.openPort",
+    "serial.closePort",
+    "serial.sendData",
+    "hid.listDevices",
+    "hid.claimDevice",
+    "hid.releaseDevice",
+    "hid.sendData",
+    # files (unused today)
+    "file.list",
+    "file.read",
+    "file.write",
+})
+
 
 def _qz_dir() -> str:
     return frappe.get_site_path("private", "qz")
@@ -105,8 +137,10 @@ def sign_message(message: str) -> str:
       - Role-gated (`_QZ_SIGN_ROLES`); a non-POS logged-in user can no
         longer request signatures.
       - Envelope-validated; the message must be a JSON envelope whose
-        `call` field starts with `qz.` (the only shape QZ Tray's client
-        ever signs). Closes the "sign anything" oracle path.
+        `call` field matches one of the QZ Tray API surface entries
+        (`_ALLOWED_QZ_CALLS`). Closes the "sign anything" oracle path
+        without breaking the legitimate qz-tray.js client which sends
+        `printers.find`, `print`, etc. (NOT prefixed with `qz.`).
     """
     frappe.only_for(list(_QZ_SIGN_ROLES))
 
@@ -124,8 +158,8 @@ def sign_message(message: str) -> str:
         return ""  # unreachable; placates type checkers about envelope below
 
     call = envelope.get("call")
-    if not isinstance(call, str) or not call.startswith("qz."):
-        frappe.throw(_("sign_message envelope must carry call=qz.*"))
+    if not isinstance(call, str) or call not in _ALLOWED_QZ_CALLS:
+        frappe.throw(_("sign_message envelope carries an unknown call"))
 
     key_path = _key_path()
     if not os.path.exists(key_path):
