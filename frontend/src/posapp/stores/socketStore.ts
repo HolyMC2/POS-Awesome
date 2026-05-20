@@ -115,16 +115,22 @@ export const useSocketStore = defineStore("socket", () => {
   // (Desk's session-cookie auto-join) AND the doc room
   // (`doc:Sales Invoice/<name>`). The web-route SPA goes through
   // frappe-shim which doesn't reliably auto-join user rooms, so we
-  // explicitly subscribe to the doc room via socket.io's
-  // `doctype_subscribe` event before listening.
+  // explicitly subscribe to the doc room here.
+  //
+  // Frappe v16 socketio handlers (apps/frappe/realtime/handlers.js):
+  //   socket.on("doc_subscribe", function (doctype, docname) { ... })
+  //   socket.on("doctype_subscribe", function (doctype) { ... })
+  // doc_subscribe takes TWO positional args (NOT an object). Earlier
+  // attempt sent `{doctype, docname}` to "doctype_subscribe" which
+  // joined the wrong room (or none).
   function subscribeToInvoiceDoc(invoice: string, doctype = "Sales Invoice") {
     try {
       if (typeof frappe === "undefined" || !frappe.realtime) return;
       const realtime: any = frappe.realtime;
       if (typeof realtime.emit === "function") {
-        realtime.emit("doctype_subscribe", { doctype, docname: invoice });
+        realtime.emit("doc_subscribe", doctype, invoice);
       } else if (realtime.socket && typeof realtime.socket.emit === "function") {
-        realtime.socket.emit("doctype_subscribe", { doctype, docname: invoice });
+        realtime.socket.emit("doc_subscribe", doctype, invoice);
       }
     } catch {
       // Subscribe failure is non-fatal — the user room may still
