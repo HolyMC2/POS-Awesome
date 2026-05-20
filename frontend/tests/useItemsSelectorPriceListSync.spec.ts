@@ -45,11 +45,13 @@ describe("useItemsSelectorPriceListSync", () => {
 	it("skips redundant updates after trimming the incoming price list", async () => {
 		const activePriceList = ref("Wholesale");
 		const updatePriceList = vi.fn();
+		const getItems = vi.fn(async () => []);
 
 		const sync = useItemsSelectorPriceListSync({
 			activePriceList,
 			getDefaultPriceList: () => "Retail",
 			updatePriceList,
+			getItems,
 		});
 
 		await sync.syncSelectorPriceList(" Wholesale ");
