@@ -17,10 +17,21 @@ from frappe import _
 # these can request a QZ Tray signature; users without them get 403.
 # Without this gate the endpoint was an unbounded RSA signing oracle
 # against the site's QZ Tray private key.
+#
+# Sales User / Sales Manager are included because real-world POSAwesome
+# operators frequently lack the standalone POS User role — the app's
+# permission model gates POS access via POS Profile membership, not via
+# the POS User role. A user who can sell from POS Awesome must also be
+# able to sign QZ print envelopes; otherwise the QZ Tray client sees
+# unsigned calls and shows the "Cannot verify trust - Invalid Signature"
+# Allow/Block dialog on every connection (the symptom this allowlist
+# was tightened to fix, then over-tightened to cause).
 _QZ_SIGN_ROLES = (
     "POS User",
     "POS Manager",
     "POS Awesome Supervisor",
+    "Sales User",
+    "Sales Manager",
     "System Manager",
 )
 
