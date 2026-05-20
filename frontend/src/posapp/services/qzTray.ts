@@ -334,11 +334,16 @@ function setupSecurity() {
 
 	qz.security.setSignatureAlgorithm("SHA512");
 	qz.security.setSignaturePromise((toSign) => {
+		// QZ DEBUG: log what qz-tray.js asked us to sign. If toSign is
+		// a 64-char hex string → SHA256-hex pre-hashed envelope (v2.2.x
+		// expected). If longer/JSON → wire-protocol mismatch.
+		console.log("[QZ-SIGN] toSign len:", toSign.length, "sample:", toSign.slice(0, 80));
 		return (resolve) => {
 			callServer<string>("posawesome.posawesome.api.qz.sign_message", {
 				message: toSign,
 			})
 				.then((signature) => {
+					console.log("[QZ-SIGN] returned sig len:", signature?.length || 0, "prefix:", signature?.slice(0, 30));
 					if (signature && certificateProvided) {
 						qzCertStatus.value = "trusted";
 						qzCertReady.value = true;
@@ -359,6 +364,30 @@ function setupSecurity() {
 				});
 		};
 	});
+
+	// QZ DEBUG: capture exact websocket frame qz-tray.js sends to the
+	// QZ Tray daemon. If signAlgorithm field is missing or mismatched
+	// vs our backend's SHA512+PKCS1v15 → "Invalid Signature" dialog.
+	try {
+		const origSend = WebSocket.prototype.send;
+		(WebSocket.prototype as any).send = function (data: any) {
+			try {
+				if (typeof data === "string" && data.startsWith("{") && data.includes("\"call\"")) {
+					const parsed = JSON.parse(data);
+					if (parsed && parsed.call) {
+						console.log(
+							"[QZ-WS]",
+							"call:", parsed.call,
+							"algo:", parsed.signAlgorithm || "MISSING",
+							"sig:", parsed.signature ? parsed.signature.slice(0, 24) + "…" : "MISSING",
+							"ts:", parsed.timestamp,
+						);
+					}
+				}
+			} catch {}
+			return origSend.call(this, data);
+		};
+	} catch {}
 }
 
 export function getSavedPrinterName() {
