@@ -213,15 +213,37 @@ function makeRealtime() {
 			(typeof window !== "undefined" && window.posawesome_site_name) || "";
 		const namespace = siteName ? `/${siteName}` : "";
 		const url = `${window.location.origin}${namespace}`;
-		socket = ioFactory(url, {
-			transports: ["websocket"],
+		// Mirror Desk's `socketio_client.js` connection options
+		// (apps/frappe/frappe/public/js/frappe/socketio_client.js).
+		// Earlier this shim forced `transports: ["websocket"]` which
+		// works on Desk's localhost dev server but failed silently
+		// behind nginx/Frappe-Cloud proxies that didn't forward the
+		// WebSocket Upgrade header for the /socket.io/ path → socket
+		// stayed `connected:false` forever, so every realtime event
+		// the SPA waited on timed out (45 s waitForPostSubmitPayments
+		// gap before print). Defaulting transports lets engine.io
+		// negotiate polling-first → WS upgrade, identical to Desk.
+		const ioOpts: Record<string, unknown> = {
 			withCredentials: true,
-			reconnection: true,
-		});
+			reconnectionAttempts: 3,
+		};
+		if (window.location.protocol === "https:") {
+			ioOpts.secure = true;
+		}
+		socket = ioFactory(url, ioOpts);
 		// Re-attach all pending handlers when the socket settles.
 		for (const [event, set] of handlers.entries()) {
 			set.forEach((cb) => socket.on(event, cb));
 		}
+		// Surface connect-time errors. Earlier the silent
+		// `connected:false` state was invisible because no
+		// `connect_error` listener was attached.
+		socket.on("connect_error", (err: any) => {
+			console.warn(
+				"[POSA][shim] socket connect_error:",
+				err?.message || err,
+			);
+		});
 		return socket;
 	}
 

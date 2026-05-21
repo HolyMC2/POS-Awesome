@@ -21,6 +21,13 @@ describe("socketStore", () => {
 				on: vi.fn((event: string, handler: (payload: any) => void) => {
 					handlers[event] = handler;
 				}),
+				// socket.connected gate: the store's wait short-circuits
+				// when the realtime socket hasn't completed handshake
+				// (real-world failure mode of the /posapp frappe-shim
+				// behind WebSocket-unaware proxies). For this test we
+				// simulate a healthy connection so the event-driven
+				// resolution path is exercised, not the fallback.
+				socket: { connected: true, emit: vi.fn() },
 			},
 			msgprint: vi.fn(),
 		});
