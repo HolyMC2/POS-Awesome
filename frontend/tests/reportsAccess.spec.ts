@@ -58,6 +58,14 @@ describe("Reports supervisor gating", () => {
 		setActivePinia(createPinia());
 		vi.clearAllMocks();
 		vi.stubGlobal("__", (value: string) => value);
+		// QzTelemetryPanel.vue (transitively imported by Reports.vue)
+		// reads `frappe._(...)` at computed-eval time. Without this stub
+		// vue's render hits `ReferenceError: frappe is not defined`
+		// during mount() and the test fails before assertion.
+		vi.stubGlobal("frappe", {
+			_: (s: string) => s,
+			call: vi.fn(async () => ({ message: {} })),
+		});
 		const uiStore = useUIStore();
 		uiStore.setPosProfile({ name: "Main POS", currency: "PKR" } as any);
 	});
