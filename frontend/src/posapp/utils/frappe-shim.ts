@@ -83,6 +83,55 @@ function nowDateIso(): string {
 	return `${y}-${m}-${dd}`;
 }
 
+// Mirror Desk's `frappe.datetime.obj_to_str` — coerces a JS Date,
+// moment-like object, or ISO string into MariaDB DATETIME format
+// (`YYYY-MM-DD HH:mm:ss`, local time, no timezone suffix). Desk's
+// implementation feeds the value through `frappe.boot.lang`-aware
+// moment helpers; the SPA only needs the string format so we
+// reimplement directly without pulling moment into the bundle.
+function objToStr(value: unknown): string {
+	if (value === null || value === undefined || value === "") return "";
+	let d: Date;
+	if (value instanceof Date) {
+		d = value;
+	} else if (typeof value === "string") {
+		// Already a Frappe-shaped date string → pass through.
+		if (/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$/.test(value)) {
+			return value.length === 10 ? `${value} 00:00:00` : value;
+		}
+		d = new Date(value);
+	} else if (
+		typeof value === "object" &&
+		value !== null &&
+		typeof (value as any).toDate === "function"
+	) {
+		// moment-like: { toDate(): Date }
+		d = (value as any).toDate();
+	} else {
+		return "";
+	}
+	if (Number.isNaN(d.getTime())) return "";
+	const y = d.getFullYear();
+	const m = String(d.getMonth() + 1).padStart(2, "0");
+	const dd = String(d.getDate()).padStart(2, "0");
+	const hh = String(d.getHours()).padStart(2, "0");
+	const mi = String(d.getMinutes()).padStart(2, "0");
+	const ss = String(d.getSeconds()).padStart(2, "0");
+	return `${y}-${m}-${dd} ${hh}:${mi}:${ss}`;
+}
+
+// Inverse of obj_to_str. Returns null on parse failure so callers
+// don't blow up with NaN-date side-effects.
+function strToObj(value: unknown): Date | null {
+	if (!value) return null;
+	if (value instanceof Date) {
+		return Number.isNaN(value.getTime()) ? null : value;
+	}
+	if (typeof value !== "string") return null;
+	const d = new Date(value);
+	return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function getCsrfToken(): string {
 	return (
 		(typeof window !== "undefined" && window.posawesome_csrf_token) || ""
@@ -416,7 +465,10 @@ export function installFrappeShim() {
 		},
 		datetime: {
 			nowdate: nowDateIso,
+			now_date: nowDateIso,
 			get_today: nowDateIso,
+			obj_to_str: objToStr,
+			str_to_obj: strToObj,
 		},
 		call: frappeCall,
 		realtime: makeRealtime(),
