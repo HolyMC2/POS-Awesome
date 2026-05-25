@@ -228,13 +228,28 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			? __("Request ID: {0}", [requestId])
 			: undefined;
 
-		if (
-			code === "TIMEOUT" ||
-			code === "HTTP_ERROR" ||
-			code === "TRANSPORT_ERROR"
-		) {
+		if (code === "TIMEOUT" || code === "TRANSPORT_ERROR") {
 			return {
 				title: __("Connection problem while submitting invoice"),
+				detail: detail ? `${message}\n${detail}` : message,
+				color: "error",
+			};
+		}
+
+		// HTTP_ERROR with a parsed server message (Frappe `_server_messages`
+		// is decoded inside normalizeTransportFailure) is a real validation
+		// or permission failure, not a transport hiccup. Surface the actual
+		// reason so operators see "Rate outside ±20% band" / "POS Profile
+		// required" instead of a generic "Connection problem".
+		const looksLikeTransport =
+			!message ||
+			/^HTTP \d{3}$/i.test(message) ||
+			/network request failed/i.test(message);
+		if (code === "HTTP_ERROR") {
+			return {
+				title: looksLikeTransport
+					? __("Connection problem while submitting invoice")
+					: __("Unable to submit invoice"),
 				detail: detail ? `${message}\n${detail}` : message,
 				color: "error",
 			};
