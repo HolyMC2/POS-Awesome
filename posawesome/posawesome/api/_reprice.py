@@ -139,14 +139,28 @@ def enforce_discount_limit(invoice_doc: Any, profile_doc: Any | None = None) -> 
 # ---------------------------------------------------------------------------
 
 
-def assert_payments_match_grand_total(invoice_doc: Any, tolerance: float | None = None) -> None:
+def assert_payments_match_grand_total(
+    invoice_doc: Any,
+    tolerance: float | None = None,
+    is_credit_sale: bool = False,
+) -> None:
     """Require sum(payments[].amount) == grand_total within tolerance.
 
     Catches the "client sends payments=[$0] for a $1000 cart" attack.
     Frappe re-sums line totals in ``calculate_taxes_and_totals`` but
     accepts whatever the client put in ``payments`` if the invoice is
     being saved as a draft. By the time submit happens it's too late.
+
+    Credit-sale flow (`data.is_credit_sale=1`) intentionally accepts a
+    partial payment: customer pays $200 of a $400 invoice, the
+    remaining $200 becomes outstanding (anticipo / receivable). The
+    "$0 for $1000 cart" threat doesn't apply — the outstanding IS the
+    deferred liability, not an exfiltration. Skip the equality check
+    when the caller flags the request as a credit sale.
     """
+
+    if is_credit_sale:
+        return
 
     tol = tolerance if tolerance is not None else PAYMENT_MATCH_TOLERANCE
 

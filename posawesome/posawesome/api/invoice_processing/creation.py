@@ -1203,7 +1203,14 @@ def submit_invoice(invoice, data, submit_in_background=False):
     )
     enforce_discount_limit(invoice_doc, profile_doc_for_caps_submit)
     assert_rates_within_band(invoice_doc, profile_doc_for_caps_submit)
-    assert_payments_match_grand_total(invoice_doc)
+    # Credit sale (`is_credit_sale=1` in the outer data payload) lets
+    # the operator collect a partial payment intentionally — remainder
+    # becomes outstanding (anticipo). Pass the flag through so the
+    # payments-vs-total invariant skips the equality check in that case.
+    assert_payments_match_grand_total(
+        invoice_doc,
+        is_credit_sale=cint(data.get("is_credit_sale")),
+    )
 
     # if frappe.get_value("POS Profile", invoice_doc.pos_profile, "posa_auto_set_batch"):
     #     set_batch_nos(invoice_doc, "warehouse", throw=True)
