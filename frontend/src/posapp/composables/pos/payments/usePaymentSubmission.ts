@@ -755,6 +755,17 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 
 		if (doc) {
 			ensureInvoiceClientRequestId(doc);
+			// Belt-and-suspenders for the backend scope assertions in
+			// invoice_processing/creation.py:1025-1027 (PR-1 security
+			// hardening). submit_invoice reads pos_profile/company/customer
+			// from the serialized invoice doc, not from `data`. If any
+			// flow constructs/edits the doc without re-seeding from the
+			// active POS Profile, the submit POST 403s with
+			// "POS Profile is required for this action." Restamp here
+			// so the doc is always in scope by the time we serialize.
+			doc.pos_profile = doc.pos_profile || profile?.name;
+			doc.company = doc.company || profile?.company;
+			doc.customer = doc.customer || profile?.customer;
 			doc.write_off_amount = writeOffAmount;
 			doc.base_write_off_amount = formatFloat(
 				writeOffAmount * (doc.conversion_rate || 1),
