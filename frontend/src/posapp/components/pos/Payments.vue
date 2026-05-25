@@ -1366,8 +1366,14 @@ const fetchSubmittedInvoiceDoc = async (invoiceName, doctype) => {
 };
 
 const waitForInvoiceSubmission = async (invoiceName, doctype) => {
+	// 8 s ceiling: enough for a healthy bg submit + socket round-trip,
+	// well below the operator's "is it hung?" patience window.
+	// If the realtime event is missed (proxy hiccup, room subscribe
+	// race, shim doc_subscribe failure, etc.) the catch path below
+	// hits the DB and confirms docstatus — typically <500 ms. Total
+	// worst case ~9 s vs the previous 45+ s hang (#150 follow-up).
 	try {
-		return await socketStore.waitForInvoiceProcessed(invoiceName, 45000);
+		return await socketStore.waitForInvoiceProcessed(invoiceName, 8000);
 	} catch (error) {
 		const result = await frappe.call({
 			method: "frappe.client.get_value",
@@ -1404,7 +1410,15 @@ const runDeferredPrintWorkflow = async ({
 		}
 
 		if (waitForPostSubmitPayments) {
-			await socketStore.waitForPostSubmitPayments(name, 45000);
+			// Same 8 s ceiling as waitForInvoiceSubmission. Payment-entry
+			// creation is fast (no external IO); 8 s is generous. Falls
+			// through silently — payment entries land in DB regardless.
+			try {
+				await socketStore.waitForPostSubmitPayments(name, 8000);
+			} catch (_e) {
+				// Don't block print on missed payment-entry event;
+				// receipt prints from invoice doc + DB-side payments.
+			}
 		}
 
 		const freshDoc = await fetchSubmittedInvoiceDoc(name, resolvedDoctype);
