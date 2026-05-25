@@ -274,7 +274,21 @@ function normalizeTransportFailure<T>(
 	const status =
 		Number(error?.status || error?.httpStatus || error?.xhr?.status || 0) ||
 		null;
+	// Frappe non-2xx responses encode the real failure in
+	// `_server_messages` (translated string + title) and/or `exception`
+	// on the JSON body. The shim attaches that parsed body as
+	// `error.response`. Pull the human message from there so operators
+	// see the actual reason (e.g. rate-band violation, missing scope)
+	// instead of a generic "HTTP 403".
+	const response =
+		error?.response || error?.responseJSON || error?.xhr?.responseJSON;
+	const serverMessage =
+		extractServerMessage(response) ||
+		response?._error_message ||
+		response?.message ||
+		response?.exception;
 	const statusText =
+		serverMessage ||
 		error?.statusText ||
 		error?.xhr?.statusText ||
 		error?.message ||

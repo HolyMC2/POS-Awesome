@@ -228,13 +228,28 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			? __("Request ID: {0}", [requestId])
 			: undefined;
 
-		if (
-			code === "TIMEOUT" ||
-			code === "HTTP_ERROR" ||
-			code === "TRANSPORT_ERROR"
-		) {
+		if (code === "TIMEOUT" || code === "TRANSPORT_ERROR") {
 			return {
 				title: __("Connection problem while submitting invoice"),
+				detail: detail ? `${message}\n${detail}` : message,
+				color: "error",
+			};
+		}
+
+		// HTTP_ERROR with a parsed server message (Frappe `_server_messages`
+		// is decoded inside normalizeTransportFailure) is a real validation
+		// or permission failure, not a transport hiccup. Surface the actual
+		// reason so operators see "Rate outside ±20% band" / "POS Profile
+		// required" instead of a generic "Connection problem".
+		const looksLikeTransport =
+			!message ||
+			/^HTTP \d{3}$/i.test(message) ||
+			/network request failed/i.test(message);
+		if (code === "HTTP_ERROR") {
+			return {
+				title: looksLikeTransport
+					? __("Connection problem while submitting invoice")
+					: __("Unable to submit invoice"),
 				detail: detail ? `${message}\n${detail}` : message,
 				color: "error",
 			};
@@ -755,6 +770,17 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 
 		if (doc) {
 			ensureInvoiceClientRequestId(doc);
+			// Belt-and-suspenders for the backend scope assertions in
+			// invoice_processing/creation.py:1025-1027 (PR-1 security
+			// hardening). submit_invoice reads pos_profile/company/customer
+			// from the serialized invoice doc, not from `data`. If any
+			// flow constructs/edits the doc without re-seeding from the
+			// active POS Profile, the submit POST 403s with
+			// "POS Profile is required for this action." Restamp here
+			// so the doc is always in scope by the time we serialize.
+			doc.pos_profile = doc.pos_profile || profile?.name;
+			doc.company = doc.company || profile?.company;
+			doc.customer = doc.customer || profile?.customer;
 			doc.write_off_amount = writeOffAmount;
 			doc.base_write_off_amount = formatFloat(
 				writeOffAmount * (doc.conversion_rate || 1),

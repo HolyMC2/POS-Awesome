@@ -139,14 +139,28 @@ def enforce_discount_limit(invoice_doc: Any, profile_doc: Any | None = None) -> 
 # ---------------------------------------------------------------------------
 
 
-def assert_payments_match_grand_total(invoice_doc: Any, tolerance: float | None = None) -> None:
+def assert_payments_match_grand_total(
+    invoice_doc: Any,
+    tolerance: float | None = None,
+    is_credit_sale: bool = False,
+) -> None:
     """Require sum(payments[].amount) == grand_total within tolerance.
 
     Catches the "client sends payments=[$0] for a $1000 cart" attack.
     Frappe re-sums line totals in ``calculate_taxes_and_totals`` but
     accepts whatever the client put in ``payments`` if the invoice is
     being saved as a draft. By the time submit happens it's too late.
+
+    Credit-sale flow (`data.is_credit_sale=1`) intentionally accepts a
+    partial payment: customer pays $200 of a $400 invoice, the
+    remaining $200 becomes outstanding (anticipo / receivable). The
+    "$0 for $1000 cart" threat doesn't apply — the outstanding IS the
+    deferred liability, not an exfiltration. Skip the equality check
+    when the caller flags the request as a credit sale.
     """
+
+    if is_credit_sale:
+        return
 
     tol = tolerance if tolerance is not None else PAYMENT_MATCH_TOLERANCE
 
@@ -215,7 +229,10 @@ def assert_rates_within_band(
         # against; skipping is safer than failing legitimate flows.
         return
 
-    band = band_pct if band_pct is not None else DEFAULT_RATE_BAND_PCT
+    # `band_pct` retained for ABI compatibility; rate-band enforcement
+    # is currently disabled when posa_allow_user_to_edit_rate=1.
+    # See docs/TODO.md → "Rate-band cap".
+    del band_pct
 
     for line in _iter_lines(invoice_doc):
         item_code = _line_value(line, "item_code")
@@ -258,20 +275,13 @@ def assert_rates_within_band(
                 )
             continue
 
-        # Editable rate — enforce ±band%.
-        max_allowed = master_rate * (1 + band / 100.0)
-        min_allowed = master_rate * (1 - band / 100.0)
-        if client_rate > max_allowed or client_rate < min_allowed:
-            frappe.throw(
-                _(
-                    "Rate for line {0} ({1}) is outside the allowed ±{2}% band. "
-                    "Submitted {3}, price-list {4}."
-                ).format(
-                    _line_value(line, "idx") or "?",
-                    item_code,
-                    band,
-                    client_rate,
-                    master_rate,
-                ),
-                frappe.PermissionError,
-            )
+        # Editable rate — band cap disabled. The ±band% guard blocked
+        # legitimate variable-price items (e.g. "cambiar pantalla" — labor
+        # charged per device model, customer brings the display) where
+        # the cart rate intentionally exceeds the price-list rate by far
+        # more than ±20%. `posa_allow_user_to_edit_rate` already gates
+        # whether ANY edit is allowed; once on, operator judgment rules.
+        # Cleaner per-item / per-item-group opt-out is tracked in
+        # docs/TODO.md → "Rate-band cap". Until then, profile edit-flag
+        # is a full bypass.
+        continue
