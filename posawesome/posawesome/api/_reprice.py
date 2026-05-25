@@ -215,7 +215,10 @@ def assert_rates_within_band(
         # against; skipping is safer than failing legitimate flows.
         return
 
-    band = band_pct if band_pct is not None else DEFAULT_RATE_BAND_PCT
+    # `band_pct` retained for ABI compatibility; rate-band enforcement
+    # is currently disabled when posa_allow_user_to_edit_rate=1.
+    # See docs/TODO.md → "Rate-band cap".
+    del band_pct
 
     for line in _iter_lines(invoice_doc):
         item_code = _line_value(line, "item_code")
@@ -258,20 +261,13 @@ def assert_rates_within_band(
                 )
             continue
 
-        # Editable rate — enforce ±band%.
-        max_allowed = master_rate * (1 + band / 100.0)
-        min_allowed = master_rate * (1 - band / 100.0)
-        if client_rate > max_allowed or client_rate < min_allowed:
-            frappe.throw(
-                _(
-                    "Rate for line {0} ({1}) is outside the allowed ±{2}% band. "
-                    "Submitted {3}, price-list {4}."
-                ).format(
-                    _line_value(line, "idx") or "?",
-                    item_code,
-                    band,
-                    client_rate,
-                    master_rate,
-                ),
-                frappe.PermissionError,
-            )
+        # Editable rate — band cap disabled. The ±band% guard blocked
+        # legitimate variable-price items (e.g. "cambiar pantalla" — labor
+        # charged per device model, customer brings the display) where
+        # the cart rate intentionally exceeds the price-list rate by far
+        # more than ±20%. `posa_allow_user_to_edit_rate` already gates
+        # whether ANY edit is allowed; once on, operator judgment rules.
+        # Cleaner per-item / per-item-group opt-out is tracked in
+        # docs/TODO.md → "Rate-band cap". Until then, profile edit-flag
+        # is a full bypass.
+        continue
