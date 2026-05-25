@@ -1315,15 +1315,20 @@ def submit_invoice(invoice, data, submit_in_background=False):
 
 
 def submit_in_background_job(kwargs):
+    # Hoist `invoice`, `user`, `doctype` ABOVE the try so the exception
+    # handler can reference them even if the failure fires before the
+    # first inner statement runs. Previously `user` was bound inside
+    # try → except path could NameError on a very early failure and
+    # the real error would be masked.
     invoice = kwargs.get("invoice")
+    user = kwargs.get("user") or getattr(getattr(frappe, "session", None), "user", None)
+    doctype = kwargs.get("doctype") or "Sales Invoice"
     try:
-        doctype = kwargs.get("doctype") or "Sales Invoice"
         data = kwargs.get("data") or {}
         is_payment_entry = kwargs.get("is_payment_entry")
         total_cash = kwargs.get("total_cash")
         cash_account = kwargs.get("cash_account")
         payments = kwargs.get("payments") or []
-        user = kwargs.get("user") or getattr(getattr(frappe, "session", None), "user", None)
         ledger_name = kwargs.get("ledger_name")
         ledger_doc = _get_submission_ledger_by_name(ledger_name) if ledger_name else None
 
@@ -1380,7 +1385,14 @@ def submit_in_background_job(kwargs):
                 invoice_name=invoice_doc.name,
             )
         if hasattr(frappe, "publish_realtime"):
-            frappe.publish_realtime(
+            # Dual-publish so the web-route SPA receives this event.
+            # frappe-shim doesn't auto-join the `user:<email>` room (Desk
+            # does via session cookie), so user-only events get lost on
+            # /posapp. The SPA subscribes to `doc:<doctype>/<name>` via
+            # doctype_subscribe — publish there too. See _posa_publish_dual
+            # docstring for the if/elif routing quirk that requires two
+            # explicit publishes.
+            _posa_publish_dual(
                 "pos_invoice_processed",
                 {
                     "invoice": invoice_doc.name,
@@ -1388,6 +1400,8 @@ def submit_in_background_job(kwargs):
                     "has_post_submit_payment_work": _has_post_submit_payment_work(data),
                 },
                 user=user,
+                doctype=invoice_doc.doctype,
+                docname=invoice_doc.name,
             )
         _process_post_submit_payments(
             invoice_doc,
@@ -1413,10 +1427,18 @@ def submit_in_background_job(kwargs):
             except Exception:
                 pass
         frappe.log_error(f"POS Background Submission Failed for {invoice}: {error_msg}")
-        frappe.publish_realtime(
+        # Dual-publish so the web-route SPA hears the failure too.
+        # `invoice` here is the invoice name string (from kwargs at the
+        # top of submit_in_background_job). `doctype` is captured at
+        # the start of try; if we crashed BEFORE that assignment, fall
+        # back to Sales Invoice (the dominant case).
+        _doctype = kwargs.get("doctype") or "Sales Invoice"
+        _posa_publish_dual(
             "pos_invoice_submit_error",
-            {"invoice": invoice, "error": error_msg},
+            {"invoice": invoice or "", "error": error_msg},
             user=user,
+            doctype=_doctype,
+            docname=invoice,
         )
 
 
