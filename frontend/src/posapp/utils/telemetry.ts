@@ -160,14 +160,60 @@ function trackEvent(entry: any /* PerformanceEventTiming */) {
 	// Only sample high-INP events to limit volume; the
 	// PerformanceObserver gives us hundreds per minute otherwise.
 	if (entry.duration < 50) return;
+
+	// Rich context for tail diagnosis. The bare event payload
+	// (name+target.tagName) was not enough to identify why operator
+	// hits a 2.8s keydown freeze — could be cart search during bg
+	// item sync, drawer open, or pricing-rule recalc. Adding route,
+	// nearest data-perf-tag ancestor, attribution (clickTarget
+	// nodeName + id/class snippet), and the active route so the
+	// dashboard can group by view + interaction surface.
+	const tagName =
+		entry.target && typeof entry.target.tagName === "string"
+			? entry.target.tagName.toLowerCase()
+			: null;
+	let perfTag: string | null = null;
+	let elementId: string | null = null;
+	let elementClass: string | null = null;
+	try {
+		const t = entry.target as HTMLElement | null;
+		if (t) {
+			if (t.id) elementId = t.id.slice(0, 60);
+			if (t.className && typeof t.className === "string") {
+				// First two class tokens — keeps payload bounded.
+				elementClass = t.className.trim().split(/\s+/).slice(0, 2).join(" ").slice(0, 80);
+			}
+			// Walk up looking for a `data-perf-tag="<label>"` marker.
+			// Components that wrap expensive interactions can opt in
+			// by adding the attribute on the wrapper — gives a stable
+			// semantic name even after refactors rename CSS classes.
+			let node: HTMLElement | null = t;
+			for (let i = 0; i < 6 && node; i++) {
+				const v = node.getAttribute?.("data-perf-tag");
+				if (v) { perfTag = v.slice(0, 40); break; }
+				node = node.parentElement;
+			}
+		}
+	} catch {
+		/* attribution is best-effort */
+	}
+	const route =
+		(typeof window !== "undefined" &&
+			(window.location?.pathname || "") +
+				(window.location?.hash?.slice(0, 60) || "")) || "";
+
 	push("rum:inp", entry.duration, {
 		name: entry.name,
 		startTime: Math.round(entry.startTime || 0),
 		processingStart: Math.round(entry.processingStart || 0),
-		target:
-			entry.target && typeof entry.target.tagName === "string"
-				? entry.target.tagName.toLowerCase()
-				: null,
+		target: tagName,
+		// New fields — backwards-compatible (older dashboards just
+		// ignore unknown keys; the ingest endpoint stores metadata
+		// as opaque JSON).
+		perfTag,
+		elementId,
+		elementClass,
+		route: route.slice(0, 120),
 	});
 }
 

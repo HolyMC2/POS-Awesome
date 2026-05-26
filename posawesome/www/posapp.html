@@ -36,6 +36,18 @@
 	{# Cache-busted CSS bundle (build-manifest emits the hashed path). #}
 	<link id="posa-posapp-css" rel="stylesheet" href="{{ asset_css }}" />
 
+	{# Preload the boot-critical JS chunks in parallel. Without these,
+	   the browser only discovers them after the entry parses + walks
+	   imports — a 3-5 s LCP penalty on slow networks. `modulepreload`
+	   uses the same HTTP cache as the eventual import + sets the
+	   right CORS mode for ES modules. Order matches build-manifest's
+	   PRELOAD_CHUNK_NAMES (vendor → vue → router → state → first
+	   route). Each chunk is content-hashed; SW + browser HTTP cache
+	   match the eventual import 1:1. #}
+	{% for chunk_url in asset_web_preload %}
+		<link rel="modulepreload" href="{{ chunk_url }}" />
+	{% endfor %}
+
 	<style>
 		/* Reset Desk's own injected CSS reset side effects. The web
 		   route doesn't load Desk, but if browsers cached the Desk

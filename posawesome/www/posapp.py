@@ -95,6 +95,18 @@ def get_context(context: Dict[str, Any]) -> Dict[str, Any]:
             )
             or "/assets/posawesome/dist/js/posawesome.css",
             "asset_web_entry": _resolve_web_entry_url(asset_manifest),
+            # List of hashed module URLs to `<link rel=modulepreload>`
+            # in the HTML head. Browser starts fetching boot chunks in
+            # parallel instead of waiting for the entry to parse + walk
+            # imports — biggest LCP win for cold loads. List comes from
+            # `frontend/build-manifest.js#PRELOAD_CHUNK_NAMES`; missing
+            # chunk names drop silently. Empty list = no preload (older
+            # builds without the new manifest field).
+            "asset_web_preload": (
+                (asset_manifest.get("assets", {}).get("web_preload") or [])
+                if isinstance(asset_manifest, dict)
+                else []
+            ),
         }
     )
     return context

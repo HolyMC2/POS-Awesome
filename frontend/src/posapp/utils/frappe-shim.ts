@@ -217,7 +217,20 @@ async function frappeCall(
 		);
 		(err as any).response = data;
 		(err as any).status = response.status;
-		if (o.error) o.error(err);
+		// Frappe's `frappe.call` contract is callback-OR-promise, not
+		// both. When the caller passed an `error` callback (e.g.
+		// api.callEnvelope wraps every error path into the envelope
+		// settle), the throw here ALSO rejects the promise — landing
+		// in window.onunhandledrejection AFTER the envelope already
+		// resolved. That noise polluted `crash:unhandledrejection`
+		// telemetry + console with "Uncaught (in promise) Error: HTTP
+		// 403/417" lines for errors that were already handled cleanly.
+		// Honor the contract: if `error` callback fired, swallow the
+		// throw — the caller chose the callback path.
+		if (o.error) {
+			o.error(err);
+			return null;
+		}
 		throw err;
 	}
 
