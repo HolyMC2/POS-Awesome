@@ -2,6 +2,85 @@
 
 All notable changes.
 
+## Unreleased — 2026-05-25 / 2026-05-26
+
+Hotfix saga + perf instrumentation following prod migration
+`fm → muelle compose` on contavm. 11 commits, ~600 LoC, all on
+`doco-customizations`.
+
+### 🐞 Fixes (prod 403 / 417 saga)
+- `6e0c6ffe fix(scope)` — stamp `pos_profile`/`company`/`customer` on
+  the submit doc before serialize. PR-1 scope assertions read from
+  the serialized invoice, not `data`; some flows mutated the cart
+  doc without re-seeding → submit 403 "POS Profile is required".
+- `ffb94fb8 fix(shim)` — add `frappe.datetime.obj_to_str`,
+  `str_to_obj`, `now_date` aliases. Credit-sale at Payments view
+  TypeError'd on due-date selection because the shim only exported
+  `nowdate` / `get_today`.
+- `805b366b fix(toast)` — surface Frappe `_server_messages` text in
+  the envelope error message. Operators were seeing "Connection
+  problem / HTTP 403" for permission + validation failures that
+  carried a real reason in the response body.
+- `23ca94e6 fix(reprice)` — disable ±band cap when
+  `posa_allow_user_to_edit_rate=1`. Blocked legit variable-price
+  items (e.g. *cambiar pantalla*) where the cart rate intentionally
+  exceeds price-list by far more than ±20%. Per-item opt-out is the
+  longer-term fix; see `docs/TODO.md` → "Rate-band cap".
+- `eb90960f fix(reprice)` — skip paid==grand_total check on
+  credit-sale submit (`data.is_credit_sale=1`). Partial payment is
+  intentional; remainder becomes outstanding.
+- `371d73d1 fix(print)` — drop deferred-print socket wait from 45 s
+  to 8 s with silent DB-poll fallback on timeout.
+- `f130a058 fix(realtime)` — dual-publish bg-submit lifecycle events
+  to BOTH `user:` and `doc:Sales Invoice/<name>` rooms. The
+  web-route shim doesn't auto-join the user room, so user-only
+  events were lost on `/posapp`; print wait timed out (until 8 s
+  cap above kicked in).
+
+### ✨ Features
+- `8e351c65 perf` — observability + LCP preload + INP attribution:
+  per-method timing for every `api.callEnvelope` settle
+  (`perf:api.<method>.<ok|err>`); 11 critical chunks
+  `<link rel=modulepreload>` in `posapp.html`; rich `rum:inp`
+  metadata (route, `data-perf-tag` ancestor, element id/class).
+  Shim error-callback contract now honors caller's `error` cb (no
+  more `Uncaught (in promise) HTTP …` leaks).
+- `4e01676b feat(closing-shift)` — auto-print Cierre de Caja ticket
+  via QZ after `submit_closing_shift`. New POS Profile field
+  `posa_closing_shift_print_format` (Link → Print Format). New
+  default format `POSA Cierre de Caja` (80 mm thermal, Jinja
+  sandbox-safe). Failure is fire-and-forget — shift is already
+  submitted; operator gets a "re-print from Desk if needed"
+  toast.
+- `b653c278 fix(closing-shift)` — template fix after Jinja sandbox
+  rejected `frappe.get_cached_value` + `.format()`. Now uses
+  `frappe.utils.fmt_money` + `|int` + entity-encoded accents.
+  Companion spec pins the dispatch contract.
+
+### 🔀 Routing
+- `f2d99d12 feat(spa-route)` — `/posapp` is now the canonical
+  operator entry. `posapp.js` immediately
+  `window.location.replace('/posapp')` unless `?legacy=1` /
+  `?customer_display=1` / `?_posa_chunk_reload` is set (dev
+  bypasses). `OpeningDialog.vue logout()` redirects to `/posapp`.
+  Workspace links + shortcut stay on `link_type=Page` →
+  `link_to=posapp` because v16 Workspace Link enum only allows
+  DocType/Page/Report — `posapp.js` redirects on arrival. URL
+  link_type would need a Property Setter; tracked in
+  `docs/TODO.md`.
+- `95352acf fix(workspace)` — revert prior URL/link_type edit that
+  broke `bench migrate` (Workspace Link enum constraint). Prod DB
+  was healed via direct UPDATE; both file + DB now back to
+  Page/posapp; redirect lives in `posapp.js`.
+
+### 📝 Test
+- 3 new specs: `apiTimingTelemetry`, `shimErrorCallbackContract`,
+  `closingShiftPrintFormat`. `buildManifest` extended for the new
+  `web_preload` field + ordering / dedupe / skip-missing.
+- 569/569 vitest green.
+
+---
+
 Release 15.29.0 — May 8, 2026
 ### ✨ Features
 - Add CI/CD gates for build integrity and release blocking 

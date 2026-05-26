@@ -6,7 +6,13 @@
 
 ## 1. What it is
 
-POSAwesome is a Single-Page Application (SPA) that runs **inside the Frappe Desk shell** at `/app/posapp`. It's a Vue 3 + Vuetify 3 + Pinia frontend that talks to a Python (Frappe / ERPNext v16) backend through `frappe.call` and a Socket.IO realtime channel. Offline support is provided by IndexedDB (Dexie) + a service worker.
+POSAwesome is a Single-Page Application (SPA). It's a Vue 3 + Vuetify 3 + Pinia frontend that talks to a Python (Frappe / ERPNext v16) backend through `frappe.call` and a Socket.IO realtime channel. Offline support is provided by IndexedDB (Dexie) + a service worker.
+
+**Two entry routes as of 2026-05-26:**
+- **`/posapp`** — canonical operator entry. Web route (no Desk shell). Boot via `posawesome/www/posapp.{py,html}` + `web-entry.ts` chunk. Baseline DOM ~5 k nodes vs ~150 k under Desk; LCP win ~3-5 s on cold loads.
+- **`/app/posapp`** — legacy entry inside Desk shell. Kept alive for regression testing of the Desk boot path; `posapp.js` redirects every operator hit to `/posapp` immediately. Devs opt back in with `/app/posapp?legacy=1` (also: `?customer_display=1` for the secondary-screen flow, `?_posa_chunk_reload` mid-recovery).
+
+Workspace links + shortcuts target `/app/posapp` (`link_type=Page`, `link_to=posapp`) because v16's `Workspace Link.link_type` enum only allows `DocType / Page / Report` — the `posapp.js` redirect handles the hop to `/posapp`. `docs/TODO.md` → "Workspace link URL support" tracks a Property Setter cleanup that would let the workspace target `/posapp` directly.
 
 ```
 ┌─────────────────────────────── Browser ────────────────────────────────┐

@@ -5,6 +5,53 @@ Cross-link from code with `docs/TODO.md → "<heading>"`.
 
 ---
 
+## Workspace link URL support
+
+**Status:** workaround in place; cleaner fix deferred.
+
+**Background.** We wanted the "POS Awesome" workspace link / shortcut
+to point at the `/posapp` web route directly (`link_type=URL`,
+`link_to=/posapp`). Frappe v16's `Workspace Link.link_type` enum only
+accepts `DocType / Page / Report`; the URL value broke
+`bench migrate` (`Cannot set value DataError: link_type`).
+
+**Current workaround (95352acf):**
+- Workspace link stays `link_type=Page link_to=posapp` → resolves
+  to `/app/posapp`.
+- `posawesome/page/posapp/posapp.js` does an immediate
+  `window.location.replace('/posapp')` on load → operator never
+  actually sees the Desk shell.
+- Bypass for devs: `/app/posapp?legacy=1`.
+
+**Cleaner fix:** ship a Property Setter that extends the
+`Workspace Link.link_type` enum to include `URL` (and ideally
+upstream the change to Frappe). Patch shape:
+
+```python
+# posawesome/patches/add_workspace_link_url_option.py
+from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+make_property_setter(
+    "Workspace Link", "link_type", "options",
+    "\nDocType\nPage\nReport\nURL", "Text",
+    for_doctype=False,
+)
+```
+
+After the PS lands, the workspace JSON can use `link_type=URL
+link_to=/posapp` directly; operators get a clean nav graph without
+the bounce hop through `/app/posapp`. Cost: ~10 LoC patch +
+regression test. Reverts cleanly via `frappe.delete_doc("Property
+Setter", "Workspace Link-link_type-options")`.
+
+**Acceptance:**
+- `bench migrate` clean on a fresh DB.
+- Workspace shortcut + 2 link entries point at `/posapp`,
+  link_type=URL, no controller-side redirect needed.
+- `posapp.js` `shouldStayOnLegacy()` branch can be simplified —
+  legacy URL still resolves but operators almost never hit it.
+
+---
+
 ## Rate-band cap
 
 **Status:** disabled 2026-05-25 in `_reprice.py:261` after blocking a
