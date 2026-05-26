@@ -296,7 +296,11 @@ function go_desk() {
 }
 
 function logout() {
-	const redirectTarget = "/app/posapp";
+	// 2026-05-26: /posapp is the canonical operator entry. After
+	// re-login the user should land back inside the SPA shell, not
+	// the Desk-shell legacy boot path (which now auto-redirects
+	// to /posapp anyway, but skip the bounce).
+	const redirectTarget = "/posapp";
 	const loginPath = `/login?redirect-to=${encodeURIComponent(redirectTarget)}`;
 	authService.logout().finally(() => {
 		const loginUrl =

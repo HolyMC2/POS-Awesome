@@ -72,106 +72,54 @@ const ensurePosBootController = async () => {
 	});
 };
 
-// Phase 1.F: when any POS Profile the user is assigned to has the
-// `posa_use_web_route` flag set, surface a "POS has moved to /posapp"
-// banner and auto-navigate after 10 s. Users on the legacy boot path
-// see no change. We check the flag via the same call the SPA itself
-// uses (cheap; cached server-side) so toggling it from the POS
-// Profile form takes effect on the next /app/posapp load.
+// 2026-05-26: /posapp is the canonical operator route. /app/posapp
+// stays alive for dev / regression testing of the Desk-shell boot
+// path, but every user hitting /app/posapp via stale bookmark or
+// muscle memory bounces to /posapp IMMEDIATELY. Bypass for devs:
+//   /app/posapp?legacy=1  → stay on Desk-shell SPA, no redirect
+// Anyone is allowed the bypass (System Manager-only would block
+// our own QA accounts that lack that role on tenant sites).
 const WEB_ROUTE_DEST = "/posapp";
-const REDIRECT_DELAY_MS = 10_000;
 
-const userOptedIntoWebRoute = async () => {
+const shouldStayOnLegacy = () => {
 	try {
-		const r = await frappe.call({
-			method: "posawesome.posawesome.api.utilities.posa_user_opted_into_web_route",
-			args: {},
-		});
-		return Boolean(r?.message);
-	} catch (e) {
-		// Pre-deploy of the helper endpoint, or any error → stay on
-		// the legacy boot path. The flag is opt-in; failing closed is
-		// the right default.
-		return false;
-	}
+		const params = new URLSearchParams(window.location.search);
+		// Explicit opt-in to legacy: ?legacy=1
+		if (params.get("legacy") === "1") return true;
+		// Customer-display secondary screen still uses the legacy boot
+		// path (Phase 5 Customer Display is mounted under
+		// /app/posapp/customer-display). Don't bounce it.
+		if (params.get("customer_display") === "1") return true;
+		// Chunk-recovery loop (chunkLoadRecovery.ts) reloads
+		// /app/posapp?_posa_chunk_reload=1 to retry boot after a
+		// stale SW chunk. Don't bounce mid-recovery.
+		if (params.has("_posa_chunk_reload")) return true;
+	} catch (_) { /* no params, fall through */ }
+	return false;
 };
 
-const showWebRouteRedirectNotice = (pageRef) => {
-	const wrapper = pageRef?.wrapper || document.querySelector(".page-container");
-	if (!wrapper) return;
-	const banner = document.createElement("div");
-	banner.id = "posa-web-route-redirect-banner";
-	banner.style.cssText = [
-		"position:relative",
-		"margin:8px 0",
-		"padding:10px 14px",
-		"background:#1e293b",
-		"color:#e2e8f0",
-		"border-left:4px solid #38bdf8",
-		"border-radius:4px",
-		"font-size:13px",
-		"display:flex",
-		"align-items:center",
-		"gap:12px",
-	].join(";");
-	const text = document.createElement("div");
-	text.style.flex = "1";
-	text.innerHTML =
-		'<strong>POS Awesome has moved.</strong> Redirecting to <code>/posapp</code> in <span data-countdown>10</span> s — ' +
-		'<a href="#" data-cancel style="color:#7dd3fc">stay here</a>.';
-	const goBtn = document.createElement("button");
-	goBtn.textContent = "Go now";
-	goBtn.style.cssText =
-		"padding:4px 10px;border:1px solid #475569;background:#0f172a;color:#e2e8f0;border-radius:4px;cursor:pointer;font-size:12px";
-	banner.appendChild(text);
-	banner.appendChild(goBtn);
-	wrapper.insertBefore(banner, wrapper.firstChild);
-
-	let cancelled = false;
-	const counter = text.querySelector("[data-countdown]");
-	const cancelLink = text.querySelector("[data-cancel]");
-	const startedAt = Date.now();
-	const tick = () => {
-		if (cancelled) return;
-		const left = Math.max(
-			0,
-			Math.ceil((REDIRECT_DELAY_MS - (Date.now() - startedAt)) / 1000),
-		);
-		if (counter) counter.textContent = String(left);
-		if (left <= 0) {
-			window.location.href = WEB_ROUTE_DEST;
-			return;
-		}
-		setTimeout(tick, 250);
-	};
-	tick();
-
-	const cancel = (e) => {
-		if (e) e.preventDefault();
-		cancelled = true;
-		banner.remove();
-	};
-	cancelLink?.addEventListener("click", cancel);
-	goBtn.addEventListener("click", () => {
-		cancelled = true;
-		window.location.href = WEB_ROUTE_DEST;
-	});
-};
+// (Banner-with-countdown removed 2026-05-26 — replaced by the
+// immediate redirect at the top of `on_page_load`. Devs land on
+// /app/posapp?legacy=1 to skip the bounce; everyone else never
+// sees the Desk-shell boot path again.)
 
 frappe.pages["posapp"].on_page_load = async function (wrapper) {
+	// 2026-05-26: every hit to /app/posapp bounces to /posapp by
+	// default. Dev / regression bypass via ?legacy=1 (also honored:
+	// customer_display=1 and _posa_chunk_reload — see
+	// `shouldStayOnLegacy` notes). Replace the page URL so the back
+	// button on the new route doesn't trap users in a bounce loop.
+	if (shouldStayOnLegacy() === false) {
+		window.location.replace(WEB_ROUTE_DEST);
+		return;
+	}
+
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
-		title: "POS Awesome",
+		title: "POS Awesome (legacy)",
 		single_column: true,
 	});
 	const pageRef = (wrapper && wrapper.page) || page;
-
-	// Check the flag first. If opted in, show the banner and let the
-	// legacy boot continue in parallel so the user can still cancel
-	// the redirect without seeing a broken page.
-	userOptedIntoWebRoute().then((opted) => {
-		if (opted) showWebRouteRedirectNotice(pageRef);
-	});
 
 	try {
 		await ensurePosBootController();
