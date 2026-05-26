@@ -221,6 +221,12 @@ export function usePosShift(openDialog?: () => void) {
 
 	function submit_closing_pos(data: any) {
 		debugLog("Submitting closing shift", data);
+		// Capture the active profile before we null it below so the
+		// closing-ticket print can still reach the configured printer
+		// + format. After clear, `pos_profile.value` flips to null and
+		// the QZ helper would lose `posa_qz_printer_name` /
+		// `posa_closing_shift_print_format`.
+		const activeProfile = pos_profile.value as any;
 		frappe
 			.call(
 				"posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.submit_closing_shift",
@@ -231,6 +237,43 @@ export function usePosShift(openDialog?: () => void) {
 			.then((r: any) => {
 				debugLog("Submit result", r);
 				if (r.message) {
+					// Auto-print the cierre-de-caja ticket BEFORE the
+					// state-clear runs. Fire-and-forget — print failure
+					// must not block the close (the doc is already
+					// submitted in the DB). Operator can re-print from
+					// Desk if QZ Tray was down.
+					const closingShiftName = r.message;
+					const printFormat = activeProfile?.posa_closing_shift_print_format;
+					if (printFormat && closingShiftName) {
+						// Dynamic import keeps qzTray out of the
+						// non-print hot path (its bundle pulls
+						// signing crypto + ESC/POS helpers).
+						import("../../../services/qzTray")
+							.then(({ printDocumentViaQz }) =>
+								printDocumentViaQz({
+									doctype: "POS Closing Shift",
+									name: closingShiftName,
+									printFormat,
+									letterhead: activeProfile?.letter_head || null,
+									noLetterhead: activeProfile?.letter_head ? "0" : "1",
+									printerName:
+										activeProfile?.posa_qz_printer_name || undefined,
+								}),
+							)
+							.catch((err) => {
+								console.warn(
+									"[POSA] Closing-shift auto-print failed:",
+									err,
+								);
+								toastStore.show({
+									title: "Close-shift ticket print failed",
+									message:
+										"Shift was closed correctly. Re-print from Desk if needed.",
+									color: "warning",
+									timeout: 8000,
+								});
+							});
+					}
 					pos_profile.value = null;
 					pos_opening_shift.value = null;
 					uiStore.posOpeningShift = null;
