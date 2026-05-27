@@ -233,8 +233,9 @@
    "color": "Grey",
    "doc_view": "List",
    "label": "POS Awesome App",
-   "link_to": "posapp",
-   "type": "Page"
+   "link_to": "",
+   "type": "URL",
+   "url": "/posapp"
   }
  ],
  "title": "POS Awesome",

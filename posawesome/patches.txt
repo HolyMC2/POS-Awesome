@@ -22,3 +22,4 @@ posawesome.patches.set_doco_qz_print_defaults
 posawesome.patches.add_qz_cut_after_print
 posawesome.patches.add_closing_shift_print_format_field
 posawesome.patches.add_default_closing_shift_print_format
+posawesome.patches.heal_pos_awesome_shortcut_url
