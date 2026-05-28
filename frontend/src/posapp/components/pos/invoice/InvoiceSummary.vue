@@ -109,6 +109,7 @@
 					@print-draft="handlePrintDraft"
 					@show-payment="handleShowPayment"
 					@open-customer-display="handleOpenCustomerDisplay"
+					@open-saldo-picker="$emit('open-saldo-picker')"
 				/>
 			</v-col>
 		</v-row>
@@ -232,6 +233,7 @@ const emit = defineEmits([
 	"show-payment",
 	"open-customer-display",
 	"resume-parked-order",
+	"open-saldo-picker",
 ]);
 
 const saveLoading = ref(false);

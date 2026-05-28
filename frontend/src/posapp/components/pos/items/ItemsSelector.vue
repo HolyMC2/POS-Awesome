@@ -778,6 +778,48 @@ const handleRemoteStockAdjustment = (payload: unknown) => {
 	itemAvailability.handleInvoiceStockAdjusted(payload);
 };
 
+// SALDO-INTEGRATION-POINT — receive picker-driven add. Picker passes a
+// fully-resolved {item_code, rate, price_list_rate, saldo_referencia}.
+// Hand off to handleItemSelection so addItemMeasured (with getNewItem +
+// price-list normalization) runs the same as a search-driven add.
+let saldoPickerAddHandler: ((p: any) => void) | null = null;
+onMounted(() => {
+	if (eventBus && typeof eventBus.on === "function") {
+		saldoPickerAddHandler = (payload: any) => {
+			if (!payload?.item_code) return;
+			const synthetic = {
+				item_code: payload.item_code,
+				item_name: payload.item_name || payload.item_code,
+				rate: payload.rate,
+				price_list_rate: payload.price_list_rate,
+				qty: 1,
+				stock_qty: 1,
+				saldo_enabled: 1,
+				saldo_referencia: payload.saldo_referencia,
+				uom: "Nos",
+				is_stock_item: 0,
+			};
+			try {
+				// Synthetic MouseEvent so addItemMeasured's fly-animation
+				// origin point doesn't crash. Real event isn't needed —
+				// the handler only reads currentTarget for animation.
+				const evt = new MouseEvent("click", { bubbles: false });
+				itemSelection.handleItemSelection(evt, synthetic);
+			} catch (err) {
+				console.error("[saldo] picker handoff failed", err);
+			}
+		};
+		eventBus.on("saldo:picker-add", saldoPickerAddHandler);
+	}
+});
+onBeforeUnmount(() => {
+	if (eventBus && saldoPickerAddHandler && typeof eventBus.off === "function") {
+		eventBus.off("saldo:picker-add", saldoPickerAddHandler);
+		saldoPickerAddHandler = null;
+	}
+});
+// /SALDO-INTEGRATION-POINT
+
 onMounted(async () => {
 	itemAvailability.initAvailability();
 

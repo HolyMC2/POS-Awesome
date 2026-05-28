@@ -258,6 +258,36 @@ export default {
 		const invoicePanel = ref(null);
 		const additionalDiscountField = ref(null);
 		const mobileDock = ref(null);
+		// SALDO-INTEGRATION-POINT — picker open state + handlers live in
+		// setup() (not data()/methods) because the Options-API method binding
+		// was not reaching the template's @open-saldo-picker handler in the
+		// production-built render scope. setup() returns expose cleanly via
+		// `n.openSaldoPicker` after Vite compilation.
+		const saldoPickerOpen = ref(false);
+		const openSaldoPicker = () => {
+			saldoPickerOpen.value = true;
+		};
+		const onSaldoPicked = (payload) => {
+			// Hand off to ItemsSelector's add pipeline (addItemMeasured) so
+			// posawesome's getNewItem + price-list normalization run. Raw
+			// invoiceStore.addItems bypasses that and the cart line ends up
+			// with rate=0 because price_list_rate isn't preserved on a
+			// bare-bones row.
+			//
+			// The receiver sees saldo_referencia already populated and skips
+			// the requireSaldoCapture intercept (useItemAddition.ts:354).
+			if (eventBus && typeof eventBus.emit === "function") {
+				eventBus.emit("saldo:picker-add", {
+					item_code: payload.item_code,
+					item_name: payload.product_label || payload.item_code,
+					rate: Number(payload.monto),
+					price_list_rate: Number(payload.monto),
+					saldo_referencia: payload.referencia,
+				});
+			} else {
+				console.error("[saldo] eventBus missing — cannot deliver picker payload");
+			}
+		};
 		const responsive = useResponsive();
 		const rtl = useRtl();
 		const shift = usePosShift(() => {
@@ -643,6 +673,10 @@ export default {
 			...rtl,
 			...shift,
 			...offers,
+			// SALDO-INTEGRATION-POINT
+			saldoPickerOpen,
+			openSaldoPicker,
+			onSaldoPicked,
 			uiStore,
 			invoiceStore,
 			itemsStore,
@@ -717,11 +751,13 @@ export default {
 
 	// SALDO-INTEGRATION-POINT — data/created/beforeUnmount/methods saldo*
 	// blocks below. Keep contained here for easy rebase identification.
+	// saldoPickerOpen + openSaldoPicker + onSaldoPicked moved into setup()
+	// above — Options-API methods weren't reaching @open-saldo-picker
+	// template binding in production build.
 	data() {
 		return {
 			saldoDialogOpen: false,
 			saldoDialogMeta: null,
-			saldoPickerOpen: false,
 			_saldoResolve: null,
 			_saldoReject: null,
 		};
@@ -759,42 +795,7 @@ export default {
 			this._saldoResolve = null;
 			this._saldoReject = null;
 		},
-		openSaldoPicker() {
-			this.saldoPickerOpen = true;
-		},
-		onSaldoPicked(payload) {
-			// Picker returns {item_code, monto, referencia, carrier_label, product_label}.
-			// Drop straight into the invoice — picker already collected what
-			// addItemMeasured normally gathers via dialog.
-			try {
-				const item = {
-					item_code: payload.item_code,
-					item_name: payload.product_label || payload.item_code,
-					qty: 1,
-					stock_qty: 1,
-					rate: Number(payload.monto),
-					price_list_rate: Number(payload.monto),
-					amount: Number(payload.monto),
-					discount_percentage: 0,
-					discount_amount: 0,
-					uom: this.pos_profile?.uom || "Nos",
-					is_stock_item: 0,
-					saldo_enabled: 1,
-					saldo_referencia: payload.referencia,
-					posa_offer_applied: 0,
-					posa_is_offer: 0,
-				};
-				this.invoiceStore.addItems([item], 0);
-			} catch (err) {
-				console.error("[saldo] addItems failed", err);
-				if (window.frappe?.show_alert) {
-					window.frappe.show_alert(
-						{ message: __("No se pudo agregar al carrito: {0}", [String(err)]), indicator: "red" },
-						6,
-					);
-				}
-			}
-		},
+		// openSaldoPicker + onSaldoPicked moved to setup() — see SALDO-INTEGRATION-POINT
 		// SALDO-INTEGRATION-POINT-END
 		create_opening_voucher() {
 			this.dialog = true;
