@@ -22,6 +22,20 @@
 				{{ __("PAY") }}
 			</v-btn>
 		</v-col>
+		<!-- SALDO-INTEGRATION-POINT — launcher for the 3-step picker -->
+		<v-col cols="12">
+			<v-btn
+				block
+				color="primary"
+				theme="dark"
+				prepend-icon="mdi-cellphone-arrow-down"
+				@click="$emit('open-saldo-picker')"
+				class="summary-btn"
+			>
+				{{ __("Recarga / Servicio") }}
+			</v-btn>
+		</v-col>
+		<!-- /SALDO-INTEGRATION-POINT -->
 		<v-col cols="12" sm="6">
 			<v-btn
 				block
@@ -161,6 +175,7 @@ defineEmits([
 	"print-draft",
 	"show-payment",
 	"open-customer-display",
+	"open-saldo-picker",
 ]);
 
 const __ = window.__;

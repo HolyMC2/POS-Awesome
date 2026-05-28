@@ -19,6 +19,11 @@
 			@cancelled="onSaldoCancelled"
 		></SaldoReferenciaDialog>
 		<SaldoStatusDialog></SaldoStatusDialog>
+		<SaldoCatalogPicker
+			v-model="saldoPickerOpen"
+			@picked="onSaldoPicked"
+			@cancelled="saldoPickerOpen = false"
+		></SaldoCatalogPicker>
 		<!-- /SALDO-INTEGRATION-POINT -->
 		<OpeningDialog
 			v-if="dialog"
@@ -103,7 +108,7 @@
 				cols="12"
 				class="pos dynamic-col dynamic-col--invoice"
 			>
-				<Invoice ref="invoicePanel"></Invoice>
+				<Invoice ref="invoicePanel" @open-saldo-picker="openSaldoPicker"></Invoice>
 			</v-col>
 		</v-row>
 		<div v-if="showBottomDock" ref="mobileDock" class="mobile-pos-stack">
@@ -222,6 +227,7 @@ import PosCoupons from "../offers/PosCoupons.vue";
 // declared in vite.config.js. Upstream rebase: keep these 3 lines.
 import SaldoReferenciaDialog from "@saldo/SaldoReferenciaDialog.vue";
 import SaldoStatusDialog from "@saldo/SaldoStatusDialog.vue";
+import SaldoCatalogPicker from "@saldo/SaldoCatalogPicker.vue";
 import { saldoCaptureBus } from "@saldo/useSaldoCapture";
 import { usePosShift } from "../../../composables/pos/shared/usePosShift";
 import { useOffers } from "../../../composables/pos/shared/useOffers";
@@ -706,6 +712,7 @@ export default {
 		// SALDO-INTEGRATION-POINT
 		SaldoReferenciaDialog,
 		SaldoStatusDialog,
+		SaldoCatalogPicker,
 	},
 
 	// SALDO-INTEGRATION-POINT — data/created/beforeUnmount/methods saldo*
@@ -714,6 +721,7 @@ export default {
 		return {
 			saldoDialogOpen: false,
 			saldoDialogMeta: null,
+			saldoPickerOpen: false,
 			_saldoResolve: null,
 			_saldoReject: null,
 		};
@@ -750,6 +758,42 @@ export default {
 			if (this._saldoReject) this._saldoReject(new Error("saldo capture cancelled"));
 			this._saldoResolve = null;
 			this._saldoReject = null;
+		},
+		openSaldoPicker() {
+			this.saldoPickerOpen = true;
+		},
+		onSaldoPicked(payload) {
+			// Picker returns {item_code, monto, referencia, carrier_label, product_label}.
+			// Drop straight into the invoice — picker already collected what
+			// addItemMeasured normally gathers via dialog.
+			try {
+				const item = {
+					item_code: payload.item_code,
+					item_name: payload.product_label || payload.item_code,
+					qty: 1,
+					stock_qty: 1,
+					rate: Number(payload.monto),
+					price_list_rate: Number(payload.monto),
+					amount: Number(payload.monto),
+					discount_percentage: 0,
+					discount_amount: 0,
+					uom: this.pos_profile?.uom || "Nos",
+					is_stock_item: 0,
+					saldo_enabled: 1,
+					saldo_referencia: payload.referencia,
+					posa_offer_applied: 0,
+					posa_is_offer: 0,
+				};
+				this.invoiceStore.addItems([item], 0);
+			} catch (err) {
+				console.error("[saldo] addItems failed", err);
+				if (window.frappe?.show_alert) {
+					window.frappe.show_alert(
+						{ message: __("No se pudo agregar al carrito: {0}", [String(err)]), indicator: "red" },
+						6,
+					);
+				}
+			}
 		},
 		// SALDO-INTEGRATION-POINT-END
 		create_opening_voucher() {

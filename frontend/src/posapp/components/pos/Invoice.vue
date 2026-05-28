@@ -256,6 +256,7 @@
 			@open-returns="open_returns"
 			@print-draft="print_draft_invoice"
 			@show-payment="handleShowPaymentRequest"
+			@open-saldo-picker="$emit('open-saldo-picker')"
 			@open-customer-display="handleOpenCustomerDisplayRequest"
 			@resume-parked-order="resume_parked_order"
 		/>
@@ -307,6 +308,7 @@ import {
 export default {
 	name: "POSInvoice",
 	mixins: [format],
+	emits: ["open-saldo-picker"],
 	setup() {
 		const instance = getCurrentInstance();
 		const uiStore = useUIStore();
