@@ -49,8 +49,13 @@ export function useCartValidation() {
 				return true;
 			}
 
+			// SALDO-INTEGRATION-POINT (also benefits services, gift cards):
+			// Non-stock items always have actual_qty=0 by design — they're
+			// not in the warehouse. Only block on zero qty if this is a
+			// real stock item. UPSTREAM-WORTHY — consider PR to posawesome.
 			if (
 				item.actual_qty === 0 &&
+				parseBooleanSetting(item?.is_stock_item) &&
 				posProfile?.posa_display_items_in_stock &&
 				!isReturnInvoice
 			) {

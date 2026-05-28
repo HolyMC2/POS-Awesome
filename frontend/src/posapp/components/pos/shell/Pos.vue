@@ -11,6 +11,15 @@
 		<NewAddress v-if="newAddressMounted" :open-request="newAddressOpenRequest"></NewAddress>
 		<MpesaPayments v-if="mpesaMounted" :open-request="mpesaOpenRequest"></MpesaPayments>
 		<Variants v-if="uiStore.variantsDialog"></Variants>
+		<!-- SALDO-INTEGRATION-POINT — components live in saldo Frappe app -->
+		<SaldoReferenciaDialog
+			v-model="saldoDialogOpen"
+			:meta="saldoDialogMeta"
+			@captured="onSaldoCaptured"
+			@cancelled="onSaldoCancelled"
+		></SaldoReferenciaDialog>
+		<SaldoStatusDialog></SaldoStatusDialog>
+		<!-- /SALDO-INTEGRATION-POINT -->
 		<OpeningDialog
 			v-if="dialog"
 			:dialog="dialog"
@@ -208,6 +217,12 @@ import Invoice from "../Invoice.vue";
 import OpeningDialog from "../shift/OpeningDialog.vue";
 import PosOffers from "../offers/PosOffers.vue";
 import PosCoupons from "../offers/PosCoupons.vue";
+// SALDO-INTEGRATION-POINT — Vue sources live in the saldo Frappe app
+// (see saldo/saldo/public/saldo_pos/). Resolved via Vite alias `@saldo`
+// declared in vite.config.js. Upstream rebase: keep these 3 lines.
+import SaldoReferenciaDialog from "@saldo/SaldoReferenciaDialog.vue";
+import SaldoStatusDialog from "@saldo/SaldoStatusDialog.vue";
+import { saldoCaptureBus } from "@saldo/useSaldoCapture";
 import { usePosShift } from "../../../composables/pos/shared/usePosShift";
 import { useOffers } from "../../../composables/pos/shared/useOffers";
 // Import the cache cleanup function
@@ -673,10 +688,6 @@ export default {
 			mpesaOpenRequest,
 		};
 	},
-	data: function () {
-		return {};
-	},
-
 	components: {
 		ItemsSelector,
 		Invoice,
@@ -692,9 +703,55 @@ export default {
 		Variants,
 		MpesaPayments,
 		SalesOrders,
+		// SALDO-INTEGRATION-POINT
+		SaldoReferenciaDialog,
+		SaldoStatusDialog,
+	},
+
+	// SALDO-INTEGRATION-POINT — data/created/beforeUnmount/methods saldo*
+	// blocks below. Keep contained here for easy rebase identification.
+	data() {
+		return {
+			saldoDialogOpen: false,
+			saldoDialogMeta: null,
+			_saldoResolve: null,
+			_saldoReject: null,
+		};
+	},
+
+	created() {
+		this._saldoOpenHandler = ({ meta, resolve, reject }) => {
+			this.saldoDialogMeta = meta;
+			this.saldoDialogOpen = true;
+			this._saldoResolve = resolve;
+			this._saldoReject = reject;
+		};
+		saldoCaptureBus.on("saldo:open", this._saldoOpenHandler);
+		// Clean up expired customer balance cache on POS load (was a separate
+		// created() hook before saldo wiring; merged here because Vue Options
+		// API silently keeps only the last definition of a duplicate key).
+		clearExpiredCustomerBalances();
+	},
+
+	beforeUnmount() {
+		if (this._saldoOpenHandler) {
+			saldoCaptureBus.off("saldo:open", this._saldoOpenHandler);
+		}
 	},
 
 	methods: {
+		// SALDO-INTEGRATION-POINT
+		onSaldoCaptured(result) {
+			if (this._saldoResolve) this._saldoResolve(result);
+			this._saldoResolve = null;
+			this._saldoReject = null;
+		},
+		onSaldoCancelled() {
+			if (this._saldoReject) this._saldoReject(new Error("saldo capture cancelled"));
+			this._saldoResolve = null;
+			this._saldoReject = null;
+		},
+		// SALDO-INTEGRATION-POINT-END
 		create_opening_voucher() {
 			this.dialog = true;
 		},
@@ -744,11 +801,6 @@ export default {
 				{ immediate: true },
 			);
 		});
-	},
-	// In the created() or mounted() lifecycle hook
-	created() {
-		// Clean up expired customer balance cache on POS load
-		clearExpiredCustomerBalances();
 	},
 };
 </script>

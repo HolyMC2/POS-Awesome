@@ -21,7 +21,12 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ]
+      ],
+      "@saldo/*": [
+        "../../saldo/saldo/public/saldo_pos/*"
+      ],
+      "mitt": ["./node_modules/mitt"],
+      "vue": ["./node_modules/vue"]
     },
     "types": [
       "node"
@@ -33,7 +38,9 @@
     "src/**/*.d.ts",
     "src/**/*.tsx",
     "src/**/*.vue",
-    "env.d.ts"
+    "env.d.ts",
+    "../../saldo/saldo/public/saldo_pos/**/*.ts",
+    "../../saldo/saldo/public/saldo_pos/**/*.vue"
   ],
   "exclude": [
     "node_modules",

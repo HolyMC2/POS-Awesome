@@ -1,6 +1,8 @@
 import _ from "lodash";
 import { withPerf } from "../../../utils/perf";
 import { debugLog } from "../../../utils/debug";
+// SALDO-INTEGRATION-POINT — saldo capture lives outside this fork.
+import { requireSaldoCapture } from "@saldo/useSaldoCapture";
 import { parseBooleanSetting } from "../../../utils/stock";
 import { useToastStore } from "../../../stores/toastStore";
 import { useStockUtils } from "../shared/useStockUtils";
@@ -344,6 +346,27 @@ export function useItemAddition() {
 	const addItem = withPerf(
 		"pos:add-item",
 		async function addItemMeasured(item, context) {
+			// SALDO-INTEGRATION-POINT — for saldo-enabled items, capture
+			// referencia BEFORE the line hits the cart. Per TAECEL spec §5,
+			// a successful recarga is irreversible; we MUST get a confirmed
+			// reference up front. requireSaldoCapture is a no-op for items
+			// without saldo_enabled, so the cost is one lazy HTTP per item.
+			if (!item.saldo_referencia && !context?.isReturnInvoice) {
+				try {
+					const captured = await requireSaldoCapture(item);
+					if (captured) {
+						item.saldo_referencia = captured.referencia;
+						if (captured.monto && captured.monto > 0) {
+							item.rate = captured.monto;
+							item.price_list_rate = captured.monto;
+						}
+					}
+				} catch {
+					return; // operator cancelled
+				}
+			}
+			// /SALDO-INTEGRATION-POINT
+
 			const currentInvoiceType =
 				typeof context?.invoiceType === "string"
 					? context.invoiceType

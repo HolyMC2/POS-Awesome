@@ -343,6 +343,49 @@ export const useSocketStore = defineStore("socket", () => {
         setLastStockAdjustment: uiStore.setLastStockAdjustment,
       });
     });
+
+    // SALDO-INTEGRATION-POINT — terminal status from saldo TAECEL
+    // worker. Emits on saldoBus → SaldoStatusDialog mounted in Pos.vue
+    // shows a modal with Print/Close buttons. Bus + dialog source live
+    // in saldo Frappe app under saldo/saldo/public/saldo_pos/.
+    //
+    // The dynamic import is wrapped because @saldo is a Vite alias to
+    // an OUT-OF-TREE Frappe app — if the saldo app isn't site-installed
+    // or the alias misconfigs the import resolves to nothing and the
+    // modal silently disappears. Fallback path surfaces a toast so the
+    // cashier still sees the terminal status verdict.
+    frappe.realtime.on("saldo:transaction", async (data: any) => {
+      if (!data || !data.name) return;
+      try {
+        const { saldoBus } = await import("@saldo/useSaldoCapture");
+        saldoBus.emit("saldo:result", data);
+      } catch (err) {
+        console.error("[saldo] dialog bus import failed", err);
+        try {
+          const tone =
+            data.status === "Success"
+              ? "success"
+              : data.status === "Failed" || data.status === "Refunded"
+              ? "error"
+              : "warning";
+          toastStore.show({
+            key: `saldo::${data.name}`,
+            title: __("Saldo: {0}", [data.status || ""]),
+            detail:
+              data.message_es ||
+              data.error_message ||
+              data.manual_review_reason ||
+              data.name,
+            color: tone,
+            timeout: 12000,
+            loading: false,
+          });
+        } catch {
+          // Toast itself failed — final degradation, swallow rather
+          // than crash the realtime handler.
+        }
+      }
+    });
   }
 
   return {

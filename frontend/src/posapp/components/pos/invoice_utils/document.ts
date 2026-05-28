@@ -577,6 +577,12 @@ export function get_invoice_items(context: any) {
 			// Explicitly include stock status to optimize backend validation loops
 			// where O(N) cache lookups occur if this flag is missing.
 			is_stock_item: item.is_stock_item,
+			// SALDO-INTEGRATION-POINT — pass-through per-line fields the
+			// saldo Frappe app's hook expects. Without these the serializer
+			// drops them and the before_submit hook refuses with "no
+			// tienen número de teléfono".
+			...(item.saldo_referencia && { saldo_referencia: item.saldo_referencia }),
+			...(item.saldo_transaction && { saldo_transaction: item.saldo_transaction }),
 			discount_percentage: flt(item.discount_percentage),
 			batch_no: item.batch_no,
 			posa_notes: item.posa_notes,

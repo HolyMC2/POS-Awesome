@@ -169,6 +169,15 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@": path.resolve(__dirname, "src"),
+			// SALDO-INTEGRATION-POINT — keep saldo Vue source outside this
+			// fork so upstream rebases don't touch it. Files live in the
+			// saldo Frappe app at: saldo/saldo/public/saldo_pos/. The
+			// explicit `mitt`/`vue` aliases redirect those modules to
+			// this fork's node_modules when imported FROM saldo_pos,
+			// since that dir has no node_modules ancestor.
+			"@saldo": path.resolve(__dirname, "../../saldo/saldo/public/saldo_pos"),
+			mitt: path.resolve(__dirname, "node_modules/mitt"),
+			vue: path.resolve(__dirname, "node_modules/vue"),
 		},
 	},
 	define: {
