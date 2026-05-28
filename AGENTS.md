@@ -1,5 +1,7 @@
 # posawesome — POSAwesome fork (Frappe v16)
 
+> ⚠ **Multi-agent stomping safeguard**: before any edit/restart, read [muelle/AGENTS.md → Coordination](../muelle/AGENTS.md#coordination--multi-agent-freshness-read-before-any-write). Use `bash ../muelle/scripts/muelle-restart.sh <svc> --reason "..."` not raw `docker compose restart`. Memory entries: `feedback_agent_freshness_protocol`, `feedback_restart_coordination`.
+
 Point-of-sale SPA for Frappe / ERPNext v16, branched from
 [`HolyMC2/POS-Awesome`](https://github.com/HolyMC2/POS-Awesome) @
 `doco-customizations`. Heavy fork — frontend rebuilt around
