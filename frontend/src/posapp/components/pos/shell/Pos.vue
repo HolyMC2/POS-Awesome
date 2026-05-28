@@ -1,7 +1,7 @@
 <template>
 	<div
 		class="pos-main-container dynamic-container"
-		:class="rtlClasses"
+		:class="[rtlClasses, leanModeClasses]"
 		:style="[responsiveStyles, layoutStyleOverrides, rtlStyles]"
 	>
 		<Drafts v-if="uiStore.draftsDialog"></Drafts>
@@ -309,6 +309,14 @@ export default {
 			additionalDiscountPercentage,
 		} = storeToRefs(invoiceStore);
 		const usePaymentDialog = computed(() => responsive.windowWidth.value >= 992);
+
+		// Lean-layout classes — toggles set on POS Profile.
+		// `posa_lean_vertical_layout` (B mock): stacks cart below selector.
+		// `posa_lean_wizard_layout` (C mock): wizard step indicator + jumbo pay.
+		const leanModeClasses = computed(() => ({
+			"posa-lean-vertical": !!posProfile.value?.posa_lean_vertical_layout,
+			"posa-lean-wizard": !!posProfile.value?.posa_lean_wizard_layout,
+		}));
 		const useCompactPosSwitcher = computed(() => responsive.windowWidth.value < 1100);
 		const compactPanel = ref("selector");
 		const isPhone = computed(() => responsive.isPhone.value);
@@ -688,6 +696,7 @@ export default {
 			formattedDiscountTotal,
 			cartMetaLabel,
 			posProfile,
+			leanModeClasses,
 			additionalDiscountField,
 			additionalDiscountDisplay,
 			additionalDiscountPercentageDisplay,
@@ -1067,5 +1076,60 @@ export default {
 		min-height: 52px;
 		font-size: 0.65rem;
 	}
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Lean-vertical (B mock): stack cart below selector, hide chips.
+ * Mocked at the CSS layer so we can iterate visuals without touching
+ * v-row / v-col logic yet. Final implementation should move the
+ * selector + invoice columns into a flex column with min-height
+ * proper for the device.
+ * ──────────────────────────────────────────────────────────────── */
+.pos-main-container.posa-lean-vertical :deep(.dynamic-main-row) {
+	flex-direction: column !important;
+	flex-wrap: nowrap !important;
+}
+.pos-main-container.posa-lean-vertical :deep(.dynamic-col--selector) {
+	max-width: 100% !important;
+	flex-basis: 100% !important;
+	min-height: 200px;
+}
+.pos-main-container.posa-lean-vertical :deep(.dynamic-col--invoice) {
+	max-width: 100% !important;
+	flex-basis: 100% !important;
+}
+/* hide non-essential affordances */
+.pos-main-container.posa-lean-vertical :deep(.item-group-chips),
+.pos-main-container.posa-lean-vertical :deep(.selector-section-card .items-view-toggle),
+.pos-main-container.posa-lean-vertical :deep(.sales-person-selector) {
+	display: none !important;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Lean-wizard (C mock): jumbo pay button + step-indicator strip.
+ * Pure CSS reskin — wizard step routing is a follow-up if direction
+ * validates. For now adds a visual "Step 1 / 2 / 3" hint + makes
+ * the primary CTA huge and high-contrast.
+ * ──────────────────────────────────────────────────────────────── */
+.pos-main-container.posa-lean-wizard::before {
+	content: "1. Agregar artículos  →  2. Revisar  →  3. Cobrar";
+	display: block;
+	padding: 12px 16px;
+	background: linear-gradient(90deg, #0ea5e9 0%, #6366f1 100%);
+	color: #fff;
+	font-weight: 600;
+	font-size: 1rem;
+	text-align: center;
+	letter-spacing: 0.02em;
+}
+.pos-main-container.posa-lean-wizard :deep(.btn-pay),
+.pos-main-container.posa-lean-wizard :deep(button[class*="pay"]) {
+	min-height: 64px !important;
+	font-size: 1.25rem !important;
+	font-weight: 700 !important;
+	letter-spacing: 0.04em !important;
+}
+.pos-main-container.posa-lean-wizard :deep(.dynamic-col--invoice) {
+	background-color: rgba(14, 165, 233, 0.04) !important;
 }
 </style>
