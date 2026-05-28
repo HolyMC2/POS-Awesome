@@ -108,8 +108,8 @@
 								:format-number="memoizedFormatNumber"
 								:rate-precision="ratePrecision"
 								:is-negative="isNegative"
-								:no-items-title="__('No items found')"
-								:no-items-subtitle="__('Try adjusting your search or filters')"
+								:no-items-title="noItemsTitle"
+								:no-items-subtitle="noItemsSubtitle"
 								:clear-search-label="__('Clear Search')"
 								@select-item="select_item"
 								@dragstart="onDragStart"
@@ -136,7 +136,7 @@
 								:is-negative="isNegative"
 								:item-class="getItemRowClass"
 								:row-props="getItemRowProps"
-								:no-data-text="__('No items found')"
+								:no-data-text="noItemsTitle"
 								@row-click="click_item_row"
 								@list-scroll="onListScroll"
 							/>
@@ -455,6 +455,12 @@ const displayedItems = computed(() => {
 		first_search.value ||
 		"";
 	const term = (typeof rawTerm === "string" ? rawTerm : "").trim().toLowerCase();
+	// Barcode-first mode: nothing visible until the operator searches/
+	// scans. Cuts visual noise in convenience-store layouts where every
+	// sale is a barcode hit and the operator never browses the grid.
+	if (!term && pos_profile.value?.posa_hide_items_until_search) {
+		return [];
+	}
 	return filterAndPaginate(baseItems, {
 		searchTerm: term,
 		hideZeroRate: hide_zero_rate_items.value,
@@ -463,6 +469,27 @@ const displayedItems = computed(() => {
 		limit: enable_custom_items_per_page.value ? items_per_page.value : itemsPerPage.value,
 	});
 });
+
+const isBarcodeFirstWaiting = computed(() => {
+	if (!pos_profile.value?.posa_hide_items_until_search) return false;
+	const rawTerm =
+		(typeof search_input.value === "string" && search_input.value) ||
+		first_search.value ||
+		"";
+	return !((typeof rawTerm === "string" ? rawTerm : "").trim());
+});
+
+const noItemsTitle = computed(() =>
+	isBarcodeFirstWaiting.value
+		? __("Scan a barcode or type to search")
+		: __("No items found"),
+);
+
+const noItemsSubtitle = computed(() =>
+	isBarcodeFirstWaiting.value
+		? __("Items list stays empty in barcode-first mode")
+		: __("Try adjusting your search or filters"),
+);
 
 watch(
 	() => props.showOnlyBarcodeItems,

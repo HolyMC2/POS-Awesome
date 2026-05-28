@@ -23,3 +23,4 @@ posawesome.patches.add_qz_cut_after_print
 posawesome.patches.add_closing_shift_print_format_field
 posawesome.patches.add_default_closing_shift_print_format
 posawesome.patches.heal_pos_awesome_shortcut_url
+posawesome.patches.add_hide_items_until_search
