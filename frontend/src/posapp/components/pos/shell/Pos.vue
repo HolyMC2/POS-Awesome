@@ -183,7 +183,7 @@
 					:class="{ 'mobile-pos-dock__item--active': compactPanel === 'invoice' }"
 					@click="showInvoicePanel"
 				>
-					<span class="mobile-pos-dock__pill">{{ itemsCount }}</span>
+					<span v-if="itemsCount > 0" class="mobile-pos-dock__pill">{{ itemsCount }}</span>
 					<v-icon icon="mdi-cart-outline" size="22" />
 					<span>{{ __("Cart") }}</span>
 				</button>
@@ -950,13 +950,21 @@ export default {
 }
 
 .mobile-pos-dock__item--active {
-	background: rgba(var(--v-theme-primary), 0.12);
+	background: rgba(var(--v-theme-primary), 0.08);
 	color: rgb(var(--v-theme-primary));
 }
 
+/* Pay button is always the primary CTA — visible without active state. */
+.mobile-pos-dock__item--pay {
+	background: rgb(var(--v-theme-success));
+	color: #fff;
+}
+.mobile-pos-dock__item--pay:hover {
+	background: color-mix(in srgb, rgb(var(--v-theme-success)) 90%, #000);
+}
 .mobile-pos-dock__item--pay.mobile-pos-dock__item--active {
-	background: rgba(var(--v-theme-success), 0.16);
-	color: rgb(var(--v-theme-success));
+	background: color-mix(in srgb, rgb(var(--v-theme-success)) 88%, #000);
+	color: #fff;
 }
 
 :deep(.v-theme--dark) .mobile-sale-dock,
