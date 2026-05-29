@@ -1,7 +1,7 @@
 <template>
 	<v-app class="container1 posapp pos-theme-root" :class="rtlClasses">
 		<AppLoadingOverlay :visible="globalLoading" />
-		<UpdatePrompt />
+		<UpdatePrompt v-if="!posProfile || !posProfile.posa_disable_update_prompt" />
 		<v-main class="main-content">
 			<ClosingDialog />
 			<Navbar

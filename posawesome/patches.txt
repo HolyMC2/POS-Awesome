@@ -25,3 +25,4 @@ posawesome.patches.add_default_closing_shift_print_format
 posawesome.patches.heal_pos_awesome_shortcut_url
 posawesome.patches.add_hide_items_until_search
 posawesome.patches.add_lean_layout_flags
+posawesome.patches.add_disable_update_prompt_flag
