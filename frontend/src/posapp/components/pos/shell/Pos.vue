@@ -939,7 +939,7 @@ export default {
 		transform 0.18s ease;
 }
 
-.mobile-pos-dock__item span {
+.mobile-pos-dock__item > span:not(.mobile-pos-dock__pill) {
 	display: block;
 	width: 100%;
 	min-width: 0;
