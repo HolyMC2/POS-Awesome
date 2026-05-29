@@ -959,3 +959,17 @@ def posa_user_opted_into_web_route() -> bool:
     except Exception:
         return False
     return any(int(row[0] or 0) for row in rows)
+
+
+# ----------------------------------------------------------------------
+# Backward-compat path aliases. Some POSAwesome frontend chunks call
+# `posawesome.posawesome.api.<old_module>.<func>` whose impl moved into
+# subpackages. Frappe's whitelist check on imported aliases fails because
+# the underlying function's `__module__` no longer matches the requested
+# path. Local wrappers below carry their own @whitelist + delegate.
+# ----------------------------------------------------------------------
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_active_pricing_rules(*args, **kwargs):
+    from posawesome.posawesome.api.pricing_rules import get_active_pricing_rules as _impl
+    return _impl(*args, **kwargs)

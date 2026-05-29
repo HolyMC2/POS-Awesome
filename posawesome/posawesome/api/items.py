@@ -230,3 +230,77 @@ def get_item_brand(item_code):
     if not brand and data.get("variant_of"):
         brand = frappe.db.get_value("Item", data.get("variant_of"), "brand")
     return normalize_brand(brand) if brand else ""
+
+
+# ----------------------------------------------------------------------
+# Backward-compat path aliases. Some POSAwesome frontend chunks call
+# `posawesome.posawesome.api.<old_module>.<func>` whose impl moved into
+# subpackages. Frappe's whitelist check on imported aliases fails because
+# the underlying function's `__module__` no longer matches the requested
+# path. Local wrappers below carry their own @whitelist + delegate.
+# ----------------------------------------------------------------------
+
+@frappe.whitelist(methods=["GET", "POST"])
+def build_scale_barcode(*args, **kwargs):
+    from posawesome.posawesome.api.item_processing.barcode import build_scale_barcode as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_items_from_barcode(*args, **kwargs):
+    from posawesome.posawesome.api.item_processing.barcode import get_items_from_barcode as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def parse_scale_barcode(*args, **kwargs):
+    from posawesome.posawesome.api.item_processing.barcode import parse_scale_barcode as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def search_serial_or_batch_or_barcode_number(*args, **kwargs):
+    from posawesome.posawesome.api.item_processing.barcode import search_serial_or_batch_or_barcode_number as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_available_qty(*args, **kwargs):
+    from posawesome.posawesome.api.item_processing.stock import get_available_qty as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_item_detail(*args, **kwargs):
+    from posawesome.posawesome.api.item_processing.details import get_item_detail as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_items_details(*args, **kwargs):
+    from posawesome.posawesome.api.item_processing.details import get_items_details as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_item_variants(*args, **kwargs):
+    from posawesome.posawesome.api.item_processing.details import get_item_variants as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_items(*args, **kwargs):
+    from posawesome.posawesome.api.item_processing.search import get_items as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_items_groups(*args, **kwargs):
+    from posawesome.posawesome.api.item_processing.search import get_items_groups as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_price_for_uom(*args, **kwargs):
+    from posawesome.posawesome.api.item_processing.price import get_price_for_uom as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def update_price_list_rate(*args, **kwargs):
+    from posawesome.posawesome.api.item_processing.price import update_price_list_rate as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def search_items(*args, **kwargs):
+    from posawesome.posawesome.api.purchase_orders import search_items as _impl
+    return _impl(*args, **kwargs)

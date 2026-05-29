@@ -242,3 +242,52 @@ def update_invoice_from_order(data):
     """Backward-compatible facade used by order-to-invoice flow."""
 
     return update_invoice(data)
+
+
+# ----------------------------------------------------------------------
+# Backward-compat path aliases. Some POSAwesome frontend chunks call
+# `posawesome.posawesome.api.<old_module>.<func>` whose impl moved into
+# subpackages. Frappe's whitelist check on imported aliases fails because
+# the underlying function's `__module__` no longer matches the requested
+# path. Local wrappers below carry their own @whitelist + delegate.
+# ----------------------------------------------------------------------
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_available_currencies(*args, **kwargs):
+    from posawesome.posawesome.api.invoice_processing.utils import get_available_currencies as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_price_list_currency(*args, **kwargs):
+    from posawesome.posawesome.api.invoice_processing.utils import get_price_list_currency as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_invoice_for_return(*args, **kwargs):
+    from posawesome.posawesome.api.invoice_processing.returns import get_invoice_for_return as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def search_invoices_for_return(*args, **kwargs):
+    from posawesome.posawesome.api.invoice_processing.returns import search_invoices_for_return as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_last_invoice_rates(*args, **kwargs):
+    from posawesome.posawesome.api.invoice_processing.data import get_last_invoice_rates as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def submit_invoice(*args, **kwargs):
+    from posawesome.posawesome.api.invoice_processing.creation import submit_invoice as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def update_invoice(*args, **kwargs):
+    from posawesome.posawesome.api.invoice_processing.creation import update_invoice as _impl
+    return _impl(*args, **kwargs)
+
+@frappe.whitelist(methods=["GET", "POST"])
+def validate_cart_items(*args, **kwargs):
+    from posawesome.posawesome.api.invoice_processing.creation import validate_cart_items as _impl
+    return _impl(*args, **kwargs)
