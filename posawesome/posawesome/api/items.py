@@ -235,72 +235,191 @@ def get_item_brand(item_code):
 # ----------------------------------------------------------------------
 # Backward-compat path aliases. Some POSAwesome frontend chunks call
 # `posawesome.posawesome.api.<old_module>.<func>` whose impl moved into
-# subpackages. Frappe's whitelist check on imported aliases fails because
-# the underlying function's `__module__` no longer matches the requested
-# path. Local wrappers below carry their own @whitelist + delegate.
+# subpackages. Direct `from ... import` aliases fail Frappe's whitelist
+# check because the function's `__module__` no longer matches the URL
+# path → 404. Local wrappers below carry their own @whitelist and
+# delegate, filtering Frappe-injected kwargs (e.g. `cmd`) so impls
+# without **kwargs don't TypeError.
 # ----------------------------------------------------------------------
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def build_scale_barcode(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.item_processing.barcode.build_scale_barcode.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.item_processing.barcode import build_scale_barcode as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_items_from_barcode(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.item_processing.barcode.get_items_from_barcode.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.item_processing.barcode import get_items_from_barcode as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def parse_scale_barcode(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.item_processing.barcode.parse_scale_barcode.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.item_processing.barcode import parse_scale_barcode as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def search_serial_or_batch_or_barcode_number(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.item_processing.barcode.search_serial_or_batch_or_barcode_number.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.item_processing.barcode import search_serial_or_batch_or_barcode_number as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_available_qty(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.item_processing.stock.get_available_qty.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.item_processing.stock import get_available_qty as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_item_detail(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.item_processing.details.get_item_detail.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.item_processing.details import get_item_detail as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_items_details(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.item_processing.details.get_items_details.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.item_processing.details import get_items_details as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_item_variants(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.item_processing.details.get_item_variants.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.item_processing.details import get_item_variants as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_items(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.item_processing.search.get_items.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.item_processing.search import get_items as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_items_groups(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.item_processing.search.get_items_groups.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.item_processing.search import get_items_groups as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_price_for_uom(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.item_processing.price.get_price_for_uom.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.item_processing.price import get_price_for_uom as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def update_price_list_rate(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.item_processing.price.update_price_list_rate.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.item_processing.price import update_price_list_rate as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def search_items(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.purchase_orders.search_items.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.purchase_orders import search_items as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)

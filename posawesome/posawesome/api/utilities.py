@@ -964,12 +964,23 @@ def posa_user_opted_into_web_route() -> bool:
 # ----------------------------------------------------------------------
 # Backward-compat path aliases. Some POSAwesome frontend chunks call
 # `posawesome.posawesome.api.<old_module>.<func>` whose impl moved into
-# subpackages. Frappe's whitelist check on imported aliases fails because
-# the underlying function's `__module__` no longer matches the requested
-# path. Local wrappers below carry their own @whitelist + delegate.
+# subpackages. Direct `from ... import` aliases fail Frappe's whitelist
+# check because the function's `__module__` no longer matches the URL
+# path → 404. Local wrappers below carry their own @whitelist and
+# delegate, filtering Frappe-injected kwargs (e.g. `cmd`) so impls
+# without **kwargs don't TypeError.
 # ----------------------------------------------------------------------
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_active_pricing_rules(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.pricing_rules.get_active_pricing_rules.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.pricing_rules import get_active_pricing_rules as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)

@@ -247,47 +247,121 @@ def update_invoice_from_order(data):
 # ----------------------------------------------------------------------
 # Backward-compat path aliases. Some POSAwesome frontend chunks call
 # `posawesome.posawesome.api.<old_module>.<func>` whose impl moved into
-# subpackages. Frappe's whitelist check on imported aliases fails because
-# the underlying function's `__module__` no longer matches the requested
-# path. Local wrappers below carry their own @whitelist + delegate.
+# subpackages. Direct `from ... import` aliases fail Frappe's whitelist
+# check because the function's `__module__` no longer matches the URL
+# path → 404. Local wrappers below carry their own @whitelist and
+# delegate, filtering Frappe-injected kwargs (e.g. `cmd`) so impls
+# without **kwargs don't TypeError.
 # ----------------------------------------------------------------------
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_available_currencies(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.invoice_processing.utils.get_available_currencies.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.invoice_processing.utils import get_available_currencies as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_price_list_currency(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.invoice_processing.utils.get_price_list_currency.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.invoice_processing.utils import get_price_list_currency as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_invoice_for_return(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.invoice_processing.returns.get_invoice_for_return.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.invoice_processing.returns import get_invoice_for_return as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def search_invoices_for_return(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.invoice_processing.returns.search_invoices_for_return.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.invoice_processing.returns import search_invoices_for_return as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_last_invoice_rates(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.invoice_processing.data.get_last_invoice_rates.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.invoice_processing.data import get_last_invoice_rates as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def submit_invoice(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.invoice_processing.creation.submit_invoice.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.invoice_processing.creation import submit_invoice as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def update_invoice(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.invoice_processing.creation.update_invoice.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.invoice_processing.creation import update_invoice as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
 
 @frappe.whitelist(methods=["GET", "POST"])
 def validate_cart_items(*args, **kwargs):
+    """Backward-compat alias → posawesome.posawesome.api.invoice_processing.creation.validate_cart_items.
+    Filters kwargs against the impl's signature so Frappe's `cmd` /
+    other handler-injected fields don't trip TypeError on impls without
+    **kwargs."""
     from posawesome.posawesome.api.invoice_processing.creation import validate_cart_items as _impl
+    import inspect as _inspect
+    _sig = _inspect.signature(_impl)
+    if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
