@@ -324,6 +324,45 @@ export function trackCustomMark(name: string, durationMs: number) {
 	push(`perf:${name}`, durationMs);
 }
 
+// --- Per-method API latency -------------------------------------------
+// Single source of truth for app-perf timing. Both api.ts callEnvelope
+// and the /posapp frappe-shim frappeCall feed timings through here, so
+// perf:api.* lands in telemetry regardless of which call path a caller
+// used. Before this, only callEnvelope (a few services) emitted timings;
+// the ~50 direct frappe.call sites — incl update_invoice / submit_invoice
+// — were invisible, so the telemetry table had ZERO perf:api rows.
+const API_HOT_METHODS = new Set<string>([
+	"posawesome.posawesome.api.invoices.submit_invoice",
+	"posawesome.posawesome.api.invoices.update_invoice",
+	"posawesome.posawesome.api.invoices.validate_cart_items",
+	"posawesome.posawesome.api.shifts.check_opening_shift",
+	"posawesome.posawesome.api.items.search_items",
+	"posawesome.posawesome.api.items.get_items",
+	"posawesome.posawesome.api.customers.search_customers",
+	"posawesome.posawesome.api.utilities.get_active_pricing_rules",
+]);
+
+function apiMethodLabel(method: string): string {
+	const prefix = "posawesome.posawesome.api.";
+	return method.startsWith(prefix) ? method.slice(prefix.length) : method;
+}
+
+// Hot methods always tracked; cold ones sampled at 10% to bound volume.
+// Telemetry must never throw.
+export function trackApiTiming(
+	method: string,
+	ok: boolean,
+	elapsedMs: number,
+): void {
+	try {
+		if (!method) return;
+		if (!API_HOT_METHODS.has(method) && Math.random() >= 0.1) return;
+		push(`perf:api.${apiMethodLabel(method)}.${ok ? "ok" : "err"}`, elapsedMs);
+	} catch {
+		/* telemetry must never throw */
+	}
+}
+
 export function start(opts: {
 	terminal?: string;
 	buildVersion?: string;

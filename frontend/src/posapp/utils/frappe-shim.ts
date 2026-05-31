@@ -55,6 +55,8 @@
  *   frappe.desk.search               search — Desk-only widget
  */
 
+import { trackApiTiming } from "./telemetry";
+
 declare global {
 	interface Window {
 		posawesome_boot?: any;
@@ -157,6 +159,17 @@ async function frappeCall(
 		o = { ...opts };
 	}
 	const method = o.method;
+	const __t0 =
+		typeof performance !== "undefined" ? performance.now() : Date.now();
+	const __emitTiming = (ok: boolean): void => {
+		try {
+			const now =
+				typeof performance !== "undefined" ? performance.now() : Date.now();
+			trackApiTiming(method, ok, now - __t0);
+		} catch {
+			/* telemetry must never throw */
+		}
+	};
 	const type = (o.type || "POST").toUpperCase();
 	const headers: Record<string, string> = {
 		"X-Frappe-CSRF-Token": getCsrfToken(),
@@ -199,6 +212,7 @@ async function frappeCall(
 			body,
 		});
 	} catch (networkErr) {
+		__emitTiming(false);
 		if (o.error) o.error(networkErr);
 		throw networkErr;
 	}
@@ -211,6 +225,7 @@ async function frappeCall(
 	}
 
 	if (!response.ok) {
+		__emitTiming(false);
 		const err = new Error(
 			(data && (data._error_message || data.message)) ||
 				`HTTP ${response.status}`,
@@ -241,6 +256,7 @@ async function frappeCall(
 			console.warn("[POSA][shim] callback raised", cbErr);
 		}
 	}
+	__emitTiming(true);
 	return data;
 }
 

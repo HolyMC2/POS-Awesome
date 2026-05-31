@@ -1,5 +1,3 @@
-import { trackCustomMark } from "../utils/telemetry";
-
 export interface CallOptions {
 	freeze?: boolean;
 	freeze_message?: string;
@@ -7,29 +5,6 @@ export interface CallOptions {
 	timeoutMs?: number;
 	signal?: AbortSignal;
 	[key: string]: any;
-}
-
-// Hot-path methods worth high-fidelity timing. Anything not in this
-// list is still tracked but with a coarser sampled bucket so we don't
-// spam the telemetry table with every utility ping.
-const HOT_METHODS = new Set([
-	"posawesome.posawesome.api.invoices.submit_invoice",
-	"posawesome.posawesome.api.invoices.update_invoice",
-	"posawesome.posawesome.api.invoices.validate_cart_items",
-	"posawesome.posawesome.api.shifts.check_opening_shift",
-	"posawesome.posawesome.api.items.search_items",
-	"posawesome.posawesome.api.items.get_items",
-	"posawesome.posawesome.api.customers.search_customers",
-	"posawesome.posawesome.api.utilities.get_active_pricing_rules",
-]);
-
-function methodLabel(method: string): string {
-	// Strip the long `posawesome.posawesome.api.` prefix to keep
-	// event_name under the schema's 64-char cap and human-readable.
-	return method
-		.replace(/^posawesome\.posawesome\.api\./, "posa.")
-		.replace(/^frappe\.client\./, "frap.")
-		.slice(0, 60);
 }
 
 export interface FrappeResponse<T = any> {
@@ -366,16 +341,6 @@ const api = {
 			...args,
 			request_id: requestId,
 		};
-		// Per-method timing — emits perf:api.<short-method> events to
-		// telemetry. Hot methods (submit_invoice, update_invoice,
-		// search_items, etc.) always tracked; everything else still
-		// tracked but the schema's allow-prefix gates noise. See the
-		// HOT_METHODS set + methodLabel() near the top of this file.
-		// Telemetry table was missing app-perf events entirely until
-		// this wiring landed — only RUM web-vitals were flowing.
-		const startedAt =
-			typeof performance !== "undefined" ? performance.now() : Date.now();
-		const isHot = HOT_METHODS.has(method);
 
 		return new Promise((resolve) => {
 			let settled = false;
@@ -393,23 +358,6 @@ const api = {
 					timeoutHandle = null;
 				}
 				options.signal?.removeEventListener("abort", handleAbort);
-				try {
-					const elapsed =
-						(typeof performance !== "undefined"
-							? performance.now()
-							: Date.now()) - startedAt;
-					// Always track hot methods; sample cold ones at 10%
-					// to keep telemetry volume bounded. Telemetry must
-					// never raise.
-					if (isHot || Math.random() < 0.1) {
-						trackCustomMark(
-							`api.${methodLabel(method)}.${envelope.ok ? "ok" : "err"}`,
-							elapsed,
-						);
-					}
-				} catch {
-					/* telemetry must never throw */
-				}
 				resolve(envelope);
 			};
 
