@@ -1,0 +1,38 @@
+name: gitleaks
+
+on:
+  push:
+    branches: [develop, main, master]
+  pull_request:
+    branches: [develop, main, master]
+  schedule:
+    - cron: "30 7 * * 0"
+
+permissions:
+  contents: read
+  pull-requests: read
+  security-events: write
+
+jobs:
+  scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so gitleaks can sweep historical commits, not
+          # just the HEAD snapshot. Secret detection is high-signal on
+          # accidental commits that were later "fixed" without rewrite.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Default ruleset covers AWS, GCP, Azure, Slack, Stripe,
+          # GitHub PAT, generic high-entropy strings. Add custom rules
+          # via .gitleaks.toml if false-positive noise grows.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+          GITLEAKS_ENABLE_SUMMARY: "true"
