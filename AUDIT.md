@@ -135,3 +135,42 @@ Output is ~60 % smaller; saves the lead session's context budget.
 - Don't spawn one at a time — both go in a single message with `run_in_background: true`.
 - Don't omit `name:` — without it the agent isn't addressable via `SendMessage`.
 - Don't have the lead also do parallel coding work — race conditions on the same files.
+
+---
+
+## 5. `upstream-pr/*` branch reconcile (2026-05-31)
+
+Patch-id reconcile (`git cherry origin/doco-customizations origin/upstream-pr/*`)
+of the four long-lived upstream-PR branches vs current HEAD (`d9757dec`):
+
+| Branch | absent-from-HEAD (by patch-id) | already-in-HEAD |
+|---|---|---|
+| `upstream-pr/01-py3-14-module-lock` | 16 | 10 |
+| `upstream-pr/02-vuetify-3-12-6` | 16 | 10 |
+| `upstream-pr/03-build-sw-bgsync` | 16 | 13 |
+| `upstream-pr/05-watcher-listener-hygiene` | **18** | 12 |
+
+**Key finding: 01/02/03 carry the SAME 16 absent commits; 05 = those 16 + 2.**
+The 16 are a shared upstream-integration backlog (multi-currency payment
+precision, cart-addition perf, "remove deep item-map watcher", RTL
+pay-sidebar, duplicate-print-prompt fix, background-sync detail refresh,
+exchange gain/loss, …). 05's 2 extras are `perf(watchers): drop deep:true
+from 8 hot watchers` + `fix(watchers): restore deep:true on posa_coupons +
+pos_offers per review`.
+
+**Verdict:**
+- `upstream-pr/01`, `02`, `03` carry NOTHING unique vs `05` → **redundant,
+  safe to prune** (their entire delta is a subset of 05).
+- `upstream-pr/05` is the real integration backlog (18 commits). Do NOT
+  prune. NOT a blind merge — our HEAD already did its own deep-watcher
+  drop, so the 2 watcher commits + the overlapping perf work need a
+  3-way / patch-id-aware merge, same hybrid analysis as §1-3 (b5992f70 /
+  8bf5eba7 / efdaa465). Re-run `git cherry` before integrating; counts
+  drift as HEAD advances.
+
+NOTE: the leaked GitHub PAT that triggered the 2026-05-31 rotation lives
+in commit `de88df1b` — a git-stash blob ("untracked files on saldo…"),
+NOT reachable from any origin branch and never pushed. gitleaks CI (PR-C,
+`fetch-depth: 0`) will NOT flag it: GitHub's clone only includes
+branch-reachable history. Current `doco-customizations` tree + history are
+PAT-clean.

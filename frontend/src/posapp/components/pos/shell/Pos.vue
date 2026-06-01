@@ -240,6 +240,7 @@ import { useUIStore } from "../../../stores/uiStore.js";
 import { useInvoiceStore } from "../../../stores/invoiceStore.js";
 import { useItemsStore } from "../../../stores/itemsStore.js";
 import { storeToRefs } from "pinia";
+import { parseBooleanSetting } from "../../../utils/stock";
 import { useCustomerDisplayPublisher } from "../../../composables/pos/shared/useCustomerDisplayPublisher";
 
 const Payments = defineAsyncComponent(() => import("../Payments.vue"));
@@ -264,7 +265,17 @@ export default {
 		// production-built render scope. setup() returns expose cleanly via
 		// `n.openSaldoPicker` after Vite compilation.
 		const saldoPickerOpen = ref(false);
+		// SALDO-INTEGRATION-POINT — per-profile gate. The launcher button is
+		// hidden via v-if when the active POS Profile has saldo disabled, but
+		// the eventBus `open-saldo-picker` path could still fire, so guard here
+		// too (defensive). `posProfile` is a storeToRefs(uiStore) ref declared
+		// below; closure resolves it at click-time, well after setup() returns.
+		const saldoEnabledForProfile = () =>
+			parseBooleanSetting(posProfile.value?.saldo_enabled);
 		const openSaldoPicker = () => {
+			if (!saldoEnabledForProfile()) {
+				return;
+			}
 			saldoPickerOpen.value = true;
 		};
 		const onSaldoPicked = (payload) => {
@@ -309,6 +320,13 @@ export default {
 			additionalDiscountPercentage,
 		} = storeToRefs(invoiceStore);
 		const usePaymentDialog = computed(() => responsive.windowWidth.value >= 992);
+
+		// SALDO-INTEGRATION-POINT — per-profile gate for the catalog picker.
+		// SaldoReferenciaDialog + SaldoStatusDialog stay mounted (bus-driven,
+		// inert without saldo lines); only the operator-facing picker is gated.
+		const showSaldoCatalogPicker = computed(() =>
+			parseBooleanSetting(posProfile.value?.saldo_enabled),
+		);
 
 		// Lean-layout classes — toggles set on POS Profile.
 		// `posa_lean_vertical_layout` (B mock): stacks cart below selector.
@@ -683,6 +701,7 @@ export default {
 			...offers,
 			// SALDO-INTEGRATION-POINT
 			saldoPickerOpen,
+			showSaldoCatalogPicker,
 			openSaldoPicker,
 			onSaldoPicked,
 			uiStore,

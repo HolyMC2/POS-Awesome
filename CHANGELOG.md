@@ -2,6 +2,42 @@
 
 All notable changes.
 
+## Unreleased — 2026-05-31 (LAB ONLY, not on prod)
+
+Telemetry call-path fix + API legacy-path compatibility + saldo
+per-profile gate. On `doco-customizations`, built + verified on
+ventas.lab. NOT deployed to prod — prod backend still `89fc7cd4`.
+
+### 🔌 Saldo per-profile gate (host-side)
+- Saldo (TAECEL airtime) UI now gated on the POS Profile `saldo_enabled`
+  flag (the field itself is owned + installed by the saldo app, default
+  OFF). `InvoiceActionButtons.vue` — "Recarga / Servicio" launcher
+  `v-if="showSaldoButton"` = `parseBooleanSetting(pos_profile?.saldo_enabled)`.
+  `Pos.vue` — `openSaldoPicker()` no-ops + `<SaldoCatalogPicker v-if>` when
+  the active profile has saldo off (defensive — button hidden AND handler
+  guarded). SaldoReferenciaDialog/StatusDialog stay mounted (bus-driven,
+  inert). Backend dispatch gate lives in the saldo app. Uncommitted, lab
+  only.
+
+### ⚡ Telemetry
+- `d9757dec perf(telemetry)` — emit `perf:api.*` from the frappe-shim
+  chokepoint. Per-method timing lived only in `api.ts callEnvelope`,
+  but the hot methods (update_invoice / submit_invoice / search_items,
+  ~52 call sites) hit `frappe.call()` directly and bypassed it → zero
+  perf:api rows ever reached POS Telemetry Event. Moved to a single
+  source `trackApiTiming()` in `utils/telemetry.ts`, called from the
+  shim `frappeCall` at all 3 exits (network-err / !ok / success);
+  removed callEnvelope self-timing (no double-count — on /posapp the
+  global `frappe` IS the shim). Lab-verified 0→19 rows / 16 method
+  labels. Hot methods always tracked, cold 10%-sampled. Desk path
+  `/app/posapp` (deprecated) loses app-perf timing — acceptable.
+
+### 🐞 API compatibility
+- `89fc7cd4 fix(api)` — legacy-path wrappers filter Frappe handler kwargs.
+- `30d60701 fix(api)` — backward-compat aliases for refactored legacy paths.
+
+---
+
 ## Unreleased — 2026-05-25 / 2026-05-26
 
 Hotfix saga + perf instrumentation following prod migration

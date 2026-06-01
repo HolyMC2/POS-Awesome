@@ -361,8 +361,19 @@ export function useItemAddition() {
 							item.price_list_rate = captured.monto;
 						}
 					}
-				} catch {
-					return; // operator cancelled
+				} catch (err) {
+					// Only a deliberate operator cancel (the dialog rejects with
+					// "cancelled") aborts the add. Any other throw — a transient
+					// meta-fetch failure, or the saldo source not being usable in
+					// the current runtime — must NOT silently kill add-to-cart for
+					// ordinary, non-saldo items; fall through to a normal addition.
+					const cancelled =
+						err === "cancelled" ||
+						(err as any)?.message === "cancelled" ||
+						(err as any)?.reason === "cancelled";
+					if (cancelled) {
+						return; // operator cancelled
+					}
 				}
 			}
 			// /SALDO-INTEGRATION-POINT

@@ -94,7 +94,7 @@ posawesome/
           telemetry.ts                 ← RUM client + buffer + flush
           perf.ts                      ← withPerf wrapper
         services/
-          api.ts                       ← callEnvelope + per-method timing
+          api.ts                       ← callEnvelope (timing moved to shim 2026-05-31)
           invoiceService.ts            ← thin Promise wrapper
           qzTray.ts                    ← printDocumentViaQz pipeline
         stores/ (Pinia)
@@ -137,6 +137,24 @@ posawesome/
 Latest first. Idempotent — `create_custom_field` no-ops, format inserts
 check `frappe.db.exists` first.
 
+> ⏳ **On LAB, NOT yet on prod (2026-05-31):** `d9757dec` perf:api
+> telemetry chokepoint fix (see corrected Observability entry below).
+> Prod backend still `89fc7cd4`. Deploy needs frontend vite build +
+> asset-volume sync (or image rebake) — never `bench build` in the prod
+> backend. Until deployed, prod POS p99 stays per-method-blind.
+
+> ⏳ **Also lab-only, uncommitted (2026-05-31): saldo per-profile gate.**
+> Saldo (TAECEL airtime) UI now gated on POS Profile `saldo_enabled`
+> (Check, default OFF, field owned + installed by the saldo app, doco
+> tenants only). Host-side gate: `InvoiceActionButtons.vue` "Recarga /
+> Servicio" launcher `v-if="showSaldoButton"`
+> (`parseBooleanSetting(pos_profile?.saldo_enabled)`); `Pos.vue`
+> `openSaldoPicker()` no-ops + `SaldoCatalogPicker v-if` when off. Backend
+> validate/dispatch gate lives in saldo `pos_invoice_hooks.py`. Prod doco
+> profiles need the flag flipped ON once after deploy (default OFF).
+> Source-verified; full in-browser proof pending (lab Chrome/429
+> contention). See saldo CHANGELOG Phase 12.
+
 ### Closing-shift auto-print (2026-05-26)
 - New: POS Profile field `posa_closing_shift_print_format` (Link →
   Print Format). When set, SPA auto-prints the closing ticket on the
@@ -170,9 +188,14 @@ check `frappe.db.exists` first.
   [`frontend/src/posapp/components/pos/shift/OpeningDialog.vue`](frontend/src/posapp/components/pos/shift/OpeningDialog.vue)
 - Commits `f2d99d12` + `95352acf` (workspace JSON revert)
 
-### Observability + LCP preload + INP attribution (2026-05-26)
-- `api.callEnvelope` emits `perf:api.<method>.<ok|err>` on every
-  settle. Hot methods always tracked; cold sampled 10%.
+### Observability + LCP preload + INP attribution (2026-05-26; perf:api corrected 2026-05-31)
+- `perf:api.<method>.<ok|err>` per-method timing. ORIGINALLY emitted
+  from `api.callEnvelope` (commit `8e351c65`) — but the hot methods
+  bypass callEnvelope via direct `frappe.call()` (~52 sites), so 0 rows
+  ever landed. FIXED `d9757dec` (lab): timing now emits from
+  `trackApiTiming()` in `utils/telemetry.ts`, called by the shim
+  `frappeCall` chokepoint at all 3 exits; callEnvelope no longer
+  self-times. Hot methods always tracked; cold sampled 10%.
 - 11 `<link rel=modulepreload>` tags emitted in `posapp.html` head
   for boot-critical chunks (vendor / vue / router / pinia / api /
   format / db / posawesome / Pos / DefaultLayout / ItemsSelector).

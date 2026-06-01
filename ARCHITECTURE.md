@@ -1,6 +1,7 @@
 # POSAwesome — Architecture
 
 > Living architecture doc. Snapshot 2026-05-11 · branch `track/upstream-develop` (defendicon `15.29.0` + 23 perf commits).
+> 2026-05-31: telemetry call-path corrected (perf:api now emits from the shim chokepoint, `d9757dec`) — see §13. `/posapp` web route is now canonical (§12's "cleanest structural fix" shipped 2026-05-26).
 
 ---
 
@@ -417,3 +418,46 @@ Even with all 23 perf commits, the SPA still hits Chrome's per-tab memory cap on
 - **Vuetify per-component CSS rules** (mostly GC'd, but creates GC pressure)
 
 The cleanest structural fix is **moving POSAwesome from `/app/posapp` (Desk-wrapped) to `/posapp` (web route, no Desk)** — see Path 3 in the perf-investigation log. Estimated effort ~1 week, single-developer. DOM baseline drops from ~250 k → ~100 k nodes.
+
+**Status: SHIPPED 2026-05-26.** `/posapp` is the canonical operator entry; `/app/posapp` kept as legacy (`?legacy=1` bypass). See §1.
+
+---
+
+## 13. Telemetry call-path (perf:api.*) — fixed 2026-05-31 (`d9757dec`)
+
+Per-method API latency has ONE source of truth: `trackApiTiming()` in
+`utils/telemetry.ts`, called from the shim's `frappeCall`
+(`utils/frappe-shim.ts`) at all three exits — network error, `!response.ok`,
+and success. The shim is the universal chokepoint: on `/posapp` the global
+`frappe` IS the shim, so even `services/api.ts callEnvelope` routes through it
+(callEnvelope → global `frappe.call` → shim). callEnvelope no longer
+self-times (would double-count).
+
+Why it was broken before: timing lived only in `callEnvelope` (commit
+`8e351c65`), but the hot methods — `update_invoice`, `submit_invoice`,
+`search_items`, `get_items`, etc. — call `frappe.call()` directly (~52 sites)
+and never touch callEnvelope. Net: **zero `perf:api.*` rows** ever reached the
+`POS Telemetry Event` table; only RUM web-vitals + crash events flowed.
+
+Hot methods (8-name set in `telemetry.ts`) are always timed; everything else
+is 10%-sampled to bound volume. Telemetry never throws (every path wrapped).
+Lab-verified: 0 → 19 rows across 16 method labels, ingest POST 200 carrying
+both `.ok` and `.err`. Desk path `/app/posapp` (deprecated) loses app-perf
+timing — acceptable, prod is `/posapp`.
+
+This is OUR fork code (frappe-shim.ts + api.ts + telemetry.ts), NOT upstream
+Frappe and NOT a config change.
+
+## 14. Branch / deploy state (2026-05-31)
+
+- **Fork HEAD** `doco-customizations` = `d9757dec` (the perf:api fix), in sync
+  with `origin/doco-customizations`.
+- **Prod (contavm)** posawesome = `89fc7cd4` (bind-mounted, NOT image-baked
+  for app code — `${POSAWESOME_DIR}` mount). 1 commit behind fork. The pending
+  perf:api deploy is frontend TS → needs vite build + asset-volume sync or
+  image rebake; never `bench build` in the prod backend.
+- **`upstream/develop`** ~89 commits ahead of `track/upstream-develop` (drift).
+- **Stale work branches** `upstream-pr/{01,02,03,05}-*` diverge ~230 files /
+  16k lines from HEAD (pre-refactor snapshots) — reconcile by patch-id before
+  pruning; do NOT assume content-in-HEAD.
+- **`ci/codeql-dependabot-gitleaks`** (PR-C) prepped, +1 commit, never merged.

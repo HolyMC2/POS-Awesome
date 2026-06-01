@@ -22,8 +22,10 @@
 				{{ __("PAY") }}
 			</v-btn>
 		</v-col>
-		<!-- SALDO-INTEGRATION-POINT — launcher for the 3-step picker -->
-		<v-col cols="12">
+		<!-- SALDO-INTEGRATION-POINT — launcher for the 3-step picker.
+		     Gated on the per-profile `saldo_enabled` flag (saldo Custom Field
+		     on POS Profile, default OFF, doco tenants only). -->
+		<v-col cols="12" v-if="showSaldoButton">
 			<v-btn
 				block
 				color="primary"
@@ -181,6 +183,11 @@ defineEmits([
 const __ = window.__;
 const showCustomerDisplayButton = computed(() =>
 	parseBooleanSetting(props.pos_profile?.posa_enable_customer_display),
+);
+// SALDO-INTEGRATION-POINT — only show the saldo launcher when the profile
+// opts in (saldo_enabled Custom Field on POS Profile, default OFF).
+const showSaldoButton = computed(() =>
+	parseBooleanSetting(props.pos_profile?.saldo_enabled),
 );
 </script>
 
