@@ -21,7 +21,6 @@ export const useItemsSelectorSearch = ({
 	scannerInput,
 	itemSelection,
 	getSearchInput,
-	setSearchInput,
 	isLimitSearchEnabled,
 	runLimitSearch,
 	clearHighlightedItem,
@@ -104,15 +103,6 @@ export const useItemsSelectorSearch = ({
 		return typeof vm?.search_input === "string"
 			? vm.search_input
 			: vm?.first_search || "";
-	};
-
-	const syncSearchInput = (vm: any, value: string) => {
-		if (typeof setSearchInput === "function") {
-			setSearchInput(value);
-		}
-		if (vm) {
-			vm.search_input = value;
-		}
 	};
 
 	const clearHighlightedSelection = (vm: any) => {
@@ -291,9 +281,17 @@ export const useItemsSelectorSearch = ({
 		const rawQuery = getCurrentSearchInput(vm);
 		const trimmedQuery = String(rawQuery || "").trim();
 
-		// Keep both search refs aligned with the value we are about to process.
+		// Use trimmedQuery for matching / barcode detection only — do NOT
+		// write it back into the visible search field. On a slow multiword
+		// search the operator types "iphone" then a space to begin the next
+		// word; this 300 ms-debounced tick fires on "iphone ", and rewriting
+		// the trimmed value deleted the trailing space right under the cursor
+		// ("iphone 12" became "iphone12"). The matcher re-trims and the
+		// downstream split(/\s+/) ignores surrounding whitespace, so syncing
+		// the trimmed value into the live input bought nothing but the lost
+		// keystroke. first_search is the internal/scanner mirror (not the
+		// visible v-model), so aligning it to the trimmed query is safe.
 		vm.first_search = trimmedQuery;
-		syncSearchInput(vm, trimmedQuery);
 
 		// If the input is a numeric string 12 characters or longer, treat it as a barcode
 		if (/^\d{12,}$/.test(trimmedQuery)) {
