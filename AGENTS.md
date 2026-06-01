@@ -137,23 +137,37 @@ posawesome/
 Latest first. Idempotent — `create_custom_field` no-ops, format inserts
 check `frappe.db.exists` first.
 
-> ⏳ **On LAB, NOT yet on prod (2026-05-31):** `d9757dec` perf:api
-> telemetry chokepoint fix (see corrected Observability entry below).
-> Prod backend still `89fc7cd4`. Deploy needs frontend vite build +
-> asset-volume sync (or image rebake) — never `bench build` in the prod
-> backend. Until deployed, prod POS p99 stays per-method-blind.
-
-> ⏳ **Also lab-only, uncommitted (2026-05-31): saldo per-profile gate.**
-> Saldo (TAECEL airtime) UI now gated on POS Profile `saldo_enabled`
-> (Check, default OFF, field owned + installed by the saldo app, doco
-> tenants only). Host-side gate: `InvoiceActionButtons.vue` "Recarga /
-> Servicio" launcher `v-if="showSaldoButton"`
-> (`parseBooleanSetting(pos_profile?.saldo_enabled)`); `Pos.vue`
-> `openSaldoPicker()` no-ops + `SaldoCatalogPicker v-if` when off. Backend
-> validate/dispatch gate lives in saldo `pos_invoice_hooks.py`. Prod doco
-> profiles need the flag flipped ON once after deploy (default OFF).
-> Source-verified; full in-browser proof pending (lab Chrome/429
-> contention). See saldo CHANGELOG Phase 12.
+> ✅ **DEPLOYED to prod 2026-06-01.** posawesome `89fc7cd4` → `aeaf0216`
+> on both tenants. Bundle this session:
+> - `d9757dec` perf:api telemetry chokepoint fix (Observability entry below).
+>   VERIFIED on prod: 313 perf:api rows, method-level latency attributable.
+> - `ee8e1b7d` + saldo `33e8aa7` — saldo per-profile gate. POS Profile
+>   `saldo_enabled` (Check, default OFF, field owned/installed by the saldo
+>   app, doco-only). Host gate: `InvoiceActionButtons.vue` "Recarga /
+>   Servicio" launcher `v-if`, `Pos.vue` `openSaldoPicker()` no-op +
+>   `SaldoCatalogPicker v-if`. Backend validate/dispatch gate in saldo
+>   `pos_invoice_hooks.py`. **Prod doco profiles flipped ON: Doco Ventas +
+>   CONTROL** (mumu OFF). New profiles need the flag set ON manually.
+> - `cb3cfb60` searchbar multiword-whitespace fix.
+> - `aeaf0216` shim `_server_messages` surfacing — direct `frappe.call`
+>   throws now show the real message (was bare "HTTP 417"); close-shift
+>   `.catch` added.
+> - `bac3f1d5` security CI (CodeQL + gitleaks + Dependabot).
+>
+> **Deploy mechanics (bind-mount prod):** pull source on contavm sibling +
+> rsync lab-built `dist/` (gitignored, doesn't travel via git) + migrate
+> if patches/fields. SPA-only changes skip migrate + worker restart. NEVER
+> `bench build` in the prod backend. After backend `--force-recreate`,
+> restart proxy (stale upstream → 502).
+>
+> ⚠️ **Healthcare landmine (2026-05-31, fixed):** an empty root-owned
+> `~/healthcare` bind-mount (no pyproject) made `pip-install-apps.sh` skip
+> it, so `apps.txt`-listed `healthcare` crashed `setup_module_map` →
+> Desk workspace icons broke + every `bench` cmd threw ModuleNotFound.
+> Fixed by populating `~/healthcare` (earthians/marley@a032347e). Clean-boot
+> now safe (configurator pip-installs it). NOTE: `~/healthcare` on contavm
+> is a manual clone, NOT git-tracked — if wiped, re-clone before `compose
+> up`. See [[marley_healthcare_isolation]].
 
 ### Closing-shift auto-print (2026-05-26)
 - New: POS Profile field `posa_closing_shift_print_format` (Link →

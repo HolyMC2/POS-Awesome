@@ -2,13 +2,39 @@
 
 All notable changes.
 
-## Unreleased — 2026-05-31 (LAB ONLY, not on prod)
+## Unreleased — 2026-05-31 / 2026-06-01 (DEPLOYED to prod)
 
 Telemetry call-path fix + API legacy-path compatibility + saldo
-per-profile gate. On `doco-customizations`, built + verified on
-ventas.lab. NOT deployed to prod — prod backend still `89fc7cd4`.
+per-profile gate + searchbar whitespace fix + shim error-message
+surfacing + security CI. On `doco-customizations`, built + verified on
+ventas.lab, then deployed to BOTH prod tenants (ventas.docomexico.com +
+ventas.mumulenceria.com) on 2026-06-01. Prod posawesome `89fc7cd4` →
+`aeaf0216`. Deploy = pull source (bind-mount) + rsync built dist +
+migrate (saldo field) + flip saldo profiles; SPA-only follow-ups skip
+migrate.
 
-### 🔌 Saldo per-profile gate (host-side)
+### 🐞 Shim error-message surfacing (`aeaf0216`)
+- A direct `frappe.call` hitting a server-side validate throw showed
+  operators only "HTTP 417" + an "Uncaught (in promise)" console error.
+  Real example: close shift → `make_closing_shift_from_opening` submits
+  the shift's printed draft invoices; one threw "Valuation Rate missing
+  for Item …", surfaced as a bare 417. Two gaps fixed:
+  - `frappe-shim.ts` `frappeCall` built the error from `_error_message` /
+    `message` only, ignoring `_server_messages` (where Frappe puts the
+    thrown text — `callEnvelope` already parsed it). Added
+    `extractServerMessage` + `stripHtml`; error now carries the real text,
+    `err.serverMessage` exposed.
+  - `usePosShift.get_closing_data()` had `.then` but no `.catch` → the
+    rejection went unhandled. Added a `.catch` that toasts the real
+    message. Fixes the `crash:unhandledrejection: HTTP 417` telemetry rows.
+
+### 🔍 Searchbar (`cb3cfb60`)
+- `useItemsSelectorSearch._performSearch` wrote the trimmed query back into
+  the visible input every 300ms debounce tick, deleting the trailing space
+  mid-type on multiword search ("iphone 12" → "iphone12"). Dropped the
+  write-back; matcher still trims internally.
+
+### 🔌 Saldo per-profile gate (host-side) (`ee8e1b7d` + saldo `33e8aa7`)
 - Saldo (TAECEL airtime) UI now gated on the POS Profile `saldo_enabled`
   flag (the field itself is owned + installed by the saldo app, default
   OFF). `InvoiceActionButtons.vue` — "Recarga / Servicio" launcher
@@ -16,8 +42,14 @@ ventas.lab. NOT deployed to prod — prod backend still `89fc7cd4`.
   `Pos.vue` — `openSaldoPicker()` no-ops + `<SaldoCatalogPicker v-if>` when
   the active profile has saldo off (defensive — button hidden AND handler
   guarded). SaldoReferenciaDialog/StatusDialog stay mounted (bus-driven,
-  inert). Backend dispatch gate lives in the saldo app. Uncommitted, lab
-  only.
+  inert). Backend dispatch gate lives in the saldo app. Deployed; prod
+  doco profiles flipped ON: Doco Ventas + CONTROL (mumu stays OFF — gate
+  realizes the doco-only intent). Browser-proven on lab (isolated Chrome).
+
+### 🛡️ Security CI (`bac3f1d5`)
+- PR-C: CodeQL + gitleaks (full-history secret scan) + Dependabot. gitleaks
+  is the control that catches PAT leaks at commit time. History is
+  branch-reachably PAT-clean.
 
 ### ⚡ Telemetry
 - `d9757dec perf(telemetry)` — emit `perf:api.*` from the frappe-shim
