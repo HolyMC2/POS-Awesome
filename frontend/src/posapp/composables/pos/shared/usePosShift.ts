@@ -216,6 +216,29 @@ export function usePosShift(openDialog?: () => void) {
 
 					eventBus?.emit("open_ClosingDialog", closingShift);
 				}
+			})
+			.catch((err: unknown) => {
+				// make_closing_shift_from_opening submits the shift's printed
+				// draft invoices; a server-side validate throw (e.g. "Valuation
+				// Rate missing for Item …") rejected here unhandled, so the
+				// operator only saw "Uncaught (in promise) Error: HTTP 417" in
+				// the console and no on-screen reason. Surface the real message
+				// (the shim now carries Frappe's _server_messages text).
+				const anyErr = err as any;
+				let message =
+					anyErr?.serverMessage ||
+					anyErr?.message ||
+					anyErr?.exc ||
+					String(err) ||
+					"Could not prepare closing shift.";
+				message = String(message).replace(/<[^>]+>/g, "").trim();
+				console.error("Error preparing closing shift", err);
+				toastStore.show({
+					title: "Could not close shift",
+					message,
+					color: "error",
+					timeout: 12000,
+				});
 			});
 	}
 

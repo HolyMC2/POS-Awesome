@@ -140,6 +140,42 @@ function getCsrfToken(): string {
 	);
 }
 
+// Extract the human-readable text Frappe puts in `_server_messages` on a
+// thrown response. Desk surfaces this; the SPA was showing the bare
+// `HTTP 417` status instead because the shim ignored it. `_server_messages`
+// is a JSON-encoded array of JSON-encoded `{message,title}` objects, so it
+// needs two parse passes. Mirrors `extractServerMessage` in services/api.ts.
+function extractServerMessage(payload: any): string | null {
+	const serverMessages = payload?._server_messages || payload?.server_messages;
+	if (!serverMessages) {
+		return null;
+	}
+	try {
+		const parsed = JSON.parse(serverMessages);
+		if (Array.isArray(parsed) && parsed.length) {
+			const first = parsed[0];
+			if (typeof first === "string") {
+				try {
+					const obj = JSON.parse(first);
+					return obj.message || obj.title || first;
+				} catch {
+					return first;
+				}
+			}
+			return (first && (first.message || first.title)) || String(first);
+		}
+	} catch {
+		return String(serverMessages);
+	}
+	return null;
+}
+
+// Strip HTML tags Frappe wraps validation messages in (e.g. bold item
+// names) so the toast shows clean text.
+function stripHtml(s: string): string {
+	return s.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+}
+
 async function frappeCall(
 	opts: CallOpts | string,
 	posArgs?: Record<string, unknown>,
@@ -226,12 +262,21 @@ async function frappeCall(
 
 	if (!response.ok) {
 		__emitTiming(false);
-		const err = new Error(
+		// Surface Frappe's real thrown message instead of the bare status.
+		// Priority: _server_messages (the validation/throw text Desk shows)
+		// → _error_message → message → "HTTP <status>". Without this an
+		// operator hitting a server-side validate throw (e.g. "Valuation
+		// Rate missing for Item …" on close-shift) only saw "HTTP 417" and
+		// couldn't tell what to fix.
+		const serverMsg = data ? extractServerMessage(data) : null;
+		const errMessage =
+			(serverMsg && stripHtml(serverMsg)) ||
 			(data && (data._error_message || data.message)) ||
-				`HTTP ${response.status}`,
-		);
+			`HTTP ${response.status}`;
+		const err = new Error(errMessage);
 		(err as any).response = data;
 		(err as any).status = response.status;
+		(err as any).serverMessage = serverMsg || null;
 		// Frappe's `frappe.call` contract is callback-OR-promise, not
 		// both. When the caller passed an `error` callback (e.g.
 		// api.callEnvelope wraps every error path into the envelope
