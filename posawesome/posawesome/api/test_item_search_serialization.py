@@ -101,6 +101,7 @@ class TestItemSearchSerialization(unittest.TestCase):
             limit_start=0,
             order_by="item_name asc",
             page_size=1,
+            fetch_page_size=1,
             initial_page_start=0,
             item_code_for_search=None,
             search_words=[],

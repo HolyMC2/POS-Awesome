@@ -53,6 +53,7 @@ class SearchPlan:
     limit_start: Optional[int]
     order_by: str
     page_size: int
+    fetch_page_size: int
     initial_page_start: int
     item_code_for_search: Optional[str]
     search_words: List[str]
@@ -211,6 +212,18 @@ def _build_search_plan(
     initial_page_start = limit_start or 0
     page_size = limit_page_length or 100
 
+    # ``page_size`` retains its original meaning (the result cap when a caller
+    # passes ``limit``). ``fetch_page_size`` is the size of each DB round-trip in
+    # the paging loop. When there is no explicit ``limit_page_length`` cap we
+    # would otherwise page the *entire* catalog 100 rows at a time, which forces
+    # MariaDB to re-walk the ORDER BY index from the start on every page
+    # (deep-OFFSET, O(n^2)). Fetching in large chunks keeps OFFSET shallow and
+    # produces the identical row sequence, since the order is deterministic.
+    if limit_page_length is not None:
+        fetch_page_size = page_size
+    else:
+        fetch_page_size = 2000
+
     word_filter_active = bool(normalized_search_value) and len(normalized_search_value) >= 3
 
     return SearchPlan(
@@ -221,6 +234,7 @@ def _build_search_plan(
         limit_start=limit_start,
         order_by=order_by,
         page_size=page_size,
+        fetch_page_size=fetch_page_size,
         initial_page_start=initial_page_start,
         item_code_for_search=item_code_for_search,
         search_words=search_words,
@@ -423,7 +437,7 @@ def _run_item_query(
             or_filters=plan.or_filters or None,
             fields=plan.fields,
             limit_start=page_start,
-            limit_page_length=plan.page_size,
+            limit_page_length=plan.fetch_page_size,
             order_by=plan.order_by,
         )
 
@@ -438,7 +452,7 @@ def _run_item_query(
                 ],
                 fields=plan.fields,
                 limit_start=page_start,
-                limit_page_length=plan.page_size,
+                limit_page_length=plan.fetch_page_size,
                 order_by=plan.order_by,
             )
 
@@ -475,7 +489,7 @@ def _run_item_query(
             break
 
         page_start += len(items_data)
-        if len(items_data) < plan.page_size:
+        if len(items_data) < plan.fetch_page_size:
             break
 
     return result[: plan.limit_page_length] if plan.limit_page_length else result
