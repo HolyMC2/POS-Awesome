@@ -527,12 +527,22 @@ const disableDiscountEdit = computed(
 		!!props.item.posa_offer_applied,
 );
 
+// These refs point at <v-text-field> COMPONENT instances, not DOM nodes.
+// Vuetify 3 does not expose `.focus()` on the public instance, so a bare
+// `ref.value?.focus()` threw "y.value?.focus is not a function" (the `?.`
+// guards null, not wrong-type) — surfaced in prod telemetry as
+// crash:unhandledrejection. Reach the inner <input> like openUomEdit does.
+function focusInput(r) {
+	const el = r?.value?.$el?.querySelector?.("input") || r?.value;
+	el?.focus?.();
+}
+
 function openQtyEdit() {
 	if (disableInput.value) return;
 	isEditingQty.value = true;
 	editingQtyValue.value = "";
 	nextTick(() => {
-		qtyInput.value?.focus();
+		focusInput(qtyInput);
 	});
 }
 
@@ -594,7 +604,7 @@ function openRateEdit() {
 	isEditingRate.value = true;
 	editingRateValue.value = "";
 	nextTick(() => {
-		rateInput.value?.focus();
+		focusInput(rateInput);
 	});
 }
 
@@ -619,7 +629,7 @@ function openDiscountPercentEdit() {
 	isEditingDiscountPercent.value = true;
 	editingDiscountPercentValue.value = "";
 	nextTick(() => {
-		discountPercentInput.value?.focus();
+		focusInput(discountPercentInput);
 	});
 }
 
@@ -641,7 +651,7 @@ function openDiscountAmountEdit() {
 	isEditingDiscountAmount.value = true;
 	editingDiscountAmountValue.value = "";
 	nextTick(() => {
-		discountAmountInput.value?.focus();
+		focusInput(discountAmountInput);
 	});
 }
 
