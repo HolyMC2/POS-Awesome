@@ -2,16 +2,20 @@
 
 All notable changes.
 
-## Unreleased — 2026-06-02 (lab-staged, NOT yet on prod)
+## 2026-06-02 (DEPLOYED to prod) — posawesome `8bebc65a` → `6ff78542`
 
 Telemetry verification of the 2026-06-01 deploy + `get_items` deterministic
 cache key + cross-process pre-warm. Built + proven cross-process on
-ventas.lab / doco-mirror.lab; awaiting explicit "push to prod". Pure Python
-(search.py cache key + new `cache_warmer` module + scheduler cron) — prod
-deploy = pull source + `bench migrate` (registers the cron Scheduled Job
-Type) + restart backend/scheduler workers. No frontend build. (First loads
-after deploy are cold once — the new `posa_get_items:v1` key namespace
-replaces the old per-process hash keys — then warm.)
+ventas.lab / doco-mirror.lab, then deployed to BOTH prod tenants
+(ventas.docomexico.com + ventas.mumulenceria.com). Pure Python (search.py
+cache key + new `cache_warmer` module + scheduler cron): pull source +
+`bench migrate` (registered the `*/25` cron Scheduled Job Type both tenants)
++ restart backend/queue/scheduler. No frontend build. Post-deploy verify:
+both sites 200, deterministic cache proven cross-process on prod (separate
+operator process reads warm 109ms/page vs 371ms cold), cron active +
+scheduler enabled, zero get_items/cache_warmer errors, zero crash events.
+(One transient 502 during the backend boot window — gunicorn pip-install
+startup — auto-recovered.)
 
 ### ✅ Telemetry verify (2026-06-02 prod)
 - All families flowing 24h: `rum` 11,757 + `perf` 512; 47 perf:api methods

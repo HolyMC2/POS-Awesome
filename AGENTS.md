@@ -137,7 +137,12 @@ posawesome/
 Latest first. Idempotent — `create_custom_field` no-ops, format inserts
 check `frappe.db.exists` first.
 
-> 🧪 **LAB-STAGED 2026-06-02 (NOT yet on prod — awaiting "push to prod").**
+> ✅ **DEPLOYED to prod 2026-06-02.** posawesome `8bebc65a` → `6ff78542`
+> both tenants (pull + `bench migrate` + restart backend/queue/scheduler; no
+> frontend build). Verified: both sites 200, deterministic cache proven
+> cross-process on prod (separate operator proc reads warm 109ms/page vs
+> 371ms cold), `*/25` cron active + scheduler enabled, 0 errors, 0 crashes.
+> Transient 502 during backend boot (pip-install startup) auto-recovered.
 > - get_items **deterministic cache key + cross-process pre-warm**. ⚠️ The
 >   gotcha: frappe `@redis_cache` keys on builtin `hash()` = randomized per
 >   process (PYTHONHASHSEED unset), so a scheduler/queue worker can NEVER warm
