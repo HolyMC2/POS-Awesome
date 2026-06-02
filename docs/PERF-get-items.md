@@ -9,9 +9,13 @@ _Last updated 2026-06-02. Owner: doco fork. Status of the deep fix below:
   avg, max ~6580ms).
 - The 2026-06-01 deep-OFFSET paging fix (`8bebc65a`) helped **lab** 6.4× but
   **did not move prod** — prod is enrichment-bound, not OFFSET-bound.
-- The shipped lab-staged fix is a **cache pre-warm** scheduler job
-  (`cache_warmer.py`). It makes the operator's steady-state (cache-ON,
-  non-reset) catalog walk warm: prod 371→70ms/page (5.3×), lab 11.6×.
+- The lab-staged fix is a **deterministic cache key + cross-process pre-warm**
+  (`search.py` + `cache_warmer.py`). ⚠️ Frappe's `@redis_cache` keys on
+  builtin `hash()` (randomized per process, PYTHONHASHSEED unset) so a
+  scheduler/queue worker can't warm the gunicorn web cache. Fixed by keying
+  `get_items` on `posa_get_items:v1:<sha1(args)>` instead. The `*/25` prewarm
+  then warms a key every web worker shares. Proven **cross-process**:
+  separate-process operator walk 220→26ms/page (~8.5×); output byte-identical.
 - The **deep fix** below (replace pypika query-building with raw SQL in
   `_prepare_lookup`) is scoped here but **deferred**: once pre-warm is live it
   only helps the rare cache-OFF reset path and the scheduler's own cost, not

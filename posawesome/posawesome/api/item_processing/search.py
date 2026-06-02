@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import time
@@ -7,7 +8,6 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import frappe
 from frappe import _, as_json
 from frappe.utils import cint, cstr, get_datetime
-from frappe.utils.caching import redis_cache
 
 from posawesome.posawesome.api.item_fetchers import ItemDetailAggregator
 from posawesome.posawesome.api.utils import (
@@ -575,6 +575,57 @@ def _prepare_item_groups(profile_name: Optional[str], item_groups) -> ItemGroupC
     return ItemGroupContext(groups=groups, groups_tuple=groups_tuple)
 
 
+# Bump when the cached row SHAPE changes so a deploy invalidates stale entries.
+GET_ITEMS_CACHE_VERSION = "v1"
+
+
+def _build_get_items_cache_key(
+    profile_name,
+    warehouse,
+    price_list,
+    customer,
+    search_value,
+    limit,
+    offset,
+    start_after,
+    modified_after,
+    item_group,
+    include_description,
+    include_image,
+    groups_tuple,
+):
+    """Deterministic, process-stable cache key for the get_items page cache.
+
+    Frappe's ``@redis_cache`` keys on Python's builtin ``hash()``, which is
+    randomized per process (PYTHONHASHSEED). That makes its entries effectively
+    per-process — a separate scheduler/queue worker can never warm the cache
+    the gunicorn web workers read, and a freshly forked web worker can't read a
+    sibling's entries either. We key on a sha1 of the normalized args instead so
+    the prewarm job and every worker share one entry. See docs/PERF-get-items.md.
+    """
+    payload = json.dumps(
+        [
+            profile_name,
+            warehouse,
+            price_list,
+            customer or "",
+            search_value or "",
+            limit,
+            offset,
+            start_after,
+            str(modified_after) if modified_after else None,
+            item_group or "",
+            bool(include_description),
+            bool(include_image),
+            list(groups_tuple),
+        ],
+        default=str,
+        sort_keys=True,
+    )
+    digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()
+    return f"posa_get_items:{GET_ITEMS_CACHE_VERSION}:{digest}"
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def get_items(
     pos_profile,
@@ -594,39 +645,8 @@ def get_items(
     profile_ctx = _normalize_profile_context(pos_profile)
     groups_ctx = _prepare_item_groups(profile_ctx.profile_name, item_groups)
 
-    @redis_cache(ttl=profile_ctx.cache_ttl or 300)
-    def __get_items(
-        _pos_profile_name,
-        _warehouse,
-        price_list,
-        customer,
-        search_value,
-        limit,
-        offset,
-        start_after,
-        modified_after,
-        item_group,
-        include_description,
-        include_image,
-        item_groups_tuple,
-    ):
-        return _execute_item_search(
-            profile_ctx.pos_profile_json,
-            price_list,
-            item_group,
-            search_value,
-            customer,
-            limit,
-            offset,
-            start_after,
-            modified_after,
-            include_description,
-            include_image,
-            list(item_groups_tuple),
-        )
-
     if profile_ctx.use_price_list_cache:
-        result = __get_items(
+        cache_key = _build_get_items_cache_key(
             profile_ctx.profile_name,
             profile_ctx.warehouse,
             price_list,
@@ -641,6 +661,30 @@ def get_items(
             include_image,
             groups_ctx.groups_tuple,
         )
+        cache = frappe.cache()
+        # set_value stores [] as a real value; get_value returns None only on a
+        # true miss, so an empty result still counts as a hit (never re-runs).
+        result = cache.get_value(cache_key)
+        if result is None:
+            result = _execute_item_search(
+                profile_ctx.pos_profile_json,
+                price_list,
+                item_group,
+                search_value,
+                customer,
+                limit,
+                offset,
+                start_after,
+                modified_after,
+                include_description,
+                include_image,
+                list(groups_ctx.groups_tuple),
+            )
+            cache.set_value(
+                cache_key,
+                result,
+                expires_in_sec=profile_ctx.cache_ttl or 300,
+            )
         log_perf_event(
             "get_items",
             started_at,

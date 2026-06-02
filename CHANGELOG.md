@@ -4,11 +4,14 @@ All notable changes.
 
 ## Unreleased — 2026-06-02 (lab-staged, NOT yet on prod)
 
-Telemetry verification of the 2026-06-01 deploy + `get_items` cache
-pre-warm. Built + proven on ventas.lab / doco-mirror.lab; awaiting explicit
-"push to prod". Pure Python (scheduler + new module) — prod deploy = pull
-source + `bench migrate` (registers the cron Scheduled Job Type) + restart
-backend/scheduler workers. No frontend build.
+Telemetry verification of the 2026-06-01 deploy + `get_items` deterministic
+cache key + cross-process pre-warm. Built + proven cross-process on
+ventas.lab / doco-mirror.lab; awaiting explicit "push to prod". Pure Python
+(search.py cache key + new `cache_warmer` module + scheduler cron) — prod
+deploy = pull source + `bench migrate` (registers the cron Scheduled Job
+Type) + restart backend/scheduler workers. No frontend build. (First loads
+after deploy are cold once — the new `posa_get_items:v1` key namespace
+replaces the old per-process hash keys — then warm.)
 
 ### ✅ Telemetry verify (2026-06-02 prod)
 - All families flowing 24h: `rum` 11,757 + `perf` 512; 47 perf:api methods
@@ -18,29 +21,43 @@ backend/scheduler workers. No frontend build.
   not HTTP 417 — no `crash:` family present at all (cart-focus `76939d60`
   also crash-free).
 
-### ⚡ get_items cache pre-warm (`cache_warmer.py`)
+### ⚡ get_items deterministic cache key + cross-process pre-warm
 - `get_items` caches each catalog *page* in Redis (TTL =
   `posa_server_cache_duration`, 30 min) when `posa_use_server_cache` is on.
-  Prod telemetry showed operators still paying ~371ms/page cold because the
-  cache lapses on TTL between loads. Measured prod non-reset walk (6455
-  items, 7 pages of 1000): cold 2597ms (371ms/page) vs warm 488ms
-  (70ms/page) = 5.3×.
-- Fix: `posawesome.posawesome.api.cache_warmer.prewarm_pos_item_cache`, a
-  `*/25 * * * *` scheduled job. For each `posa_use_server_cache=1` profile
-  it replays the SPA's exact non-reset background-sync walk (customer=None,
-  item_group="", search="", limit=page_size, keyset cursor by item_name) so
-  the live page-cache never goes cold. The cache key is the normalized
-  scalar tuple inside `__get_items`, so matching those args = a true hit.
-- Scope (deliberate): warms only the cache-ON non-reset path. The SPA's
-  reset / force-reload walk runs with the cache OFF for data freshness —
-  nothing to warm there (it stays ~390ms/page, but it's progressive and
-  non-blocking).
-- Proven on lab (doco-mirror, 5737 items): operator SPA walk 820→71ms =
-  **11.6×** after a prewarm run; cron registered + active (`*/25`,
-  `stopped=0`); `bench execute` on ventas.lab warmed Doco Ventas (6 pages,
-  5700 items), Doco Reparaciones correctly skipped (cache off). 5/5 new unit
-  tests (`test_cache_warmer.py`). Per-profile failures isolated via
-  try/except + `frappe.log_error`.
+  Goal: a `*/25` scheduled job re-walks the catalog so the live page-cache
+  never lapses between operator loads.
+- **Bug found while verifying (this is the real story):** the pre-warm did
+  NOT work cross-process. Frappe's `@redis_cache` keys on Python's builtin
+  `hash()`, which is **randomized per process** (PYTHONHASHSEED unset). So
+  the scheduler/queue worker's warm entries are keyed by *its* random hash
+  and are invisible to the gunicorn web workers that serve operators. (The
+  existing `posa_use_server_cache` still works *across* gunicorn workers
+  because they're forked from one master and share a seed — but a separate
+  process can never warm them.) An initial single-process lab test hid this
+  by busting+warming+reading in one process (in-process hash is stable); the
+  honest cross-process test (warm in proc A, read in proc B) came back cold.
+- **Fix:** replace the `hash()`-keyed `@redis_cache` on `get_items`'
+  `__get_items` with an explicit **deterministic** key —
+  `posa_get_items:v1:<sha1(json.dumps(normalized_args, sort_keys, default=str))>`
+  via `frappe.cache().get_value/set_value`. Now the scheduler prewarm and
+  every web worker share one entry. Bonus: also fixes the latent
+  once-cold-per-worker behaviour of the existing cache (one cold load ever,
+  not one per gunicorn worker). TTL-only expiry unchanged (no item-save
+  invalidation existed before; none added). `v1` prefix lets a future row
+  shape-change bust cleanly.
+- Pre-warm: `cache_warmer.prewarm_pos_item_cache`, `*/25 * * * *`. Per
+  `posa_use_server_cache=1` profile it replays the SPA's exact non-reset
+  background-sync walk (customer=None, item_group="", search="",
+  limit=page_size, keyset cursor by item_name). Warms only the cache-ON
+  non-reset path; the reset/force-reload walk runs cache-OFF for freshness
+  (nothing to warm, stays ~390ms/page but progressive/non-blocking).
+- **Proven cross-process on lab** (doco-mirror / ventas.lab, 5700 items):
+  separate-process operator walk **220→26ms/page (~8.5×)** after a prewarm;
+  end-to-end via the real scheduler fire (enqueue SJT → queue worker → fresh
+  operator process reads warm) confirmed 26ms/page. Output **byte-identical**
+  cached vs uncached (parity check). Cron registered + active (`*/25`,
+  `stopped=0`). 5/5 unit tests (`test_cache_warmer.py`) + existing search
+  serialization test still green. Per-profile failures isolated.
 
 ## Unreleased — 2026-05-31 / 2026-06-01 (DEPLOYED to prod)
 
