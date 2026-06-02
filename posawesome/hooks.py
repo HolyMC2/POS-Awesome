@@ -172,6 +172,16 @@ scheduler_events = {
         # beyond the rolling window the dashboard reads from.
         "posawesome.posawesome.api.telemetry.prune_old_events",
     ],
+    "cron": {
+        # Keep the get_items page cache warm. The server cache TTL is
+        # posa_server_cache_duration minutes (30 on the doco profiles); re-walk
+        # every 25 min so the live cache never lapses between operator loads.
+        # Cold non-reset walk ~371 ms/page vs ~70 ms/page warm (5.3x). Cheap:
+        # ~2.6 s per cache-enabled profile per run. See cache_warmer docstring.
+        "*/25 * * * *": [
+            "posawesome.posawesome.api.cache_warmer.prewarm_pos_item_cache",
+        ],
+    },
 }
 
 # Testing

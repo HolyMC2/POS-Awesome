@@ -2,6 +2,46 @@
 
 All notable changes.
 
+## Unreleased — 2026-06-02 (lab-staged, NOT yet on prod)
+
+Telemetry verification of the 2026-06-01 deploy + `get_items` cache
+pre-warm. Built + proven on ventas.lab / doco-mirror.lab; awaiting explicit
+"push to prod". Pure Python (scheduler + new module) — prod deploy = pull
+source + `bench migrate` (registers the cron Scheduled Job Type) + restart
+backend/scheduler workers. No frontend build.
+
+### ✅ Telemetry verify (2026-06-02 prod)
+- All families flowing 24h: `rum` 11,757 + `perf` 512; 47 perf:api methods
+  timed via the shim chokepoint. Pipeline confirmed end-to-end.
+- HTTP 417 close-shift crashes = **zero** since the `aeaf0216` deploy. The
+  34 rows matching "417" were all `rum:inp` events (digits in `startTime`),
+  not HTTP 417 — no `crash:` family present at all (cart-focus `76939d60`
+  also crash-free).
+
+### ⚡ get_items cache pre-warm (`cache_warmer.py`)
+- `get_items` caches each catalog *page* in Redis (TTL =
+  `posa_server_cache_duration`, 30 min) when `posa_use_server_cache` is on.
+  Prod telemetry showed operators still paying ~371ms/page cold because the
+  cache lapses on TTL between loads. Measured prod non-reset walk (6455
+  items, 7 pages of 1000): cold 2597ms (371ms/page) vs warm 488ms
+  (70ms/page) = 5.3×.
+- Fix: `posawesome.posawesome.api.cache_warmer.prewarm_pos_item_cache`, a
+  `*/25 * * * *` scheduled job. For each `posa_use_server_cache=1` profile
+  it replays the SPA's exact non-reset background-sync walk (customer=None,
+  item_group="", search="", limit=page_size, keyset cursor by item_name) so
+  the live page-cache never goes cold. The cache key is the normalized
+  scalar tuple inside `__get_items`, so matching those args = a true hit.
+- Scope (deliberate): warms only the cache-ON non-reset path. The SPA's
+  reset / force-reload walk runs with the cache OFF for data freshness —
+  nothing to warm there (it stays ~390ms/page, but it's progressive and
+  non-blocking).
+- Proven on lab (doco-mirror, 5737 items): operator SPA walk 820→71ms =
+  **11.6×** after a prewarm run; cron registered + active (`*/25`,
+  `stopped=0`); `bench execute` on ventas.lab warmed Doco Ventas (6 pages,
+  5700 items), Doco Reparaciones correctly skipped (cache off). 5/5 new unit
+  tests (`test_cache_warmer.py`). Per-profile failures isolated via
+  try/except + `frappe.log_error`.
+
 ## Unreleased — 2026-05-31 / 2026-06-01 (DEPLOYED to prod)
 
 Telemetry call-path fix + API legacy-path compatibility + saldo
@@ -28,6 +68,17 @@ migrate.
 - Lab-measured (Doco Ventas, 5697 items, output parity verified): catalog
   2566→402ms cold (6.4×), search 1366→356ms (3.8×), get_all stage
   887→101ms. Pure Python deploy (worker restart, no rsync/migrate).
+- **⚠️ Correction (2026-06-02, prod telemetry verify):** the lab 6.4× did
+  NOT transfer to prod. Server-side cold full-catalog on prod
+  (ventas.docomexico, 6459 items) is still ~2475ms after this fix.
+  cProfile shows prod is **enrichment-bound, not OFFSET-bound**: 2.46s of
+  the cold call is `_prepare_lookup` (item_fetchers.py:611) — 8 batched
+  lookups (prices/stock/meta/uom/barcode/bom/batch/serial) + ~0.8s pypika
+  query construction. The paging fix cut query *count* (~780→48), which is
+  why lab (smaller catalog, OFFSET-dominated) sped up, but prod's per-item
+  enrichment is the real cost and paging doesn't touch it. Real prod win =
+  the cache pre-warm below; a deeper `_prepare_lookup` raw-SQL pass is
+  scoped (docs/PERF-get-items.md) but unbuilt.
 
 ### 🐞 Cart inline-edit focus crash (`76939d60`)
 - Cart cell-edit refs (qty/rate/discount %/amount) point at `<v-text-field>`

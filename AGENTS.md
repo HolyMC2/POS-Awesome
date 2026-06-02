@@ -137,6 +137,22 @@ posawesome/
 Latest first. Idempotent — `create_custom_field` no-ops, format inserts
 check `frappe.db.exists` first.
 
+> 🧪 **LAB-STAGED 2026-06-02 (NOT yet on prod — awaiting "push to prod").**
+> - get_items **cache pre-warm** — `posawesome.posawesome.api.cache_warmer.`
+>   `prewarm_pos_item_cache`, a `*/25 * * * *` scheduled job (hooks.py
+>   `scheduler_events["cron"]`). Per `posa_use_server_cache=1` profile it
+>   replays the SPA's exact non-reset background-sync walk (customer=None,
+>   group="", search="", limit=page_size, keyset cursor) so the Redis
+>   page-cache never lapses on its 30-min TTL between operator loads.
+>   Operator steady-state walk: prod 371→70ms/page (5.3×), lab doco-mirror
+>   820→71ms (11.6×). Does NOT touch the reset/force-reload path (cache OFF
+>   by design for freshness). 5/5 unit tests (`test_cache_warmer.py`).
+>   **Prod deploy = pull source + `bench migrate` (registers the cron
+>   Scheduled Job Type) + restart backend/scheduler. No frontend build.**
+> - Telemetry verify of the 2026-06-01 deploy: all families flowing (rum
+>   11.7k + perf 512 / 24h), HTTP 417 close-shift crashes = zero since
+>   `aeaf0216`, no `crash:` family at all (focus fix `76939d60` clean).
+
 > ✅ **DEPLOYED to prod 2026-06-01.** posawesome `89fc7cd4` → `8bebc65a`
 > on both tenants. Bundle this session:
 > - `d9757dec` perf:api telemetry chokepoint fix (Observability entry below).
@@ -162,6 +178,12 @@ check `frappe.db.exists` first.
 >   index re-walk). `SearchPlan.fetch_page_size` decouples DB chunk (2000)
 >   from result cap. Lab: catalog 2566→402ms cold (6.4×), search
 >   1366→356ms. Pure-Python deploy (worker restart only).
+>   **⚠️ 2026-06-02 prod verify: the 6.4× did NOT transfer.** Prod cold
+>   full-catalog still ~2475ms — prod is enrichment-bound (`_prepare_lookup`
+>   2.46s), not OFFSET-bound. The paging fix cut query *count* but not the
+>   per-item enrichment that dominates at 6459 items. Real prod win = the
+>   cache pre-warm (lab-staged below); raw-SQL deep fix scoped in
+>   `docs/PERF-get-items.md`, deferred.
 >
 > **Deploy mechanics (bind-mount prod):** pull source on contavm sibling +
 > rsync lab-built `dist/` (gitignored, doesn't travel via git) + migrate
