@@ -137,7 +137,7 @@ posawesome/
 Latest first. Idempotent — `create_custom_field` no-ops, format inserts
 check `frappe.db.exists` first.
 
-> ✅ **DEPLOYED to prod 2026-06-01.** posawesome `89fc7cd4` → `aeaf0216`
+> ✅ **DEPLOYED to prod 2026-06-01.** posawesome `89fc7cd4` → `8bebc65a`
 > on both tenants. Bundle this session:
 > - `d9757dec` perf:api telemetry chokepoint fix (Observability entry below).
 >   VERIFIED on prod: 313 perf:api rows, method-level latency attributable.
@@ -153,6 +153,15 @@ check `frappe.db.exists` first.
 >   throws now show the real message (was bare "HTTP 417"); close-shift
 >   `.catch` added.
 > - `bac3f1d5` security CI (CodeQL + gitleaks + Dependabot).
+> - `76939d60` cart inline-edit focus crash fix — `ref.value?.focus()` on a
+>   `<v-text-field>` instance threw "y.value?.focus is not a function"
+>   (Vuetify 3 doesn't expose `.focus` on the instance); `focusInput()`
+>   reaches the inner `<input>`. Killed the crash:unhandledrejection rows.
+> - `8bebc65a` get_items perf — deep-OFFSET paging fix. Full-catalog load
+>   paged 5700 items 100-at-a-time (107 deep-OFFSET round-trips, O(n²)
+>   index re-walk). `SearchPlan.fetch_page_size` decouples DB chunk (2000)
+>   from result cap. Lab: catalog 2566→402ms cold (6.4×), search
+>   1366→356ms. Pure-Python deploy (worker restart only).
 >
 > **Deploy mechanics (bind-mount prod):** pull source on contavm sibling +
 > rsync lab-built `dist/` (gitignored, doesn't travel via git) + migrate

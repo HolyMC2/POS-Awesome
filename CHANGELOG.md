@@ -6,12 +6,37 @@ All notable changes.
 
 Telemetry call-path fix + API legacy-path compatibility + saldo
 per-profile gate + searchbar whitespace fix + shim error-message
-surfacing + security CI. On `doco-customizations`, built + verified on
-ventas.lab, then deployed to BOTH prod tenants (ventas.docomexico.com +
-ventas.mumulenceria.com) on 2026-06-01. Prod posawesome `89fc7cd4` →
-`aeaf0216`. Deploy = pull source (bind-mount) + rsync built dist +
+surfacing + security CI + cart-focus crash fix + get_items perf. On
+`doco-customizations`, built + verified on ventas.lab, then deployed to
+BOTH prod tenants (ventas.docomexico.com + ventas.mumulenceria.com) over
+2026-06-01. Prod posawesome `89fc7cd4` → `8bebc65a`. Deploy = pull source
+(bind-mount) + rsync built dist (frontend) or worker restart (Python) +
 migrate (saldo field) + flip saldo profiles; SPA-only follow-ups skip
 migrate.
+
+### ⚡ get_items perf — deep-OFFSET paging fix (`8bebc65a`)
+- get_items averaged 2424ms / max 6580ms in prod telemetry — slowest
+  operator-facing call. Root cause (measured on lab, NOT the suspected
+  N+1): full-catalog loads page the whole ~5700-item catalog 100 rows at
+  a time, issuing `ORDER BY item_name LIMIT 100 OFFSET n` 107 times;
+  MariaDB re-walks the order-by index from row 0 each page (deep-OFFSET,
+  O(n²)). The composite index already existed — the paging was wrong.
+- Fix: `SearchPlan.fetch_page_size` decouples the DB fetch chunk from the
+  result cap (2000 when no `limit`, else `page_size`). ~6 shallow
+  round-trips instead of 107 deep. Deterministic order → byte-identical
+  output; response contract unchanged.
+- Lab-measured (Doco Ventas, 5697 items, output parity verified): catalog
+  2566→402ms cold (6.4×), search 1366→356ms (3.8×), get_all stage
+  887→101ms. Pure Python deploy (worker restart, no rsync/migrate).
+
+### 🐞 Cart inline-edit focus crash (`76939d60`)
+- Cart cell-edit refs (qty/rate/discount %/amount) point at `<v-text-field>`
+  COMPONENT instances; Vuetify 3 doesn't expose `.focus()` on the public
+  instance, so `ref.value?.focus()` threw "y.value?.focus is not a
+  function" on opening a cart edit (the `?.` guards null, not wrong-type)
+  → crash:unhandledrejection. Added `focusInput()` reaching the inner
+  `<input>` via `$el.querySelector("input")` (the pattern `openUomEdit`
+  already used); all 4 call sites routed through it.
 
 ### 🐞 Shim error-message surfacing (`aeaf0216`)
 - A direct `frappe.call` hitting a server-side validate throw showed
