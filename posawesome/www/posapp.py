@@ -130,6 +130,22 @@ def _boot_messages() -> Dict[str, str]:
         return {}
 
 
+def _website_settings() -> Dict[str, Any]:
+    """Subset of Website Settings the SPA navbar reads (app_logo / banner_image
+    for the POS logo). Desk seeds frappe.boot.website_settings; without it the
+    /posapp navbar logo is blank. Cached doc; wrapped so it never breaks boot.
+    """
+    try:
+        ws = frappe.get_cached_doc("Website Settings")
+        return {
+            "app_logo": ws.get("app_logo"),
+            "banner_image": ws.get("banner_image"),
+            "app_name": ws.get("app_name"),
+        }
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def _build_boot_payload() -> Dict[str, Any]:
     """Subset of `frappe.boot` the SPA actually needs.
 
@@ -170,6 +186,8 @@ def _build_boot_payload() -> Dict[str, Any]:
         # Mirror Desk: the SPA's frappe-shim reads frappe.boot.__messages for
         # frappe._()/__() — seed it so /posapp is translated, not raw source.
         "__messages": _boot_messages(),
+        # Navbar reads frappe.boot.website_settings.app_logo/banner_image.
+        "website_settings": _website_settings(),
     }
 
 

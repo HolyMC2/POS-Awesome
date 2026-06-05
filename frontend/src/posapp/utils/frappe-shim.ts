@@ -48,11 +48,15 @@
  *
  *   frappe.set_route(route)          window.location for now (no Desk router)
  *
- * Not implemented (throws if called — surfaces gaps):
+ *   frappe.ui.Dialog                 minimal DOM-modal (HTML/Select fields,
+ *                                    primary_action, onhide, $wrapper) — the
+ *                                    two SPA call sites only
  *
- *   frappe.ui.Dialog                 modal — POS uses Vuetify dialogs
+ * Not implemented:
+ *
  *   frappe.www.printview             print — handled separately
- *   frappe.desk.search               search — Desk-only widget
+ *   frappe.desk.search               (the search_link SERVER method works via
+ *                                    frappe.call; only the Desk widget is absent)
  */
 
 import { trackApiTiming } from "./telemetry";
@@ -515,6 +519,195 @@ function provide(path: string) {
 	return cur;
 }
 
+type ShimDialogField = {
+	fieldtype?: string;
+	fieldname?: string;
+	label?: string;
+	options?: string;
+	reqd?: boolean | number;
+};
+type ShimDialogOpts = {
+	title?: string;
+	fields?: ShimDialogField[];
+	primary_action_label?: string;
+	primary_action?: (values: Record<string, string>) => void;
+	secondary_action_label?: string;
+	secondary_action?: () => void;
+};
+
+// Minimal `frappe.ui.Dialog` for the /posapp web route. Desk's Dialog has a
+// huge API; the SPA only ever constructs it in TWO utilities —
+// `itemSelectionDialog` (HTML field + jQuery `$wrapper.find().on()`) and
+// `useItemBatchSerial` (Select field + `primary_action(values)` + `onhide`).
+// The previous shim THREW, so barcode-disambiguation + batch/serial entry
+// crashed on /posapp. Implement exactly that surface as a themed DOM modal
+// (styled via the --pos-* vars, which resolve from :root in theme.css) so the
+// call sites work unchanged outside Desk.
+function makeDialogClass(): any {
+	const S = {
+		overlay:
+			"position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;" +
+			"align-items:center;justify-content:center;z-index:99999;",
+		box:
+			"background:var(--pos-card-bg,#fff);color:var(--pos-text-primary,#212121);" +
+			"border:1px solid var(--pos-border,#e0e0e0);border-radius:8px;min-width:320px;" +
+			"max-width:90vw;max-height:85vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.35);",
+		header:
+			"font-size:18px;font-weight:600;padding:16px 20px;" +
+			"border-bottom:1px solid var(--pos-border,#e0e0e0);",
+		body: "padding:16px 20px;",
+		label:
+			"display:block;margin-bottom:6px;font-size:13px;color:var(--pos-text-secondary,#666);",
+		field:
+			"width:100%;padding:8px;border:1px solid var(--pos-border,#ccc);border-radius:6px;" +
+			"background:var(--pos-card-bg,#fff);color:var(--pos-text-primary,#212121);font-size:14px;",
+		footer:
+			"padding:12px 20px;border-top:1px solid var(--pos-border,#e0e0e0);" +
+			"display:flex;justify-content:flex-end;gap:8px;",
+		btnPrimary:
+			"padding:8px 16px;background:var(--pos-primary,#0097a7);color:#fff;border:none;" +
+			"border-radius:6px;cursor:pointer;font-size:14px;",
+		btnSecondary:
+			"padding:8px 16px;background:transparent;color:var(--pos-text-primary,#212121);" +
+			"border:1px solid var(--pos-border,#ccc);border-radius:6px;cursor:pointer;font-size:14px;",
+	};
+
+	return class ShimDialog {
+		opts: ShimDialogOpts;
+		onhide: (() => void) | null = null;
+		wrapper: HTMLElement;
+		$wrapper: any;
+		private body: HTMLElement;
+		private inputs: Record<string, HTMLSelectElement | HTMLInputElement> = {};
+		private visible = false;
+
+		constructor(opts: ShimDialogOpts) {
+			this.opts = opts || {};
+			const overlay = document.createElement("div");
+			overlay.setAttribute("style", S.overlay);
+			const box = document.createElement("div");
+			box.setAttribute("style", S.box);
+
+			const header = document.createElement("div");
+			header.setAttribute("style", S.header);
+			header.textContent = this.opts.title || "";
+			box.appendChild(header);
+
+			this.body = document.createElement("div");
+			this.body.setAttribute("style", S.body);
+			(this.opts.fields || []).forEach((f) => this.renderField(f));
+			box.appendChild(this.body);
+
+			const footer = document.createElement("div");
+			footer.setAttribute("style", S.footer);
+			if (this.opts.secondary_action_label) {
+				const sb = document.createElement("button");
+				sb.setAttribute("style", S.btnSecondary);
+				sb.textContent = this.opts.secondary_action_label;
+				sb.addEventListener("click", () => {
+					if (this.opts.secondary_action) this.opts.secondary_action();
+					this.hide();
+				});
+				footer.appendChild(sb);
+			}
+			const pb = document.createElement("button");
+			pb.setAttribute("style", S.btnPrimary);
+			pb.textContent = this.opts.primary_action_label || "OK";
+			pb.addEventListener("click", () => this.onPrimary());
+			footer.appendChild(pb);
+			box.appendChild(footer);
+
+			overlay.addEventListener("click", (e) => {
+				if (e.target === overlay) this.hide();
+			});
+			overlay.appendChild(box);
+			this.wrapper = overlay;
+
+			const jq = (window as any).$ || (window as any).jQuery;
+			this.$wrapper = jq ? jq(box) : null;
+		}
+
+		private renderField(f: ShimDialogField) {
+			const ft = f.fieldtype || "Data";
+			if (ft === "HTML") {
+				const div = document.createElement("div");
+				div.innerHTML = f.options || "";
+				this.body.appendChild(div);
+				return;
+			}
+			if (f.label) {
+				const lbl = document.createElement("label");
+				lbl.setAttribute("style", S.label);
+				lbl.textContent = f.label;
+				this.body.appendChild(lbl);
+			}
+			if (ft === "Select") {
+				const sel = document.createElement("select");
+				sel.setAttribute("style", S.field);
+				if (f.reqd) sel.dataset.reqd = "1";
+				(f.options || "")
+					.split("\n")
+					.map((o) => o.trim())
+					.filter(Boolean)
+					.forEach((o) => {
+						const opt = document.createElement("option");
+						opt.value = o;
+						opt.textContent = o;
+						sel.appendChild(opt);
+					});
+				this.body.appendChild(sel);
+				if (f.fieldname) this.inputs[f.fieldname] = sel;
+				return;
+			}
+			const inp = document.createElement("input");
+			inp.type = "text";
+			inp.setAttribute("style", S.field);
+			if (f.reqd) inp.dataset.reqd = "1";
+			this.body.appendChild(inp);
+			if (f.fieldname) this.inputs[f.fieldname] = inp;
+		}
+
+		get_values(): Record<string, string> {
+			const v: Record<string, string> = {};
+			Object.entries(this.inputs).forEach(([k, el]) => {
+				v[k] = el.value;
+			});
+			return v;
+		}
+
+		private onPrimary() {
+			for (const el of Object.values(this.inputs)) {
+				if (el.dataset && el.dataset.reqd === "1" && !el.value) {
+					el.style.outline = "2px solid #d32f2f";
+					return;
+				}
+			}
+			if (this.opts.primary_action) this.opts.primary_action(this.get_values());
+		}
+
+		show() {
+			if (this.visible) return;
+			document.body.appendChild(this.wrapper);
+			this.visible = true;
+		}
+
+		hide() {
+			if (!this.visible) return;
+			this.visible = false;
+			if (this.wrapper.parentNode) {
+				this.wrapper.parentNode.removeChild(this.wrapper);
+			}
+			if (typeof this.onhide === "function") {
+				try {
+					this.onhide();
+				} catch {
+					/* onhide must not break teardown */
+				}
+			}
+		}
+	};
+}
+
 /**
  * Install the shim on (window as any).frappe. Idempotent.
  *
@@ -585,11 +778,9 @@ export function installFrappeShim() {
 			);
 		},
 		ui: {
-			Dialog: function () {
-				throw new Error(
-					"frappe.ui.Dialog is not available outside Desk; use a Vuetify <v-dialog>",
-				);
-			},
+			// Minimal DOM-modal Dialog (HTML + Select fields, primary_action,
+			// onhide, jQuery $wrapper) — enough for the SPA's two call sites.
+			Dialog: makeDialogClass(),
 			set_theme(_theme: string) {
 				/* no-op outside Desk */
 			},
