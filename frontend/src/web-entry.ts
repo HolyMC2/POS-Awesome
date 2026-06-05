@@ -59,7 +59,64 @@ function showFailure(message: string, err?: unknown) {
 	if (err) console.error("[POSA][web-entry]", err);
 }
 
+async function evictStaleServiceWorkers(): Promise<boolean> {
+	// The /posapp web route NEVER registers a service worker. Any SW present is
+	// stale — left by a prior Desk-era build — and, scoped at "/", it intercepts
+	// same-origin requests including `/files/*` item images, returning a
+	// cache-miss 404 on the web route. The Desk loader self-heals via
+	// `loader.ts performAssetRecovery`; the web route had no equivalent, so
+	// operators saw broken item pictures until a manual DevTools unregister.
+	//
+	// Mirror that cleanup here. A CONTROLLING worker keeps intercepting for the
+	// life of the current page even after `unregister()` (it detaches only on
+	// the next navigation), so when we actually evict one we reload once —
+	// guarded by a session sentinel so a re-registering SW can't loop us.
+	//
+	// Returns true if a reload was triggered (caller should stop booting).
+	try {
+		if (
+			typeof navigator === "undefined" ||
+			!navigator.serviceWorker ||
+			typeof navigator.serviceWorker.getRegistrations !== "function"
+		) {
+			return false;
+		}
+		const registrations = await navigator.serviceWorker.getRegistrations();
+		if (!registrations.length) return false; // nothing stale — leave caches alone
+
+		await Promise.all(
+			registrations.map(async (registration) => {
+				registration.active?.postMessage({ type: "CLIENT_FORCE_UNREGISTER" });
+				registration.waiting?.postMessage({ type: "CLIENT_FORCE_UNREGISTER" });
+				registration.installing?.postMessage({ type: "CLIENT_FORCE_UNREGISTER" });
+				await registration.unregister();
+			}),
+		);
+
+		if (typeof caches !== "undefined") {
+			const keys = await caches.keys();
+			await Promise.all(keys.map((key) => caches.delete(key)));
+		}
+
+		if (
+			navigator.serviceWorker.controller &&
+			!sessionStorage.getItem("posa_sw_evicted")
+		) {
+			sessionStorage.setItem("posa_sw_evicted", "1");
+			location.reload();
+			return true;
+		}
+	} catch (err) {
+		console.warn("[POSA][web-entry] stale service worker cleanup failed", err);
+	}
+	return false;
+}
+
 async function boot() {
+	// Evict any stale Desk-era service worker BEFORE booting — it would
+	// otherwise 404 same-origin `/files/*` item images on this route.
+	if (await evictStaleServiceWorkers()) return; // reloading to drop the SW
+
 	try {
 		installFrappeShim();
 	} catch (err) {
