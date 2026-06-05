@@ -112,6 +112,24 @@ def get_context(context: Dict[str, Any]) -> Dict[str, Any]:
     return context
 
 
+def _boot_messages() -> Dict[str, str]:
+    """Translation dict for the current user's language, mirroring Desk's
+    `bootinfo["__messages"] = get_messages_for_boot()` (boot.py:347).
+
+    The frappe-shim's `makeI18n` reads `frappe.boot.__messages` for
+    `frappe._()` / `__()`. Without it, /posapp renders untranslated SOURCE
+    strings while Desk /app/posapp is fully translated. Frappe caches the
+    per-lang dict, so this is cheap per request; wrapped so a translation
+    hiccup never breaks the route (it must always render).
+    """
+    try:
+        from frappe.translate import get_messages_for_boot
+
+        return get_messages_for_boot() or {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def _build_boot_payload() -> Dict[str, Any]:
     """Subset of `frappe.boot` the SPA actually needs.
 
@@ -149,6 +167,9 @@ def _build_boot_payload() -> Dict[str, Any]:
         "posawesome_settings": {
             "use_web_route": _user_opted_into_web_route(user),
         },
+        # Mirror Desk: the SPA's frappe-shim reads frappe.boot.__messages for
+        # frappe._()/__() — seed it so /posapp is translated, not raw source.
+        "__messages": _boot_messages(),
     }
 
 
