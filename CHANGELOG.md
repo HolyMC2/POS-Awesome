@@ -2,6 +2,48 @@
 
 All notable changes.
 
+## 2026-06-05 (DEPLOYED to prod) — /posapp web-route parity: SW/images, theme, i18n, Dialog
+
+Hardened the light `/posapp` web route (vs Desk `/app/posapp`) — a cluster of
+"Desk provides it, the web shell forgot it" gaps. Built on lab, shipped to BOTH
+prod tenants (gitignored Vite dist via `posawesome-push-prod.sh` rsync;
+`es.csv`/`posapp.py` via git-pull + clear-cache, data-only). Playwright-verified
+on prod.
+
+- **`65e0a8b2` SW/images:** a stale Desk-era service worker (scope `/`) kept
+  controlling `/posapp` and 404'd same-origin `/files/*` item images
+  (cache-miss). Desk self-heals via `loader.ts performAssetRecovery`; web-entry
+  didn't. `web-entry.ts` now unregisters SWs + purges caches on boot, reloads
+  once (session-sentinel-guarded). Was the broken-item-pictures report.
+- **`2bcf2ddd` theme/hover:** `posapp/styles/theme.css` scopes **61 rules**
+  (menu/dialog/overlay text + HOVER colours, tooltips, the POS theme) to
+  `body[data-page-route="posapp"]` — an attr Desk sets but the web shell didn't
+  → all 61 inert → dropdown/serial-selector hover text == highlight colour
+  (unreadable). Set it in `posapp.html` (vars resolve from `:root`).
+- **`f58bfee5` shim gaps:** `frappe.ui.Dialog` threw outside Desk (crashed
+  barcode-disambiguation + batch/serial entry) → minimal themed DOM-modal
+  `makeDialogClass` (HTML/Select fields, `primary_action(values)`, `onhide`,
+  jQuery `$wrapper`); call sites unchanged. `boot.website_settings` seeded
+  (navbar logo).
+- **`0551a28d` i18n mechanism:** boot payload now seeds `frappe.boot.__messages
+  = get_messages_for_boot()` (Desk parity) — `frappe._()`/`__()` (~140 sites)
+  were rendering SOURCE strings; now translated.
+- **i18n content** (`06059001` `fc3c5764` `c2994703` `e078333c` `c77f3374`):
+  **550** es-MX strings in `translations/es.csv` (were en==es placeholders or
+  missing) — empty-cart, report empties, payment/gift-card/cashier/scanner/
+  offline-sync/QZ/settings/supervisor. Remaining ~37 are identity ("OK",
+  "Serial", "POS"), diagnostic metrics, or grammar-risky fragments.
+- **`06059001` layout:** empty-cart box `min-height 280→140px`, `padding
+  40→22px` (was an oversized slab).
+
+### ✅ Prod verify (2026-06-05, Playwright, ventas.docomexico.com)
+- `/posapp` boots authenticated → routes to `/posapp/pos` (shim + web-history OK).
+- Spanish live: "No hay artículos en el carrito", "Buscar, escanear o explorar
+  artículo", "Cargos de Entrega", "Venta Activa" — renders es even on an `en`
+  account.
+- Empty-cart compact; `body[data-page-route="posapp"]` present; **0** broken
+  images. Console errors = QZ Tray local-printer absent in headless (benign).
+
 ## 2026-06-02 (DEPLOYED to prod) — posawesome `8bebc65a` → `6ff78542`
 
 Telemetry verification of the 2026-06-01 deploy + `get_items` deterministic
