@@ -1469,3 +1469,148 @@ Adjust the quantity or enable negative stock to continue.,Ajusta la cantidad o h
 Allowed UOM is {0},La unidad de medida permitida es {0}
 Available Customer Redeemable Balance,Saldo canjeable del cliente disponible
 Available customer redeemable balance,Saldo canjeable del cliente disponible
+Appearance and user-level preferences for the current session.,Apariencia y preferencias de usuario para la sesión actual.
+Applied Stored Value,Valor almacenado aplicado
+Apply only the amount you want to redeem on this invoice. The remaining balance stays on the card.,Aplica solo el monto que deseas canjear en esta factura. El saldo restante permanece en la tarjeta.
+Auto reconciliation completed after payment submit.,Conciliación automática completada tras enviar el pago.
+Auto reconciliation completed. Allocated: {0}{1}. Remaining outstanding: {0}{2}.,Conciliación automática completada. Asignado: {0}{1}. Pendiente restante: {0}{2}.
+Awesome Dashboard is disabled for the selected POS Profile.,El Panel Awesome está deshabilitado para el perfil de POS seleccionado.
+Awesome Dashboard is unavailable for the selected scope.,El Panel Awesome no está disponible para el alcance seleccionado.
+Awesome Dashboard is visible only to POS supervisors.,El Panel Awesome solo es visible para los supervisores de POS.
+Background processing did not finish in time.,El procesamiento en segundo plano no terminó a tiempo.
+Background processing failed for Invoice {0}: {1},El procesamiento en segundo plano falló para la factura {0}: {1}
+Base Paid Amt:,Monto pagado base:
+Base Recv Amt:,Monto recibido base:
+Base:,Base:
+Batch No. Available QTY,No. de lote — Cantidad disponible
+Birthday (DD-MM-YYYY),Cumpleaños (DD-MM-AAAA)
+Browse,Explorar
+Camera constraints not supported by your device. Trying fallback settings...,Tu dispositivo no admite estas restricciones de cámara. Probando configuración alternativa...
+Camera is busy or blocked by another app/tab. Close other camera apps and try again.,La cámara está ocupada o bloqueada por otra app/pestaña. Cierra otras apps de cámara e inténtalo de nuevo.
+Camera permission denied. Please allow camera access in your browser settings and refresh the page.,Permiso de cámara denegado. Permite el acceso a la cámara en la configuración del navegador y recarga la página.
+Camera scanner is locked until the current error is acknowledged,El escáner de cámara está bloqueado hasta confirmar el error actual
+Camera started but the video stream did not load in time. Please try again.,La cámara inició pero el video no cargó a tiempo. Inténtalo de nuevo.
+Cancel cash movement {0}?,¿Cancelar el movimiento de efectivo {0}?
+Cannot add an item with zero or negative quantity.,No se puede agregar un artículo con cantidad cero o negativa.
+Cannot redeem gift cards more than invoice total,No se pueden canjear tarjetas de regalo por más del total de la factura
+Card health after the last live lookup,Estado de la tarjeta tras la última consulta en vivo
+Cart,Carrito
+Cash payment cannot be less than invoice total when partial payment is not allowed,El pago en efectivo no puede ser menor al total de la factura cuando no se permite pago parcial
+Cashier Access,Acceso de cajero
+Cashier PIN,PIN de cajero
+Cashier PIN saved successfully.,PIN de cajero guardado correctamente.
+Cashier identity and appearance preferences.,Identidad del cajero y preferencias de apariencia.
+Categories,Categorías
+Change allocation repaired,Asignación de cambio reparada
+Change terminal cashier,Cambiar cajero de la terminal
+Check Balance,Consultar saldo
+Check balance for any card. Supervisors can issue and top up cards here.,Consulta el saldo de cualquier tarjeta. Los supervisores pueden emitir y recargar tarjetas aquí.
+Check balance only,Solo consultar saldo
+Check live balance before applying redemption,Consultar saldo en vivo antes de aplicar el canje
+Check live balance before redemption,Consultar saldo en vivo antes del canje
+Checking...,Consultando...
+Cheque/Reference Date,Fecha de cheque/referencia
+Cheque/Reference No,No. de cheque/referencia
+Choose the cashier currently operating this terminal.,Elige el cajero que opera actualmente esta terminal.
+Clear Log,Limpiar registro
+Clear all barcode items,Limpiar todos los artículos de código de barras
+Clear all purchase order items,Limpiar todos los artículos de la orden de compra
+Close about dialog,Cerrar el diálogo Acerca de
+Close cashier switcher,Cerrar el selector de cajero
+Close closing shift dialog,Cerrar el diálogo de cierre de turno
+Close column selector,Cerrar el selector de columnas
+Close drafts dialog,Cerrar el diálogo de borradores
+Close invoice details dialog,Cerrar el diálogo de detalles de factura
+Close invoice management,Cerrar la gestión de facturas
+Close offline invoices dialog,Cerrar el diálogo de facturas fuera de línea
+Close packing list dialog,Cerrar el diálogo de lista de empaque
+Close returns dialog,Cerrar el diálogo de devoluciones
+Close sales orders dialog,Cerrar el diálogo de órdenes de venta
+Close scanner dialog,Cerrar el diálogo del escáner
+Collapse item details,Contraer detalles del artículo
+Compare interpolation × density on paper,Comparar interpolación × densidad en papel
+Confirm PIN,Confirmar PIN
+Connection problem while submitting invoice,Problema de conexión al enviar la factura
+Connectivity and cached prerequisite status were rechecked.,Se verificó nuevamente la conectividad y el estado de los prerrequisitos en caché.
+Conversion Rate,Tipo de cambio
+Could not create supplier,No se pudo crear el proveedor
+Could not load sales order,No se pudo cargar la orden de venta
+Could not submit M-Pesa payment,No se pudo enviar el pago M-Pesa
+Create PIN,Crear PIN
+Create and load a new prepaid card,Crear y cargar una nueva tarjeta prepagada
+Create and preload a new gift card,Crear y precargar una nueva tarjeta de regalo
+Create or change your PIN,Crea o cambia tu PIN
+Create return from invoice,Crear devolución desde la factura
+Current PIN,PIN actual
+Current redeemable value on the gift card,Valor canjeable actual en la tarjeta de regalo
+Customer Credit Return Active,Devolución de crédito de cliente activa
+Customer Group,Grupo de clientes
+Customer display was blocked. Please allow pop-ups for this site.,Se bloqueó la pantalla del cliente. Permite las ventanas emergentes para este sitio.
+Customer-facing tools and printer setup.,Herramientas de cara al cliente y configuración de impresora.
+Daily cashier actions without scrolling.,Acciones diarias del cajero sin desplazarse.
+Delete cancelled cash movement {0}?,¿Eliminar el movimiento de efectivo cancelado {0}?
+Delete draft invoice,Eliminar factura borrador
+Delete draft invoice {0}?,¿Eliminar la factura borrador {0}?
+Delete offline invoice,Eliminar factura fuera de línea
+Delivered,Entregado
+Delivery Charges Rate,Tarifa de cargos de entrega
+Delivery Note {0} created,Nota de entrega {0} creada
+Delivery note created,Nota de entrega creada
+Deployed Bundle:,Paquete desplegado:
+Disable offline mode first to recheck live connectivity.,Desactiva primero el modo fuera de línea para verificar la conectividad en vivo.
+Discount clarity,Claridad del descuento
+Draft source,Origen del borrador
+Due {0},Vence {0}
+Edit Gift Application,Editar aplicación de tarjeta de regalo
+Edit customer,Editar cliente
+Email,Correo electrónico
+Employee,Empleado
+Enter a PIN.,Ingresa un PIN.
+Enter the cashier PIN to continue.,Ingresa el PIN del cajero para continuar.
+Enter the current PIN first.,Ingresa primero el PIN actual.
+"Enter the current PIN, then choose a new one.",Ingresa el PIN actual y luego elige uno nuevo.
+Error submitting invoice: No response from server,Error al enviar la factura: Sin respuesta del servidor
+Error submitting invoice: {0},Error al enviar la factura: {0}
+Expand item details,Expandir detalles del artículo
+Failed to load QZ telemetry,No se pudo cargar la telemetría de QZ
+Failure rate,Tasa de fallos
+Failures,Fallos
+Fast cashier actions for active shifts.,Acciones rápidas del cajero para turnos activos.
+Fetch HTML,Obtener HTML
+Fetch the latest offline prerequisite updates,Obtener las últimas actualizaciones de prerrequisitos fuera de línea
+Find a sales order quickly and load it into the current sale.,Encuentra una orden de venta rápidamente y cárgala en la venta actual.
+From:,Desde:
+Gain,Ganancia
+Generate a fresh prepaid card and start it with an opening balance.,Genera una nueva tarjeta prepagada e iníciala con un saldo de apertura.
+Generate and install the certificate to allow fully silent printing without trust prompts.,Genera e instala el certificado para permitir impresión totalmente silenciosa sin avisos de confianza.
+Generated scale barcode: {0},Código de barras de báscula generado: {0}
+Gift Card,Tarjeta de regalo
+Gift Card Applied,Tarjeta de regalo aplicada
+Gift Card Code,Código de tarjeta de regalo
+Gift Card Management,Gestión de tarjetas de regalo
+Gift Cards,Tarjetas de regalo
+Gift card,Tarjeta de regalo
+Gift card amount must be greater than zero.,El monto de la tarjeta de regalo debe ser mayor que cero.
+Gift card code is required for redemption,Se requiere el código de la tarjeta de regalo para el canje
+Gift card code is required.,Se requiere el código de la tarjeta de regalo.
+Gift card issued successfully.,Tarjeta de regalo emitida correctamente.
+Gift card loaded successfully.,Tarjeta de regalo cargada correctamente.
+Gift card payment,Pago con tarjeta de regalo
+Gift card redemption requires an online connection,El canje de tarjeta de regalo requiere conexión en línea
+Gift card topped up successfully.,Tarjeta de regalo recargada correctamente.
+"Grouped controls for terminal, UI, and session settings.","Controles agrupados para terminal, interfaz y ajustes de sesión."
+Hide,Ocultar
+Hide Gift Card,Ocultar tarjeta de regalo
+Hide search tools,Ocultar herramientas de búsqueda
+How this section works,Cómo funciona esta sección
+"If stale data remains, open Settings > Offline & Sync and run Rebuild Offline Data again while online.","Si persisten datos desactualizados, abre Ajustes > Fuera de línea y sincronización y ejecuta de nuevo Reconstruir datos fuera de línea mientras estés en línea."
+"If the warning persists, open Settings > Offline & Sync, then run Refresh Offline Data or Rebuild Offline Data.","Si la advertencia persiste, abre Ajustes > Fuera de línea y sincronización y ejecuta Actualizar datos fuera de línea o Reconstruir datos fuera de línea."
+In stock: {0},En existencia: {0}
+Included in settlement,Incluido en la liquidación
+Initial Amount,Monto inicial
+Inline images,Imágenes en línea
+"Inspect cache, sync, and prerequisite status","Inspeccionar el estado de caché, sincronización y prerrequisitos"
+Invoice ID,ID de factura
+Invoice {0} is Submitted,La factura {0} está enviada
+Invoice {0} processed successfully,Factura {0} procesada correctamente
+Invoice {0} submission failed,Falló el envío de la factura {0}
