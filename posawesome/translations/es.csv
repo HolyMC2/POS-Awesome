@@ -1756,3 +1756,140 @@ Repairing change allocation,Reparando asignación de cambio
 Request ID: {0},ID de solicitud: {0}
 Requested route: {0},Ruta solicitada: {0}
 Required By,Requerido para
+Resource Health,Estado de recursos
+Restricted,Restringido
+Restricted operational controls for supervisors only.,Controles operativos restringidos solo para supervisores.
+Retry route,Reintentar ruta
+Sales Order {0} is Submitted,La orden de venta {0} está enviada
+Save as POS Profile Default,Guardar como predeterminado del perfil de POS
+Save the selected printer as the POS Profile default so it shows automatically on this setup.,Guarda la impresora seleccionada como predeterminada del perfil de POS para que aparezca automáticamente en esta configuración.
+Saved as draft because: {0},Guardado como borrador porque: {0}
+Saving...,Guardando...
+Scale barcode settings are not configured. Using item barcode only.,La configuración de código de barras de báscula no está definida. Usando solo el código de barras del artículo.
+Scale template barcode is missing for this item/UOM. Using item barcode only.,Falta el código de barras de plantilla de báscula para este artículo/UM. Usando solo el código de barras del artículo.
+Scan a barcode or type to search,Escanea un código de barras o escribe para buscar
+Scan an existing card and top it up without leaving the payment flow.,Escanea una tarjeta existente y recárgala sin salir del flujo de pago.
+Scan or enter a gift card code to check balance or redeem.,Escanea o ingresa un código de tarjeta de regalo para consultar saldo o canjear.
+Scan or paste the card code below.,Escanea o pega el código de la tarjeta a continuación.
+Scan with camera,Escanear con cámara
+Scan-First Flow,Flujo de escaneo primero
+Scan-Ready,Listo para escanear
+Scanning for: {0},Escaneando: {0}
+Search an invoice and continue the return flow without extra steps.,Busca una factura y continúa el flujo de devolución sin pasos adicionales.
+"Search, scan or browse item","Buscar, escanear o explorar artículo"
+Section failed to load,No se pudo cargar la sección
+Secure context (HTTPS or localhost) is required for camera access.,Se requiere un contexto seguro (HTTPS o localhost) para acceder a la cámara.
+Secure context (HTTPS) required for camera access. Please use HTTPS to access the camera.,Se requiere un contexto seguro (HTTPS) para acceder a la cámara. Usa HTTPS para acceder a la cámara.
+Select a cashier first.,Selecciona primero un cajero.
+Select the cashier who is taking over this terminal.,Selecciona el cajero que tomará esta terminal.
+Selected,Seleccionado
+Selected Payments,Pagos seleccionados
+Sensitive actions kept away from quick taps.,Acciones sensibles mantenidas lejos de toques rápidos.
+Sent to printer,Enviado a la impresora
+Serial No,No. de serie
+Serial No QTY,Cantidad de No. de serie
+Session,Sesión
+Set each cashier PIN in the User form and keep terminal members assigned in POS Profile User.,Establece el PIN de cada cajero en el formulario de Usuario y mantén a los miembros de la terminal asignados en POS Profile User.
+Settings in this section update the POS workspace without changing the current route.,Los ajustes de esta sección actualizan el espacio de trabajo del POS sin cambiar la ruta actual.
+Shared terminal,Terminal compartida
+Show,Mostrar
+Show Repair Candidates,Mostrar candidatos de reparación
+Show rate info,Mostrar información de tarifa
+Show search tools,Mostrar herramientas de búsqueda
+Show the active cart on a customer-facing screen,Mostrar el carrito activo en una pantalla de cara al cliente
+Showing {0}-{1} of {2},Mostrando {0}-{1} de {2}
+Sign out of the current POS session,Cerrar la sesión actual del POS
+Source Ex. Rate:,Tipo de cambio origen:
+Source Rate:,Tarifa origen:
+Standard Rate,Tarifa estándar
+Stock is lower than requested,El stock es menor al solicitado
+Store as Credit?,¿Guardar como crédito?
+Stored Value Source,Origen del valor almacenado
+Supervisor Access,Acceso de supervisor
+Supervisor Tools,Herramientas de supervisor
+Supervisor permissions unlock issuance and reloads,Los permisos de supervisor habilitan la emisión y las recargas
+Supplier Group,Grupo de proveedores
+Supplier Invoices,Facturas de proveedor
+Supplier Name,Nombre del proveedor
+Supplier Payments,Pagos a proveedores
+Supplier Type,Tipo de proveedor
+Switch Cashier,Cambiar cajero
+Switch the POS appearance theme,Cambiar el tema de apariencia del POS
+Sync Offline Cash Movements ({0}),Sincronizar movimientos de efectivo fuera de línea ({0})
+Sync Offline Sales,Sincronizar ventas fuera de línea
+Synced {0} offline cash movement(s).,Se sincronizaron {0} movimiento(s) de efectivo fuera de línea.
+Syncing items in background,Sincronizando artículos en segundo plano
+System / Diagnostics,Sistema / Diagnóstico
+"System actions are low-frequency maintenance controls such as app info, support diagnostics, and session controls.","Las acciones del sistema son controles de mantenimiento de baja frecuencia como información de la app, diagnóstico de soporte y controles de sesión."
+Tap the button below to redeem a gift card during checkout.,Toca el botón de abajo para canjear una tarjeta de regalo durante el cobro.
+Target Ex. Rate:,Tipo de cambio destino:
+Target Rate:,Tarifa destino:
+Terminal & Devices,Terminal y dispositivos
+Terminal locked,Terminal bloqueada
+"Terminal tools affect this checkout station, customer-facing displays, and future printer/device controls.","Las herramientas de terminal afectan esta estación de cobro, las pantallas de cara al cliente y los futuros controles de impresora/dispositivo."
+Territory,Territorio
+The quantity for {0} has been adjusted to the maximum available stock.,La cantidad de {0} se ajustó al stock máximo disponible.
+The system could not retrieve the item details. Please try again.,El sistema no pudo obtener los detalles del artículo. Inténtalo de nuevo.
+This POS page could not be opened offline because its code was not cached on this terminal yet.,Esta página del POS no se pudo abrir fuera de línea porque su código aún no estaba en caché en esta terminal.
+This action now opens inside the settings workspace.,Esta acción ahora se abre dentro del espacio de trabajo de ajustes.
+This invoice does not need change-allocation repair,Esta factura no necesita reparación de asignación de cambio
+This invoice is already repaired,Esta factura ya está reparada
+This return will be saved as customer credit instead of cashback.,Esta devolución se guardará como crédito del cliente en lugar de efectivo.
+To:,Para:
+Toggle Theme,Alternar tema
+Tools,Herramientas
+Tools for customer-facing screens and terminal-specific actions.,Herramientas para pantallas de cara al cliente y acciones específicas de la terminal.
+Top Up Amount,Monto de recarga
+Top Up Card,Recargar tarjeta
+Top Up Mode,Modo de recarga
+Total Discount,Descuento total
+Transaction ID,ID de transacción
+Try another source or refresh the list.,Prueba otro origen o actualiza la lista.
+Unable to access camera even with basic settings. Please check your camera permissions and device compatibility.,No se pudo acceder a la cámara ni con la configuración básica. Revisa los permisos de cámara y la compatibilidad del dispositivo.
+Unable to add offer item {0}. Please refresh and try again.,No se pudo agregar el artículo de oferta {0}. Actualiza e inténtalo de nuevo.
+Unable to fetch documents,No se pudieron obtener los documentos
+Unable to issue gift card.,No se pudo emitir la tarjeta de regalo.
+Unable to load cashier PIN status.,No se pudo cargar el estado del PIN de cajero.
+Unable to load document,No se pudo cargar el documento
+Unable to load gift card balance.,No se pudo cargar el saldo de la tarjeta de regalo.
+Unable to load parked order,No se pudo cargar la orden en espera
+Unable to prepare document,No se pudo preparar el documento
+Unable to print submitted invoice,No se pudo imprimir la factura enviada
+Unable to process document action,No se pudo procesar la acción del documento
+Unable to repair change allocation,No se pudo reparar la asignación de cambio
+Unable to save cashier PIN.,No se pudo guardar el PIN de cajero.
+Unable to save the rate to the backend price list,No se pudo guardar la tarifa en la lista de precios del servidor
+Unable to submit invoice,No se pudo enviar la factura
+Unable to top up gift card.,No se pudo recargar la tarjeta de regalo.
+Unable to verify cashier PIN.,No se pudo verificar el PIN de cajero.
+Unallocated:,Sin asignar:
+Unavailable,No disponible
+Unlock POS,Desbloquear POS
+"Unselected payments stay unallocated first, then auto reconcile after submit.","Los pagos no seleccionados quedan sin asignar primero, luego se concilian automáticamente tras enviar."
+Update PIN,Actualizar PIN
+Updates and app info that stay out of the cashier flow.,Actualizaciones e información de la app que se mantienen fuera del flujo del cajero.
+Use Cashier,Usar cajero
+Use Customer Balance,Usar saldo del cliente
+Use a 4 to 8 digit PIN for cashier switching and terminal unlock.,Usa un PIN de 4 a 8 dígitos para cambiar de cajero y desbloquear la terminal.
+"Use one field for manual code entry, barcode scans, or QR scans.","Usa un solo campo para entrada manual de códigos, escaneos de código de barras o escaneos QR."
+"Use one workflow for balance checks, new issuance, and top ups without leaving POS.","Usa un solo flujo para consultas de saldo, nueva emisión y recargas sin salir del POS."
+"Use this section when cached prerequisite data needs a refresh, rebuild, or diagnostics review.","Usa esta sección cuando los datos de prerrequisitos en caché necesiten actualización, reconstrucción o revisión de diagnóstico."
+Valid until,Válido hasta
+View Data Diagnostics,Ver diagnóstico de datos
+View all,Ver todo
+View app information and current build details,Ver información de la app y detalles de la compilación actual
+View invoice details,Ver detalles de la factura
+View restricted POS insights,Ver información restringida del POS
+Window,Ventana
+Window: last 24 hours,Ventana: últimas 24 horas
+Workflow,Flujo
+Write off amount cannot exceed the POS profile maximum of {0},El monto de cancelación no puede exceder el máximo del perfil de POS de {0}
+Write off amount exceeds the allowed limit ({0}). Please add payment for the remaining amount.,El monto de cancelación excede el límite permitido ({0}). Agrega un pago por el monto restante.
+{0} (Qty: {1}),{0} (Cant.: {1})
+{0} actions,{0} acciones
+{0} offline invoice{1} pending,{0} factura{1} fuera de línea pendiente{1}
+{0} offline invoice{1} saved as draft,{0} factura{1} fuera de línea guardada{1} como borrador
+{0} offline invoice{1} synced,{0} factura{1} fuera de línea sincronizada{1}
+{0}d ago,hace {0}d
+{0}h ago,hace {0}h
+{0}m ago,hace {0}m
