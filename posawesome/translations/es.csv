@@ -887,7 +887,7 @@ Error calculating prices,Error al calcular precios
 Error fetching customer balance,Error al obtener saldo del cliente
 Error processing payment,Error al procesar pago
 Error searching invoices,Error al buscar facturas
-Error submitting invoice: ,Error submitting invoice: 
+Error submitting invoice: ,Error al enviar la factura: 
 Error updating item details,Error al actualizar detalles del artículo
 Est. Purchase,Compra Est.
 Est. Value,Valor Est.
@@ -997,102 +997,102 @@ No allocation was recorded for Payment Entry {0}.,No se registró asignación pa
 No allocations were made.,No se hicieron asignaciones.
 No batches available in {0} for {1}.,No batches available in {0} for {1}.
 No branch/location data found.,No branch/location data found.
-No brand data found.,No brand data found.
+No brand data found.,No se encontraron datos de marca.
 No cash movement type is allowed for this POS Profile.,No cash movement type is allowed for this POS Profile.
 No cashier-wise discount/void/return activity.,No cashier-wise discount/void/return activity.
-No category data found.,No category data found.
+No category data found.,No se encontraron datos de categoría.
 No category profitability data found.,No category profitability data found.
-No change returned recorded for this shift.,No change returned recorded for this shift.
+No change returned recorded for this shift.,No hay cambio devuelto registrado para este turno.
 No charge head breakdown found.,No charge head breakdown found.
-No customer sales data found.,No customer sales data found.
+No customer sales data found.,No se encontraron datos de ventas por cliente.
 No day-wise discount/void/return trend.,No day-wise discount/void/return trend.
 No day-wise payment data found.,No day-wise payment data found.
 No day-wise profitability trend found.,No day-wise profitability trend found.
-No day-wise purchase data found.,No day-wise purchase data found.
-No day-wise sales trend found.,No day-wise sales trend found.
+No day-wise purchase data found.,No se encontraron datos de compras por día.
+No day-wise sales trend found.,No se encontró tendencia de ventas por día.
 No day-wise tax/charges trend found.,No day-wise tax/charges trend found.
-No dead stock items.,No dead stock items.
-No hourly sales trend found for today.,No hourly sales trend found for today.
-No invoices found,No invoices found
-No invoices found. Try different search criteria.,No invoices found. Try different search criteria.
+No dead stock items.,No hay artículos sin movimiento.
+No hourly sales trend found for today.,No se encontró tendencia de ventas por hora para hoy.
+No invoices found,No se encontraron facturas
+No invoices found. Try different search criteria.,No se encontraron facturas. Prueba otros criterios de búsqueda.
 No item profitability data found.,No item profitability data found.
-No item sales data found for this period.,No item sales data found for this period.
-No items found,No items found
-No items in cart,No items in cart
-No items with barcodes to print,No items with barcodes to print
+No item sales data found for this period.,No se encontraron datos de ventas por artículo en este periodo.
+No items found,No se encontraron artículos
+No items in cart,No hay artículos en el carrito
+No items with barcodes to print,No hay artículos con códigos de barras para imprimir
 No location-wise top item data found.,No location-wise top item data found.
-No low stock alerts right now.,No low stock alerts right now.
-No low stock items.,No low stock items.
+No low stock alerts right now.,No hay alertas de stock bajo en este momento.
+No low stock items.,No hay artículos con stock bajo.
 No month-wise sales trend found.,No month-wise sales trend found.
-No negative stock items.,No negative stock items.
+No negative stock items.,No hay artículos con stock negativo.
 No offline cash movement synced.,No offline cash movement synced.
-No offline invoices pending synchronization,No offline invoices pending synchronization
-No out-of-stock items.,No out-of-stock items.
-No payment collection data found.,No payment collection data found.
-No payment rows available on this invoice.,No payment rows available on this invoice.
-No payments registered for this shift.,No payments registered for this shift.
-No pending balances in this period.,No pending balances in this period.
-No pending offline invoices,No pending offline invoices
+No offline invoices pending synchronization,No hay facturas fuera de línea pendientes de sincronización
+No out-of-stock items.,No hay artículos agotados.
+No payment collection data found.,No se encontraron datos de cobranza.
+No payment rows available on this invoice.,No hay renglones de pago disponibles en esta factura.
+No payments registered for this shift.,No hay pagos registrados para este turno.
+No pending balances in this period.,No hay saldos pendientes en este periodo.
+No pending offline invoices,No hay facturas fuera de línea pendientes
 No profiles found for selected scope. Falling back to current profile failed.,No profiles found for selected scope. Falling back to current profile failed.
-No recent customer activity found.,No recent customer activity found.
-No recent stock entries found.,No recent stock entries found.
-No reorder suggestions right now.,No reorder suggestions right now.
-No repeat customers in this period.,No repeat customers in this period.
+No recent customer activity found.,No se encontró actividad reciente de clientes.
+No recent stock entries found.,No se encontraron entradas de stock recientes.
+No reorder suggestions right now.,No hay sugerencias de reorden en este momento.
+No repeat customers in this period.,No hay clientes recurrentes en este periodo.
 No return item trend found.,No return item trend found.
-No returnable items found for this invoice,No returnable items found for this invoice
-No returns were processed in this shift.,No returns were processed in this shift.
-No risk activity found.,No risk activity found.
-No sales activity found for this period.,No sales activity found for this period.
-No slow moving items.,No slow moving items.
-No staff sales activity found.,No staff sales activity found.
-No stock movement for this period.,No stock movement for this period.
-No submitted cash movements in this shift.,No submitted cash movements in this shift.
-No supplier purchases found in this month.,No supplier purchases found in this month.
-No suppliers found for this period.,No suppliers found for this period.
+No returnable items found for this invoice,No se encontraron artículos retornables para esta factura.
+No returns were processed in this shift.,No se procesaron devoluciones en este turno.
+No risk activity found.,No se encontró actividad de riesgo.
+No sales activity found for this period.,No se encontró actividad de ventas en este periodo.
+No slow moving items.,No hay artículos de lento movimiento.
+No staff sales activity found.,No se encontró actividad de ventas del personal.
+No stock movement for this period.,No hay movimientos de stock en este periodo.
+No submitted cash movements in this shift.,No hay movimientos de efectivo enviados en este turno.
+No supplier purchases found in this month.,No se encontraron compras a proveedores en este mes.
+No suppliers found for this period.,No se encontraron proveedores para este periodo.
 No tax head breakdown found.,No tax head breakdown found.
-No top items found for this location.,No top items found for this location.
+No top items found for this location.,No se encontraron artículos destacados para esta ubicación.
 No unallocated payments were available for reconciliation.,No unallocated payments were available for reconciliation.
-No unpaid invoices,No unpaid invoices
+No unpaid invoices,No hay facturas sin pagar
 No valid batches available in {0} for {1}.,No valid batches available in {0} for {1}.
-No variant data found.,No variant data found.
+No variant data found.,No se encontraron datos de variantes.
 No week-wise sales trend found.,No week-wise sales trend found.
 No.,No.
 Nobile Number,Nobile Number
-Offline Invoices,Offline Invoices
+Offline Invoices,Facturas fuera de línea
 Only cancelled POS Cash Movement records can be deleted.,Only cancelled POS Cash Movement records can be deleted.
-Only cancelled cash movements can be deleted.,Only cancelled cash movements can be deleted.
-Only submitted cash movements can be cancelled.,Only submitted cash movements can be cancelled.
+Only cancelled cash movements can be deleted.,Solo se pueden eliminar los movimientos de efectivo cancelados.
+Only submitted cash movements can be cancelled.,Solo se pueden cancelar los movimientos de efectivo enviados.
 Only submitted or cancelled cash movements can be duplicated.,Only submitted or cancelled cash movements can be duplicated.
-Only the shift owner can create cash movement entries.,Only the shift owner can create cash movement entries.
+Only the shift owner can create cash movement entries.,Solo el dueño del turno puede crear movimientos de efectivo.
 Open this screen from POS Menu -> Open Customer Display.,Open this screen from POS Menu -> Open Customer Display.
 OpenCV Off,OpenCV Off
 OpenCV On,OpenCV On
 OpenCV image processing enabled - Enhanced barcode detection,OpenCV image processing enabled - Enhanced barcode detection
 OpenCV image processing unavailable on this device,OpenCV image processing unavailable on this device
 OpenCV processing disabled,OpenCV processing disabled
-Out of Stock Items,Out of Stock Items
-Outstanding,Outstanding
+Out of Stock Items,Artículos agotados
+Outstanding,Pendiente
 Outstanding Credit by Currency,Outstanding Credit by Currency
-Overpayment Change,Overpayment Change
+Overpayment Change,Cambio por sobrepago
 PDF,PDF
 POS,POS
 POS Awesome,POS Awesome
 POS Awesome Payments is not enabled for this POS Profile,POS Awesome Payments is not enabled for this POS Profile
 POS Awesome credit redemption for Sales Invoice {0},POS Awesome credit redemption for Sales Invoice {0}
 POS Cash Movement,POS Cash Movement
-POS Offer is disable.,POS Offer is disable.
-POS Opening Shift is required,POS Opening Shift is required
-POS Opening Shift is required to compute the overview.,POS Opening Shift is required to compute the overview.
-POS Opening Shift is required.,POS Opening Shift is required.
+POS Offer is disable.,La oferta de POS está deshabilitada.
+POS Opening Shift is required,Se requiere un turno de apertura de POS
+POS Opening Shift is required to compute the overview.,Se requiere un turno de apertura de POS para calcular el resumen.
+POS Opening Shift is required.,Se requiere un turno de apertura de POS.
 POS Opening Shift must be submitted and open.,POS Opening Shift must be submitted and open.
-POS Opening Shift not found.,POS Opening Shift not found.
+POS Opening Shift not found.,Turno de apertura de POS no encontrado.
 POS Opening Shift {0} is not for the same POS Profile,POS Opening Shift {0} is not for the same POS Profile
 POS Opening Shift {0} is not for the same company,POS Opening Shift {0} is not for the same company
 POS Profile,POS Profile
 POS Profile company must match active POS Opening Shift company.,POS Profile company must match active POS Opening Shift company.
-POS Profile is required,POS Profile is required
+POS Profile is required,Se requiere un perfil de POS
 POS Profile is required to create purchase documents.,POS Profile is required to create purchase documents.
-POS Profile is required.,POS Profile is required.
+POS Profile is required.,Se requiere un perfil de POS.
 POS Profile must match the active POS Opening Shift profile.,POS Profile must match the active POS Opening Shift profile.
 POS Profile must match the selected POS Opening Shift profile.,POS Profile must match the selected POS Opening Shift profile.
 POS Profile {0} does not belong to company {1}.,El perfil POS {0} no pertenece a la empresa {1}.
@@ -1440,3 +1440,32 @@ Tip Clear cache regularly to free up space and keep the app fast.,Consejo: Limpi
 Tip Close unused tabs or apps to reduce lag.,Consejo: Cierre pestañas o aplicaciónes no utilizadas para reducir el retraso.
 Tip Monitor slow queries and table size for optimal performance.,Consejo: Monitoree consultas lentas y tamaño de tablas para un rendimiento óptimo.
 Total Selected ,Total Seleccionado
+No matching items in cart,No hay artículos coincidentes en el carrito
+Add items from the selector to start building this sale.,Agrega artículos desde el selector para iniciar esta venta.
+Try a different search term or clear the cart search.,Prueba otro término de búsqueda o limpia la búsqueda del carrito.
+Active sale,Venta activa
+Add new customer,Agregar nuevo cliente
+Add payment to invoice,Agregar pago a la factura
+Additional Discount %,Descuento adicional %
+Address Line 2,Dirección línea 2
+Address Name,Nombre de dirección
+Balance,Saldo
+Access,Acceso
+Apply Gift Card,Aplicar tarjeta de regalo
+Apply Redemption,Aplicar canje
+Apply Stored Value,Aplicar valor almacenado
+Applying,Aplicando
+Applied now,Aplicado ahora
+Available Actions,Acciones disponibles
+Available Stored Value,Valor almacenado disponible
+Auto Allocate Payment Amount,Asignar monto de pago automáticamente
+Acknowledge the error to resume scanning.,Confirma el error para reanudar el escaneo.
+A POS supervisor is required for this action.,Se requiere un supervisor de POS para esta acción.
+Add more value to an existing gift card,Agregar más valor a una tarjeta de regalo existente
+Back to {0},Volver a {0}
+Barcode / QR Ready,Código de barras / QR listo
+Additional Discount is the separate invoice-level discount.,El descuento adicional es el descuento a nivel de factura por separado.
+Adjust the quantity or enable negative stock to continue.,Ajusta la cantidad o habilita el stock negativo para continuar.
+Allowed UOM is {0},La unidad de medida permitida es {0}
+Available Customer Redeemable Balance,Saldo canjeable del cliente disponible
+Available customer redeemable balance,Saldo canjeable del cliente disponible

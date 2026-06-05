@@ -131,8 +131,8 @@
 }
 
 .posa-cart-empty-state {
-	min-height: 280px;
-	padding: 40px 24px;
+	min-height: 140px;
+	padding: 22px 20px;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
