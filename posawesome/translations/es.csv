@@ -1614,3 +1614,145 @@ Invoice ID,ID de factura
 Invoice {0} is Submitted,La factura {0} está enviada
 Invoice {0} processed successfully,Factura {0} procesada correctamente
 Invoice {0} submission failed,Falló el envío de la factura {0}
+Invoice {0} was already submitted,La factura {0} ya estaba enviada
+Issue Mode,Modo de emisión
+Issue New Card,Emitir nueva tarjeta
+Issue Workflow,Flujo de emisión
+"Issue, top up, and check","Emitir, recargar y consultar"
+Item / Rate Discounts,Descuentos de artículo / tarifa
+Item Group,Grupo de artículos
+Item and rate discounts are already included in item rates and Net Total.,Los descuentos de artículo y tarifa ya están incluidos en las tarifas de artículo y el Total Neto.
+Item {0} added to invoice,Artículo {0} agregado a la factura
+Items list stays empty in barcode-first mode,La lista de artículos permanece vacía en modo código de barras primero
+Just now,Justo ahora
+Keep offline prerequisites healthy and recover stale data safely.,Mantén sanos los prerrequisitos fuera de línea y recupera datos desactualizados de forma segura.
+"Language, theme, terminal tools, and session controls.","Idioma, tema, herramientas de terminal y controles de sesión."
+Last failure,Último fallo
+Last sync: {0} | ok: {1} | failed: {2} | skipped: {3},Última sincronización: {0} | ok: {1} | fallidos: {2} | omitidos: {3}
+Load a POS profile and cashier first.,Carga primero un perfil de POS y un cajero.
+Loading customers,Cargando clientes
+Loading view...,Cargando vista...
+Local storage is unavailable. Switching to online-only mode.,El almacenamiento local no está disponible. Cambiando a modo solo en línea.
+Lock Screen,Bloquear pantalla
+Lookup Workflow,Flujo de consulta
+Loss,Pérdida
+Low-frequency maintenance and system details.,Mantenimiento de baja frecuencia y detalles del sistema.
+Loyalty Program,Programa de lealtad
+Make New Payment,Realizar nuevo pago
+Manage Cashier PIN,Administrar PIN de cajero
+Manage all,Administrar todo
+"Manage offline tools, terminal controls, and maintenance from one workspace.","Administra herramientas fuera de línea, controles de terminal y mantenimiento desde un solo espacio."
+"Manual codes, barcode scans, and QR scans work in the same field","Los códigos manuales, escaneos de código de barras y escaneos QR funcionan en el mismo campo"
+Manual offline mode is enabled,El modo fuera de línea manual está habilitado
+Maximum Amount,Monto máximo
+Maximum available quantity is {0}. Quantity adjusted to match stock.,La cantidad máxima disponible es {0}. La cantidad se ajustó al stock.
+Maximum discount amount for this offer item is {0}.,El monto máximo de descuento para este artículo de oferta es {0}.
+Maximum discount percentage for this offer item is {0}%.,El porcentaje máximo de descuento para este artículo de oferta es {0}%.
+Maximum offer quantity is {0}. Quantity adjusted to allowed limit.,La cantidad máxima de oferta es {0}. La cantidad se ajustó al límite permitido.
+Method,Método
+Minimum Amount,Monto mínimo
+Minimum allowed rate for this offer item is {0}.,La tarifa mínima permitida para este artículo de oferta es {0}.
+New PIN,Nuevo PIN
+No Company Selected,Ninguna empresa seleccionada
+No QZ printer selected. Open QZ Tray Setup first.,No hay impresora QZ seleccionada. Abre primero la configuración de QZ Tray.
+No QZ telemetry events in the window. Print a receipt with QZ Tray active to populate the dashboard.,No hay eventos de telemetría QZ en la ventana. Imprime un recibo con QZ Tray activo para poblar el panel.
+No cached gift card balance is available offline.,No hay saldo de tarjeta de regalo en caché disponible fuera de línea.
+No camera found on this device. Please ensure your device has a working camera.,No se encontró cámara en este dispositivo. Asegúrate de que tu dispositivo tenga una cámara funcional.
+No capability warnings recorded yet.,Aún no se han registrado advertencias de capacidad.
+No cashier PIN is set yet. Create one now.,Aún no se ha establecido un PIN de cajero. Crea uno ahora.
+No cashier profiles are available for this POS profile yet.,Aún no hay perfiles de cajero disponibles para este perfil de POS.
+No change-allocation invoices match the current filters.,Ninguna factura de asignación de cambio coincide con los filtros actuales.
+No exact repair match found for this invoice,No se encontró una coincidencia de reparación exacta para esta factura
+No offline sync issues recorded yet.,Aún no se han registrado problemas de sincronización fuera de línea.
+No records found,No se encontraron registros
+No sync trigger has run yet in this session.,Aún no se ha ejecutado ninguna sincronización en esta sesión.
+None in window,Ninguno en la ventana
+Not available,No disponible
+Not checked,No verificado
+Not selected,No seleccionado
+Offline & Sync,Fuera de línea y sincronización
+Offline Capabilities,Capacidades fuera de línea
+Offline Queue: {0},Cola fuera de línea: {0}
+Offline Status,Estado fuera de línea
+Offline data status refreshed,Estado de datos fuera de línea actualizado
+Offline diagnostics,Diagnóstico fuera de línea
+Offline rebuild guidance,Guía de reconstrucción fuera de línea
+Offline restore is unavailable for this session.,La restauración fuera de línea no está disponible para esta sesión.
+Offline selling is available with degraded capabilities.,La venta fuera de línea está disponible con capacidades reducidas.
+Offline snapshot does not match the current POS state.,La instantánea fuera de línea no coincide con el estado actual del POS.
+"Offline, terminal, and system controls","Controles de fuera de línea, terminal y sistema"
+Open POS home,Abrir inicio del POS
+Open actions menu,Abrir menú de acciones
+Open drawer,Abrir cajón
+Order ID,ID de orden
+Overpayment change deducted: {0},Cambio por sobrepago deducido: {0}
+PIN confirmation does not match.,La confirmación del PIN no coincide.
+PIN must be 4 to 8 digits.,El PIN debe tener de 4 a 8 dígitos.
+POS controls and maintenance,Controles y mantenimiento del POS
+POS is running with limited offline prerequisites.,El POS se ejecuta con prerrequisitos fuera de línea limitados.
+Page unavailable offline,Página no disponible fuera de línea
+Paid (orig):,Pagado (orig):
+Paid:,Pagado:
+Party Type,Tipo de entidad
+Pause terminal until next cashier,Pausar terminal hasta el siguiente cajero
+Payment Entry Type,Tipo de entrada de pago
+Payment entries processed for Invoice {0},Entradas de pago procesadas para la factura {0}
+Payment of {0} received successfully.,Pago de {0} recibido correctamente.
+Payment request status could not be retrieved. Please try again,No se pudo obtener el estado de la solicitud de pago. Inténtalo de nuevo
+Payment submitted.,Pago enviado.
+Pending Sales,Ventas pendientes
+Pending count updated from {0} to {1},Conteo pendiente actualizado de {0} a {1}
+Pending sales: {0} | Cache usage: {1}%,Ventas pendientes: {0} | Uso de caché: {1}%
+Pending: {0},Pendiente: {0}
+Pending: {0} | Synced: {1} | Draft: {2},Pendiente: {0} | Sincronizado: {1} | Borrador: {2}
+Per-stage p95 (ms),p95 por etapa (ms)
+Personal preferences adjust the current cashier experience without changing the active POS route.,Las preferencias personales ajustan la experiencia del cajero actual sin cambiar la ruta de POS activa.
+Please make a payment or select a payment,Realiza un pago o selecciona un pago
+Please select a party,Selecciona una entidad
+Please select a party before reconciling.,Selecciona una entidad antes de conciliar.
+Please set the customer,Establece el cliente
+Please verify the barcode or check the item,Verifica el código de barras o revisa el artículo
+Preparing background sync,Preparando sincronización en segundo plano
+"Press OK to continue offline with a warning, or Cancel to retry.","Presiona Aceptar para continuar fuera de línea con una advertencia, o Cancelar para reintentar."
+Price List,Lista de precios
+Price list rate updated locally only,Tarifa de lista de precios actualizada solo localmente
+Print All (9 combos),Imprimir todo (9 combinaciones)
+Print invoice,Imprimir factura
+Prints (24h),Impresiones (24h)
+Processing payment entries for Invoice {0},Procesando entradas de pago para la factura {0}
+QZ Test Print (A/B),Impresión de prueba QZ (A/B)
+QZ Tray is manually disconnected. Press Connect to enable it again.,QZ Tray está desconectado manualmente. Presiona Conectar para habilitarlo de nuevo.
+QZ Tray is not connected. Open QZ Tray Setup first.,QZ Tray no está conectado. Abre primero la configuración de QZ Tray.
+QZ Tray — Interpolation A/B Test,QZ Tray — Prueba A/B de interpolación
+QZ send,Envío QZ
+Quotation submitted,Cotización enviada
+Quotation {0} is Submitted,La cotización {0} está enviada
+Ready to resume,Listo para reanudar
+Rebuild Offline Data,Reconstruir datos fuera de línea
+Receive,Recibir
+Received:,Recibido:
+Rechecking connection,Verificando conexión nuevamente
+"Reconnect and open this page once while online, then offline refreshes will be able to restore it.",Reconéctate y abre esta página una vez en línea; luego las actualizaciones fuera de línea podrán restaurarla.
+Reconnect online to refresh cached offline data from the server.,Reconéctate en línea para actualizar los datos fuera de línea en caché desde el servidor.
+Recreate local offline prerequisites from scratch,Recrear desde cero los prerrequisitos fuera de línea locales
+Recv:,Recibido:
+Redeem,Canjear
+Redeem / Scan,Canjear / Escanear
+Redeem Amount,Monto a canjear
+Redeem Mode,Modo de canje
+Refresh Offline Data,Actualizar datos fuera de línea
+Refund,Reembolso
+Release Notes,Notas de la versión
+Reload,Recargar
+Reload Workflow,Flujo de recarga
+Reload customers,Recargar clientes
+Remove barcode item,Quitar artículo de código de barras
+Remove cached data and reload the POS app,Eliminar datos en caché y recargar la app de POS
+Repair Candidate,Candidato de reparación
+Repair Change Allocation,Reparar asignación de cambio
+Repair requires an online connection,La reparación requiere conexión en línea
+Repaired,Reparado
+Repairing change allocation,Reparando asignación de cambio
+Request ID: {0},ID de solicitud: {0}
+Requested route: {0},Ruta solicitada: {0}
+Required By,Requerido para
