@@ -79,7 +79,13 @@
 		}
 	</style>
 </head>
-<body>
+{# `data-page-route="posapp"` is the hook 61 rules in posapp/styles/theme.css
+   key on (menu/dialog/overlay text + hover colors, tooltips, the whole POS
+   theme). Desk sets this attribute on its body for the posapp Page; the web
+   route must set it too, else NONE of those rules apply and Vuetify defaults
+   leak through — e.g. dropdown/serial-selector hover text becomes the same
+   colour as its highlight (unreadable). #}
+<body data-page-route="posapp">
 	<div id="posa-app-loading">Loading POS Awesome…</div>
 	{# `main-section` class is required by PosAppController.make_body()
 	   which does `$(document).find(".main-section")` to locate its mount
