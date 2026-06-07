@@ -154,19 +154,42 @@ function extractServerMessage(payload: any): string | null {
 	if (!serverMessages) {
 		return null;
 	}
+	// ERPNext emits a benign POS toast ("Payment methods refreshed…", orange)
+	// on every POS draft (posawesome leaves is_created_using_pos=0 by design).
+	// It lands FIRST in _server_messages, so picking parsed[0] surfaced it as
+	// the Error.message — masking the real failure (CFDI/stock/account). Skip
+	// the benign toast + info-level messages; surface the real error-level one.
+	const BENIGN = /Payment methods refreshed/i;
+	const INFO = new Set(["orange", "yellow", "blue", "green"]);
 	try {
 		const parsed = JSON.parse(serverMessages);
 		if (Array.isArray(parsed) && parsed.length) {
-			const first = parsed[0];
-			if (typeof first === "string") {
-				try {
-					const obj = JSON.parse(first);
-					return obj.message || obj.title || first;
-				} catch {
-					return first;
+			const deferred: string[] = [];
+			for (const entry of parsed) {
+				let text = "";
+				let indicator = "";
+				if (typeof entry === "string") {
+					try {
+						const obj = JSON.parse(entry);
+						text = obj.message || obj.title || entry;
+						indicator = (obj.indicator || "").toLowerCase();
+					} catch {
+						text = entry;
+					}
+				} else if (entry && typeof entry === "object") {
+					text = entry.message || entry.title || "";
+					indicator = (entry.indicator || "").toLowerCase();
 				}
+				text = (text || "").trim();
+				if (!text || BENIGN.test(text)) continue;
+				if (INFO.has(indicator)) {
+					deferred.push(text);
+					continue;
+				}
+				return text;
 			}
-			return (first && (first.message || first.title)) || String(first);
+			if (deferred.length) return deferred[0];
+			return null;
 		}
 	} catch {
 		return String(serverMessages);
