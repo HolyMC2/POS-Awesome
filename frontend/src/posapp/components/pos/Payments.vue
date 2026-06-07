@@ -256,6 +256,8 @@
 			@update:phone-dialog="phone_dialog = $event"
 			@request-payment="request_payment"
 		/>
+		<!-- MP-INTEGRATION-POINT (sale checkout): terminal hard-gate modal -->
+		<MpPointSaleGateDialog :gate="mpPointGate" />
 		<GiftCardDialog
 			:model-value="giftCardDialogOpen"
 			:card-code="giftCardCode"
@@ -323,6 +325,9 @@ import PaymentCustomerCreditDetails from "./payments/PaymentCustomerCreditDetail
 import PaymentOptions from "./payments/PaymentOptions.vue";
 import PaymentSelectionFields from "./payments/PaymentSelectionFields.vue";
 import PaymentDialogs from "./payments/PaymentDialogs.vue";
+// MP-INTEGRATION-POINT (sale checkout): hard gate — isolated, no-op when off.
+import MpPointSaleGateDialog from "../pos_pay/MpPointSaleGateDialog.vue";
+import { useMpPointSaleGate } from "../../composables/pos/payments/useMpPointSaleGate";
 
 const props = defineProps({
 	dialogMode: {
@@ -370,6 +375,14 @@ const stock_settings = ref("");
 const pos_settings = ref({});
 const is_cashback = ref(true);
 const paid_change = ref(0);
+
+// MP-INTEGRATION-POINT (sale checkout): hard gate. No-op unless the connector
+// is enabled AND the sale carries a MercadoPago Point payment amount.
+const mpPointGate = useMpPointSaleGate({
+	getInvoiceDoc: () => invoiceStore.invoiceDoc,
+	getPosProfile: () => pos_profile.value,
+	isSupervisor: () => Boolean(currentCashier.value?.is_supervisor),
+});
 const credit_change = ref(0);
 const loading = ref(false);
 const show_change_dialog = ref(false);
@@ -1529,6 +1542,16 @@ const submitInvoiceWrapper = async (print, callbackOverrides = {}, options = {})
 	loading.value = true;
 	try {
 		await validateSubmission(options.paymentReceived || false);
+		// MP-INTEGRATION-POINT (sale checkout): hard gate — a MercadoPago Point
+		// sale cannot finalize until the terminal approves the charge (or a
+		// supervisor overrides). No-op when the connector is off / no MP amount.
+		// Drop the loading overlay so the gate modal is interactive, restore after.
+		loading.value = false;
+		const mpTerminalOk = await mpPointGate.ensureChargedBeforeFinalize();
+		loading.value = true;
+		if (!mpTerminalOk) {
+			return;
+		}
 		await submitInvoice(print, {
 			onPrint: (doc, printOptions = {}) => {
 				if (print) {

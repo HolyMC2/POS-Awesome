@@ -42,6 +42,9 @@ export function createPointOrder(args: {
 	pos_invoice?: string | null;
 	amount: number;
 	terminal_id?: string;
+	// Dynamic-Link target: "POS Invoice" or "Sales Invoice" (POSAwesome's
+	// invoice doctype). Optional — the backend auto-detects when omitted.
+	invoice_doctype?: string;
 }): Promise<{ ok: boolean; order: PointOrder }> {
 	return call("create_point_order", args, "POST");
 }
