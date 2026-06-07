@@ -146,6 +146,26 @@ def _website_settings() -> Dict[str, Any]:
         return {}
 
 
+def _connector_boot() -> Dict[str, Any]:
+    """Seed boot keys that connector `boot_session` hooks add on Desk but the
+    /posapp minimal payload would otherwise drop (the minimal-boot trap). The
+    POS UI gates features on these (e.g. mercadopago Point button reads
+    frappe.boot.mercadopago.enabled). Guarded per-connector — no-op if the
+    connector app isn't installed; never breaks the route.
+    """
+    extra: Dict[str, Any] = {}
+    try:
+        from mercadopago_connector.boot import boot_session as _mp_boot
+
+        tmp = frappe._dict()
+        _mp_boot(tmp)
+        if tmp.get("mercadopago") is not None:
+            extra["mercadopago"] = tmp.get("mercadopago")
+    except Exception:  # noqa: BLE001
+        pass
+    return extra
+
+
 def _build_boot_payload() -> Dict[str, Any]:
     """Subset of `frappe.boot` the SPA actually needs.
 
@@ -188,6 +208,9 @@ def _build_boot_payload() -> Dict[str, Any]:
         "__messages": _boot_messages(),
         # Navbar reads frappe.boot.website_settings.app_logo/banner_image.
         "website_settings": _website_settings(),
+        # Connector boot keys (mercadopago, …) the SPA gates on — Desk gets these
+        # from boot_session; the web route must seed them explicitly.
+        **_connector_boot(),
     }
 
 
