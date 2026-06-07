@@ -382,6 +382,13 @@ const paid_change_rules = ref([]);
 const is_user_editing_paid_change = ref(false);
 const highlightSubmit = ref(false);
 const last_payment_change_was_cash = ref(null);
+// True once the cashier manually sets a payment amount (typed or tapped a
+// denomination). While true, auto-defaulting (syncPreferredPaymentToCurrentTotal)
+// backs off so changing another field / toggling credit doesn't wipe what they
+// entered. Reset on new invoice / clear / submit. Credit-toggle uses its own
+// snapshot (paymentSnapshotBeforeCredit) to restore amounts.
+const paymentsTouched = ref(false);
+let paymentSnapshotBeforeCredit = null;
 const backgroundStatusCheck = ref(null);
 const paymentVisible = ref(false);
 const paymentContainer = ref(null);
@@ -1074,6 +1081,11 @@ const syncPreferredPaymentToCurrentTotal = (doc = invoice_doc.value) => {
 	if (!doc || !Array.isArray(doc.payments) || !doc.payments.length || is_credit_sale.value) {
 		return null;
 	}
+	// Once the cashier has set an amount, don't auto-overwrite it back to the
+	// full total — that was wiping their entry when any other field changed.
+	if (paymentsTouched.value) {
+		return null;
+	}
 
 	const payments = doc.payments.filter((payment) => payment?.mode_of_payment);
 	if (!payments.length) {
@@ -1292,6 +1304,7 @@ const updateCreditChange = (rawValue) => {
 };
 
 const handlePaymentAmountChange = (payment, event) => {
+	paymentsTouched.value = true;
 	last_payment_change_was_cash.value = isCashLikePayment(payment);
 	setFormatedCurrency(payment, "amount", null, false, event);
 
@@ -1306,6 +1319,7 @@ const handlePaymentAmountChange = (payment, event) => {
 };
 
 const setPaymentToDenomination = (payment, amount) => {
+	paymentsTouched.value = true;
 	payment.amount = amount;
 	if (payment.base_amount !== undefined) {
 		const conversion_rate = invoice_doc.value.conversion_rate || 1;
@@ -1755,16 +1769,52 @@ watch(is_credit_sale, (newVal) => {
 	const doc = invoice_doc.value;
 	const conversionRate = doc.conversion_rate || 1;
 
-	// Always clear all payment methods first to prevent stale paid amounts.
-	doc.payments.forEach((payment) => {
-		payment.amount = 0;
-		if (payment.base_amount !== undefined) {
-			payment.base_amount = 0;
-		}
-	});
+	if (newVal) {
+		// Credit sale ON: snapshot the cashier's amounts so toggling back
+		// restores them, then clear (a credit sale is unpaid up front).
+		paymentSnapshotBeforeCredit = doc.payments.map((p) => ({
+			mode_of_payment: p.mode_of_payment,
+			amount: flt(p.amount, currency_precision.value),
+			base_amount: p.base_amount,
+		}));
+		doc.payments.forEach((payment) => {
+			payment.amount = 0;
+			if (payment.base_amount !== undefined) {
+				payment.base_amount = 0;
+			}
+		});
+		return;
+	}
 
-	if (!newVal && doc.payments.length) {
+	// Credit sale OFF.
+	const snap = paymentSnapshotBeforeCredit;
+	paymentSnapshotBeforeCredit = null;
+	const hadEntry = Array.isArray(snap) && snap.some((s) => Math.abs(s.amount) > 0.0001);
+
+	if (hadEntry) {
+		// Restore exactly what the cashier had typed before toggling credit.
+		doc.payments.forEach((payment) => {
+			const s = snap.find((x) => x.mode_of_payment === payment.mode_of_payment);
+			if (s) {
+				payment.amount = s.amount;
+				if (payment.base_amount !== undefined) {
+					payment.base_amount =
+						s.base_amount !== undefined
+							? s.base_amount
+							: flt(s.amount * conversionRate, currency_precision.value);
+				}
+			}
+		});
+		return;
+	}
+
+	// No prior entry → default the preferred method to the full total.
+	if (doc.payments.length) {
 		const amount = flt(doc.rounded_total || doc.grand_total, currency_precision.value);
+		doc.payments.forEach((payment) => {
+			payment.amount = 0;
+			if (payment.base_amount !== undefined) payment.base_amount = 0;
+		});
 		const defaultPayment =
 			doc.payments.find((payment) => payment.default === 1) ||
 			doc.payments.find((payment) => isCashLikePayment(payment)) ||
@@ -1875,6 +1925,9 @@ onMounted(() => {
 			last_payment_change_was_cash.value = null;
 			is_credit_sale.value = false;
 			is_write_off_change.value = false;
+			// Fresh invoice → allow auto-default again.
+			paymentsTouched.value = false;
+			paymentSnapshotBeforeCredit = null;
 
 			const initializedPayment = ensurePaymentLinesInitialized(doc);
 
@@ -1922,6 +1975,8 @@ onMounted(() => {
 		eventBus.on("clear_invoice", () => {
 			invoiceStore.clear();
 			invoiceStore.resetPostingDate();
+			paymentsTouched.value = false;
+			paymentSnapshotBeforeCredit = null;
 			is_return.value = false;
 			is_credit_return.value = false;
 			return_valid_upto_date.value = null;
