@@ -201,7 +201,12 @@ const poll = async () => {
 			setPhase("waiting", __("Esperando que el cliente pague en la terminal…"));
 		}
 		if (s === "finished") {
-			if (st.payment && st.payment.status === "Approved") return approve();
+			// The connector books the payment and auto-matches it to the invoice
+			// (external_reference), so by the time the order is "finished" the
+			// MercadoPago Payment may already be "Reconciled" (matched) rather
+			// than just "Approved" (captured). Both mean the money was taken.
+			const ps = st.payment && st.payment.status;
+			if (ps === "Approved" || ps === "Reconciled") return approve();
 			return fail(__("La terminal no aprobó el pago"));
 		}
 		if (s === "expired" || s === "canceled" || s === "error") {
