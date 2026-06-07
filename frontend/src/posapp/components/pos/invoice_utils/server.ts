@@ -67,18 +67,44 @@ const extractServerErrorMessage = (context: any, error: any) => {
 		try {
 			const parsedMessages = JSON.parse(error._server_messages);
 			if (Array.isArray(parsedMessages) && parsedMessages.length) {
-				for (const message of parsedMessages) {
-					const stockMessage = tryExtractStockErrors(message);
+				// ERPNext emits a benign POS toast ("Payment methods refreshed…")
+				// on every POS draft (posawesome leaves is_created_using_pos=0 by
+				// design). It lands FIRST in _server_messages and was masking the
+				// real failure (CFDI/stock/account validation). Skip it + any
+				// info-level (orange/yellow/blue/green) message; surface the real
+				// error-level one instead.
+				const BENIGN = /Payment methods refreshed/i;
+				const INFO = new Set(["orange", "yellow", "blue", "green"]);
+				const deferred: string[] = [];
+				for (const entry of parsedMessages) {
+					const stockMessage = tryExtractStockErrors(entry);
 					if (stockMessage) {
 						return stockMessage;
 					}
 
-					if (typeof message === "string" && message.trim()) {
-						return frappe?.utils?.strip_html
-							? frappe.utils.strip_html(message)
-							: message;
+					let text = "";
+					let indicator = "";
+					if (typeof entry === "string") {
+						try {
+							const o = JSON.parse(entry);
+							text = o?.message || o?.title || entry;
+							indicator = (o?.indicator || "").toLowerCase();
+						} catch {
+							text = entry;
+						}
+					} else if (entry && typeof entry === "object") {
+						text = (entry as any).message || (entry as any).title || "";
+						indicator = ((entry as any).indicator || "").toLowerCase();
 					}
+					text = (frappe?.utils?.strip_html ? frappe.utils.strip_html(text) : text || "").trim();
+					if (!text || BENIGN.test(text)) continue;
+					if (INFO.has(indicator)) {
+						deferred.push(text);
+						continue;
+					}
+					return text;
 				}
+				if (deferred.length) return deferred[0];
 			}
 		} catch {
 			/* no-op */
