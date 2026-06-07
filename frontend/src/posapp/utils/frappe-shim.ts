@@ -188,7 +188,7 @@ function extractServerMessage(payload: any): string | null {
 				}
 				return text;
 			}
-			if (deferred.length) return deferred[0];
+			if (deferred.length) return deferred[0] ?? null;
 			return null;
 		}
 	} catch {
