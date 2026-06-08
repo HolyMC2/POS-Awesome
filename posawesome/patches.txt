@@ -25,3 +25,6 @@ posawesome.patches.add_default_closing_shift_print_format
 posawesome.patches.heal_pos_awesome_shortcut_url
 posawesome.patches.add_hide_items_until_search
 posawesome.patches.add_lean_layout_flags
+posawesome.patches.add_gift_card_pos_profile_settings
+posawesome.patches.migrate_pos_supervisor_to_role
+posawesome.patches.remove_item_barcode_posa_uom
