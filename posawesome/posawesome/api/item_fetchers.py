@@ -46,6 +46,27 @@ _serial_cache: Dict[int, Callable[..., Any]] = {}
 _bom_cache: Dict[int, Callable[..., Any]] = {}
 
 
+def clear_stock_caches(doc=None, method=None):
+    """Invalidate the stock / batch / serial redis caches.
+
+    These caches are wrapped with ``redis_cache(ttl=...)`` but were never
+    invalidated, so after any stock movement other POS terminals kept seeing
+    pre-movement quantities for up to the configured TTL. Wired (via hooks) to
+    Bin / Stock Ledger Entry / Serial No / Batch writes so quantities refresh
+    as soon as stock actually changes. Each cache holds one wrapper per TTL
+    variant, so clear them all.
+    """
+    for store in (_bin_cache, _batch_cache, _serial_cache):
+        for cached_fn in list(store.values()):
+            clearer = getattr(cached_fn, "clear_cache", None)
+            if callable(clearer):
+                try:
+                    clearer()
+                except Exception:
+                    # Cache invalidation must never break the triggering write
+                    frappe.log_error(frappe.get_traceback(), "POSAwesome stock cache clear failed")
+
+
 def _fetch_item_prices(
     price_list: str,
     currency: str,
