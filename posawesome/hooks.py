@@ -136,8 +136,26 @@ doc_events = {
         "after_insert": "posawesome.posawesome.api.customer.after_insert",
     },
     "Bin": {
-        "after_insert": "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
-        "on_update": "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
+        "after_insert": [
+            "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
+            "posawesome.posawesome.api.item_fetchers.clear_stock_caches",
+        ],
+        "on_update": [
+            "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
+            "posawesome.posawesome.api.item_fetchers.clear_stock_caches",
+        ],
+    },
+    "Stock Ledger Entry": {
+        "after_insert": "posawesome.posawesome.api.item_fetchers.clear_stock_caches",
+        "on_cancel": "posawesome.posawesome.api.item_fetchers.clear_stock_caches",
+    },
+    "Serial No": {
+        "after_insert": "posawesome.posawesome.api.item_fetchers.clear_stock_caches",
+        "on_update": "posawesome.posawesome.api.item_fetchers.clear_stock_caches",
+    },
+    "Batch": {
+        "after_insert": "posawesome.posawesome.api.item_fetchers.clear_stock_caches",
+        "on_update": "posawesome.posawesome.api.item_fetchers.clear_stock_caches",
     },
     # Phase 6: bust the Redis cache for `get_active_pricing_rules`
     # whenever a rule is written, renamed, or deleted. Cheap (one
