@@ -81,7 +81,7 @@
 
 				<v-card flat class="selector-section-card selector-results-card pos-themed-card">
 					<v-row class="items">
-						<v-col cols="12" class="pt-0 mt-0">
+						<v-col cols="12" class="pt-0 mt-0" data-perf-tag="items-grid">
 							<ItemsSelectorCards
 								v-if="items_view === 'card'"
 								ref="itemsContainer"

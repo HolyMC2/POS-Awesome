@@ -1,5 +1,5 @@
 <template>
-	<v-row dense>
+	<v-row dense data-perf-tag="pos-actions">
 		<!-- PAY moved to the top of the action grid. With every secondary
 		     button rendered (Save&Clear, Drafts, Select S.O, Invoice Mgmt,
 		     Cancel, Sales Return, Print Draft, Customer Screen) the grid

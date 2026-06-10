@@ -56,6 +56,30 @@ function nowIso(): string {
 	return new Date().toISOString();
 }
 
+// Stable per-browser terminal id. Persisted in localStorage so the same
+// physical device keeps one id across reloads/builds. Prod telemetry had
+// `terminal` 100% empty (start() only ever passed buildVersion), so all
+// per-device grouping was dead — this gives every row a device key even
+// before a POS profile is known. Coarse device id only; no PII.
+function getOrCreateTerminalId(): string {
+	if (typeof window === "undefined") return "";
+	try {
+		const KEY = "posa_terminal_id";
+		let id = window.localStorage?.getItem(KEY) || "";
+		if (!id) {
+			const uuid =
+				typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+					? crypto.randomUUID()
+					: `t-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`;
+			id = uuid.replace(/-/g, "").slice(0, 24);
+			window.localStorage?.setItem(KEY, id);
+		}
+		return id;
+	} catch {
+		return "";
+	}
+}
+
 function getRumEnabled(): boolean {
 	if (typeof window === "undefined") return false;
 	// Opt-out hatch: any operator can disable RUM by setting
@@ -265,22 +289,39 @@ function startObservers() {
 	safeObserve("paint", trackPaint, { buffered: true });
 }
 
+// Benign browser/runtime noise that fires as a global `error` event but is
+// NOT a real crash. "ResizeObserver loop …" in particular floods the channel
+// (212 events over 3 days on prod, drowning real crashes) — it's a harmless
+// notification the spec itself says can be ignored. Dropped at the source so
+// it never costs a network round-trip or a telemetry row.
+const IGNORED_CRASH_SUBSTRINGS = [
+	"ResizeObserver loop completed with undelivered notifications",
+	"ResizeObserver loop limit exceeded",
+];
+
+function isIgnoredCrashMessage(message: string): boolean {
+	if (!message) return false;
+	return IGNORED_CRASH_SUBSTRINGS.some((s) => message.includes(s));
+}
+
 function startCrashHooks() {
 	if (typeof window === "undefined") return;
 	window.addEventListener("error", (ev: ErrorEvent) => {
+		const message = (ev.message || "").slice(0, 256);
+		if (isIgnoredCrashMessage(message)) return;
 		push("crash:error", 1, {
-			message: (ev.message || "").slice(0, 256),
+			message,
 			filename: (ev.filename || "").slice(0, 256),
 			lineno: ev.lineno || 0,
 		});
 	});
 	window.addEventListener("unhandledrejection", (ev: PromiseRejectionEvent) => {
 		const reason: any = ev.reason;
-		const message =
+		const rawMessage =
 			(reason && reason.message) || (typeof reason === "string" ? reason : "");
-		push("crash:unhandledrejection", 1, {
-			message: String(message || "").slice(0, 256),
-		});
+		const message = String(rawMessage || "").slice(0, 256);
+		if (isIgnoredCrashMessage(message)) return;
+		push("crash:unhandledrejection", 1, { message });
 	});
 }
 
@@ -373,6 +414,12 @@ export function start(opts: {
 		return;
 	}
 	started = true;
+	// Default the terminal to the stable per-device id when the caller
+	// doesn't supply one (boot only passes buildVersion). Later
+	// updateContext() calls that omit `terminal` leave this in place.
+	if (opts.terminal === undefined) {
+		opts = { ...opts, terminal: getOrCreateTerminalId() };
+	}
 	setContext(opts);
 	if (!getRumEnabled()) return;
 	startObservers();

@@ -60,6 +60,21 @@ def _sanitise_event(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
     event_name = event_name[:MAX_EVENT_NAME_LEN]
 
+    # Server-side mirror of the client noise filter (utils/telemetry.ts):
+    # "ResizeObserver loop …" is a benign browser notification, not a crash.
+    # It flooded crash:error (212 rows / 3 days on prod) before the client
+    # filter shipped. Drop it here too so a stale tab on an old build can't
+    # reflood the table after the client fix lands.
+    if event_name.startswith("crash:"):
+        meta = raw.get("metadata")
+        meta_msg = ""
+        if isinstance(meta, dict):
+            meta_msg = str(meta.get("message") or "")
+        elif isinstance(meta, str):
+            meta_msg = meta
+        if "ResizeObserver loop" in meta_msg:
+            return None
+
     try:
         value = flt(raw.get("value") or 0)
     except Exception:
@@ -148,6 +163,13 @@ def ingest(events=None):
             continue
         try:
             doc = frappe.get_doc(prepared)
+            # RUM is append-only observability data — never let a stale or
+            # renamed `pos_profile` (a Link field) drop the row via
+            # LinkValidationError. We'd rather keep a telemetry row whose
+            # pos_profile no longer resolves than lose a terminal's metrics
+            # because its profile got renamed. ignore_links skips link
+            # checks; `user` is always frappe.session.user so it stays valid.
+            doc.flags.ignore_links = True
             doc.insert(ignore_permissions=True)
             accepted += 1
         except Exception:

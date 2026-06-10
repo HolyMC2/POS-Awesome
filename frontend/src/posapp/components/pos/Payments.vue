@@ -1,6 +1,6 @@
 ﻿<!-- eslint-disable vue/multi-word-component-names -->
 <template>
-	<div :class="['payment-shell', { 'payment-shell--dialog': dialogMode }]">
+	<div :class="['payment-shell', { 'payment-shell--dialog': dialogMode }]" data-perf-tag="payment">
 		<v-card
 			:class="[
 				'selection mx-auto my-0 pos-themed-card payment-card',

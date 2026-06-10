@@ -1,6 +1,7 @@
 <template>
 	<div
 		ref="tableContainer"
+		data-perf-tag="cart-table"
 		class="my-0 py-0 overflow-y-auto posa-items-table-container posa-responsive-table-container pos-themed-card"
 		:style="containerStyles"
 		:class="containerClasses"

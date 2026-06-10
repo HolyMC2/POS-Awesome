@@ -1,5 +1,5 @@
 <template>
-	<div class="sticky-header">
+	<div class="sticky-header" data-perf-tag="item-search">
 		<v-row class="items">
 			<v-col
 				class="pb-0"

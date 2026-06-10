@@ -657,6 +657,18 @@ export default {
 						});
 					}
 				},
+			}).catch((err) => {
+				// A server-side frappe.throw (e.g. duplicate customer —
+				// "El cliente ya existe") rejects the call's promise. frappe
+				// already surfaces its own error dialog, so we just play the
+				// error sound and swallow: leaving it unhandled was flooding
+				// crash:unhandledrejection telemetry (7 rows in the last
+				// prod window for this one message alone).
+				frappe.utils.play_sound("error");
+				console.warn(
+					"create_customer rejected:",
+					err?.message || err,
+				);
 			});
 		},
 		onDateSelect() {

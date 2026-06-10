@@ -869,6 +869,12 @@ export default {
 					if (newProfile && newProfile.name) {
 						this.pos_profile = newProfile;
 						this.get_offers(newProfile.name, newProfile);
+						// Tag telemetry with the active profile once it's known
+						// (boot only has buildVersion). Lazy + best-effort so it
+						// can never block or break the shell.
+						import("../../../utils/telemetry")
+							.then((t) => t.updateContext({ posProfile: newProfile.name }))
+							.catch(() => {});
 					}
 				},
 				{ immediate: true },
