@@ -41,7 +41,9 @@ export function useResponsive() {
 	const responsiveStyles = computed(() => {
 		let cardHeightVh;
 		if (isPhone.value) {
-			cardHeightVh = isShortViewport.value ? 56 : 62;
+			// Fill more of the phone screen so the item list reaches the action
+			// bar instead of leaving a dead gap above it.
+			cardHeightVh = isShortViewport.value ? 60 : 70;
 		} else if (isTablet.value) {
 			cardHeightVh = isShortViewport.value ? 58 : 64;
 		} else {
@@ -60,11 +62,14 @@ export function useResponsive() {
 			containerHeightVh = 64;
 		}
 
+		// Pre-measurement fallback only — the live dock height (measured via
+		// ResizeObserver in Pos.vue) overrides this once mounted. Kept small so
+		// the slim solid action bar doesn't reserve a big empty gap on first paint.
 		let bottomSafeSpace = 24;
 		if (windowWidth.value < 600) {
-			bottomSafeSpace = isShortViewport.value ? 176 : 196;
+			bottomSafeSpace = isShortViewport.value ? 108 : 126;
 		} else if (windowWidth.value < 1100) {
-			bottomSafeSpace = isShortViewport.value ? 112 : 132;
+			bottomSafeSpace = isShortViewport.value ? 100 : 116;
 		}
 
 		return {

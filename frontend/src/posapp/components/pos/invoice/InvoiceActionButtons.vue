@@ -11,6 +11,7 @@
 		<v-col cols="12">
 			<v-btn
 				block
+				:variant="secondaryVariant"
 				color="success"
 				theme="dark"
 				size="large"
@@ -28,6 +29,7 @@
 		<v-col cols="12" v-if="showSaldoButton">
 			<v-btn
 				block
+				:variant="secondaryVariant"
 				color="primary"
 				theme="dark"
 				prepend-icon="mdi-cellphone-arrow-down"
@@ -38,9 +40,10 @@
 			</v-btn>
 		</v-col>
 		<!-- /SALDO-INTEGRATION-POINT -->
-		<v-col cols="12" sm="6">
+		<v-col cols="6">
 			<v-btn
 				block
+				:variant="secondaryVariant"
 				color="accent"
 				theme="dark"
 				prepend-icon="mdi-content-save"
@@ -51,9 +54,10 @@
 				{{ __("Save & Clear") }}
 			</v-btn>
 		</v-col>
-		<v-col cols="12" sm="6">
+		<v-col cols="6">
 			<v-btn
 				block
+				:variant="secondaryVariant"
 				color="warning"
 				theme="dark"
 				prepend-icon="mdi-tray-full"
@@ -64,9 +68,10 @@
 				{{ __("Drafts") }}
 			</v-btn>
 		</v-col>
-		<v-col cols="12" sm="6" v-if="pos_profile.custom_allow_select_sales_order == 1">
+		<v-col cols="6" v-if="pos_profile.custom_allow_select_sales_order == 1">
 			<v-btn
 				block
+				:variant="secondaryVariant"
 				color="info"
 				theme="dark"
 				prepend-icon="mdi-book-search"
@@ -77,9 +82,10 @@
 				{{ __("Select S.O") }}
 			</v-btn>
 		</v-col>
-		<v-col cols="12" sm="6">
+		<v-col cols="6">
 			<v-btn
 				block
+				:variant="secondaryVariant"
 				color="deep-purple"
 				theme="dark"
 				prepend-icon="mdi-folder-search-outline"
@@ -90,9 +96,10 @@
 				{{ __("Invoice Mgmt") }}
 			</v-btn>
 		</v-col>
-		<v-col cols="12" sm="6">
+		<v-col cols="6">
 			<v-btn
 				block
+				:variant="secondaryVariant"
 				color="error"
 				theme="dark"
 				prepend-icon="mdi-close-circle"
@@ -104,9 +111,10 @@
 			</v-btn>
 		</v-col>
 
-		<v-col cols="12" sm="6" v-if="pos_profile.posa_allow_return == 1">
+		<v-col cols="6" v-if="pos_profile.posa_allow_return == 1">
 			<v-btn
 				block
+				:variant="secondaryVariant"
 				color="secondary"
 				theme="dark"
 				prepend-icon="mdi-backup-restore"
@@ -117,9 +125,10 @@
 				{{ __("Sales Return") }}
 			</v-btn>
 		</v-col>
-		<v-col cols="12" sm="6" v-if="pos_profile.posa_allow_print_draft_invoices">
+		<v-col cols="6" v-if="pos_profile.posa_allow_print_draft_invoices">
 			<v-btn
 				block
+				:variant="secondaryVariant"
 				color="primary"
 				theme="dark"
 				prepend-icon="mdi-printer"
@@ -130,9 +139,10 @@
 				{{ __("Print Draft") }}
 			</v-btn>
 		</v-col>
-		<v-col cols="12" sm="6" v-if="showCustomerDisplayButton">
+		<v-col cols="6" v-if="showCustomerDisplayButton">
 			<v-btn
 				block
+				:variant="secondaryVariant"
 				color="indigo"
 				theme="dark"
 				prepend-icon="mdi-monitor"
@@ -149,6 +159,7 @@
 <script setup>
 import { computed } from "vue";
 import { parseBooleanSetting } from "../../../utils/stock";
+import { useResponsive } from "../../../composables/core/useResponsive";
 
 const props = defineProps({
 	pos_profile: {
@@ -181,6 +192,11 @@ defineEmits([
 ]);
 
 const __ = window.__;
+const { isPhone } = useResponsive();
+// Phone: soft tonal fills instead of a stack of saturated solid buttons
+// (the "rainbow" wall). Desktop keeps the default elevated solids. PAY keeps
+// its own gradient regardless (pay-btn CSS), so it stays the strong CTA.
+const secondaryVariant = computed(() => (isPhone.value ? "tonal" : "elevated"));
 const showCustomerDisplayButton = computed(() =>
 	parseBooleanSetting(props.pos_profile?.posa_enable_customer_display),
 );

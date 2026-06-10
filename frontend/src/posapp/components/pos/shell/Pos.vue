@@ -1,7 +1,7 @@
 <template>
 	<div
 		class="pos-main-container dynamic-container"
-		:class="[rtlClasses, leanModeClasses]"
+		:class="[rtlClasses]"
 		:style="[responsiveStyles, layoutStyleOverrides, rtlStyles]"
 	>
 		<Drafts v-if="uiStore.draftsDialog"></Drafts>
@@ -111,17 +111,13 @@
 				<Invoice ref="invoicePanel" @open-saldo-picker="openSaldoPicker"></Invoice>
 			</v-col>
 		</v-row>
-		<div v-if="showBottomDock" ref="mobileDock" class="mobile-pos-stack">
-			<div class="mobile-sale-dock">
-				<div class="mobile-sale-dock__copy">
-					<span class="mobile-sale-dock__eyebrow">{{ __("Active sale") }}</span>
-					<strong class="mobile-sale-dock__amount">{{ formattedCartTotal }}</strong>
-					<div class="mobile-sale-dock__meta">
-						<span>{{ cartMetaLabel }}</span>
-						<span>{{ formattedDiscountTotal }}</span>
-					</div>
+		<div v-if="showBottomDock" ref="mobileDock" class="mobile-dock">
+			<div class="mobile-dock__summary">
+				<div class="mobile-dock__totals">
+					<strong class="mobile-dock__amount">{{ formattedCartTotal }}</strong>
+					<span class="mobile-dock__meta">{{ cartMetaLabel }}</span>
 				</div>
-				<div class="mobile-sale-dock__field">
+				<div class="mobile-dock__field">
 					<v-text-field
 						v-if="!posProfile?.posa_use_percentage_discount"
 						ref="additionalDiscountField"
@@ -129,7 +125,7 @@
 						@update:model-value="handleAdditionalDiscountUpdate"
 						@focus="handleAdditionalDiscountFocus"
 						@blur="handleAdditionalDiscountBlur"
-						:label="__('Additional Discount')"
+						:placeholder="__('Discount')"
 						prepend-inner-icon="mdi-cash-minus"
 						variant="solo"
 						density="compact"
@@ -149,7 +145,7 @@
 						@focus="handleAdditionalDiscountPercentageFocus"
 						@blur="handleAdditionalDiscountPercentageBlur"
 						@change="commitAdditionalDiscountPercentage"
-						:label="__('Additional Discount %')"
+						:placeholder="__('Discount %')"
 						suffix="%"
 						prepend-inner-icon="mdi-percent"
 						variant="solo"
@@ -163,11 +159,11 @@
 					/>
 				</div>
 			</div>
-			<div class="mobile-pos-dock">
+			<div class="mobile-dock__tabs">
 				<button
 					type="button"
-					class="mobile-pos-dock__item"
-					:class="{ 'mobile-pos-dock__item--active': isSelectorViewActive('items') }"
+					class="mobile-dock__tab"
+					:class="{ 'mobile-dock__tab--active': isSelectorViewActive('items') }"
 					@click="setSelectorView('items')"
 				>
 					<v-icon icon="mdi-magnify" size="20" />
@@ -175,8 +171,8 @@
 				</button>
 				<button
 					type="button"
-					class="mobile-pos-dock__item"
-					:class="{ 'mobile-pos-dock__item--active': activeView === 'offers' }"
+					class="mobile-dock__tab"
+					:class="{ 'mobile-dock__tab--active': activeView === 'offers' }"
 					@click="setSelectorView('offers')"
 				>
 					<v-icon icon="mdi-tag-outline" size="20" />
@@ -184,18 +180,18 @@
 				</button>
 				<button
 					type="button"
-					class="mobile-pos-dock__item mobile-pos-dock__item--cart"
-					:class="{ 'mobile-pos-dock__item--active': compactPanel === 'invoice' }"
+					class="mobile-dock__tab mobile-dock__tab--cart"
+					:class="{ 'mobile-dock__tab--active': compactPanel === 'invoice' }"
 					@click="showInvoicePanel"
 				>
-					<span class="mobile-pos-dock__pill">{{ itemsCount }}</span>
+					<span v-if="itemsCount" class="mobile-dock__pill">{{ itemsCount }}</span>
 					<v-icon icon="mdi-cart-outline" size="22" />
 					<span>{{ __("Cart") }}</span>
 				</button>
 				<button
 					type="button"
-					class="mobile-pos-dock__item"
-					:class="{ 'mobile-pos-dock__item--active': activeView === 'coupons' }"
+					class="mobile-dock__tab"
+					:class="{ 'mobile-dock__tab--active': activeView === 'coupons' }"
 					@click="setSelectorView('coupons')"
 				>
 					<v-icon icon="mdi-ticket-percent-outline" size="20" />
@@ -203,8 +199,8 @@
 				</button>
 				<button
 					type="button"
-					class="mobile-pos-dock__item mobile-pos-dock__item--pay"
-					:class="{ 'mobile-pos-dock__item--active': activeView === 'payment' }"
+					class="mobile-dock__tab mobile-dock__tab--pay"
+					:class="{ 'mobile-dock__tab--active': activeView === 'payment' }"
 					@click="triggerInvoicePay"
 				>
 					<v-icon icon="mdi-credit-card-outline" size="20" />
@@ -328,13 +324,6 @@ export default {
 			parseBooleanSetting(posProfile.value?.saldo_enabled),
 		);
 
-		// Lean-layout classes — toggles set on POS Profile.
-		// `posa_lean_vertical_layout` (B mock): stacks cart below selector.
-		// `posa_lean_wizard_layout` (C mock): wizard step indicator + jumbo pay.
-		const leanModeClasses = computed(() => ({
-			"posa-lean-vertical": !!posProfile.value?.posa_lean_vertical_layout,
-			"posa-lean-wizard": !!posProfile.value?.posa_lean_wizard_layout,
-		}));
 		const useCompactPosSwitcher = computed(() => responsive.windowWidth.value < 1100);
 		const compactPanel = ref("selector");
 		const isPhone = computed(() => responsive.isPhone.value);
@@ -527,7 +516,7 @@ export default {
 				bottomDockHeight.value = 0;
 				return;
 			}
-			bottomDockHeight.value = dockElement.offsetHeight + 20;
+			bottomDockHeight.value = dockElement.offsetHeight + 10;
 		};
 		const layoutStyleOverrides = computed(() => {
 			const fallbackBottomSpace = getFallbackBottomSpace();
@@ -715,7 +704,6 @@ export default {
 			formattedDiscountTotal,
 			cartMetaLabel,
 			posProfile,
-			leanModeClasses,
 			additionalDiscountField,
 			additionalDiscountDisplay,
 			additionalDiscountPercentageDisplay,
@@ -918,98 +906,100 @@ export default {
 	min-height: 0;
 }
 
-.mobile-pos-stack {
+/* ───────────────────────────────────────────────────────────────
+ * Mobile action bar (compact < 1100px). SOLID + opaque — no glass,
+ * no backdrop blur — so page content never bleeds through it (the
+ * old translucent fixed dock did, which read as a render glitch).
+ * Slim two-row layout: compact totals + 5-tab panel switcher. The
+ * content panel above reserves --bottom-safe-space (measured from
+ * this bar) so the last content row always clears it.
+ * ─────────────────────────────────────────────────────────────── */
+.mobile-dock {
 	position: fixed;
-	left: max(10px, env(safe-area-inset-left));
-	right: max(10px, env(safe-area-inset-right));
-	bottom: max(10px, env(safe-area-inset-bottom));
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
+	left: 0;
+	right: 0;
+	bottom: 0;
 	z-index: 20;
-}
-
-.mobile-sale-dock,
-.mobile-pos-dock {
-	padding: 10px;
-	border-radius: 24px;
-	background: color-mix(in srgb, var(--pos-card-bg) 88%, transparent);
-	backdrop-filter: blur(18px);
-	box-shadow: 0 18px 38px var(--pos-shadow);
-	border: 1px solid var(--pos-border);
-}
-
-.mobile-sale-dock {
-	display: grid;
-	grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
-	gap: 12px;
-	align-items: center;
-}
-
-.mobile-sale-dock__copy {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	background: var(--pos-card-bg);
+	border-top: 1px solid var(--pos-border);
+	border-radius: 16px 16px 0 0;
+	box-shadow: 0 -6px 20px var(--pos-shadow);
+	padding-bottom: env(safe-area-inset-bottom);
+}
+
+.mobile-dock__summary {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 7px 14px;
+	border-bottom: 1px solid var(--pos-border);
+}
+
+.mobile-dock__totals {
+	display: flex;
+	flex-direction: column;
 	min-width: 0;
+	flex: 1 1 auto;
 }
 
-.mobile-sale-dock__eyebrow {
-	font-size: 0.72rem;
+.mobile-dock__amount {
+	font-size: 1.15rem;
 	font-weight: 700;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-	color: var(--pos-text-secondary);
-}
-
-.mobile-sale-dock__amount {
-	font-size: clamp(1.05rem, 2vw, 1.5rem);
-	line-height: 1.1;
+	line-height: 1.15;
 	color: var(--pos-text-primary);
 }
 
-.mobile-sale-dock__meta {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px 12px;
-	font-size: 0.82rem;
+.mobile-dock__meta {
+	font-size: 0.72rem;
 	color: var(--pos-text-secondary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
-.mobile-sale-dock__field :deep(.v-field) {
-	background: rgba(var(--v-theme-surface), 0.92);
+.mobile-dock__field {
+	flex: 0 1 190px;
+	min-width: 0;
 }
 
-.mobile-pos-dock {
+.mobile-dock__field :deep(.v-field) {
+	background: rgba(var(--v-theme-surface), 0.6);
+}
+
+.mobile-dock__tabs {
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
-	gap: 8px;
+	gap: 4px;
+	padding: 6px 8px;
 }
 
-.mobile-pos-dock__item {
+.mobile-dock__tab {
 	position: relative;
 	border: 0;
-	border-radius: 18px;
 	background: transparent;
+	border-radius: 12px;
 	min-width: 0;
-	min-height: 58px;
-	padding: 8px 4px;
+	min-height: 46px;
+	padding: 4px 2px;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 4px;
+	gap: 2px;
 	font: inherit;
-	font-size: 0.72rem;
-	font-weight: 700;
+	font-size: 0.66rem;
+	font-weight: 600;
 	color: var(--pos-text-secondary);
 	cursor: pointer;
 	transition:
-		background-color 0.18s ease,
-		color 0.18s ease,
-		transform 0.18s ease;
+		background-color 0.15s ease,
+		color 0.15s ease,
+		transform 0.1s ease;
 }
 
-.mobile-pos-dock__item span {
+.mobile-dock__tab span {
 	display: block;
 	width: 100%;
 	min-width: 0;
@@ -1019,56 +1009,53 @@ export default {
 	text-align: center;
 }
 
-.mobile-pos-dock__item--active {
-	background: rgba(var(--v-theme-primary), 0.12);
+.mobile-dock__tab:active {
+	transform: scale(0.96);
+}
+
+.mobile-dock__tab--active {
+	background: rgba(var(--v-theme-primary), 0.14);
 	color: rgb(var(--v-theme-primary));
 }
 
-.mobile-pos-dock__item--pay.mobile-pos-dock__item--active {
-	background: rgba(var(--v-theme-success), 0.16);
+.mobile-dock__tab--pay.mobile-dock__tab--active {
+	background: rgba(var(--v-theme-success), 0.18);
 	color: rgb(var(--v-theme-success));
 }
 
-:deep(.v-theme--dark) .mobile-sale-dock,
-:deep(.v-theme--dark) .mobile-pos-dock,
-:deep([data-theme="dark"]) .mobile-sale-dock,
-:deep([data-theme="dark"]) .mobile-pos-dock,
-:deep([data-theme-mode="dark"]) .mobile-sale-dock,
-:deep([data-theme-mode="dark"]) .mobile-pos-dock {
-	background: color-mix(in srgb, var(--pos-card-bg) 94%, transparent);
-	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
-	border-color: rgba(255, 255, 255, 0.08);
-}
-
-:deep(.v-theme--dark) .mobile-pos-dock__item--active,
-:deep([data-theme="dark"]) .mobile-pos-dock__item--active,
-:deep([data-theme-mode="dark"]) .mobile-pos-dock__item--active {
-	background: rgba(var(--v-theme-primary), 0.2);
-}
-
-:deep(.v-theme--dark) .mobile-pos-dock__item--pay.mobile-pos-dock__item--active,
-:deep([data-theme="dark"]) .mobile-pos-dock__item--pay.mobile-pos-dock__item--active,
-:deep([data-theme-mode="dark"]) .mobile-pos-dock__item--pay.mobile-pos-dock__item--active {
-	background: rgba(var(--v-theme-success), 0.22);
-}
-
-.mobile-pos-dock__item:active {
-	transform: scale(0.98);
-}
-
-.mobile-pos-dock__pill {
+.mobile-dock__pill {
 	position: absolute;
-	top: 4px;
-	right: 10px;
-	min-width: 18px;
-	height: 18px;
-	padding: 0 5px;
+	top: 2px;
+	right: calc(50% - 24px);
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
 	border-radius: 999px;
 	background: rgb(var(--v-theme-primary));
 	color: #fff;
-	font-size: 0.68rem;
-	line-height: 18px;
+	font-size: 0.62rem;
+	font-weight: 700;
+	line-height: 16px;
 	text-align: center;
+}
+
+:deep(.v-theme--dark) .mobile-dock,
+:deep([data-theme="dark"]) .mobile-dock,
+:deep([data-theme-mode="dark"]) .mobile-dock {
+	box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.5);
+	border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+:deep(.v-theme--dark) .mobile-dock__tab--active,
+:deep([data-theme="dark"]) .mobile-dock__tab--active,
+:deep([data-theme-mode="dark"]) .mobile-dock__tab--active {
+	background: rgba(var(--v-theme-primary), 0.22);
+}
+
+:deep(.v-theme--dark) .mobile-dock__tab--pay.mobile-dock__tab--active,
+:deep([data-theme="dark"]) .mobile-dock__tab--pay.mobile-dock__tab--active,
+:deep([data-theme-mode="dark"]) .mobile-dock__tab--pay.mobile-dock__tab--active {
+	background: rgba(var(--v-theme-success), 0.24);
 }
 
 @media (max-width: 768px) {
@@ -1083,78 +1070,43 @@ export default {
 	}
 }
 
-@media (max-width: 560px) {
-	.mobile-sale-dock {
-		grid-template-columns: 1fr;
+@media (max-width: 360px) {
+	.mobile-dock__field {
+		display: none;
 	}
 
-	.mobile-sale-dock,
-	.mobile-pos-dock {
-		padding: 8px;
+	.mobile-dock__summary {
+		justify-content: space-between;
+	}
+}
+
+/* Landscape / short viewport: collapse to one slim row — drop the
+ * discount field + meta, shrink tabs so content keeps the screen. */
+@media (orientation: landscape) and (max-height: 540px) {
+	.mobile-dock__summary {
+		padding: 3px 12px;
+		border-bottom: 0;
 	}
 
-	.mobile-pos-dock {
+	.mobile-dock__field,
+	.mobile-dock__meta {
+		display: none;
+	}
+
+	.mobile-dock__amount {
+		font-size: 1rem;
+	}
+
+	.mobile-dock__tabs {
+		padding: 0 8px 3px;
 		gap: 6px;
 	}
 
-	.mobile-pos-dock__item {
-		min-height: 52px;
-		font-size: 0.65rem;
+	.mobile-dock__tab {
+		min-height: 36px;
+		font-size: 0.6rem;
+		flex-direction: row;
+		gap: 6px;
 	}
-}
-
-/* ──────────────────────────────────────────────────────────────────
- * Lean-vertical (B mock): stack cart below selector, hide chips.
- * Mocked at the CSS layer so we can iterate visuals without touching
- * v-row / v-col logic yet. Final implementation should move the
- * selector + invoice columns into a flex column with min-height
- * proper for the device.
- * ──────────────────────────────────────────────────────────────── */
-.pos-main-container.posa-lean-vertical :deep(.dynamic-main-row) {
-	flex-direction: column !important;
-	flex-wrap: nowrap !important;
-}
-.pos-main-container.posa-lean-vertical :deep(.dynamic-col--selector) {
-	max-width: 100% !important;
-	flex-basis: 100% !important;
-	min-height: 200px;
-}
-.pos-main-container.posa-lean-vertical :deep(.dynamic-col--invoice) {
-	max-width: 100% !important;
-	flex-basis: 100% !important;
-}
-/* hide non-essential affordances */
-.pos-main-container.posa-lean-vertical :deep(.item-group-chips),
-.pos-main-container.posa-lean-vertical :deep(.selector-section-card .items-view-toggle),
-.pos-main-container.posa-lean-vertical :deep(.sales-person-selector) {
-	display: none !important;
-}
-
-/* ──────────────────────────────────────────────────────────────────
- * Lean-wizard (C mock): jumbo pay button + step-indicator strip.
- * Pure CSS reskin — wizard step routing is a follow-up if direction
- * validates. For now adds a visual "Step 1 / 2 / 3" hint + makes
- * the primary CTA huge and high-contrast.
- * ──────────────────────────────────────────────────────────────── */
-.pos-main-container.posa-lean-wizard::before {
-	content: "1. Agregar artículos  →  2. Revisar  →  3. Cobrar";
-	display: block;
-	padding: 12px 16px;
-	background: linear-gradient(90deg, #0ea5e9 0%, #6366f1 100%);
-	color: #fff;
-	font-weight: 600;
-	font-size: 1rem;
-	text-align: center;
-	letter-spacing: 0.02em;
-}
-.pos-main-container.posa-lean-wizard :deep(.btn-pay),
-.pos-main-container.posa-lean-wizard :deep(button[class*="pay"]) {
-	min-height: 64px !important;
-	font-size: 1.25rem !important;
-	font-weight: 700 !important;
-	letter-spacing: 0.04em !important;
-}
-.pos-main-container.posa-lean-wizard :deep(.dynamic-col--invoice) {
-	background-color: rgba(14, 165, 233, 0.04) !important;
 }
 </style>

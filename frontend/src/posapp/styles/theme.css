@@ -734,7 +734,7 @@ body[data-page-route="posapp"] .desk-container {
 .posapp .action-btn,
 .posapp .action-btn-consistent,
 .posapp .view-toggle-btn,
-.posapp .mobile-pos-dock__item,
+.posapp .mobile-dock__tab,
 .posapp [role="button"] {
 	touch-action: manipulation;
 }
