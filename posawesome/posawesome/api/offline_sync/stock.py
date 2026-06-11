@@ -6,6 +6,7 @@ from posawesome.posawesome.api.offline_sync.common import (
     _max_timestamp,
     _normalize_timestamp,
     _resolve_profile,
+    _watermark_floor,
 )
 
 SYNC_SCHEMA_VERSION = "2026-04-09"
@@ -84,7 +85,10 @@ def sync_stock(
     resolved_limit = _coerce_limit(limit)
     fetch_limit = resolved_limit + 1
     warehouse = profile.get("warehouse")
-    rows = _collect_stock_rows(profile, watermark, start_after, fetch_limit)
+    # Query with a small overlap window so same-microsecond commits at the
+    # watermark boundary are not missed; next_watermark below still advances
+    # from the ORIGINAL watermark so it never regresses on idle syncs.
+    rows = _collect_stock_rows(profile, _watermark_floor(watermark), start_after, fetch_limit)
     has_more = len(rows) > resolved_limit
     rows = rows[:resolved_limit]
 

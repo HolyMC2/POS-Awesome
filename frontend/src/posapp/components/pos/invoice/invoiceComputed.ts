@@ -152,7 +152,10 @@ const invoiceComputed: Record<string, unknown> & ThisType<InvoiceComputedVm> = {
 			});
 		}
 
-		const result = flt(sum, this.float_precision);
+		// Currency amount — round like the sibling totals (gross/subtotal
+		// use currency_precision) so the discount label can't show
+		// 4-decimal artifacts.
+		const result = flt(sum, this.currency_precision);
 		perfMarkEnd("pos:totals-discount", mark);
 		return result;
 	},

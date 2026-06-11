@@ -387,7 +387,16 @@ def create_customer(
 
             return customer
         else:
-            frappe.throw(_("Customer already exists"))
+            # Idempotent create: a duplicate name means this request (an
+            # offline-queue retry, a double-tap, or offline+online race —
+            # prod telemetry showed 7 unhandled "El cliente ya existe"
+            # rejections) already has a usable customer. Return the
+            # existing doc instead of throwing so the caller / write
+            # queue treats it as success and doesn't dead-letter.
+            existing_name = frappe.db.get_value(
+                "Customer", {"customer_name": customer_name}, "name"
+            )
+            return frappe.get_doc("Customer", existing_name)
 
     elif method == "update":
         customer_doc = frappe.get_doc("Customer", customer_id)

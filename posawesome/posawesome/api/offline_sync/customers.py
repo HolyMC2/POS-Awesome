@@ -11,6 +11,7 @@ from posawesome.posawesome.api.offline_sync.common import (
     _max_timestamp,
     _normalize_timestamp,
     _resolve_profile,
+    _watermark_floor,
 )
 
 SYNC_SCHEMA_VERSION = "2026-04-09"
@@ -69,12 +70,15 @@ def sync_customers(
     resolved_limit = _coerce_limit(limit)
     fetch_limit = resolved_limit + 1
     serialized_profile = json.dumps(profile)
+    # Overlap window on the query watermark (boundary-commit safety);
+    # next_watermark still advances from the original watermark.
+    query_watermark = _watermark_floor(watermark)
     rows = (
         get_customer_names(
             serialized_profile,
             limit=fetch_limit,
             start_after=start_after,
-            modified_after=watermark,
+            modified_after=query_watermark,
         )
         or []
     )
@@ -92,7 +96,7 @@ def sync_customers(
         if row.get("name")
     ]
 
-    deleted_rows = _collect_deleted_customers(profile, watermark, fetch_limit)
+    deleted_rows = _collect_deleted_customers(profile, query_watermark, fetch_limit)
     deleted = [{"key": row["key"]} for row in deleted_rows]
     next_watermark = _max_timestamp(
         watermark,

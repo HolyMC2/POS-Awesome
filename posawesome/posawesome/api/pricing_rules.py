@@ -609,8 +609,19 @@ def reconcile_line_prices(cart_payload: dict | str | None = None):
         price_list_rate = flt(details.get("price_list_rate") or args.price_list_rate)
         discount_amount = flt(details.get("discount_amount") or 0)
         discount_percentage = flt(details.get("discount_percentage") or 0)
-        # Default rate calculation if no rules apply
-        rate = flt(details.get("rate") or (price_list_rate - discount_amount))
+        # Default rate calculation if no rules apply. `rate` can be a
+        # LEGITIMATE 0 (a Rate-type rule resolving to free) — `or` would
+        # treat that as "missing" and fall back toward full price, charging
+        # the customer for a free-rule item. Only fall back when the engine
+        # genuinely returned no rate.
+        details_rate = details.get("rate")
+        if details_rate is None or details_rate == "":
+            rate = flt(price_list_rate - discount_amount)
+        elif flt(details_rate) == 0 and not details.get("pricing_rules"):
+            # Spurious 0 with no rule applied — keep the old fallback.
+            rate = flt(price_list_rate - discount_amount)
+        else:
+            rate = flt(details_rate)
 
         applied_rules = []
         if details.get("pricing_rules"):

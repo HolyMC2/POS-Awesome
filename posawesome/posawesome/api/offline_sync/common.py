@@ -12,6 +12,26 @@ def _normalize_timestamp(value):
     return text or None
 
 
+def _watermark_floor(watermark, overlap_seconds=2):
+    """Push the incoming watermark back by a small overlap window.
+
+    The watermark is max(modified) of the rows the client last received.
+    Filtering with a strict `> watermark` permanently misses rows that
+    committed in the same (micro)second after that page was read. Re-syncing
+    a couple of seconds of overlap is harmless — the client upserts changes
+    by key — while a missed row would stay stale until its next edit.
+    """
+    text = _normalize_timestamp(watermark)
+    if not text:
+        return None
+    try:
+        from frappe.utils import add_to_date, get_datetime
+
+        return str(add_to_date(get_datetime(text), seconds=-abs(overlap_seconds)))
+    except Exception:
+        return text
+
+
 def _max_timestamp(*values):
     normalized = []
     for value in values:

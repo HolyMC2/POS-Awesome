@@ -8,6 +8,7 @@ from posawesome.posawesome.api.offline_sync.common import (
     _max_timestamp,
     _normalize_timestamp,
     _resolve_profile,
+    _watermark_floor,
 )
 from posawesome.posawesome.api.utils import (
     expand_item_groups,
@@ -104,11 +105,14 @@ def sync_items(
     serialized_profile = json.dumps(profile)
     effective_price_list = price_list or profile.get("selling_price_list")
 
+    # Overlap window on the query watermark (boundary-commit safety);
+    # next_watermark still advances from the original watermark.
+    query_watermark = _watermark_floor(watermark)
     if watermark:
         rows = (
             get_delta_items(
                 serialized_profile,
-                modified_after=watermark,
+                modified_after=query_watermark,
                 price_list=effective_price_list,
                 customer=customer,
                 limit=fetch_limit,
@@ -142,7 +146,7 @@ def sync_items(
         if row.get("item_code")
     ]
 
-    deleted_rows = _collect_deleted_items(profile, watermark, fetch_limit)
+    deleted_rows = _collect_deleted_items(profile, query_watermark, fetch_limit)
     deleted = [{"key": row["key"]} for row in deleted_rows]
 
     next_watermark = _max_timestamp(
