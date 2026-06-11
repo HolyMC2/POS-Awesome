@@ -90,6 +90,7 @@ export const KEY_TABLE_MAP: Record<string, string> = {
 	cache_version: "settings",
 	cache_ready: "settings",
 	stock_cache_ready: "settings",
+	stock_cache_synced_at: "settings",
 	manual_offline: "settings",
 	invoice_outbox_mode: "settings",
 	bootstrap_snapshot: "settings",
@@ -116,6 +117,7 @@ const LOCAL_STORAGE_KEYS = new Set([
 	"bootstrap_limited_mode",
 	"cache_ready",
 	"stock_cache_ready",
+	"stock_cache_synced_at",
 	"schema_signature",
 	"tax_inclusive",
 ]);
@@ -143,6 +145,7 @@ export const DERIVED_OFFLINE_CACHE_KEYS = Object.freeze([
 	"payment_method_currency_cache",
 	"local_stock_cache",
 	"stock_cache_ready",
+	"stock_cache_synced_at",
 	"customer_storage",
 	"items_last_sync",
 	"customers_last_sync",
@@ -262,6 +265,7 @@ const MEMORY_DEFAULTS: AnyRecord = {
 	payment_method_currency_cache: {},
 	local_stock_cache: {},
 	stock_cache_ready: false,
+	stock_cache_synced_at: null,
 	customer_storage: [],
 	items_last_sync: null,
 	customers_last_sync: null,
@@ -738,6 +742,7 @@ export async function clearAllCache() {
 	memory.customer_balance_cache = {};
 	memory.local_stock_cache = {};
 	memory.stock_cache_ready = false;
+	memory.stock_cache_synced_at = null;
 	memory.customer_storage = [];
 	memory.items_last_sync = null;
 	memory.customers_last_sync = null;

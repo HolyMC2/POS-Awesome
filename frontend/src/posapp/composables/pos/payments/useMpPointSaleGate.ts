@@ -277,6 +277,22 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 			const who = frappe?.session?.user || "?";
 			const stamp = __("[MP-OVERRIDE] Terminal sin confirmar — autorizado por {0}", [who]);
 			doc.remarks = doc.remarks ? `${doc.remarks}\n${stamp}` : stamp;
+			// Server-side audit row (Comment on the invoice timeline). The
+			// remarks stamp above is client-editable after the fact; the
+			// Comment is server-stamped (user + time). Fire-and-forget —
+			// the sale must never block on audit plumbing.
+			try {
+				frappe.call({
+					method: "posawesome.posawesome.api.mp_audit.log_mp_override",
+					args: {
+						invoice_name: doc.name || null,
+						doctype: doc.doctype || "Sales Invoice",
+					},
+					freeze: false,
+				});
+			} catch {
+				/* never block the sale on audit */
+			}
 		}
 		stopPolling();
 		state.open = false;

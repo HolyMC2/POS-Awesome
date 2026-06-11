@@ -288,6 +288,38 @@ def process_pos_payment(payload):
         )
 
     is_replay_attempt = bool(existing_entries)
+    if is_replay_attempt:
+        # Bind the replay to the SAME invoice set. A retry that reuses the
+        # client_request_id but targets different invoices would get the
+        # cached Payment Entries back and believe those invoices were paid
+        # — double-allocating the original cash. Compare the cached
+        # entries' references against the invoices in this request.
+        requested_invoices = {
+            (inv.get("voucher_no") or inv.get("name"))
+            for inv in (data.selected_invoices or [])
+            if inv.get("voucher_no") or inv.get("name")
+        }
+        entry_names = [entry.get("name") for entry in existing_entries if entry.get("name")]
+        if entry_names:
+            referenced_invoices = {
+                row.reference_name
+                for row in frappe.get_all(
+                    "Payment Entry Reference",
+                    filters={"parent": ["in", entry_names]},
+                    fields=["reference_name"],
+                )
+                if row.reference_name
+            }
+            if referenced_invoices and requested_invoices and not referenced_invoices <= requested_invoices:
+                frappe.throw(
+                    _(
+                        "Payment request {0} was already recorded against different "
+                        "invoices ({1}). Refresh the POS and retry the payment."
+                    ).format(
+                        client_request_id,
+                        ", ".join(sorted(referenced_invoices - requested_invoices)),
+                    )
+                )
     completed_mpesa_entries, pending_mpesa_payments = ([], [])
     if is_replay_attempt and allow_mpesa_reconcile_payments and data.total_selected_mpesa_payments > 0:
         completed_mpesa_entries, pending_mpesa_payments = _partition_completed_mpesa_payments(

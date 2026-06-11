@@ -188,6 +188,7 @@ const KEY_TABLE_MAP = {
 	cache_version: "settings",
 	cache_ready: "settings",
 	stock_cache_ready: "settings",
+	stock_cache_synced_at: "settings",
 	manual_offline: "settings",
 	invoice_outbox_mode: "settings",
 	bootstrap_snapshot: "settings",
@@ -209,6 +210,7 @@ const LOCAL_STORAGE_KEYS = new Set([
 	"bootstrap_limited_mode",
 	"cache_ready",
 	"stock_cache_ready",
+	"stock_cache_synced_at",
 	"schema_signature",
 	"tax_inclusive",
 ]);

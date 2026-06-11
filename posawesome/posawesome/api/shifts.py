@@ -60,6 +60,31 @@ def get_opening_dialog_data():
 def create_opening_voucher(pos_profile, company, balance_details):
     balance_details = json.loads(balance_details)
 
+    # One open shift per user. Multiple concurrent open shifts (same or
+    # different POS Profiles) silently break cash reconciliation:
+    # check_opening_shift() only ever returns the newest one, so sales can
+    # land on a shift no closing ever accounts for. Force the operator to
+    # close the existing shift first.
+    existing_open = frappe.db.get_all(
+        "POS Opening Shift",
+        filters={
+            "user": frappe.session.user,
+            "pos_closing_shift": ["is", "not set"],
+            "docstatus": 1,
+            "status": "Open",
+        },
+        fields=["name", "pos_profile"],
+        order_by="period_start_date desc",
+        limit=1,
+    )
+    if existing_open:
+        frappe.throw(
+            _(
+                "You already have an open shift ({0}) on POS Profile {1}. "
+                "Close it before opening a new one."
+            ).format(existing_open[0].name, existing_open[0].pos_profile)
+        )
+
     new_pos_opening = frappe.get_doc(
         {
             "doctype": "POS Opening Shift",

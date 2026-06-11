@@ -79,27 +79,30 @@ def normalize_pos_payment_references(closing_shift_doc):
 
 
 @frappe.whitelist()
-def make_closing_shift_from_opening(opening_shift):
-    opening_shift = json.loads(opening_shift)
-    use_pos_invoice = frappe.db.get_value(
-        "POS Profile",
-        opening_shift.get("pos_profile"),
-        "create_pos_invoice_instead_of_sales_invoice",
-    )
-    doctype = "POS Invoice" if use_pos_invoice else "Sales Invoice"
-    skipped_printed_invoices = submit_printed_invoices(opening_shift.get("name"), doctype)
-    closing_shift = frappe.new_doc("POS Closing Shift")
-    closing_shift.pos_opening_shift = opening_shift.get("name")
-    closing_shift.period_start_date = opening_shift.get("period_start_date")
-    closing_shift.period_end_date = frappe.utils.get_datetime()
-    closing_shift.pos_profile = opening_shift.get("pos_profile")
-    closing_shift.user = opening_shift.get("user")
-    closing_shift.company = opening_shift.get("company")
-    closing_shift.grand_total = 0
-    closing_shift.net_total = 0
-    closing_shift.total_quantity = 0
+def compute_closing_tables(opening_shift, doctype=None):
+    """Recompute every server-derivable closing-shift table from DB truth.
 
-    company_currency = frappe.get_cached_value("Company", closing_shift.company, "default_currency")
+    `opening_shift` is a dict (POS Opening Shift as_dict or the client's
+    copy of it — only name/pos_profile/company/balance_details are read).
+    Returns a dict with pos_transactions, payment_reconciliation (expected
+    amounts only), taxes, pos_payments and the header totals. Shared by
+    make_closing_shift_from_opening (build) and POSClosingShift.validate
+    (anti-tamper re-derivation at submit).
+    """
+    if not doctype:
+        use_pos_invoice = frappe.db.get_value(
+            "POS Profile",
+            opening_shift.get("pos_profile"),
+            "create_pos_invoice_instead_of_sales_invoice",
+        )
+        doctype = "POS Invoice" if use_pos_invoice else "Sales Invoice"
+
+    company = opening_shift.get("company")
+    grand_total = 0
+    net_total = 0
+    total_quantity = 0
+
+    company_currency = frappe.get_cached_value("Company", company, "default_currency")
     cash_mode_of_payment = (
         frappe.get_value(
             "POS Profile",
@@ -144,9 +147,9 @@ def make_closing_shift_from_opening(opening_shift):
         )
         base_grand_total = get_base_value(d, "grand_total", "base_grand_total", conversion_rate)
         base_net_total = get_base_value(d, "net_total", "base_net_total", conversion_rate)
-        closing_shift.grand_total += base_grand_total
-        closing_shift.net_total += base_net_total
-        closing_shift.total_quantity += flt(d.total_qty)
+        grand_total += base_grand_total
+        net_total += base_net_total
+        total_quantity += flt(d.total_qty)
 
         for t in d.taxes:
             existing_tax = [tx for tx in taxes if tx.account_head == t.account_head and tx.rate == t.rate]
@@ -232,10 +235,44 @@ def make_closing_shift_from_opening(opening_shift):
                 )
             )
 
-    closing_shift.set("pos_transactions", pos_transactions)
-    closing_shift.set("payment_reconciliation", payments)
-    closing_shift.set("taxes", taxes)
-    closing_shift.set("pos_payments", pos_payments_table)
+    return {
+        "doctype": doctype,
+        "pos_transactions": pos_transactions,
+        "payment_reconciliation": payments,
+        "taxes": taxes,
+        "pos_payments": pos_payments_table,
+        "grand_total": grand_total,
+        "net_total": net_total,
+        "total_quantity": total_quantity,
+    }
+
+
+def make_closing_shift_from_opening(opening_shift):
+    opening_shift = json.loads(opening_shift)
+    use_pos_invoice = frappe.db.get_value(
+        "POS Profile",
+        opening_shift.get("pos_profile"),
+        "create_pos_invoice_instead_of_sales_invoice",
+    )
+    doctype = "POS Invoice" if use_pos_invoice else "Sales Invoice"
+    skipped_printed_invoices = submit_printed_invoices(opening_shift.get("name"), doctype)
+
+    tables = compute_closing_tables(opening_shift, doctype)
+
+    closing_shift = frappe.new_doc("POS Closing Shift")
+    closing_shift.pos_opening_shift = opening_shift.get("name")
+    closing_shift.period_start_date = opening_shift.get("period_start_date")
+    closing_shift.period_end_date = frappe.utils.get_datetime()
+    closing_shift.pos_profile = opening_shift.get("pos_profile")
+    closing_shift.user = opening_shift.get("user")
+    closing_shift.company = opening_shift.get("company")
+    closing_shift.grand_total = tables["grand_total"]
+    closing_shift.net_total = tables["net_total"]
+    closing_shift.total_quantity = tables["total_quantity"]
+    closing_shift.set("pos_transactions", tables["pos_transactions"])
+    closing_shift.set("payment_reconciliation", tables["payment_reconciliation"])
+    closing_shift.set("taxes", tables["taxes"])
+    closing_shift.set("pos_payments", tables["pos_payments"])
 
     return {
         "closing_shift": closing_shift,

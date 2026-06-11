@@ -91,6 +91,7 @@ export async function initializeStockCache(
 
 			memory.local_stock_cache = existingCache;
 			persist("local_stock_cache");
+			markStockCacheSynced();
 			setStockCacheReady(true);
 			console.info(
 				"Stock cache initialized with",
@@ -106,15 +107,49 @@ export async function initializeStockCache(
 	}
 }
 
+// How long a server-fed stock cache stays trustworthy. After this window
+// another terminal may have sold the same stock, so offline consumers stop
+// treating the cache as "ready" (item fetchers then refuse the local
+// fallback instead of silently overselling). Tunable per device without a
+// deploy: localStorage.posa_stock_ttl_min = minutes (0 disables the TTL).
+const STOCK_CACHE_TTL_MINUTES = 30;
+
+function stockCacheTtlMinutes(): number {
+	try {
+		const raw = window.localStorage?.getItem("posa_stock_ttl_min");
+		if (raw !== null && raw !== undefined && raw !== "") {
+			const parsed = Number(raw);
+			if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+		}
+	} catch {
+		/* default below */
+	}
+	return STOCK_CACHE_TTL_MINUTES;
+}
+
+export function markStockCacheSynced() {
+	memory.stock_cache_synced_at = new Date().toISOString();
+	persist("stock_cache_synced_at");
+}
+
+export function isStockCacheFresh(): boolean {
+	const ttl = stockCacheTtlMinutes();
+	if (!ttl) return true; // TTL disabled
+	const syncedAt = memory.stock_cache_synced_at;
+	if (!syncedAt) return false;
+	const age = Date.now() - new Date(syncedAt).getTime();
+	return Number.isFinite(age) && age >= 0 && age <= ttl * 60_000;
+}
+
 export function isStockCacheReady() {
-	return memory.stock_cache_ready || false;
+	return (memory.stock_cache_ready || false) && isStockCacheFresh();
 }
 
 export function setStockCacheReady(ready: boolean) {
 	memory.stock_cache_ready = ready;
 	persist("stock_cache_ready");
 	refreshBootstrapSnapshotFromCacheState({
-		stockCacheReady: memory.stock_cache_ready,
+		stockCacheReady: isStockCacheReady(),
 	});
 }
 
@@ -173,6 +208,9 @@ export function updateLocalStockCache(items: AnyRecord[]) {
 
 		memory.local_stock_cache = stockCache;
 		persist("local_stock_cache");
+		// Server-fed quantities — refresh the whole-cache freshness marker
+		// the TTL gate in isStockCacheReady() checks.
+		markStockCacheSynced();
 	} catch (e) {
 		console.error("Failed to refresh local stock cache", e);
 	}

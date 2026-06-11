@@ -55,7 +55,46 @@ class POSClosingShift(Document):
                 _("Selected POS Opening Shift should be open."),
                 title=_("Invalid Opening Entry"),
             )
+        self.enforce_server_truth()
         self.update_payment_reconciliation()
+
+    def enforce_server_truth(self):
+        """Anti-tamper: rebuild every server-derivable table from the DB.
+
+        submit_closing_shift() accepts the whole document from the client
+        (with ignore_permissions), so a tampered payload could omit
+        invoices from pos_transactions or fabricate expected_amount to
+        hide a cash shortage. Re-derive transactions, taxes, expected
+        amounts, pos_payments and the header totals from the opening
+        shift + submitted invoices; the ONLY operator inputs kept are
+        closing_amount (counted money) per mode of payment.
+        """
+        from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.creation import (
+            compute_closing_tables,
+        )
+
+        opening = frappe.get_doc("POS Opening Shift", self.pos_opening_shift)
+        # Header fields must match the opening shift, not the payload.
+        self.user = opening.user
+        self.pos_profile = opening.pos_profile
+        self.company = opening.company
+
+        tables = compute_closing_tables(opening.as_dict())
+
+        counted = {
+            d.mode_of_payment: flt(d.closing_amount)
+            for d in (self.payment_reconciliation or [])
+        }
+        for row in tables["payment_reconciliation"]:
+            row["closing_amount"] = counted.get(row.get("mode_of_payment"), 0)
+
+        self.grand_total = tables["grand_total"]
+        self.net_total = tables["net_total"]
+        self.total_quantity = tables["total_quantity"]
+        self.set("pos_transactions", tables["pos_transactions"])
+        self.set("payment_reconciliation", tables["payment_reconciliation"])
+        self.set("taxes", tables["taxes"])
+        self.set("pos_payments", tables["pos_payments"])
 
     def update_payment_reconciliation(self):
         # update the difference values in Payment Reconciliation child table
