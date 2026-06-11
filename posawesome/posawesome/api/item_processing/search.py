@@ -63,6 +63,8 @@ class SearchPlan:
     include_image: bool
     posa_display_items_in_stock: bool
     posa_show_template_items: bool
+    search_serial_no: bool = False
+    search_batch_no: bool = False
 
 
 def normalize_brand(brand: str) -> str:
@@ -244,6 +246,8 @@ def _build_search_plan(
         include_image=include_image,
         posa_display_items_in_stock=bool(posa_display_items_in_stock),
         posa_show_template_items=bool(posa_show_template_items),
+        search_serial_no=bool(search_serial_no),
+        search_batch_no=bool(search_batch_no),
     )
 
 
@@ -419,6 +423,73 @@ def _build_attribute_maps(
     return template_attributes_map, variant_attributes_map
 
 
+_WORD_FILTER_CANDIDATE_CAP = 1000
+
+
+def _word_filter_candidates(plan: SearchPlan) -> Optional[List[str]]:
+    """SQL prefilter for the typed-search word filter.
+
+    Historically the word filter ran ONLY in Python, AFTER full details
+    (prices/stock/barcodes/uoms) were fetched page by page — a search
+    matching few or zero items swept the whole catalog with detail
+    queries (~4s for 0 rows on a 6.5k catalog; 17s tail on prod).
+
+    This narrows in SQL first: a row qualifies when EVERY search word
+    matches at least one of the same surfaces `_collect_searchable_values`
+    inspects — item columns, Item Barcode, variant attributes, and
+    (when the profile enables them) serial / batch numbers. It is a
+    SUPERSET of the Python matcher by design; `_matches_search_words`
+    still runs afterwards as the authority, so semantics are unchanged
+    — rows can only be skipped, never added.
+
+    Returns None when the word filter is inactive (caller keeps the
+    legacy path) or a list of candidate Item names (possibly empty —
+    caller can return immediately without any detail fetches).
+    """
+    if not plan.word_filter_active or not plan.search_words:
+        return None
+
+    conditions = []
+    params: Dict[str, Any] = {}
+    for i, word in enumerate(plan.search_words):
+        key = f"w{i}"
+        params[key] = f"%{word}%"
+        per_word = [
+            f"i.item_code LIKE %({key})s",
+            f"i.item_name LIKE %({key})s",
+            f"i.name LIKE %({key})s",
+            f"IFNULL(i.description, '') LIKE %({key})s",
+            f"IFNULL(i.brand, '') LIKE %({key})s",
+            f"i.item_group LIKE %({key})s",
+            "EXISTS (SELECT 1 FROM `tabItem Barcode` ib"
+            f" WHERE ib.parent = i.name AND ib.barcode LIKE %({key})s)",
+            "EXISTS (SELECT 1 FROM `tabItem Variant Attribute` iva"
+            f" WHERE iva.parent = i.name AND (iva.attribute LIKE %({key})s"
+            f" OR iva.attribute_value LIKE %({key})s))",
+        ]
+        if plan.search_serial_no:
+            per_word.append(
+                "EXISTS (SELECT 1 FROM `tabSerial No` sn"
+                f" WHERE sn.item_code = i.name AND sn.name LIKE %({key})s)"
+            )
+        if plan.search_batch_no:
+            per_word.append(
+                "EXISTS (SELECT 1 FROM `tabBatch` b"
+                f" WHERE b.item = i.name AND b.name LIKE %({key})s)"
+            )
+        conditions.append("(" + " OR ".join(per_word) + ")")
+
+    rows = frappe.db.sql(
+        """SELECT i.name FROM `tabItem` i
+           WHERE i.disabled = 0 AND i.is_sales_item = 1 AND {conds}
+           LIMIT {cap}""".replace("{conds}", " AND ".join(conditions)).replace(
+            "{cap}", str(_WORD_FILTER_CANDIDATE_CAP)
+        ),
+        params,
+    )
+    return [row[0] for row in rows]
+
+
 def _run_item_query(
     pos_profile: Dict[str, Any],
     price_list: Optional[str],
@@ -429,6 +500,18 @@ def _run_item_query(
 
     result: List[Dict[str, Any]] = []
     page_start = plan.initial_page_start
+
+    candidate_names = _word_filter_candidates(plan)
+    if candidate_names is not None:
+        if not candidate_names:
+            # No item can satisfy the word filter — skip the catalog
+            # sweep (and every detail fetch) entirely.
+            return []
+        if len(candidate_names) < _WORD_FILTER_CANDIDATE_CAP:
+            # Narrow the page query to the candidates. At the cap the
+            # prefilter may be truncated, so fall back to the full sweep
+            # rather than silently dropping matches.
+            plan.filters["name"] = ["in", candidate_names]
 
     while True:
         items_data = frappe.get_all(
