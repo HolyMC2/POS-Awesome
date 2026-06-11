@@ -156,30 +156,77 @@ def ingest(events=None):
     dropped = 0
     started = time.perf_counter()
 
+    # Single bulk INSERT instead of one doc.insert() per row. Prod showed
+    # the row-by-row path averaging 2.4s / batch (max 64s on a 200-row
+    # flush) — pure ORM overhead for a doctype with no validate logic, no
+    # children and hash autonaming. bulk_insert also skips link
+    # validation, which we WANT here: RUM is append-only observability
+    # data; a stale/renamed pos_profile must never drop a terminal's
+    # metrics (LinkValidationError).
+    now = now_datetime()
+    session_user = frappe.session.user
+    fields = [
+        "name",
+        "owner",
+        "creation",
+        "modified",
+        "modified_by",
+        "docstatus",
+        "idx",
+        "event_name",
+        "value",
+        "terminal",
+        "user",
+        "pos_profile",
+        "build_version",
+        "user_agent",
+        "event_timestamp",
+        "metadata",
+    ]
+    rows = []
     for raw in parsed:
         prepared = _sanitise_event(raw)
         if not prepared:
             dropped += 1
             continue
+        rows.append(
+            (
+                frappe.generate_hash(length=10),
+                session_user,
+                now,
+                now,
+                session_user,
+                0,
+                0,
+                prepared["event_name"],
+                prepared["value"],
+                prepared["terminal"],
+                prepared["user"],
+                prepared["pos_profile"],
+                prepared["build_version"],
+                prepared["user_agent"],
+                prepared["event_timestamp"],
+                prepared["metadata"],
+            )
+        )
+
+    if rows:
         try:
-            doc = frappe.get_doc(prepared)
-            # RUM is append-only observability data — never let a stale or
-            # renamed `pos_profile` (a Link field) drop the row via
-            # LinkValidationError. We'd rather keep a telemetry row whose
-            # pos_profile no longer resolves than lose a terminal's metrics
-            # because its profile got renamed. ignore_links skips link
-            # checks; `user` is always frappe.session.user so it stays valid.
-            doc.flags.ignore_links = True
-            doc.insert(ignore_permissions=True)
-            accepted += 1
+            frappe.db.bulk_insert(
+                "POS Telemetry Event",
+                fields=fields,
+                values=rows,
+                ignore_duplicates=True,
+            )
+            accepted = len(rows)
         except Exception:
             # We never want telemetry to surface as an error to the
-            # operator — log + drop.
+            # operator — log + drop the batch.
             frappe.log_error(
-                title="POSA telemetry ingest row failed",
+                title="POSA telemetry bulk ingest failed",
                 message=frappe.get_traceback(),
             )
-            dropped += 1
+            dropped += len(rows)
 
     frappe.db.commit()
     duration_ms = (time.perf_counter() - started) * 1000.0
