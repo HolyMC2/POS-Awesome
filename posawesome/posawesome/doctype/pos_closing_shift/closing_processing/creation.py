@@ -78,7 +78,6 @@ def normalize_pos_payment_references(closing_shift_doc):
         closing_shift_doc.flags.ignore_mandatory = True
 
 
-@frappe.whitelist()
 def compute_closing_tables(opening_shift, doctype=None):
     """Recompute every server-derivable closing-shift table from DB truth.
 
@@ -247,6 +246,7 @@ def compute_closing_tables(opening_shift, doctype=None):
     }
 
 
+@frappe.whitelist()
 def make_closing_shift_from_opening(opening_shift):
     opening_shift = json.loads(opening_shift)
     use_pos_invoice = frappe.db.get_value(
