@@ -1931,6 +1931,38 @@ watch(selectedCustomer, (newCustomer, oldCustomer) => {
 	}
 });
 
+const applyIncomingInvoiceDoc = (doc) => {
+	if (!doc) {
+		return;
+	}
+	invoiceStore.setInvoiceDoc(doc);
+	paid_change.value = flt(doc.paid_change || 0, currency_precision.value);
+	credit_change.value = flt(doc.credit_change || 0, currency_precision.value);
+	last_payment_change_was_cash.value = null;
+	is_credit_sale.value = false;
+	is_write_off_change.value = false;
+	// Fresh invoice → allow auto-default again.
+	paymentsTouched.value = false;
+	paymentSnapshotBeforeCredit = null;
+
+	const initializedPayment = ensurePaymentLinesInitialized(doc);
+
+	if (doc.is_return) {
+		is_return.value = true;
+		is_credit_return.value = false;
+	} else if (initializedPayment) {
+		is_credit_return.value = false;
+	}
+	initializeReturnValidity(doc);
+	loyalty_amount.value = 0;
+	redeemed_customer_credit.value = 0;
+	resetGiftCardState({ clearPayment: true });
+	if (doc.customer) {
+		get_addresses();
+	}
+	get_sales_person_names();
+};
+
 // Lifecycle
 onMounted(() => {
 	_shortcutHandlers.value.handlePaymentShortcut = handlePaymentShortcut.bind(this);
@@ -1941,34 +1973,7 @@ onMounted(() => {
 	eventBus.on("server-online", () => syncStore.syncPendingInvoices());
 
 	if (eventBus) {
-		eventBus.on("send_invoice_doc_payment", (doc) => {
-			invoiceStore.setInvoiceDoc(doc);
-			paid_change.value = flt(doc.paid_change || 0, currency_precision.value);
-			credit_change.value = flt(doc.credit_change || 0, currency_precision.value);
-			last_payment_change_was_cash.value = null;
-			is_credit_sale.value = false;
-			is_write_off_change.value = false;
-			// Fresh invoice → allow auto-default again.
-			paymentsTouched.value = false;
-			paymentSnapshotBeforeCredit = null;
-
-			const initializedPayment = ensurePaymentLinesInitialized(doc);
-
-			if (doc.is_return) {
-				is_return.value = true;
-				is_credit_return.value = false;
-			} else if (initializedPayment) {
-				is_credit_return.value = false;
-			}
-			initializeReturnValidity(doc);
-			loyalty_amount.value = 0;
-			redeemed_customer_credit.value = 0;
-			resetGiftCardState({ clearPayment: true });
-			if (doc.customer) {
-				get_addresses();
-			}
-			get_sales_person_names();
-		});
+		eventBus.on("send_invoice_doc_payment", applyIncomingInvoiceDoc);
 
 		eventBus.on("register_pos_profile", (data) => {
 			pos_profile.value = data.pos_profile;
@@ -2008,6 +2013,15 @@ onMounted(() => {
 	}
 
 	if (isPaymentOpen.value) {
+		// This panel is an async component mounted behind v-if, so on the
+		// first open of a session the "send_invoice_doc_payment" event can
+		// fire while the chunk is still loading — before our listener exists.
+		// Recover the doc from the store so the default payment line is not
+		// left blank.
+		const storeDoc = invoice_doc.value;
+		if (storeDoc && Array.isArray(storeDoc.payments) && storeDoc.payments.length) {
+			applyIncomingInvoiceDoc(storeDoc);
+		}
 		handleShowPayment("true");
 	}
 });

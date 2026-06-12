@@ -125,6 +125,14 @@ export async function show_payment(context: any) {
 
 		await context.$nextTick();
 
+		// Persist the doc before opening the panel: Payments.vue is an async
+		// component behind v-if, so on the first open of a session the
+		// "send_invoice_doc_payment" event below can fire before its listener
+		// is registered. The panel re-initializes from the store on mount.
+		if (context.invoiceStore?.setInvoiceDoc) {
+			context.invoiceStore.setInvoiceDoc(invoice_doc);
+		}
+
 		const useDesktopPaymentDialog =
 			typeof window !== "undefined" && window.innerWidth >= 992;
 
