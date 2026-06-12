@@ -26,7 +26,14 @@ declare const frappe: any;
 const POLL_MS = 2000;
 const TIMEOUT_MS = 15 * 60 * 1000;
 
-type Phase = "idle" | "sending" | "waiting" | "processing" | "approved" | "failed";
+type Phase = "idle" | "sending" | "choosing" | "waiting" | "processing" | "approved" | "failed";
+
+export interface MpTerminalOption {
+	terminal_id: string;
+	store_id?: string;
+	pos_id?: string;
+	operating_mode?: string;
+}
 
 export interface MpPointSaleGateState {
 	open: boolean;
@@ -36,6 +43,7 @@ export interface MpPointSaleGateState {
 	currency: string;
 	orderName: string | null;
 	canOverride: boolean;
+	terminals: MpTerminalOption[];
 }
 
 export interface MpPointSaleGateOptions {
@@ -53,7 +61,12 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 		currency: "",
 		orderName: null,
 		canOverride: false,
+		terminals: [],
 	});
+
+	// Pending sale context while the cashier picks a terminal ("choosing").
+	let pendingInvoice: string | null = null;
+	let pendingAmount = 0;
 
 	let pollTimer: ReturnType<typeof setTimeout> | null = null;
 	let deadline = 0;
@@ -100,16 +113,49 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 		}
 	};
 
-	const resolveTerminal = async (): Promise<string | undefined> => {
+	// Device-level memory of the cashier's last pick, keyed by profile so two
+	// cajas sharing a device but switching profiles don't cross terminals.
+	const rememberKey = (): string => {
+		const prof = opts.getPosProfile();
+		return `posa_mp_terminal:${prof?.name || prof?.pos_profile || "?"}`;
+	};
+
+	// Terminal resolution priority:
+	//   1. POS Profile default (mp_default_terminal_id) — manager-controlled
+	//   2. last pick remembered on this device (still enabled)
+	//   3. the only enabled terminal
+	//   4. multiple candidates → cashier picks (phase "choosing")
+	//   5. none / fetch error → undefined (server falls back to Settings default)
+	const resolveTerminal = async (): Promise<{ id?: string; options?: MpTerminalOption[] }> => {
+		let terminals: MpTerminalOption[] = [];
 		try {
-			const terminals = await listEnabledTerminals();
-			if (Array.isArray(terminals) && terminals.length) {
-				return terminals[0]?.terminal_id;
-			}
+			const res = await listEnabledTerminals();
+			if (Array.isArray(res)) terminals = res;
 		} catch {
-			/* fall back to the connector's Settings default terminal */
+			return {}; // server-side Settings default takes over
 		}
-		return undefined;
+		if (!terminals.length) return {};
+
+		const has = (id: string | null | undefined): boolean =>
+			!!id && terminals.some((t) => t.terminal_id === id);
+
+		const profDefault = opts.getPosProfile()?.mp_default_terminal_id;
+		if (has(profDefault)) return { id: profDefault };
+
+		if (terminals.length === 1) {
+			const only = terminals[0];
+			return only ? { id: only.terminal_id } : {};
+		}
+
+		let remembered: string | null = null;
+		try {
+			remembered = localStorage.getItem(rememberKey());
+		} catch {
+			/* storage unavailable — just ask */
+		}
+		if (has(remembered)) return { id: remembered as string };
+
+		return { options: terminals };
 	};
 
 	const setPhase = (p: Phase, m: string): void => {
@@ -195,13 +241,13 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 		}
 	};
 
-	const start = async (pos_invoice: string, amount: number): Promise<void> => {
-		state.open = true;
-		state.canOverride = false;
-		state.orderName = null;
+	const dispatchToTerminal = async (
+		pos_invoice: string,
+		amount: number,
+		terminal_id: string | undefined,
+	): Promise<void> => {
 		setPhase("sending", __("Enviando a la terminal…"));
 		try {
-			const terminal_id = await resolveTerminal();
 			const invoice_doctype = opts.getInvoiceDoc()?.doctype || "Sales Invoice";
 			const res: any = await createPointOrder({ pos_invoice, amount, terminal_id, invoice_doctype });
 			if (!res || !res.ok || !res.order || !res.order.name) {
@@ -217,6 +263,37 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 			terminalFailed((e && e.message) || __("Error de conexión"));
 		}
 	};
+
+	const start = async (pos_invoice: string, amount: number): Promise<void> => {
+		state.open = true;
+		state.canOverride = false;
+		state.orderName = null;
+		state.terminals = [];
+		pendingInvoice = pos_invoice;
+		pendingAmount = amount;
+		setPhase("sending", __("Enviando a la terminal…"));
+		const resolved = await resolveTerminal();
+		if (resolved.options && resolved.options.length) {
+			// Multiple enabled terminals, no default — cashier picks once;
+			// the choice is remembered on this device (per profile).
+			state.terminals = resolved.options;
+			setPhase("choosing", __("Elige la terminal para cobrar"));
+			return;
+		}
+		await dispatchToTerminal(pos_invoice, amount, resolved.id);
+	};
+
+	// Dialog action for the "choosing" phase.
+	function chooseTerminal(terminal_id: string): void {
+		if (!pendingInvoice || state.phase !== "choosing") return;
+		try {
+			localStorage.setItem(rememberKey(), terminal_id);
+		} catch {
+			/* storage unavailable — choice just won't stick */
+		}
+		state.terminals = [];
+		void dispatchToTerminal(pendingInvoice, pendingAmount, terminal_id);
+	}
 
 	// PUBLIC: call from the finalize path. Resolves true when it's safe to
 	// finalize the sale (terminal approved, nothing to charge, or supervisor
@@ -315,5 +392,6 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 		retry,
 		cancel,
 		override,
+		chooseTerminal,
 	};
 }

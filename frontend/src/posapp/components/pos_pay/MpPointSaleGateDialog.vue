@@ -24,6 +24,23 @@
 					mdi-close-circle
 				</v-icon>
 				<div class="text-body-1">{{ gate.state.message }}</div>
+				<!-- Multiple enabled terminals, no default: cashier picks once
+				     (remembered on this device for next sales) -->
+				<v-list v-if="gate.state.phase === 'choosing'" class="mt-3 text-start" density="compact">
+					<v-list-item
+						v-for="t in gate.state.terminals"
+						:key="t.terminal_id"
+						rounded="lg"
+						class="mb-1 border"
+						@click="gate.chooseTerminal(t.terminal_id)"
+					>
+						<template #prepend>
+							<v-icon color="primary">mdi-contactless-payment</v-icon>
+						</template>
+						<v-list-item-title>{{ terminalLabel(t) }}</v-list-item-title>
+						<v-list-item-subtitle>{{ t.terminal_id }}</v-list-item-subtitle>
+					</v-list-item>
+				</v-list>
 				<div v-if="gate.state.amount > 0" class="text-h6 font-weight-bold mt-3">
 					{{ gate.state.currency }} {{ gate.state.amount.toFixed(2) }}
 				</div>
@@ -75,4 +92,11 @@ const __ = window.__ || ((s) => s);
 const spinner = computed(() =>
 	["sending", "waiting", "processing"].includes(props.gate.state.phase),
 );
+
+// "Sucursal 56029845 · …05159619" — store + device tail beats raw ids.
+function terminalLabel(t) {
+	const store = t.store_id ? `${__("Sucursal")} ${t.store_id}` : __("Terminal");
+	const tail = (t.terminal_id || "").slice(-8);
+	return `${store} · …${tail}`;
+}
 </script>
