@@ -2,6 +2,40 @@
 
 All notable changes.
 
+## 2026-06-12 (lab only) — fix: first payment of session opened with blank default amount
+
+- **`fcfeccd8` payments race:** `Payments.vue` is a `defineAsyncComponent`
+  behind `v-if` (`Pos.vue`), so on the first payment of a browser session the
+  `send_invoice_doc_payment` event fired while the chunk was still loading —
+  no listener yet → event dropped → `ensurePaymentLinesInitialized` never ran
+  → default payment line stayed `0` and the cashier had to type the amount
+  (the 1-user "primer pago en blanco" report). Later opens worked because the
+  chunk was cached and the mount won the race.
+- **Fix (dual delivery):** `show_payment` (dialogs.ts) now writes the doc to
+  `invoiceStore` *before* opening the panel; `Payments.vue` extracts the event
+  handler into `applyIncomingInvoiceDoc()` and re-runs it from the store in
+  `onMounted` when the panel opens. Event path still covers the
+  already-mounted case; both paths are idempotent.
+
+### ✅ Lab verify (2026-06-12, Playwright MCP, ventas.lab)
+- Open shift → add item → PAGAR: Cash default line prefilled with full total
+  (was the bug). Close + reopen payment: still prefilled, no double-init
+  artifacts. Cancel-sale cleanup OK.
+- `vue-tsc --noEmit` clean; vitest 577/577 pass. Smoke `posapp.web-route`
+  suite blocked by a pre-existing bot-user boot stall at "Inicializando 33%"
+  (also stalls without this change) — verified manually instead.
+
+### Safe to skip?
+- No. Cashier-facing prod bug (every first sale of the day needs a manual
+  amount entry). Ship with the next posawesome bundle push.
+
+### Observed, not fixed
+- Cancelling the saldo "Numero Celular" dialog still leaves the recarga item
+  in the cart (cart showed 2 items / MX$440 after cancel).
+- `playwright-bot@lab` boot stalls at "Inicializando aplicación… 33%" on
+  `/posapp` (permissions?) — Administrator boots fine; smoke suite unusable
+  for that user until diagnosed.
+
 ## 2026-06-05 (DEPLOYED to prod) — /posapp web-route parity: SW/images, theme, i18n, Dialog
 
 Hardened the light `/posapp` web route (vs Desk `/app/posapp`) — a cluster of
