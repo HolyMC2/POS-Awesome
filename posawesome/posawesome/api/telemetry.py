@@ -47,6 +47,18 @@ ALLOWED_EVENT_PREFIXES = (
 )
 DEFAULT_RETENTION_DAYS = 30
 
+# Time-based web vitals (milliseconds). A tab throttled in the background
+# then resumed reports wall-clock durations — prod saw rum:inp at
+# 4,971,552 ms (82 min) and rum:lcp at 3,568,076 ms (59 min), single
+# garbage samples that trashed max/p99 on these low-count metrics. Drop
+# any reading above the ceiling. Mirror of the client cap in
+# `frontend/src/posapp/utils/telemetry.ts` (MAX_WEBVITAL_MS) — kept here
+# so a stale tab on an old build can't reflood after the client fix lands.
+# NOT applied to rum:cls (unitless score) or rum:heap_used_mb (megabytes),
+# nor to perf:* API timings (a real 15 s get_items is signal we want).
+WEBVITAL_MS_EVENTS = ("rum:lcp", "rum:fcp", "rum:inp", "rum:longtask")
+MAX_WEBVITAL_MS = 60000.0
+
 
 def _sanitise_event(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Return a dict ready for `Document.update()` or None if the row
@@ -79,6 +91,12 @@ def _sanitise_event(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         value = flt(raw.get("value") or 0)
     except Exception:
         value = 0.0
+
+    # Drop background-throttle artifacts on time-based web vitals (see
+    # WEBVITAL_MS_EVENTS). Negative readings are impossible for these and
+    # also dropped.
+    if event_name in WEBVITAL_MS_EVENTS and not (0 <= value <= MAX_WEBVITAL_MS):
+        return None
 
     # Bound metadata. Even though `frappe.db.escape` and the
     # `JSON` doctype field handle SQL safety, an arbitrarily nested

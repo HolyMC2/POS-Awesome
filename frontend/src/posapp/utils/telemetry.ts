@@ -173,8 +173,32 @@ async function flush(): Promise<void> {
 	}
 }
 
+// Web-vital readings above this are physically implausible for a real
+// interaction or paint. They come from a tab throttled in the background
+// then resumed: the spec measures wall-clock, so the throttle gap lands
+// in `entry.duration` (INP/longtask) or `entry.startTime` (LCP/FCP). Prod
+// saw rum:inp max 4,971,552 ms (82 min) and rum:lcp 3,568,076 ms (59 min)
+// — single garbage samples that trashed max/p99 on the low-count vitals.
+// Drop at source (mirrored server-side in api/telemetry.py for stale tabs
+// on old builds). Time-based vitals only: CLS is a unitless score and
+// heap_used_mb is megabytes, so neither is subject to this cap.
+const MAX_WEBVITAL_MS = 60_000;
+
+export function isPlausibleVitalMs(value: number): boolean {
+	return Number.isFinite(value) && value >= 0 && value <= MAX_WEBVITAL_MS;
+}
+
+function pushVital(
+	event_name: string,
+	valueMs: number,
+	metadata?: Record<string, unknown>,
+) {
+	if (!isPlausibleVitalMs(valueMs)) return;
+	push(event_name, valueMs, metadata);
+}
+
 function trackLongTask(entry: PerformanceEntry) {
-	push("rum:longtask", entry.duration, {
+	pushVital("rum:longtask", entry.duration, {
 		startTime: Math.round(entry.startTime),
 	});
 }
@@ -184,6 +208,8 @@ function trackEvent(entry: any /* PerformanceEventTiming */) {
 	// Only sample high-INP events to limit volume; the
 	// PerformanceObserver gives us hundreds per minute otherwise.
 	if (entry.duration < 50) return;
+	// Drop background-throttle artifacts before building rich metadata.
+	if (!isPlausibleVitalMs(entry.duration)) return;
 
 	// Rich context for tail diagnosis. The bare event payload
 	// (name+target.tagName) was not enough to identify why operator
@@ -226,7 +252,7 @@ function trackEvent(entry: any /* PerformanceEventTiming */) {
 			(window.location?.pathname || "") +
 				(window.location?.hash?.slice(0, 60) || "")) || "";
 
-	push("rum:inp", entry.duration, {
+	pushVital("rum:inp", entry.duration, {
 		name: entry.name,
 		startTime: Math.round(entry.startTime || 0),
 		processingStart: Math.round(entry.processingStart || 0),
@@ -242,7 +268,7 @@ function trackEvent(entry: any /* PerformanceEventTiming */) {
 }
 
 function trackLcp(entry: any /* LargestContentfulPaint */) {
-	push("rum:lcp", entry.startTime, {
+	pushVital("rum:lcp", entry.startTime, {
 		size: entry.size || null,
 		url: entry.url || null,
 	});
@@ -255,7 +281,7 @@ function trackCls(entry: any /* LayoutShift */) {
 
 function trackPaint(entry: PerformanceEntry) {
 	if (entry.name === "first-contentful-paint") {
-		push("rum:fcp", entry.startTime);
+		pushVital("rum:fcp", entry.startTime);
 	}
 }
 
