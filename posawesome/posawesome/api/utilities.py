@@ -485,8 +485,43 @@ def get_pos_profile_tax_inclusive(pos_profile: str):
     return frappe.get_cached_value("POS Profile", pos_profile, "posa_tax_inclusive")
 
 
-@frappe.whitelist(methods=["GET", "POST"])
-def get_database_usage():
+# Both navbar gadgets (ServerUsageGadget / DatabaseUsageGadget) poll their
+# endpoint every 10 s from EVERY open POS tab. Uncached, N terminals × the
+# whole-system queries (information_schema scans, a 0.5 s psutil block)
+# saturated the worker pool under sales load — prod RUM showed
+# get_database_usage max 49 s and get_server_usage.err p95 31 s (gateway
+# timeouts), pure queueing not query cost (warm, the 4 IS scans run in
+# ~0.28 s). A short site-shared cache collapses all concurrent tabs to one
+# real computation per window, so the cost no longer scales with tab count.
+_DB_USAGE_CACHE_TTL = 60  # DB size/rows barely move minute-to-minute
+_SERVER_USAGE_CACHE_TTL = 10  # matches the gadget poll cadence
+
+
+def _get_cached_usage(key, generator, ttl):
+    """Read a site-shared, TTL'd cache value; compute + store on miss.
+
+    frappe.cache().get_value's own generator path can't carry a TTL in this
+    Frappe version (``expires`` is a bool and skips the generator), so do it
+    explicitly: read redis (bypassing the per-request local cache so a None
+    miss isn't memoised), and on miss compute then set_value with
+    ``expires_in_sec``. Never let a cache failure break the endpoint.
+    """
+    cache = frappe.cache()
+    try:
+        cached = cache.get_value(key, use_local_cache=False)
+        if cached is not None:
+            return cached
+    except Exception:
+        pass
+    value = generator()
+    try:
+        cache.set_value(key, value, expires_in_sec=ttl)
+    except Exception:
+        pass
+    return value
+
+
+def _compute_database_usage():
     db_size = None
     db_connections = None
     db_slow_queries = None
@@ -523,33 +558,29 @@ def get_database_usage():
             db_top_tables = [{"name": t[0], "size": int(t[1])} for t in db_top_tables]
         elif db_type == "mariadb" or db_type == "mysql":
             db_name = frappe.conf.get("db_name") or frappe.db.get_database_name()
-            db_size = frappe.db.sql(
-                "SELECT SUM(data_length + index_length) FROM information_schema.tables WHERE table_schema = %s",
+            # Single information_schema.tables pass — size, table count, row
+            # total and the top-3 tables all derive from these rows. Was 4
+            # separate scans; collapsing shrinks the table-open / lock
+            # footprint that contends with sales traffic under load.
+            rows = frappe.db.sql(
+                """
+                SELECT table_name, (data_length + index_length) AS size, TABLE_ROWS
+                FROM information_schema.tables
+                WHERE table_schema = %s
+                """,
                 (db_name,),
-            )[0][0]
-            db_size = int(db_size)
+            )
+            db_table_count = len(rows)
+            db_size = int(sum((r[1] or 0) for r in rows))
+            db_total_rows = int(sum((r[2] or 0) for r in rows))
+            db_top_tables = [
+                {"name": r[0], "size": int(r[1] or 0)}
+                for r in sorted(rows, key=lambda r: (r[1] or 0), reverse=True)[:3]
+            ]
             db_connections = frappe.db.sql("SHOW STATUS WHERE variable_name = 'Threads_connected';")[0][1]
             db_connections = int(db_connections)
             db_slow_queries = frappe.db.sql("SHOW GLOBAL STATUS WHERE variable_name = 'Slow_queries';")[0][1]
             db_slow_queries = int(db_slow_queries)
-            db_table_count = frappe.db.sql(
-                "SELECT count(*) FROM information_schema.tables WHERE table_schema = %s",
-                (db_name,),
-            )[0][0]
-            db_total_rows = frappe.db.sql(
-                "SELECT SUM(TABLE_ROWS) FROM information_schema.tables WHERE table_schema = %s",
-                (db_name,),
-            )[0][0]
-            db_top_tables = frappe.db.sql(
-                """
-                SELECT table_name, (data_length + index_length) AS size
-                FROM information_schema.tables
-                WHERE table_schema = %s
-                ORDER BY size DESC LIMIT 3
-            """,
-                (db_name,),
-            )
-            db_top_tables = [{"name": t[0], "size": int(t[1])} for t in db_top_tables]
     except Exception as db_exc:
         frappe.log_error(f"DB stats error: {db_exc}")
         db_size = None
@@ -573,7 +604,15 @@ def get_database_usage():
 
 
 @frappe.whitelist(methods=["GET", "POST"])
-def get_server_usage():
+def get_database_usage():
+    # Site-shared cache: one computation per _DB_USAGE_CACHE_TTL regardless
+    # of how many tabs poll. frappe.cache is per-site, so tenants don't mix.
+    return _get_cached_usage(
+        "posa_database_usage", _compute_database_usage, _DB_USAGE_CACHE_TTL
+    )
+
+
+def _compute_server_usage():
     global _PSUTIL_MISSING_LOGGED
 
     cpu_percent = None
@@ -590,8 +629,13 @@ def get_server_usage():
             _PSUTIL_MISSING_LOGGED = True
     else:
         try:
-
-            cpu_percent = psutil.cpu_percent(interval=0.5)
+            # interval=None is non-blocking — it returns CPU% since this
+            # worker last called cpu_percent, instead of pinning the worker
+            # for 0.5 s (which, multiplied across every tab's 10 s poll, was
+            # a top contributor to the worker-pool saturation). load_avg is
+            # the more meaningful CPU signal anyway; cpu_percent is best
+            # effort and reads 0.0 on a worker's very first sample.
+            cpu_percent = psutil.cpu_percent(interval=None)
             mem = psutil.virtual_memory()
             memory_percent = mem.percent
             memory_total = mem.total
@@ -610,6 +654,15 @@ def get_server_usage():
         "load_avg": load_avg,
         "uptime": uptime,
     }
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_server_usage():
+    # Site-shared cache (see _DB_USAGE_CACHE_TTL note): collapses every
+    # tab's 10 s poll to one real sample per window across all workers.
+    return _get_cached_usage(
+        "posa_server_usage", _compute_server_usage, _SERVER_USAGE_CACHE_TTL
+    )
 
 
 # Cache for language data
