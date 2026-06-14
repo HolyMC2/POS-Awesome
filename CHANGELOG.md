@@ -2,6 +2,61 @@
 
 All notable changes.
 
+## 2026-06-14 (lab only) — telemetry hygiene: web-vital outlier cap + usage-endpoint caching
+
+Two fixes from a prod telemetry review (`get_pos_telemetry_summary` on both
+ventas tenants).
+
+### (a) `a1e36206` Drop background-throttle web-vital outliers
+A POS tab throttled in the background then resumed reports wall-clock
+durations on time-based web vitals (the spec measures against the throttle
+gap). Prod saw `rum:inp` max **4,971,552 ms** (82 min) and `rum:lcp`
+**3,568,076 ms** (59 min) — single garbage samples that wrecked max/p99 on
+the low-count vitals (mumu `rum:lcp`/`fcp` p50 read **550,000 ms** off 3
+samples).
+
+- Cap `rum:lcp`/`fcp`/`inp`/`longtask` at 60 s; **drop** above it (dropping,
+  not clamping — a clamp would inject a fake 60 s p99). `rum:cls` (unitless)
+  and `rum:heap_used_mb` (MB) exempt; `perf:*` API timings untouched (a real
+  15 s `get_items` is signal we want).
+- client `utils/telemetry.ts`: `isPlausibleVitalMs` gate at all 4 vital push
+  sites. server `api/telemetry.py`: mirror in `_sanitise_event` so a stale
+  tab on an old build can't reflood (same shape as the ResizeObserver crash
+  filter). Tests: 3 vitest + 11 unittest.
+
+### (b) `d6091db5` Cache the navbar usage gadgets' endpoints
+`ServerUsageGadget` + `DatabaseUsageGadget` sit always-on in the navbar and
+each poll every 10 s from **every** open POS tab. Uncached, that fanned the
+whole-system queries across the worker pool under sales load — prod RUM:
+`get_database_usage` max **49,305 ms**, `get_server_usage.err` p95 **30,722
+ms** (gateway timeouts). Not query cost: warm, the 4 `information_schema`
+scans run in ~0.28 s. Pure queueing — amplified by tab count and a 0.5 s
+`psutil.cpu_percent(interval=0.5)` block per call.
+
+- **Site-shared cache** on both endpoints (db 60 s, server 10 s) via
+  redis `set_value(expires_in_sec=…)` — collapses all concurrent tabs to one
+  real computation per window, so cost no longer scales with tab count.
+- `get_server_usage`: `psutil.cpu_percent(interval=None)` — non-blocking
+  (was pinning a worker 0.5 s/call; first per-worker sample reads 0.0,
+  `load_avg` is the better CPU signal anyway).
+- `get_database_usage`: 4 `information_schema.tables` scans → **1**; size,
+  count, row total, top-3 derived in Python (smaller lock/table-open
+  footprint under contention).
+- Lab-verified (real DB): cache hit **337 ms → 0.1 ms**, aggregation +
+  top-3 sort correct, response shape unchanged. (No dedicated unit test —
+  `utilities.py` is heavily frappe-coupled; verified against the live bench.)
+
+### Safe to skip?
+- (a) low urgency but cheap — restores trust in the vitals dashboard.
+- (b) yes-ish today (small fleet), but it's the cause of the 30–49 s tails
+  and worsens with every added terminal. Ship together.
+
+### Deploy
+Both lab only, unpushed. Python (`telemetry.py`, `utilities.py`) + SPA
+bundle (`telemetry.ts`). Prod needs `prod-refresh.sh posawesome
+--restart-py` (python) **and** `posawesome-push-prod.sh` (bundle) — gate on
+explicit signal.
+
 ## 2026-06-12 (lab only) — fix: first payment of session opened with blank default amount
 
 - **`fcfeccd8` payments race:** `Payments.vue` is a `defineAsyncComponent`
