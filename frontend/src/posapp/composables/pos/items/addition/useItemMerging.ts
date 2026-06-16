@@ -4,10 +4,17 @@ export function useItemMerging() {
 	type MergeEntry = any;
 	type MergeContext = any;
 	// PERF: maintain an O(1) lookup map for mergeable lines to avoid repeated O(n) scans when 100+ items are added
+	// SALDO: a saldo line carries a per-unit `saldo_referencia` (the phone/account
+	// to recharge) and the TAECEL backend fires exactly ONE recarga per LINE at the
+	// fixed product price. Merging two recargas into a qty=2 line silently drops the
+	// 2nd referencia AND only ever delivers one recarga while charging for two. So a
+	// line with a saldo_referencia must never be a merge target — keep each recarga
+	// on its own qty=1 line. (Same exclusion idiom as offers/replacements above.)
 	const shouldIndexItem = (entry: MergeEntry) =>
 		entry &&
 		!entry.posa_is_offer &&
 		!entry.posa_is_replace &&
+		!entry.saldo_referencia &&
 		Number.parseFloat(entry.qty) !== 0;
 
 	const buildMergeKey = (entry: MergeEntry, requireBatch: boolean) => {

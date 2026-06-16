@@ -656,7 +656,11 @@ export function useItemAddition() {
 										pendingItem.uom === line.uom &&
 										pendingItem.rate === line.rate &&
 										(pendingItem.batch_no || "") ===
-											(line.batch_no || ""),
+											(line.batch_no || "") &&
+										// SALDO: never collapse two recargas into one
+										// qty>1 line — each needs its own referencia.
+										!pendingItem.saldo_referencia &&
+										!line.saldo_referencia,
 								);
 
 								if (pendingIndex !== -1 && !context.new_line) {
