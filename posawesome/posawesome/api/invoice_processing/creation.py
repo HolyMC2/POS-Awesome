@@ -748,6 +748,45 @@ def _normalize_return_payment_rows(invoice_doc, conversion_rate=1):
     invoice_doc.paid_amount = flt(sum(p.amount for p in invoice_doc.payments or []))
     invoice_doc.base_paid_amount = flt(sum(p.base_amount for p in invoice_doc.payments or []))
 
+    _guard_return_cash_refund(invoice_doc)
+
+
+def _guard_return_cash_refund(invoice_doc):
+    """Block a cash refund larger than what was actually paid on the original.
+
+    A return against an UNPAID (credit / on-account) invoice must not pay out
+    cash: the credit should reduce the customer's outstanding instead. Refunding
+    cash here both gives money for an unpaid sale and leaves the customer's
+    balance untouched, while corrupting the cash drawer. We cap the refund at
+    the amount the customer actually paid on the original invoice and reject
+    anything beyond it so the error surfaces instead of silently losing money.
+    """
+    return_against = invoice_doc.get("return_against")
+    if not return_against:
+        return
+
+    # paid_amount is negative for returns; the cash refunded is its magnitude.
+    refund = abs(flt(invoice_doc.paid_amount))
+    if refund <= 0:
+        return
+
+    original_paid = flt(
+        frappe.db.get_value(invoice_doc.doctype, return_against, "paid_amount")
+    )
+    tolerance = 1.0 / (10 ** (cint(invoice_doc.precision("paid_amount")) or 2))
+    if refund > original_paid + tolerance:
+        frappe.throw(
+            _(
+                "Cannot refund {0} for this return: only {1} was paid on the "
+                "original invoice {2}. Set the paid amount to 0 so the return is "
+                "recorded as a credit note that reduces the customer's balance."
+            ).format(
+                frappe.format_value(refund, {"fieldtype": "Currency"}),
+                frappe.format_value(original_paid, {"fieldtype": "Currency"}),
+                return_against,
+            )
+        )
+
 
 @frappe.whitelist(methods=["POST"])
 def update_invoice(data):
