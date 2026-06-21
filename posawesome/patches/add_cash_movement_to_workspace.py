@@ -24,6 +24,32 @@ def _set_link_indexes(links):
         link.idx = idx
 
 
+def _prune_dangling_links(workspace):
+    """Drop workspace links whose DocType target no longer exists so saving the
+    workspace can't abort migrate under frappe 16.23's strict link validation.
+
+    Defensive: if an upstream posawesome doctype (e.g. POS Opening Shift) fails
+    to sync during THIS migrate run, the pre-existing workspace link to it would
+    otherwise raise LinkValidationError and abort the whole migrate. Pruning the
+    dangling rows here (frappe rebuilds workspace links from the desk anyway)
+    keeps the patch — and the migrate — resilient to sync ordering."""
+    links = workspace.links or []
+    kept = [
+        link
+        for link in links
+        if not (
+            link.type == "Link"
+            and (link.link_type or "DocType") == "DocType"
+            and link.link_to
+            and not frappe.db.exists("DocType", link.link_to)
+        )
+    ]
+    if len(kept) != len(links):
+        workspace.links = kept
+        _recompute_card_break_counts(kept)
+        _set_link_indexes(kept)
+
+
 def _remove_cash_movement_links(workspace):
     links = workspace.links or []
     changed = False
@@ -118,6 +144,8 @@ def execute():
         if removed_links or removed_content:
             if not workspace.get("type"):
                 workspace.type = "Workspace"
+            _prune_dangling_links(workspace)
+            workspace.flags.ignore_links = True
             workspace.save(ignore_permissions=True)
         return
 
@@ -160,4 +188,6 @@ def execute():
     _ensure_workspace_content(workspace)
     if not workspace.get("type"):
         workspace.type = "Workspace"
+    _prune_dangling_links(workspace)
+    workspace.flags.ignore_links = True
     workspace.save(ignore_permissions=True)
