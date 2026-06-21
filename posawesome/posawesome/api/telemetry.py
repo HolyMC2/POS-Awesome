@@ -275,12 +275,23 @@ def get_pos_telemetry_summary(
     since: Optional[str] = None,
     terminal: Optional[str] = None,
     limit: int = 50000,
+    newest: Any = False,
 ):
     """Aggregate telemetry rows for the dashboard.
 
     Returns a dict keyed by event_name:
     ``{ event_name: { count, p50, p95, p99, max, last_seen } }``,
     plus a top-level ``crashes`` counter and ``window`` info.
+
+    ``newest`` (default off): when truthy, fetch the most-recent ``limit``
+    rows (event_timestamp DESC) instead of the oldest. The default ASC
+    fetch capped at ``limit`` silently summarises the OLDEST rows — on a
+    busy tenant (>``limit`` rows in the window) that makes *recent*
+    activity look truncated and ``last_seen`` stall. ``window.truncated``
+    flags when the cap was hit so a caller can narrow ``since`` or pass
+    ``newest=1``. Aggregation is order-independent (values are sorted per
+    event_name below) and ``last_seen`` tracks the max timestamp seen, so
+    both orderings return correct percentiles + a correct last_seen.
 
     Permission gate: requires System Manager or POS Manager. Anyone
     can WRITE telemetry (the ingest endpoint runs under the caller's
@@ -300,11 +311,15 @@ def get_pos_telemetry_summary(
 
     limit = max(1000, min(int(limit or 50000), 200000))
 
+    # HTTP query args arrive as strings ("1"/"true"); normalise.
+    want_newest = str(newest).strip().lower() in ("1", "true", "yes", "on")
+    order = "event_timestamp desc" if want_newest else "event_timestamp asc"
+
     rows = frappe.get_all(
         "POS Telemetry Event",
         filters=filters,
         fields=["event_name", "value", "event_timestamp"],
-        order_by="event_timestamp asc",
+        order_by=order,
         limit_page_length=limit,
     )
 
@@ -320,7 +335,12 @@ def get_pos_telemetry_summary(
         if name not in by_name:
             by_name[name] = []
         by_name[name].append(flt(row.get("value") or 0))
-        last_seen[name] = str(row.get("event_timestamp"))
+        # Track the newest timestamp regardless of fetch order. Stringified
+        # frappe datetimes ("YYYY-MM-DD HH:MM:SS.ffffff") sort lexically, so
+        # a plain `>` compare is correct for both ASC and DESC fetches.
+        ts = str(row.get("event_timestamp"))
+        if name not in last_seen or ts > last_seen[name]:
+            last_seen[name] = ts
 
     summary: Dict[str, Any] = {}
     for name, values in by_name.items():
@@ -339,7 +359,12 @@ def get_pos_telemetry_summary(
             "profile": profile or None,
             "terminal": terminal or None,
             "since": since or None,
+            "order": "desc" if want_newest else "asc",
+            "limit": limit,
             "row_count": len(rows),
+            # True => the window held more rows than `limit`; the summary
+            # only covers `limit` of them (oldest if asc, newest if desc).
+            "truncated": len(rows) >= limit,
         },
         "crashes": crashes,
         "events": summary,
