@@ -225,6 +225,11 @@ class TestUpdateInvoiceReturnPayments(unittest.TestCase):
             ],
             taxes=[],
             flags=types.SimpleNamespace(ignore_pricing_rule=False, ignore_permissions=False),
+            total=0,
+            net_total=0,
+            grand_total=0,
+            rounded_total=0,
+            discount_amount=0,
             paid_amount=0,
             base_paid_amount=0,
             conversion_rate=1,
@@ -275,6 +280,11 @@ class TestUpdateInvoiceReturnPayments(unittest.TestCase):
             ],
             taxes=[],
             flags=types.SimpleNamespace(ignore_pricing_rule=False, ignore_permissions=False),
+            total=0,
+            net_total=0,
+            grand_total=0,
+            rounded_total=0,
+            discount_amount=0,
             paid_amount=0,
             base_paid_amount=0,
             conversion_rate=1,
@@ -313,6 +323,97 @@ class TestUpdateInvoiceReturnPayments(unittest.TestCase):
 
         self.assertEqual(amount, 12.34)
         self.assertEqual(base_amount, 24.68)
+
+    def test_return_outstanding_policy_targets_credit_note_when_original_is_fully_paid(self):
+        invoice_doc = FakeDoc(
+            doctype="Sales Invoice",
+            is_return=1,
+            is_pos=0,
+            is_paid=0,
+            return_against="ACC-SINV-2026-00005",
+            rounded_total=-64,
+            grand_total=-64,
+            update_outstanding_for_self=0,
+        )
+        original_get_value = self.creation.frappe.db.get_value
+        self.creation.frappe.db.get_value = lambda *args, **kwargs: 0
+        try:
+            self.creation._apply_return_outstanding_policy(invoice_doc)
+        finally:
+            self.creation.frappe.db.get_value = original_get_value
+
+        self.assertEqual(invoice_doc.update_outstanding_for_self, 1)
+
+    def test_return_outstanding_policy_targets_original_when_it_has_enough_outstanding(self):
+        invoice_doc = FakeDoc(
+            doctype="Sales Invoice",
+            is_return=1,
+            is_pos=0,
+            is_paid=0,
+            return_against="ACC-SINV-2026-00006",
+            rounded_total=-64,
+            grand_total=-64,
+            update_outstanding_for_self=1,
+        )
+        original_get_value = self.creation.frappe.db.get_value
+        self.creation.frappe.db.get_value = lambda *args, **kwargs: 100
+        try:
+            self.creation._apply_return_outstanding_policy(invoice_doc)
+        finally:
+            self.creation.frappe.db.get_value = original_get_value
+
+        self.assertEqual(invoice_doc.update_outstanding_for_self, 0)
+
+    def test_linked_return_filters_only_erpnext_outstanding_info_messages(self):
+        invoice_doc = FakeDoc(
+            is_return=1,
+            return_against="ACC-SINV-2026-00005",
+        )
+        original_local = getattr(self.creation.frappe, "local", None)
+        self.creation.frappe.local = types.SimpleNamespace(
+            message_log=[{"message": "Existing message"}]
+        )
+
+        def operation():
+            self.creation.frappe.local.message_log.extend(
+                [
+                    {
+                        "message": (
+                            "The outstanding amount 0.0 is lesser than 64.0. "
+                            "Updating the outstanding to this invoice."
+                        )
+                    },
+                    {"message": "A separate warning that must remain"},
+                    {
+                        "message": (
+                            "If you want the original invoice updated, uncheck "
+                            "Update Outstanding for Self."
+                        )
+                    },
+                ]
+            )
+            return "submitted"
+
+        try:
+            result = self.creation._run_without_return_outstanding_prompts(
+                invoice_doc,
+                operation,
+            )
+            filtered_messages = list(self.creation.frappe.local.message_log)
+        finally:
+            if original_local is None:
+                del self.creation.frappe.local
+            else:
+                self.creation.frappe.local = original_local
+
+        self.assertEqual(result, "submitted")
+        self.assertEqual(
+            filtered_messages,
+            [
+                {"message": "Existing message"},
+                {"message": "A separate warning that must remain"},
+            ],
+        )
 
 
 class TestStaleNamedInvoiceHandling(unittest.TestCase):
@@ -1071,7 +1172,11 @@ class TestManualPostingDatePreservation(unittest.TestCase):
         invoice_doc.submit = assert_submit_sees_negative_payments
 
         self.creation.frappe.db.exists = lambda doctype, name: name == "ACC-SINV-RETURN-0001"
-        self.creation.frappe.db.get_value = lambda *args, **kwargs: 0
+        self.creation.frappe.db.get_value = (
+            lambda doctype, name, fieldname, *args, **kwargs: 90
+            if fieldname == "paid_amount"
+            else 0
+        )
         self.creation.frappe.get_value = lambda *args, **kwargs: 0
         self.creation.frappe.get_doc = lambda *args: invoice_doc
         self.creation._apply_invoice_gift_card_settlement = lambda *args, **kwargs: None
