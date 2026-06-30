@@ -986,6 +986,15 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 				(profile?.create_pos_invoice_instead_of_sales_invoice
 					? "POS Invoice"
 					: "Sales Invoice");
+			const submittedDocstatus =
+				docstatus !== undefined ? docstatus : status;
+			const submittedDocument = {
+				...doc,
+				...(typeof r.message === "object" ? r.message : {}),
+				name: responseInvoiceName,
+				doctype: submittedDoctype,
+				docstatus: submittedDocstatus,
+			};
 
 			// SALDO-INTEGRATION-POINT — hold-until-confirm: the server parked
 			// the draft while TAECEL runs (posawesome_submit_hold_gates). No
@@ -1062,7 +1071,7 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 				!waitForInvoiceProcessing &&
 				!hasPostSubmitPaymentWork
 			) {
-				onPrint(doc, {
+				onPrint(submittedDocument, {
 					name: responseInvoiceName,
 					doctype: submittedDoctype,
 					waitForPostSubmitPayments: hasPostSubmitPaymentWork,
@@ -1075,6 +1084,8 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 
 			if (stores?.invoiceStore?.invoiceDoc) {
 				stores.invoiceStore.invoiceDoc.docstatus = 1;
+				stores.invoiceStore.invoiceDoc.name = responseInvoiceName;
+				stores.invoiceStore.invoiceDoc.doctype = submittedDoctype;
 			}
 
 			if (stores?.uiStore) {
@@ -1103,11 +1114,11 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 
 			if (!waitForInvoiceProcessing) {
 				const submittedTitle =
-					type === "Order" && profile?.posa_create_only_sales_order
-						? __("Sales Order {0} is Submitted", [r.message.name])
-						: type === "Quotation"
-							? __("Quotation {0} is Submitted", [r.message.name])
-							: __("Invoice {0} is Submitted", [r.message.name]);
+					submittedDoctype === "Sales Order"
+						? __("Sales Order {0} is Submitted", [responseInvoiceName])
+						: submittedDoctype === "Quotation"
+							? __("Quotation {0} is Submitted", [responseInvoiceName])
+							: __("Invoice {0} is Submitted", [responseInvoiceName]);
 				stores?.toastStore?.show(
 					hasPostSubmitPaymentWork
 						? {
@@ -1134,7 +1145,9 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 				frappe.utils.play_sound("submit");
 			}
 
-			const submittedItems = Array.isArray(doc.items) ? doc.items : [];
+			const submittedItems = Array.isArray(submittedDocument.items)
+				? submittedDocument.items
+				: [];
 			updateLocalStock(submittedItems);
 			stockCoordinator.applyInvoiceConsumption(submittedItems, {
 				source: "invoice",

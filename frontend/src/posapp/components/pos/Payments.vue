@@ -621,6 +621,7 @@ const {
 						loadPrintPage({
 							doc,
 							doctype: printOptions.doctype,
+							name: printOptions.name,
 						});
 					}
 				}
@@ -1643,6 +1644,7 @@ const submitInvoiceWrapper = async (print, callbackOverrides = {}, options = {})
 						loadPrintPage({
 							doc,
 							doctype: printOptions.doctype,
+							name: printOptions.name,
 						});
 					}
 				}

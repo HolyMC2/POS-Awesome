@@ -24,6 +24,23 @@ vi.mock("../src/offline_print_template", () => ({
 
 import { usePaymentPrinting } from "../src/posapp/composables/pos/payments/usePaymentPrinting";
 
+const buildOptions = (overrides: any = {}) => ({
+	invoiceDoc: ref(
+		overrides.invoiceDoc ?? { name: "ACC-SINV-0001", doctype: "Sales Invoice" },
+	),
+	posProfile: ref({
+		print_format_for_online: "Standard",
+		print_format: "Standard",
+		letter_head: 0,
+		posa_open_print_in_new_tab: false,
+		posa_silent_print: false,
+		create_pos_invoice_instead_of_sales_invoice: 0,
+		...(overrides.posProfile || {}),
+	}),
+	invoiceType: ref(overrides.invoiceType ?? "Invoice"),
+	printFormat: ref("Standard"),
+});
+
 describe("usePaymentPrinting", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -39,19 +56,7 @@ describe("usePaymentPrinting", () => {
 			.spyOn(window, "open")
 			.mockReturnValue({ closed: false } as any);
 
-		const { loadPrintPage } = usePaymentPrinting({
-			invoiceDoc: ref({ name: "ACC-SINV-0001", doctype: "Sales Invoice" }),
-			posProfile: ref({
-				print_format_for_online: "Standard",
-				print_format: "Standard",
-				letter_head: 0,
-				posa_open_print_in_new_tab: false,
-				posa_silent_print: false,
-				create_pos_invoice_instead_of_sales_invoice: 0,
-			}),
-			invoiceType: ref("Invoice"),
-			printFormat: ref("Standard"),
-		});
+		const { loadPrintPage } = usePaymentPrinting(buildOptions());
 
 		await loadPrintPage({
 			doc: {
@@ -68,5 +73,72 @@ describe("usePaymentPrinting", () => {
 			expect.stringContaining("&name=ACC-PINV-0001"),
 			"Print",
 		);
+	});
+
+	it("uses the submitted name override instead of an unsaved document name", async () => {
+		const openSpy = vi
+			.spyOn(window, "open")
+			.mockReturnValue({ closed: false } as any);
+
+		const { loadPrintPage } = usePaymentPrinting(
+			buildOptions({
+				invoiceDoc: { doctype: "Sales Order" },
+				invoiceType: "Order",
+				posProfile: { posa_allow_sales_order: 1 },
+			}),
+		);
+
+		await loadPrintPage({
+			doc: {
+				doctype: "Sales Order",
+			},
+			name: "SAL-ORD-0001",
+		});
+
+		expect(openSpy).toHaveBeenCalledWith(
+			expect.stringContaining("&name=SAL-ORD-0001"),
+			"Print",
+		);
+	});
+
+	it("rejects print requests without a submitted document name", async () => {
+		const openSpy = vi
+			.spyOn(window, "open")
+			.mockReturnValue({ closed: false } as any);
+
+		const { loadPrintPage } = usePaymentPrinting(
+			buildOptions({
+				invoiceDoc: { doctype: "Sales Order" },
+				invoiceType: "Order",
+				posProfile: { posa_allow_sales_order: 1 },
+			}),
+		);
+
+		await expect(
+			loadPrintPage({
+				doc: {
+					name: undefined,
+					doctype: "Sales Order",
+				},
+			}),
+		).rejects.toThrow("Cannot print document without a submitted document name");
+
+		expect(openSpy).not.toHaveBeenCalled();
+	});
+
+	it("guards against the literal strings 'undefined' and 'null' as names", async () => {
+		const openSpy = vi
+			.spyOn(window, "open")
+			.mockReturnValue({ closed: false } as any);
+
+		const { loadPrintPage } = usePaymentPrinting(buildOptions());
+
+		await expect(
+			loadPrintPage({
+				doc: { name: "undefined", doctype: "Sales Invoice" },
+			}),
+		).rejects.toThrow("Cannot print document without a submitted document name");
+
+		expect(openSpy).not.toHaveBeenCalled();
 	});
 });
