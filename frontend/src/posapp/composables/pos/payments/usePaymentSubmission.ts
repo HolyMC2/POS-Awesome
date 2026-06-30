@@ -987,7 +987,11 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 					? "POS Invoice"
 					: "Sales Invoice");
 			const submittedDocstatus =
-				docstatus !== undefined ? docstatus : status;
+				docstatus !== undefined
+					? docstatus
+					: status !== undefined
+						? status
+						: 1;
 			const submittedDocument = {
 				...doc,
 				...(typeof r.message === "object" ? r.message : {}),
@@ -1082,11 +1086,11 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			// Reset local state vars
 			if (customerCreditDict) customerCreditDict.value = [];
 
-			if (stores?.invoiceStore?.invoiceDoc) {
-				stores.invoiceStore.invoiceDoc.docstatus = 1;
-				stores.invoiceStore.invoiceDoc.name = responseInvoiceName;
-				stores.invoiceStore.invoiceDoc.doctype = submittedDoctype;
-			}
+			stores?.invoiceStore?.mergeInvoiceDoc?.({
+				docstatus: submittedDocstatus,
+				name: responseInvoiceName,
+				doctype: submittedDoctype,
+			});
 
 			if (stores?.uiStore) {
 				// Store the server-assigned name, not the pre-submit doc.name —
