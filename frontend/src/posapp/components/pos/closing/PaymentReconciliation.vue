@@ -24,13 +24,14 @@
 					:rules="[closingAmountRule]"
 					:label="$frappe._('Edit')"
 					single-line
-					counter
 					type="number"
+					inputmode="decimal"
 					density="compact"
 					variant="outlined"
 					color="primary"
-					class="pos-themed-input"
+					class="pos-themed-input closing-amount-input"
 					hide-details
+					hide-spin-buttons
 					:prefix="companyCurrencySymbol"
 				></v-text-field>
 			</template>
@@ -138,6 +139,24 @@ const varianceClass = (item) => {
 .pos-themed-input :deep(.v-field__outline__start),
 .pos-themed-input :deep(.v-field__outline__end) {
 	border-color: rgba(var(--v-border-color), var(--v-border-opacity)) !important;
+}
+
+/* Closing Amount input was chopping digits: the compact cell + currency
+   prefix + native number spinners left ~1 char visible. Give it real width
+   and strip the spin buttons so the full amount shows. */
+.closing-amount-input {
+	min-width: 140px;
+}
+
+.closing-amount-input :deep(input[type="number"]) {
+	-moz-appearance: textfield;
+	appearance: textfield;
+}
+
+.closing-amount-input :deep(input[type="number"]::-webkit-outer-spin-button),
+.closing-amount-input :deep(input[type="number"]::-webkit-inner-spin-button) {
+	-webkit-appearance: none;
+	margin: 0;
 }
 
 .variance-chip {

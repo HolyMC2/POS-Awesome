@@ -302,7 +302,7 @@ export function useClosingSummary(
 				key: "net-sales",
 				label: __("Net Sales"),
 				value: netSales,
-				caption: `${__("After returns")}: ${formatCurrency(salesSummary.value.net_company_currency_total)}`,
+				caption: `${__("After returns")}: ${formatCurrencyWithSymbol(salesSummary.value.net_company_currency_total, overviewCompanyCurrency.value)}`,
 				icon: "mdi-cash-multiple",
 				color: "accent-success",
 			},

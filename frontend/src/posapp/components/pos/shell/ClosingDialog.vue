@@ -108,7 +108,12 @@ export default {
 		} = useClosingShift(eventBus);
 
 		// Formatters
-		const formatCurrency = (v) => window.format_currency(v);
+		// Return a BARE formatted number (no symbol). Callers add the currency
+		// symbol themselves — the reconciliation cells via a template prefix and
+		// formatCurrencyWithSymbol via the per-currency symbol — so using
+		// window.format_currency here (which prepends a symbol) double-printed
+		// it as "MX$ MX$1,000.00".
+		const formatCurrency = (v, precision) => window.format_number(v, null, precision ?? 2);
 		const formatFloat = (v, d) => window.flt(v, d);
 		const currencySymbol = (c) => window.get_currency_symbol(c);
 		const translate = (t) => window.__(t);
