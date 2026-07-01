@@ -47,7 +47,8 @@
 			<v-card-actions class="dialog-actions-container">
 				<v-spacer></v-spacer>
 				<v-btn
-					theme="dark"
+					color="error"
+					variant="flat"
 					@click="closeDialog"
 					class="pos-action-btn cancel-action-btn"
 					size="large"
@@ -57,7 +58,8 @@
 					<span>{{ __("Close") }}</span>
 				</v-btn>
 				<v-btn
-					theme="dark"
+					color="success"
+					variant="flat"
 					@click="submitDialog"
 					class="pos-action-btn submit-action-btn"
 					size="large"
