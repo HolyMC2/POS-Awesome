@@ -203,6 +203,45 @@ function stripHtml(s: string): string {
 	return s.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
 }
 
+// ALL displayable `_server_messages` entries (not just the first error like
+// extractServerMessage): Desk's frappe.call renders every entry regardless of
+// HTTP status, so messages riding a 200 (backend frappe.msgprint without a
+// throw — e.g. the payment-reconcile errors table) must reach the operator on
+// the web route too, or they exist only on Desk.
+function collectServerMessages(payload: any): Array<{ text: string; indicator: string }> {
+	const serverMessages = payload?._server_messages || payload?.server_messages;
+	if (!serverMessages) return [];
+	const BENIGN = /Payment methods refreshed/i;
+	const out: Array<{ text: string; indicator: string }> = [];
+	try {
+		const parsed = JSON.parse(serverMessages);
+		if (!Array.isArray(parsed)) return [];
+		for (const entry of parsed) {
+			let text = "";
+			let indicator = "";
+			if (typeof entry === "string") {
+				try {
+					const obj = JSON.parse(entry);
+					text = obj.message || obj.title || entry;
+					indicator = (obj.indicator || "").toLowerCase();
+				} catch {
+					text = entry;
+				}
+			} else if (entry && typeof entry === "object") {
+				text = entry.message || entry.title || "";
+				indicator = (entry.indicator || "").toLowerCase();
+			}
+			text = (text || "").trim();
+			if (!text || BENIGN.test(text)) continue;
+			out.push({ text, indicator });
+		}
+	} catch {
+		const text = String(serverMessages).trim();
+		if (text) out.push({ text, indicator: "" });
+	}
+	return out;
+}
+
 async function frappeCall(
 	opts: CallOpts | string,
 	posArgs?: Record<string, unknown>,
@@ -319,6 +358,21 @@ async function frappeCall(
 			return null;
 		}
 		throw err;
+	}
+
+	// Success responses can still carry _server_messages (backend
+	// frappe.msgprint without a throw). Desk renders them; the shim must
+	// too, or those messages exist only on Desk (bit prod: reconcile-error
+	// tables invisible on /posapp). msgprint is toast-bound after mount.
+	for (const m of collectServerMessages(data)) {
+		try {
+			(window as any).frappe?.msgprint?.({
+				message: stripHtml(m.text),
+				indicator: m.indicator || "blue",
+			});
+		} catch {
+			// Surfacing must never break the call itself.
+		}
 	}
 
 	if (o.callback) {
