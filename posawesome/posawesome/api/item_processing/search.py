@@ -685,6 +685,11 @@ def _build_get_items_cache_key(
     the gunicorn web workers read, and a freshly forked web worker can't read a
     sibling's entries either. We key on a sha1 of the normalized args instead so
     the prewarm job and every worker share one entry. See docs/PERF-get-items.md.
+
+    limit/offset must be normalized: the SPA's form-POST delivers them as
+    strings while the in-process prewarm passes ints — json.dumps("1000") vs
+    json.dumps(1000) would split them into two keys and the warmer would never
+    warm the key the web workers read.
     """
     payload = json.dumps(
         [
@@ -693,8 +698,8 @@ def _build_get_items_cache_key(
             price_list,
             customer or "",
             search_value or "",
-            limit,
-            offset,
+            _to_positive_int(limit),
+            _to_positive_int(offset),
             start_after,
             str(modified_after) if modified_after else None,
             item_group or "",

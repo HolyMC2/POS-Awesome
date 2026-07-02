@@ -121,5 +121,42 @@ class TestItemSearchSerialization(unittest.TestCase):
         self.assertIn("2026-04-23 10:30:00", serialized_payloads[0])
 
 
+class TestGetItemsCacheKeyParity(unittest.TestCase):
+    """The prewarm job (in-process ints) and the SPA (form-POST strings) must
+    hash to the same cache key or the warmer warms a key nobody reads."""
+
+    @classmethod
+    def setUpClass(cls):
+        _install_stubs()
+        cls.module = _load_module()
+
+    def _key(self, limit, offset):
+        return self.module._build_get_items_cache_key(
+            "Doco Ventas",
+            "Store - D",
+            "Standard Selling",
+            None,
+            "",
+            limit,
+            offset,
+            None,
+            None,
+            "",
+            False,
+            False,
+            tuple(),
+        )
+
+    def test_string_and_int_limit_offset_share_one_key(self):
+        self.assertEqual(self._key("1000", "0"), self._key(1000, 0))
+
+    def test_none_and_absent_offset_share_one_key(self):
+        # warmer omits offset (None); SPA may send "" — both normalize to None
+        self.assertEqual(self._key(1000, None), self._key("1000", ""))
+
+    def test_different_limits_still_get_distinct_keys(self):
+        self.assertNotEqual(self._key(500, 0), self._key(1000, 0))
+
+
 if __name__ == "__main__":
     unittest.main()
