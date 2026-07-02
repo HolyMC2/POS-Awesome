@@ -9,6 +9,9 @@ app_license = "GPLv3"
 app_url = "https://github.com/defendicon/POS-Awesome-V15"
 app_source_link = "https://github.com/defendicon/POS-Awesome-V15"
 source_link = "https://github.com/defendicon/POS-Awesome-V15"
+# Fail fast at install time: 40+ `from erpnext...` imports make erpnext a hard
+# dependency. (No <16 version cap — this fork is mid-migration to v16.)
+required_apps = ["erpnext"]
 
 # Includes in <head>
 # ------------------
