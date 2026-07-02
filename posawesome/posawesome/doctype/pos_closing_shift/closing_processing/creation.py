@@ -7,6 +7,7 @@ from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.data imp
     get_payments_entries,
 )
 from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.invoices import (
+    get_pending_draft_invoices,
     submit_printed_invoices,
 )
 
@@ -256,6 +257,13 @@ def make_closing_shift_from_opening(opening_shift):
     )
     doctype = "POS Invoice" if use_pos_invoice else "Sales Invoice"
     skipped_printed_invoices = submit_printed_invoices(opening_shift.get("name"), doctype)
+    # Unprinted drafts were historically invisible here — silently deleted
+    # (posa_allow_delete) or stranded on the closed shift. Return them so the
+    # SPA can tell the closer exactly what will happen before committing.
+    pending_drafts = get_pending_draft_invoices(opening_shift.get("name"), doctype)
+    drafts_will_be_deleted = bool(
+        frappe.db.get_value("POS Profile", opening_shift.get("pos_profile"), "posa_allow_delete")
+    )
 
     tables = compute_closing_tables(opening_shift, doctype)
 
@@ -277,6 +285,8 @@ def make_closing_shift_from_opening(opening_shift):
     return {
         "closing_shift": closing_shift,
         "skipped_printed_invoices": skipped_printed_invoices,
+        "pending_drafts": pending_drafts,
+        "drafts_will_be_deleted": drafts_will_be_deleted,
     }
 
 

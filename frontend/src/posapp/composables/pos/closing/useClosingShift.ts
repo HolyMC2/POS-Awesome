@@ -211,6 +211,9 @@ export function useClosingShift(eventBus: any) {
 				),
 			},
 			cash_movements: normalizeCashMovements(payload.cash_movements),
+			draft_invoices: {
+				count: toNumber(payload.draft_invoices?.count),
+			},
 		});
 
 		const request = frappe.call(

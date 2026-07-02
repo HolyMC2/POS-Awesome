@@ -697,6 +697,14 @@ def get_closing_shift_overview(pos_opening_shift):
             "by_currency": prepare_currency_rows(cash_movement_totals_by_currency),
             "by_type": prepare_movement_type_rows(cash_movement_totals_by_type),
         },
+        # Drafts still attached to the shift (any printed state) — surfaced
+        # so the closer sees pending work BEFORE committing the close.
+        "draft_invoices": {
+            "count": frappe.db.count(
+                doctype,
+                {"posa_pos_opening_shift": opening_shift_doc.name, "docstatus": 0},
+            ),
+        },
     }
 
 

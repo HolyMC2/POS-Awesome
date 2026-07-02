@@ -393,6 +393,18 @@ export function useClosingSummary(
 				icon: "mdi-safe",
 				color: "accent-success",
 			},
+			{
+				key: "draft-invoices",
+				label: __("Draft Invoices"),
+				value: formatCount(unref(overview)?.draft_invoices?.count || 0),
+				caption: (unref(overview)?.draft_invoices?.count || 0) > 0
+					? __("Pending drafts on this shift — submit or delete before closing")
+					: __("No pending drafts"),
+				icon: "mdi-file-clock-outline",
+				color: (unref(overview)?.draft_invoices?.count || 0) > 0
+					? "accent-warning"
+					: "accent-success",
+			},
 		];
 	});
 

@@ -76,6 +76,27 @@ def _is_consolidated_sales_invoice(sales_invoice):
     return bool(frappe.db.exists("POS Invoice Merge Log", {"consolidated_credit_note": sales_invoice}))
 
 
+def get_pending_draft_invoices(pos_opening_shift, doctype):
+    """Unprinted draft invoices still attached to the shift.
+
+    These were historically invisible at close: never submitted, never in
+    totals, and either force-deleted (posa_allow_delete) or silently stranded
+    on the closed shift. Surfaced so the closer sees exactly what blocks or
+    will be deleted — name, owner and amount.
+    """
+
+    return frappe.get_all(
+        doctype,
+        filters={
+            "posa_pos_opening_shift": pos_opening_shift,
+            "docstatus": 0,
+            "posa_is_printed": 0,
+        },
+        fields=["name", "owner", "grand_total"],
+        order_by="creation asc",
+    )
+
+
 def delete_draft_invoices(pos_opening_shift, pos_profile):
     if frappe.get_value("POS Profile", pos_profile, "posa_allow_delete"):
         doctype = (

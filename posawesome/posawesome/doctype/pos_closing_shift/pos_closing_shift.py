@@ -20,6 +20,7 @@ from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.creation
     submit_closing_shift,
 )
 from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.invoices import (
+    get_pending_draft_invoices,
     submit_printed_invoices,
     delete_draft_invoices,
     _set_closing_entry_invoices,
@@ -55,8 +56,48 @@ class POSClosingShift(Document):
                 _("Selected POS Opening Shift should be open."),
                 title=_("Invalid Opening Entry"),
             )
+        self._block_on_stranded_drafts()
         self.enforce_server_truth()
         self.update_payment_reconciliation()
+
+    def _block_on_stranded_drafts(self):
+        """Refuse to close over unprinted drafts that would be stranded.
+
+        When posa_allow_delete is ON, on_submit purges them (existing
+        behavior, and the prepare step warns the closer first). When OFF they
+        used to be silently orphaned on a closed shift — invisible to every
+        POS user, cleanable only by an admin in Desk. Fail loudly instead,
+        naming each draft and its owner so someone with access can submit or
+        delete them.
+        """
+
+        if frappe.get_value("POS Profile", self.pos_profile, "posa_allow_delete"):
+            return
+        doctype = (
+            "POS Invoice"
+            if frappe.db.get_value(
+                "POS Profile", self.pos_profile, "create_pos_invoice_instead_of_sales_invoice"
+            )
+            else "Sales Invoice"
+        )
+        drafts = get_pending_draft_invoices(self.pos_opening_shift, doctype)
+        if not drafts:
+            return
+        lines = "<br>".join(
+            _("{0} — draft by {1} ({2})").format(
+                frappe.bold(d.name), d.owner, frappe.format_value(d.grand_total, {"fieldtype": "Currency"})
+            )
+            for d in drafts
+        )
+        frappe.throw(
+            _(
+                "This shift still has {0} draft invoice(s) that would be stranded by closing:"
+                "<br>{1}<br>Submit or delete them first — a supervisor can see them in "
+                "Invoice Management. (Profiles with 'Allow Delete' enabled purge drafts "
+                "automatically at close.)"
+            ).format(len(drafts), lines),
+            title=_("Draft Invoices Block Closing"),
+        )
 
     def enforce_server_truth(self):
         """Anti-tamper: rebuild every server-derivable table from the DB.
