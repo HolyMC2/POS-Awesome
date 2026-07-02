@@ -134,12 +134,23 @@ def _install_package_stubs():
         module = types.ModuleType(name)
         module.__path__ = [str(path)]
         sys.modules[name] = module
+        _bind_to_parent(name, module)
+
+
+def _bind_to_parent(module_name, module):
+    # mock.patch on Python < 3.12 resolves dotted targets by getattr-walking
+    # from the top module, not via sys.modules — manually installed stubs
+    # must therefore also hang off their parent as an attribute (CI runs 3.10).
+    parent_name, _, child_name = module_name.rpartition(".")
+    if parent_name and parent_name in sys.modules:
+        setattr(sys.modules[parent_name], child_name, module)
 
 
 def _load_module(module_name, file_path):
     spec = importlib.util.spec_from_file_location(module_name, file_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
+    _bind_to_parent(module_name, module)
     spec.loader.exec_module(module)
     return module
 
