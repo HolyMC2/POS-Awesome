@@ -94,8 +94,15 @@ async function evictStaleServiceWorkers(): Promise<boolean> {
 		);
 
 		if (typeof caches !== "undefined") {
+			// Only drop the stale SW's own caches (posawesome-cache-*, see
+			// www/sw.js CACHE_PREFIX) — wiping ALL Cache Storage keys would
+			// also destroy caches owned by unrelated same-origin pages.
 			const keys = await caches.keys();
-			await Promise.all(keys.map((key) => caches.delete(key)));
+			await Promise.all(
+				keys
+					.filter((key) => key.startsWith("posawesome-cache-"))
+					.map((key) => caches.delete(key)),
+			);
 		}
 
 		if (
