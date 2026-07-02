@@ -63,6 +63,24 @@ lab via dev-refresh + coordinated worker restart. NOT on prod yet.
   (SPA bundle) + prod-refresh for Python + worker restart + watch prewarm
   hit-rate and stock-qty refresh across terminals.
 
+### Late addition — pull-model billing (taller→POS) PILOTED on lab
+
+Three-repo feature (doco `33e69e5` POS Charge Request doctype, taller
+`27d32c86` flag-gated writer, posawesome `3050e469` cashier flow). Full
+chain verified on lab with real RO-06190: taller "Cobrar" → PCR-2026-00002
+→ listed for Doco Ventas → draft ACC-SINV-2026-02077 born in the charging
+cashier's own shift (right owner/shift/rate/marker) → submit → request
+Charged → **RO linkage via the duck-typed callback confirmed**. Reuse-guard
+and unsubmitted-invoice guard also verified. Browser smoke additionally
+exercised the stale-shift auto-close + pending-drafts confirm live (an old
+June shift with 16 foreign test drafts — the exact pathology, now loud).
+
+LAB PILOT STATE: `use_pos_charge_requests` ON in Taller App Settings and
+`posa_use_charge_requests` ON for POS Profile "Doco Ventas" (lab only).
+Note: with an RO that already has a legacy draft linked, `create_billing_doc`
+still returns that draft (idempotency runs before the pull-model branch) —
+in-flight ROs finish on the old path; new ones take the rail.
+
 ## 2026-06-14 (lab only) — telemetry hygiene: web-vital outlier cap + usage-endpoint caching
 
 Two fixes from a prod telemetry review (`get_pos_telemetry_summary` on both
