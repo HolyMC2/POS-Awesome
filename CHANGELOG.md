@@ -33,7 +33,17 @@ lab via dev-refresh + coordinated worker restart. NOT on prod yet.
 - **ci:** saldo sibling stubs (`frontend/ci/saldo-stubs/`) — Frontend CI /
   Build Verify / Docs had been red since ~2026-06-01 because the `@saldo`
   alias points at a private sibling repo CI can't see. All three green again.
-  Backend CI still red at its bench site-install step (pre-existing, open).
+- **ci (backend):** ALSO green now — two root causes found by reproducing
+  the whole job in a runner-like container: (1) frappe v15 restores the
+  new-site DB via the `mariadb` binary, which the ubuntu-22.04 runner image
+  lacks (only `mysql`) → `apt-get install mariadb-client`; (2) get-app's
+  implicit `bench build` needs the saldo sibling → `--skip-assets` (backend
+  job never serves assets). Site/app setup split into per-command steps so
+  future failures are identifiable from the public step API without log
+  auth. **All four workflows green as of `81823b19`.**
+- **feat(pricing):** `transaction_rules_failed` now surfaces as a warning
+  toast (operator re-checks the total instead of trusting a quietly-missing
+  header discount).
 - **test-runner:** `bench run-tests --app posawesome` had been broken at
   DISCOVERY — `test_telemetry.py` installed its fake `frappe` into
   sys.modules at import time, poisoning every later import ("cannot import
