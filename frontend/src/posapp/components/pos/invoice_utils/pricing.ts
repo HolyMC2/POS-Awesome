@@ -663,6 +663,20 @@ export async function _applyServerPricingRules(context: any, ctx: any = {}) {
 		: [];
 	const invoiceUpdates = message.invoice_updates || {};
 
+	if (message.transaction_rules_failed) {
+		// Server hit an exception applying transaction-level pricing rules and
+		// returned success with the invoice-level discount silently dropped —
+		// line prices look right but the header discount is missing. Warn the
+		// operator so the total gets a second look before charging.
+		context.toastStore?.show({
+			title: __("Invoice discount could not be applied"),
+			message: __(
+				"Transaction-level pricing rules failed on the server. Review the total before charging.",
+			),
+			color: "warning",
+		});
+	}
+
 	const hasDiscountUpdate =
 		invoiceUpdates &&
 		(Object.prototype.hasOwnProperty.call(
