@@ -2,6 +2,57 @@
 
 All notable changes.
 
+## 2026-07-02 (lab) — audit-fix + upstream-pick batch, CI unbroken, test runner unbroken
+
+Big consolidation day. Full audit of the 56 commits since 2026-05-28 plus a
+triage of 225 new upstream commits (15.29→15.31). Landed on
+`doco-customizations` via PRs #2–#6 (rebase-merged, linear), verified with
+vitest 152 files / 580 tests + vue-tsc + vite build + py_compile, deployed to
+lab via dev-refresh + coordinated worker restart. NOT on prod yet.
+
+- **PR #2 backend audit fixes** — get_items cache-key str/int normalization
+  (the */25 min prewarm was warming a key no web worker ever read — feature
+  was dead); `_scope` asserts on `create_opening_voucher` + `log_mp_override`;
+  `reconcile_line_prices` now logs tracebacks + returns
+  `transaction_rules_failed` (SPA wiring pending).
+- **PR #3 frontend audit fixes** — P0: named eventBus handlers in Payments
+  teardown (bare `off()` wiped PosOffers/PosCoupons/UpdateCustomer
+  `register_pos_profile` listeners after one payment-dialog cycle); telemetry
+  observer/listener release on stop(); `getLocalStock` `??`; saldo no-merge
+  guard parity; SW cache purge scoped to `posawesome-cache-*`.
+- **PR #4 pick 605a1b96** — stock cache invalidation on Bin/SLE/Serial/Batch
+  writes (stale-qty-on-floor bug).
+- **PR #5 picks 3a909429+60c695c3+0d37fc33** — cash-movement JE created
+  atomically in on_submit; idempotency-ledger except narrowed to
+  DuplicateEntryError + raise on fetch-fail.
+- **PR #6 returns chain 9c006c42→b78aa6df→49778cd4 + e322f0dc + 8991edd3** —
+  no cash refund beyond what the original invoice actually paid; auto
+  "Store as Credit"; negative return totals; outstanding-prompt suppression.
+- **feat(print)** — Print Last Invoice survives reload (localStorage) + new
+  owner-scoped `get_last_pos_invoice` server fallback.
+- **ci:** saldo sibling stubs (`frontend/ci/saldo-stubs/`) — Frontend CI /
+  Build Verify / Docs had been red since ~2026-06-01 because the `@saldo`
+  alias points at a private sibling repo CI can't see. All three green again.
+  Backend CI still red at its bench site-install step (pre-existing, open).
+- **test-runner:** `bench run-tests --app posawesome` had been broken at
+  DISCOVERY — `test_telemetry.py` installed its fake `frappe` into
+  sys.modules at import time, poisoning every later import ("cannot import
+  name 'nowdate' from 'frappe.utils' (unknown location)"). Now lazy + all 26
+  standalone stub-test files skip under bench (`_UNDER_BENCH` guard); they
+  remain runnable directly via `python3 <file>`. Discovery is clean; the full
+  integration run now needs a properly composed test site (ventas mirror
+  lacks erpnext `_Test` fixtures; test-tenant migrated but trips on
+  cross-app `CRM Deal Repair Order` test-record deps — open item).
+- **PR #7 (draft, unmerged)** — v16 migrate prep (one-shot patches,
+  re-run-safe supervisor patch, delta-sync indexes, required_apps). Hold for
+  the muelle 16.23 upgrade. erpnext_compat lazy-import port still to do on
+  the v16 branch.
+- Upstream PR #3028 (watcher hygiene) rebased onto stage-develop `7edf5c44`
+  and force-pushed — mergeable again, awaiting defendicon.
+- Prod deploy checklist when signaled: `posawesome-push-prod.sh --build --yes`
+  (SPA bundle) + prod-refresh for Python + worker restart + watch prewarm
+  hit-rate and stock-qty refresh across terminals.
+
 ## 2026-06-14 (lab only) — telemetry hygiene: web-vital outlier cap + usage-endpoint caching
 
 Two fixes from a prod telemetry review (`get_pos_telemetry_summary` on both
