@@ -285,6 +285,13 @@ function trackPaint(entry: PerformanceEntry) {
 	}
 }
 
+// Handles created by start() that stop() must release. Without these, every
+// start()→stop()→start() cycle stacked a fresh set of PerformanceObservers
+// and window listeners on top of the old ones — each RUM/crash event then
+// pushed N times after N restarts.
+const activeObservers: PerformanceObserver[] = [];
+const activeTeardowns: Array<() => void> = [];
+
 function safeObserve(type: string, cb: (entry: any) => void, opts: PerformanceObserverInit = {}) {
 	if (typeof PerformanceObserver === "undefined") return;
 	try {
@@ -302,6 +309,7 @@ function safeObserve(type: string, cb: (entry: any) => void, opts: PerformanceOb
 			}
 		});
 		observer.observe({ type, ...opts });
+		activeObservers.push(observer);
 	} catch {
 		// Some browsers reject unknown types; ignore.
 	}
@@ -332,7 +340,7 @@ function isIgnoredCrashMessage(message: string): boolean {
 
 function startCrashHooks() {
 	if (typeof window === "undefined") return;
-	window.addEventListener("error", (ev: ErrorEvent) => {
+	const onError = (ev: ErrorEvent) => {
 		const message = (ev.message || "").slice(0, 256);
 		if (isIgnoredCrashMessage(message)) return;
 		push("crash:error", 1, {
@@ -340,14 +348,20 @@ function startCrashHooks() {
 			filename: (ev.filename || "").slice(0, 256),
 			lineno: ev.lineno || 0,
 		});
-	});
-	window.addEventListener("unhandledrejection", (ev: PromiseRejectionEvent) => {
+	};
+	const onRejection = (ev: PromiseRejectionEvent) => {
 		const reason: any = ev.reason;
 		const rawMessage =
 			(reason && reason.message) || (typeof reason === "string" ? reason : "");
 		const message = String(rawMessage || "").slice(0, 256);
 		if (isIgnoredCrashMessage(message)) return;
 		push("crash:unhandledrejection", 1, { message });
+	};
+	window.addEventListener("error", onError);
+	window.addEventListener("unhandledrejection", onRejection);
+	activeTeardowns.push(() => {
+		window.removeEventListener("error", onError);
+		window.removeEventListener("unhandledrejection", onRejection);
 	});
 }
 
@@ -376,9 +390,16 @@ function startLifecycleHooks() {
 		}
 	};
 	document.addEventListener("visibilitychange", flushOnHide);
+	activeTeardowns.push(() => {
+		document.removeEventListener("visibilitychange", flushOnHide);
+	});
 	if (typeof window !== "undefined") {
-		window.addEventListener("pagehide", () => {
+		const onPageHide = () => {
 			flushSync();
+		};
+		window.addEventListener("pagehide", onPageHide);
+		activeTeardowns.push(() => {
+			window.removeEventListener("pagehide", onPageHide);
 		});
 	}
 }
@@ -465,6 +486,20 @@ export function stop() {
 	if (heapTimer) {
 		clearInterval(heapTimer);
 		heapTimer = null;
+	}
+	for (const observer of activeObservers.splice(0)) {
+		try {
+			observer.disconnect();
+		} catch {
+			/* telemetry must never throw */
+		}
+	}
+	for (const teardown of activeTeardowns.splice(0)) {
+		try {
+			teardown();
+		} catch {
+			/* telemetry must never throw */
+		}
 	}
 	flush().catch(() => {});
 	started = false;
