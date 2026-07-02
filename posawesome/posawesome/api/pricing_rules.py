@@ -737,6 +737,7 @@ def reconcile_line_prices(cart_payload: dict | str | None = None):
     doc.net_total = total
 
     invoice_updates = {}
+    transaction_rules_failed = False
     try:
         # Apply transaction-level rules using the controller method
         doc_obj = frappe.get_doc(doc)
@@ -748,8 +749,16 @@ def reconcile_line_prices(cart_payload: dict | str | None = None):
                 "pricing_rules": doc_obj.pricing_rules,
                 "apply_discount_on": doc_obj.apply_discount_on,
             }
-    except Exception as e:
-        frappe.log_error(f"Failed to apply transaction pricing rules: {str(e)}")
+    except Exception:
+        # On failure the response still succeeds with the header discount
+        # silently dropped — operator sees line prices but no invoice-level
+        # discount. Log the full traceback (the old one-liner was
+        # undiagnosable) and flag the miss so the SPA can surface it.
+        transaction_rules_failed = True
+        frappe.log_error(
+            frappe.get_traceback(),
+            "POSA reconcile_line_prices: transaction pricing rules failed",
+        )
 
     expected_free_lines = []
     for (item_code, rule_name), data in freebies.items():
@@ -789,4 +798,9 @@ def reconcile_line_prices(cart_payload: dict | str | None = None):
             }
         )
 
-    return {"updates": updates, "free_lines": expected_free_lines, "invoice_updates": invoice_updates}
+    return {
+        "updates": updates,
+        "free_lines": expected_free_lines,
+        "invoice_updates": invoice_updates,
+        "transaction_rules_failed": transaction_rules_failed,
+    }
