@@ -1964,52 +1964,64 @@ const applyIncomingInvoiceDoc = (doc) => {
 };
 
 // Lifecycle
+// mitt's off(event) with NO handler removes EVERY handler for that event —
+// including other components'. This panel mounts/unmounts on every payment
+// dialog open/close, so anonymous inline handlers + bare off() wiped the
+// register_pos_profile listeners of PosOffers/PosCoupons/UpdateCustomer
+// (which stay mounted) after the first dialog cycle. Keep named refs and
+// always pass them to off().
+const onNetworkOnline = () => syncStore.syncPendingInvoices();
+const onRegisterPosProfile = (data) => {
+	pos_profile.value = data.pos_profile;
+	stock_settings.value = data.stock_settings;
+};
+const onAddTheNewAddress = (data) => {
+	const normalized = normalizeAddress(data);
+	if (normalized) {
+		const existing = addresses.value.filter((addr) => addr.name !== normalized.name);
+		addresses.value = [...existing, normalized];
+		if (invoice_doc.value) {
+			invoice_doc.value.shipping_address_name = normalized.name;
+		}
+	}
+};
+const onSetPosSettings = (data) => {
+	pos_settings.value = data || {};
+	if (invoice_doc.value && !invoice_doc.value.is_return) {
+		initializeReturnValidity(invoice_doc.value);
+	}
+};
+const onSetMpesaPayment = (data) => {
+	set_mpesa_payment(data);
+};
+const onClearInvoice = () => {
+	invoiceStore.clear();
+	invoiceStore.resetPostingDate();
+	paymentsTouched.value = false;
+	paymentSnapshotBeforeCredit = null;
+	is_return.value = false;
+	is_credit_return.value = false;
+	return_valid_upto_date.value = null;
+	resetGiftCardState({ clearPayment: true });
+};
+
 onMounted(() => {
 	_shortcutHandlers.value.handlePaymentShortcut = handlePaymentShortcut.bind(this);
 	document.addEventListener("keydown", _shortcutHandlers.value.handlePaymentShortcut);
 
 	syncStore.syncPendingInvoices();
-	eventBus.on("network-online", () => syncStore.syncPendingInvoices());
-	eventBus.on("server-online", () => syncStore.syncPendingInvoices());
+	eventBus.on("network-online", onNetworkOnline);
+	eventBus.on("server-online", onNetworkOnline);
 
 	if (eventBus) {
 		eventBus.on("send_invoice_doc_payment", applyIncomingInvoiceDoc);
-
-		eventBus.on("register_pos_profile", (data) => {
-			pos_profile.value = data.pos_profile;
-			stock_settings.value = data.stock_settings;
-		});
-		eventBus.on("add_the_new_address", (data) => {
-			const normalized = normalizeAddress(data);
-			if (normalized) {
-				const existing = addresses.value.filter((addr) => addr.name !== normalized.name);
-				addresses.value = [...existing, normalized];
-				if (invoice_doc.value) {
-					invoice_doc.value.shipping_address_name = normalized.name;
-				}
-			}
-		});
-		eventBus.on("set_pos_settings", (data) => {
-			pos_settings.value = data || {};
-			if (invoice_doc.value && !invoice_doc.value.is_return) {
-				initializeReturnValidity(invoice_doc.value);
-			}
-		});
-		eventBus.on("set_mpesa_payment", (data) => {
-			set_mpesa_payment(data);
-		});
+		eventBus.on("register_pos_profile", onRegisterPosProfile);
+		eventBus.on("add_the_new_address", onAddTheNewAddress);
+		eventBus.on("set_pos_settings", onSetPosSettings);
+		eventBus.on("set_mpesa_payment", onSetMpesaPayment);
 		eventBus.on("queue_submit_payment_shortcut", queueShortcutSubmit);
 		eventBus.on("submit_payment_shortcut", handleSubmitPaymentShortcut);
-		eventBus.on("clear_invoice", () => {
-			invoiceStore.clear();
-			invoiceStore.resetPostingDate();
-			paymentsTouched.value = false;
-			paymentSnapshotBeforeCredit = null;
-			is_return.value = false;
-			is_credit_return.value = false;
-			return_valid_upto_date.value = null;
-			resetGiftCardState({ clearPayment: true });
-		});
+		eventBus.on("clear_invoice", onClearInvoice);
 	}
 
 	if (isPaymentOpen.value) {
@@ -2027,16 +2039,16 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-	eventBus.off("send_invoice_doc_payment");
-	eventBus.off("register_pos_profile");
-	eventBus.off("add_the_new_address");
-	eventBus.off("set_pos_settings");
-	eventBus.off("set_mpesa_payment");
+	eventBus.off("send_invoice_doc_payment", applyIncomingInvoiceDoc);
+	eventBus.off("register_pos_profile", onRegisterPosProfile);
+	eventBus.off("add_the_new_address", onAddTheNewAddress);
+	eventBus.off("set_pos_settings", onSetPosSettings);
+	eventBus.off("set_mpesa_payment", onSetMpesaPayment);
 	eventBus.off("queue_submit_payment_shortcut", queueShortcutSubmit);
 	eventBus.off("submit_payment_shortcut", handleSubmitPaymentShortcut);
-	eventBus.off("clear_invoice");
-	eventBus.off("network-online");
-	eventBus.off("server-online");
+	eventBus.off("clear_invoice", onClearInvoice);
+	eventBus.off("network-online", onNetworkOnline);
+	eventBus.off("server-online", onNetworkOnline);
 	clearBackgroundStatusCheck();
 
 	if (_shortcutHandlers.value.handlePaymentShortcut) {
