@@ -785,7 +785,12 @@ export function useItemAddition() {
 											pendingItem.uom === splitLine.uom &&
 											pendingItem.rate === splitLine.rate &&
 											(pendingItem.batch_no || "") ===
-												(splitLine.batch_no || ""),
+												(splitLine.batch_no || "") &&
+											// SALDO: same guard as the primary dedup above —
+											// never collapse two recargas into one qty>1 line,
+											// each needs its own referencia.
+											!pendingItem.saldo_referencia &&
+											!splitLine.saldo_referencia,
 									);
 									if (pendingIndex !== -1 && !context.new_line) {
 										const pendingItem = pendingItems[pendingIndex];

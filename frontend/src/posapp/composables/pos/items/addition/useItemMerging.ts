@@ -208,11 +208,15 @@ export function useItemMerging() {
 		context: MergeContext,
 	) {
 		// Find a matching item (by item_code, uom, and rate)
+		// SALDO: recarga lines never merge — each keeps its own referencia
+		// (same exclusion shouldIndexItem applies).
 		const match = items.find(
 			(item) =>
 				item.item_code === newItem.item_code &&
 				item.uom === newItem.uom &&
-				item.rate === newItem.rate,
+				item.rate === newItem.rate &&
+				!item.saldo_referencia &&
+				!newItem.saldo_referencia,
 		);
 		if (match) {
 			// If found, increment quantity
