@@ -5,6 +5,31 @@ Cross-link from code with `docs/TODO.md → "<heading>"`.
 
 ---
 
+## Quirks Mode warning on POSAwesome route
+
+**Status:** open. Spotted 2026-05-26 while exercising the saldo dialog
+on `/posapp`. Discovered by saldo phase 11 integration; no functional
+impact on the saldo flow itself.
+
+**Symptom.** Firefox DevTools console logs:
+> This page is in Quirks Mode. Page layout may be impacted. For
+> Standards Mode use "<!DOCTYPE html>".
+
+**What we know.** The top-level `/posapp` route emits `<!doctype html>`
+correctly (verified via `curl https://<site>/posapp | head`). The
+warning must come from a child HTML resource Frappe loads — print
+preview iframe, alert toast iframe, offline.html, or one of the
+fragments under `posawesome/posawesome/doctype/*/closing_shift_details.html`
+which start with a bare `<div>`.
+
+**Action.** Open DevTools > Network > filter `text/html` on a real POS
+session; identify which exact resource Firefox flags. For any fragment
+whose first line is `<div>` / `<table>` and that gets loaded as a
+top-level document, prepend `<!doctype html>` or rewrap so Frappe
+templating injects the doctype header. Low priority — purely cosmetic.
+
+---
+
 ## Workspace link URL support
 
 **Status:** workaround in place; cleaner fix deferred.
