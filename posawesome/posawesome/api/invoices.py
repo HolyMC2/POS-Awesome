@@ -47,7 +47,18 @@ from posawesome.posawesome.api.invoice_processing.data import get_last_invoice_r
 from posawesome.posawesome.api.utils import log_perf_event
 
 
-_SUPERVISOR_ROLES = ("POS Manager", "Sales Manager", "Accounts Manager", "System Manager")
+# "POS Awesome Supervisor" is the app's OWN supervisor role (employees.py
+# drives the SPA's is_supervisor from it) — omitting it here silently
+# downgraded POSAwesome-promoted supervisors to shift-scope: the UI showed
+# the supervisor drafts tab while the server returned only their own shift,
+# so nobody could find other users' (or stranded) drafts.
+_SUPERVISOR_ROLES = (
+    "POS Awesome Supervisor",
+    "POS Manager",
+    "Sales Manager",
+    "Accounts Manager",
+    "System Manager",
+)
 
 
 @frappe.whitelist(methods=["GET", "POST"])
