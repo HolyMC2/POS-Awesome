@@ -8,6 +8,7 @@ import frappe
 from frappe.utils import cint, nowdate
 from frappe import _
 from .utilities import get_version
+from ._scope import assert_company, assert_profile
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -58,6 +59,13 @@ def get_opening_dialog_data():
 
 @frappe.whitelist(methods=["POST"])
 def create_opening_voucher(pos_profile, company, balance_details):
+    # Tenant boundary: profile/company come straight from the client and the
+    # insert below runs with ignore_permissions. get_opening_dialog_data only
+    # OFFERS assigned profiles — nothing stopped a crafted call from opening
+    # a shift on an unassigned profile/company.
+    assert_profile(frappe.session.user, pos_profile)
+    assert_company(frappe.session.user, company)
+
     balance_details = json.loads(balance_details)
 
     # One open shift per user. Multiple concurrent open shifts (same or
