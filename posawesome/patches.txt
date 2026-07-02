@@ -28,3 +28,4 @@ posawesome.patches.add_lean_layout_flags
 posawesome.patches.add_gift_card_pos_profile_settings
 posawesome.patches.migrate_pos_supervisor_to_role
 posawesome.patches.remove_item_barcode_posa_uom
+posawesome.patches.add_offline_sync_delta_indexes
