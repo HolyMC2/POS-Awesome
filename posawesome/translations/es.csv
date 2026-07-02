@@ -1934,3 +1934,5 @@ Invoice {0} is not submitted yet.,La factura {0} aún no está validada.
 "Invoice {0} belongs to {1}, not to the request's customer {2}.","La factura {0} pertenece a {1}, no al cliente de la solicitud {2}."
 Use POS Charge Requests,Usar solicitudes de cobro POS
 Show external charge requests (repairs etc.) so cashiers can bill them in their own shift.,"Muestra solicitudes de cobro externas (reparaciones, etc.) para que el cajero las cobre en su propio turno."
+"This request was already charged with invoice {0} — it has now been marked as completed. Do not charge it again.","Esta solicitud ya fue cobrada con la factura {0} — se marcó como completada. No la cobres de nuevo."
+"Charge request {0} is already being charged by {1} (draft {2}). Coordinate before charging it twice.","La solicitud {0} ya la está cobrando {1} (borrador {2}). Coordínense antes de cobrarla dos veces."

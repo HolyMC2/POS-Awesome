@@ -132,17 +132,39 @@ def prepare_charge_request_invoice(name, pos_profile, pos_opening_shift):
     doctype = "POS Invoice" if use_pos_invoice else "Sales Invoice"
 
     marker = _request_marker(request.name)
+
+    # Money guard 1: if a SUBMITTED invoice already carries this request's
+    # marker (browser died between submit and mark-charged), reconcile the
+    # request instead of minting a second bill.
+    submitted = frappe.db.get_value(
+        doctype, {"docstatus": 1, "remarks": ["like", f"%{marker}%"]}, "name"
+    )
+    if submitted:
+        request.mark_charged(doctype, submitted)
+        frappe.throw(
+            _(
+                "This request was already charged with invoice {0} — it has now "
+                "been marked as completed. Do not charge it again."
+            ).format(submitted)
+        )
+
+    # Money guard 2: a live draft for this request in ANOTHER cashier's shift
+    # means someone else is mid-charge — don't create a competing bill.
     existing = frappe.db.get_value(
         doctype,
-        {
-            "docstatus": 0,
-            "posa_pos_opening_shift": pos_opening_shift,
-            "remarks": ["like", f"%{marker}%"],
-        },
-        "name",
+        {"docstatus": 0, "remarks": ["like", f"%{marker}%"]},
+        ["name", "posa_pos_opening_shift", "owner"],
+        as_dict=True,
     )
     if existing:
-        return frappe.get_doc(doctype, existing).as_dict()
+        if existing.posa_pos_opening_shift == pos_opening_shift:
+            return frappe.get_doc(doctype, existing.name).as_dict()
+        frappe.throw(
+            _(
+                "Charge request {0} is already being charged by {1} (draft {2}). "
+                "Coordinate before charging it twice."
+            ).format(request.name, existing.owner, existing.name)
+        )
 
     doc = frappe.new_doc(doctype)
     doc.customer = request.customer
