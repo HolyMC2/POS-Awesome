@@ -9,6 +9,9 @@ app_license = "GPLv3"
 app_url = "https://github.com/defendicon/POS-Awesome-V15"
 app_source_link = "https://github.com/defendicon/POS-Awesome-V15"
 source_link = "https://github.com/defendicon/POS-Awesome-V15"
+# Fail fast at install time: 40+ `from erpnext...` imports make erpnext a hard
+# dependency. (No <16 version cap — this fork is mid-migration to v16.)
+required_apps = ["erpnext"]
 
 # Includes in <head>
 # ------------------
@@ -81,20 +84,13 @@ doctype_js = {
 # after_install = "posawesome.install.after_install"
 # before_uninstall = "posawesome.uninstall.before_uninstall"
 after_uninstall = "posawesome.uninstall.after_uninstall"
-after_migrate = [
-    "posawesome.patches.add_pos_cash_movement_settings.execute",
-    "posawesome.patches.add_cash_movement_to_workspace.execute",
-    "posawesome.patches.add_customer_display_settings.execute",
-    "posawesome.patches.add_dashboard_settings.execute",
-    "posawesome.patches.add_dashboard_global_settings.execute",
-    "posawesome.patches.reorganize_pos_profile_sections.execute",
-    "posawesome.patches.add_gift_card_pos_profile_settings.execute",
-    "posawesome.patches.add_gift_card_invoice_redemption_fields.execute",
-    "posawesome.patches.add_gift_card_to_workspace.execute",
-    "posawesome.patches.add_submission_ledger_to_workspace.execute",
-    "posawesome.patches.migrate_pos_supervisor_to_role.execute",
-    "posawesome.patches.remove_item_barcode_posa_uom.execute",
-]
+# NOTE: these migrations are registered one-shot in patches.txt and must NOT
+# also run on every `bench migrate`. Running them via after_migrate re-rewrote
+# the POS Awesome workspace and POS Profile section ordering on every migrate,
+# destroying any user customization. The three that previously lived only here
+# (add_gift_card_pos_profile_settings, migrate_pos_supervisor_to_role,
+# remove_item_barcode_posa_uom) have been moved into patches.txt.
+after_migrate = []
 
 # Desk Notifications
 # ------------------
