@@ -85,8 +85,12 @@ jobs:
       - name: Install ERPNext
         run: cd frappe-bench && bench --site example.com install-app erpnext
 
+      # --skip-assets: get-app otherwise runs `bench build --app posawesome`,
+      # whose vite build needs the private saldo sibling (absent here) and
+      # fails the step. This backend job never serves assets — Build Verify
+      # covers the frontend build (with CI stubs).
       - name: Get POS Awesome
-        run: cd frappe-bench && bench get-app "$GITHUB_WORKSPACE"
+        run: cd frappe-bench && bench get-app --skip-assets "$GITHUB_WORKSPACE"
 
       - name: Install POS Awesome
         run: cd frappe-bench && bench --site example.com install-app posawesome
