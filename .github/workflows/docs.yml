@@ -18,6 +18,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # See frontend/ci/saldo-stubs/README.md — private sibling repo absent in CI.
+      - name: Provide saldo sibling stubs (private repo absent in CI)
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/../saldo/saldo/public/saldo_pos"
+          cp -r "$GITHUB_WORKSPACE/frontend/ci/saldo-stubs/." "$GITHUB_WORKSPACE/../saldo/saldo/public/saldo_pos/"
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:

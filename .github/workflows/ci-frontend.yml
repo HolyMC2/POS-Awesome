@@ -20,6 +20,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # The @saldo vite/tsconfig alias resolves to a sibling clone of the
+      # private HolyMC2/saldo repo, absent on runners. Copy the no-op stubs
+      # (frontend/ci/saldo-stubs/README.md) so type-check/tests can resolve it.
+      - name: Provide saldo sibling stubs (private repo absent in CI)
+        working-directory: .
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/../saldo/saldo/public/saldo_pos"
+          cp -r "$GITHUB_WORKSPACE/frontend/ci/saldo-stubs/." "$GITHUB_WORKSPACE/../saldo/saldo/public/saldo_pos/"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
