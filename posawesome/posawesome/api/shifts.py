@@ -113,6 +113,15 @@ def create_opening_voucher(pos_profile, company, balance_details):
     return data
 
 
+def is_shift_stale(opening_shift) -> bool:
+    """An open shift whose period started on a previous day is stale."""
+
+    period_start = opening_shift.get("period_start_date")
+    if not period_start:
+        return False
+    return frappe.utils.getdate(period_start) < frappe.utils.getdate(nowdate())
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def check_opening_shift(user):
     open_vouchers = frappe.db.get_all(
@@ -131,7 +140,46 @@ def check_opening_shift(user):
         data = {}
         data["pos_opening_shift"] = frappe.get_doc("POS Opening Shift", open_vouchers[0]["name"])
         update_opening_shift_data(data, open_vouchers[0]["pos_profile"])
+        # Single source of truth for Desk AND the /posapp web route: the SPA
+        # routes a stale shift straight into the closing flow, and
+        # assert_shift_not_stale is the server-side backstop at submit time.
+        data["stale_shift"] = is_shift_stale(data["pos_opening_shift"])
+        data["force_close_stale_shift"] = bool(
+            cint(data["pos_profile"].get("posa_force_close_stale_shift") or 0)
+        )
     return data
+
+
+def assert_shift_not_stale(pos_opening_shift):
+    """Backstop for the stale-shift gate at invoice-submit time.
+
+    The SPA routes stale shifts into the closing flow at boot; this stops
+    anything that bypasses the UI (stale cached tab, direct API call) from
+    selling into yesterday's shift when the profile enforces closure.
+    """
+
+    if not pos_opening_shift:
+        return
+    row = frappe.db.get_value(
+        "POS Opening Shift",
+        pos_opening_shift,
+        ["period_start_date", "pos_profile", "status", "docstatus"],
+        as_dict=True,
+    )
+    if not row or cint(row.docstatus) != 1 or row.status != "Open":
+        return
+    if not is_shift_stale(row):
+        return
+    if not cint(
+        frappe.db.get_value("POS Profile", row.pos_profile, "posa_force_close_stale_shift") or 0
+    ):
+        return
+    frappe.throw(
+        _(
+            "This POS shift was opened on {0} and must be closed before selling today. "
+            "Use Close Shift, then open a new shift."
+        ).format(frappe.utils.getdate(row.period_start_date).strftime("%d-%m-%Y"))
+    )
 
 
 def update_opening_shift_data(data, pos_profile):

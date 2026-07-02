@@ -26,9 +26,17 @@ type SkippedPrintedInvoice = {
 	return_against?: string;
 };
 
+type PendingDraftInvoice = {
+	name?: string;
+	owner?: string;
+	grand_total?: number;
+};
+
 type ClosingShiftPreparationResponse = {
 	closing_shift?: any;
 	skipped_printed_invoices?: SkippedPrintedInvoice[];
+	pending_drafts?: PendingDraftInvoice[];
+	drafts_will_be_deleted?: boolean;
 };
 
 const translateMessage = (value: string) => (typeof window !== "undefined" && window.__
@@ -59,6 +67,34 @@ export function buildSkippedClosingInvoicesPrompt(
 		translateMessage(baseMessage),
 		detailMessage,
 		translateMessage("The skipped invoice will remain a draft."),
+		translateMessage("Do you want to proceed?"),
+	]
+		.filter(Boolean)
+		.join(" ");
+}
+
+export function buildPendingDraftsPrompt(
+	pendingDrafts: PendingDraftInvoice[],
+) {
+	const count = pendingDrafts.length;
+	// Keep the translatable part static (count prefixed) so the es-MX row
+	// matches — same reason the skipped-invoices prompt has a singular row.
+	const baseMessage = count === 1
+		? translateMessage("1 draft invoice on this shift will be DELETED when the shift closes.")
+		: `${count} ${translateMessage("draft invoices on this shift will be DELETED when the shift closes.")}`;
+	const details = pendingDrafts
+		.slice(0, 5)
+		.map((draft) => {
+			const name = draft?.name || translateMessage("Unknown invoice");
+			return draft?.owner ? `${name} (${draft.owner})` : name;
+		})
+		.join(", ");
+	const detailMessage = details
+		? `${translateMessage("Invoices")}: ${details}${count > 5 ? "…" : "."}`
+		: "";
+	return [
+		baseMessage,
+		detailMessage,
 		translateMessage("Do you want to proceed?"),
 	]
 		.filter(Boolean)
@@ -153,6 +189,24 @@ export function usePosShift(openDialog?: () => void) {
 					} catch (e) {
 						console.error("Failed to cache opening data", e);
 					}
+					if (r.message.stale_shift) {
+						// Shift opened on a previous day: never adopt it
+						// silently. Warn always; when the profile enforces
+						// closure, route straight into the closing flow —
+						// the server also blocks submits into a stale shift.
+						const enforced = !!r.message.force_close_stale_shift;
+						toastStore.show({
+							title: __("Shift from a previous day is still open"),
+							message: enforced
+								? __("Close it now to start today's shift. Sales are blocked until it is closed.")
+								: __("Close it and open a new shift to keep the day's cash reconciliation clean."),
+							color: enforced ? "error" : "warning",
+							timeout: 0,
+						});
+						if (enforced) {
+							get_closing_data();
+						}
+					}
 				} else {
 					console.info("No opening shift found, opening dialog");
 					clearOpeningStorage();
@@ -201,6 +255,9 @@ export function usePosShift(openDialog?: () => void) {
 					const skippedPrintedInvoices = Array.isArray(response.skipped_printed_invoices)
 						? response.skipped_printed_invoices
 						: [];
+					const pendingDrafts = Array.isArray(response.pending_drafts)
+						? response.pending_drafts
+						: [];
 					if (!closingShift) {
 						return;
 					}
@@ -210,6 +267,34 @@ export function usePosShift(openDialog?: () => void) {
 							buildSkippedClosingInvoicesPrompt(skippedPrintedInvoices),
 						);
 						if (!confirmed) {
+							return;
+						}
+					}
+
+					if (pendingDrafts.length) {
+						if (response.drafts_will_be_deleted) {
+							// Profile purges drafts at close — make that explicit
+							// and let the closer back out.
+							const confirmed = window.confirm(
+								buildPendingDraftsPrompt(pendingDrafts),
+							);
+							if (!confirmed) {
+								return;
+							}
+						} else {
+							// Closing would throw server-side (stranded drafts).
+							// Stop here with the actionable list instead of
+							// letting the submit fail later.
+							const details = pendingDrafts
+								.slice(0, 5)
+								.map((d) => (d?.owner ? `${d?.name} (${d.owner})` : d?.name))
+								.join(", ");
+							toastStore.show({
+								title: __("Draft invoices block closing"),
+								message: `${__("Submit or delete these drafts first — a supervisor can see them in Invoice Management:")} ${details}${pendingDrafts.length > 5 ? "…" : ""}`,
+								color: "error",
+								timeout: 0,
+							});
 							return;
 						}
 					}

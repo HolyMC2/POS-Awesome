@@ -18,7 +18,27 @@ export function isCachedOpeningValidForCurrentUser(
 	if (!currentUser || !cachedUser) {
 		return false;
 	}
-	return currentUser === cachedUser;
+	if (currentUser !== cachedUser) {
+		return false;
+	}
+	// Never resurrect yesterday's shift from cache when the profile enforces
+	// closure — the error/offline boot path would otherwise adopt it silently
+	// and the server would reject every submit with no obvious way out.
+	if (openingData?.force_close_stale_shift) {
+		const periodStart = openingData?.pos_opening_shift?.period_start_date;
+		if (periodStart) {
+			const started = new Date(String(periodStart).replace(" ", "T"));
+			const now = new Date();
+			const sameDay =
+				started.getFullYear() === now.getFullYear() &&
+				started.getMonth() === now.getMonth() &&
+				started.getDate() === now.getDate();
+			if (!Number.isNaN(started.getTime()) && !sameDay && started < now) {
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 export function getValidCachedOpeningForCurrentUser(
