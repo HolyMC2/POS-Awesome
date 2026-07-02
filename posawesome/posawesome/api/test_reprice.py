@@ -235,13 +235,14 @@ class RateBandTests(unittest.TestCase):
         profile = {"posa_allow_user_to_edit_rate": 1, "selling_price_list": "Doco"}
         rp.assert_rates_within_band(invoice, profile)
 
-    def test_edit_outside_band_raises(self):
+    def test_edit_outside_band_allowed_while_cap_disabled(self):
+        # Band enforcement with posa_allow_user_to_edit_rate=1 is disabled
+        # since 23ca94e6 (docs/TODO.md → "Rate-band cap"); any rate passes.
         rp = _import_reprice(_basic_scenario())
-        # Item Price 100; 70 is outside ±20%
+        # Item Price 100; 70 is outside ±20% but must NOT raise
         invoice = {"items": [{"idx": 1, "item_code": "IT-1", "rate": 70.00}]}
         profile = {"posa_allow_user_to_edit_rate": 1, "selling_price_list": "Doco"}
-        with self.assertRaises(_PermissionError):
-            rp.assert_rates_within_band(invoice, profile)
+        rp.assert_rates_within_band(invoice, profile)
 
     def test_no_price_list_skips(self):
         rp = _import_reprice(_basic_scenario())
@@ -254,16 +255,16 @@ class RateBandTests(unittest.TestCase):
         profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
         rp.assert_rates_within_band(invoice, profile)  # no master → skip
 
-    def test_custom_band(self):
+    def test_custom_band_ignored_while_cap_disabled(self):
+        # band_pct is retained for ABI compatibility only (23ca94e6,
+        # docs/TODO.md → "Rate-band cap"); it must not reject any rate.
         rp = _import_reprice(_basic_scenario())
-        # Item Price 100; 95 is within ±5% (range 95..105)
         invoice = {"items": [{"idx": 1, "item_code": "IT-1", "rate": 95.00}]}
         profile = {"posa_allow_user_to_edit_rate": 1, "selling_price_list": "Doco"}
         rp.assert_rates_within_band(invoice, profile, band_pct=5)
-        # 90 is outside ±5%
+        # 90 would be outside ±5% under the old cap; still passes today
         invoice["items"][0]["rate"] = 90.00
-        with self.assertRaises(_PermissionError):
-            rp.assert_rates_within_band(invoice, profile, band_pct=5)
+        rp.assert_rates_within_band(invoice, profile, band_pct=5)
 
 
 if __name__ == "__main__":

@@ -124,8 +124,9 @@ jobs:
           bench get-app "$GITHUB_WORKSPACE"
           bench --site example.com install-app posawesome
 
-      - name: POS Awesome backend unit smoke
-        run: python -m unittest discover -s posawesome/posawesome/api -p "test_offline_sync_*.py"
+      # Same standalone stub suite as Backend CI (ci-backend.yml).
+      - name: POS Awesome standalone unit suite
+        run: python -m unittest discover -s posawesome/posawesome/api -p "test_*.py"
 
   build-gates:
     name: Build release gates

@@ -2,7 +2,14 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from posawesome.posawesome.api.cash_movement import queries, service, validation
+# Importing the real api package pulls frappe transitively (api/__init__).
+# Skip the module when discovered by the standalone stub-suite runner
+# (python3 -m unittest discover), where frappe is not importable; under
+# bench the import succeeds and the tests run with mock.patch as usual.
+try:
+    from posawesome.posawesome.api.cash_movement import queries, service, validation
+except ImportError:
+    raise unittest.SkipTest("bench-only test module - requires frappe") from None
 
 
 class TestCashMovementValidation(unittest.TestCase):

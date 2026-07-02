@@ -170,6 +170,9 @@ def _install_stubs():
     frappe_module.utils = types.SimpleNamespace(now_datetime=lambda: "2026-04-05 12:00:00")
     frappe_utils_module.nowdate = lambda: "2026-04-05"
     frappe_module.session = types.SimpleNamespace(user="administrator@example.com")
+    # _scope._is_super consults roles; System Manager bypasses scope asserts
+    # so these tests exercise gift-card logic, not scope (test_scope covers that).
+    frappe_module.get_roles = lambda user=None: ["System Manager"]
 
     def _new_doc(doctype):
         if doctype == "POS Gift Card":

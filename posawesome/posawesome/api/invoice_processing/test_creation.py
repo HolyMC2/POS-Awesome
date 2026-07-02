@@ -110,6 +110,9 @@ def _install_framework_stubs():
         {"args": args, "kwargs": kwargs}
     )
     frappe_module.session = types.SimpleNamespace(user="test@example.com")
+    # _scope._is_super consults roles; System Manager bypasses scope asserts
+    # so these tests exercise creation logic, not scope (test_scope covers that).
+    frappe_module.get_roles = lambda user=None: ["System Manager"]
 
     frappe_exceptions.TimestampMismatchError = TimestampMismatchError
     enqueue_calls = []
@@ -163,6 +166,12 @@ def _install_dependency_stubs():
     utilities_module.ensure_child_doctype = lambda *_args, **_kwargs: None
     utilities_module.set_batch_nos_for_bundels = lambda *_args, **_kwargs: None
     sys.modules["posawesome.posawesome.api.utilities"] = utilities_module
+
+    # submit_invoice lazily imports shifts.assert_shift_not_stale; the real
+    # shifts module drags frappe + utilities.get_version into the harness.
+    shifts_module = types.ModuleType("posawesome.posawesome.api.shifts")
+    shifts_module.assert_shift_not_stale = lambda *_args, **_kwargs: None
+    sys.modules["posawesome.posawesome.api.shifts"] = shifts_module
 
     payments_module = types.ModuleType("posawesome.posawesome.api.payments")
     payments_module.redeeming_customer_credit = lambda *_args, **_kwargs: None
@@ -784,7 +793,8 @@ class TestPostSubmitPaymentProcessing(unittest.TestCase):
         self.assertEqual(queued["kwargs"]["data"], {"paid_change": 4})
         self.assertEqual(queued["kwargs"]["payments"], [{"mode_of_payment": "Cash", "amount": 600}])
         self.assertEqual(queued["kwargs"]["user"], "cashier@example.com")
-        self.assertEqual(len(self.frappe._publish_realtime_calls), 1)
+        # _posa_publish_dual: one publish to the user room, one to the doc room
+        self.assertEqual(len(self.frappe._publish_realtime_calls), 2)
         self.assertEqual(
             self.frappe._publish_realtime_calls[0]["args"][0],
             "pos_post_submit_payments_started",
@@ -792,6 +802,14 @@ class TestPostSubmitPaymentProcessing(unittest.TestCase):
         self.assertEqual(
             self.frappe._publish_realtime_calls[0]["kwargs"]["user"],
             "cashier@example.com",
+        )
+        self.assertEqual(
+            self.frappe._publish_realtime_calls[1]["args"][0],
+            "pos_post_submit_payments_started",
+        )
+        self.assertEqual(
+            self.frappe._publish_realtime_calls[1]["kwargs"]["docname"],
+            "SINV-0002",
         )
         self.assertTrue(queued["enqueue_after_commit"])
 
@@ -942,10 +960,15 @@ class TestPostSubmitPaymentProcessing(unittest.TestCase):
             self.creation._run_post_submit_payments = original_runner
 
         self.assertEqual([call[0] for call in calls], ["run"])
-        self.assertEqual(len(self.frappe._publish_realtime_calls), 1)
+        # _posa_publish_dual: one publish to the user room, one to the doc room
+        self.assertEqual(len(self.frappe._publish_realtime_calls), 2)
         self.assertEqual(
             self.frappe._publish_realtime_calls[0]["args"][0],
             "pos_post_submit_payments_completed",
+        )
+        self.assertEqual(
+            self.frappe._publish_realtime_calls[1]["kwargs"]["docname"],
+            "SINV-0003",
         )
 
     def test_submit_in_background_job_uses_captured_user_for_submit_errors(self):

@@ -14,11 +14,24 @@ def _install_frappe_stub():
     frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
     frappe_module.db = types.SimpleNamespace(has_column=lambda *args, **kwargs: False)
     frappe_module.get_list = lambda *args, **kwargs: []
+    frappe_module.session = types.SimpleNamespace(user="supervisor@example.com")
+    # get_draft_invoices computes supervisor scope server-side from roles;
+    # returning a supervisor role lets is_supervisor=1 broaden the scope
+    # while the cashier test (is_supervisor=0) stays shift-scoped.
+    frappe_module.get_roles = lambda user=None: ["POS Awesome Supervisor"]
     sys.modules["frappe"] = frappe_module
 
     erpnext_sales_order = types.ModuleType("erpnext.selling.doctype.sales_order.sales_order")
     erpnext_sales_order.make_sales_invoice = lambda *args, **kwargs: None
     sys.modules["erpnext.selling.doctype.sales_order.sales_order"] = erpnext_sales_order
+
+    # Pre-stub _scope so importing invoices.py doesn't pull the real
+    # posawesome.posawesome.api package (its __init__ imports frappe.utils).
+    scope_module = types.ModuleType("posawesome.posawesome.api._scope")
+    scope_module.assert_company = lambda *args, **kwargs: None
+    scope_module.assert_customer_in_profile = lambda *args, **kwargs: None
+    scope_module.assert_profile = lambda *args, **kwargs: None
+    sys.modules["posawesome.posawesome.api._scope"] = scope_module
 
     invoice_processing_utils = types.ModuleType("posawesome.posawesome.api.invoice_processing.utils")
     invoice_processing_utils._get_return_validity_settings = lambda *args, **kwargs: (False, 0)

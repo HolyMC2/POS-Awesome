@@ -1,7 +1,15 @@
 import json
+import unittest
 from unittest.mock import patch
 
-import frappe
+# Bench-only integration test: needs a real frappe + site. Skip the module
+# when discovered by the standalone stub-suite runner (python3 -m unittest
+# discover), where frappe is not importable.
+try:
+    import frappe
+except ImportError:
+    raise unittest.SkipTest("bench-only integration test - requires frappe")
+
 # IntegrationTestCase, not the legacy frappe.tests.utils.FrappeTestCase: one
 # legacy import flips frappe's runner into compat mode that preloads EVERY
 # app doctype's test records upfront — the dependency walk then dies on link

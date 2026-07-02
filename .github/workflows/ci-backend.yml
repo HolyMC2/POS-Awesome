@@ -95,5 +95,8 @@ jobs:
       - name: Install POS Awesome
         run: cd frappe-bench && bench --site example.com install-app posawesome
 
-      - name: POS Awesome backend unit smoke
-        run: python -m unittest discover -s posawesome/posawesome/api -p "test_offline_sync_*.py"
+      # Full standalone stub suite (not just offline_sync): every test_*.py
+      # under api/ that fakes frappe in sys.modules. Bench-only modules guard
+      # their frappe import and skip themselves here.
+      - name: POS Awesome standalone unit suite
+        run: python -m unittest discover -s posawesome/posawesome/api -p "test_*.py"
