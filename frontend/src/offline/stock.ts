@@ -185,7 +185,10 @@ export function updateLocalStock(items: AnyRecord[]) {
 export function getLocalStock(itemCode: string) {
 	try {
 		const stockCache = memory.local_stock_cache || {};
-		return stockCache[itemCode]?.actual_qty || null;
+		// ?? not ||: actual_qty === 0 is a real cached answer ("out of
+		// stock"), not a cache miss — || collapsed it to null and callers
+		// fell through to a server fetch instead of showing 0 available.
+		return stockCache[itemCode]?.actual_qty ?? null;
 	} catch {
 		return null;
 	}
