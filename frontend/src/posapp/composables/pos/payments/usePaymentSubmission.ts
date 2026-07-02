@@ -14,6 +14,61 @@ import { debugLog } from "../../../utils/debug";
 declare const frappe: any;
 declare const __: (_str: string, _args?: any[]) => string;
 
+// Pull-model billing: drafts built from a doco POS Charge Request carry a
+// remarks marker set server-side (charge_requests.prepare_charge_request_invoice).
+// The state rides the document — no client-side ref to race or go stale.
+const CHARGE_REQUEST_MARKER = /POS Charge Request: (\S+)/;
+
+async function markChargeRequestCharged(
+	stores: PaymentSubmissionOptions["stores"],
+	requestName: string,
+	posProfile: string,
+	invoiceDoctype: string,
+	invoiceName: string,
+	attempt = 0,
+): Promise<void> {
+	try {
+		await frappe.call({
+			method: "posawesome.posawesome.api.charge_requests.mark_charge_request_charged",
+			args: {
+				name: requestName,
+				pos_profile: posProfile,
+				invoice_doctype: invoiceDoctype,
+				invoice_name: invoiceName,
+			},
+		});
+		stores?.toastStore?.show({
+			title: __("Charge request completed"),
+			message: `${requestName} → ${invoiceName}`,
+			color: "success",
+		});
+	} catch (err: any) {
+		// Background-submitted invoices may not be docstatus=1 yet — retry
+		// once before going loud. The sale itself already stands; the ONLY
+		// unacceptable outcome is a silent failure.
+		if (attempt < 1) {
+			setTimeout(() => {
+				void markChargeRequestCharged(
+					stores,
+					requestName,
+					posProfile,
+					invoiceDoctype,
+					invoiceName,
+					attempt + 1,
+				);
+			}, 5000);
+			return;
+		}
+		console.error("mark_charge_request_charged failed", err);
+		stores?.toastStore?.show({
+			title: __("Charge request not marked as charged"),
+			message: `${__("The sale went through, but request")} ${requestName} ${__("is still Open. A supervisor must mark it charged with invoice")} ${invoiceName}.`,
+			color: "error",
+			timeout: 0,
+		});
+	}
+}
+
 export interface PaymentSubmissionOptions {
 	invoiceDoc: Ref<any>;
 	posProfile: Ref<any>;
@@ -997,6 +1052,23 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 				// they diverge on amended/renamed invoices, which would make the
 				// reprint fetch a name that doesn't exist server-side.
 				stores.uiStore.setLastInvoice(responseInvoiceName);
+			}
+
+			// Pull-model billing: if this draft was built from a charge
+			// request (remarks marker), flip it to Charged now that the
+			// invoice is real. Fire-and-forget with retry — failures toast
+			// loudly, never silently.
+			const chargeRequestMatch = String(doc?.remarks || "").match(
+				CHARGE_REQUEST_MARKER,
+			);
+			if (chargeRequestMatch?.[1] && responseInvoiceName) {
+				void markChargeRequestCharged(
+					stores,
+					chargeRequestMatch[1],
+					profile?.name || doc?.pos_profile || "",
+					submittedDoctype,
+					responseInvoiceName,
+				);
 			}
 
 			if (!waitForInvoiceProcessing) {

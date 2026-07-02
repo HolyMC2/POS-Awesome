@@ -1913,3 +1913,24 @@ Block sales into a shift opened on a previous day until it is closed.,Bloquea ve
 Invoice discount could not be applied,No se pudo aplicar el descuento de la factura
 Transaction-level pricing rules failed on the server. Review the total before charging.,Las reglas de precio a nivel factura fallaron en el servidor. Revisa el total antes de cobrar.
 Unknown invoice,Factura desconocida
+Pending Charges,Cobros pendientes
+Bill repairs and external requests,Cobra reparaciones y solicitudes externas
+No pending charges. Requests from repairs and other modules appear here.,Sin cobros pendientes. Las solicitudes de reparaciones y otros módulos aparecen aquí.
+Could not load pending charges.,No se pudieron cargar los cobros pendientes.
+Could not load this charge request.,No se pudo cargar esta solicitud de cobro.
+Server returned no invoice for this request.,El servidor no devolvió factura para esta solicitud.
+Charge loaded,Cobro cargado
+charge it like any sale; the request completes automatically on payment.,cóbralo como cualquier venta; la solicitud se completa automáticamente al pagar.
+Charge request completed,Solicitud de cobro completada
+Charge request not marked as charged,Solicitud de cobro no marcada como cobrada
+The sale went through, but request,La venta se realizó pero la solicitud
+is still Open. A supervisor must mark it charged with invoice,sigue Abierta. Un supervisor debe marcarla como cobrada con la factura
+Charge requests are not enabled for this POS Profile.,Las solicitudes de cobro no están habilitadas para este POS Profile.
+Charge request {0} is {1} — someone already handled it.,La solicitud de cobro {0} está {1} — alguien ya la atendió.
+You need your own open POS shift to load a charge request.,Necesitas tu propio turno POS abierto para cargar una solicitud de cobro.
+Unsupported invoice doctype {0}.,Tipo de factura no soportado {0}.
+Invoice {0} not found.,No se encontró la factura {0}.
+Invoice {0} is not submitted yet.,La factura {0} aún no está validada.
+"Invoice {0} belongs to {1}, not to the request's customer {2}.","La factura {0} pertenece a {1}, no al cliente de la solicitud {2}."
+Use POS Charge Requests,Usar solicitudes de cobro POS
+Show external charge requests (repairs etc.) so cashiers can bill them in their own shift.,"Muestra solicitudes de cobro externas (reparaciones, etc.) para que el cajero las cobre en su propio turno."

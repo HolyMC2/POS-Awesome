@@ -282,6 +282,7 @@
 
 	<QzTrayDialog v-model="showQzTrayDialog" />
 	<QzTestPrintDialog v-model="showQzTestPrintDialog" />
+	<ChargeRequestsDialog v-model="showChargeRequestsDialog" :pos-profile="posProfile" />
 
 	<!-- Notification Snackbars -->
 	<v-snackbar
@@ -313,12 +314,14 @@ import { useEmployeeStore } from "../../stores/employeeStore";
 import { storeToRefs } from "pinia";
 import QzTrayDialog from "./QzTrayDialog.vue";
 import QzTestPrintDialog from "../settings/QzTestPrintDialog.vue";
+import ChargeRequestsDialog from "./ChargeRequestsDialog.vue";
 
 export default {
 	name: "NavbarMenu",
 	components: {
 		QzTrayDialog,
 		QzTestPrintDialog,
+		ChargeRequestsDialog,
 	},
 	props: {
 		posProfile: { type: Object, default: () => ({}) },
@@ -341,6 +344,7 @@ export default {
 			showLanguageDialog: false,
 			showQzTrayDialog: false,
 			showQzTestPrintDialog: false,
+			showChargeRequestsDialog: false,
 			selectedLanguage: "en",
 			currentLanguage: "en",
 			availableLanguages: FALLBACK_LANGUAGES,
@@ -434,6 +438,16 @@ export default {
 					tone: "info",
 					handler: "syncInvoices",
 				},
+				this.posProfile?.posa_use_charge_requests
+					? {
+							id: "charge-requests",
+							label: __("Pending Charges"),
+							subtitle: __("Bill repairs and external requests"),
+							icon: "mdi-cash-register",
+							tone: "warning",
+							handler: "openChargeRequests",
+						}
+					: null,
 				!this.posProfile?.posa_hide_closing_shift
 					? {
 							id: "close-shift",
@@ -653,6 +667,10 @@ export default {
 				case "closeShift":
 					this.closeMenu();
 					this.$emit("close-shift");
+					break;
+				case "openChargeRequests":
+					this.closeMenu();
+					this.showChargeRequestsDialog = true;
 					break;
 				case "openLanguageDialog":
 					this.closeMenu();
