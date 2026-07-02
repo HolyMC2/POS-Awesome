@@ -47,7 +47,11 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y redis-server libmysqlclient-dev
+          # mariadb-client: frappe v15 shells out to the `mariadb` binary to
+          # restore the new-site DB template; the runner image only ships the
+          # `mysql` client, so new-site died with ExecutableNotFound (this is
+          # what kept Backend CI red — reproduced + fixed 2026-07-02).
+          sudo apt-get install -y redis-server libmysqlclient-dev mariadb-client
 
       - name: Ruff syntax smoke
         run: python -m ruff check --select E9,F63,F7 posawesome
