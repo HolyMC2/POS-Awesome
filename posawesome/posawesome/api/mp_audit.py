@@ -15,6 +15,10 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
+from ._scope import assert_company
+
+_AUDITABLE_DOCTYPES = ("Sales Invoice", "POS Invoice")
+
 
 @frappe.whitelist(methods=["POST"])
 def log_mp_override(invoice_name=None, doctype="Sales Invoice", note=None):
@@ -22,8 +26,17 @@ def log_mp_override(invoice_name=None, doctype="Sales Invoice", note=None):
 
     Best-effort by design: the POS calls this fire-and-forget, the sale
     must not block on audit plumbing. Returns {"logged": bool}.
+
+    The Comment insert runs with ignore_permissions, so the target must be
+    scope-checked: otherwise any logged-in user could forge "[MP-OVERRIDE]
+    Authorized by X" entries onto invoices in companies they can't access,
+    poisoning the very audit trail this exists to protect.
     """
     user = frappe.session.user
+    if doctype not in _AUDITABLE_DOCTYPES:
+        frappe.throw(_("Unsupported doctype for MP override audit."), frappe.PermissionError)
+    if invoice_name and frappe.db.exists(doctype, invoice_name):
+        assert_company(user, frappe.db.get_value(doctype, invoice_name, "company"))
     detail = _(
         "[MP-OVERRIDE] Point terminal sale finalized WITHOUT terminal "
         "confirmation. Authorized by {0}."
