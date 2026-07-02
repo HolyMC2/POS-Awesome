@@ -69,17 +69,27 @@ jobs:
           done
           redis-cli -p 11000 ping
 
-      - name: Create test site and install POS Awesome
+      # The site/app setup is split into one step per command so a failure is
+      # visible at step granularity from the public API (job logs need auth).
+      - name: Create test site
         run: |
           cd frappe-bench
           bench new-site example.com \
             --mariadb-root-password frappe \
             --admin-password frappe \
             --no-mariadb-socket
-          bench get-app --branch version-15 https://github.com/frappe/erpnext
-          bench --site example.com install-app erpnext
-          bench get-app "$GITHUB_WORKSPACE"
-          bench --site example.com install-app posawesome
+
+      - name: Get ERPNext
+        run: cd frappe-bench && bench get-app --branch version-15 https://github.com/frappe/erpnext
+
+      - name: Install ERPNext
+        run: cd frappe-bench && bench --site example.com install-app erpnext
+
+      - name: Get POS Awesome
+        run: cd frappe-bench && bench get-app "$GITHUB_WORKSPACE"
+
+      - name: Install POS Awesome
+        run: cd frappe-bench && bench --site example.com install-app posawesome
 
       - name: POS Awesome backend unit smoke
         run: python -m unittest discover -s posawesome/posawesome/api -p "test_offline_sync_*.py"
