@@ -194,6 +194,12 @@ def _load_module():
     return module
 
 
+# Standalone stub harness: this file fakes `frappe` in sys.modules inside
+# setUpClass, which would poison every test that runs after it inside a real
+# bench process. Skip under `bench run-tests`; run directly: python3 <file>.
+_UNDER_BENCH = callable(getattr(sys.modules.get("frappe"), "init", None))
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class TestUpdateInvoiceReturnPayments(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -416,6 +422,7 @@ class TestUpdateInvoiceReturnPayments(unittest.TestCase):
         )
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class TestStaleNamedInvoiceHandling(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -708,6 +715,7 @@ class TestStaleNamedInvoiceHandling(unittest.TestCase):
         self.assertEqual(result.get("customer_name"), "New Customer")
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class TestPostSubmitPaymentProcessing(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -1023,6 +1031,7 @@ class TestPostSubmitPaymentProcessing(unittest.TestCase):
         )
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class TestManualPostingDatePreservation(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -1215,6 +1224,7 @@ class TestManualPostingDatePreservation(unittest.TestCase):
         self.assertEqual(result["status"], 1)
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class TestInvoiceIdempotency(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

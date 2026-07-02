@@ -106,6 +106,12 @@ def _basic_scenario():
 # ---------------------------------------------------------------------------
 
 
+# Standalone stub harness: this file fakes `frappe` in sys.modules inside
+# setUpClass, which would poison every test that runs after it inside a real
+# bench process. Skip under `bench run-tests`; run directly: python3 <file>.
+_UNDER_BENCH = callable(getattr(sys.modules.get("frappe"), "init", None))
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class DiscountCapTests(unittest.TestCase):
     def test_under_cap_passes(self):
         rp = _import_reprice(_basic_scenario())
@@ -141,6 +147,7 @@ class DiscountCapTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class PaymentTotalsTests(unittest.TestCase):
     def test_match_passes(self):
         rp = _import_reprice(_basic_scenario())
@@ -202,6 +209,7 @@ class PaymentTotalsTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class RateBandTests(unittest.TestCase):
     def test_no_edit_must_match_price_list(self):
         rp = _import_reprice(_basic_scenario())

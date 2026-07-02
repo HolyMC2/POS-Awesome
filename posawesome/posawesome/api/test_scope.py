@@ -169,6 +169,12 @@ def _doco_scenario(session_user="cashier@doco"):
 # ---------------------------------------------------------------------------
 
 
+# Standalone stub harness: this file fakes `frappe` in sys.modules inside
+# setUpClass, which would poison every test that runs after it inside a real
+# bench process. Skip under `bench run-tests`; run directly: python3 <file>.
+_UNDER_BENCH = callable(getattr(sys.modules.get("frappe"), "init", None))
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class AssertCompanyTests(unittest.TestCase):
     def test_allowed_company_passes(self):
         scope = _import_scope(_doco_scenario())
@@ -194,6 +200,7 @@ class AssertCompanyTests(unittest.TestCase):
         scope.assert_company("admin@doco", "Anything")
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class AssertProfileTests(unittest.TestCase):
     def test_assigned_profile_passes(self):
         scope = _import_scope(_doco_scenario())
@@ -210,6 +217,7 @@ class AssertProfileTests(unittest.TestCase):
             scope.assert_profile("cashier@doco", None)
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class AssertCustomerInProfileTests(unittest.TestCase):
     def test_in_group_passes(self):
         scope = _import_scope(_doco_scenario())
@@ -239,6 +247,7 @@ class AssertCustomerInProfileTests(unittest.TestCase):
         scope.assert_customer_in_profile("cashier@doco", "VIP-CUST", "Doco Reparaciones")
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class BulkAssertTests(unittest.TestCase):
     def test_dedup_and_pass(self):
         scope = _import_scope(_doco_scenario())
@@ -254,6 +263,7 @@ class BulkAssertTests(unittest.TestCase):
             )
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class CacheTests(unittest.TestCase):
     def test_per_request_cache_isolation(self):
         scope = _import_scope(_doco_scenario())

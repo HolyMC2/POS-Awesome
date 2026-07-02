@@ -60,6 +60,12 @@ def _load_module():
     return module
 
 
+# Standalone stub harness: this file fakes `frappe` in sys.modules inside
+# setUpClass, which would poison every test that runs after it inside a real
+# bench process. Skip under `bench run-tests`; run directly: python3 <file>.
+_UNDER_BENCH = callable(getattr(sys.modules.get("frappe"), "init", None))
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class TestItemSearchSerialization(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -121,6 +127,7 @@ class TestItemSearchSerialization(unittest.TestCase):
         self.assertIn("2026-04-23 10:30:00", serialized_payloads[0])
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class TestGetItemsCacheKeyParity(unittest.TestCase):
     """The prewarm job (in-process ints) and the SPA (form-POST strings) must
     hash to the same cache key or the warmer warms a key nobody reads."""

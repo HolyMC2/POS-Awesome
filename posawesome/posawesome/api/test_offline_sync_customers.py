@@ -112,6 +112,12 @@ def _load_common_module():
     return sys.modules["posawesome.posawesome.api.offline_sync.common"]
 
 
+# Standalone stub harness: this file fakes `frappe` in sys.modules inside
+# setUpClass, which would poison every test that runs after it inside a real
+# bench process. Skip under `bench run-tests`; run directly: python3 <file>.
+_UNDER_BENCH = callable(getattr(sys.modules.get("frappe"), "init", None))
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class TestOfflineSyncCustomers(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

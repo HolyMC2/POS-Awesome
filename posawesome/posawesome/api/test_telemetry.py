@@ -71,13 +71,21 @@ def _import_telemetry():
     return module
 
 
-telemetry = _import_telemetry()
+# Standalone stub harness: this file fakes `frappe` in sys.modules, which
+# would poison a real bench process for every test imported after it. Must be
+# evaluated BEFORE _import_telemetry() swaps in the stub, and the import must
+# be skipped entirely under bench — a module-level stub install at discovery
+# time broke `bench run-tests --app posawesome` for the whole app.
+# Run directly: python3 <this file>.
+_UNDER_BENCH = callable(getattr(sys.modules.get("frappe"), "init", None))
+
+telemetry = None if _UNDER_BENCH else _import_telemetry()
 
 
 def _event(name: str, value):
     return {"event_name": name, "value": value}
 
-
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class WebVitalCapTests(unittest.TestCase):
     def test_normal_inp_kept(self):
         row = telemetry._sanitise_event(_event("rum:inp", 200))
@@ -121,6 +129,7 @@ class WebVitalCapTests(unittest.TestCase):
         self.assertIsNotNone(row)
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class CrashFilterRegressionTests(unittest.TestCase):
     def test_resizeobserver_crash_dropped(self):
         ev = {
@@ -142,6 +151,7 @@ class CrashFilterRegressionTests(unittest.TestCase):
         self.assertIsNone(telemetry._sanitise_event(_event("garbage:foo", 1)))
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class TelemetrySummaryOrderTests(unittest.TestCase):
     """get_pos_telemetry_summary: the newest/order opt-in + truncated flag
     added after the 50k-ASC cap silently summarised the OLDEST rows on a
