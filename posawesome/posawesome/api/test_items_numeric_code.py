@@ -2,12 +2,17 @@ import json
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+# IntegrationTestCase, not the legacy frappe.tests.utils.FrappeTestCase: one
+# legacy import flips frappe's runner into compat mode that preloads EVERY
+# app doctype's test records upfront — the dependency walk then dies on link
+# targets from apps that aren't installed (e.g. Payment Gateway from the
+# `payments` app via erpnext's Payment Gateway Account).
+from frappe.tests import IntegrationTestCase
 
 from posawesome.posawesome.api.items import get_items
 
 
-class TestNumericItemCodes(FrappeTestCase):
+class TestNumericItemCodes(IntegrationTestCase):
     def setUp(self):
         items = [
             ("ALPHA-TEST", "Alpha"),
@@ -36,12 +41,22 @@ class TestNumericItemCodes(FrappeTestCase):
                 ).insert(ignore_permissions=True, ignore_mandatory=True)
 
     def test_numeric_code_appears_without_search(self):
+        # Regression: numeric item codes used to be filtered out of the
+        # non-search listing. Walk the keyset pages until 002 shows up —
+        # the catalog also contains erpnext _Test fixture items, so no
+        # assumption about which page it lands on.
         pos_profile = json.dumps({"name": "TestProfile"})
+        codes = []
         with patch("posawesome.posawesome.api.items.get_items_details", return_value=[]):
-            first_page = get_items(pos_profile, limit=2)
-            last_name = first_page[-1]["item_name"]
-            second_page = get_items(pos_profile, limit=2, start_after=last_name)
-        codes = [i["item_code"] for i in second_page]
+            start_after = None
+            for _page in range(50):
+                page = get_items(pos_profile, limit=100, start_after=start_after)
+                if not page:
+                    break
+                codes.extend(i["item_code"] for i in page)
+                if "002" in codes:
+                    break
+                start_after = page[-1]["item_name"]
         self.assertIn("002", codes)
 
     def test_item_search_with_whitespace(self):

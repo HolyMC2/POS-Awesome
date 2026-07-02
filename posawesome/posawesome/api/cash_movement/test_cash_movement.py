@@ -57,12 +57,10 @@ class TestCashMovementService(unittest.TestCase):
     @patch("posawesome.posawesome.api.cash_movement.service.resolve_source_cash_account")
     @patch("posawesome.posawesome.api.cash_movement.service.resolve_target_account")
     @patch("posawesome.posawesome.api.cash_movement.service.validate_account_company")
-    @patch("posawesome.posawesome.api.cash_movement.service.create_journal_entry")
     @patch("posawesome.posawesome.api.cash_movement.service.frappe")
     def test_create_cash_movement_returns_existing_when_client_request_replayed(
         self,
         mock_frappe,
-        mock_create_journal_entry,
         mock_validate_account_company,
         mock_resolve_target_account,
         mock_resolve_source_cash_account,
@@ -90,7 +88,9 @@ class TestCashMovementService(unittest.TestCase):
         result = service._create_cash_movement({"x": 1}, "Expense")
 
         self.assertEqual(result, {"name": "POS-CM-.26.-00002"})
-        mock_create_journal_entry.assert_not_called()
+        # JE creation now lives in POSCashMovement.on_submit; the replay path
+        # returns the existing movement before any doc is constructed, so the
+        # account-resolution helpers below are the not-called signal.
         mock_resolve_source_cash_account.assert_not_called()
         mock_resolve_target_account.assert_not_called()
         mock_validate_account_company.assert_not_called()

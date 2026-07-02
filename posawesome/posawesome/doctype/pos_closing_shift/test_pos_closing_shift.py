@@ -224,6 +224,9 @@ class TestPOSClosingShift(unittest.TestCase):
         mock_frappe.db.get_value.side_effect = lambda doctype, name, field: (
             2 if (doctype, name, field) == ("Sales Invoice", "ACC-SINV-2026-00222", "docstatus") else None
         )
+        # Skip rows are built via frappe._dict — give the mocked module a real
+        # dict-to-namespace behavior so the attribute asserts below see values.
+        mock_frappe._dict.side_effect = lambda d=None, **kw: SimpleNamespace(**(d or kw))
 
         result = invoices.submit_printed_invoices("POS-OPEN-1", "Sales Invoice")
 

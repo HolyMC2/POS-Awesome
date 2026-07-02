@@ -37,7 +37,9 @@ class TestClosingShiftCashMovementIntegration(unittest.TestCase):
         mock_get_pos_invoices,
         mock_get_payments_entries,
     ):
-        mock_submit_printed_invoices.return_value = None
+        # Real submit_printed_invoices always returns a list ([] when nothing
+        # was skipped) — mirror that contract.
+        mock_submit_printed_invoices.return_value = []
         mock_get_pos_invoices.return_value = []
         mock_get_payments_entries.return_value = []
         mock_frappe.get_cached_value.return_value = "USD"
