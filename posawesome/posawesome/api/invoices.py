@@ -143,6 +143,35 @@ def get_draft_invoice_doc(invoice_name, doctype="Sales Invoice"):
     return doc
 
 
+@frappe.whitelist(methods=["GET", "POST"])
+def get_last_pos_invoice(pos_opening_shift=None, doctype="Sales Invoice"):
+    """Name of the caller's most recent SUBMITTED POS invoice.
+
+    Backs the "Print Last Invoice" reprint button when the client-side
+    ``lastInvoiceId`` cache is empty — fresh tab, cleared storage, or a
+    service-worker reload. Scoped to the calling user so a cashier only
+    ever reprints their own ticket; narrowed to the active opening shift
+    when the client can supply it. Returns ``None`` when nothing matches.
+    """
+    from frappe import _
+
+    if doctype not in ("Sales Invoice", "POS Invoice"):
+        frappe.throw(_("Invalid doctype {0}").format(doctype))
+
+    filters = {"docstatus": 1, "owner": frappe.session.user}
+    if pos_opening_shift and frappe.db.has_column(doctype, "posa_pos_opening_shift"):
+        filters["posa_pos_opening_shift"] = pos_opening_shift
+
+    name = frappe.db.get_value(doctype, filters, "name", order_by="creation desc")
+    if not name:
+        return None
+
+    # Defense-in-depth: confirm the caller may read this company's docs
+    # before handing back a printable name (mirrors get_draft_invoice_doc).
+    assert_company(frappe.session.user, frappe.db.get_value(doctype, name, "company"))
+    return name
+
+
 @frappe.whitelist(methods=["POST"])
 def delete_invoice(invoice):
     from frappe import _

@@ -183,9 +183,26 @@ export const useUIStore = defineStore("ui", () => {
     if (data.pos_opening_shift) posOpeningShift.value = data.pos_opening_shift;
   }
 
-  const lastInvoiceId = ref<string | null>(null);
+  const LAST_INVOICE_STORAGE_KEY = "posa_last_invoice_id";
+  function loadLastInvoiceId(): string | null {
+    try {
+      return localStorage.getItem(LAST_INVOICE_STORAGE_KEY) || null;
+    } catch {
+      return null;
+    }
+  }
+  // Persisted per-origin so "Print Last Invoice" survives a page reload or
+  // service-worker refresh. Kept in-memory only, this ref reset to null on
+  // every reload — which silently broke the reprint button at the counter.
+  const lastInvoiceId = ref<string | null>(loadLastInvoiceId());
   function setLastInvoice(id: string | null) {
     lastInvoiceId.value = id;
+    try {
+      if (id) localStorage.setItem(LAST_INVOICE_STORAGE_KEY, id);
+      else localStorage.removeItem(LAST_INVOICE_STORAGE_KEY);
+    } catch {
+      // localStorage unavailable (private mode / quota) — in-memory only.
+    }
   }
 
   const lastStockAdjustment = ref<any>(null);

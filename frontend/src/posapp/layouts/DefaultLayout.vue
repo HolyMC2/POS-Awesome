@@ -26,7 +26,6 @@
 				:bootstrap-capabilities="visibleBootstrapCapabilitySummaries"
 				@nav-click="handleNavClick"
 				@close-shift="handleCloseShift"
-				@print-last-invoice="handlePrintLastInvoice"
 				@sync-invoices="handleSyncInvoices"
 				@toggle-offline="handleToggleOffline"
 				@retry-status="handleRetryStatus"
@@ -829,9 +828,7 @@ onBeforeUnmount(() => {
 	if (eventBus) {
 		eventBus.off("data-loaded");
 		eventBus.off("register_pos_profile");
-		eventBus.off("set_last_invoice");
 		eventBus.off("data-load-progress");
-		eventBus.off("print_last_invoice");
 		eventBus.off("sync_invoices");
 	}
 
@@ -935,11 +932,6 @@ const initializeData = async () => {
 
 const setupEventListeners = () => {
 	if (eventBus) {
-		// Track last submitted invoice id
-		// eventBus.on("set_last_invoice", (invoiceId) => {
-		// 	uiStore.setLastInvoice(invoiceId);
-		// });
-
 		eventBus.on("data-loaded", (name) => {
 			markSourceLoaded(name);
 		});
@@ -947,11 +939,6 @@ const setupEventListeners = () => {
 		eventBus.on("data-load-progress", ({ name, progress }) => {
 			setSourceProgress(name, progress);
 		});
-
-		// Allow other components to trigger printing
-		// eventBus.on("print_last_invoice", () => {
-		// 	handlePrintLastInvoice();
-		// });
 
 		// Manual trigger to sync offline invoices
 		eventBus.on("sync_invoices", () => {

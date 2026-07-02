@@ -8,6 +8,7 @@ import {
 import { printDocumentViaQz } from "../../services/qzTray";
 
 declare const frappe: any;
+declare const __: (text: string, args?: any[]) => string;
 
 // Module-scope in-flight guard. Closes the "two paper copies" bug:
 // operators tap the navbar print button while a print is mid-flight
@@ -28,6 +29,20 @@ export function useLastInvoicePrinting() {
 		}
 		if (typeof value === "number") return value === 1;
 		return Boolean(value);
+	}
+
+	async function fetchLastInvoiceName(doctype: string): Promise<string | null> {
+		try {
+			const shiftName = uiStore.posOpeningShift?.name || undefined;
+			const response = await frappe.call({
+				method: "posawesome.posawesome.api.invoices.get_last_pos_invoice",
+				args: { pos_opening_shift: shiftName, doctype },
+			});
+			return response?.message || null;
+		} catch (error) {
+			console.warn("Failed to fetch last invoice from server", error);
+			return null;
+		}
 	}
 
 	async function printLastInvoice() {
@@ -54,25 +69,46 @@ export function useLastInvoicePrinting() {
 	}
 
 	async function _printLastInvoiceImpl() {
-		const lastInvoiceId = uiStore.lastInvoiceId;
 		const posProfile = uiStore.posProfile;
 
-		if (!lastInvoiceId) {
-			console.warn("No last invoice ID to print");
+		if (!posProfile) {
+			frappe?.show_alert?.(
+				{
+					message: __("POS Profile is still loading. Try again in a moment."),
+					indicator: "red",
+				},
+				5,
+			);
 			return;
 		}
 
-		if (!posProfile) {
-			console.warn("No POS Profile loaded");
+		const doctype = posProfile.create_pos_invoice_instead_of_sales_invoice
+			? "POS Invoice"
+			: "Sales Invoice";
+
+		// Prefer the cached id (in-memory or persisted); when empty — fresh tab,
+		// cleared storage, service-worker reload — fall back to the server so the
+		// reprint button works on the operator's first action after opening POS.
+		let lastInvoiceId = uiStore.lastInvoiceId;
+		if (!lastInvoiceId) {
+			lastInvoiceId = await fetchLastInvoiceName(doctype);
+			if (lastInvoiceId) uiStore.setLastInvoice(lastInvoiceId);
+		}
+
+		if (!lastInvoiceId) {
+			frappe?.show_alert?.(
+				{
+					message: __("No recent ticket found to reprint."),
+					indicator: "orange",
+				},
+				5,
+			);
 			return;
 		}
 
 		const pf =
 			posProfile.print_format_for_online || posProfile.print_format;
 		const letter_head = posProfile.letter_head || 0;
-		const doctype = posProfile.create_pos_invoice_instead_of_sales_invoice
-			? "POS Invoice"
-			: "Sales Invoice";
 		const debugPrint = isDebugPrintEnabled();
 		const openInNewTab = parseBooleanSetting(
 			posProfile.posa_open_print_in_new_tab,
@@ -184,6 +220,15 @@ export function useLastInvoicePrinting() {
 		}
 
 		console.warn("Popup blocked or failed to open print window");
+		frappe?.show_alert?.(
+			{
+				message: __(
+					"Could not open the print window — check the browser's popup blocker.",
+				),
+				indicator: "red",
+			},
+			6,
+		);
 	}
 
 	return {

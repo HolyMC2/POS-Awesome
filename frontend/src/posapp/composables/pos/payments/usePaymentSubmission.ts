@@ -973,7 +973,10 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			}
 
 			if (stores?.uiStore) {
-				stores.uiStore.setLastInvoice(doc.name);
+				// Store the server-assigned name, not the pre-submit doc.name —
+				// they diverge on amended/renamed invoices, which would make the
+				// reprint fetch a name that doesn't exist server-side.
+				stores.uiStore.setLastInvoice(responseInvoiceName);
 			}
 
 			if (!waitForInvoiceProcessing) {
