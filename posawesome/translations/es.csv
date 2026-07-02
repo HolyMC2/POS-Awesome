@@ -1893,3 +1893,23 @@ Write off amount exceeds the allowed limit ({0}). Please add payment for the rem
 {0}d ago,hace {0}d
 {0}h ago,hace {0}h
 {0}m ago,hace {0}m
+Do you want to proceed?,¿Deseas continuar?
+Shift from a previous day is still open,Sigue abierto un turno de un día anterior
+Close it now to start today's shift. Sales are blocked until it is closed.,Ciérralo ahora para iniciar el turno de hoy. Las ventas están bloqueadas hasta cerrarlo.
+Close it and open a new shift to keep the day's cash reconciliation clean.,Ciérralo y abre un turno nuevo para mantener limpio el corte de caja del día.
+"This POS shift was opened on {0} and must be closed before selling today. Use Close Shift, then open a new shift.","Este turno de POS se abrió el {0} y debe cerrarse antes de vender hoy. Usa Cerrar Turno y luego abre un turno nuevo."
+Draft Invoices Block Closing,Borradores bloquean el cierre
+{0} — draft by {1} ({2}),{0} — borrador de {1} ({2})
+"This shift still has {0} draft invoice(s) that would be stranded by closing:<br>{1}<br>Submit or delete them first — a supervisor can see them in Invoice Management. (Profiles with 'Allow Delete' enabled purge drafts automatically at close.)","Este turno aún tiene {0} factura(s) en borrador que quedarían huérfanas al cerrar:<br>{1}<br>Primero valídalas o elimínalas — un supervisor puede verlas en Gestión de Facturas. (Los perfiles con 'Permitir Eliminar' purgan los borradores automáticamente al cerrar.)"
+Draft invoices block closing,Borradores bloquean el cierre
+Submit or delete these drafts first — a supervisor can see them in Invoice Management:,Primero valida o elimina estos borradores — un supervisor puede verlos en Gestión de Facturas:
+1 draft invoice on this shift will be DELETED when the shift closes.,1 factura en borrador de este turno se ELIMINARÁ al cerrar el turno.
+draft invoices on this shift will be DELETED when the shift closes.,facturas en borrador de este turno se ELIMINARÁN al cerrar el turno.
+Draft Invoices,Facturas en Borrador
+Pending drafts on this shift — submit or delete before closing,Borradores pendientes en este turno — valídalos o elimínalos antes de cerrar
+No pending drafts,Sin borradores pendientes
+Force Closing Stale Shifts,Forzar cierre de turnos atrasados
+Block sales into a shift opened on a previous day until it is closed.,Bloquea ventas en un turno abierto un día anterior hasta que se cierre.
+Invoice discount could not be applied,No se pudo aplicar el descuento de la factura
+Transaction-level pricing rules failed on the server. Review the total before charging.,Las reglas de precio a nivel factura fallaron en el servidor. Revisa el total antes de cobrar.
+Unknown invoice,Factura desconocida
