@@ -667,7 +667,7 @@ export default {
 			this.settingsPanelOpen = false;
 		},
 		goDesk() {
-			window.location.href = "/app";
+			window.location.href = "/desk";
 		},
 
 		openCloseShift() {

@@ -216,8 +216,9 @@ const invoiceShortcuts: Record<string, unknown> & ThisType<InvoiceShortcutsVm> =
 
 			if (key === "Home") {
 				consumeEvent(event);
-				frappe.set_route("/");
-				location.reload();
+				// Same deskless bug as OpeningDialog.go_desk: set_route("/")
+				// maps to nothing on /posapp and reload() re-entered the SPA.
+				window.location.href = "/desk";
 				return;
 			}
 

@@ -721,7 +721,12 @@ export default {
 			}
 		},
 		openDashboard() {
-			window.location.href = "/app/posapp/dashboard";
+			// Hard-navigating to /app/posapp/dashboard breaks on the /posapp
+			// web route: the Desk-shell bounce (posapp.js) strips the
+			// /dashboard suffix and lands the user back on the POS. The
+			// dashboard is an SPA route — let vue-router resolve it under
+			// whichever base (/posapp or /app/posapp) is active.
+			this.$router.push("/dashboard");
 		},
 		initializeWesternNumerals() {
 			try {

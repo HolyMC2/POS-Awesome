@@ -1053,8 +1053,12 @@ const handleToggleTheme = () => {
 };
 
 const handleLogout = () => {
+	// Match OpeningDialog.logout: the operator's entry point is the POS,
+	// so re-login should land back in /posapp — not bounce through /app
+	// (which 301s to Desk).
+	const loginPath = `/login?redirect-to=${encodeURIComponent("/posapp")}`;
 	authService.logout().finally(() => {
-		window.location.href = "/app";
+		window.location.href = loginPath;
 	});
 };
 
