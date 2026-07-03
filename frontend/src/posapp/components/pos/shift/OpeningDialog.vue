@@ -291,8 +291,10 @@ function submit_dialog() {
 }
 
 function go_desk() {
-	frappe.set_route("/");
-	location.reload();
+	// /posapp has no Desk router — set_route("/") mapped to nothing and
+	// location.reload() just re-entered the SPA, which re-opened this
+	// dialog. Hard-navigate to Desk (/desk on v16; /app 301s there).
+	window.location.href = "/desk";
 }
 
 function logout() {
