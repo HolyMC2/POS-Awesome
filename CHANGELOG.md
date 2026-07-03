@@ -2,6 +2,32 @@
 
 All notable changes.
 
+## 2026-07-02 (PROD) — deployed c4f747f4..68550c34 to both tenants
+
+The whole gated batch below (audit fixes, returns chain, stale-shift gate,
+draft-closing visibility, charge-requests rail, test-suite revival) shipped to
+prod via posawesome-push-prod.sh (--restart-py) + bench migrate on both
+tenants. Deploy notes:
+
+- **Migrate ran 2 patches**: `add_force_close_stale_shift_flag` (flag ON for
+  all 4 profiles across both tenants — sales into a previous-day shift are
+  now blocked until it's closed; per-profile opt-out) and
+  `add_use_charge_requests_flag` (OFF everywhere — pull-model charging stays
+  dormant; doco's POS Charge Request doctype + taller's settings flag landed
+  on prod separately ~30 min earlier, also OFF).
+- **Pre-migrate safety**: verified live shifts weren't stale in site tz
+  (America/Mazatlan) so the restart→migrate window couldn't hit the missing
+  column on the submit path. Zombie open shifts from Apr/May exist on both
+  tenants; their owners will be routed into the closing flow on next boot.
+- **Verify**: web-entry + /api/method/ping + /posapp 200/301 on both tenants;
+  patch log confirmed; flag counts checked (3+1 profiles ON).
+- **Safe to skip**: nothing here needs manual follow-up; flipping
+  `posa_use_charge_requests` (POS Profile) + `use_pos_charge_requests`
+  (Taller App Settings) starts the pull-model pilot when ready.
+- The prod smoke inside prod-refresh raced the proxy's stale-upstream window
+  (known 30s self-heal) and reported 502; external re-smoke after recovery
+  was green. Script exit 7 was a false alarm.
+
 ## 2026-07-02 (lab) — audit-fix + upstream-pick batch, CI unbroken, test runner unbroken
 
 Big consolidation day. Full audit of the 56 commits since 2026-05-28 plus a
