@@ -170,6 +170,7 @@ export default {
 				const { item, items, profile, attrsMeta } = data;
 
 				this.parentItem = item || null;
+				if (!this.parentItem) return;
 				this.items = Array.isArray(items) ? items : [];
 				this.filters = {};
 				this.attributes_meta = attrsMeta || this.attributes_meta;
@@ -202,6 +203,11 @@ export default {
 				});
 			},
 			deep: true,
+			// The component lazy-mounts (Pos.vue v-if="variantsDialog" +
+			// defineAsyncComponent) AFTER openVariants() has already set
+			// variantsData, so a non-immediate watcher never saw the first
+			// payload — the dialog opened blank (regression in 6f1f6296).
+			immediate: true,
 		},
 	},
 
