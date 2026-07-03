@@ -239,16 +239,22 @@ export default {
 		// Watcher is not needed if we bind v-model="draftsDialog" to store ref
 	},
 	watch: {
-		draftsDialog(value) {
-			if (!value) {
-				this.selected = [];
-				return;
-			}
+		draftsDialog: {
+			handler(value) {
+				if (!value) {
+					this.selected = [];
+					return;
+				}
 
-			if (!this.uiStore.invoiceManagementDialog) {
-				this.uiStore.closeDrafts();
-				this.uiStore.openInvoiceManagement("drafts", this.uiStore.draftSource || "invoice");
-			}
+				if (!this.uiStore.invoiceManagementDialog) {
+					this.uiStore.closeDrafts();
+					this.uiStore.openInvoiceManagement("drafts", this.uiStore.draftSource || "invoice");
+				}
+			},
+			// Lazy-mount race (see Variants.vue 2659aae3): mounted behind
+			// v-if="draftsDialog", so without immediate the open transition —
+			// and this redirect into Invoice Management — never fired.
+			immediate: true,
 		},
 		draftsData: {
 			handler(data) {

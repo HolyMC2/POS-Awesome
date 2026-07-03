@@ -1719,17 +1719,24 @@ export default {
 		},
 	},
 	watch: {
-		invoiceManagementDialog(value) {
-			if (value) {
-				this.activeTab = this.invoiceManagementTargetTab || "history";
-				this.draftSource = getDefaultCommercialDocumentSource(
-					this.posProfile,
-					this.uiStore.invoiceManagementDraftSource || this.draftSource,
-				);
-				this.initializeSupervisorProfileScope();
-				this.loadSupervisorPosProfiles();
-				this.refreshAll();
-			} else this.resetPagination();
+		invoiceManagementDialog: {
+			handler(value) {
+				if (value) {
+					this.activeTab = this.invoiceManagementTargetTab || "history";
+					this.draftSource = getDefaultCommercialDocumentSource(
+						this.posProfile,
+						this.uiStore.invoiceManagementDraftSource || this.draftSource,
+					);
+					this.initializeSupervisorProfileScope();
+					this.loadSupervisorPosProfiles();
+					this.refreshAll();
+				} else this.resetPagination();
+			},
+			// Same lazy-mount race as Variants.vue (2659aae3): Pos.vue mounts
+			// this behind v-if="invoiceManagementDialog" + async import, so
+			// the open transition happens BEFORE the watcher exists — without
+			// immediate the dialog opened unrefreshed on the default tab.
+			immediate: true,
 		},
 		activeTab() {
 			this.refreshActiveTab();
