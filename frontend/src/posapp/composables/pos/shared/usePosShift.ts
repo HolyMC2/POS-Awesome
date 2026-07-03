@@ -315,11 +315,11 @@ export function usePosShift(openDialog?: () => void) {
 					anyErr?.message ||
 					anyErr?.exc ||
 					String(err) ||
-					"Could not prepare closing shift.";
+					translateMessage("Could not prepare closing shift.");
 				message = String(message).replace(/<[^>]+>/g, "").trim();
 				console.error("Error preparing closing shift", err);
 				toastStore.show({
-					title: "Could not close shift",
+					title: translateMessage("Could not close shift"),
 					message,
 					color: "error",
 					timeout: 12000,
@@ -374,9 +374,9 @@ export function usePosShift(openDialog?: () => void) {
 									err,
 								);
 								toastStore.show({
-									title: "Close-shift ticket print failed",
+									title: translateMessage("Close-shift ticket print failed"),
 									message:
-										"Shift was closed correctly. Re-print from Desk if needed.",
+										translateMessage("Shift was closed correctly. Re-print from Desk if needed."),
 									color: "warning",
 									timeout: 8000,
 								});
@@ -388,7 +388,7 @@ export function usePosShift(openDialog?: () => void) {
 					clearOpeningStorage();
 					useInvoiceStore().clear();
 					toastStore.show({
-						title: "POS Shift Closed",
+						title: translateMessage("POS Shift Closed"),
 						color: "success",
 					});
 					check_opening_entry();
@@ -422,13 +422,13 @@ export function usePosShift(openDialog?: () => void) {
 					}
 				}
 				if (!message) {
-					message = anyErr?.message || anyErr?.exc || String(err) || "Close-shift failed.";
+					message = anyErr?.message || anyErr?.exc || String(err) || translateMessage("Close-shift failed.");
 				}
 				// Strip HTML — Frappe throws sometimes include <strong>/
 				// <br/> markup that toastStore renders as plain text.
 				message = message.replace(/<[^>]+>/g, "").trim();
 				toastStore.show({
-					title: "Could not close shift",
+					title: translateMessage("Could not close shift"),
 					message,
 					color: "error",
 					timeout: 12000,

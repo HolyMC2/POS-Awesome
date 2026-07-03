@@ -1936,3 +1936,9 @@ Use POS Charge Requests,Usar solicitudes de cobro POS
 Show external charge requests (repairs etc.) so cashiers can bill them in their own shift.,"Muestra solicitudes de cobro externas (reparaciones, etc.) para que el cajero las cobre en su propio turno."
 "This request was already charged with invoice {0} — it has now been marked as completed. Do not charge it again.","Esta solicitud ya fue cobrada con la factura {0} — se marcó como completada. No la cobres de nuevo."
 "Charge request {0} is already being charged by {1} (draft {2}). Coordinate before charging it twice.","La solicitud {0} ya la está cobrando {1} (borrador {2}). Coordínense antes de cobrarla dos veces."
+Could not close shift,No se pudo cerrar el turno
+Could not prepare closing shift.,No se pudo preparar el cierre del turno.
+Close-shift failed.,Falló el cierre del turno.
+Close-shift ticket print failed,No se imprimió el ticket de cierre
+Shift was closed correctly. Re-print from Desk if needed.,El turno se cerró correctamente. Reimprímelo desde el Escritorio si hace falta.
+POS Shift Closed,Turno POS cerrado

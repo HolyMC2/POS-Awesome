@@ -171,10 +171,15 @@ export const useToastStore = defineStore("toast", () => {
 				: DEFAULT_SNACK_TIMEOUT;
 		const summary =
 			typeof data.summary === "string" ? data.summary.trim() : "";
+		// `message` is detail text whenever a title is present; without a
+		// title it already became the title above (don't show it twice).
 		const detail =
 			typeof data.detail === "string"
 				? data.detail.trim()
-				: data.text || "";
+				: data.text ||
+					(typeof data.title === "string" && typeof data.message === "string"
+						? data.message.trim()
+						: "");
 		const count =
 			Number.isFinite(data.count) && (data.count ?? 0) > 0
 				? Math.floor(data.count!)
