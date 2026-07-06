@@ -2,6 +2,22 @@
 
 All notable changes.
 
+## 2026-07-03 (LAB) — invisible selected item in dropdown menus (black-on-black)
+
+- **Fixed: selected/hovered rows in Vuetify list menus rendered as a solid
+  bar the same color as their text** (black-on-black light / white-on-white
+  dark) — bit the POS Profile dropdown in Create POS Opening Shift, and
+  silently affected every VList overlay wash (navbar drawer active item,
+  actions menu, autocompletes, charge-request list). Root cause: Vuetify only
+  defines `--v-theme-overlay-multiplier` inside generated `.bg-*` utility
+  rules; our menus render VList without a bg-* class, so
+  `opacity: calc(var(--v-activated-opacity) * var(--v-theme-overlay-multiplier))`
+  is invalid at computed-value time and collapses to opacity 1 (solid
+  currentColor). Fix: inherited fallback `--v-theme-overlay-multiplier: 1` on
+  `body[data-page-route="posapp"]` / `.posapp` / `.v-overlay-container`
+  (theme.css); element-level `.bg-*` rules still win. Verified live on lab
+  with computed styles (overlay 0.12 after fix). NOT yet pushed to prod.
+
 ## 2026-07-02 (PROD) — deployed c4f747f4..68550c34 to both tenants
 
 The whole gated batch below (audit fixes, returns chain, stale-shift gate,

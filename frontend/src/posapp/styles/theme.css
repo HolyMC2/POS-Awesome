@@ -455,6 +455,23 @@ body[data-page-route="posapp"] {
 	outline-offset: 2px;
 }
 
+/* Selected/hover wash on Vuetify list items: `.v-list-item--active >
+   .v-list-item__overlay` gets `opacity: calc(var(--v-activated-opacity) *
+   var(--v-theme-overlay-multiplier))`, but Vuetify only DEFINES
+   --v-theme-overlay-multiplier inside its generated `.bg-*` utility rules.
+   Our menus/drawers render VList without a bg-* class, so the var is
+   unset, the calc() is invalid at computed-value time, and opacity
+   collapses to its initial value 1 — a solid currentColor bar that
+   swallows its own label (black-on-black in light mode, white-on-white
+   in dark; bit the POS Profile dropdown in Create POS Opening Shift).
+   Provide the missing default by inheritance: element-level .bg-* rules
+   still win when present. */
+body[data-page-route="posapp"],
+.posapp,
+.v-overlay-container {
+	--v-theme-overlay-multiplier: 1;
+}
+
 body[data-page-route="posapp"] .v-overlay__content > .v-card,
 body[data-page-route="posapp"] .v-overlay__content > .v-sheet,
 body[data-page-route="posapp"] .v-overlay__content .v-card {
