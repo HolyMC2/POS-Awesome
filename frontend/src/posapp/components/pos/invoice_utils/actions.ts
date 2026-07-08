@@ -85,6 +85,17 @@ export async function add_item(context: any, item: any, options: any = {}) {
 	}
 	applyReturnDiscountProration(context);
 
+	if (res && context.eventBus && typeof context.eventBus.emit === "function") {
+		const focusedLine: any = res;
+		window.setTimeout(() => {
+			context.eventBus.emit("focus_cart_item_qty", {
+				item: focusedLine,
+				rowId: focusedLine?.posa_row_id,
+				itemCode: focusedLine?.item_code || item?.item_code,
+			});
+		}, 0);
+	}
+
 	// Log debug info
 	_logPriceListDebug(context, "add_item", {
 		...priceContext,

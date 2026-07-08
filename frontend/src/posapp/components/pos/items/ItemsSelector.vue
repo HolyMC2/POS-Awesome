@@ -691,6 +691,7 @@ const add_item = async (item, optionsOrQty: any = {}) => {
 			price_list_currency: item.original_currency || item.currency || pos_profile.value?.currency,
 			itemCurrencyUtils,
 			invoiceStore,
+			eventBus,
 			itemDetailFetcher,
 			items: invoiceStore.items,
 			isReturnInvoice: isReturnInvoice.value,
@@ -713,11 +714,21 @@ const add_item = async (item, optionsOrQty: any = {}) => {
 
 		if (isValid) {
 			await useItemAddition().prepareItemForCart(item, requestedQty, context);
-			await useItemAddition().addItem(item, context);
+			const addedLine = await useItemAddition().addItem(item, context);
 			if (eventBus && typeof eventBus.emit === "function") {
 				eventBus.emit("apply_pricing_rules");
 			}
 			qty.value = 1;
+			if (addedLine && eventBus && typeof eventBus.emit === "function") {
+				const focusedLine: any = addedLine;
+				window.setTimeout(() => {
+					eventBus.emit("focus_cart_item_qty", {
+						item: focusedLine,
+						rowId: focusedLine?.posa_row_id,
+						itemCode: focusedLine?.item_code || item?.item_code,
+					});
+				}, 0);
+			}
 		}
 	} else {
 		emit("add-item", item);

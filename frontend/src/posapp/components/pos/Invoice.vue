@@ -537,6 +537,35 @@ export default {
 			this.uiStore.triggerItemSearchFocus();
 		},
 
+		focusCartItemQty(payload = {}) {
+			const rows = Array.isArray(this.items) ? this.items : [];
+			if (!rows.length) return;
+
+			const requestedItem = payload?.item || payload;
+			const rowId = payload?.rowId || requestedItem?.posa_row_id;
+			const itemCode = payload?.itemCode || requestedItem?.item_code;
+			let index = -1;
+
+			if (rowId) {
+				index = rows.findIndex((row) => row?.posa_row_id === rowId);
+			}
+			if (index < 0 && itemCode) {
+				index = rows.findIndex((row) => row?.item_code === itemCode);
+			}
+			if (index < 0) {
+				index = 0;
+			}
+
+			this.$nextTick(() => {
+				window.setTimeout(() => {
+					const focused = this.$refs.itemsTableRef?.focusItemField?.(index, "qty");
+					if (!focused && index !== 0) {
+						this.$refs.itemsTableRef?.focusItemField?.(0, "qty");
+					}
+				}, 0);
+			});
+		},
+
 		focusAdditionalDiscountField() {
 			this.eventBus?.emit?.("focus_additional_discount");
 			this.$refs.invoiceSummary?.focusAdditionalDiscountField?.();
@@ -1064,6 +1093,7 @@ export default {
 			update_invoice_coupons: this.handleUpdateInvoiceCoupons,
 			set_all_items: this.handleSetAllItems,
 			load_return_invoice: this.handleLoadReturnInvoice,
+			focus_cart_item_qty: this.focusCartItemQty,
 			set_new_line: this.handleSetNewLine,
 			calc_uom: this.calc_uom,
 			recalculate_return_discount: (payload) => this.applyReturnDiscountProration(payload),

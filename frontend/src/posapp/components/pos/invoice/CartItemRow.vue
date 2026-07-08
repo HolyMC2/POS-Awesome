@@ -109,7 +109,7 @@
 						variant="outlined"
 						class="posa-cart-table__qty-input"
 						@blur="closeQtyEdit"
-						@keydown.enter.prevent="closeQtyEdit"
+						@keydown.enter.prevent="closeQtyEdit({ returnFocusToSearch: true })"
 						@click.stop
 						ref="qtyInput"
 						:autofocus="true"
@@ -433,6 +433,7 @@ const emit = defineEmits([
 	"update-rate",
 	"update-discount-percent",
 	"update-discount-amount",
+	"qty-edit-submitted",
 	"toggle-offer",
 	"toggle-expand",
 	"remove-item",
@@ -555,16 +556,21 @@ function openUomEdit() {
 	});
 }
 
-function closeQtyEdit() {
+function closeQtyEdit(options = {}) {
 	if (isEditingQty.value) {
+		let didUpdate = false;
 		if (editingQtyValue.value !== "" && editingQtyValue.value != null) {
 			const newQty = parseFloat(editingQtyValue.value);
 			// Emit event to update parent state
 			const val = !newQty || newQty <= 0 ? 1 : newQty;
 			emit("update-qty", props.item, val);
+			didUpdate = true;
 		}
 		isEditingQty.value = false;
 		editingQtyValue.value = "";
+		if (didUpdate && options?.returnFocusToSearch) {
+			emit("qty-edit-submitted", props.item);
+		}
 	}
 }
 

@@ -62,6 +62,7 @@
 						:isRTL="isRtl"
 						:is-expanded="isItemExpanded(item.posa_row_id)"
 						@update-qty="handleQtyUpdate"
+						@qty-edit-submitted="handleQtyEditSubmitted"
 						@minus-click="handleMinusClick"
 						@add-one="addOne"
 						@calc-uom="calcUom"
@@ -314,6 +315,12 @@ const handleMinusClick = (item: any) => {
 const handleQtyUpdate = (item: any, newQty: any) => {
 	props.setFormatedQty(item, "qty", null, false, newQty);
 	eventBus?.emit("recalculate_return_discount", { defer: true });
+};
+
+const handleQtyEditSubmitted = () => {
+	window.setTimeout(() => {
+		eventBus?.emit("focus_item_search");
+	}, 0);
 };
 
 const handleRateUpdate = (item: any, newRate: any) => {
