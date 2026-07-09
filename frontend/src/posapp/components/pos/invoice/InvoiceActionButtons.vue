@@ -18,6 +18,7 @@
 				prepend-icon="mdi-credit-card"
 				@click="$emit('show-payment')"
 				class="summary-btn pay-btn"
+				data-pos-keyboard-target="pay"
 				:loading="paymentLoading"
 			>
 				{{ __("PAY") }}
@@ -35,6 +36,7 @@
 				prepend-icon="mdi-cellphone-arrow-down"
 				@click="$emit('open-saldo-picker')"
 				class="summary-btn"
+				data-pos-keyboard-target="invoice-action"
 			>
 				{{ __("Recarga / Servicio") }}
 			</v-btn>
@@ -49,6 +51,7 @@
 				prepend-icon="mdi-content-save"
 				@click="$emit('save-and-clear')"
 				class="summary-btn"
+				data-pos-keyboard-target="invoice-action"
 				:loading="saveLoading"
 			>
 				{{ __("Save & Clear") }}
@@ -63,6 +66,7 @@
 				prepend-icon="mdi-tray-full"
 				@click="$emit('load-drafts')"
 				class="white-text-btn summary-btn"
+				data-pos-keyboard-target="invoice-action"
 				:loading="loadDraftsLoading"
 			>
 				{{ __("Drafts") }}
@@ -77,6 +81,7 @@
 				prepend-icon="mdi-book-search"
 				@click="$emit('select-order')"
 				class="summary-btn"
+				data-pos-keyboard-target="invoice-action"
 				:loading="selectOrderLoading"
 			>
 				{{ __("Select S.O") }}
@@ -91,6 +96,7 @@
 				prepend-icon="mdi-folder-search-outline"
 				@click="$emit('open-invoice-management')"
 				class="summary-btn"
+				data-pos-keyboard-target="invoice-action"
 				:loading="invoiceManagementLoading"
 			>
 				{{ __("Invoice Mgmt") }}
@@ -105,6 +111,7 @@
 				prepend-icon="mdi-close-circle"
 				@click="$emit('cancel-sale')"
 				class="summary-btn"
+				data-pos-keyboard-target="invoice-action"
 				:loading="cancelLoading"
 			>
 				{{ __("Cancel Sale") }}
@@ -120,6 +127,7 @@
 				prepend-icon="mdi-backup-restore"
 				@click="$emit('open-returns')"
 				class="summary-btn"
+				data-pos-keyboard-target="invoice-action"
 				:loading="returnsLoading"
 			>
 				{{ __("Sales Return") }}
@@ -134,6 +142,7 @@
 				prepend-icon="mdi-printer"
 				@click="$emit('print-draft')"
 				class="summary-btn"
+				data-pos-keyboard-target="invoice-action"
 				:loading="printLoading"
 			>
 				{{ __("Print Draft") }}
@@ -148,6 +157,7 @@
 				prepend-icon="mdi-monitor"
 				@click="$emit('open-customer-display')"
 				class="summary-btn"
+				data-pos-keyboard-target="invoice-action"
 				:loading="customerDisplayLoading"
 			>
 				{{ __("Customer Screen") }}

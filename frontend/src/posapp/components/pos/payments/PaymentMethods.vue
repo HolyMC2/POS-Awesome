@@ -22,6 +22,7 @@
 			<v-row class="payments ma-0" dense>
 				<v-col cols="12" md="7" v-if="!isMpesaC2bPayment(payment)">
 					<v-text-field
+						data-pos-keyboard-target="payment-amount"
 						density="compact"
 						variant="solo"
 						:color="isReturn ? 'error' : 'primary'"
@@ -33,6 +34,8 @@
 						:rules="[isNumber]"
 						:prefix="currencySymbol(currency)"
 						@focus="$emit('set-rest-amount', payment, isReturn)"
+						@keydown.enter="blurTarget"
+						@keydown.esc="blurTarget"
 						:readonly="isGiftCardPayment(payment)"
 					></v-text-field>
 				</v-col>
@@ -43,6 +46,7 @@
 							color="primary"
 							variant="flat"
 							class="payment-method-action-btn"
+							data-pos-keyboard-target="payment-action"
 							:data-test="`payment-method-action-${payment.mode_of_payment}`"
 							@click="handlePrimaryAction(payment)"
 						>
@@ -68,6 +72,7 @@
 							color="secondary"
 							variant="tonal"
 							class="payment-denominations__btn"
+							data-pos-keyboard-target="payment-denomination"
 							@click="$emit('set-denomination', payment, d)"
 						>
 							{{ formatCurrency(d) }}
@@ -81,6 +86,7 @@
 						color="success"
 						variant="flat"
 						class="payment-method-action-btn payment-method-action-btn--success"
+						data-pos-keyboard-target="payment-action"
 						@click="$emit('mpesa-dialog', payment)"
 					>
 						{{ __("Get Payments") }}
@@ -97,6 +103,7 @@
 						color="success"
 						variant="tonal"
 						class="payment-method-action-btn payment-method-action-btn--secondary"
+						data-pos-keyboard-target="payment-action"
 						:disabled="payment.amount === 0"
 						@click="$emit('request-payment', payment)"
 					>
@@ -145,6 +152,10 @@ const handlePrimaryAction = (payment) => {
 		return;
 	}
 	emit("set-full-amount", payment, props.isReturn);
+};
+
+const blurTarget = (event) => {
+	event?.target?.blur?.();
 };
 </script>
 

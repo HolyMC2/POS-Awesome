@@ -42,8 +42,11 @@ describe("item selector highlight bindings", () => {
 
 		expect(buildSelectorRowProps(itemSelection as any, item)).toEqual({
 			"data-item-code": "ITEM-003",
+			"data-pos-keyboard-target": "item-row",
 			class: "item-row-highlighted",
 			draggable: true,
+			role: "button",
+			tabindex: 0,
 		});
 	});
 });

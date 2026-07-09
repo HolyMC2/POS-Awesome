@@ -1,6 +1,11 @@
 ﻿<!-- eslint-disable vue/multi-word-component-names -->
 <template>
-	<div :class="['payment-shell', { 'payment-shell--dialog': dialogMode }]" data-perf-tag="payment">
+	<div
+		ref="paymentRoot"
+		data-pos-keyboard-root="payment"
+		:class="['payment-shell', { 'payment-shell--dialog': dialogMode }]"
+		data-perf-tag="payment"
+	>
 		<v-card
 			:class="[
 				'selection mx-auto my-0 pos-themed-card payment-card',
@@ -312,6 +317,7 @@ import {
 import { resolvePaymentPrintFormatDoctypes } from "../../utils/paymentPrintDoctype";
 import { resolvePaymentPrintFormat } from "../../utils/paymentPrintFormat";
 import { parseBooleanSetting } from "../../utils/stock";
+import { focusFirstKeyboardTarget } from "../../utils/keyboardNavigation";
 
 // Components
 import PaymentSummary from "./payments/PaymentSummary.vue";
@@ -405,6 +411,7 @@ const paymentsTouched = ref(false);
 let paymentSnapshotBeforeCredit = null;
 const backgroundStatusCheck = ref(null);
 const paymentVisible = ref(false);
+const paymentRoot = ref(null);
 const paymentContainer = ref(null);
 const submitButton = ref(null);
 const _shortcutHandlers = ref({});
@@ -1273,17 +1280,41 @@ const restorePaymentLinesAfterFailedSubmit = () => {
 	is_credit_sale.value = false;
 };
 
+// NOTE: upstream's enableShortcutCreditSale (zero quick-cash → credit sale)
+// was dropped — it belongs to the 8ce1752c credit-sale UI we skipped; our
+// server-side _validate_credit_sale_allowed covers the invariant.
+const focusSubmitButton = () => {
+	const btn = submitButton.value;
+	const el = btn && btn.$el ? btn.$el : btn;
+	if (!el) {
+		return false;
+	}
+	el.scrollIntoView?.({ behavior: "smooth", block: "center" });
+	el.focus?.();
+	highlightSubmit.value = true;
+	return true;
+};
+
+const focusFirstPaymentTarget = () => {
+	const root = paymentRoot.value;
+	if (
+		focusFirstKeyboardTarget(
+			root,
+			"[data-pos-keyboard-target='payment-amount'], [data-pos-keyboard-target='payment-action']",
+		)
+	) {
+		highlightSubmit.value = false;
+		return true;
+	}
+
+	return focusSubmitButton();
+};
+
 const handleShowPayment = () => {
 	paymentVisible.value = true;
 	nextTick(() => {
 		setTimeout(() => {
-			const btn = submitButton.value;
-			const el = btn && btn.$el ? btn.$el : btn;
-			if (el) {
-				el.scrollIntoView({ behavior: "smooth", block: "center" });
-				el.focus();
-				highlightSubmit.value = true;
-			}
+			focusFirstPaymentTarget();
 			if (eventBus && typeof eventBus.emit === "function") {
 				eventBus.emit("payment_ui_ready");
 			}
@@ -2118,6 +2149,10 @@ onBeforeUnmount(() => {
 	if (_shortcutHandlers.value.handlePaymentShortcut) {
 		document.removeEventListener("keydown", _shortcutHandlers.value.handlePaymentShortcut);
 	}
+});
+
+defineExpose({
+	focusFirstPaymentTarget,
 });
 </script>
 

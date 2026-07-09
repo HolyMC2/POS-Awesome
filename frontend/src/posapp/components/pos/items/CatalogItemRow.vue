@@ -5,7 +5,9 @@
 		:style="gridStyle"
 		role="row"
 		tabindex="0"
+		data-pos-keyboard-target="item-row"
 		@click="onClick"
+		@keydown="onKeyboardSelect"
 	>
 		<div
 			v-for="column in columns"
@@ -153,6 +155,15 @@ function onClick(event) {
 	// would fire against a stale closure. The emit goes through the
 	// component instance, which the scroller keeps stable for the slot
 	// lifetime. Same pattern used in ItemsSelectorCards → ItemCard.
+	emit("click", event, props.item);
+}
+
+function onKeyboardSelect(event) {
+	const key = event?.key || "";
+	if (key !== "Enter" && key !== " ") {
+		return;
+	}
+	event.preventDefault?.();
 	emit("click", event, props.item);
 }
 </script>

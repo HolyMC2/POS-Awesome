@@ -16,6 +16,7 @@
 						class="pos-themed-input"
 						:label="frappe._('Search, scan or browse item')"
 						hide-details
+						data-pos-keyboard-target="item-search"
 						:model-value="searchInput"
 						@update:model-value="
 							(val) => {
@@ -23,9 +24,8 @@
 								$emit('search-input', val);
 							}
 						"
-						@keydown.esc="$emit('esc')"
 						@keydown.enter="$emit('enter')"
-						@keydown="$emit('search-keydown', $event)"
+						@keydown="handleSearchKeydown"
 						@click:clear="$emit('clear-search')"
 						@click:prepend-inner="$emit('focus')"
 						@paste="$emit('search-paste', $event)"
@@ -101,12 +101,13 @@
 					class="pos-themed-input"
 					:label="frappe._('QTY')"
 					hide-details
+					data-pos-keyboard-target="item-qty"
 					:model-value="qtyInput"
 					@update:model-value="$emit('update:qtyInput', $event)"
 					type="text"
 					inputmode="decimal"
 					@keydown.enter="$emit('enter')"
-					@keydown.esc="$emit('esc')"
+					@keydown.esc="blurTarget"
 					@focus="$emit('clear-qty')"
 					@click="$emit('clear-qty')"
 					@blur="$emit('blur-qty')"
@@ -181,7 +182,7 @@ const props = defineProps({
 	context: { type: String, default: "pos" },
 });
 
-defineEmits([
+const emit = defineEmits([
 	"update:searchInput",
 	"update:qtyInput",
 	"esc",
@@ -221,6 +222,26 @@ const syncItemsCountLabel = computed(() => {
 	const itemLabel = count === 1 ? translate("item synced") : translate("items synced");
 	return `${count.toLocaleString()} ${itemLabel}`;
 });
+
+const blurTarget = (event) => {
+	event?.target?.blur?.();
+};
+
+const handleSearchEscape = (event) => {
+	if (props.searchInput) {
+		emit("esc");
+		return;
+	}
+	blurTarget(event);
+};
+
+const handleSearchKeydown = (event) => {
+	if (event?.key === "Escape") {
+		handleSearchEscape(event);
+		return;
+	}
+	emit("search-keydown", event);
+};
 
 defineExpose({
 	debounce_search,

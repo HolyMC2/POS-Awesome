@@ -9,6 +9,7 @@
 					color="primary"
 					variant="flat"
 					class="payment-submit-btn payment-footer-btn"
+					data-pos-keyboard-target="payment-submit"
 					@click="$emit('submit')"
 					:loading="loading"
 					:disabled="loading || validatePayment"
@@ -24,6 +25,7 @@
 					color="success"
 					variant="flat"
 					class="payment-submit-print-btn payment-footer-btn"
+					data-pos-keyboard-target="payment-submit-print"
 					@click="$emit('submit-and-print')"
 					:loading="loading"
 					:disabled="loading || validatePayment"
@@ -38,6 +40,7 @@
 					color="error"
 					variant="flat"
 					class="mt-2 pa-1 payment-cancel-btn payment-footer-btn"
+					data-pos-keyboard-target="payment-cancel"
 					@click="$emit('cancel')"
 				>
 					{{ __("Cancel Payment") }}

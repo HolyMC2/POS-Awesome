@@ -1,5 +1,7 @@
 <template>
 	<div
+		ref="posRoot"
+		data-pos-keyboard-root="pos"
 		class="pos-main-container dynamic-container"
 		:class="[rtlClasses]"
 		:style="[responsiveStyles, layoutStyleOverrides, rtlStyles]"
@@ -241,6 +243,10 @@ import { useItemsStore } from "../../../stores/itemsStore.js";
 import { storeToRefs } from "pinia";
 import { parseBooleanSetting } from "../../../utils/stock";
 import { useCustomerDisplayPublisher } from "../../../composables/pos/shared/useCustomerDisplayPublisher";
+import {
+	moveFocusByArrow,
+	resolveKeyboardNavigationRoot,
+} from "../../../utils/keyboardNavigation";
 
 const Payments = defineAsyncComponent(() => import("../Payments.vue"));
 const Drafts = defineAsyncComponent(() => import("../flows/Drafts.vue"));
@@ -255,6 +261,7 @@ export default {
 	setup() {
 		const eventBus = inject("eventBus");
 		const dialog = ref(false);
+		const posRoot = ref(null);
 		const invoicePanel = ref(null);
 		const additionalDiscountField = ref(null);
 		const mobileDock = ref(null);
@@ -578,6 +585,10 @@ export default {
 				token: Date.now(),
 			};
 		};
+		const handlePosKeyboardNavigation = (event) => {
+			const root = resolveKeyboardNavigationRoot(posRoot.value);
+			moveFocusByArrow(event, { root });
+		};
 
 		useCustomerDisplayPublisher({
 			posProfile,
@@ -597,6 +608,7 @@ export default {
 		);
 
 		onMounted(() => {
+			document.addEventListener("keydown", handlePosKeyboardNavigation);
 			if (typeof window !== "undefined" && "ResizeObserver" in window) {
 				mobileDockObserver = new ResizeObserver(() => {
 					updateBottomDockHeight();
@@ -621,6 +633,7 @@ export default {
 		});
 
 		onBeforeUnmount(() => {
+			document.removeEventListener("keydown", handlePosKeyboardNavigation);
 			if (mobileDockObserver) {
 				mobileDockObserver.disconnect();
 				mobileDockObserver = null;
@@ -701,6 +714,7 @@ export default {
 			itemsStore,
 			__,
 			invoiceDoc,
+			posRoot,
 			itemsCount,
 			totalQty,
 			formattedCartTotal,

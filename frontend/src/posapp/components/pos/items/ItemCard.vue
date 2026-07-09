@@ -1,7 +1,12 @@
 <template>
 	<div
 		:class="['card-item-card', { 'item-highlighted': isItemHighlighted }]"
+		data-pos-keyboard-target="item-card"
+		tabindex="0"
+		role="button"
+		:aria-label="`${item.item_name || item.item_code}`"
 		@click="onClick"
+		@keydown="onKeyboardSelect"
 		:draggable="true"
 		@dragstart="onDragStart"
 		@dragend="onDragEnd"
@@ -144,6 +149,15 @@ const formattedActualQty = computed(() => {
 });
 
 const onClick = (event) => {
+	emit("click", event, props.item);
+};
+
+const onKeyboardSelect = (event) => {
+	const key = event?.key || "";
+	if (key !== "Enter" && key !== " ") {
+		return;
+	}
+	event.preventDefault?.();
 	emit("click", event, props.item);
 };
 

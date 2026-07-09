@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 import { mount } from "@vue/test-utils";
 
@@ -33,6 +33,20 @@ const VBtnStub = defineComponent({
 				},
 				slots.default?.(),
 			);
+	},
+});
+
+const VTextFieldStub = defineComponent({
+	emits: ["change", "focus", "keydown"],
+	setup(_, { attrs, emit }) {
+		return () =>
+			h("input", {
+				...attrs,
+				value: attrs.modelValue,
+				onChange: (event: Event) => emit("change", event),
+				onFocus: (event: FocusEvent) => emit("focus", event),
+				onKeydown: (event: KeyboardEvent) => emit("keydown", event),
+			});
 	},
 });
 
@@ -72,7 +86,7 @@ describe("PaymentMethods", () => {
 					VRow: BoxStub,
 					VCol: BoxStub,
 					VBtn: VBtnStub,
-					VTextField: BoxStub,
+					VTextField: VTextFieldStub,
 				},
 			},
 		});
@@ -82,5 +96,46 @@ describe("PaymentMethods", () => {
 
 		expect(wrapper.find('[data-test="payment-method-exact-Cash"]').exists()).toBe(false);
 		expect(wrapper.find('[data-test="payment-method-remaining-Cash"]').exists()).toBe(false);
+	});
+
+	it("marks payment amounts as keyboard targets and blurs them on Enter", async () => {
+		const wrapper = mount(PaymentMethods, {
+			props: {
+				payments: [
+					{
+						name: "PAY-1",
+						mode_of_payment: "Cash",
+						type: "Cash",
+						amount: 0,
+						default: 1,
+					},
+				],
+				currency: "PKR",
+				isReturn: false,
+				requestPaymentField: false,
+				currencySymbol: () => "Rs ",
+				formatCurrency: (value: number) => String(value),
+				isNumber: () => true,
+				getVisibleDenominations: () => [],
+				isCashLikePayment: () => true,
+				isMpesaC2bPayment: () => false,
+				isGiftCardPayment: () => false,
+			},
+			global: {
+				components: {
+					VRow: BoxStub,
+					VCol: BoxStub,
+					VBtn: VBtnStub,
+					VTextField: VTextFieldStub,
+				},
+			},
+		});
+
+		const input = wrapper.get('input[data-pos-keyboard-target="payment-amount"]');
+		const blurSpy = vi.spyOn(input.element as HTMLInputElement, "blur");
+
+		await input.trigger("keydown", { key: "Enter" });
+
+		expect(blurSpy).toHaveBeenCalledTimes(1);
 	});
 });

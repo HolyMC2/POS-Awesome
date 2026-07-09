@@ -58,12 +58,13 @@ const VTextFieldStub = defineComponent({
 		label: { type: String, default: "" },
 		disabled: { type: Boolean, default: false },
 	},
-	emits: ["update:modelValue"],
+	emits: ["update:modelValue", "keydown"],
 	setup(props, { attrs, emit, slots }) {
 		return () =>
 			h("label", { class: "v-text-field-stub" }, [
 				h("span", { class: "field-label" }, props.label),
 				h("input", {
+					...attrs,
 					"data-test": attrs["data-test"] ?? "text-field-input",
 					value: props.modelValue,
 					disabled: props.disabled,
@@ -72,6 +73,7 @@ const VTextFieldStub = defineComponent({
 							"update:modelValue",
 							(event.target as HTMLInputElement).value,
 						),
+					onKeydown: (event: KeyboardEvent) => emit("keydown", event),
 				}),
 				slots["append-inner"]?.(),
 			]);
@@ -118,4 +120,5 @@ describe("ItemHeader", () => {
 		expect(wrapper.text()).toContain("Syncing offline catalog...");
 		expect(wrapper.text()).toContain("128 items synced");
 	});
+
 });

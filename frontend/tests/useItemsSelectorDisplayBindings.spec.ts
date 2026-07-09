@@ -76,7 +76,10 @@ describe("useItemsSelectorDisplayBindings", () => {
 		expect(bindings.getItemRowProps(item)).toEqual({
 			class: "item-row-highlighted",
 			"data-item-code": "ITEM-001",
+			"data-pos-keyboard-target": "item-row",
 			draggable: true,
+			role: "button",
+			tabindex: 0,
 		});
 	});
 });

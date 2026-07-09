@@ -21,6 +21,9 @@ export const buildSelectorRowProps = (
 	return {
 		...highlightProps,
 		"data-item-code": item?.item_code || "",
+		"data-pos-keyboard-target": "item-row",
 		draggable: true,
+		role: "button",
+		tabindex: 0,
 	};
 };
