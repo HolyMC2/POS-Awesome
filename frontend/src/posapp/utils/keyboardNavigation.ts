@@ -39,6 +39,18 @@ export const isEditableElement = (element: Element | null | undefined) => {
 	return true;
 };
 
+const shouldUseEditableArrowNavigation = (element: Element | null | undefined) => {
+	if (!element || !isHTMLElement(element)) {
+		return false;
+	}
+
+	const keyboardTarget = element.closest("[data-pos-keyboard-target]");
+	return Boolean(
+		keyboardTarget &&
+			!keyboardTarget.hasAttribute("data-pos-keyboard-native-arrows"),
+	);
+};
+
 const hasDisabledState = (element: HTMLElement) =>
 	element.hasAttribute("disabled") ||
 	element.getAttribute("aria-disabled") === "true" ||
@@ -207,7 +219,7 @@ export const moveFocusByArrow = (
 	}
 
 	const activeElement = document.activeElement;
-	if (isEditableElement(activeElement)) {
+	if (isEditableElement(activeElement) && !shouldUseEditableArrowNavigation(activeElement)) {
 		return false;
 	}
 

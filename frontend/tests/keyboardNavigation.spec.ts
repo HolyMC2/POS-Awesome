@@ -98,6 +98,27 @@ describe("keyboardNavigation", () => {
 		expect(document.activeElement).toBe(input);
 	});
 
+	it("moves out of explicit POS keyboard inputs with arrow keys", () => {
+		const root = document.createElement("div");
+		const fieldWrapper = document.createElement("div");
+		const input = document.createElement("input");
+		const next = document.createElement("button");
+		fieldWrapper.dataset.posKeyboardTarget = "item-search";
+		fieldWrapper.appendChild(input);
+		root.append(fieldWrapper, next);
+		document.body.appendChild(root);
+		setRect(root, { left: 0, top: 0, width: 400, height: 300 });
+		setRect(input, { left: 20, top: 20 });
+		setRect(next, { left: 120, top: 20 });
+
+		input.focus();
+
+		const event = keydown("ArrowRight");
+		expect(moveFocusByArrow(event, { root })).toBe(true);
+		expect(event.defaultPrevented).toBe(true);
+		expect(document.activeElement).toBe(next);
+	});
+
 	it("focuses a preferred target first when available", () => {
 		const root = document.createElement("div");
 		const fallback = document.createElement("button");
