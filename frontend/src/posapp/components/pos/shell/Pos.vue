@@ -244,6 +244,8 @@ import { storeToRefs } from "pinia";
 import { parseBooleanSetting } from "../../../utils/stock";
 import { useCustomerDisplayPublisher } from "../../../composables/pos/shared/useCustomerDisplayPublisher";
 import {
+	isEditableElement,
+	isElementVisible,
 	moveFocusByArrow,
 	resolveKeyboardNavigationRoot,
 } from "../../../utils/keyboardNavigation";
@@ -589,6 +591,33 @@ export default {
 			const root = resolveKeyboardNavigationRoot(posRoot.value);
 			moveFocusByArrow(event, { root });
 		};
+		// Upstream bf150918 replaced arrow-nav with an UNCONDITIONAL Tab
+		// hijack (any Tab anywhere → item search). We keep both, gated:
+		// native Tab survives inside editable fields and open overlays
+		// (payment dialog, saldo dialogs), everywhere else Tab jumps to
+		// the search box — the cashier's home position.
+		const handlePosTabFocus = (event) => {
+			if (
+				event.key !== "Tab" ||
+				event.altKey ||
+				event.ctrlKey ||
+				event.metaKey ||
+				event.shiftKey
+			) {
+				return;
+			}
+			if (isEditableElement(document.activeElement)) {
+				return;
+			}
+			const hasVisibleOverlay = Array.from(
+				document.querySelectorAll(".v-overlay__content"),
+			).some((el) => isElementVisible(el));
+			if (hasVisibleOverlay) {
+				return;
+			}
+			event.preventDefault();
+			focusItemSearchField();
+		};
 
 		useCustomerDisplayPublisher({
 			posProfile,
@@ -609,6 +638,7 @@ export default {
 
 		onMounted(() => {
 			document.addEventListener("keydown", handlePosKeyboardNavigation);
+			document.addEventListener("keydown", handlePosTabFocus, true);
 			if (typeof window !== "undefined" && "ResizeObserver" in window) {
 				mobileDockObserver = new ResizeObserver(() => {
 					updateBottomDockHeight();
@@ -634,6 +664,7 @@ export default {
 
 		onBeforeUnmount(() => {
 			document.removeEventListener("keydown", handlePosKeyboardNavigation);
+			document.removeEventListener("keydown", handlePosTabFocus, true);
 			if (mobileDockObserver) {
 				mobileDockObserver.disconnect();
 				mobileDockObserver = null;
@@ -714,7 +745,6 @@ export default {
 			itemsStore,
 			__,
 			invoiceDoc,
-			posRoot,
 			itemsCount,
 			totalQty,
 			formattedCartTotal,
@@ -750,6 +780,7 @@ export default {
 			handlePaymentDialogAfterLeave,
 			discountPercentageOfferName,
 			getCurrencySymbol,
+			posRoot,
 			invoicePanel,
 			eventBus,
 			dialog,

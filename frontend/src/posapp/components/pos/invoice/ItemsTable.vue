@@ -68,6 +68,7 @@
 						@calc-uom="calcUom"
 						@update-rate="handleRateUpdate"
 						@update-discount-percent="handleDiscountPercentUpdate"
+						@discount-percent-edit-submitted="handleDiscountEditSubmitted"
 						@update-discount-amount="handleDiscountAmountUpdate"
 						@open-name-dialog="openNameDialog"
 						@reset-item-name="resetItemName"
@@ -150,7 +151,11 @@ import { useItemsTableMerge } from "../../../composables/pos/items/useItemsTable
 import { useItemsTableNameEdit } from "../../../composables/pos/items/useItemsTableNameEdit";
 import { useFormatters } from "../../../composables/core/useFormatters";
 import { useRtl } from "../../../composables/core/useRtl";
-import { focusCartItemField, type CartShortcutField } from "../../../utils/cartFieldFocus";
+import {
+	focusCartItemField,
+	type CartFieldFocusOptions,
+	type CartShortcutField,
+} from "../../../utils/cartFieldFocus";
 import "./items-table-styles.css";
 
 // Global declarations for Frappe
@@ -317,7 +322,28 @@ const handleQtyUpdate = (item: any, newQty: any) => {
 	eventBus?.emit("recalculate_return_discount", { defer: true });
 };
 
-const handleQtyEditSubmitted = () => {
+const getItemIndex = (item: any) => {
+	if (!item) {
+		return -1;
+	}
+	const rowId = item?.posa_row_id;
+	if (rowId) {
+		return items.value.findIndex((row: any) => row?.posa_row_id === rowId);
+	}
+	return items.value.findIndex((row: any) => row === item);
+};
+
+const handleQtyEditSubmitted = (item: any) => {
+	window.setTimeout(() => {
+		const index = getItemIndex(item);
+		if (index >= 0 && focusItemField(index, "discount_percentage", { activate: false })) {
+			return;
+		}
+		eventBus?.emit("focus_item_search");
+	}, 0);
+};
+
+const handleDiscountEditSubmitted = () => {
 	window.setTimeout(() => {
 		eventBus?.emit("focus_item_search");
 	}, 0);
@@ -342,8 +368,8 @@ const handleDiscountAmountUpdate = (item: any, newDiscount: any) => {
 	props.calcPrices(item, newDiscount, { target: { id: "discount_amount" } });
 };
 
-const focusItemField = (index: number, field: CartShortcutField) => {
-	return focusCartItemField(tableContainer.value, index, field);
+const focusItemField = (index: number, field: CartShortcutField, options?: CartFieldFocusOptions) => {
+	return focusCartItemField(tableContainer.value, index, field, options);
 };
 
 const isItemExpanded = (itemId: any) => {

@@ -19,6 +19,9 @@ const createContainer = () => {
 					<td data-column-key="rate">
 						<div class="posa-cart-table__editor-display" tabindex="0"></div>
 					</td>
+					<td data-column-key="discount_percentage">
+						<div class="posa-cart-table__editor-display" tabindex="0"></div>
+					</td>
 				</tr>
 			</tbody>
 		</table>
@@ -50,5 +53,17 @@ describe("focusCartItemField", () => {
 		expect(focusCartItemField(container, 0, "uom")).toBe(true);
 		expect(document.activeElement).toBe(activator);
 		expect(clickSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("focuses discount percentage without opening the editor when activation is disabled", () => {
+		const container = createContainer();
+		const activator = container.querySelector(
+			'[data-column-key="discount_percentage"] .posa-cart-table__editor-display',
+		) as HTMLElement;
+		const clickSpy = vi.spyOn(activator, "click");
+
+		expect(focusCartItemField(container, 0, "discount_percentage", { activate: false })).toBe(true);
+		expect(document.activeElement).toBe(activator);
+		expect(clickSpy).not.toHaveBeenCalled();
 	});
 });
