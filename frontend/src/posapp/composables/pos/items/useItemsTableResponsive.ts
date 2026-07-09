@@ -37,18 +37,10 @@ export function getResponsiveVisibleHeaders(
 				return true;
 			}
 
-			if (width < 450) {
+			if (width > 0 && width < 450) {
 				return ["item_name", "qty", "amount", "actions"].includes(
 					header.key,
 				);
-			} else if (width < 650) {
-				return ![
-					"discount_percentage",
-					"discount_amount",
-					"price_list_rate",
-					"uom",
-					"posa_is_offer",
-				].includes(header.key);
 			}
 			return true;
 		})

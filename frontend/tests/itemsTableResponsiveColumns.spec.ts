@@ -37,15 +37,20 @@ describe("items table final visible columns", () => {
 		]);
 	});
 
-	it("uses the exact same responsive column list before the expand system column", () => {
+	it("keeps selected optional columns visible in normal POS pane widths", () => {
 		const responsive = getResponsiveVisibleHeaders(headers, 600);
 		const finalColumns = buildFinalVisibleColumns(headers, 600);
 
 		expect(responsive.map((column) => column.key)).toEqual([
 			"item_name",
 			"qty",
+			"uom",
+			"price_list_rate",
+			"discount_percentage",
+			"discount_amount",
 			"rate",
 			"amount",
+			"posa_is_offer",
 			"actions",
 		]);
 		expect(finalColumns.slice(0, -1)).toEqual(responsive);
