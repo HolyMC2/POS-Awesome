@@ -650,6 +650,11 @@ const bootstrapWarningUiState = computed(() =>
 		warningActive: bootstrapWarningActive.value,
 		warningTooltip: bootstrapWarningTooltip.value,
 		capabilitySummaries: bootstrapCapabilitySummaries.value,
+		onlineReady:
+			networkOnline.value &&
+			serverOnline.value &&
+			!serverConnecting.value &&
+			!getIsManualOffline(),
 	}),
 );
 const visibleBootstrapWarningActive = computed(() => bootstrapWarningUiState.value.active);

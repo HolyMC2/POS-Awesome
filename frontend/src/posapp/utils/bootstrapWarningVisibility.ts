@@ -24,8 +24,17 @@ export function resolveBootstrapWarningUiState<
 	warningActive: boolean;
 	warningTooltip?: string | null;
 	capabilitySummaries?: TSummary[] | null;
+	onlineReady?: boolean;
 }) {
 	if (!input.startupWarningsReady) {
+		return {
+			active: false,
+			tooltip: "",
+			capabilitySummaries: [] as TSummary[],
+		};
+	}
+
+	if (input.onlineReady) {
 		return {
 			active: false,
 			tooltip: "",

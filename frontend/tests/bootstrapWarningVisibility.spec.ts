@@ -50,6 +50,32 @@ describe("bootstrap warning startup deferral", () => {
 		expect(state.tooltip).toBe("Stock Confidence Offline");
 	});
 
+	it("hides offline cache warnings while the server is reachable", () => {
+		const state = resolveBootstrapWarningUiState({
+			startupWarningsReady: true,
+			warningActive: true,
+			warningTooltip: "Stock Confidence Offline",
+			capabilitySummaries: [
+				{
+					id: "stock_confidence_offline",
+					label: "Stock Confidence Offline",
+					status: "override_required",
+					severity: "warning",
+					message: "Stock confidence is low.",
+					action: "Collect a local supervisor PIN.",
+					warningCodes: ["stock_cache_ready"],
+					prerequisites: ["stock_cache_ready"],
+					policy: "require_manager_override",
+				},
+			],
+			onlineReady: true,
+		});
+
+		expect(state.active).toBe(false);
+		expect(state.tooltip).toBe("");
+		expect(state.capabilitySummaries).toEqual([]);
+	});
+
 	it("keeps startup warnings hidden until item background sync settles", () => {
 		const shouldLift = shouldLiftBootstrapWarningStartupGate({
 			loadingActive: false,
