@@ -123,6 +123,7 @@ import {
 	getSyncResourceDefinitions,
 	getSyncResourceState,
 	listSyncResourceStates,
+	setTaxInclusiveSetting,
 } from "../../offline/index";
 import { SyncCoordinator } from "../../offline/sync/SyncCoordinator";
 import { createOfflineSyncRuntime } from "../../offline/sync/runtime";
@@ -182,6 +183,8 @@ const __ = instance?.proxy?.__ || ((value) => value);
 const BUILD_VERSION = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : null;
 const OFFLINE_SYNC_SCHEMA_VERSION = "2026-04-09";
 const OFFLINE_SYNC_TIMER_INTERVAL_MS = 60_000;
+const PRODUCT_SYNC_SETTLE_TIMEOUT_MS = 120_000;
+const PRODUCT_SYNC_SETTLE_POLL_MS = 250;
 
 // Utils
 const createFallbackLoadingScope = () =>
@@ -482,6 +485,48 @@ function canRunOfflineSync() {
 
 function canRunTimerOfflineSync() {
 	return !!(canRunOfflineSync() && serverOnline.value && !serverConnecting.value);
+}
+
+function waitForItemsBackgroundSync(timeoutMs = PRODUCT_SYNC_SETTLE_TIMEOUT_MS) {
+	return new Promise((resolve) => {
+		const startedAt = Date.now();
+		const poll = () => {
+			if (!itemsBackgroundLoading.value) {
+				resolve(true);
+				return;
+			}
+			if (Date.now() - startedAt >= timeoutMs) {
+				resolve(false);
+				return;
+			}
+			setTimeout(poll, PRODUCT_SYNC_SETTLE_POLL_MS);
+		};
+		poll();
+	});
+}
+
+async function refreshOfflineProductCatalog() {
+	const profile = getCurrentBootstrapProfile();
+	if (!profile?.name || !canRunOfflineSync()) {
+		return false;
+	}
+
+	try {
+		await memoryInitPromise;
+		if (!itemsStore.posProfile?.name) {
+			await itemsStore.initialize(
+				profile,
+				selectedCustomer.value || profile.customer || null,
+				profile.selling_price_list || null,
+			);
+		}
+		await itemsStore.refreshItems();
+		await waitForItemsBackgroundSync();
+		return true;
+	} catch (error) {
+		console.error("Failed to refresh offline product catalog", error);
+		return false;
+	}
 }
 
 async function callOfflineSyncMethod(method, args = {}) {
@@ -1003,7 +1048,9 @@ const handleRefreshOfflineData = async () => {
 	if (!getIsManualOffline() && navigator.onLine) {
 		await handleRetryStatus();
 		await triggerOperatorRefreshSync();
-		await refreshOfflinePricingRules();
+		await refreshOfflineProductCatalog();
+		await refreshTaxInclusiveSetting();
+		await refreshOfflinePricingRules({ force: true });
 		evaluateBootstrapSnapshot({ allowPrompt: false });
 	}
 	toastStore.show({
@@ -1022,6 +1069,8 @@ const handleRebuildOfflineData = async () => {
 	});
 	if (canRunOfflineSync()) {
 		await triggerOperatorRefreshSync({ includeBootSync: true });
+		await refreshOfflineProductCatalog();
+		await refreshTaxInclusiveSetting();
 		await refreshOfflinePricingRules({ force: true });
 		evaluateBootstrapSnapshot({ allowPrompt: false });
 	}
@@ -1077,7 +1126,7 @@ const handleRefreshCacheUsage = () => {
 
 const refreshTaxInclusiveSetting = async () => {
 	if (!posProfile.value || !posProfile.value.name || !navigator.onLine) {
-		return;
+		return false;
 	}
 	try {
 		const r = await frappe.call({
@@ -1087,18 +1136,13 @@ const refreshTaxInclusiveSetting = async () => {
 			},
 		});
 		if (r.message !== undefined) {
-			const val = r.message;
-			import("../../offline/index")
-				.then((m) => {
-					if (m && m.setTaxInclusiveSetting) {
-						m.setTaxInclusiveSetting(val);
-					}
-				})
-				.catch(() => {});
+			setTaxInclusiveSetting(r.message);
+			return true;
 		}
 	} catch (e) {
 		console.warn("Failed to refresh tax inclusive setting", e);
 	}
+	return false;
 };
 
 const handleUpdateAfterDelete = () => {
