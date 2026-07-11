@@ -23,11 +23,8 @@ POS Profile wiring audit (`POS-PROFILE-SPEC.md`), upstream ledger
 posting-date backdating gate, is_return gate, delete_invoice gate,
 gift-cards feature gate + PKR-default fix. 9 tests (test_profile_gates.py).
 
-Remaining (needs one Marco decision):
-- `use_customer_credit` server gate — **DECIDE: is the M-Pesa client-side
-  force-enable (`usePaymentMethods.ts:213`) intended? formalize server-side
-  or remove**
-- `posa_allow_line_item_name_override`, `posa_use_delivery_charges` (low)
+✅ ALL P0 LANDED (Marco decided: M-Pesa unused → mutation removed,
+customer-credit gated plainly; name-override + delivery-charges gated).
 
 ### 2. Offline dead-letter sales surfacing (reliability HIGH) — SPEC A
 
@@ -78,10 +75,7 @@ Save&Clear/cancel; boot transition suppressed. Effort S/M.
 
 ### 5. POS Profile P1/P2 cleanup
 
-- Remove 6 DEAD fields (fixture + patch, one commit):
-  posa_allow_supervisor_manage_gift_cards, posa_allow_zero_rated_items,
-  posa_apply_customer_discount, posa_default_card_view, posa_fetch_coupon,
-  posa_smart_reload_mode
+- ✅ 6 DEAD fields removed (remove_dead_pos_profile_fields, 2026-07-11)
 - Warts: `pose_use_limit_search` typo (document or migrate),
   posa_auto_set_batch dead backend comment, PostingDateRow odd-home note
 
