@@ -16,10 +16,10 @@ server-side check; pattern exists.
 
 | # | field | hole | fix point |
 |---|---|---|---|
-| 1 | `posa_allow_change_posting_date` | client can backdate sales into closed accounting periods; `_apply_manual_posting_controls` (creation.py:618) accepts client posting_date without reading the flag | reject client-supplied posting date/time when flag OFF |
-| 2 | `posa_allow_return` | return invoices (negative totals → cash refunds) submittable on profiles with returns disabled — zero server reads | check on `is_return` in submit_invoice |
-| 3 | `posa_use_gift_cards` | gift-card issue/top-up/redeem endpoints never read the feature flag (only supervisor ROLE gates); also `issue_gift_card(currency="PKR")` upstream default mints PKR cards on bare calls | feature check in gift_cards.py entrypoints + default currency from company |
-| 4 | `posa_allow_delete` | split-brain: closing purge honors it, `delete_invoice` endpoint (invoices.py:187) ignores it (only printed-guard + scope) | flag check in delete_invoice |
+| 1 ✅ `2b73be6d` | `posa_allow_change_posting_date` | client can backdate sales into closed accounting periods; `_apply_manual_posting_controls` (creation.py:618) accepts client posting_date without reading the flag | reject client-supplied posting date/time when flag OFF |
+| 2 ✅ `2b73be6d` | `posa_allow_return` | return invoices (negative totals → cash refunds) submittable on profiles with returns disabled — zero server reads | check on `is_return` in submit_invoice |
+| 3 ✅ `2b73be6d` | `posa_use_gift_cards` | gift-card issue/top-up/redeem endpoints never read the feature flag (only supervisor ROLE gates); also `issue_gift_card(currency="PKR")` upstream default mints PKR cards on bare calls | feature check in gift_cards.py entrypoints + default currency from company |
+| 4 ✅ `2b73be6d` | `posa_allow_delete` | split-brain: closing purge honors it, `delete_invoice` endpoint (invoices.py:187) ignores it (only printed-guard + scope) | flag check in delete_invoice |
 | 5 | `use_customer_credit` | UI gate only AND M-Pesa flow force-mutates it client-side (`usePaymentMethods.ts:213 profile.use_customer_credit = true`) to bypass its own gate; redemption AMOUNTS are server-validated vs real advances, the feature gate is fiction | profile check in the customer-credit redemption path; decide the M-Pesa exception server-side |
 | 6 | `posa_allow_line_item_name_override` | `_apply_item_name_overrides` applies client name overrides unconditionally — receipt-text tampering (low) | gate on flag |
 | 7 | `posa_use_delivery_charges` | server accepts delivery-charge rows regardless (payment invariant limits theft to mislabeling) | flag check when rows present (low) |

@@ -19,14 +19,11 @@ POS Profile wiring audit (`POS-PROFILE-SPEC.md`), upstream ledger
 
 ### 1. POS Profile P0 server backstops (security/money — see POS-PROFILE-SPEC.md)
 
-Wave 1 (mechanical, pattern = `_validate_credit_sale_allowed`):
-- `posa_allow_change_posting_date` → reject client posting date when OFF
-- `posa_allow_return` → block `is_return` submits when OFF
-- `posa_allow_delete` → check in `delete_invoice` endpoint
+✅ **LANDED 2026-07-11 `2b73be6d`** (wave 1 + gift-cards):
+posting-date backdating gate, is_return gate, delete_invoice gate,
+gift-cards feature gate + PKR-default fix. 9 tests (test_profile_gates.py).
 
-Wave 2 (needs one Marco decision):
-- `posa_use_gift_cards` feature gate in gift_cards.py + fix `currency="PKR"`
-  default
+Remaining (needs one Marco decision):
 - `use_customer_credit` server gate — **DECIDE: is the M-Pesa client-side
   force-enable (`usePaymentMethods.ts:213`) intended? formalize server-side
   or remove**
