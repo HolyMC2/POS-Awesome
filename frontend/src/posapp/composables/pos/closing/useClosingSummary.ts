@@ -64,6 +64,17 @@ export function useClosingSummary(
 			: [];
 	});
 
+	const customerCreditRedeemed = computed(() => {
+		const ov = unref(overview);
+		return (
+			ov?.customer_credit_redeemed || {
+				count: 0,
+				company_currency_total: 0,
+				by_currency: [],
+			}
+		);
+	});
+
 	const returnsSummary = computed(() => {
 		const ov = unref(overview);
 		return (
@@ -357,6 +368,17 @@ export function useClosingSummary(
 				color: "accent-warning",
 			},
 			{
+				key: "customer-credit-redeemed",
+				label: __("Customer Credit Redeemed"),
+				value: formatCurrencyWithSymbol(
+					customerCreditRedeemed.value.company_currency_total,
+					overviewCompanyCurrency.value,
+				),
+				caption: `${__("Invoices")}: ${formatCount(customerCreditRedeemed.value.count || 0)}`,
+				icon: "mdi-wallet-giftcard",
+				color: "accent-info",
+			},
+			{
 				key: "returns",
 				label: __("Returns"),
 				value: returnsValue,
@@ -492,6 +514,7 @@ export function useClosingSummary(
 		multiCurrencyTotals,
 		paymentsByMode,
 		creditInvoicesByCurrency,
+		customerCreditRedeemed,
 		returnsByCurrency,
 		changeReturnedRows,
 		cashExpectedByCurrency,

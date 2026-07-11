@@ -27,3 +27,4 @@ posawesome.patches.add_hide_items_until_search
 posawesome.patches.add_lean_layout_flags
 posawesome.patches.add_force_close_stale_shift_flag
 posawesome.patches.add_use_charge_requests_flag
+posawesome.patches.add_customer_credit_invoice_fields

@@ -169,6 +169,11 @@ export function useClosingShift(eventBus: any) {
 			),
 			payments_by_mode: normalizePayments(payload.payments_by_mode),
 			credit_invoices: normalizeCredit(payload.credit_invoices),
+			// Same {count, company_currency_total, by_currency} shape as
+			// credit_invoices — reuse the normalizer.
+			customer_credit_redeemed: normalizeCredit(
+				payload.customer_credit_redeemed,
+			),
 			sales_summary: {
 				gross_company_currency_total: toNumber(
 					payload.sales_summary?.gross_company_currency_total,

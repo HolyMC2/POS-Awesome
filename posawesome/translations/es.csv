@@ -1942,3 +1942,7 @@ Close-shift failed.,Falló el cierre del turno.
 Close-shift ticket print failed,No se imprimió el ticket de cierre
 Shift was closed correctly. Re-print from Desk if needed.,El turno se cerró correctamente. Reimprímelo desde el Escritorio si hace falta.
 POS Shift Closed,Turno POS cerrado
+Customer Credit Redeemed,Crédito de Cliente Canjeado
+Customer Credit Used,Crédito de Cliente Usado
+Remaining Customer Credit Balance,Saldo Restante de Crédito del Cliente
+Invoices,Facturas

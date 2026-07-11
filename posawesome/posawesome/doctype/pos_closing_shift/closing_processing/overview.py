@@ -63,6 +63,9 @@ def get_closing_shift_overview(pos_opening_shift):
     credit_company_currency_total = 0
     credit_invoices_count = 0
     credit_totals_by_currency = {}
+    customer_credit_redeemed_company_currency_total = 0
+    customer_credit_redeemed_invoice_count = 0
+    customer_credit_redeemed_totals_by_currency = {}
     gross_company_currency_total = 0
     sale_invoices_count = 0
     returns_company_currency_total = 0
@@ -345,6 +348,45 @@ def get_closing_shift_overview(pos_opening_shift):
                     rate = flt(conversion_rate)
                 if rate:
                     credit_entry["exchange_rates"].add(rate)
+
+        # Customer credit redeemed on this sale (posa_redeemed_customer_credit,
+        # set server-side by _apply_customer_credit_print_fields). Field-guarded
+        # via .get(): invoices predating the patch simply contribute nothing.
+        customer_credit_amount = flt(invoice.get("posa_redeemed_customer_credit") or 0)
+        if customer_credit_amount > 0:
+            customer_credit_base_amount = customer_credit_amount
+            if invoice_currency != company_currency:
+                customer_credit_base_amount = customer_credit_amount * flt(conversion_rate or 1)
+
+            customer_credit_redeemed_company_currency_total += customer_credit_base_amount
+            customer_credit_redeemed_invoice_count += 1
+
+            customer_credit_entry = customer_credit_redeemed_totals_by_currency.setdefault(
+                invoice_currency,
+                {
+                    "currency": invoice_currency,
+                    "total": 0,
+                    "invoice_count": 0,
+                    "company_currency_total": 0,
+                    "exchange_rates": set(),
+                },
+            )
+            customer_credit_entry["total"] += customer_credit_amount
+            customer_credit_entry["company_currency_total"] += customer_credit_base_amount
+            customer_credit_entry["invoice_count"] += 1
+
+            if invoice_currency != company_currency:
+                rate = None
+                if customer_credit_amount:
+                    rate = (
+                        abs(customer_credit_base_amount) / abs(customer_credit_amount)
+                        if customer_credit_base_amount
+                        else None
+                    )
+                if not rate and conversion_rate:
+                    rate = flt(conversion_rate)
+                if rate:
+                    customer_credit_entry["exchange_rates"].add(rate)
 
         is_return = bool(invoice.get("is_return"))
         if not is_return and flt(invoice_total) < 0:
@@ -657,6 +699,13 @@ def get_closing_shift_overview(pos_opening_shift):
             "count": credit_invoices_count,
             "company_currency_total": flt(credit_company_currency_total),
             "by_currency": prepare_currency_rows(credit_totals_by_currency, include_count=True),
+        },
+        "customer_credit_redeemed": {
+            "count": customer_credit_redeemed_invoice_count,
+            "company_currency_total": flt(customer_credit_redeemed_company_currency_total),
+            "by_currency": prepare_currency_rows(
+                customer_credit_redeemed_totals_by_currency, include_count=True
+            ),
         },
         "sales_summary": {
             "gross_company_currency_total": flt(gross_company_currency_total),
