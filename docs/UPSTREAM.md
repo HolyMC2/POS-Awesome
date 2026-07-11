@@ -64,17 +64,17 @@ posawesome-push-prod + rebake.
 | `e2385917` | keyboard control for saved-drafts drawer | `ParkedOrdersList.vue` drift == exactly this commit → near-clean + spec. |
 | `d1942886` | keep user-selected catalog columns visible | `useItemsTableResponsive.ts` 10-liner, clean. |
 | `9df5c4f8` (adapt hunks) | "Refresh Offline Data" actually re-pulls catalog + forces pricing | Our `DefaultLayout.handleRefreshOfflineData` never refreshes the product catalog; `itemsStore.refreshItems` already exists to call. |
-| `86b5b1f0`→`86b1b5f0` | arrow nav from cashier inputs | 34 lines on keyboardNavigation.ts — free once f78d2d0d lands. |
+| `86b1b5f0` | arrow nav from cashier inputs | **PICKED 2026-07-11 → `55169bb6`** (inside keyboard chain). |
 
 ### ADAPT — concept yes, reimplement on our tree
 
 | SHA(s) | What | Notes |
 |---|---|---|
 | `c988133c`+`cbb684c1`+`7d74d02e` (squash) | customer-credit redemption totals in closing shift + print fields | **ADAPTED 2026-07-11 → `f5ad0182`**, lab-verified (migrate + overview drill + vitest 588). Their by-currency UI section became a secondaryInsights tile; normalizer reused. Prod: rides next push + NEEDS `bench migrate` per tenant (new patch). |
-| `f78d2d0d` | keyboard navigation core (`utils/keyboardNavigation.ts` 253 lines + specs pick clean; component wiring manual) | Biggest cashier speed win. |
+| `f78d2d0d` | keyboard navigation core (`utils/keyboardNavigation.ts` 253 lines + specs pick clean; component wiring manual) | **ADAPTED 2026-07-11 → `5b55fd6c`..`085ef545`** (whole chain df519349→f78d2d0d→86b1b5f0→bf150918 in upstream order). Judgment departures: (1) kept BOTH arrow-nav AND Tab-to-search — upstream's final bf150918 ripped arrow-nav out and hijacks EVERY Tab unconditionally; ours gates Tab (not in editable fields / open overlays) so native form Tab survives; (2) our no-drafts-no-surface contract re-asserted in draftDialogs.spec; (3) dropped their enableShortcutCreditSale (skipped 8ce1752c UI) + tax_contracts-adjacent hunks; (4) CatalogItemRow (our RecycleScroller row) got Enter/Space select instead of their v-data-table keydown. `86b1b5f0` no longer separate — inside chain. |
 | `08b5d170`+`118c8246` | print by server-assigned name in immediate print branch | Our `Payments.vue:614`/`usePaymentPrinting.ts:109` use client `doc.name` → SO/amended invoices print stale name. ~10 lines. |
-| `df519349` | focus qty after adding item | No post-add focus in ours; port by hand. |
-| `bf150918` | cart field focus flow | `cartFieldFocus.ts` near-clean; Pos.vue hunks manual. |
+| `df519349` | focus qty after adding item | **ADAPTED 2026-07-11** — part of the keyboard chain (see f78d2d0d row). |
+| `bf150918` | cart field focus flow | **ADAPTED 2026-07-11** — part of the keyboard chain (see f78d2d0d row). |
 | `f16ab0be` | pricing-rule `min_amt`/`max_amt`/`max_qty` support | Our engine has min_qty only; insurance before someone configures an amount-threshold rule. |
 | `699e7b6b`/`31167649` (concept) | visible toast/confirm when QZ print falls back to browser | Our fallback is silent today; ~15 lines in our catch paths. |
 
