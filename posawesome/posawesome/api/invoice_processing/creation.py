@@ -1367,6 +1367,42 @@ def submit_invoice(invoice, data, submit_in_background=False):
             ),
         )
 
+    hold = _run_submit_hold_gates(invoice_doc, data)
+    if hold:
+        if not ledger_doc:
+            # Exotic callers without a client_request_id still need a parked
+            # payment context for resume_held_submission — synthesize a ledger
+            # keyed to the draft.
+            ledger_doc = _get_or_create_submission_ledger(
+                f"hold::{invoice_doc.name}", invoice, data, invoice_doc.doctype
+            )
+            _update_submission_ledger(
+                ledger_doc,
+                STATE_DRAFT_CREATED,
+                invoice_name=invoice_doc.name,
+                request_data=_json_dumps(data),
+                payment_context=_json_dumps(
+                    {
+                        "is_payment_entry": is_payment_entry,
+                        "total_cash": total_cash,
+                        "cash_account": cash_account,
+                        "payments": payments,
+                    }
+                ),
+            )
+        return {
+            "name": invoice_doc.name,
+            "status": 0,
+            "docstatus": 0,
+            "doctype": invoice_doc.doctype,
+            "held": True,
+            "hold_reason": hold.get("reason"),
+            "hold_detail": hold,
+            "ledger_state": ledger_doc.get("state") if ledger_doc else None,
+            "client_request_id": client_request_id,
+            "idempotent": bool(client_request_id),
+        }
+
     if submit_in_background and allow_background_submit:
         enqueue(
             method=submit_in_background_job,
@@ -1423,6 +1459,81 @@ def submit_invoice(invoice, data, submit_in_background=False):
         "client_request_id": client_request_id,
         "idempotent": bool(client_request_id),
     }
+
+
+def _run_submit_hold_gates(invoice_doc, data):
+    """Let installed apps park a POS submission at draft (docstatus 0).
+
+    Hook: `posawesome_submit_hold_gates` — each registered dotted-path fn is
+    called with (invoice_doc, data) AFTER the draft is saved and the ledger
+    holds the payment context. Return a truthy dict ({"reason": ...}) to hold;
+    first hold wins. The gate owner later calls `resume_held_submission` to
+    finish the submit, or leaves the draft for the cashier to fix/delete.
+
+    Gate exceptions propagate: a gate that meant to hold but crashed must not
+    silently let the invoice submit (that is exactly the un-cancellable-SI
+    failure mode this mechanism exists to prevent).
+    """
+    for method in frappe.get_hooks("posawesome_submit_hold_gates") or []:
+        result = frappe.get_attr(method)(invoice_doc, data)
+        if result:
+            return result if isinstance(result, dict) else {}
+    return None
+
+
+def resume_held_submission(invoice_name, doctype="Sales Invoice"):
+    """Submit a draft parked by a `posawesome_submit_hold_gates` gate.
+
+    Server-side callers only (NOT whitelisted) — e.g. saldo after TAECEL
+    confirms the recarga. Re-enqueues `submit_in_background_job` with the
+    payment context persisted on the submission ledger at DRAFT_CREATED, so
+    the resumed submit is byte-for-byte the same job the normal background
+    path would have run.
+    """
+    docstatus = frappe.db.get_value(doctype, invoice_name, "docstatus")
+    if docstatus is None:
+        frappe.throw(_("Invoice {0} not found").format(invoice_name))
+    if cint(docstatus) != 0:
+        return {"name": invoice_name, "docstatus": cint(docstatus), "resumed": False}
+
+    rows = frappe.get_all(
+        LEDGER_DOCTYPE,
+        filters={"invoice_name": invoice_name, "document_type": doctype},
+        fields=["name", "state", "request_data", "payment_context", "owner"],
+        order_by="modified desc",
+        limit=1,
+    )
+    if not rows:
+        frappe.throw(
+            _("No submission ledger found for held invoice {0} — cannot resume").format(
+                invoice_name
+            )
+        )
+    ledger = rows[0]
+    context = _json_loads(ledger.payment_context)
+    data = _json_loads(ledger.request_data)
+    enqueue(
+        method=submit_in_background_job,
+        queue="default",
+        timeout=3000,
+        is_async=True,
+        enqueue_after_commit=True,
+        job_id=f"posa-resume-{invoice_name}",
+        kwargs={
+            "invoice": invoice_name,
+            "doctype": doctype,
+            "data": data,
+            "is_payment_entry": context.get("is_payment_entry"),
+            "total_cash": context.get("total_cash"),
+            "cash_account": context.get("cash_account"),
+            "payments": context.get("payments") or [],
+            # Route the pos_invoice_processed realtime event to the cashier
+            # who parked the sale, not whatever context resumes it.
+            "user": ledger.owner,
+            "ledger_name": ledger.name,
+        },
+    )
+    return {"name": invoice_name, "docstatus": 0, "resumed": True}
 
 
 def submit_in_background_job(kwargs):
