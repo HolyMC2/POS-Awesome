@@ -70,7 +70,7 @@ posawesome-push-prod + rebake.
 
 | SHA(s) | What | Notes |
 |---|---|---|
-| `c988133c`+`cbb684c1`+`7d74d02e` (squash) | customer-credit redemption totals in closing shift + print fields | Daily-used feature, zero credit refs in our `closing_processing/overview.py`; backend ports easy, ShiftOverview UI re-do. |
+| `c988133c`+`cbb684c1`+`7d74d02e` (squash) | customer-credit redemption totals in closing shift + print fields | **ADAPTED 2026-07-11 → `f5ad0182`**, lab-verified (migrate + overview drill + vitest 588). Their by-currency UI section became a secondaryInsights tile; normalizer reused. Prod: rides next push + NEEDS `bench migrate` per tenant (new patch). |
 | `f78d2d0d` | keyboard navigation core (`utils/keyboardNavigation.ts` 253 lines + specs pick clean; component wiring manual) | Biggest cashier speed win. |
 | `08b5d170`+`118c8246` | print by server-assigned name in immediate print branch | Our `Payments.vue:614`/`usePaymentPrinting.ts:109` use client `doc.name` → SO/amended invoices print stale name. ~10 lines. |
 | `df519349` | focus qty after adding item | No post-add focus in ours; port by hand. |
