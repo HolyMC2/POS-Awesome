@@ -50,6 +50,9 @@ function getCssAssetFileName(bundle) {
 // the entry is dropped.
 const PRELOAD_CHUNK_NAMES = [
 	"vendor",        // shared vendor split
+	"vuetify",       // UI framework — the LARGEST chunk (531kB/164kB gz);
+	                 // was missing here, so it fetched serially only after
+	                 // posawesome.js parsed its imports (audit: LCP path)
 	"vue",           // vue runtime
 	"vue-router",    // router
 	"pinia",         // state

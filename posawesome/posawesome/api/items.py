@@ -173,6 +173,12 @@ def get_delta_items(
         "brand",
         "allow_negative_stock",
     ]
+    # saldo_enabled rides the catalog payload so the SPA can skip the
+    # per-item saldo-meta HTTP round-trip on first add (audit: ~100-300ms
+    # added to the first add of every distinct item). Custom field exists
+    # only on doco tenants — guard for mumu/muelle installs.
+    if frappe.db.has_column("Item", "saldo_enabled"):
+        fields.append("saldo_enabled")
 
     item_rows = frappe.get_all(
         "Item",

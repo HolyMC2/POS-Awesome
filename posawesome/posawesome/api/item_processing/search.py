@@ -206,6 +206,10 @@ def _build_search_plan(
         "brand",
         "allow_negative_stock",
     ]
+    # saldo_enabled rides the payload so the SPA skips the per-item
+    # saldo-meta HTTP round-trip on first add (doco tenants only; guarded).
+    if frappe.db.has_column("Item", "saldo_enabled"):
+        fields.append("saldo_enabled")
     if include_description:
         fields.append("description")
     if include_image:
@@ -733,7 +737,10 @@ def get_items(
     profile_ctx = _normalize_profile_context(pos_profile)
     groups_ctx = _prepare_item_groups(profile_ctx.profile_name, item_groups)
 
-    if profile_ctx.use_price_list_cache:
+    # Never cache delta polls: every 60s timer poll passes a fresh
+    # modified_after watermark, so each poll would write a 5-min redis entry
+    # under a key that can never be read again — pure churn (audit finding).
+    if profile_ctx.use_price_list_cache and not modified_after:
         cache_key = _build_get_items_cache_key(
             profile_ctx.profile_name,
             profile_ctx.warehouse,

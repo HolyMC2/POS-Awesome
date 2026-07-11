@@ -342,42 +342,58 @@ export function useItemAddition() {
 		}
 	};
 
-	// Add item to invoice
-	const addItem = withPerf(
-		"pos:add-item",
-		async function addItemMeasured(item, context) {
-			// SALDO-INTEGRATION-POINT — for saldo-enabled items, capture
-			// referencia BEFORE the line hits the cart. Per TAECEL spec §5,
-			// a successful recarga is irreversible; we MUST get a confirmed
-			// reference up front. requireSaldoCapture is a no-op for items
-			// without saldo_enabled, so the cost is one lazy HTTP per item.
-			if (!item.saldo_referencia && !context?.isReturnInvoice) {
-				try {
-					const captured = await requireSaldoCapture(item);
-					if (captured) {
-						item.saldo_referencia = captured.referencia;
-						if (captured.monto && captured.monto > 0) {
-							item.rate = captured.monto;
-							item.price_list_rate = captured.monto;
-						}
-					}
-				} catch (err) {
-					// Only a deliberate operator cancel (the dialog rejects with
-					// "cancelled") aborts the add. Any other throw — a transient
-					// meta-fetch failure, or the saldo source not being usable in
-					// the current runtime — must NOT silently kill add-to-cart for
-					// ordinary, non-saldo items; fall through to a normal addition.
-					const cancelled =
-						err === "cancelled" ||
-						(err as any)?.message === "cancelled" ||
-						(err as any)?.reason === "cancelled";
-					if (cancelled) {
-						return; // operator cancelled
+	// Add item to invoice.
+	//
+	// The saldo capture lives OUTSIDE the perf measure (audit finding: the
+	// old wrapping mixed cashier typing time + a meta HTTP round-trip into
+	// pos:add-item, making its p99 untrustable for regressions).
+	const addItem = async function addItem(item: any, context: any) {
+		// SALDO-INTEGRATION-POINT — for saldo-enabled items, capture
+		// referencia BEFORE the line hits the cart. Per TAECEL spec §5,
+		// a successful recarga is irreversible; we MUST get a confirmed
+		// reference up front.
+		//
+		// Fast path: get_items now ships `saldo_enabled` in the catalog
+		// payload (doco tenants) — a DEFINED falsy value means we can skip
+		// the per-item saldo-meta HTTP round-trip entirely. Undefined
+		// (mumu/stale cache) falls back to requireSaldoCapture's own
+		// meta fetch, which no-ops for non-saldo items.
+		const saldoKnownDisabled =
+			item.saldo_enabled !== undefined &&
+			item.saldo_enabled !== null &&
+			!Number(item.saldo_enabled);
+		if (!item.saldo_referencia && !context?.isReturnInvoice && !saldoKnownDisabled) {
+			try {
+				const captured = await requireSaldoCapture(item);
+				if (captured) {
+					item.saldo_referencia = captured.referencia;
+					if (captured.monto && captured.monto > 0) {
+						item.rate = captured.monto;
+						item.price_list_rate = captured.monto;
 					}
 				}
+			} catch (err) {
+				// Only a deliberate operator cancel (the dialog rejects with
+				// "cancelled") aborts the add. Any other throw — a transient
+				// meta-fetch failure, or the saldo source not being usable in
+				// the current runtime — must NOT silently kill add-to-cart for
+				// ordinary, non-saldo items; fall through to a normal addition.
+				const cancelled =
+					err === "cancelled" ||
+					(err as any)?.message === "cancelled" ||
+					(err as any)?.reason === "cancelled";
+				if (cancelled) {
+					return; // operator cancelled
+				}
 			}
-			// /SALDO-INTEGRATION-POINT
+		}
+		// /SALDO-INTEGRATION-POINT
+		return addItemMeasured(item, context);
+	};
 
+	const addItemMeasured = withPerf(
+		"pos:add-item",
+		async function addItemInner(item, context) {
 			const currentInvoiceType =
 				typeof context?.invoiceType === "string"
 					? context.invoiceType

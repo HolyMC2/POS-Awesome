@@ -115,11 +115,12 @@
 	{# socket.io-client is marked `external` in vite.config.js
 	   (Desk provides `window.io`). Outside Desk we load the
 	   client the socket.io server itself serves at
-	   /socket.io/socket.io.js. The frappe-shim's `realtime` impl
-	   reads `window.io` first, falling back to a dynamic import
-	   only if absent. Synchronous load so window.io is set before
-	   the entry module runs. #}
-	<script src="/socket.io/socket.io.js"></script>
+	   /socket.io/socket.io.js. DEFERRED (audit): a cold/slow
+	   socketio node process was gating first paint even though
+	   realtime is not needed for render — the frappe-shim reads
+	   `window.io` when realtime first connects and falls back to
+	   a dynamic import if still absent, so the race is covered. #}
+	<script defer src="/socket.io/socket.io.js"></script>
 
 	{# Entry chunk — installs the frappe-shim + mounts Vue. The chunk
 	   is built by Vite as a separate Rollup input; its hashed URL
