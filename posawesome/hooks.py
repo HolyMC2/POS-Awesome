@@ -189,6 +189,10 @@ scheduler_events = {
         # Telemetry is keep-it-cheap; we don't need historical retention
         # beyond the rolling window the dashboard reads from.
         "posawesome.posawesome.api.telemetry.prune_old_events",
+        # Prune final-state submission-ledger rows older than 45 days
+        # (2-3 invoice JSON copies per sale, was unbounded). Non-final
+        # rows are the repair trail and are kept.
+        "posawesome.posawesome.api.invoice_processing.creation.prune_submission_ledger",
     ],
     "cron": {
         # Keep the get_items page cache warm. The server cache TTL is

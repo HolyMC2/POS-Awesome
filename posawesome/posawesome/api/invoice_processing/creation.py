@@ -1527,6 +1527,24 @@ def submit_invoice(invoice, data, submit_in_background=False):
     }
 
 
+def prune_submission_ledger(days: int = 45):
+    """Scheduler helper — the ledger writes one row per sale carrying 2-3
+    full invoice JSON copies and had NO retention (audit finding: unbounded
+    growth dragging backups). Deletes final-state rows older than ``days``.
+    Non-final rows (RECEIVED / DRAFT_CREATED / FAILED) are kept forever —
+    they are the repair/forensics trail for stuck or held submissions.
+    """
+    cutoff = frappe.utils.add_days(frappe.utils.getdate(), -abs(cint(days) or 45))
+    deleted = frappe.db.sql(
+        """DELETE FROM `tabPOS Invoice Submission Ledger`
+           WHERE state IN ('SUBMITTED', 'POST_SUBMIT_DONE')
+             AND modified < %s""",
+        (cutoff,),
+    )
+    frappe.db.commit()
+    return {"cutoff": str(cutoff), "ok": True, "deleted_rows": deleted}
+
+
 def _run_submit_hold_gates(invoice_doc, data):
     """Let installed apps park a POS submission at draft (docstatus 0).
 
@@ -1585,6 +1603,10 @@ def resume_held_submission(invoice_name, doctype="Sales Invoice"):
         is_async=True,
         enqueue_after_commit=True,
         job_id=f"posa-resume-{invoice_name}",
+        # Two SLDOs of one invoice reaching Success in different workers both
+        # call resume — without dedup the second enqueue raises on the active
+        # job_id and logs a scary resume_error although the resume IS running.
+        deduplicate=True,
         kwargs={
             "invoice": invoice_name,
             "doctype": doctype,
@@ -1662,6 +1684,21 @@ def submit_in_background_job(kwargs):
         _apply_customer_credit_print_fields(invoice_doc, data)
         _normalize_return_payment_rows(invoice_doc, invoice_doc.get("conversion_rate") or 1)
 
+        # Re-assert payments-vs-total at the moment of ACTUAL submit. The
+        # invariant ran in submit_invoice, but held drafts (hold-until-confirm)
+        # can sit for hours between that check and this one — a Desk edit in
+        # the window would otherwise submit a cash sale with silent
+        # outstanding. Returns are exempt (their payment rows are negative
+        # settlements handled by _apply_return_outstanding_policy).
+        if not invoice_doc.get("is_return"):
+            from posawesome.posawesome.api._reprice import (
+                assert_payments_match_grand_total as _assert_payments,
+            )
+            _assert_payments(
+                invoice_doc,
+                is_credit_sale=cint((data or {}).get("is_credit_sale")),
+            )
+
         from posawesome.posawesome.api._perms import account_perm_bypass
         with account_perm_bypass():
             invoice_doc = _save_draft_with_latest_timestamp(invoice_doc)
@@ -1716,6 +1753,17 @@ def submit_in_background_job(kwargs):
             except Exception:
                 pass
         frappe.log_error(f"POS Background Submission Failed for {invoice}: {error_msg}")
+        # Leave a Comment on the draft itself — the realtime event dies with
+        # a closed SPA and Error Log forensics need timestamp hunting; the
+        # stuck draft should explain itself in Desk.
+        try:
+            frappe.get_doc(doctype, invoice).add_comment(
+                comment_type="Info",
+                text=f"Background submit failed: {error_msg[:500]}",
+            )
+            frappe.db.commit()
+        except Exception:
+            pass
         # Dual-publish so the web-route SPA hears the failure too.
         # `invoice` here is the invoice name string (from kwargs at the
         # top of submit_in_background_job). `doctype` is captured at
