@@ -26,7 +26,7 @@ gift-cards feature gate + PKR-default fix. 9 tests (test_profile_gates.py).
 ✅ ALL P0 LANDED (Marco decided: M-Pesa unused → mutation removed,
 customer-credit gated plainly; name-override + delivery-charges gated).
 
-### 2. Offline dead-letter sales surfacing (reliability HIGH) — SPEC A
+### 2. Offline dead-letter sales surfacing — ✅ LANDED 2026-07-11 (SPEC A)
 
 Dead-lettered sale (5 failed syncs) is invisible today: cash in drawer, no
 invoice, no signal. Replay-safety VERIFIED (client_request_id → ledger
@@ -44,7 +44,7 @@ Edges: corrupt payload → back to dead_letter w/ new last_error (operator
 loop, no auto-retry); missed-ack → replay drains ✓; IndexedDB wipe = data
 gone (crash: row is the durable trace). Effort M (~1 day incl. drill).
 
-### 3. posawesome → Prometheus export — SPEC B
+### 3. posawesome → Prometheus export — ✅ LANDED 2026-07-11 (SPEC B; scrape e2e-verified on lab; vigia panel/alert = open follow-up)
 
 saldo's multiproc registry pattern (`saldo/api/telemetry.py:76-135` — guard
 import, site label, PROMETHEUS_MULTIPROC_DIR self-heal) + doco's existing
@@ -60,7 +60,7 @@ metric must never break the money path. vigia follow-up: Grafana panel +
 `rate(posa_submit_failures_total[15m]) > 0` → Telegram alert.
 Effort S/M.
 
-### 4. Offline + sale-cycle telemetry — SPEC C
+### 4. Offline + sale-cycle telemetry — ✅ LANDED 2026-07-11 (SPEC C)
 
 | Event | Where | Shape |
 |---|---|---|
