@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import frappe
 from erpnext.setup.utils import get_exchange_rate
 from frappe.query_builder import DocType
 from frappe.query_builder.functions import Sum
 from frappe.utils import cint, flt, nowdate
-from frappe.utils.caching import redis_cache
 
 
 def _resolve_cache_ttl(ttl: Optional[int]) -> int:
@@ -19,15 +20,49 @@ def _resolve_cache_ttl(ttl: Optional[int]) -> int:
     return int(ttl) if ttl else 300
 
 
-def _cache_wrapper(store: Dict[int, Callable[..., Any]], ttl: Optional[int], fn: Callable[..., Any]):
-    """Memoize the redis cache decorator for a given TTL to avoid re-wrapping."""
+# Deterministic cache keys (2026-07-11 audit). The previous
+# `frappe.utils.caching.redis_cache` wrapping keyed entries with Python's
+# per-process salted hash(): every gunicorn worker wrote keys no other
+# worker could read, so multi-worker prod hit-rate was per-worker only.
+# Same class of bug already fixed for get_items (see item_processing/
+# search.py `posa_get_items:v1:` docstring) — mirror that pattern here.
+#
+# The stock-scoped kinds (bin / batch / serial) embed the warehouse in the
+# key so `clear_stock_caches` can invalidate ONE warehouse instead of
+# flushing everything on every stock write (which left the enrichment path
+# effectively uncached during trading hours — the main get_items p95/p99
+# tail feeder).
+_STOCK_KINDS = ("bin", "batch", "serial")
 
-    resolved_ttl = _resolve_cache_ttl(ttl)
-    cached = store.get(resolved_ttl)
-    if cached is None:
-        cached = redis_cache(ttl=resolved_ttl)(fn)
-        store[resolved_ttl] = cached
-    return cached
+
+def _fetch_cache_key(kind: str, args: tuple, scope: str = "") -> str:
+    digest = hashlib.sha1(
+        json.dumps(args, default=str, sort_keys=True).encode()
+    ).hexdigest()
+    scope_part = f"{scope}:" if scope else ""
+    return f"posa_fetch:{kind}:v1:{scope_part}{digest}"
+
+
+def _cached_fetch(kind, ttl, fn, args: tuple, scope: str = ""):
+    """Read-through redis cache with deterministic, cross-worker keys.
+
+    Empty results ([]) are real values and cache as hits; only a true miss
+    (None) re-runs the fetcher — matches the get_items cache semantics.
+    """
+    key = _fetch_cache_key(kind, args, scope)
+    cache = frappe.cache()
+    try:
+        result = cache.get_value(key)
+    except Exception:
+        result = None
+    if result is None:
+        result = fn(*args)
+        try:
+            cache.set_value(key, result, expires_in_sec=_resolve_cache_ttl(ttl))
+        except Exception:
+            # Cache write failure must never break the read path.
+            pass
+    return result
 
 
 def _normalize_codes(codes: Iterable[str]) -> Tuple[str, ...]:
@@ -36,35 +71,46 @@ def _normalize_codes(codes: Iterable[str]) -> Tuple[str, ...]:
     return tuple(sorted({code for code in codes if code}))
 
 
-_price_cache: Dict[int, Callable[..., Any]] = {}
-_bin_cache: Dict[int, Callable[..., Any]] = {}
-_meta_cache: Dict[int, Callable[..., Any]] = {}
-_barcode_cache: Dict[int, Callable[..., Any]] = {}
-_uom_cache: Dict[int, Callable[..., Any]] = {}
-_batch_cache: Dict[int, Callable[..., Any]] = {}
-_serial_cache: Dict[int, Callable[..., Any]] = {}
-_bom_cache: Dict[int, Callable[..., Any]] = {}
-
-
 def clear_stock_caches(doc=None, method=None):
-    """Invalidate the stock / batch / serial redis caches.
+    """Invalidate stock / batch / serial caches — per warehouse when known.
 
-    These caches are wrapped with ``redis_cache(ttl=...)`` but were never
-    invalidated, so after any stock movement other POS terminals kept seeing
-    pre-movement quantities for up to the configured TTL. Wired (via hooks) to
-    Bin / Stock Ledger Entry / Serial No / Batch writes so quantities refresh
-    as soon as stock actually changes. Each cache holds one wrapper per TTL
-    variant, so clear them all.
+    Wired (via hooks) to Bin / Stock Ledger Entry / Serial No / Batch writes.
+    Bin/SLE/Serial rows carry a warehouse: only that warehouse's keys (plus
+    its ancestor group warehouses, which cache under their own scope) are
+    dropped, so a sale in one shop no longer flushes every terminal's stock
+    enrichment cache site-wide. Batch docs carry no warehouse → batch kind
+    flushed globally. No doc at all (manual call) → flush all three kinds.
     """
-    for store in (_bin_cache, _batch_cache, _serial_cache):
-        for cached_fn in list(store.values()):
-            clearer = getattr(cached_fn, "clear_cache", None)
-            if callable(clearer):
-                try:
-                    clearer()
-                except Exception:
-                    # Cache invalidation must never break the triggering write
-                    frappe.log_error(frappe.get_traceback(), "POSAwesome stock cache clear failed")
+    cache = frappe.cache()
+
+    def _drop(kind: str, scope: str = ""):
+        prefix = f"posa_fetch:{kind}:v1:{scope + ':' if scope else ''}"
+        try:
+            cache.delete_keys(prefix)
+        except Exception:
+            # Cache invalidation must never break the triggering write
+            frappe.log_error(frappe.get_traceback(), "POSAwesome stock cache clear failed")
+
+    warehouse = getattr(doc, "warehouse", None) if doc is not None else None
+    if warehouse:
+        scopes = [warehouse]
+        try:
+            from frappe.utils.nestedset import get_ancestors_of
+
+            scopes.extend(get_ancestors_of("Warehouse", warehouse) or [])
+        except Exception:
+            pass
+        for kind in _STOCK_KINDS:
+            for scope in scopes:
+                _drop(kind, scope)
+        return
+
+    if doc is not None and getattr(doc, "doctype", "") == "Batch":
+        _drop("batch")
+        return
+
+    for kind in _STOCK_KINDS:
+        _drop(kind)
 
 
 def _fetch_item_prices(
@@ -127,8 +173,10 @@ def get_item_prices(
 ):
     """Fetch Item Price data with optional redis caching based on TTL."""
 
-    cached = _cache_wrapper(_price_cache, ttl, _fetch_item_prices)
-    return cached(price_list, currency, tuple(item_codes), customer or "", today or nowdate())
+    return _cached_fetch(
+        "price", ttl, _fetch_item_prices,
+        (price_list, currency, tuple(item_codes), customer or "", today or nowdate()),
+    )
 
 
 def _fetch_bin_qty(warehouse: str, item_codes: Tuple[str, ...]):
@@ -161,8 +209,10 @@ def _fetch_bin_qty(warehouse: str, item_codes: Tuple[str, ...]):
 def get_bin_qty(warehouse: Optional[str], item_codes: Sequence[str], ttl: Optional[int] = None):
     """Return cached Bin quantities when a warehouse and codes are provided."""
 
-    cached = _cache_wrapper(_bin_cache, ttl, _fetch_bin_qty)
-    return cached(warehouse, tuple(item_codes))
+    return _cached_fetch(
+        "bin", ttl, _fetch_bin_qty, (warehouse, tuple(item_codes)),
+        scope=warehouse or "",
+    )
 
 
 def _fetch_item_meta(item_codes: Tuple[str, ...]):
@@ -194,8 +244,7 @@ def _fetch_item_meta(item_codes: Tuple[str, ...]):
 def get_item_meta(item_codes: Sequence[str], ttl: Optional[int] = None):
     """Fetch Item metadata with caching support."""
 
-    cached = _cache_wrapper(_meta_cache, ttl, _fetch_item_meta)
-    return cached(tuple(item_codes))
+    return _cached_fetch("meta", ttl, _fetch_item_meta, (tuple(item_codes),))
 
 
 def _fetch_barcodes(item_codes: Tuple[str, ...]):
@@ -213,8 +262,7 @@ def _fetch_barcodes(item_codes: Tuple[str, ...]):
 def get_barcodes(item_codes: Sequence[str], ttl: Optional[int] = None):
     """Fetch Item Barcode entries while respecting the configured TTL."""
 
-    cached = _cache_wrapper(_barcode_cache, ttl, _fetch_barcodes)
-    return cached(tuple(item_codes))
+    return _cached_fetch("barcode", ttl, _fetch_barcodes, (tuple(item_codes),))
 
 
 def _fetch_uoms(item_codes: Tuple[str, ...]):
@@ -232,8 +280,7 @@ def _fetch_uoms(item_codes: Tuple[str, ...]):
 def get_uoms(item_codes: Sequence[str], ttl: Optional[int] = None):
     """Fetch UOM Conversion Detail rows with redis caching support."""
 
-    cached = _cache_wrapper(_uom_cache, ttl, _fetch_uoms)
-    return cached(tuple(item_codes))
+    return _cached_fetch("uom", ttl, _fetch_uoms, (tuple(item_codes),))
 
 
 def _normalize_warehouses(warehouse: Optional[str]) -> Tuple[str, ...]:
@@ -355,8 +402,10 @@ def _fetch_batches(warehouse: str, item_codes: Tuple[str, ...]):
 def get_batches(warehouse: Optional[str], item_codes: Sequence[str], ttl: Optional[int] = None):
     """Fetch batch availability constrained to the provided warehouse."""
 
-    cached = _cache_wrapper(_batch_cache, ttl, _fetch_batches)
-    return cached(warehouse, tuple(item_codes))
+    return _cached_fetch(
+        "batch", ttl, _fetch_batches, (warehouse, tuple(item_codes)),
+        scope=warehouse or "",
+    )
 
 
 def _fetch_serials(warehouse: str, item_codes: Tuple[str, ...]):
@@ -378,8 +427,10 @@ def _fetch_serials(warehouse: str, item_codes: Tuple[str, ...]):
 def get_serials(warehouse: Optional[str], item_codes: Sequence[str], ttl: Optional[int] = None):
     """Fetch serial number data while honouring the redis cache TTL."""
 
-    cached = _cache_wrapper(_serial_cache, ttl, _fetch_serials)
-    return cached(warehouse, tuple(item_codes))
+    return _cached_fetch(
+        "serial", ttl, _fetch_serials, (warehouse, tuple(item_codes)),
+        scope=warehouse or "",
+    )
 
 
 def _resolve_bom_cost_fields() -> List[str]:
@@ -463,8 +514,7 @@ def get_bom_costs(meta_rows: Sequence[frappe._dict], ttl: Optional[int] = None):
     normalized_rows = tuple(
         (str(row.get("name") or ""), row.get("default_bom")) for row in (meta_rows or []) if row.get("name")
     )
-    cached = _cache_wrapper(_bom_cache, ttl, _fetch_bom_costs)
-    return cached(normalized_rows)
+    return _cached_fetch("bom", ttl, _fetch_bom_costs, (normalized_rows,))
 
 
 @dataclass(frozen=True)
