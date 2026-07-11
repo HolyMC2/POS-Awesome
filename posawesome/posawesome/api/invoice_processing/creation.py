@@ -556,6 +556,24 @@ def _apply_customer_credit_print_fields(invoice_doc, data):
     )
 
 
+def _validate_return_allowed(invoice_doc):
+    """Server backstop for `posa_allow_return` (POS-PROFILE-SPEC P0-2).
+
+    The flag only hid the Sales Return button client-side — return invoices
+    (negative totals → cash refunds) were submittable on profiles with
+    returns disabled. `posa_allow_return_without_invoice` stays a separate,
+    already-server-enforced policy (stock.py)."""
+    if not invoice_doc.get("is_return"):
+        return
+    profile = invoice_doc.get("pos_profile")
+    if not profile:
+        return
+    if not cint(
+        frappe.get_cached_value("POS Profile", profile, "posa_allow_return")
+    ):
+        frappe.throw(_("Sales returns are not enabled in POS Profile"))
+
+
 def _validate_credit_sale_allowed(invoice_doc, data):
     """Server-side backstop for `posa_allow_credit_sale` — the SPA gates the
     credit-sale toggle client-side only, and `is_credit_sale=1` in the data
@@ -619,11 +637,34 @@ def _apply_manual_posting_controls(payload):
     if posting_date:
         payload["posting_date"] = posting_date
 
+    # Server backstop for posa_allow_change_posting_date (POS-PROFILE-SPEC
+    # P0-1): the flag only hid the date picker client-side while this
+    # function happily honored any client-supplied date — letting a
+    # tampered/stale client backdate sales into closed accounting periods.
+    # A non-today date (or explicit set_posting_time) on a profile with the
+    # flag OFF is rejected loudly, same policy as the credit-sale gate.
+    today = _safe_date_string(nowdate())
+    wants_manual_posting = bool(
+        cint(payload.get("set_posting_time"))
+        or (posting_date and today and posting_date != today)
+    )
+    if wants_manual_posting:
+        profile = payload.get("pos_profile")
+        if profile and not cint(
+            frappe.get_cached_value(
+                "POS Profile", profile, "posa_allow_change_posting_date"
+            )
+        ):
+            frappe.throw(
+                _(
+                    "Changing the posting date is not enabled in POS Profile"
+                )
+            )
+
     if cint(payload.get("set_posting_time")):
         payload["set_posting_time"] = 1
         return
 
-    today = _safe_date_string(nowdate())
     if posting_date and today and posting_date != today:
         payload["set_posting_time"] = 1
 
@@ -1392,6 +1433,7 @@ def submit_invoice(invoice, data, submit_in_background=False):
     _validate_stock_on_invoice(invoice_doc)
 
     _validate_credit_sale_allowed(invoice_doc, data)
+    _validate_return_allowed(invoice_doc)
     _apply_write_off_settings(invoice_doc, data)
 
     invoice_doc.flags.ignore_permissions = True

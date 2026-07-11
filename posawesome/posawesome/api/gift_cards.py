@@ -70,6 +70,17 @@ def _get_profile_doc(pos_profile=None):
     return frappe.get_cached_doc("POS Profile", profile_name)
 
 
+def _require_gift_cards_enabled(profile_doc):
+    """Server backstop for `posa_use_gift_cards` (POS-PROFILE-SPEC P0-3):
+    the feature flag only hid the UI — issue/top-up/redeem endpoints were
+    gated by the supervisor ROLE alone, so gift cards could be minted and
+    redeemed on profiles with the feature off."""
+    from frappe.utils import cint
+
+    if not cint(_doc_value(profile_doc, "posa_use_gift_cards")):
+        frappe.throw(frappe._("Gift cards are not enabled in POS Profile"))
+
+
 def _resolve_cost_center(profile_doc, company):
     cost_center = str(_doc_value(profile_doc, "cost_center") or "").strip()
     if cost_center:
@@ -273,6 +284,7 @@ def apply_invoice_gift_card_redemptions(invoice_doc, rows=None):
     cashier = None
     company = _doc_value(invoice_doc, "company")
     profile_doc = _get_profile_doc(_doc_value(invoice_doc, "pos_profile"))
+    _require_gift_cards_enabled(profile_doc)
     liability_account = _resolve_liability_account(profile_doc)
 
     for row, redeem_amount in valid_rows:
@@ -441,10 +453,11 @@ def issue_gift_card(
     initial_amount=0,
     gift_card_code=None,
     expiry_date=None,
-    currency="PKR",
+    currency=None,
 ):
     profile_name, cashier, _user_doc = _require_supervisor(pos_profile, cashier)
     profile_doc = _get_profile_doc(profile_name)
+    _require_gift_cards_enabled(profile_doc)
 
     amount = _to_float(initial_amount)
     if amount < 0:
@@ -467,7 +480,11 @@ def issue_gift_card(
     gift_card_doc = frappe.new_doc("POS Gift Card")
     gift_card_doc.gift_card_code = code
     gift_card_doc.company = company
-    gift_card_doc.currency = currency or "PKR"
+    # upstream default was the author's local "PKR" — a bare call minted a
+    # PKR card on an MXN site. Fall back to the company default currency.
+    gift_card_doc.currency = currency or frappe.get_cached_value(
+        "Company", company, "default_currency"
+    )
     gift_card_doc.current_balance = amount
     gift_card_doc.status = "Active"
     gift_card_doc.expiry_date = expiry_date
@@ -498,6 +515,7 @@ def issue_gift_card(
 def top_up_gift_card(pos_profile=None, cashier=None, gift_card_code=None, amount=0):
     profile_name, cashier, _user_doc = _require_supervisor(pos_profile, cashier)
     profile_doc = _get_profile_doc(profile_name)
+    _require_gift_cards_enabled(profile_doc)
 
     top_up_amount = _to_float(amount)
     if top_up_amount <= 0:

@@ -210,6 +210,17 @@ def delete_invoice(invoice):
     ):
         frappe.throw(_("This invoice {0} cannot be deleted").format(invoice))
 
+    # Server backstop for posa_allow_delete (POS-PROFILE-SPEC P0-4): the
+    # closing-shift purge honored the flag but this endpoint never did —
+    # any scoped user could delete unprinted drafts regardless of profile
+    # policy. Profile-less drafts stay governed by the scope asserts above.
+    from frappe.utils import cint as _cint
+
+    if row.get("pos_profile") and not _cint(
+        frappe.get_cached_value("POS Profile", row["pos_profile"], "posa_allow_delete")
+    ):
+        frappe.throw(_("Deleting invoices is not enabled in POS Profile"))
+
     frappe.delete_doc(doctype, invoice, force=1)
     delete_invoice_submission_ledger_entries_for_invoice(doctype, invoice)
     return _("Invoice {0} Deleted").format(invoice)

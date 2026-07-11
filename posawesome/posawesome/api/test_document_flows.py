@@ -226,6 +226,20 @@ class TestDocumentFlows(IntegrationTestCase):
 		self.assertTrue(replay.get("idempotent"))
 
 	def test_si_return_invoice(self):
+		# posa_allow_return is server-gated now — force ON for portability.
+		self._return_flag_before = frappe.db.get_value(
+			"POS Profile", PROFILE, "posa_allow_return"
+		)
+		frappe.db.set_value("POS Profile", PROFILE, "posa_allow_return", 1)
+		frappe.clear_cache(doctype="POS Profile")
+		self.addCleanup(
+			lambda: (
+				frappe.db.set_value(
+					"POS Profile", PROFILE, "posa_allow_return", self._return_flag_before or 0
+				),
+				frappe.clear_cache(doctype="POS Profile"),
+			)
+		)
 		sale = self._submit_si(self._si_payload(self._crid("si-ret-src")))
 		ret = self._si_payload(self._crid("si-ret"), rate=10, pay=-10)
 		ret["is_return"] = 1
