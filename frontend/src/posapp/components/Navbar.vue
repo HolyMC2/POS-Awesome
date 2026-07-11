@@ -336,10 +336,12 @@ export default {
 			immediate: true,
 		},
 		offlineStatusState: {
+			// no `deep`: this computed rebuilds a fresh object on every
+			// dependency tick, so the identity change alone re-fires the
+			// watcher — the deep traversal was pure overhead (audit).
 			handler() {
 				this.syncOfflineStatusSurface();
 			},
-			deep: true,
 			immediate: true,
 		},
 		currentCashier: {

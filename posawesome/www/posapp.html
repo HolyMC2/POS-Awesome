@@ -125,6 +125,6 @@
 	{# Entry chunk — installs the frappe-shim + mounts Vue. The chunk
 	   is built by Vite as a separate Rollup input; its hashed URL
 	   comes from build-manifest.json. #}
-	<script type="module" src="{{ asset_web_entry }}"></script>
+	<script type="module" src="{{ asset_web_entry }}" data-posa-bundle="{{ asset_posawesome }}"></script>
 </body>
 </html>

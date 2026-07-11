@@ -79,7 +79,9 @@ import { computed, inject } from "vue";
 import { useDatabaseStats } from "../../composables/core/useDatabaseStats";
 
 // Using JavaScript composable
-const { dbStats, history, loading, error } = useDatabaseStats(10000, 30);
+// 60s (was 10s — audit): an ambient gauge polled 6×/min per tab, ~17k
+// calls/day/terminal against get_database_usage for decoration.
+const { dbStats, history, loading, error } = useDatabaseStats(60000, 30);
 const __ = inject("__", (txt) => txt);
 
 const formattedDbSize = computed(() => formatBytes(dbStats.value?.db_size));

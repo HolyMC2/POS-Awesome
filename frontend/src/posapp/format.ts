@@ -522,12 +522,24 @@ export default {
 
 		try {
 			const uiStore = useUIStore();
+			// Watch ONLY the field this mixin derives from — the previous
+			// deep watch on the whole 100+-field profile object ran a full
+			// deep traversal in every one of the ~15 components using this
+			// mixin on ANY profile touch (2026-07-11 audit).
 			this.$watch(
-				() => uiStore.posProfile,
+				() =>
+					(uiStore.posProfile as any)?.posa_decimal_precision ??
+					(uiStore.posProfile as any)?.pos_profile
+						?.posa_decimal_precision,
 				(newVal: any) => {
-					if (newVal) updatePrecision(newVal);
+					if (newVal !== undefined && newVal !== null) {
+						updatePrecision(
+							(uiStore.posProfile as any)?.pos_profile ||
+								uiStore.posProfile,
+						);
+					}
 				},
-				{ deep: true, immediate: true },
+				{ immediate: true },
 			);
 		} catch (e) {
 			console.warn("Failed to connect format.ts mixin to uiStore", e);

@@ -119,10 +119,21 @@ async function evictStaleServiceWorkers(): Promise<boolean> {
 	return false;
 }
 
+function injectedBundleUrl(): string | null {
+	// posapp.py resolves the bundle URL server-side and rides it on the
+	// entry <script> tag — skips the version.json round-trip that used to
+	// sit in the LCP path on every boot (2026-07-11 audit).
+	const el = document.querySelector("script[data-posa-bundle]");
+	const url = (el?.getAttribute("data-posa-bundle") || "").trim();
+	return url.length ? url : null;
+}
+
 async function boot() {
-	// Evict any stale Desk-era service worker BEFORE booting — it would
-	// otherwise 404 same-origin `/files/*` item images on this route.
-	if (await evictStaleServiceWorkers()) return; // reloading to drop the SW
+	// Evict any stale Desk-era service worker BEFORE importing the bundle —
+	// it would otherwise 404 same-origin `/files/*` item images. Kicked off
+	// concurrently with the shim install (audit: the serial await added an
+	// async hop to every boot).
+	const evictPromise = evictStaleServiceWorkers();
 
 	try {
 		installFrappeShim();
@@ -131,14 +142,37 @@ async function boot() {
 		return;
 	}
 
-	const manifest = await fetchManifest();
-	const bundleUrl = resolveBundleUrl(manifest);
+	if (await evictPromise) return; // reloading to drop the SW
+
+	const injected = injectedBundleUrl();
+	let bundleUrl = injected;
+	if (!bundleUrl) {
+		const manifest = await fetchManifest();
+		bundleUrl = resolveBundleUrl(manifest);
+	}
 
 	try {
 		await import(/* @vite-ignore */ bundleUrl);
 	} catch (err) {
-		showFailure("Could not load POS bundle", err);
-		return;
+		// Injected URL can go stale mid-deploy (template cached, assets
+		// swapped). Recover once through the manifest before failing.
+		if (injected) {
+			try {
+				const manifest = await fetchManifest();
+				const fresh = resolveBundleUrl(manifest);
+				if (fresh && fresh !== bundleUrl) {
+					await import(/* @vite-ignore */ fresh);
+				} else {
+					throw err;
+				}
+			} catch (recoveryErr) {
+				showFailure("Could not load POS bundle", recoveryErr);
+				return;
+			}
+		} else {
+			showFailure("Could not load POS bundle", err);
+			return;
+		}
 	}
 
 	// The bundle minifier renames every named export to a single letter

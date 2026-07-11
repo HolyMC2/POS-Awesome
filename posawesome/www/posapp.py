@@ -95,6 +95,16 @@ def get_context(context: Dict[str, Any]) -> Dict[str, Any]:
             )
             or "/assets/posawesome/dist/js/posawesome.css",
             "asset_web_entry": _resolve_web_entry_url(asset_manifest),
+            # Main SPA bundle URL resolved SERVER-side so web-entry can skip
+            # its version.json round-trip (~50-300ms of every boot, in the
+            # LCP path — 2026-07-11 audit). Empty string → client falls back
+            # to the manifest fetch (older builds).
+            "asset_posawesome": (
+                asset_manifest.get("assets", {}).get("posawesome")
+                if isinstance(asset_manifest, dict)
+                else ""
+            )
+            or "",
             # List of hashed module URLs to `<link rel=modulepreload>`
             # in the HTML head. Browser starts fetching boot chunks in
             # parallel instead of waiting for the entry to parse + walk
