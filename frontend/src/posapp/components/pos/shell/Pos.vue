@@ -24,6 +24,7 @@
 			@picked="onSaldoPicked"
 			@cancelled="saldoPickerOpen = false"
 		></SaldoCatalogPicker>
+		<SaldoHoldsBadge :pos-profile="pos_profile"></SaldoHoldsBadge>
 		<!-- /SALDO-INTEGRATION-POINT -->
 		<OpeningDialog
 			v-if="dialog"
@@ -220,11 +221,13 @@ import PosOffers from "../offers/PosOffers.vue";
 import PosCoupons from "../offers/PosCoupons.vue";
 // SALDO-INTEGRATION-POINT — Vue sources live in the saldo Frappe app
 // (see saldo/saldo/public/saldo_pos/). Resolved via Vite alias `@saldo`
-// declared in vite.config.js. Upstream rebase: keep these 3 lines.
+// declared in vite.config.js. Upstream rebase: keep these lines.
 import SaldoReferenciaDialog from "@saldo/SaldoReferenciaDialog.vue";
 import SaldoStatusDialog from "@saldo/SaldoStatusDialog.vue";
 import SaldoCatalogPicker from "@saldo/SaldoCatalogPicker.vue";
+import SaldoHoldsBadge from "@saldo/SaldoHoldsBadge.vue";
 import { saldoCaptureBus } from "@saldo/useSaldoCapture";
+import { printInvoiceByName } from "../../../utils/printInvoiceByName";
 import { usePosShift } from "../../../composables/pos/shared/usePosShift";
 import { useOffers } from "../../../composables/pos/shared/useOffers";
 // Import the cache cleanup function
@@ -763,6 +766,7 @@ export default {
 		SaldoReferenciaDialog,
 		SaldoStatusDialog,
 		SaldoCatalogPicker,
+		SaldoHoldsBadge,
 	},
 
 	// SALDO-INTEGRATION-POINT — data/created/beforeUnmount/methods saldo*
@@ -787,6 +791,12 @@ export default {
 			this._saldoReject = reject;
 		};
 		saldoCaptureBus.on("saldo:open", this._saldoOpenHandler);
+		// Hold-until-confirm: SaldoHoldsBadge asks us to print the receipt
+		// of a held sale that submitted in background after TAECEL confirmed.
+		this._saldoHoldPrintHandler = ({ invoice, doctype }) => {
+			printInvoiceByName(this.pos_profile, doctype || "Sales Invoice", invoice);
+		};
+		saldoCaptureBus.on("saldo:hold_print", this._saldoHoldPrintHandler);
 		// Clean up expired customer balance cache on POS load (was a separate
 		// created() hook before saldo wiring; merged here because Vue Options
 		// API silently keeps only the last definition of a duplicate key).
@@ -796,6 +806,9 @@ export default {
 	beforeUnmount() {
 		if (this._saldoOpenHandler) {
 			saldoCaptureBus.off("saldo:open", this._saldoOpenHandler);
+		}
+		if (this._saldoHoldPrintHandler) {
+			saldoCaptureBus.off("saldo:hold_print", this._saldoHoldPrintHandler);
 		}
 	},
 

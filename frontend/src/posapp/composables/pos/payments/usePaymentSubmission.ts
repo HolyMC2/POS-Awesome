@@ -987,6 +987,36 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 					? "POS Invoice"
 					: "Sales Invoice");
 
+			// SALDO-INTEGRATION-POINT — hold-until-confirm: the server parked
+			// the draft while TAECEL runs (posawesome_submit_hold_gates). No
+			// print now — the sale auto-submits + prints on confirmation and
+			// the SaldoHoldsBadge tracks it. Clear the cart for the next
+			// customer immediately.
+			if (r.message?.held) {
+				stores?.toastStore?.show({
+					title: __("Venta en espera de confirmación TAECEL"),
+					detail: r.message?.hold_detail?.message || "",
+					color: "info",
+					timeout: 6000,
+				});
+				try {
+					const { saldoBus } = await import("@saldo/useSaldoCapture");
+					saldoBus.emit("saldo:hold_registered", {
+						invoice: responseInvoiceName,
+						doctype: submittedDoctype,
+					});
+				} catch {
+					// saldo app absent → gate can't fire server-side either.
+				}
+				if (stores?.customersStore?.setSelectedCustomer) {
+					stores.customersStore.setSelectedCustomer(
+						profile?.customer || null,
+					);
+				}
+				if (onFinishNavigation) onFinishNavigation(true);
+				return { held: true, name: responseInvoiceName };
+			}
+
 			if (!wasSubmitted && backgroundReason) {
 				const failedInfo = {
 					invoice: responseInvoiceName,
