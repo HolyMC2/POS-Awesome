@@ -84,8 +84,9 @@ Save&Clear/cancel; boot transition suppressed. Effort S/M.
 - update_invoice/submit multi-cycle tax recalc (structural ERPNext, L, risky)
 - Fast counter search / invoice column toggles / cache-capacity suppression
   (upstream EYEBALL rows — see UPSTREAM.md)
-- Web-entry manifest RTT (Jinja-inject bundle URL), format-mixin deep
-  watchers, CatalogItemRow lazy menus (LOW perf)
+- ✅ Web-entry manifest RTT + format-mixin watchers + gadget cadence
+  landed 2026-07-11 (perf wave); CatalogItemRow lazy menus deliberately
+  kept (bounded by scroller)
 - Raw ESC/POS printing (revisit only if qz_print latency becomes a target)
 
 ## Standing rules

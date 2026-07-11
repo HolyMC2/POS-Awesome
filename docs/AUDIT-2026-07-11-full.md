@@ -31,7 +31,7 @@ REVIEW2, PERF-get-items) — only new findings.
 | `Item Price.modified` / `Bin.modified` unindexed (delta polls full-scan; fine now, real at muelle scale) + ledger `invoice_name` unindexed (hold resume) | ✅ patch `add_pos_delta_sync_indexes` |
 | Stock/batch/serial fetcher caches: per-process `hash()` keys (invisible cross-worker) + global flush on EVERY stock write → effectively uncached during trading → main get_items tail feeder | ✅ **LANDED 2026-07-11 (same day)** — deterministic sha1 keys all 8 fetchers + per-warehouse invalidation w/ ancestor scopes; lab-drilled (scoped clear isolation ✓, warm get_items 30ms) |
 | update_invoice runs ≥2 full pricing/tax cycles per cart edit (structural ERPNext); submit adds 2 more | ❌ parked (L, risky surgery) |
-| Search-string cache churn | ❌ parked (LOW) |
+| Search-string cache churn | ✅ deliberately KEPT — repeated barcode scans re-hit those keys |
 
 ## Frontend performance
 
@@ -41,10 +41,10 @@ REVIEW2, PERF-get-items) — only new findings.
 | First add of ANY distinct item blocked on saldo-meta HTTP round-trip | ✅ `saldo_enabled` ships in get_items payload (guarded) + SPA fast-path skips capture when defined-falsy |
 | `pos:add-item` metric polluted (included saldo dialog = cashier typing) | ✅ perf mark moved below capture — metric now honest |
 | Sync socket.io script gates first paint on socketio health | ✅ `defer` (shim fallback covers race) |
-| `fetchManifest` RTT before bundle import (~50-300ms každý boot) | ❌ BACKLOG (S/M): Jinja-inject bundle URL |
-| 15 components × deep watcher on whole posProfile (format mixin) | ❌ BACKLOG (M) |
-| Navbar deep watchers on rebuilt computeds; CatalogItemRow per-row v-menu | ❌ parked (LOW) |
-| SW eviction serial await in boot path | ❌ parked (micro) |
+| `fetchManifest` RTT before bundle import (~50-300ms every boot) | ✅ LANDED 2026-07-11 — server-injected bundle URL, manifest = fallback/recovery |
+| 15 components × deep watcher on whole posProfile (format mixin) | ✅ LANDED 2026-07-11 — single-field watch |
+| Navbar deep watchers on rebuilt computeds; CatalogItemRow per-row v-menu | ✅ offlineStatusState deep dropped; row menus deliberately kept (bounded) |
+| SW eviction serial await in boot path | ✅ concurrent with shim install |
 
 ## Telemetry
 
