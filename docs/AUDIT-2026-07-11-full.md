@@ -29,7 +29,7 @@ REVIEW2, PERF-get-items) — only new findings.
 |---|---|
 | Delta polls (60s×terminal) write never-read cache entries (fresh `modified_after` watermark each call) | ✅ cache gated on `not modified_after` |
 | `Item Price.modified` / `Bin.modified` unindexed (delta polls full-scan; fine now, real at muelle scale) + ledger `invoice_name` unindexed (hold resume) | ✅ patch `add_pos_delta_sync_indexes` |
-| Stock/batch/serial fetcher caches: per-process `hash()` keys (invisible cross-worker) + global flush on EVERY stock write → effectively uncached during trading → main get_items tail feeder | ❌ **BACKLOG (M) — the real get_items lever**: deterministic keys (proven June pattern) + per-warehouse invalidation |
+| Stock/batch/serial fetcher caches: per-process `hash()` keys (invisible cross-worker) + global flush on EVERY stock write → effectively uncached during trading → main get_items tail feeder | ✅ **LANDED 2026-07-11 (same day)** — deterministic sha1 keys all 8 fetchers + per-warehouse invalidation w/ ancestor scopes; lab-drilled (scoped clear isolation ✓, warm get_items 30ms) |
 | update_invoice runs ≥2 full pricing/tax cycles per cart edit (structural ERPNext); submit adds 2 more | ❌ parked (L, risky surgery) |
 | Search-string cache churn | ❌ parked (LOW) |
 
