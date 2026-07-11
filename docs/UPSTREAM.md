@@ -43,6 +43,17 @@ cherry-picked yet — this table IS the review; pick session pending Marco.
 
 ### PICK — apply (near-)clean, ranked
 
+**PICKED 2026-07-11 (same day, lab-verified):** all rows below except
+`86b1b5f0` (rides the f78d2d0d keyboard-core ADAPT) landed as
+`6a16580c`..`b5305fbb` — 8ce1752c→`6a16580c` (backend hunk), f41fc415→
+`1bb43876` (backend hunk), 9aa0dde0→`936dff13`, fb44f74d→`c5206a1e`,
+1e4f2a02→`6363102a`, d1942886→`8e27b67a`, e2385917→`3feebd6b` (+`b5305fbb`
+keeps our no-drafts-no-surface contract, dropped their pre-fetch drawer
+open), 9df5c4f8→`bbff9fa2`. Verified: vitest 586/586, vue-tsc, vite build,
+bench tests both apps on doco-mirror.lab, dev-refresh deployed. Their
+`posawesome-enhancements.md` doc kept deleted. Prod: rides next
+posawesome-push-prod + rebake.
+
 | SHA | What | Why us |
 |---|---|---|
 | `8ce1752c` (backend hunk only) | server-side `_validate_credit_sale_allowed` in submit_invoice | **Security**: our `assert_payments_match_grand_total` skips the invariant on client-sent `is_credit_sale=1`; `posa_allow_credit_sale` only gates the UI. 17 lines. |
