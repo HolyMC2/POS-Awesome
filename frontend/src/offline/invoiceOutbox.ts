@@ -25,6 +25,8 @@ export interface InvoiceOutboxEntry {
 	last_error: string | null;
 	invoice_name: string | null;
 	acknowledged_at: string | null;
+	// operator-driven dead-letter requeues (SPEC A); no auto-retry cap
+	requeue_count?: number;
 }
 
 const TABLE = "invoice_outbox";
@@ -139,6 +141,60 @@ export async function getInvoiceOutboxRows(
 
 export async function getPendingInvoiceOutboxCount() {
 	return (await getInvoiceOutboxRows()).length;
+}
+
+// ---- dead-letter surface (2026-07-11 audit SPEC A) -------------------
+// A sale that exhausted MAX_RETRY_COUNT syncs used to fall into the
+// terminal filter and vanish from every count — cash in the drawer, no
+// invoice, no signal. These give the badge/panel a distinct view plus an
+// operator-driven requeue (replay-safe: the server ledger replays by
+// client_request_id, so a late retry cannot double-bill).
+
+export async function getDeadLetterRows() {
+	await ensureOutboxReady();
+	const rows = (await db
+		.table(TABLE)
+		.orderBy("created_at")
+		.toArray()) as InvoiceOutboxEntry[];
+	return rows.filter((row) => row.status === "dead_letter");
+}
+
+export async function getDeadLetterCount() {
+	return (await getDeadLetterRows()).length;
+}
+
+export async function requeueDeadLetterEntry(clientRequestId: string) {
+	await ensureOutboxReady();
+	const rows = (await db.table(TABLE).toArray()) as InvoiceOutboxEntry[];
+	const row = rows.find(
+		(r) => r.client_request_id === clientRequestId && r.status === "dead_letter",
+	);
+	if (!row) return null;
+	const updated: InvoiceOutboxEntry = {
+		...row,
+		status: "retrying",
+		updated_at: nowIso(),
+		next_retry_at: nowIso(),
+		nextAttemptAt: nowIso(),
+		// keep retry history visible; the operator loop has no auto-retry cap
+		requeue_count: Number((row as AnyRecord).requeue_count || 0) + 1,
+	} as InvoiceOutboxEntry;
+	await safeBulkPut(TABLE, [updated]);
+	return updated;
+}
+
+export async function exportDeadLetterEntry(clientRequestId: string) {
+	const rows = await getDeadLetterRows();
+	const row = rows.find((r) => r.client_request_id === clientRequestId);
+	if (!row) return null;
+	return cloneSerializable({
+		client_request_id: row.client_request_id,
+		invoice: row.invoice,
+		data: row.data,
+		retry_count: row.retry_count,
+		last_error: row.last_error,
+		created_at: row.created_at,
+	});
 }
 
 function shouldAttempt(row: InvoiceOutboxEntry) {

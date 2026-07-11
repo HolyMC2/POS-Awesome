@@ -67,6 +67,58 @@
 
 				<v-card-text class="pa-0 white-background">
 					<v-container fluid class="pa-6">
+						<!-- SPEC A: dead-lettered sales — sync retries exhausted;
+						     cash was collected but NO invoice exists. Loudest
+						     section, first. -->
+						<v-alert
+							v-if="deadLetterRows.length"
+							type="error"
+							variant="tonal"
+							class="mb-6"
+							density="comfortable"
+						>
+							<div class="text-subtitle-1 font-weight-bold mb-2">
+								{{ __("Sin sincronizar — atención") }} ({{ deadLetterRows.length }})
+							</div>
+							<div class="text-body-2 mb-3">
+								{{ __("Estas ventas cobradas NO tienen factura registrada. Reintenta; si vuelve a fallar, exporta el JSON y llama al administrador.") }}
+							</div>
+							<div
+								v-for="row in deadLetterRows"
+								:key="row.client_request_id"
+								class="d-flex align-center flex-wrap mb-2"
+								style="gap: 8px"
+							>
+								<span class="font-weight-medium">
+									{{ row.invoice?.customer_name || row.invoice?.customer || __("Cliente") }}
+								</span>
+								<span>{{ currencySymbol(row.invoice?.currency) }} {{ formatCurrency(row.invoice?.grand_total) }}</span>
+								<span class="text-caption text-medium-emphasis">
+									{{ row.created_at }} · {{ __("intentos") }}: {{ row.retry_count }}
+								</span>
+								<span v-if="row.last_error" class="text-caption text-error" style="max-width: 420px">
+									{{ String(row.last_error).slice(0, 160) }}
+								</span>
+								<v-spacer />
+								<v-btn
+									size="small"
+									color="primary"
+									variant="tonal"
+									:loading="deadLetterBusy === row.client_request_id"
+									@click="retryDeadLetter(row)"
+								>
+									{{ __("Reintentar") }}
+								</v-btn>
+								<v-btn
+									size="small"
+									variant="tonal"
+									@click="exportDeadLetter(row)"
+								>
+									{{ __("Exportar JSON") }}
+								</v-btn>
+							</div>
+						</v-alert>
+
 						<!-- Enhanced Empty State -->
 						<div v-if="!invoices.length" class="empty-state text-center py-12">
 							<div class="empty-icon-wrapper mb-4">
@@ -198,7 +250,14 @@
 <script setup>
 import { ref, watch } from "vue";
 import { formatUtils } from "../format";
-import { getOfflineInvoices, deleteOfflineInvoice, getPendingOfflineInvoiceCount } from "../../offline/index";
+import {
+	getOfflineInvoices,
+	deleteOfflineInvoice,
+	getPendingOfflineInvoiceCount,
+	getDeadLetterRows,
+	exportDeadLetterEntry,
+} from "../../offline/index";
+import { useSyncStore } from "../stores/syncStore";
 
 defineOptions({
 	name: "OfflineInvoicesDialog",
@@ -219,6 +278,9 @@ const currency_precision = ref(2);
 
 const dialog = ref(props.modelValue);
 const invoices = ref([]);
+const deadLetterRows = ref([]);
+const deadLetterBusy = ref("");
+const syncStore = useSyncStore();
 const headers = [
 	{
 		title: __("Customer"),
@@ -289,6 +351,37 @@ function currencySymbol(currency) {
 
 function loadInvoices() {
 	invoices.value = getOfflineInvoices();
+	void loadDeadLetters();
+}
+
+async function loadDeadLetters() {
+	try {
+		deadLetterRows.value = await getDeadLetterRows();
+	} catch (e) {
+		console.error("dead-letter load failed", e);
+	}
+}
+
+async function retryDeadLetter(row) {
+	deadLetterBusy.value = row.client_request_id;
+	try {
+		await syncStore.requeueDeadLetter(row.client_request_id);
+	} finally {
+		deadLetterBusy.value = "";
+		await loadDeadLetters();
+	}
+}
+
+async function exportDeadLetter(row) {
+	const payload = await exportDeadLetterEntry(row.client_request_id);
+	if (!payload) return;
+	const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement("a");
+	a.href = url;
+	a.download = `venta-sin-sincronizar-${row.client_request_id}.json`;
+	a.click();
+	URL.revokeObjectURL(url);
 }
 
 async function removeInvoice(index) {

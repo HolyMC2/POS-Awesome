@@ -73,16 +73,25 @@
 							'offline-invoices-btn mobile-btn pos-themed-button',
 							isRtl ? 'rtl-offline-btn' : 'ltr-offline-btn',
 							{ 'has-pending': pendingInvoices > 0 },
+							{ 'has-dead-letter': deadLetterCount > 0 },
 						]"
-						:aria-label="__('View offline invoices') + ` (${pendingInvoices})`"
+						:aria-label="__('View offline invoices') + ` (${pendingInvoices})` + (deadLetterCount > 0 ? ` — ${deadLetterCount} ` + __('failed, need attention') : '')"
 						@click="$emit('show-offline-invoices')"
 					>
-						<v-badge v-if="pendingInvoices > 0" :content="pendingInvoices" color="error" floating>
+						<v-badge
+							v-if="pendingInvoices > 0 || deadLetterCount > 0"
+							:content="deadLetterCount > 0 ? deadLetterCount : pendingInvoices"
+							color="error"
+							floating
+						>
 							<v-icon class="pos-text-primary">mdi-file-document-multiple-outline</v-icon>
 						</v-badge>
 						<v-icon v-else class="pos-text-primary">mdi-file-document-multiple-outline</v-icon>
 						<v-tooltip activator="parent" location="bottom">
 							{{ __("Offline Invoices") }} ({{ pendingInvoices }})
+							<template v-if="deadLetterCount > 0">
+								— {{ deadLetterCount }} {{ __("failed, need attention") }}
+							</template>
 						</v-tooltip>
 					</v-btn>
 
@@ -173,14 +182,20 @@
 							'offline-invoices-btn pos-themed-button',
 							isRtl ? 'rtl-offline-btn' : 'ltr-offline-btn',
 							{ 'has-pending': pendingInvoices > 0 },
+							{ 'has-dead-letter': deadLetterCount > 0 },
 						]"
-						:aria-label="__('View offline invoices') + ` (${pendingInvoices})`"
+						:aria-label="__('View offline invoices') + ` (${pendingInvoices})` + (deadLetterCount > 0 ? ` — ${deadLetterCount} ` + __('failed, need attention') : '')"
 						:aria-describedby="'offline-invoices-tooltip'"
 						@click="$emit('show-offline-invoices')"
 						@keydown.enter="$emit('show-offline-invoices')"
 						tabindex="0"
 					>
-						<v-badge v-if="pendingInvoices > 0" :content="pendingInvoices" color="error" floating>
+						<v-badge
+							v-if="pendingInvoices > 0 || deadLetterCount > 0"
+							:content="deadLetterCount > 0 ? deadLetterCount : pendingInvoices"
+							color="error"
+							floating
+						>
 							<v-icon class="pos-text-primary">mdi-file-document-multiple-outline</v-icon>
 						</v-badge>
 						<v-icon v-else class="pos-text-primary">mdi-file-document-multiple-outline</v-icon>
@@ -192,6 +207,9 @@
 							:close-delay="200"
 						>
 							{{ __("Offline Invoices") }} ({{ pendingInvoices }})
+							<template v-if="deadLetterCount > 0">
+								— {{ deadLetterCount }} {{ __("failed, need attention") }}
+							</template>
 						</v-tooltip>
 					</v-btn>
 
@@ -231,6 +249,8 @@
 
 <script>
 import { useRtl } from "../../composables/core/useRtl";
+import { computed } from "vue";
+import { useSyncStore } from "../../stores/syncStore";
 import posLogo from "../pos/pos.png";
 import NavbarInfoGadgets from "./NavbarInfoGadgets.vue";
 
@@ -241,11 +261,22 @@ export default {
 	},
 	setup() {
 		const { isRtl, rtlStyles, rtlClasses } = useRtl();
+		// SPEC A: dead-lettered offline sales must be impossible to miss —
+		// read the count straight from the store (no prop threading).
+		// try/catch: unit tests mount this component without a pinia.
+		let syncStore = null;
+		try {
+			syncStore = useSyncStore();
+		} catch {
+			syncStore = null;
+		}
+		const deadLetterCount = computed(() => syncStore?.deadLetterCount || 0);
 		return {
 			isRtl,
 			rtlStyles,
 			rtlClasses,
 			posLogo,
+			deadLetterCount,
 		};
 	},
 	data() {
@@ -811,6 +842,17 @@ export default {
 }
 
 /* Offline Invoices Button Enhancement - Elite Style */
+/* SPEC A: dead-lettered sales — the button itself pulses so the state
+   is visible even without hovering the tooltip. */
+.offline-invoices-btn.has-dead-letter {
+	animation: dead-letter-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes dead-letter-pulse {
+	0%, 100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.55); }
+	50% { box-shadow: 0 0 0 7px rgba(244, 67, 54, 0); }
+}
+
 .offline-invoices-btn {
 	position: relative;
 	transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
