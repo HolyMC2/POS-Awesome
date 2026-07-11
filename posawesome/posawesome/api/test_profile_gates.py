@@ -198,3 +198,57 @@ class TestProfileGates(IntegrationTestCase):
 					gift_card_code="GATE-NONEXISTENT",
 					amount=50,
 				)
+
+	# ---------- customer credit ----------
+
+	def test_customer_credit_rejected_when_flag_off(self):
+		with _FlagPatch("use_customer_credit", 0):
+			payload = self._payload("cc-off")
+			data = self._data()
+			data["redeemed_customer_credit"] = 5
+			created = creation.update_invoice(json.dumps(payload))
+			payload = dict(payload)
+			payload["name"] = created.get("name")
+			self._created.append(("Sales Invoice", created.get("name")))
+			with self.assertRaises(frappe.ValidationError) as ctx:
+				creation.submit_invoice(
+					json.dumps(payload), json.dumps(data), submit_in_background=0
+				)
+			self.assertIn("Customer credit", str(ctx.exception))
+
+	# ---------- item name override ----------
+
+	def test_name_override_dropped_when_flag_off(self):
+		with _FlagPatch("posa_allow_line_item_name_override", 0):
+			payload = self._payload("name-off")
+			payload["items"][0]["item_name"] = "Nombre Trucho"
+			r = self._submit(payload)
+			self.assertEqual(r["docstatus"], 1)
+			row_name = frappe.db.get_value(
+				"Sales Invoice Item", {"parent": r["name"]}, ["item_name", "name_overridden"], as_dict=True
+			)
+			self.assertEqual(row_name.item_name, "POSA Test Service")
+			self.assertEqual(int(row_name.name_overridden or 0), 0)
+
+	def test_name_override_applied_when_flag_on(self):
+		with _FlagPatch("posa_allow_line_item_name_override", 1):
+			payload = self._payload("name-on")
+			payload["items"][0]["item_name"] = "Nombre Personalizado"
+			r = self._submit(payload)
+			row = frappe.db.get_value(
+				"Sales Invoice Item", {"parent": r["name"]}, ["item_name", "name_overridden"], as_dict=True
+			)
+			self.assertEqual(row.item_name, "Nombre Personalizado")
+			self.assertEqual(int(row.name_overridden), 1)
+
+	# ---------- delivery charges ----------
+
+	def test_delivery_charge_rejected_when_flag_off(self):
+		charge = frappe.db.get_value("Delivery Charges", {}, "name")
+		if not charge:
+			self.skipTest("no Delivery Charges doc on site")
+		with _FlagPatch("posa_use_delivery_charges", 0):
+			payload = self._payload("dc-off", posa_delivery_charges=charge)
+			with self.assertRaises(frappe.ValidationError) as ctx:
+				creation.update_invoice(json.dumps(payload))
+			self.assertIn("Delivery charges", str(ctx.exception))

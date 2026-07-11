@@ -205,13 +205,13 @@ export function usePaymentMethods(options: PaymentMethodsOptions) {
 		}
 	};
 
-	// Set M-Pesa payment as customer credit
+	// Set M-Pesa payment as customer credit.
+	// NOTE: this used to force-enable use_customer_credit by MUTATING the
+	// profile object client-side, bypassing the feature gate. Removed
+	// 2026-07-11 (M-Pesa unused on our deployments; the server now
+	// enforces use_customer_credit at submit).
 	const set_mpesa_payment = (payment: any) => {
 		const doc = unref(invoiceDoc);
-		const profile = unref(posProfile);
-		if (profile) {
-			profile.use_customer_credit = true;
-		}
 
 		if (options.setRedeemCustomerCredit) {
 			options.setRedeemCustomerCredit(true);

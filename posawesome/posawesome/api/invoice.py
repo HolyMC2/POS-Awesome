@@ -269,6 +269,17 @@ def calc_delivery_charges(doc):
     if not doc.pos_profile:
         return
 
+    # Server backstop for `posa_use_delivery_charges` (POS-PROFILE-SPEC
+    # P0-7): the flag only hid the UI — a payload carrying a delivery
+    # charge on a profile with the feature off was accepted (theft risk is
+    # bounded by the payments invariant; the hole was mislabeled charges).
+    if doc.posa_delivery_charges and not frappe.get_cached_value(
+        "POS Profile", doc.pos_profile, "posa_use_delivery_charges"
+    ):
+        frappe.throw(
+            frappe._("Delivery charges are not enabled in POS Profile")
+        )
+
     old_doc = None
     calculate_taxes_and_totals = False
     if not doc.is_new():

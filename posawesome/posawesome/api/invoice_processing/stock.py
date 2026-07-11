@@ -253,12 +253,33 @@ def _auto_set_return_batches(invoice_doc):
 
 
 def _apply_item_name_overrides(invoice_doc, overrides=None):
-    """Apply custom item names to invoice items."""
+    """Apply custom item names to invoice items.
+
+    Server backstop for `posa_allow_line_item_name_override`
+    (POS-PROFILE-SPEC P0-6): with the flag OFF, client-provided names are
+    dropped and canonical Item names restored — graceful (a stale client
+    must not break sales over a cosmetic field), unlike the loud money
+    gates. Profile-less (non-POS) invoices keep current behavior.
+    """
     overrides = overrides or {}
+    profile = invoice_doc.get("pos_profile")
+    allow_override = True
+    if profile:
+        allow_override = bool(
+            cint(
+                frappe.get_cached_value(
+                    "POS Profile", profile, "posa_allow_line_item_name_override"
+                )
+            )
+        )
     for item in invoice_doc.items:
+        default_name = frappe.get_cached_value("Item", item.item_code, "item_name")
+        if not allow_override:
+            item.item_name = default_name
+            item.name_overridden = 0
+            continue
         source = overrides.get(item.idx) or {}
         provided = source.get("item_name") if isinstance(source, dict) else None
-        default_name = frappe.get_cached_value("Item", item.item_code, "item_name")
         clean = _sanitize_item_name(provided or item.item_name)
         if clean and clean != default_name:
             item.item_name = clean

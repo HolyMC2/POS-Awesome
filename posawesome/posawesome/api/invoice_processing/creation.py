@@ -556,6 +556,25 @@ def _apply_customer_credit_print_fields(invoice_doc, data):
     )
 
 
+def _validate_customer_credit_allowed(invoice_doc, data):
+    """Server backstop for `use_customer_credit` (POS-PROFILE-SPEC P0-5).
+
+    The flag only hid the redemption UI; redemption AMOUNTS were validated
+    against real Payment Entry advances but the feature gate itself was
+    client-side fiction — including an M-Pesa code path that force-enabled
+    the flag by mutating the profile object in the browser (removed
+    2026-07-11; M-Pesa unused on our deployments per Marco)."""
+    if flt((data or {}).get("redeemed_customer_credit")) <= 0:
+        return
+    profile = invoice_doc.get("pos_profile")
+    if not profile:
+        return
+    if not cint(
+        frappe.get_cached_value("POS Profile", profile, "use_customer_credit")
+    ):
+        frappe.throw(_("Customer credit is not enabled in POS Profile"))
+
+
 def _validate_return_allowed(invoice_doc):
     """Server backstop for `posa_allow_return` (POS-PROFILE-SPEC P0-2).
 
@@ -1434,6 +1453,7 @@ def submit_invoice(invoice, data, submit_in_background=False):
 
     _validate_credit_sale_allowed(invoice_doc, data)
     _validate_return_allowed(invoice_doc)
+    _validate_customer_credit_allowed(invoice_doc, data)
     _apply_write_off_settings(invoice_doc, data)
 
     invoice_doc.flags.ignore_permissions = True
