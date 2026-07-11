@@ -17,21 +17,21 @@ def _load_custom_field(name):
 
 
 class TestGiftCardProfileSettings(unittest.TestCase):
+    # posa_allow_supervisor_manage_gift_cards was removed 2026-07-11 (dead
+    # field — superseded by the supervisor ROLE gate; POS-PROFILE-SPEC P1).
     def test_gift_cards_are_disabled_by_default_in_fixtures(self):
         use_gift_cards = _load_custom_field("POS Profile-posa_use_gift_cards")
-        supervisor_manage = _load_custom_field("POS Profile-posa_allow_supervisor_manage_gift_cards")
 
         self.assertEqual(use_gift_cards.get("default"), "0")
-        self.assertEqual(supervisor_manage.get("default"), "0")
+
+    def test_dead_supervisor_flag_stays_removed(self):
+        fields = json.loads(FIXTURES_PATH.read_text())
+        names = {f.get("name") for f in fields}
+        self.assertNotIn("POS Profile-posa_allow_supervisor_manage_gift_cards", names)
 
     def test_related_gift_card_profile_fields_are_conditional_in_fixtures(self):
-        supervisor_manage = _load_custom_field("POS Profile-posa_allow_supervisor_manage_gift_cards")
         liability_account = _load_custom_field("POS Profile-posa_gift_card_liability_account")
 
-        self.assertEqual(
-            supervisor_manage.get("depends_on"),
-            "eval:doc.posa_use_gift_cards==1",
-        )
         self.assertEqual(
             liability_account.get("depends_on"),
             "eval:doc.posa_use_gift_cards==1",

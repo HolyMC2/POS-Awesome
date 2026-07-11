@@ -10,21 +10,18 @@ FIELDS = [
         "default": "0",
         "insert_after": "use_customer_credit",
     },
-    {
-        "fieldname": "posa_allow_supervisor_manage_gift_cards",
-        "label": "Allow Supervisor Gift Card Management",
-        "fieldtype": "Check",
-        "default": "0",
-        "depends_on": "eval:doc.posa_use_gift_cards==1",
-        "insert_after": "posa_use_gift_cards",
-    },
+    # posa_allow_supervisor_manage_gift_cards removed 2026-07-11 (dead —
+    # superseded by the POS Awesome Supervisor ROLE gate in gift_cards.py;
+    # see remove_dead_pos_profile_fields + POS-PROFILE-SPEC P1). This patch
+    # runs on EVERY migrate (after_migrate), so keeping it here would
+    # resurrect the field after removal.
     {
         "fieldname": "posa_gift_card_liability_account",
         "label": "Gift Card Liability Account",
         "fieldtype": "Link",
         "options": "Account",
         "depends_on": "eval:doc.posa_use_gift_cards==1",
-        "insert_after": "posa_allow_supervisor_manage_gift_cards",
+        "insert_after": "posa_use_gift_cards",
     },
 ]
 
