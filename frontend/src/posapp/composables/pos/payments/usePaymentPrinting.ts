@@ -194,7 +194,10 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 					});
 					return;
 				} catch (error) {
-					console.warn("QZ Tray print failed, falling back to browser print", error);
+					const { notifyQzPrintFallback } = await import(
+						"../../../services/qzTray"
+					);
+					notifyQzPrintFallback(error, "payment-print");
 				}
 			}
 			silentPrint(url, printOptions);

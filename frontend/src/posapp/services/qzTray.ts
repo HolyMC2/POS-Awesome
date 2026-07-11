@@ -33,6 +33,50 @@ function reportQzFailure(stage: string, error: unknown, meta: Record<string, unk
 	}
 }
 
+// Visible QZ→browser fallback (concept from upstream 699e7b6b/31167649):
+// the fallback itself still runs — printing must never stall the line —
+// but the operator sees WHY the receipt came out of the wrong pipeline
+// instead of a console-only warn nobody reads. Debounced: a dead tray
+// makes every print fall back; one toast per minute is signal, ten in a
+// row is noise. The qz:failure telemetry row fires every time (capped
+// upstream by QZ_FAILURE_REPORT_CAP).
+let _lastFallbackToastAt = 0;
+const QZ_FALLBACK_TOAST_COOLDOWN_MS = 60_000;
+
+export function notifyQzPrintFallback(error: unknown, context = "print") {
+	const message =
+		error instanceof Error
+			? error.message
+			: typeof error === "string"
+				? error
+				: String(error ?? "");
+	console.warn("QZ Tray print failed, falling back to browser print", error);
+	reportQzFailure(
+		"fallback_browser_print",
+		error instanceof Error ? error : new Error(message),
+		{ context },
+	);
+	const now = Date.now();
+	if (now - _lastFallbackToastAt < QZ_FALLBACK_TOAST_COOLDOWN_MS) {
+		return;
+	}
+	_lastFallbackToastAt = now;
+	const t = (s: string) =>
+		typeof window !== "undefined" && (window as any).__
+			? (window as any).__(s)
+			: s;
+	try {
+		useToastStore().show({
+			title: t("Silent print failed — using browser print"),
+			detail: message.slice(0, 200) || t("QZ Tray unreachable"),
+			color: "warning",
+			timeout: 10000,
+		});
+	} catch {
+		// toast store may not be ready; telemetry row above survives.
+	}
+}
+
 export type QzCertStatus = "unknown" | "trusted" | "untrusted";
 
 export interface QzPrintHtmlOptions {

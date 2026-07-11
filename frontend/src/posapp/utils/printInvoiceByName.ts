@@ -11,7 +11,7 @@ import {
 	silentPrint,
 	watchPrintWindow,
 } from "../plugins/print";
-import { printDocumentViaQz } from "../services/qzTray";
+import { notifyQzPrintFallback, printDocumentViaQz } from "../services/qzTray";
 import { isOffline } from "../../offline/index";
 
 declare const frappe: any;
@@ -56,10 +56,7 @@ export async function printInvoiceByName(
 			});
 			return;
 		} catch (error) {
-			console.warn(
-				"QZ Tray print failed, falling back to browser print",
-				error,
-			);
+			notifyQzPrintFallback(error, "hold-confirm-print");
 		}
 	}
 	if (useSilentPrint) {

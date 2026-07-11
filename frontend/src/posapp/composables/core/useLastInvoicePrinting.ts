@@ -5,7 +5,7 @@ import {
 	silentPrint,
 	watchPrintWindow,
 } from "../../plugins/print";
-import { printDocumentViaQz } from "../../services/qzTray";
+import { notifyQzPrintFallback, printDocumentViaQz } from "../../services/qzTray";
 
 declare const frappe: any;
 declare const __: (text: string, args?: any[]) => string;
@@ -207,7 +207,7 @@ export function useLastInvoicePrinting() {
 				});
 				return;
 			} catch (error) {
-				console.warn("QZ Tray print failed, falling back to browser print", error);
+				notifyQzPrintFallback(error, "reprint-last");
 			}
 			silentPrint(url, printOptions);
 			return;

@@ -61,6 +61,18 @@ vi.mock("../src/posapp/stores/uiStore", () => ({
 	}),
 }));
 
+const toastShow = vi.hoisted(() => vi.fn());
+vi.mock("../src/posapp/stores/toastStore", () => ({
+	useToastStore: () => ({
+		show: toastShow,
+	}),
+}));
+
+const trackMock = vi.hoisted(() => vi.fn());
+vi.mock("../src/posapp/utils/telemetry", () => ({
+	track: trackMock,
+}));
+
 describe("qzTray service", () => {
 	beforeEach(() => {
 		vi.resetModules();
@@ -146,5 +158,48 @@ describe("qzTray service", () => {
 		await qzTray.findQzPrinters();
 
 		expect(qzTray.selectedQzPrinter.value).toBe("Printer A");
+	});
+
+	it("surfaces a toast + telemetry when a QZ print falls back to browser print", async () => {
+		const qzTray = await import("../src/posapp/services/qzTray");
+
+		qzTray.notifyQzPrintFallback(new Error("connection refused"), "payment-print");
+
+		expect(toastShow).toHaveBeenCalledTimes(1);
+		expect(toastShow).toHaveBeenCalledWith(
+			expect.objectContaining({
+				color: "warning",
+				detail: expect.stringContaining("connection refused"),
+			}),
+		);
+		expect(trackMock).toHaveBeenCalledWith(
+			"qz:failure",
+			1,
+			expect.objectContaining({
+				stage: "fallback_browser_print",
+				context: "payment-print",
+			}),
+		);
+	});
+
+	it("debounces the fallback toast but keeps every telemetry row", async () => {
+		const qzTray = await import("../src/posapp/services/qzTray");
+
+		qzTray.notifyQzPrintFallback(new Error("first"), "a");
+		qzTray.notifyQzPrintFallback(new Error("second"), "b");
+
+		expect(toastShow).toHaveBeenCalledTimes(1);
+		expect(trackMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("never throws when the toast store is unavailable", async () => {
+		const qzTray = await import("../src/posapp/services/qzTray");
+		toastShow.mockImplementation(() => {
+			throw new Error("store not ready");
+		});
+
+		expect(() =>
+			qzTray.notifyQzPrintFallback(new Error("boom"), "boot"),
+		).not.toThrow();
 	});
 });

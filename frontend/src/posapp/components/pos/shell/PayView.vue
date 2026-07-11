@@ -223,7 +223,7 @@ import {
 	silentPrint,
 	watchPrintWindow,
 } from "../../../plugins/print";
-import { printDocumentViaQz } from "../../../services/qzTray";
+import { notifyQzPrintFallback, printDocumentViaQz } from "../../../services/qzTray";
 
 import { useRtl } from "../../../composables/core/useRtl";
 import { useCustomersStore } from "../../../stores/customersStore.js";
@@ -427,7 +427,7 @@ export default {
 						});
 						return;
 					} catch (error) {
-						console.warn("QZ Tray print failed, falling back to browser print", error);
+						notifyQzPrintFallback(error, "payment-entry-print");
 					}
 				}
 				silentPrint(url, printOptions);

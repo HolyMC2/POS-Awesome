@@ -1391,7 +1391,7 @@ import {
 	silentPrint,
 	watchPrintWindow,
 } from "../../../plugins/print";
-import { printDocumentViaQz } from "../../../services/qzTray";
+import { notifyQzPrintFallback, printDocumentViaQz } from "../../../services/qzTray";
 import { isOffline } from "../../../../offline/index";
 import DocumentSourceSelector from "../shared/DocumentSourceSelector.vue";
 import {
@@ -2636,7 +2636,7 @@ export default {
 					await printDocumentViaQz({ doctype, name: invoice.name, printFormat, letterhead: letterHead || null, noLetterhead: letterHead ? "0" : "1", printerName: posProfile.value?.posa_qz_printer_name || undefined });
 					return;
 				} catch (error) {
-					console.warn("QZ Tray print failed, falling back to browser print", error);
+					notifyQzPrintFallback(error, "invoice-management-print");
 				}
 			}
 			if (useSilentPrint) {
