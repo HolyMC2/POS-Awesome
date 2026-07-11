@@ -64,5 +64,10 @@ export async function printInvoiceByName(
 		return;
 	}
 	const printWindow = window.open(url, "Print");
-	if (printWindow) watchPrintWindow(printWindow, printOptions);
+	if (printWindow) {
+		watchPrintWindow(printWindow, printOptions);
+	} else {
+		const { track } = await import("./telemetry");
+		track("warn:print_popup_blocked", 1, { context: "hold-confirm-print" });
+	}
 }

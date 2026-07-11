@@ -172,8 +172,10 @@ describe("qzTray service", () => {
 				detail: expect.stringContaining("connection refused"),
 			}),
 		);
+		// warn: prefix — "qz:" is not in the server ingest allowlist and
+		// would be dropped (audit fix).
 		expect(trackMock).toHaveBeenCalledWith(
-			"qz:failure",
+			"warn:qz_failure",
 			1,
 			expect.objectContaining({
 				stage: "fallback_browser_print",

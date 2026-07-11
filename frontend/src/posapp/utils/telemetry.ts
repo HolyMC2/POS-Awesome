@@ -427,7 +427,9 @@ const API_HOT_METHODS = new Set<string>([
 	"posawesome.posawesome.api.items.search_items",
 	"posawesome.posawesome.api.items.get_items",
 	"posawesome.posawesome.api.customers.search_customers",
-	"posawesome.posawesome.api.utilities.get_active_pricing_rules",
+	// audit fix: the method lives in api.pricing_rules, not api.utilities —
+	// the wrong entry left an intended-hot method silently 10%-sampled.
+	"posawesome.posawesome.api.pricing_rules.get_active_pricing_rules",
 ]);
 
 function apiMethodLabel(method: string): string {

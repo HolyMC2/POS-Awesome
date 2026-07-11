@@ -205,6 +205,12 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 			const printWindow = window.open(url, "Print");
 			if (printWindow) {
 				watchPrintWindow(printWindow, printOptions);
+			} else {
+				// Popup blocked = receipt silently never printed. Count it —
+				// completes the print-outcome picture (attempted = qz ok +
+				// fallback + popup-blocked) for a real success rate.
+				const { track } = await import("../../../utils/telemetry");
+				track("warn:print_popup_blocked", 1, { context: "payment-print" });
 			}
 		}
 	};

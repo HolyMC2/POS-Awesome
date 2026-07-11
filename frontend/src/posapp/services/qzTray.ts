@@ -21,7 +21,11 @@ function reportQzFailure(stage: string, error: unknown, meta: Record<string, unk
 				? error
 				: String(error);
 	try {
-		track("qz:failure", 1, {
+		// warn: prefix — the ingest allowlist (api/telemetry.py
+		// ALLOWED_EVENT_PREFIXES) has no "qz:", so every row emitted under
+		// the old "qz:failure" name was silently DROPPED server-side
+		// (audit finding — the Q10 panel read nothing).
+		track("warn:qz_failure", 1, {
 			stage,
 			message: message.slice(0, 280),
 			cert: qzCertStatus.value,
