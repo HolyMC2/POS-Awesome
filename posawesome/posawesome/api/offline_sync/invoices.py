@@ -38,11 +38,17 @@ def submit_invoice_outbox_entry(client_request_id, invoice, data=None):
     data_payload.setdefault("idempotency_key", client_request_id)
     data_payload.setdefault("client_request_id", client_request_id)
 
-    response = submit_invoice(
-        json.dumps(invoice_payload),
-        json.dumps(data_payload),
-        submit_in_background=0,
-    )
+    try:
+        response = submit_invoice(
+            json.dumps(invoice_payload),
+            json.dumps(data_payload),
+            submit_in_background=0,
+        )
+    except Exception:
+        from posawesome.posawesome.api.metrics import submit_failure
+
+        submit_failure("outbox")
+        raise
 
     return {
         "acknowledged": True,

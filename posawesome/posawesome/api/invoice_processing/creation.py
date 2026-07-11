@@ -282,6 +282,8 @@ def _ledger_final_replay_response(ledger_doc):
 
 
 def _mark_ledger_failed(ledger_doc, error):
+    from posawesome.posawesome.api.metrics import submit_failure
+    submit_failure("sync")
     return _update_submission_ledger(
         ledger_doc,
         STATE_FAILED,
@@ -1597,14 +1599,22 @@ def prune_submission_ledger(days: int = 45):
     they are the repair/forensics trail for stuck or held submissions.
     """
     cutoff = frappe.utils.add_days(frappe.utils.getdate(), -abs(cint(days) or 45))
-    deleted = frappe.db.sql(
+    count = frappe.db.sql(
+        """SELECT COUNT(*) FROM `tabPOS Invoice Submission Ledger`
+           WHERE state IN ('SUBMITTED', 'POST_SUBMIT_DONE')
+             AND modified < %s""",
+        (cutoff,),
+    )[0][0]
+    frappe.db.sql(
         """DELETE FROM `tabPOS Invoice Submission Ledger`
            WHERE state IN ('SUBMITTED', 'POST_SUBMIT_DONE')
              AND modified < %s""",
         (cutoff,),
     )
     frappe.db.commit()
-    return {"cutoff": str(cutoff), "ok": True, "deleted_rows": deleted}
+    from posawesome.posawesome.api.metrics import ledger_pruned
+    ledger_pruned(int(count or 0))
+    return {"cutoff": str(cutoff), "ok": True, "deleted_rows": int(count or 0)}
 
 
 def _run_submit_hold_gates(invoice_doc, data):
@@ -1681,6 +1691,8 @@ def resume_held_submission(invoice_name, doctype="Sales Invoice"):
             # who parked the sale, not whatever context resumes it.
             "user": ledger.owner,
             "ledger_name": ledger.name,
+            # Metrics: label failures on this job as path=resume.
+            "is_resume": True,
         },
     )
     return {"name": invoice_name, "docstatus": 0, "resumed": True}
@@ -1802,6 +1814,8 @@ def submit_in_background_job(kwargs):
             user,
             ledger_name,
         )
+        from posawesome.posawesome.api.metrics import background_submit
+        background_submit("ok")
 
     except Exception as e:
         frappe.db.rollback()
@@ -1815,6 +1829,9 @@ def submit_in_background_job(kwargs):
             except Exception:
                 pass
         frappe.log_error(f"POS Background Submission Failed for {invoice}: {error_msg}")
+        from posawesome.posawesome.api.metrics import background_submit, submit_failure
+        background_submit("error")
+        submit_failure("resume" if kwargs.get("is_resume") else "background")
         # Leave a Comment on the draft itself — the realtime event dies with
         # a closed SPA and Error Log forensics need timestamp hunting; the
         # stuck draft should explain itself in Desk.
