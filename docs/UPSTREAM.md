@@ -76,7 +76,7 @@ posawesome-push-prod + rebake.
 | `df519349` | focus qty after adding item | **ADAPTED 2026-07-11** — part of the keyboard chain (see f78d2d0d row). |
 | `bf150918` | cart field focus flow | **ADAPTED 2026-07-11** — part of the keyboard chain (see f78d2d0d row). |
 | `f16ab0be` | pricing-rule `min_amt`/`max_amt`/`max_qty` support | Our engine has min_qty only; insurance before someone configures an amount-threshold rule. |
-| `699e7b6b`/`31167649` (concept) | visible toast/confirm when QZ print falls back to browser | Our fallback is silent today; ~15 lines in our catch paths. |
+| `699e7b6b`/`31167649` (concept) | visible toast/confirm when QZ print falls back to browser | **ADAPTED 2026-07-11** — notifyQzPrintFallback: non-blocking toast (NOT their confirm — printing never stalls the line), 60s debounce, qz:failure telemetry row per event, wired at all 5 fallback sites. |
 
 ### EYEBALL — Marco decides
 
