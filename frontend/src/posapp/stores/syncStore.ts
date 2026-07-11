@@ -18,9 +18,11 @@
  */
 import { defineStore } from "pinia";
 import {
+	getDeadLetterCount,
 	getInvoiceOutboxMode,
 	getPendingInvoiceOutboxCount,
 	getPendingOfflineInvoiceCount,
+	requeueDeadLetterEntry,
 	syncOfflineInvoices,
 	isOffline,
 } from "../../offline/index";
@@ -30,6 +32,10 @@ import { useToastStore } from "./toastStore.js";
 export const useSyncStore = defineStore("sync", {
 	state: () => ({
 		pendingInvoicesCount: 0,
+		// SPEC A: sales that exhausted their sync retries — cash in the
+		// drawer, invoice not created. Surfaced separately from the plain
+		// pending count so they can never hide inside it.
+		deadLetterCount: 0,
 	}),
 	actions: {
 		async updatePendingCount() {
@@ -40,9 +46,48 @@ export const useSyncStore = defineStore("sync", {
 						? legacyCount
 						: await getPendingInvoiceOutboxCount();
 				this.pendingInvoicesCount = outboxCount;
+				await this.updateDeadLetterCount();
 			} catch (error) {
 				console.error("Failed to update pending invoices count", error);
 			}
+		},
+		async updateDeadLetterCount() {
+			try {
+				const previous = this.deadLetterCount;
+				const count =
+					getInvoiceOutboxMode() === "off" ? 0 : await getDeadLetterCount();
+				this.deadLetterCount = count;
+				if (count > previous) {
+					// durable trace + loud persistent alert: a dead-lettered
+					// sale means cash in the drawer with NO invoice.
+					import("../utils/telemetry")
+						.then(({ track }) =>
+							track("crash:offline_sale_dead_letter", count, {
+								previous,
+							}),
+						)
+						.catch(() => {});
+					const toastStore = useToastStore();
+					toastStore.show({
+						key: "dead-letter",
+						title: `${count} venta(s) sin sincronizar — atención`,
+						detail:
+							"Cobros hechos sin factura registrada. Abrir Facturas Offline → Reintentar, o llamar al administrador.",
+						color: "error",
+						timeout: 0,
+					});
+				}
+			} catch (error) {
+				console.error("Failed to update dead-letter count", error);
+			}
+		},
+		async requeueDeadLetter(clientRequestId: string) {
+			const row = await requeueDeadLetterEntry(clientRequestId);
+			if (row) {
+				await this.syncPendingInvoices();
+			}
+			await this.updatePendingCount();
+			return row;
 		},
 		setPendingCount(count: number) {
 			this.pendingInvoicesCount = count;
@@ -91,6 +136,11 @@ export const useSyncStore = defineStore("sync", {
 				}
 			} catch (error) {
 				console.error("Sync failed", error);
+				import("../utils/telemetry")
+					.then(({ track }) =>
+						track("warn:offline_sync_failed", 1, { pending }),
+					)
+					.catch(() => {});
 			} finally {
 				this.updatePendingCount();
 			}

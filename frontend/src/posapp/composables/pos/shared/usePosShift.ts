@@ -329,6 +329,7 @@ export function usePosShift(openDialog?: () => void) {
 
 	function submit_closing_pos(data: any) {
 		debugLog("Submitting closing shift", data);
+		const closeStartedAt = Date.now();
 		// Capture the active profile before we null it below so the
 		// closing-ticket print can still reach the configured printer
 		// + format. After clear, `pos_profile.value` flips to null and
@@ -344,6 +345,14 @@ export function usePosShift(openDialog?: () => void) {
 			)
 			.then((r: any) => {
 				debugLog("Submit result", r);
+				// SPEC C: corte friction — server round-trip of the close.
+				import("../../../utils/telemetry")
+					.then(({ track }) =>
+						track("pos:shift_close_ms", Date.now() - closeStartedAt, {
+							payments: (data?.payment_reconciliation || []).length,
+						}),
+					)
+					.catch(() => {});
 				if (r.message) {
 					// Auto-print the cierre-de-caja ticket BEFORE the
 					// state-clear runs. Fire-and-forget — print failure

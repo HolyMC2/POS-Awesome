@@ -1,4 +1,5 @@
 import _ from "lodash";
+import { unref } from "vue";
 import { withPerf } from "../../../utils/perf";
 import { debugLog } from "../../../utils/debug";
 // SALDO-INTEGRATION-POINT — saldo capture lives outside this fork.
@@ -394,6 +395,16 @@ export function useItemAddition() {
 	const addItemMeasured = withPerf(
 		"pos:add-item",
 		async function addItemInner(item, context) {
+			try {
+				const { stampSaleCycleStart } = await import("../../../utils/saleCycle");
+				const cartItems = context?.invoiceStore?.items ?? context?.items;
+				const count = Array.isArray(cartItems)
+					? cartItems.length
+					: (unref(cartItems) || []).length;
+				stampSaleCycleStart(!count);
+			} catch {
+				/* telemetry must never break add-to-cart */
+			}
 			const currentInvoiceType =
 				typeof context?.invoiceType === "string"
 					? context.invoiceType

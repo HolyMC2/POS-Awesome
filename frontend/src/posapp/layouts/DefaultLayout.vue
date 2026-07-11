@@ -255,6 +255,20 @@ const isIpHost = ref(false);
 
 const manualOffline = ref(false);
 
+// SPEC C: how often is this terminal actually offline? Debounced 2s
+// against connection flapping; the boot transition (undefined→first
+// value) is suppressed.
+let _offlineTransitionTimer = null;
+watch(serverOnline, (val, prev) => {
+	if (prev === undefined) return;
+	if (_offlineTransitionTimer) clearTimeout(_offlineTransitionTimer);
+	_offlineTransitionTimer = setTimeout(() => {
+		import("../utils/telemetry")
+			.then(({ track }) => track("pos:offline_transition", 1, { online: !!val }))
+			.catch(() => {});
+	}, 2000);
+});
+
 const queueMetrics = useQueueMetrics({
 	getCacheUsageEstimate,
 	getPendingOfflineInvoiceCount,

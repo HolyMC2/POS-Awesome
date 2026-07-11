@@ -19,6 +19,24 @@ declare const __: (_str: string, _args?: any[]) => string;
 // The state rides the document — no client-side ref to race or go stale.
 const CHARGE_REQUEST_MARKER = /POS Charge Request: (\S+)/;
 
+// SPEC C: cashier-felt sale duration — first add on empty cart → submit
+// response (or hold-parked). Fire-and-forget; telemetry never blocks a sale.
+async function emitSaleCycle(meta: { held: boolean; background: boolean; itemCount: number }) {
+	try {
+		const { takeSaleCycleMs } = await import("../../../utils/saleCycle");
+		const elapsed = takeSaleCycleMs();
+		if (elapsed === null) return;
+		const { track } = await import("../../../utils/telemetry");
+		track("pos:sale_cycle_ms", elapsed, {
+			item_count: meta.itemCount,
+			held: meta.held,
+			background: meta.background,
+		});
+	} catch {
+		/* ignore */
+	}
+}
+
 async function markChargeRequestCharged(
 	stores: PaymentSubmissionOptions["stores"],
 	requestName: string,
@@ -902,6 +920,14 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			}
 			try {
 				await saveOfflineInvoice({ data, invoice: doc });
+				try {
+					const { track } = await import("../../../utils/telemetry");
+					track("pos:offline_invoice_saved", Number(doc?.grand_total) || 0, {
+						items: (doc?.items || []).length,
+					});
+				} catch {
+					/* never block the offline save */
+				}
 				stores?.syncStore?.updatePendingCount();
 				stores?.toastStore?.show({
 					title: __("Invoice saved offline"),
@@ -1006,6 +1032,7 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			// the SaldoHoldsBadge tracks it. Clear the cart for the next
 			// customer immediately.
 			if (r.message?.held) {
+				void emitSaleCycle({ held: true, background: false, itemCount: (doc?.items || []).length });
 				stores?.toastStore?.show({
 					title: __("Venta en espera de confirmación TAECEL"),
 					detail: r.message?.hold_detail?.message || "",
@@ -1082,6 +1109,12 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 					waitForInvoiceProcessing,
 				});
 			}
+
+			void emitSaleCycle({
+				held: false,
+				background: waitForInvoiceProcessing,
+				itemCount: (doc?.items || []).length,
+			});
 
 			// Reset local state vars
 			if (customerCreditDict) customerCreditDict.value = [];
