@@ -191,7 +191,10 @@ export async function get_draft_invoices(
 		context.uiStore.setDraftSource?.(selectedSource);
 		context.uiStore.setParkedOrders?.([]);
 		context.$refs?.invoiceSummary?.setDraftsLoading?.(true);
-		context.$refs?.invoiceSummary?.openDraftsSurface?.({ focus: false });
+		// NOTE: upstream e2385917 opened the drafts surface here (pre-fetch,
+		// with a loading spinner). We keep our contract instead: the surface
+		// only opens post-fetch and only when drafts exist (draftDialogs.spec
+		// "no drafts → no surface"). Focus handling still lands post-fetch.
 
 		const drafts = await fetchDocumentSourceRecords({
 			source: selectedSource,
