@@ -47,6 +47,24 @@
 	box-sizing: border-box;
 }
 
+/* Native-table sanity (Phase 2 rewrite): the base .posa-cart-table rules
+   above were written for the v-data-table WRAPPER DIV (display:flex,
+   overflow:hidden, height:100%). Applied to a real <table> they broke the
+   expanded row: the table was height-constrained + overflow-clipped, so the
+   938px detail panel rendered cut mid-card ("always displays cut") and its
+   content painted over the header. A table must lay out as a table and
+   grow; the invoice card (overflow:auto) is the scroller. */
+table.posa-cart-table--native {
+	display: table;
+	overflow: visible;
+	height: auto;
+	/* the `.posa-cart-table table` rules below never match the native
+	   table (it IS .posa-cart-table) — restate the layout system here */
+	table-layout: fixed;
+	border-collapse: collapse;
+	border-spacing: 0;
+}
+
 /* =================================================================
    TABLE STRUCTURE - HEADERS, ROWS, CELLS
    ================================================================= */
@@ -671,7 +689,7 @@
 }
 
 .posa-expanded-content {
-	padding: 24px;
+	padding: 12px 16px;
 	width: 100% !important;
 	max-width: 100% !important;
 	box-sizing: border-box;
@@ -701,7 +719,7 @@
 
 .posa-form-section {
 	width: 100%;
-	padding: 24px;
+	padding: 12px 16px;
 	box-sizing: border-box;
 	background: var(--pos-card-bg);
 	border-radius: 12px;
@@ -754,8 +772,8 @@
 .posa-form-row {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 16px;
-	margin-bottom: 16px;
+	gap: 10px;
+	margin-bottom: 10px;
 	width: 100%;
 }
 

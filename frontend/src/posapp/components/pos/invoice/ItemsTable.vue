@@ -282,10 +282,20 @@ const getSerialOptions = (item: any) => {
 
 const toggleExpanded = (rowId: any) => {
 	const current = Array.isArray(props.expanded) ? [...props.expanded] : [];
-	const next = current.includes(rowId)
-		? current.filter((id) => id !== rowId)
-		: [...current, rowId];
+	const opening = !current.includes(rowId);
+	const next = opening
+		? [...current, rowId]
+		: current.filter((id) => id !== rowId);
 	emit("update:expanded", next);
+	if (opening) {
+		// The detail panel is tall; without this the newly-opened panel's
+		// top can sit below the card's fold and read as "cut".
+		window.setTimeout(() => {
+			tableContainer.value
+				?.querySelector(".posa-cart-expanded-row")
+				?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+		}, 80);
+	}
 };
 
 const handleQtyChange = (item: any, event: any) => {
