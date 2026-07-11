@@ -513,6 +513,27 @@ def _apply_write_off_settings(invoice_doc, data):
     invoice_doc.base_write_off_amount = flt(effective_write_off * conversion_rate, precision_base_write_off)
 
 
+def _validate_credit_sale_allowed(invoice_doc, data):
+    """Server-side backstop for `posa_allow_credit_sale` — the SPA gates the
+    credit-sale toggle client-side only, and `is_credit_sale=1` in the data
+    payload makes assert_payments_match_grand_total skip the payments-vs-total
+    invariant. Without this check any client could underpay by claiming a
+    credit sale on a profile that never allowed them."""
+    if not cint(data.get("is_credit_sale")) or invoice_doc.get("is_return"):
+        return
+
+    if not invoice_doc.pos_profile:
+        frappe.throw(_("Credit Sale is not enabled in POS Profile"))
+
+    allow_credit_sale = frappe.db.get_value(
+        "POS Profile",
+        invoice_doc.pos_profile,
+        "posa_allow_credit_sale",
+    )
+    if not cint(allow_credit_sale):
+        frappe.throw(_("Credit Sale is not enabled in POS Profile"))
+
+
 def _safe_date_string(value):
     if value in (None, ""):
         return None
@@ -1326,6 +1347,7 @@ def submit_invoice(invoice, data, submit_in_background=False):
 
     _validate_stock_on_invoice(invoice_doc)
 
+    _validate_credit_sale_allowed(invoice_doc, data)
     _apply_write_off_settings(invoice_doc, data)
 
     invoice_doc.flags.ignore_permissions = True
