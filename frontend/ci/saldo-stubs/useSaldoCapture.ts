@@ -24,6 +24,11 @@ type CaptureResult = { referencia: string; monto: number };
 type BusEvents = {
 	"saldo:open": { meta: Meta; resolve: (r: CaptureResult) => void; reject: (r: unknown) => void };
 	"saldo:result": Record<string, unknown>;
+	// Hold-until-confirm (ventas retenidas):
+	// checkout parked a sale at draft → badge refetches.
+	"saldo:hold_registered": { invoice: string; doctype: string };
+	// held sale submitted server-side → Pos.vue prints the receipt.
+	"saldo:hold_print": { invoice: string; doctype: string };
 };
 
 export const saldoCaptureBus = mitt<BusEvents>();
