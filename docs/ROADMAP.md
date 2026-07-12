@@ -94,6 +94,17 @@ below was re-read at the cited line by the lead before ranking.
   stock/prices. Fixed: take only the claimed name, `_scope.assert_profile`, load the
   real doc server-side. +4 scope tests (`test_offline_sync_scope.py`), 19/19 green.
 
+**LANDED wave 2 (`8e89c3db`, `c77ac7dd` — backlog #3 + #1):**
+- ✅ **HIGH data-loss — IndexedDB auto-wipe.** `isCorruptionError` (db.ts) no longer
+  treats transient `InvalidStateError`/`NotFoundError` (multi-tab upgrade races) as
+  corruption, so `repairDbAfterFailedHealthCheck` won't `Dexie.delete` unsynced sales.
+  Narrowed to `VersionError`/"corrupt". +test.
+- ✅ **HIGH money — saldo offline.** `useItemAddition.addItem` now blocks a saldo item
+  offline (pure `shouldBlockSaldoOffline` helper) instead of posting a referencia-less
+  line → no more cash-collected-without-airtime. Mirrors the gift-card block. +5 tests.
+  615/615 vitest + vue-tsc + vite build green. Remaining money-path saldo backstop at
+  payment-submit is optional defense-in-depth (add-to-cart is the capture chokepoint).
+
 **RANKED BACKLOG (not yet landed):**
 
 | Rank | Sev | Where | Defect → fix |
