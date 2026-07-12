@@ -108,6 +108,29 @@ below was re-read at the cited line by the lead before ranking.
   `saldo_enabled:1` to client (marker reaches cart) + build; browser offline-add
   drill NOT run (harness offline-sim races the probe loop).
 
+**LANDED wave 6 (backlog #6,#7,#9,#10,#11,#12; #8 = documented decision):**
+- ✅ **#11 item cost leak (`e25ea6de`)**: `valuation_rate` stripped per-request for
+  non-supervisors in get_items (post-cache, so a shared user-independent cache hit
+  can't leak it); standard_rate kept. Live-drilled over the shared cache.
+- ✅ **#6 partial catalog ready (`e621a688`)**: saveItems/setCustomerStorage report
+  {ok,failed}; items/customers adapters throw on partial write → readiness not
+  advanced, delta re-pulled. +2 tests.
+- ✅ **#10 sale-path reachability (`7ce121e7`)**: useOnlineStatus = navigator.onLine
+  && probed serverOnline, reactive via new `posa:network-status` event; 401/403 no
+  longer count as connected. +mount test.
+- ✅ **#9 SW precache eviction (`d4908044`)**: version.json not cached; enforceCacheLimit
+  protects the precache (evicts non-precache first). node --check. NOTE: prod needs CF
+  purge of /sw.js.
+- ✅ **#7 shift-close offline-aware (`9dc5ce4f`)**: close blocked while offline queue
+  pending / offline; server rejects post into a Closed shift. Live-drilled + 2 tests.
+- ✅ **#12 offline data-safety (`6c01c202`)**: customer-credit redemption blocked offline
+  (mirrors gift cards); clearAllCache now resets the PII/financial memory caches it
+  missed. +2 tests.
+- ⏸ **#8 web-route cold-boot-offline**: DECISION, not a bug. The `/posapp` web route
+  deliberately never registers the SW (a `/`-scoped SW 404'd `/files/*` images); giving
+  it cold-boot-offline needs a scoped-SW re-architecture with real regression risk.
+  In-session offline already queues. Left as a product call — not changed unilaterally.
+
 **LANDED wave 5 (`0ef95452` — backlog #5):**
 - ✅ **HIGH reliability — write-queue backoff + dead-letter surfacing.** Exponential
   backoff (5s..5min) on `markWriteQueueEntryFailed` + `claimRetryableQueueEntries`
