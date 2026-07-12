@@ -1,5 +1,3 @@
-import json
-
 import frappe
 
 from posawesome.posawesome.api.items import get_delta_items, get_items
@@ -102,7 +100,9 @@ def sync_items(
 
     resolved_limit = _coerce_limit(limit)
     fetch_limit = resolved_limit + 1
-    serialized_profile = json.dumps(profile)
+    # frappe.as_json, not json.dumps: the server-resolved profile is a
+    # doc.as_dict() carrying raw datetime objects (json.dumps raises).
+    serialized_profile = frappe.as_json(profile)
     effective_price_list = price_list or profile.get("selling_price_list")
 
     # Overlap window on the query watermark (boundary-commit safety);

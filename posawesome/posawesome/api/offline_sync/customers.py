@@ -1,5 +1,3 @@
-import json
-
 import frappe
 
 from posawesome.posawesome.api.customers import (
@@ -69,7 +67,9 @@ def sync_customers(
 
     resolved_limit = _coerce_limit(limit)
     fetch_limit = resolved_limit + 1
-    serialized_profile = json.dumps(profile)
+    # frappe.as_json, not json.dumps: the server-resolved profile is a
+    # doc.as_dict() carrying raw datetime objects (json.dumps raises).
+    serialized_profile = frappe.as_json(profile)
     # Overlap window on the query watermark (boundary-commit safety);
     # next_watermark still advances from the original watermark.
     query_watermark = _watermark_floor(watermark)
