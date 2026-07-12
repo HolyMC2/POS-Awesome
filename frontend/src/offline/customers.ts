@@ -189,8 +189,10 @@ export async function setCustomerStorage(customers: AnyRecord[]) {
 
 		await db.table("customers").bulkPut(clean);
 		memory.customer_storage = mergeCustomerStorageRows(clean);
+		return { ok: true, saved: clean.length };
 	} catch (error) {
 		console.error("Failed to save customers to storage", error);
+		return { ok: false, saved: 0 };
 	}
 }
 

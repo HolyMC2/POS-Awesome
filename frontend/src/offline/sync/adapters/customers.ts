@@ -95,7 +95,12 @@ export async function syncCustomersResource(
 
 	const changedCustomers = extractChangedCustomers(response);
 	if (changedCustomers.length) {
-		await setCustomerStorage(changedCustomers);
+		const saveResult = await setCustomerStorage(changedCustomers);
+		if (saveResult && saveResult.ok === false) {
+			// Don't advance the cursor / mark ready on a failed write — retry
+			// the same window next run (mirrors the items adapter).
+			throw new Error("Offline customer write incomplete");
+		}
 	}
 
 	const deletedCustomerNames = extractDeletedCustomerNames(response);

@@ -449,4 +449,67 @@ describe("operational offline sync adapters", () => {
 			}),
 		);
 	});
+
+	it("throws instead of marking the catalog ready when the item write is incomplete", async () => {
+		syncStateMocks.getSyncResourceState.mockResolvedValue(null);
+		// Simulate a quota-truncated write.
+		cacheMocks.saveItemsBulk.mockResolvedValueOnce({
+			ok: false,
+			saved: 3,
+			failed: 2,
+		});
+		const fetcher = vi.fn(async () => ({
+			schema_version: "2026-04-09",
+			next_watermark: "2026-04-09T10:00:00",
+			has_more: false,
+			changes: [
+				{ key: "item::A", modified: "x", data: { item_code: "A" } },
+			],
+			deleted: [],
+		}));
+
+		await expect(
+			syncItemsResource({
+				posProfile: {
+					name: "POS-1",
+					company: "Test Co",
+					warehouse: "Main WH",
+					modified: "x",
+				},
+				priceList: "Retail",
+				watermark: null,
+				fetcher,
+			}),
+		).rejects.toThrow(/catalog write incomplete/i);
+
+		// Readiness must NOT be advanced on a partial write.
+		expect(cacheMocks.getStoredItemsCountByScope).not.toHaveBeenCalled();
+		expect(cacheMocks.setItemsLastSync).not.toHaveBeenCalled();
+	});
+
+	it("throws when the customer write is incomplete", async () => {
+		syncStateMocks.getSyncResourceState.mockResolvedValue(null);
+		customerMocks.setCustomerStorage.mockResolvedValueOnce({
+			ok: false,
+			saved: 0,
+		});
+		const fetcher = vi.fn(async () => ({
+			schema_version: "2026-04-09",
+			next_watermark: "2026-04-09T11:00:00",
+			has_more: false,
+			changes: [
+				{ key: "customer::C1", modified: "x", data: { name: "C1" } },
+			],
+			deleted: [],
+		}));
+
+		await expect(
+			syncCustomersResource({
+				posProfile: { name: "POS-1", company: "Test Co", modified: "x" },
+				watermark: null,
+				fetcher,
+			}),
+		).rejects.toThrow(/customer write incomplete/i);
+		expect(cacheMocks.getCustomerStorageCount).not.toHaveBeenCalled();
+	});
 });

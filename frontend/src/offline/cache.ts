@@ -357,6 +357,12 @@ export async function saveItemsBulk(items, scope = "") {
 }
 
 export async function saveItems(items, scope = "") {
+	// Report success so callers can gate offline-catalog readiness on a
+	// COMPLETE write. Previously every failure here was swallowed and the
+	// caller marked the catalog ready off a bare count>0, so a quota-truncated
+	// or half-written catalog was sold against offline as if complete.
+	let saved = 0;
+	let failed = 0;
 	try {
 		await checkDbHealth();
 		if (!db.isOpen()) await db.open();
@@ -368,7 +374,7 @@ export async function saveItems(items, scope = "") {
 					.filter((it): it is Record<string, any> => !!it?.item_code)
 			: [];
 		if (!incomingItems.length) {
-			return;
+			return { ok: true, saved: 0, failed: 0 };
 		}
 
 		const itemCodes = Array.from(new Set(incomingItems.map((it) => it.item_code).filter(Boolean)));
@@ -416,6 +422,7 @@ export async function saveItems(items, scope = "") {
 			}
 			try {
 				await db.table("items").bulkPut(scopedItems);
+				saved += scopedItems.length;
 			} catch (bulkError) {
 				console.warn(
 					"bulkPut failed for items chunk; retrying one-by-one",
@@ -424,7 +431,9 @@ export async function saveItems(items, scope = "") {
 				for (const row of scopedItems) {
 					try {
 						await db.table("items").put(row);
+						saved += 1;
 					} catch (rowError) {
+						failed += 1;
 						console.error("Failed to save item row", {
 							item_code: row?.item_code,
 							rowError,
@@ -435,7 +444,10 @@ export async function saveItems(items, scope = "") {
 		}
 	} catch (e) {
 		console.error("Failed to save items", e);
+		failed += 1;
+		return { ok: false, saved, failed };
 	}
+	return { ok: failed === 0, saved, failed };
 }
 
 export async function clearStoredItems(scope = "") {

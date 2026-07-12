@@ -127,7 +127,17 @@ export async function syncItemsResource(
 
 	const changedItems = extractChangedItems(response);
 	if (changedItems.length) {
-		await saveItemsBulk(changedItems, storageScope);
+		const saveResult = await saveItemsBulk(changedItems, storageScope);
+		if (saveResult && saveResult.ok === false) {
+			// Refuse to advance the watermark / mark the catalog ready on a
+			// partial write (quota, mid-write abort). Throwing routes this to
+			// the coordinator's error+backoff path, so the same delta window is
+			// re-pulled next run instead of leaving a silently-incomplete
+			// catalog flagged ready.
+			throw new Error(
+				`Offline catalog write incomplete: ${saveResult.failed} item(s) failed to persist`,
+			);
+		}
 		if (args.priceList) {
 			saveItemDetailsCache(args.posProfile.name, args.priceList, changedItems);
 			mergeCachedPriceListItems(args.priceList, changedItems);
