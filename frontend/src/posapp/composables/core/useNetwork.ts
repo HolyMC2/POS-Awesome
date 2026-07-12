@@ -40,6 +40,18 @@ const MIN_INTERVAL = 15000; // Min 15s
 function persistStatus(networkOnline: boolean, serverOnline: boolean) {
 	localStorage.setItem("networkOnline", JSON.stringify(networkOnline));
 	localStorage.setItem("serverOnline", JSON.stringify(serverOnline));
+	// Broadcast so consumers (useOnlineStatus → Invoice/Customer) can react to
+	// PROBED server reachability, not just raw navigator.onLine. This is the
+	// single chokepoint for every serverOnline transition.
+	try {
+		window.dispatchEvent(
+			new CustomEvent("posa:network-status", {
+				detail: { networkOnline, serverOnline },
+			}),
+		);
+	} catch {
+		/* CustomEvent unavailable — best effort */
+	}
 }
 
 function getPersistedStatus() {
@@ -161,19 +173,19 @@ export async function checkNetworkConnectivity(
 			method: "HEAD",
 			cache: "no-cache",
 			signal: AbortSignal.timeout(DESK_TIMEOUT),
-		}).then((r) => r.status < 500);
+		}).then((r) => r.status < 500 && r.status !== 401 && r.status !== 403);
 
 		const staticRequest = fetch("/assets/frappe/images/frappe-logo.png", {
 			method: "HEAD",
 			cache: "no-cache",
 			signal: AbortSignal.timeout(STATIC_TIMEOUT),
-		}).then((r) => r.status < 500);
+		}).then((r) => r.status < 500 && r.status !== 401 && r.status !== 403);
 
 		const originRequest = fetch(window.location.origin, {
 			method: "HEAD",
 			cache: "no-cache",
 			signal: AbortSignal.timeout(ORIGIN_TIMEOUT),
-		}).then((r) => r.status < 500);
+		}).then((r) => r.status < 500 && r.status !== 401 && r.status !== 403);
 
 		const localCheck = Promise.any([
 			deskRequest,
