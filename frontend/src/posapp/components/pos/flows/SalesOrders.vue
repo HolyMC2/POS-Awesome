@@ -259,6 +259,7 @@ export default {
 						order_name: this.order_name,
 						company: this.pos_profile.company,
 						currency: this.pos_profile.currency,
+						pos_profile: this.pos_profile.name,
 					},
 				});
 

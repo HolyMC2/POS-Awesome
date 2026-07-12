@@ -35,18 +35,27 @@ print/display prefs, offline flags (server re-validates at sync).
 `posa_default_card_view`, `posa_fetch_coupon`, `posa_smart_reload_mode`.
 Removal = fixture churn + patch; batch them in one cleanup commit.
 
-## P2 — warts
+## P2 — warts ✅ CLOSED 2026-07-12
 
-- `pose_use_limit_search` — fieldname TYPO (`pose_`), works but invisible to
-  any `posa_`-prefix tooling. Rename needs migration + fixture; document or
-  fix deliberately.
-- `posa_auto_set_batch` — backend call site commented out (creation.py:1388);
-  batch auto-set is client-driven now. Confirm intent, delete dead comment.
-- `posa_show_customer_balance` renders inside PostingDateRow.vue — odd home,
-  functional.
-- `custom_allow_create_quotation` / `custom_allow_select_sales_order` —
-  UI-only gates on document-type flows; SO/QO endpoints are scope-gated but
-  not flag-gated (no stock/GL movement → low).
+- ✅ `pose_use_limit_search` → RENAMED `posa_use_limit_search`
+  (`rename_pose_use_limit_search` patch: column rename preserves values,
+  CF row renamed in place before fixture sync). SPA reads keep a
+  `?? pose_use_limit_search` fallback for cached offline profiles.
+- ✅ `posa_auto_set_batch` — dead commented call site deleted; client-driven
+  (useItemAddition.ts) confirmed as the intended design.
+- ✅ `posa_show_customer_balance` in PostingDateRow.vue — documented as
+  deliberate: balance renders next to the price-list/posting controls where
+  the cashier picks the customer context. No code change.
+- ✅ `custom_allow_create_quotation` / `custom_allow_select_sales_order` —
+  server gates added via `_scope.assert_profile_feature` (strict when the
+  caller names a profile, any-assigned-profile fallback for stale clients):
+  quotations.py (search/update/submit — which also had NO scope assert at
+  all, now has `assert_company`), sales_orders.search_orders (+ missing
+  `assert_company`), invoices.create_sales_invoice_from_order, and
+  commercial_flow prepare/commit (+ company scope on source doc). SPA
+  threads `pos_profile` through all these calls. Prod values verified
+  before gating: select-SO ON everywhere (no behavior change), quotation
+  OFF everywhere (UI already hid it).
 
 ## Full field tables
 

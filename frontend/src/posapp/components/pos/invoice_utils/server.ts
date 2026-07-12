@@ -146,11 +146,15 @@ export async function update_invoice(context: any, doc: any) {
 			invoice_selling_price_list: doc.selling_price_list,
 			items_before: _buildPriceListSnapshot(context, doc.items),
 		});
+		const args: Record<string, any> = { data: doc };
+		if (doc.doctype === "Quotation") {
+			// Quotation docs don't carry pos_profile; the server flag gate
+			// (custom_allow_create_quotation) needs it explicitly.
+			args.pos_profile = context.pos_profile?.name || null;
+		}
 		const response = await frappe.call({
 			method,
-			args: {
-				data: doc,
-			},
+			args,
 		});
 
 		const message = response?.message;

@@ -1447,8 +1447,8 @@ def submit_invoice(invoice, data, submit_in_background=False):
         is_credit_sale=cint(data.get("is_credit_sale")),
     )
 
-    # if frappe.get_value("POS Profile", invoice_doc.pos_profile, "posa_auto_set_batch"):
-    #     set_batch_nos(invoice_doc, "warehouse", throw=True)
+    # posa_auto_set_batch is enforced client-side (useItemAddition.ts);
+    # the server only auto-sets batches for bundles.
     set_batch_nos_for_bundels(invoice_doc, "warehouse", throw=True)
 
     _validate_stock_on_invoice(invoice_doc)

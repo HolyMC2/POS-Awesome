@@ -18,7 +18,16 @@ def _payment_entry_job(order_name, payments):
 
 
 @frappe.whitelist(methods=["GET", "POST"])
-def search_orders(company, currency, order_name=None):
+def search_orders(company, currency, order_name=None, pos_profile=None):
+    # Scope + feature (POS-PROFILE-SPEC P2): `custom_allow_select_sales_order`
+    # only hid the SO source in the UI; the listing endpoint answered for any
+    # company regardless of the flag or the caller's membership.
+    from posawesome.posawesome.api._scope import assert_company, assert_profile_feature
+
+    assert_company(frappe.session.user, company)
+    assert_profile_feature(
+        frappe.session.user, pos_profile, "custom_allow_select_sales_order", company
+    )
     filters = {
         "billing_status": ["in", ["Not Billed", "Partly Billed"]],
         "docstatus": 1,

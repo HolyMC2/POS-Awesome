@@ -249,7 +249,7 @@ def fetch_exchange_rate_pair(from_currency, to_currency):
 
 
 @frappe.whitelist(methods=["POST"])
-def create_sales_invoice_from_order(sales_order):
+def create_sales_invoice_from_order(sales_order, pos_profile=None):
     """Backward-compatible facade for legacy frontend method path."""
 
     if not sales_order:
@@ -264,6 +264,13 @@ def create_sales_invoice_from_order(sales_order):
     # (REVIEW2/03 §2.1 row invoices.py:164).
     so_company = frappe.db.get_value("Sales Order", sales_order, "company")
     assert_company(frappe.session.user, so_company)
+    # Feature (POS-PROFILE-SPEC P2): selecting an SO into an invoice is
+    # gated by `custom_allow_select_sales_order` in the UI only.
+    from posawesome.posawesome.api._scope import assert_profile_feature
+
+    assert_profile_feature(
+        frappe.session.user, pos_profile, "custom_allow_select_sales_order", so_company
+    )
 
     invoice_doc = make_sales_invoice(sales_order)
     invoice_doc.flags.ignore_permissions = True

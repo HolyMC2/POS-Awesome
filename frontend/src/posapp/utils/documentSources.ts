@@ -84,6 +84,7 @@ type PrepareFlowOptions = {
 	source: CommercialDocumentSourceKey;
 	record: DocumentSourceRecord;
 	currentInvoiceDoctype?: string;
+	posProfile?: any;
 };
 
 type CommitFlowOptions = {
@@ -91,6 +92,7 @@ type CommitFlowOptions = {
 	source: CommercialDocumentSourceKey;
 	record: DocumentSourceRecord;
 	payload?: Record<string, any> | null;
+	posProfile?: any;
 };
 
 const DOCUMENT_SOURCE_OPTIONS: DocumentSourceOption[] = [
@@ -425,7 +427,7 @@ export async function fetchDocumentSourceRecords(
 export async function prepareDocumentFlowAction(
 	options: PrepareFlowOptions,
 ): Promise<PreparedDocumentFlow | null> {
-	const { action, source, record, currentInvoiceDoctype = "Sales Invoice" } =
+	const { action, source, record, currentInvoiceDoctype = "Sales Invoice", posProfile } =
 		options;
 
 	if (!record?.name) {
@@ -442,6 +444,7 @@ export async function prepareDocumentFlowAction(
 				getSourceDoctypeForKey(source, currentInvoiceDoctype),
 			source_name: record.name,
 			target_invoice_doctype: currentInvoiceDoctype,
+			pos_profile: posProfile?.name || posProfile || null,
 		},
 	});
 
@@ -462,7 +465,7 @@ export async function prepareDocumentFlowAction(
 export async function commitDocumentFlowAction(
 	options: CommitFlowOptions,
 ): Promise<any> {
-	const { action, source, record, payload = null } = options;
+	const { action, source, record, payload = null, posProfile } = options;
 	if (!record?.name) {
 		return null;
 	}
@@ -474,6 +477,7 @@ export async function commitDocumentFlowAction(
 			source_doctype: record?.source_doctype || record?.doctype || getSourceDoctypeForKey(source),
 			source_name: record.name,
 			payload: payload ? JSON.stringify(payload) : null,
+			pos_profile: posProfile?.name || posProfile || null,
 		},
 	});
 	return message || null;
@@ -528,6 +532,7 @@ export async function loadDocumentSourceRecord(
 			source,
 			record,
 			currentInvoiceDoctype,
+			posProfile,
 		});
 		loadedRecord = prepared?.prepared_doc || null;
 		if (prepared && typeof invoiceStore.triggerLoadFlow === "function") {

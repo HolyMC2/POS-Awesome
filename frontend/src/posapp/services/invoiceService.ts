@@ -19,6 +19,10 @@ function getSubmitInvoiceCall(
 		data,
 		invoice: invoiceDoc,
 		order: invoiceDoc,
+		// Quotation submits need the profile for the server flag gate
+		// (custom_allow_create_quotation); frappe drops unaccepted kwargs
+		// for the other methods.
+		pos_profile: posProfile.name,
 		submit_in_background:
 			posProfile.posa_allow_submissions_in_background_job,
 	};

@@ -53,6 +53,21 @@ def _normalize_quotation_row(row):
     return row
 
 
+def _assert_quotation_flow_allowed(pos_profile=None, company=None):
+    """Scope + feature gate (POS-PROFILE-SPEC P2).
+
+    `custom_allow_create_quotation` only hid the quotation flow in the UI —
+    these endpoints saved/submitted with ignore_permissions and no scope
+    assertion at all (unlike their sales_orders.py siblings).
+    """
+    from posawesome.posawesome.api._scope import assert_company, assert_profile_feature
+
+    assert_company(frappe.session.user, company)
+    assert_profile_feature(
+        frappe.session.user, pos_profile, "custom_allow_create_quotation", company
+    )
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def search_quotations(
     company,
@@ -60,7 +75,9 @@ def search_quotations(
     quotation_name=None,
     include_draft=1,
     include_submitted=1,
+    pos_profile=None,
 ):
+    _assert_quotation_flow_allowed(pos_profile, company)
     docstatus_filters = []
     if int(include_draft or 0):
         docstatus_filters.append(0)
@@ -113,9 +130,12 @@ def search_quotations(
 
 
 @frappe.whitelist(methods=["POST"])
-def update_quotation(data):
+def update_quotation(data, pos_profile=None):
     """Create or update a Quotation document."""
     data = json.loads(data)
+    _assert_quotation_flow_allowed(
+        pos_profile or data.get("pos_profile"), data.get("company")
+    )
     _map_delivery_dates(data)
     _ensure_customer_fields(data)
     if data.get("name") and frappe.db.exists("Quotation", data.get("name")):
@@ -133,9 +153,12 @@ def update_quotation(data):
 
 
 @frappe.whitelist(methods=["POST"])
-def submit_quotation(order):
+def submit_quotation(order, pos_profile=None):
     """Submit quotation document."""
     order = json.loads(order)
+    _assert_quotation_flow_allowed(
+        pos_profile or order.get("pos_profile"), order.get("company")
+    )
     _map_delivery_dates(order)
     _ensure_customer_fields(order)
     if order.get("name") and frappe.db.exists("Quotation", order.get("name")):

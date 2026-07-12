@@ -269,7 +269,9 @@ def list_source_documents(
         return [_serialize_source_record("invoice", row) for row in rows]
 
     if source_key == "order":
-        rows = search_orders(company=company, currency=currency, order_name=search)
+        rows = search_orders(
+            company=company, currency=currency, order_name=search, pos_profile=pos_profile
+        )
         return [_serialize_source_record("order", row) for row in rows]
 
     if source_key == "quote":
@@ -279,10 +281,32 @@ def list_source_documents(
             quotation_name=search,
             include_draft=include_draft,
             include_submitted=include_submitted,
+            pos_profile=pos_profile,
         )
         return [_serialize_source_record("quote", row) for row in rows]
 
     return _search_delivery_notes(company=company, currency=currency, delivery_note_name=search)
+
+
+_SOURCE_FEATURE_FLAGS = {
+    "order": "custom_allow_select_sales_order",
+    "quote": "custom_allow_create_quotation",
+}
+
+
+def _assert_source_doc_allowed(source_key, source_doc, pos_profile=None):
+    """Scope + feature gate for flow endpoints (POS-PROFILE-SPEC P2).
+
+    These endpoints took any source_name and mapped/committed it with no
+    company assertion, and the order/quote flows were gated in the UI only.
+    """
+    from posawesome.posawesome.api._scope import assert_company, assert_profile_feature
+
+    company = source_doc.get("company")
+    assert_company(frappe.session.user, company)
+    flag = _SOURCE_FEATURE_FLAGS.get(source_key)
+    if flag:
+        assert_profile_feature(frappe.session.user, pos_profile, flag, company)
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -291,6 +315,7 @@ def prepare_document_flow_action(
     source_doctype,
     source_name,
     target_invoice_doctype="Sales Invoice",
+    pos_profile=None,
 ):
     source_key, normalized_source_doctype = _normalize_source_doctype(source_doctype)
     action = str(action or "").strip()
@@ -300,6 +325,7 @@ def prepare_document_flow_action(
         frappe.throw(_("source_name is required"))
 
     source_doc = frappe.get_doc(normalized_source_doctype, source_name)
+    _assert_source_doc_allowed(source_key, source_doc, pos_profile)
     source_payload = _as_dict(source_doc)
     if source_key == "quote":
         _normalize_quotation_customer_fields(source_payload)
@@ -379,6 +405,7 @@ def commit_document_flow_action(
     source_doctype,
     source_name,
     payload=None,
+    pos_profile=None,
 ):
     source_key, normalized_source_doctype = _normalize_source_doctype(source_doctype)
     action = str(action or "").strip()
@@ -387,6 +414,7 @@ def commit_document_flow_action(
         frappe.throw(_("source_name is required"))
 
     source_doc = frappe.get_doc(normalized_source_doctype, source_name)
+    _assert_source_doc_allowed(source_key, source_doc, pos_profile)
     source_payload = _as_dict(source_doc)
     _assert_allowed_action(source_key, source_payload, action)
 

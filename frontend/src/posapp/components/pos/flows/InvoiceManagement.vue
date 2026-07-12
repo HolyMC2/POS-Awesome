@@ -2312,6 +2312,7 @@ export default {
 						action,
 						source: invoice?.source || this.currentDraftSource,
 						record: invoice,
+						posProfile: this.posProfile,
 					});
 					if (action === "quote_submit") {
 						this.toastStore.show({ title: __("Quotation submitted"), color: "success" });
@@ -2338,6 +2339,7 @@ export default {
 					source: invoice?.source || this.currentDraftSource,
 					record: invoice,
 					currentInvoiceDoctype: this.currentInvoiceDoctype,
+					posProfile: this.posProfile,
 				});
 				if (!prepared?.prepared_doc) {
 					this.toastStore.show({ title: __("Unable to prepare document"), color: "error" });

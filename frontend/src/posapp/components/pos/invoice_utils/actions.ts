@@ -336,6 +336,7 @@ export async function get_invoice_from_order_doc(context: any) {
 			currentInvoiceDoctype: context.pos_profile?.create_pos_invoice_instead_of_sales_invoice
 				? "POS Invoice"
 				: "Sales Invoice",
+			posProfile: context.pos_profile,
 		});
 		doc = prepared?.prepared_doc || context.invoice_doc;
 	} else {

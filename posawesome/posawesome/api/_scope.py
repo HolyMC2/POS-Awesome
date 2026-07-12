@@ -241,6 +241,49 @@ def assert_profile(user: str | None, pos_profile: str | None) -> None:
         )
 
 
+def assert_profile_feature(
+    user: str | None,
+    pos_profile: str | None,
+    flag_field: str,
+    company: str | None = None,
+) -> None:
+    """Membership + feature-flag gate for profile-scoped endpoints.
+
+    Strict when the caller names a profile: the user must be assigned to it
+    and the flag must be ON (flag/company match delegated to
+    ``api.utils.assert_pos_profile_write_allowed``). Legacy callers that
+    don't send a profile get the weakest sufficient check instead: at least
+    one of the user's assigned profiles has the flag ON. That keeps stale
+    SPA bundles working while still closing the flag-off hole for every
+    profile the user can act on.
+    """
+
+    user = _resolve_user(user)
+    if _is_guest(user):
+        frappe.throw(_("Guest users are not allowed to perform POS write actions."), frappe.PermissionError)
+
+    if pos_profile:
+        assert_profile(user, pos_profile)
+        from posawesome.posawesome.api.utils import assert_pos_profile_write_allowed
+
+        assert_pos_profile_write_allowed(pos_profile, flag_field, company)
+        return
+
+    if _is_super(user):
+        return
+
+    from frappe.utils import cint
+
+    for profile in get_allowed_pos_profiles(user):
+        if cint(frappe.db.get_value("POS Profile", profile, flag_field)):
+            return
+
+    frappe.throw(
+        _("This action is not enabled on your POS Profile ({0}).").format(flag_field),
+        frappe.PermissionError,
+    )
+
+
 def assert_customer_in_profile(
     user: str | None,
     customer: str | None,

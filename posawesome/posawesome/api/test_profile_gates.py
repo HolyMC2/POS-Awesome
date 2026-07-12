@@ -252,3 +252,50 @@ class TestProfileGates(IntegrationTestCase):
 			with self.assertRaises(frappe.ValidationError) as ctx:
 				creation.update_invoice(json.dumps(payload))
 			self.assertIn("Delivery charges", str(ctx.exception))
+
+	# ---------- quotation / SO-select flow gates (P2) ----------
+
+	def _quotation_payload(self, tag: str):
+		return {
+			"doctype": "Quotation",
+			"company": self.company,
+			"customer": self.customer,
+			"transaction_date": today(),
+			"items": [{"item_code": self.item, "qty": 1, "rate": 10}],
+			"posa_notes": f"gate-{tag}",
+		}
+
+	def test_quotation_flow_rejected_when_flag_off(self):
+		from posawesome.posawesome.api import quotations
+
+		with _FlagPatch("custom_allow_create_quotation", 0):
+			with self.assertRaises((frappe.PermissionError, frappe.ValidationError)):
+				quotations.update_quotation(
+					json.dumps(self._quotation_payload("q-off")), pos_profile=PROFILE
+				)
+
+	def test_quotation_flow_allowed_when_flag_on(self):
+		from posawesome.posawesome.api import quotations
+
+		with _FlagPatch("custom_allow_create_quotation", 1):
+			doc = quotations.update_quotation(
+				json.dumps(self._quotation_payload("q-on")), pos_profile=PROFILE
+			)
+			self._created.append(("Quotation", doc.name))
+			self.assertEqual(doc.docstatus, 0)
+
+	def test_search_orders_rejected_when_flag_off(self):
+		from posawesome.posawesome.api import sales_orders
+
+		currency = frappe.db.get_value("Company", self.company, "default_currency")
+		with _FlagPatch("custom_allow_select_sales_order", 0):
+			with self.assertRaises((frappe.PermissionError, frappe.ValidationError)):
+				sales_orders.search_orders(self.company, currency, pos_profile=PROFILE)
+
+	def test_search_orders_allowed_when_flag_on(self):
+		from posawesome.posawesome.api import sales_orders
+
+		currency = frappe.db.get_value("Company", self.company, "default_currency")
+		with _FlagPatch("custom_allow_select_sales_order", 1):
+			rows = sales_orders.search_orders(self.company, currency, pos_profile=PROFILE)
+			self.assertIsInstance(rows, list)
