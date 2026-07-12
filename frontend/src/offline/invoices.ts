@@ -38,6 +38,38 @@ const asBoolean = (value: any): boolean => {
 
 let invoiceSyncInProgress = false;
 
+// Ack-miss reconcile: ask the server whether this offline sale already exists
+// as a submitted invoice for its posa_client_request_id. Backed by the
+// durable submission ledger + find_invoice_by_client_request_id, so it returns
+// acknowledged only when a real submitted invoice is present — a genuine
+// (never-submitted) failure returns false / throws, letting the caller draft
+// without risking a duplicate. Exported for unit tests.
+export async function reconcileAlreadySubmitted(
+	invoice: AnyRecord,
+): Promise<boolean> {
+	const clientRequestId = String(invoice?.posa_client_request_id || "").trim();
+	if (!clientRequestId) {
+		return false;
+	}
+	try {
+		const response = await frappe.call({
+			method: "posawesome.posawesome.api.offline_sync.invoices.reconcile_invoice_outbox_entry",
+			args: {
+				client_request_id: clientRequestId,
+				company: invoice?.company,
+				pos_profile: invoice?.pos_profile,
+				document_type: invoice?.doctype || "Sales Invoice",
+			},
+		});
+		const result =
+			typeof response?.message === "undefined" ? response : response.message;
+		return Boolean(result?.acknowledged);
+	} catch {
+		// No ledger row / not submitted → genuine failure; caller drafts.
+		return false;
+	}
+}
+
 function shouldValidateOfflineInvoiceStock(invoice: AnyRecord) {
 	if (!invoice || invoice.is_return) {
 		return false;
@@ -339,6 +371,23 @@ export async function syncOfflineInvoices() {
 					entry.last_attempt_at,
 				);
 			} catch (error) {
+				// submit_invoice is idempotent by posa_client_request_id, but
+				// its HTTP response can be lost AFTER the server commits
+				// (ack-miss). The old fallback ran update_invoice
+				// unconditionally, which creates a fresh draft carrying the
+				// same request-id — an orphan DUPLICATE of the already-submitted
+				// invoice (double-bill if that draft is later submitted from
+				// Desk). Reconcile by request-id first: if the sale already
+				// exists submitted, mark synced instead of drafting.
+				if (await reconcileAlreadySubmitted(queuedInvoice.invoice)) {
+					synced += 1;
+					await markWriteQueueEntrySynced(
+						INVOICE_ENTITY,
+						Number(entry.queue_id),
+						entry.last_attempt_at,
+					);
+					continue;
+				}
 				console.error(
 					"Failed to submit invoice, saving as draft",
 					error,
