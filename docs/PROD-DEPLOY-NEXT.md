@@ -1,4 +1,10 @@
-# PROD deploy runbook — 2026-07-11 batch (execute in a fresh session)
+# PROD deploy runbook — 2026-07-11 batch — ✅ DONE 2026-07-12 (v39 cell roll)
+
+> Executed 2026-07-12 morning window. Reality answer to §1a: contavm is
+> HYBRID — posawesome/saldo bind-mounted (git pull) + image v39 recreate;
+> SPA via posawesome-push-prod. All §2 steps green, §3.1 hold flipped ON
+> (docomexico), §3.3 real-recarga e2e + §3.4 vigia panel still pending.
+> Kept for the §4 watch list + §5 rollback levers.
 
 Everything below is LAB-verified + pushed. Prod baseline: posawesome
 `158b3621` (deployed 2026-07-03). Pending: `373ea4f2..e124a14c` (~69

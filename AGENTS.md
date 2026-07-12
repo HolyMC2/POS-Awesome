@@ -137,6 +137,21 @@ posawesome/
 Latest first. Idempotent — `create_custom_field` no-ops, format inserts
 check `frappe.db.exists` first.
 
+> ✅ **DEPLOYED to prod 2026-07-12.** posawesome `03f65387` → `46a8fd5`
+> (the 2026-07-11 batch, ~65 commits) + saldo → `e6bfd03` on both tenants,
+> via the v39 cell roll (bind-mount git pull + image recreate + migrate ×3 +
+> SPA push `web-entry-D0sMvJdf.js`). Patches executed on both tenants:
+> `add_customer_credit_invoice_fields`, `add_pos_delta_sync_indexes`,
+> `remove_dead_pos_profile_fields`. Profile-flag pre-flight PASSED pre-roll
+> (docomexico: return=1, customer_credit=1 — the two daily-use gates ON;
+> mumu: return=0 → returns now server-blocked there, profile flag is the
+> lever if ever needed). `Saldo Settings.hold_submit_until_success=1` flipped
+> on ventas.docomexico ONLY (Marco pre-approved) — ticket prints after TAECEL
+> confirms; e2e proof with one real recarga pending. WATCH first 48h:
+> `warn:qz_failure` rows (first-ever QZ failure data), `posa_*` counters,
+> `hold.*` events, `recover_stuck_holds` janitor (~0 resumes expected),
+> dead-letter badge on terminals. Runbook: docs/PROD-DEPLOY-NEXT.md (DONE).
+
 > ✅ **DEPLOYED to prod 2026-06-02.** posawesome `8bebc65a` → `6ff78542`
 > both tenants (pull + `bench migrate` + restart backend/queue/scheduler; no
 > frontend build). Verified: both sites 200, deterministic cache proven
