@@ -380,4 +380,73 @@ describe("operational offline sync adapters", () => {
 		);
 		expect(result.status).toBe("fresh");
 	});
+
+	it("carries scopeSignature in the result so the coordinator persist can't null it", async () => {
+		// Regression for the scope-wipe-dead bug: the adapter persists a real
+		// scopeSignature, but SyncCoordinator writes the sync_state row AFTER
+		// the adapter from a result that used to omit scopeSignature — nulling
+		// it and permanently disabling scope-change detection. The result must
+		// now carry it (and no longer carry the response blob).
+		syncStateMocks.getSyncResourceState.mockResolvedValue(null);
+		const fetcher = vi.fn(async () => ({
+			schema_version: "2026-04-09",
+			next_watermark: "2026-04-09T10:00:00",
+			has_more: false,
+			changes: [],
+			deleted: [],
+		}));
+
+		const result = await syncCustomersResource({
+			posProfile: { name: "POS-1", company: "Test Co", modified: "x" },
+			watermark: "2026-04-09T09:00:00",
+			fetcher,
+		});
+
+		expect(result.scopeSignature).toBe(
+			JSON.stringify({ profile: "POS-1", company: "Test Co", warehouse: null }),
+		);
+		expect((result as Record<string, unknown>).response).toBeUndefined();
+	});
+
+	it("resets the watermark on full_resync_required so recovery re-pulls in full", async () => {
+		// Without the reset the adapter re-sent the same stale cursor and the
+		// server kept replying full_resync_required — pinned in "limited" forever.
+		syncStateMocks.getSyncResourceState.mockResolvedValue(null);
+		const fetcher = vi.fn(async () => ({
+			full_resync_required: true,
+			schema_version: "old-schema",
+			changes: [],
+			deleted: [],
+		}));
+
+		const result = await syncStockResource({
+			posProfile: {
+				name: "POS-1",
+				company: "Test Co",
+				warehouse: "Main WH",
+				modified: "x",
+			},
+			watermark: "2026-04-09T09:00:00",
+			fetcher,
+		});
+
+		expect(result.status).toBe("limited");
+		expect(result.watermark).toBeNull();
+		expect(result.scopeSignature).toBe(
+			JSON.stringify({
+				profile: "POS-1",
+				company: "Test Co",
+				warehouse: "Main WH",
+			}),
+		);
+		// full_resync must NOT wipe local data (only a scope change does that).
+		expect(stockMocks.clearLocalStockCache).not.toHaveBeenCalled();
+		expect(syncStateMocks.setSyncResourceState).toHaveBeenCalledWith(
+			expect.objectContaining({
+				resourceId: "stock",
+				status: "limited",
+				watermark: null,
+			}),
+		);
+	});
 });

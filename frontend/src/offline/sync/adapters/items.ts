@@ -107,17 +107,15 @@ export async function syncItemsResource(
 	});
 
 	if (response?.full_resync_required) {
-		await persistItemSyncStates(
-			"limited",
-			args,
-			response,
-			effectiveWatermark,
-		);
+		// Reset the cursor so the next run re-pulls in full instead of
+		// re-sending the stale watermark and staying "limited" forever.
+		await persistItemSyncStates("limited", args, response, null);
 		return buildResourceSyncResult(
 			"items",
 			"limited",
 			response,
-			effectiveWatermark,
+			null,
+			args.posProfile,
 		);
 	}
 
@@ -169,5 +167,6 @@ export async function syncItemsResource(
 		"fresh",
 		response,
 		effectiveWatermark,
+		args.posProfile,
 	);
 }

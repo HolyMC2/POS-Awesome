@@ -37,18 +37,20 @@ export async function syncPaymentMethodCurrenciesResource(
 				paymentMethodCurrencyCount: 0,
 			},
 		});
+		// Reset cursor so recovery re-pulls in full instead of staying "limited".
 		await persistResourceSyncState({
 			resourceId: "payment_method_currencies",
 			status: "limited",
 			posProfile: args.posProfile,
 			response,
-			watermark: args.watermark,
+			watermark: null,
 		});
 		return buildResourceSyncResult(
 			"payment_method_currencies",
 			"limited",
 			response,
-			args.watermark,
+			null,
+			args.posProfile,
 		);
 	}
 
@@ -78,5 +80,6 @@ export async function syncPaymentMethodCurrenciesResource(
 		"fresh",
 		response,
 		args.watermark,
+		args.posProfile,
 	);
 }

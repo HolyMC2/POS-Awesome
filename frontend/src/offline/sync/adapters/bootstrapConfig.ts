@@ -34,15 +34,22 @@ async function finalizeState(
 	status: SyncLifecycleState,
 	args: BootCriticalSyncArgs,
 	response: SyncResponse,
+	watermark: string | null = args.watermark ?? null,
 ) {
 	await persistResourceSyncState({
 		resourceId,
 		status,
 		posProfile: args.posProfile,
 		response,
-		watermark: args.watermark,
+		watermark,
 	});
-	return buildResourceSyncResult(resourceId, status, response, args.watermark);
+	return buildResourceSyncResult(
+		resourceId,
+		status,
+		response,
+		watermark,
+		args.posProfile,
+	);
 }
 
 export async function syncBootstrapConfigResource(
@@ -61,7 +68,7 @@ export async function syncBootstrapConfigResource(
 				taxInclusive: null,
 			},
 		});
-		return finalizeState("bootstrap_config", "limited", args, response);
+		return finalizeState("bootstrap_config", "limited", args, response, null);
 	}
 
 	const bootstrapChange = findChange(response, "bootstrap_config");
@@ -105,7 +112,7 @@ export async function syncPriceListMetaResource(
 				priceListMetaReady: false,
 			},
 		});
-		return finalizeState("price_list_meta", "limited", args, response);
+		return finalizeState("price_list_meta", "limited", args, response, null);
 	}
 
 	const priceListChange = findChange(response, "price_list_meta");

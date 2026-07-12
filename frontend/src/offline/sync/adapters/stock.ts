@@ -64,18 +64,21 @@ export async function syncStockResource(
 	});
 
 	if (response?.full_resync_required) {
+		// Reset the cursor so the next run re-pulls in full instead of
+		// staying pinned in "limited" against a stale watermark.
 		await persistResourceSyncState({
 			resourceId: "stock",
 			status: "limited",
 			posProfile: args.posProfile,
 			response,
-			watermark: effectiveWatermark,
+			watermark: null,
 		});
 		return buildResourceSyncResult(
 			"stock",
 			"limited",
 			response,
-			effectiveWatermark,
+			null,
+			args.posProfile,
 		);
 	}
 
@@ -113,5 +116,6 @@ export async function syncStockResource(
 		"fresh",
 		response,
 		effectiveWatermark,
+		args.posProfile,
 	);
 }

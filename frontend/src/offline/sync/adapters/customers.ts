@@ -70,18 +70,22 @@ export async function syncCustomersResource(
 	});
 
 	if (response?.full_resync_required) {
+		// Reset the cursor so the NEXT run does a full pull; keeping the old
+		// watermark left the resource pinned in "limited" forever (server
+		// keeps replying full_resync_required to the same stale cursor).
 		await persistResourceSyncState({
 			resourceId: "customers",
 			status: "limited",
 			posProfile: args.posProfile,
 			response,
-			watermark: effectiveWatermark,
+			watermark: null,
 		});
 		return buildResourceSyncResult(
 			"customers",
 			"limited",
 			response,
-			effectiveWatermark,
+			null,
+			args.posProfile,
 		);
 	}
 
@@ -124,5 +128,6 @@ export async function syncCustomersResource(
 		"fresh",
 		response,
 		effectiveWatermark,
+		args.posProfile,
 	);
 }

@@ -55,7 +55,11 @@ export type ResourceSyncResult = {
 	status: SyncLifecycleState;
 	watermark: string | null;
 	schemaVersion: string | null;
-	response: SyncResponse;
+	// Carried so SyncCoordinator's post-run persist keeps the adapter's
+	// scope signature instead of overwriting the sync_state row with null
+	// (which silently disabled every scope-change wipe). See
+	// buildResourceSyncResult.
+	scopeSignature: string | null;
 };
 
 export function buildScopeSignature(posProfile: SyncScopedProfile) {
@@ -123,12 +127,15 @@ export function buildResourceSyncResult(
 	status: SyncLifecycleState,
 	response: SyncResponse,
 	watermark?: string | null,
+	posProfile?: SyncScopedProfile | null,
 ): ResourceSyncResult {
 	return {
 		resourceId,
 		status,
 		watermark: resolveWatermark(response, watermark),
 		schemaVersion: response?.schema_version || null,
-		response,
+		// The coordinator writes the sync_state row AFTER the adapter, so the
+		// scope signature must ride the result or it gets clobbered to null.
+		scopeSignature: posProfile ? buildScopeSignature(posProfile) : null,
 	};
 }
