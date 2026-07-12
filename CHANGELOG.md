@@ -2,6 +2,47 @@
 
 All notable changes.
 
+## 2026-07-11 (LAB — pending prod) — hold-until-confirm, upstream recon, audit sweep, profile security, roadmap + perf waves
+
+Full-day batch, all lab-verified + pushed. **Deploy runbook for the next
+session: `docs/PROD-DEPLOY-NEXT.md`** (pre-flight flag audit is MANDATORY —
+new server gates enforce profile flags that were client-only before).
+Detail lives in: `docs/UPSTREAM.md` (recon ledger), `docs/AUDIT-2026-07-11-full.md`
+(36 findings, statuses), `docs/POS-PROFILE-SPEC.md` (99-field wiring audit),
+`docs/ROADMAP.md`.
+
+- **Hold-until-confirm (with saldo app)**: POS sale with saldo lines parks at
+  DRAFT until TAECEL confirms → auto-submit + print; failure leaves an
+  editable draft (retry with another number / abandon). Generic
+  `posawesome_submit_hold_gates` hook + `resume_held_submission` via the
+  submission ledger. SaldoHoldsBadge in the POS. Ships OFF
+  (`Saldo Settings.hold_submit_until_success`).
+- **Upstream reconciliation**: reviewed through defendicon `cc8dcaea`;
+  9 picks + 5 adapts landed (multi-batch returns fix, credit-sale server
+  gate, freebie double-apply, customer-credit corte totals, keyboard-nav
+  chain, print-by-server-name, offline-warning gate, sticky columns…).
+- **Audit quick wins ×17 + waves**: stuck-hold janitor, payments invariant at
+  background submit, `warn:qz_failure` (was 100% DROPPED at ingest),
+  hold.* events, stock-fetcher deterministic cache keys + per-warehouse
+  invalidation (get_items warm 30ms), vuetify preload, saldo_enabled in
+  catalog payload, delta-poll cache gate, ledger prune, dead-letter sales
+  surfacing (pulsing badge + retry/export), Prometheus export
+  (posa_submit_failures_total et al — rides doco scrape), sale-cycle +
+  offline telemetry, boot bundle-URL injection (kills version.json RTT),
+  format-mixin watcher fix, gadget polls 10s→60s.
+- **POS Profile security sweep**: 7 client-only money/permission flags now
+  server-enforced (posting-date backdating, returns, delete, gift-cards
+  feature gate + PKR-default fix, customer-credit + M-Pesa force-enable
+  mutation removed, name-override, delivery-charges). 6 dead fields removed
+  (patch; gift-card settings patch trimmed so it can't resurrect one).
+- **Cart expanded-row fix**: legacy v-data-table CSS on the native <table>
+  clipped/mis-laid the item detail panel — display:table restored, panel
+  compacted, auto-scroll on expand.
+- **Test suites**: document flows SI/SO/QO (11), profile gates (13),
+  dead-letter (4), holds (11 in saldo) — all bench/vitest green.
+- **Patches queued for prod migrate**: `add_customer_credit_invoice_fields`,
+  `add_pos_delta_sync_indexes`, `remove_dead_pos_profile_fields`.
+
 ## 2026-07-03 (LAB) — invisible selected item in dropdown menus (black-on-black)
 
 - **Fixed: selected/hovered rows in Vuetify list menus rendered as a solid
