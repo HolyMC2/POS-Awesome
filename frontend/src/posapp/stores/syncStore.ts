@@ -22,7 +22,9 @@ import {
 	getInvoiceOutboxMode,
 	getPendingInvoiceOutboxCount,
 	getPendingOfflineInvoiceCount,
+	getWriteQueueDeadLetterCount,
 	requeueDeadLetterEntry,
+	requeueWriteQueueDeadLetter,
 	syncOfflineInvoices,
 	isOffline,
 } from "../../offline/index";
@@ -54,8 +56,13 @@ export const useSyncStore = defineStore("sync", {
 		async updateDeadLetterCount() {
 			try {
 				const previous = this.deadLetterCount;
-				const count =
+				// Count BOTH surfaces: the invoice outbox (coordinator mode) and
+				// the write_queue (payments / cash / legacy invoices — prod
+				// default). write_queue dead-letters were previously invisible.
+				const outboxCount =
 					getInvoiceOutboxMode() === "off" ? 0 : await getDeadLetterCount();
+				const writeQueueCount = await getWriteQueueDeadLetterCount();
+				const count = outboxCount + writeQueueCount;
 				this.deadLetterCount = count;
 				if (count > previous) {
 					// durable trace + loud persistent alert: a dead-lettered
@@ -83,6 +90,14 @@ export const useSyncStore = defineStore("sync", {
 		},
 		async requeueDeadLetter(clientRequestId: string) {
 			const row = await requeueDeadLetterEntry(clientRequestId);
+			if (row) {
+				await this.syncPendingInvoices();
+			}
+			await this.updatePendingCount();
+			return row;
+		},
+		async requeueWriteQueueDeadLetter(queueId: number) {
+			const row = await requeueWriteQueueDeadLetter(queueId);
 			if (row) {
 				await this.syncPendingInvoices();
 			}

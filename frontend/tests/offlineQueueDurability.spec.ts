@@ -264,6 +264,14 @@ describe("offline write queue durability", () => {
 		);
 
 		for (let attempt = 0; attempt < 4; attempt += 1) {
+			// Retry backoff (money-path fix) deliberately skips an entry inside
+			// its next_attempt_at window, so a tight drain loop no longer burns
+			// all retries at once. Advance past the window to exercise the full
+			// escalation to dead_letter.
+			const [pending] = await db.table("write_queue").toArray();
+			await db.table("write_queue").update(pending.queue_id, {
+				next_attempt_at: new Date(Date.now() - 1000).toISOString(),
+			});
 			result = await syncOfflineCashMovements();
 		}
 

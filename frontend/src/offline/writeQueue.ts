@@ -36,6 +36,21 @@ export interface OfflineQueueEntry {
 const WRITE_QUEUE_TABLE = "write_queue";
 const MAX_RETRY_COUNT = 5;
 const SYNCING_LEASE_MS = 5 * 60 * 1000;
+const INITIAL_BACKOFF_MS = 5_000;
+const MAX_BACKOFF_MS = 5 * 60 * 1_000;
+
+function computeBackoffMs(retryCount: number) {
+	const multiplier = 2 ** Math.max(0, retryCount - 1);
+	return Math.min(MAX_BACKOFF_MS, INITIAL_BACKOFF_MS * multiplier);
+}
+
+function isBackoffElapsed(entry: OfflineQueueEntry) {
+	if (!entry.next_attempt_at) {
+		return true;
+	}
+	const next = Date.parse(entry.next_attempt_at);
+	return !Number.isFinite(next) || next <= Date.now();
+}
 
 const ENTITY_MEMORY_KEYS: Record<OfflineEntityType, string> = {
 	invoice: "offline_invoices",
@@ -448,6 +463,15 @@ export async function claimRetryableQueueEntries(entityType: OfflineEntityType) 
 				continue;
 			}
 
+			// Respect the retry backoff window. Without this a short burst of
+			// 5xx during a poll loop burned all MAX_RETRY_COUNT attempts in
+			// seconds and prematurely dead-lettered a valid money entry.
+			// pending entries have no next_attempt_at (elapsed = true); a stale
+			// syncing lease is reclaimed regardless of backoff.
+			if (entry.status !== "syncing" && !isBackoffElapsed(entry)) {
+				continue;
+			}
+
 			const nextEntry: OfflineQueueEntry = {
 				...entry,
 				status: "syncing",
@@ -537,13 +561,21 @@ export async function markWriteQueueEntryFailed(
 			const nextRetryCount = Number(current.retry_count || 0) + 1;
 			const nextStatus: OfflineQueueStatus =
 				nextRetryCount >= MAX_RETRY_COUNT ? "dead_letter" : "failed";
+			// Exponential backoff before the next claim (dead_letter is terminal
+			// and carries no next attempt). Mirrors the invoice-outbox schedule.
+			const nextAttemptAt =
+				nextStatus === "failed"
+					? new Date(
+							Date.now() + computeBackoffMs(nextRetryCount),
+					  ).toISOString()
+					: null;
 
 			return {
 				...current,
 				status: nextStatus,
 				retry_count: nextRetryCount,
 				last_attempt_at: nowIso(),
-				next_attempt_at: null,
+				next_attempt_at: nextAttemptAt,
 				last_error: toErrorMessage(error),
 			};
 		},
@@ -610,6 +642,62 @@ export async function ensureOfflineQueueReady() {
 	}
 
 	return queueReadyPromise;
+}
+
+// ---- write-queue dead-letter surface --------------------------------------
+// The invoice OUTBOX table had a dead-letter panel/badge; the write_queue path
+// (payments / cash movements / legacy invoices — the prod default) did not, so
+// a payment or cash record that exhausted its retries went to dead_letter and
+// vanished from every surface (the pending badge only shows active counts on
+// the outbox). These expose write_queue dead-letters so the badge/toast can
+// surface stranded money and the operator can requeue.
+
+export async function getWriteQueueDeadLetterRows(
+	entityType?: OfflineEntityType,
+) {
+	const types = entityType
+		? [entityType]
+		: LEGACY_QUEUE_CONFIG.map((config) => config.entityType);
+	const rows: ReturnType<typeof toPublicSnapshot>[] = [];
+	for (const type of types) {
+		const entries = await getQueueEntries(type, {
+			statuses: ["dead_letter"],
+		});
+		rows.push(...entries.map((entry) => toPublicSnapshot(entry)));
+	}
+	return rows;
+}
+
+export async function getWriteQueueDeadLetterCount() {
+	const rows = await getWriteQueueDeadLetterRows();
+	return rows.length;
+}
+
+export async function requeueWriteQueueDeadLetter(queueId: number) {
+	await ensureOfflineQueueReady();
+	const table = db.table(WRITE_QUEUE_TABLE);
+	const requeued = await db.transaction("rw", table, async () => {
+		const current = (await table.get(queueId)) as OfflineQueueEntry | undefined;
+		if (!current || current.status !== "dead_letter") {
+			return null;
+		}
+		// Replay-safe: every money path dedupes server-side by
+		// client_request_id, so re-draining a dead-letter can't double-bill.
+		const next: OfflineQueueEntry = {
+			...current,
+			status: "pending",
+			retry_count: 0,
+			last_attempt_at: null,
+			next_attempt_at: null,
+			last_error: null,
+		};
+		await table.put(next);
+		return next;
+	});
+	if (requeued) {
+		await refreshQueueMemory(requeued.entity_type);
+	}
+	return requeued;
 }
 
 export function getQueuedPayloadSnapshots(entityType: OfflineEntityType) {
