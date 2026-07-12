@@ -108,6 +108,18 @@ below was re-read at the cited line by the lead before ranking.
   `saldo_enabled:1` to client (marker reaches cart) + build; browser offline-add
   drill NOT run (harness offline-sim races the probe loop).
 
+**LANDED wave 5 (`0ef95452` — backlog #5):**
+- ✅ **HIGH reliability — write-queue backoff + dead-letter surfacing.** Exponential
+  backoff (5s..5min) on `markWriteQueueEntryFailed` + `claimRetryableQueueEntries`
+  skips entries still in-window (was: a 5xx burst burned all 5 retries in seconds →
+  premature dead-letter of a valid payment/cash). `getWriteQueueDeadLetterRows/Count`
+  + `requeueWriteQueueDeadLetter` (replay-safe by crid), folded into
+  `syncStore.deadLetterCount` so the existing red badge + persistent toast surface
+  stranded payments/cash (were invisible — outbox-only before). +writeQueueBackoff
+  spec; durability retry test updated. 625/625 + tsc + build. NOTE: per-row Reintentar
+  UI for write_queue entities in OfflineInvoices panel = small follow-up (badge+toast
+  visibility + requeue helper landed).
+
 **LANDED wave 4 (`ded73366` — backlog #4):**
 - ✅ **HIGH correctness — sync scopeSignature clobber + full-resync stuck.**
   `ResourceSyncResult` now carries `scopeSignature` (was omitted → coordinator's
