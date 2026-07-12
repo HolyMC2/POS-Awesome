@@ -367,7 +367,7 @@ fixtures = [
                     "POS Profile-posa_use_web_route",
                     "POS Profile-posa_allow_duplicate_customer_names",
                     "POS Profile-column_break_anyol",
-                    "POS Profile-pose_use_limit_search",
+                    "POS Profile-posa_use_limit_search",
                     "POS Profile-posa_search_batch_no",
                     "POS Profile-pos_awesome_payments",
                     "POS Profile-posa_use_pos_awesome_payments",

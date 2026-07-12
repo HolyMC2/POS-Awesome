@@ -299,7 +299,7 @@ export const useItemsStore = defineStore("items", () => {
 		// store + building per-item `_search_index` strings + persisting
 		// to IndexedDB synchronously regularly crashes Chrome tabs on
 		// low-RAM operator devices. Profiles that intentionally hold a
-		// big catalog locally should set `pose_use_limit_search = 1`
+		// big catalog locally should set `posa_use_limit_search = 1`
 		// (server-side pagination). When we see a mass-load arriving
 		// despite limit-search being off, downgrade gracefully: keep
 		// the first 3000 items locally so the catalog still works, and
@@ -314,7 +314,7 @@ export const useItemsStore = defineStore("items", () => {
 				: incomingArray;
 		if (cappedNewItems.length !== incomingArray.length) {
 			console.warn(
-				`[POSA][setItems] item count ${incomingArray.length} exceeds safe cap ${SAFE_LOCAL_ITEM_CAP}; truncating. Enable 'pose_use_limit_search' on the POS Profile to use server-side search instead of mass-loading.`,
+				`[POSA][setItems] item count ${incomingArray.length} exceeds safe cap ${SAFE_LOCAL_ITEM_CAP}; truncating. Enable 'posa_use_limit_search' on the POS Profile to use server-side search instead of mass-loading.`,
 			);
 		}
 
