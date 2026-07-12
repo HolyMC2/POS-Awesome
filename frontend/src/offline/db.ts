@@ -204,15 +204,20 @@ function shouldPersistToLocalStorage(key: string) {
 	return LOCAL_STORAGE_KEYS.has(key) && !LARGE_KEYS.has(key);
 }
 
-function isCorruptionError(err: unknown) {
+export function isCorruptionError(err: unknown) {
 	if (!err || typeof err !== "object") return false;
 	const maybe = err as { name?: string; message?: string };
 	const name = maybe.name || "";
 	const message = (maybe.message || "").toLowerCase();
-	return (
-		["VersionError", "InvalidStateError", "NotFoundError"].includes(name) ||
-		message.includes("corrupt")
-	);
+	// Only a genuine version-downgrade (VersionError) or an explicitly
+	// corrupt store warrants the destructive Dexie.delete in
+	// repairDbAfterFailedHealthCheck. `InvalidStateError` (the connection is
+	// closing because another tab is mid-upgrade) and `NotFoundError` (a
+	// table access during that upgrade window) are TRANSIENT multi-tab
+	// conditions — treating them as corruption used to wipe the whole store,
+	// destroying unsynced offline sales in write_queue / invoice_outbox.
+	// Those recover on the next open/retry; they must never trigger a wipe.
+	return name === "VersionError" || message.includes("corrupt");
 }
 
 // Start with version 1 using the full schema immediately

@@ -8,6 +8,7 @@ import {
 	db,
 	checkDbHealth,
 	initPromise,
+	isCorruptionError,
 	pruneOfflineStorage,
 	quickDbHealthCheck,
 	repairDbAfterFailedHealthCheck,
@@ -42,6 +43,21 @@ describe("offline IndexedDB maintenance", () => {
 
 		expect(bulkSpy).toHaveBeenCalledTimes(1);
 		expect(await db.table("keyval").count()).toBe(1500);
+	});
+
+	it("classifies only genuine corruption as fatal, not transient multi-tab errors", () => {
+		// Transient — another tab mid-upgrade. Must NOT trigger a Dexie.delete
+		// that would wipe unsynced offline sales.
+		expect(isCorruptionError({ name: "InvalidStateError" })).toBe(false);
+		expect(isCorruptionError({ name: "NotFoundError" })).toBe(false);
+		expect(isCorruptionError({ name: "AbortError" })).toBe(false);
+		expect(isCorruptionError(null)).toBe(false);
+		expect(isCorruptionError("boom")).toBe(false);
+		// Genuine — version downgrade or an explicitly corrupt store.
+		expect(isCorruptionError({ name: "VersionError" })).toBe(true);
+		expect(
+			isCorruptionError({ name: "UnknownError", message: "database is corrupt" }),
+		).toBe(true);
 	});
 
 	it("prunes terminal outbox rows and stale metadata while retaining active rows", async () => {
