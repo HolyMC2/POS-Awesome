@@ -8,8 +8,16 @@ from __future__ import annotations
 
 import json
 import time
+import unittest
 
-import frappe
+# Bench-only integration test: needs a real frappe + site. Skip the module
+# when discovered by the standalone stub-suite runner (python3 -m unittest
+# discover), where frappe is not importable.
+try:
+    import frappe
+except ImportError:
+    raise unittest.SkipTest("bench-only integration test - requires frappe")
+
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, today
 

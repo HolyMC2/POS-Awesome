@@ -169,6 +169,14 @@ def _install_stubs():
     frappe_module.generate_hash = lambda: "GCODE12345"
     frappe_module.utils = types.SimpleNamespace(now_datetime=lambda: "2026-04-05 12:00:00")
     frappe_utils_module.nowdate = lambda: "2026-04-05"
+    frappe_utils_module.cint = lambda value: int(value or 0)
+    # Gift-card default currency falls back to the company currency
+    # (P0-3: upstream minted PKR cards on bare calls).
+    frappe_module.get_cached_value = (
+        lambda doctype, name=None, fieldname=None, *args, **kwargs: (
+            "MXN" if doctype == "Company" else None
+        )
+    )
     frappe_module.session = types.SimpleNamespace(user="administrator@example.com")
     # _scope._is_super consults roles; System Manager bypasses scope asserts
     # so these tests exercise gift-card logic, not scope (test_scope covers that).

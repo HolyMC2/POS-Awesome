@@ -34,6 +34,7 @@ def _install_stubs():
         "posawesome.posawesome.api.invoices",
         "posawesome.posawesome.api.quotations",
         "posawesome.posawesome.api.sales_orders",
+        "posawesome.posawesome.api._scope",
         "erpnext.selling.doctype.quotation.quotation",
         "erpnext.selling.doctype.sales_order.sales_order",
         "erpnext.stock.doctype.delivery_note.delivery_note",
@@ -49,6 +50,7 @@ def _install_stubs():
     frappe_module.has_permission = lambda *args, **kwargs: True
     frappe_module.get_list = lambda *args, **kwargs: []
     frappe_module.get_doc = lambda *args, **kwargs: None
+    frappe_module.session = types.SimpleNamespace(user="administrator@example.com")
     sys.modules["frappe"] = frappe_module
 
     frappe_utils = types.ModuleType("frappe.utils")
@@ -67,6 +69,13 @@ def _install_stubs():
     sales_orders_module = types.ModuleType("posawesome.posawesome.api.sales_orders")
     sales_orders_module.search_orders = lambda **kwargs: []
     sys.modules["posawesome.posawesome.api.sales_orders"] = sales_orders_module
+
+    # commercial_flow's scope/feature gates defer-import _scope; these tests
+    # exercise the flow mapping, not the gates (test_scope covers those).
+    scope_module = types.ModuleType("posawesome.posawesome.api._scope")
+    scope_module.assert_company = lambda *args, **kwargs: None
+    scope_module.assert_profile_feature = lambda *args, **kwargs: None
+    sys.modules["posawesome.posawesome.api._scope"] = scope_module
 
     quotation_mapping_module = types.ModuleType("erpnext.selling.doctype.quotation.quotation")
     quotation_mapping_module.make_sales_order = lambda source_name: FakeDoc(

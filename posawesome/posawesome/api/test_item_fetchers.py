@@ -18,6 +18,14 @@ def _install_stubs():
     frappe_module.get_cached_value = lambda *args, **kwargs: None
     frappe_module.get_value = lambda *args, **kwargs: None
     frappe_module.log_error = lambda *args, **kwargs: None
+    # _cached_fetch wraps get_value/set_value in try/except — a no-op cache
+    # simply re-runs the fetcher every call.
+    frappe_module.cache = lambda: types.SimpleNamespace(
+        get_value=lambda key: None,
+        set_value=lambda *args, **kwargs: None,
+        delete_keys=lambda prefix: None,
+        delete_value=lambda key: None,
+    )
 
     class _Db:
         def has_column(self, doctype, fieldname):

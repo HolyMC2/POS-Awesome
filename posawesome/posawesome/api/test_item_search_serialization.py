@@ -30,6 +30,7 @@ def _install_stubs():
 
     fetchers = types.ModuleType("posawesome.posawesome.api.item_fetchers")
     fetchers.ItemDetailAggregator = object
+    fetchers._session_may_see_item_cost = lambda *args, **kwargs: True
     sys.modules["posawesome.posawesome.api.item_fetchers"] = fetchers
 
     utils = types.ModuleType("posawesome.posawesome.api.utils")

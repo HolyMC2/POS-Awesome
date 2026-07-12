@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import pathlib
 import sys
 import types
@@ -70,6 +71,7 @@ def _install_stubs():
 
     frappe_module.get_cached_doc = get_cached_doc
     frappe_module.get_all = lambda doctype, **kwargs: []
+    frappe_module.as_json = lambda obj, **kwargs: json.dumps(obj, default=str)
     sys.modules["frappe"] = frappe_module
 
     api_utils_module = types.ModuleType("posawesome.posawesome.api.utils")

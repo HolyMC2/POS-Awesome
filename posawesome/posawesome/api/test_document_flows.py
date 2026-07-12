@@ -14,8 +14,16 @@ from __future__ import annotations
 
 import json
 import time
+import unittest
 
-import frappe
+# Bench-only integration test: needs a real frappe + site. Skip the module
+# when discovered by the standalone stub-suite runner (python3 -m unittest
+# discover), where frappe is not importable.
+try:
+    import frappe
+except ImportError:
+    raise unittest.SkipTest("bench-only integration test - requires frappe")
+
 # IntegrationTestCase (new-style) loads test records LAZILY — the legacy
 # FrappeTestCase preloads records upfront, which explodes on this site
 # (erpnext _Test fixtures absent: "_Test Product Bundle Item").

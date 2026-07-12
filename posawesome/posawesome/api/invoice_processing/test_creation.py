@@ -96,8 +96,26 @@ def _install_framework_stubs():
     frappe_module.throw = lambda message: (_ for _ in ()).throw(Exception(message))
     frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
     frappe_module.log_error = lambda *args, **kwargs: None
-    frappe_module.get_cached_value = lambda *args, **kwargs: None
+
+    # The P0 profile gates (posting date, returns, customer credit) read
+    # these flags via get_cached_value; the stub profile has every gated
+    # feature enabled so the tests exercise creation logic, not the gates
+    # (test_profile_gates covers the gates on a real bench).
+    _enabled_profile_flags = {
+        "posa_allow_change_posting_date",
+        "posa_allow_return",
+        "use_customer_credit",
+    }
+
+    def _fake_get_cached_value(doctype, name=None, fieldname=None, *args, **kwargs):
+        if doctype == "POS Profile" and fieldname in _enabled_profile_flags:
+            return 1
+        return None
+
+    frappe_module.get_cached_value = _fake_get_cached_value
     frappe_module.get_cached_doc = lambda *args, **kwargs: _FrappeDict()
+    # submit-hold gates iterate hooks; none registered in the stub env.
+    frappe_module.get_hooks = lambda *args, **kwargs: []
     frappe_module.flags = types.SimpleNamespace(ignore_account_permission=False)
     publish_realtime_calls = []
     frappe_module.db = types.SimpleNamespace(
@@ -486,7 +504,14 @@ class TestStaleNamedInvoiceHandling(unittest.TestCase):
 
         self.creation.frappe.db.exists = lambda doctype, name: name == "SINV-OLD"
         self.creation.frappe.get_doc = fake_get_doc
-        self.creation.frappe.get_cached_value = lambda *args, **kwargs: 0
+        # Backdating is gated on posa_allow_change_posting_date since the P0
+        # backstop; these tests verify manual-posting preservation, so the
+        # flag must be ON (the gate itself is covered by test_profile_gates).
+        self.creation.frappe.get_cached_value = (
+            lambda doctype=None, name=None, fieldname=None, *args, **kwargs: (
+                1 if fieldname == "posa_allow_change_posting_date" else 0
+            )
+        )
         self.creation._save_draft_with_latest_timestamp = lambda doc: doc
 
         result = self.creation.update_invoice(
@@ -595,7 +620,14 @@ class TestStaleNamedInvoiceHandling(unittest.TestCase):
 
         self.creation.frappe.db.exists = lambda doctype, name: False
         self.creation.frappe.get_doc = fake_get_doc
-        self.creation.frappe.get_cached_value = lambda *args, **kwargs: 0
+        # Backdating is gated on posa_allow_change_posting_date since the P0
+        # backstop; these tests verify manual-posting preservation, so the
+        # flag must be ON (the gate itself is covered by test_profile_gates).
+        self.creation.frappe.get_cached_value = (
+            lambda doctype=None, name=None, fieldname=None, *args, **kwargs: (
+                1 if fieldname == "posa_allow_change_posting_date" else 0
+            )
+        )
         self.creation._save_draft_with_latest_timestamp = lambda doc: doc
 
         result = self.creation.update_invoice(
@@ -1117,7 +1149,14 @@ class TestManualPostingDatePreservation(unittest.TestCase):
             return invoice_doc
 
         self.creation.frappe.get_doc = fake_get_doc
-        self.creation.frappe.get_cached_value = lambda *args, **kwargs: 0
+        # Backdating is gated on posa_allow_change_posting_date since the P0
+        # backstop; these tests verify manual-posting preservation, so the
+        # flag must be ON (the gate itself is covered by test_profile_gates).
+        self.creation.frappe.get_cached_value = (
+            lambda doctype=None, name=None, fieldname=None, *args, **kwargs: (
+                1 if fieldname == "posa_allow_change_posting_date" else 0
+            )
+        )
         self.creation._save_draft_with_latest_timestamp = lambda doc: doc
 
         self.creation.update_invoice(
