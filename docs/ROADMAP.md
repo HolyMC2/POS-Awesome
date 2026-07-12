@@ -108,6 +108,15 @@ below was re-read at the cited line by the lead before ranking.
   `saldo_enabled:1` to client (marker reaches cart) + build; browser offline-add
   drill NOT run (harness offline-sim races the probe loop).
 
+**LANDED wave 4 (`ded73366` — backlog #4):**
+- ✅ **HIGH correctness — sync scopeSignature clobber + full-resync stuck.**
+  `ResourceSyncResult` now carries `scopeSignature` (was omitted → coordinator's
+  post-run persist nulled the sync_state row every run → scope-change wipe dead on
+  profile/company/warehouse switch). `full_resync_required` now resets the watermark
+  to null so recovery re-pulls in full (was pinned in "limited" forever). Dropped the
+  unused `response` blob from the result (bloat + type drift). All 6 adapters +
+  `buildResourceSyncResult(posProfile)`. +2 regression tests. 623/623 + tsc + build.
+
 **LANDED wave 3 (`5f45ad25` — backlog #2):**
 - ✅ **HIGH money — outbox/legacy draft-fallback double-bill.** The write-queue
   drain ran `update_invoice` unconditionally on submit failure; on an ack-miss
