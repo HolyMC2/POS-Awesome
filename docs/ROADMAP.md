@@ -104,6 +104,19 @@ below was re-read at the cited line by the lead before ranking.
   line → no more cash-collected-without-airtime. Mirrors the gift-card block. +5 tests.
   615/615 vitest + vue-tsc + vite build green. Remaining money-path saldo backstop at
   payment-submit is optional defense-in-depth (add-to-cart is the capture chokepoint).
+  Saldo verification: unit (all branches) + confirmed `get_items` ships
+  `saldo_enabled:1` to client (marker reaches cart) + build; browser offline-add
+  drill NOT run (harness offline-sim races the probe loop).
+
+**LANDED wave 3 (`5f45ad25` — backlog #2):**
+- ✅ **HIGH money — outbox/legacy draft-fallback double-bill.** The write-queue
+  drain ran `update_invoice` unconditionally on submit failure; on an ack-miss
+  (server committed, response lost) that orphaned a duplicate draft with the same
+  `posa_client_request_id` → double-bill if submitted from Desk. Now reconciles by
+  request-id first (`reconcile_invoice_outbox_entry` → `repair_invoice_submission`):
+  already-submitted → mark synced (no draft); genuine failure → draft preserved for
+  visibility. `reconcileAlreadySubmitted` helper. +6 tests (unit + ack-miss vs
+  genuine-failure drain integration). 621/621 + tsc + build green.
 
 **RANKED BACKLOG (not yet landed):**
 
