@@ -7,6 +7,29 @@ import { requireSaldoCapture } from "@saldo/useSaldoCapture";
 import { parseBooleanSetting } from "../../../utils/stock";
 import { useToastStore } from "../../../stores/toastStore";
 import { useStockUtils } from "../shared/useStockUtils";
+import { isOffline } from "../../../../offline/index";
+
+// A saldo (airtime) line cannot be captured offline: the referencia +
+// monto come from a live provider round-trip (TAECEL), and a recarga is
+// irreversible. Adding one offline used to silently fall through to a plain
+// line — cash collected, no referencia, no airtime, and the sale
+// dead-letters on sync. Block it at add-to-cart instead (the single point
+// where saldo capture happens). `saldo_enabled` ships in the get_items
+// payload on saldo tenants; a truthy value marks a saldo item.
+export function shouldBlockSaldoOffline(
+	item: any,
+	context: any,
+	offline: boolean,
+): boolean {
+	if (!offline || context?.isReturnInvoice) {
+		return false;
+	}
+	const saldoEnabled =
+		item?.saldo_enabled !== undefined &&
+		item?.saldo_enabled !== null &&
+		Number(item.saldo_enabled) > 0;
+	return saldoEnabled && !item?.saldo_referencia;
+}
 
 // Imported composables
 import { useItemTasks } from "./addition/useItemTasks";
@@ -353,6 +376,16 @@ export function useItemAddition() {
 		// referencia BEFORE the line hits the cart. Per TAECEL spec §5,
 		// a successful recarga is irreversible; we MUST get a confirmed
 		// reference up front.
+		//
+		// Offline we cannot capture a referencia at all, so refuse the add
+		// rather than let an undeliverable saldo line into the cart.
+		if (shouldBlockSaldoOffline(item, context, isOffline())) {
+			useToastStore().show({
+				title: __("Saldo/recarga requires an online connection"),
+				color: "error",
+			});
+			return;
+		}
 		//
 		// Fast path: get_items now ships `saldo_enabled` in the catalog
 		// payload (doco tenants) — a DEFINED falsy value means we can skip
