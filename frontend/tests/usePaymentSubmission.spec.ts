@@ -686,6 +686,55 @@ describe("usePaymentSubmission", () => {
 		(offlineModule.isOffline as any).mockReturnValue(false);
 	});
 
+	it("blocks offline invoice save when customer credit is redeemed", async () => {
+		const offlineModule = await import("../src/offline/index");
+		(offlineModule.isOffline as any).mockReturnValue(true);
+
+		const invoiceDoc = ref<any>({
+			name: "ACC-SINV-0006B",
+			doctype: "Sales Invoice",
+			is_return: 0,
+			items: [{ item_code: "ITEM-1", qty: 1 }],
+			payments: [{ mode_of_payment: "Cash", amount: 200, type: "Cash" }],
+			rounded_total: 200,
+			grand_total: 200,
+		});
+
+		const { submitInvoice } = usePaymentSubmission({
+			invoiceDoc,
+			posProfile: ref({
+				posa_allow_submissions_in_background_job: 0,
+				create_pos_invoice_instead_of_sales_invoice: 0,
+			}),
+			stockSettings: ref({}),
+			invoiceType: ref("Invoice"),
+			formatFloat: (value) => Number(value || 0),
+			stores: {
+				toastStore: { show: vi.fn() },
+				syncStore: { updatePendingCount: vi.fn() },
+				uiStore: {
+					setLastInvoice: vi.fn(),
+					setLastStockAdjustment: vi.fn(),
+				},
+				customersStore: { setSelectedCustomer: vi.fn() },
+				invoiceStore: { invoiceDoc: invoiceDoc.value },
+			},
+			isCashback: ref(false),
+			paidChange: ref(0),
+			creditChange: ref(0),
+			redeemedCustomerCredit: ref(150),
+			customerCreditDict: ref([{ credit_origin: "CN-1", credit_to_redeem: 150 }]),
+			giftCardRedemptions: ref([]),
+			diff_payment: ref(0),
+		});
+
+		await expect(
+			submitInvoice(false, { onFinishNavigation: vi.fn() }),
+		).rejects.toThrow("Customer credit redemption requires an online connection");
+
+		(offlineModule.isOffline as any).mockReturnValue(false);
+	});
+
 	it("submits gift card redemptions without requiring a gift card payment row", async () => {
 		const invoiceService = (
 			await import("../src/posapp/services/invoiceService")

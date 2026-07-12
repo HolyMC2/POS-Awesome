@@ -765,6 +765,23 @@ export async function clearAllCache() {
 	memory.bootstrap_snapshot = null;
 	memory.bootstrap_snapshot_status = null;
 	memory.bootstrap_limited_mode = false;
+	// PII / financial caches previously left in RAM after the IDB wipe — on a
+	// shared terminal the next persist() re-wrote the prior customer's
+	// stored-value balances, gift-card codes and addresses back into the
+	// freshly-cleared DB. Reset them to their defaults too.
+	for (const key of [
+		"stored_value_snapshot_cache",
+		"gift_card_snapshot_cache",
+		"customer_addresses_cache",
+		"exchange_rate_cache",
+		"currency_options_cache",
+		"price_list_meta_cache",
+		"delivery_charges_cache",
+		"payment_method_currency_cache",
+		"schema_signature",
+	]) {
+		resetMemoryKey(key);
+	}
 }
 
 export async function forceClearAllCache() {

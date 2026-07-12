@@ -5,10 +5,12 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+	clearAllCache,
 	db,
 	checkDbHealth,
 	initPromise,
 	isCorruptionError,
+	memory,
 	pruneOfflineStorage,
 	quickDbHealthCheck,
 	repairDbAfterFailedHealthCheck,
@@ -58,6 +60,24 @@ describe("offline IndexedDB maintenance", () => {
 		expect(
 			isCorruptionError({ name: "UnknownError", message: "database is corrupt" }),
 		).toBe(true);
+	});
+
+	it("clearAllCache resets PII/financial memory caches so they can't re-persist", async () => {
+		memory.stored_value_snapshot_cache = { "CUST-1": { balance: 500 } };
+		memory.gift_card_snapshot_cache = { "GC-1": { code: "secret" } };
+		memory.customer_addresses_cache = { "CUST-1": [{ city: "x" }] };
+		memory.payment_method_currency_cache = { Cash: "MXN" };
+		memory.exchange_rate_cache = { "USD:MXN": 17 };
+		memory.schema_signature = "old-sig";
+
+		await clearAllCache();
+
+		expect(memory.stored_value_snapshot_cache).toEqual({});
+		expect(memory.gift_card_snapshot_cache).toEqual({});
+		expect(memory.customer_addresses_cache).toEqual({});
+		expect(memory.payment_method_currency_cache).toEqual({});
+		expect(memory.exchange_rate_cache).toEqual({});
+		expect(memory.schema_signature).toBeNull();
 	});
 
 	it("prunes terminal outbox rows and stale metadata while retaining active rows", async () => {

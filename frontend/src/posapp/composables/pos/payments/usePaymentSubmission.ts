@@ -918,6 +918,15 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 					__("Gift card redemption requires an online connection"),
 				);
 			}
+			// Store-credit redemption offline reads a CACHED balance, so two
+			// terminals could each redeem the same last balance and only the
+			// second dead-letters on sync — after the goods left. The balance
+			// must be verified live, like gift cards.
+			if (formatFloat(unref(redeemedCustomerCredit) || 0, prec) > 0) {
+				throw new Error(
+					__("Customer credit redemption requires an online connection"),
+				);
+			}
 			try {
 				await saveOfflineInvoice({ data, invoice: doc });
 				try {
