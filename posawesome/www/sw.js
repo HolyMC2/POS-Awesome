@@ -197,11 +197,27 @@ async function getCacheName(forceRefresh = false, resolvedMetadata = null) {
 
 async function enforceCacheLimit(cache) {
 	const keys = await cache.keys();
-	if (keys.length > MAX_CACHE_ITEMS) {
-		const excess = keys.length - MAX_CACHE_ITEMS;
-		for (let i = 0; i < excess; i++) {
-			await cache.delete(keys[i]);
+	if (keys.length <= MAX_CACHE_ITEMS) {
+		return;
+	}
+	let excess = keys.length - MAX_CACHE_ITEMS;
+	// Evict oldest-first but NEVER the install-time precache (the boot shell +
+	// entry chunks). The old FIFO evicted keys[0..] blindly, so a long shift of
+	// runtime-cached assets pushed the precache out and broke offline cold-boot.
+	const protectedUrls = new Set(
+		getPrecacheUrls(currentVersion, currentAssets).map(
+			(url) => new URL(url, self.location.origin).href,
+		),
+	);
+	for (const request of keys) {
+		if (excess <= 0) {
+			break;
 		}
+		if (protectedUrls.has(request.url)) {
+			continue;
+		}
+		await cache.delete(request);
+		excess -= 1;
 	}
 }
 
@@ -267,6 +283,12 @@ self.addEventListener("fetch", (event) => {
 	if (url.protocol !== "http:" && url.protocol !== "https:") return;
 
 	if (event.request.url.includes("socket.io")) return;
+
+	// Never cache the version manifest. It is fetched fresh (no-store) with a
+	// unique `?t=<ts>` per call, so each fetch minted a new cache entry — those
+	// accreted past MAX_CACHE_ITEMS and evicted the precache. Let it pass
+	// straight to the network.
+	if (url.pathname === VERSION_URL) return;
 
 	// Recurring "broken font" pathology: SW caches the hashed CSS
 	// chunk, which embeds absolute `url(/assets/.../<hash>.woff2)`
