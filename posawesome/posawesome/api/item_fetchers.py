@@ -561,6 +561,34 @@ def _ensure_stock_uom(uoms: List[Dict[str, Any]], stock_uom: Optional[str]) -> L
     return uoms
 
 
+# Roles allowed to receive item COST (valuation_rate) in their payload. The
+# SPA only renders the cost row for these (useItemRateInfo visible:isSupervisor),
+# but the raw value used to ship to every cashier — and into their offline
+# IndexedDB cache. Gate it server-side so a non-supervisor never receives cost.
+_POS_COST_VISIBLE_ROLES = frozenset(
+    {
+        "POS Awesome Supervisor",
+        "POS Manager",
+        "Sales Manager",
+        "Accounts Manager",
+        "System Manager",
+    }
+)
+
+
+def _session_may_see_item_cost() -> bool:
+    """Memoized per request: may the session user receive valuation_rate?"""
+    flag = getattr(frappe.local, "_posa_item_cost_visible", None)
+    if flag is None:
+        try:
+            roles = set(frappe.get_roles(frappe.session.user))
+        except Exception:
+            roles = set()
+        flag = bool(roles & _POS_COST_VISIBLE_ROLES)
+        frappe.local._posa_item_cost_visible = flag
+    return flag
+
+
 def merge_item_row(
     item: Dict[str, Any],
     lookup_data: ItemLookupData,
@@ -596,6 +624,10 @@ def merge_item_row(
             "allow_negative_stock": meta.get("allow_negative_stock"),
             "purchase_uom": meta.get("purchase_uom"),
             "standard_rate": meta.get("standard_rate"),
+            # valuation_rate (cost) is written to the shared get_items cache
+            # here, then stripped per-request for non-supervisors on the way
+            # out (search.py _strip_item_cost_for_session) — the cache key is
+            # user-independent, so gating here would leak via a cache hit.
             "valuation_rate": meta.get("valuation_rate"),
             "default_bom": meta.get("default_bom"),
             "batch_no_data": batch_rows,

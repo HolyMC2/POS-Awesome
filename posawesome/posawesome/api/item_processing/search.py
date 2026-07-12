@@ -9,7 +9,10 @@ import frappe
 from frappe import _, as_json
 from frappe.utils import cint, cstr, get_datetime
 
-from posawesome.posawesome.api.item_fetchers import ItemDetailAggregator
+from posawesome.posawesome.api.item_fetchers import (
+    ItemDetailAggregator,
+    _session_may_see_item_cost,
+)
 from posawesome.posawesome.api.utils import (
     HAS_VARIANTS_EXCLUSION,
     expand_item_groups,
@@ -719,6 +722,23 @@ def _build_get_items_cache_key(
 
 
 @frappe.whitelist(methods=["GET", "POST"])
+def _strip_item_cost_for_session(rows):
+    """Null valuation_rate (item cost) for non-supervisor sessions.
+
+    The get_items cache is keyed on args, not on the user, so cost is written
+    into the shared cache once and would otherwise be served to any cashier via
+    a cache hit (and land in their offline IndexedDB). Strip it per request on
+    the way out. standard_rate stays — it is a legitimate selling-price
+    fallback the SPA uses for everyone.
+    """
+    if _session_may_see_item_cost():
+        return rows
+    for row in rows or []:
+        if isinstance(row, dict) and row.get("valuation_rate") is not None:
+            row["valuation_rate"] = None
+    return rows
+
+
 def get_items(
     pos_profile,
     price_list=None,
@@ -789,7 +809,7 @@ def get_items(
             search=1 if search_value else 0,
             groups=len(groups_ctx.groups_tuple),
         )
-        return result
+        return _strip_item_cost_for_session(result)
 
     result = _execute_item_search(
         profile_ctx.pos_profile_json,
@@ -814,7 +834,7 @@ def get_items(
         search=1 if search_value else 0,
         groups=len(groups_ctx.groups),
     )
-    return result
+    return _strip_item_cost_for_session(result)
 
 
 @frappe.whitelist(methods=["GET", "POST"])
