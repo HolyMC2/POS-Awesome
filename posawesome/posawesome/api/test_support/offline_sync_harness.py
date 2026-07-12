@@ -18,6 +18,16 @@ def install_offline_sync_package_stubs():
         package.__path__ = []
         sys.modules[package_name] = package
 
+    # `_resolve_profile` now asserts the session user owns the requested
+    # profile via api._scope.assert_profile. The existing standalone suites
+    # exercise the delta/pagination logic, not authorization, so install a
+    # permissive stub here to keep them scope-agnostic. The dedicated
+    # test_offline_sync_scope suite installs its OWN strict stub.
+    scope_module = types.ModuleType("posawesome.posawesome.api._scope")
+    scope_module.assert_profile = lambda user, name: None
+    scope_module.assert_company = lambda user, company: None
+    sys.modules["posawesome.posawesome.api._scope"] = scope_module
+
 
 def load_offline_sync_common():
     spec = importlib.util.spec_from_file_location(
