@@ -10,6 +10,7 @@ import {
 	clearOpeningStorage,
 	setTaxTemplate,
 	isOffline,
+	getPendingOfflineInvoiceCount,
 	getBootstrapSnapshot,
 	setBootstrapSnapshot,
 } from "../../../../offline/index";
@@ -243,6 +244,34 @@ export function usePosShift(openDialog?: () => void) {
 		if (!resolvedShift) {
 			return Promise.resolve();
 		}
+
+		// Unsynced offline sales belong in THIS shift's corte. Closing now
+		// omits them from the totals, and the server rejects a post into a
+		// closed shift (assert_shift_not_stale) — so they would dead-letter.
+		// Block the close until the queue drains. `__` is a Frappe global; guard
+		// it so the composable stays unit-testable.
+		const _t = (s: string): string =>
+			typeof (window as any)?.__ === "function" ? (window as any).__(s) : s;
+		const pendingOffline = getPendingOfflineInvoiceCount();
+		if (pendingOffline > 0) {
+			toastStore.show({
+				title: _t("Unsynced sales pending"),
+				message: `${_t("Cannot close: offline sales not yet synced")}: ${pendingOffline}. ${_t("Wait for sync (or resolve them in Facturas Offline) first.")}`,
+				color: "warning",
+			});
+			return Promise.resolve();
+		}
+		if (isOffline()) {
+			toastStore.show({
+				title: _t("Offline — cannot close shift"),
+				message: _t(
+					"Reconnect before closing so every sale is accounted for.",
+				),
+				color: "warning",
+			});
+			return Promise.resolve();
+		}
+
 		return frappe
 			.call(
 				"posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.make_closing_shift_from_opening",

@@ -166,7 +166,20 @@ def assert_shift_not_stale(pos_opening_shift):
         ["period_start_date", "pos_profile", "status", "docstatus"],
         as_dict=True,
     )
-    if not row or cint(row.docstatus) != 1 or row.status != "Open":
+    if not row or cint(row.docstatus) != 1:
+        return
+    if row.status == "Closed":
+        # A late-arriving offline sale trying to post into an already-closed
+        # shift would land outside that shift's corte (drawer mismatch). Reject
+        # it so it surfaces (dead-letter / operator handling) instead of
+        # silently corrupting reconciled totals.
+        frappe.throw(
+            _(
+                "POS shift {0} is already closed; this sale cannot be posted into it. "
+                "Open a new shift and re-submit."
+            ).format(pos_opening_shift)
+        )
+    if row.status != "Open":
         return
     if not is_shift_stale(row):
         return

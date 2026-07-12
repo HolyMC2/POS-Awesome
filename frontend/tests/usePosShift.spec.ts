@@ -3,6 +3,8 @@ import { createPinia, setActivePinia } from "pinia";
 
 const offlineState = vi.hoisted(() => ({
 	openingStorage: null as any,
+	pendingOfflineCount: 0,
+	offline: false,
 	clearOpeningStorage: vi.fn(() => {
 		offlineState.openingStorage = null;
 	}),
@@ -17,7 +19,8 @@ vi.mock("../src/offline/index", () => ({
 	}),
 	clearOpeningStorage: offlineState.clearOpeningStorage,
 	setTaxTemplate: vi.fn(),
-	isOffline: vi.fn(() => false),
+	isOffline: vi.fn(() => offlineState.offline),
+	getPendingOfflineInvoiceCount: vi.fn(() => offlineState.pendingOfflineCount),
 	getBootstrapSnapshot: vi.fn(() => null),
 	setBootstrapSnapshot: vi.fn(),
 }));
@@ -37,6 +40,8 @@ describe("usePosShift closing warnings", () => {
 	beforeEach(() => {
 		setActivePinia(createPinia());
 		offlineState.openingStorage = null;
+		offlineState.pendingOfflineCount = 0;
+		offlineState.offline = false;
 		offlineState.clearOpeningStorage.mockClear();
 		vi.stubGlobal("frappe", {
 			session: { user: "test@example.com" },
@@ -92,6 +97,33 @@ describe("usePosShift closing warnings", () => {
 			"posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.make_closing_shift_from_opening",
 			{ opening_shift: uiStore.posOpeningShift },
 		);
+	});
+
+	it("blocks closing while offline sales are still queued", async () => {
+		vi.stubGlobal("window", { __: (value: string) => value });
+		const uiStore = useUIStore();
+		uiStore.posOpeningShift = { name: "POS-OPEN-0004" };
+		offlineState.pendingOfflineCount = 3;
+		(globalThis as any).frappe.call = vi.fn();
+
+		const shift = usePosShift();
+		await shift.get_closing_data();
+
+		// Must NOT prepare a closing shift while unsynced sales exist.
+		expect((globalThis as any).frappe.call).not.toHaveBeenCalled();
+	});
+
+	it("blocks closing while offline (reconnect first)", async () => {
+		vi.stubGlobal("window", { __: (value: string) => value });
+		const uiStore = useUIStore();
+		uiStore.posOpeningShift = { name: "POS-OPEN-0005" };
+		offlineState.offline = true;
+		(globalThis as any).frappe.call = vi.fn();
+
+		const shift = usePosShift();
+		await shift.get_closing_data();
+
+		expect((globalThis as any).frappe.call).not.toHaveBeenCalled();
 	});
 
 	it("clears shared opening shift and invoice state after closing shift submit", async () => {
