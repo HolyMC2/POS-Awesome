@@ -34,6 +34,8 @@
 						@clear-cache="handleClearCacheAction"
 						@open-diagnostics="handleOpenOfflineDiagnosticsAction"
 					/>
+					<!-- Saldo status chip — sits beside the online indicator. -->
+					<SaldoHoldsBadge :pos-profile="posProfile" />
 				</div>
 			</template>
 
@@ -156,6 +158,7 @@ import NavbarSettingsPanel from "./navbar/NavbarSettingsPanel.vue";
 import NotificationBell from "./navbar/NotificationBell.vue";
 import OfflineStatusPanel from "./navbar/OfflineStatusPanel.vue";
 import StatusIndicator from "./navbar/StatusIndicator.vue";
+import SaldoHoldsBadge from "@saldo/SaldoHoldsBadge.vue";
 import CacheUsageMeter from "./navbar/CacheUsageMeter.vue";
 import AboutDialog from "./navbar/AboutDialog.vue";
 import OfflineInvoices from "./OfflineInvoices.vue";
@@ -228,6 +231,7 @@ export default {
 		NotificationBell,
 		OfflineStatusPanel,
 		StatusIndicator,
+		SaldoHoldsBadge,
 		CacheUsageMeter,
 		AboutDialog,
 		EmployeeSwitchDialog,

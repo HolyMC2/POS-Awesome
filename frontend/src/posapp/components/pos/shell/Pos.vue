@@ -26,7 +26,9 @@
 			@picked="onSaldoPicked"
 			@cancelled="saldoPickerOpen = false"
 		></SaldoCatalogPicker>
-		<SaldoHoldsBadge :pos-profile="pos_profile"></SaldoHoldsBadge>
+		<!-- SaldoHoldsBadge moved into the Navbar (top bar, beside the online
+		     indicator). Its print/realtime wiring is unaffected — it still
+		     emits saldo:hold_print on saldoCaptureBus, handled below. -->
 		<!-- /SALDO-INTEGRATION-POINT -->
 		<OpeningDialog
 			v-if="dialog"
@@ -227,7 +229,6 @@ import PosCoupons from "../offers/PosCoupons.vue";
 import SaldoReferenciaDialog from "@saldo/SaldoReferenciaDialog.vue";
 import SaldoStatusDialog from "@saldo/SaldoStatusDialog.vue";
 import SaldoCatalogPicker from "@saldo/SaldoCatalogPicker.vue";
-import SaldoHoldsBadge from "@saldo/SaldoHoldsBadge.vue";
 import { saldoCaptureBus } from "@saldo/useSaldoCapture";
 import { printInvoiceByName } from "../../../utils/printInvoiceByName";
 import { usePosShift } from "../../../composables/pos/shared/usePosShift";
@@ -811,7 +812,6 @@ export default {
 		SaldoReferenciaDialog,
 		SaldoStatusDialog,
 		SaldoCatalogPicker,
-		SaldoHoldsBadge,
 	},
 
 	// SALDO-INTEGRATION-POINT — data/created/beforeUnmount/methods saldo*
