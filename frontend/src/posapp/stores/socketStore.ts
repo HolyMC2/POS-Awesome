@@ -394,5 +394,6 @@ export const useSocketStore = defineStore("socket", () => {
     postSubmitPayments,
     waitForInvoiceProcessed,
     waitForPostSubmitPayments,
+    subscribeToInvoiceDoc,
   };
 });

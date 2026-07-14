@@ -1057,6 +1057,16 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 				} catch {
 					// saldo app absent → gate can't fire server-side either.
 				}
+				// Web route: frappe-shim never joins the user room, so the
+				// pos_invoice_processed fired on hold resume only arrives via
+				// the doc room — subscribe the parked invoice now or the badge
+				// never hears the resume and the ticket never auto-prints.
+				try {
+					const { useSocketStore } = await import("../../../stores/socketStore");
+					useSocketStore().subscribeToInvoiceDoc(responseInvoiceName, submittedDoctype);
+				} catch {
+					// Non-fatal: the Desk route still delivers via the user room.
+				}
 				if (stores?.customersStore?.setSelectedCustomer) {
 					stores.customersStore.setSelectedCustomer(
 						profile?.customer || null,
