@@ -30,11 +30,13 @@ def search_orders(company, currency, order_name=None, pos_profile=None):
     )
     filters = {
         "billing_status": ["in", ["Not Billed", "Partly Billed"]],
-        # docstatus=1 already drops Cancelled (docstatus=2), but a submitted
-        # SO can be Closed/On Hold/Completed while still Not Billed — those must
-        # not surface as billable in the POS picker (mirrors commercial_flow's
-        # list filter). Without this, Closed orders leaked into "Select S.O".
-        "status": ["not in", ["Closed", "Cancelled", "Completed", "On Hold"]],
+        # docstatus=1 drops Cancelled (docstatus=2); billing_status drops
+        # Completed (Fully Billed). The operative addition here is "Closed": a
+        # Closed SO stays submitted + Not Billed and leaked into the picker as
+        # if billable. Same status exclusion commercial_flow applies to its
+        # other sources. "On Hold" is deliberately NOT excluded — parked /
+        # apartado (layaway) SOs must stay billable from the POS.
+        "status": ["not in", ["Closed", "Cancelled", "Completed"]],
         "docstatus": 1,
         "company": company,
         "currency": currency,

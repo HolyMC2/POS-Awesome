@@ -384,6 +384,14 @@ class TestDocumentFlows(IntegrationTestCase):
 		self.assertIn(live, names, "live Not-Billed SO must be listed")
 		self.assertNotIn(closed, names, "Closed SO must NOT appear in the picker")
 
+		# On Hold (apartado/layaway) SOs must STAY billable from POS — they are
+		# deliberately NOT in the status exclusion.
+		held = self._submit_so(self._so_payload())
+		frappe.get_doc("Sales Order", held).update_status("On Hold")
+		held_rows = sales_orders.search_orders(self.company, currency, pos_profile=PROFILE)
+		held_names = {getattr(r, "name", None) or r.get("name") for r in held_rows}
+		self.assertIn(held, held_names, "On Hold (layaway) SO must remain listed")
+
 	def test_order_to_invoice_backrefs_and_bills_so(self):
 		"""SO -> Sales Invoice via the whitelisted facade must copy the
 		sales_order/so_detail back-refs, and submitting the invoice must
@@ -420,6 +428,32 @@ class TestDocumentFlows(IntegrationTestCase):
 		)
 		self.assertTrue(refs, "a Payment Entry must reference the SO")
 		self.assertEqual(float(refs[0].allocated_amount), 10.0)
+
+	def test_submit_sales_order_enqueues_payment_job(self):
+		"""The advance Payment Entry is fire-and-forget: submit_sales_order must
+		enqueue _payment_entry_job with the EXACT dotted path + kwargs. A renamed
+		path/kwarg would silently drop the cashier's payment (SO submitted, cash
+		taken, no PE, no error) — so guard the enqueue wiring directly. The job
+		body itself is covered by the test above."""
+		from unittest.mock import patch
+
+		payments = [{"mode_of_payment": "Cash", "amount": 10, "base_amount": 10}]
+		payload = self._so_payload(rate=10, payments=payments)
+		with patch.object(sales_orders.frappe, "enqueue") as enq:
+			r = sales_orders.submit_sales_order(json.dumps(payload))
+			self._created.append(("Sales Order", r["name"]))
+			self.assertEqual(
+				frappe.db.get_value("Sales Order", r["name"], "docstatus"), 1,
+				"SO must submit even though the PE is enqueued",
+			)
+		self.assertTrue(enq.called, "submit_sales_order must enqueue the advance PE job")
+		method_arg = enq.call_args.args[0] if enq.call_args.args else enq.call_args.kwargs.get("job")
+		self.assertEqual(
+			method_arg, "posawesome.posawesome.api.sales_orders._payment_entry_job",
+			"enqueue must target the current dotted path",
+		)
+		self.assertEqual(enq.call_args.kwargs.get("order_name"), r["name"])
+		self.assertEqual(enq.call_args.kwargs.get("payments"), payments)
 
 	# ---------- Quotation ----------
 
