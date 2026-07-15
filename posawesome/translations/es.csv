@@ -1159,6 +1159,8 @@ Select Columns to Display,Seleccionar Columnas a Mostrar
 Select Payment,Seleccionar Pago
 Select S.O,Seleccionar O.S.
 Select Sales Orders,Seleccionar Pedidos de Venta
+Open Order,Abrir pedido
+Create Invoice,Facturar
 Select a customer to use coupon,Seleccione un cliente para usar cupón
 Selected POS Opening Shift should be open.,El turno de apertura POS seleccionado debe estar abierto.
 Selected expense account is not allowed for this POS Profile.,La cuenta de gastos seleccionada no está permitida para este perfil POS.

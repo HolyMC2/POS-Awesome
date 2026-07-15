@@ -903,9 +903,10 @@
 										<v-btn
 											v-for="action in draftActions(item)"
 											:key="`${item.name}-${action}`"
-											variant="text"
+											:variant="isChargeDraftAction(action) ? 'flat' : 'text'"
 											size="small"
 											:color="draftActionColor(action)"
+											:prepend-icon="draftActionIcon(action)"
 											:title="draftActionLabel(action)"
 											:aria-label="draftActionLabel(action)"
 											@click="runDraftAction(item, action)"
@@ -995,8 +996,9 @@
 											v-for="action in draftActions(invoice)"
 											:key="`${invoice.name}-${action}`"
 											size="small"
-											:variant="isPrimaryDraftAction(action) ? 'flat' : 'text'"
+											:variant="isChargeDraftAction(action) ? 'flat' : 'text'"
 											:color="draftActionColor(action)"
+											:prepend-icon="draftActionIcon(action)"
 											@click="runDraftAction(invoice, action)"
 										>
 											{{ draftActionLabel(action) }}
@@ -2277,6 +2279,32 @@ export default {
 		},
 		draftActionLabel(action) {
 			return __(getDocumentFlowActionLabel(action));
+		},
+		draftActionIcon(action) {
+			// Distinct glyph per action so "Open Order" and "Create Invoice"
+			// are not two identical text buttons on the same row.
+			const icons = {
+				invoice_load_draft: "mdi-file-document-outline",
+				quote_edit_draft: "mdi-pencil-outline",
+				quote_submit: "mdi-check-bold",
+				quote_to_order: "mdi-cart-arrow-down",
+				quote_to_invoice: "mdi-cash-register",
+				order_load: "mdi-folder-open-outline",
+				order_to_delivery_note: "mdi-truck-delivery-outline",
+				order_to_invoice: "mdi-cash-register",
+				delivery_to_invoice: "mdi-cash-register",
+			};
+			return icons[action] || "mdi-open-in-new";
+		},
+		isChargeDraftAction(action) {
+			// The three actions that create an Invoice you then collect payment
+			// on. Rendered as a filled button so the cashier can tell at a glance
+			// which action takes money vs which just loads the order.
+			return (
+				action === "order_to_invoice" ||
+				action === "quote_to_invoice" ||
+				action === "delivery_to_invoice"
+			);
 		},
 		draftActionColor(action) {
 			if (action === "quote_submit") return "warning";
