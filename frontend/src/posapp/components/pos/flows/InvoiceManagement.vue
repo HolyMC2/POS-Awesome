@@ -2321,9 +2321,6 @@ export default {
 			}
 			return this.currentDraftSourceOption.color;
 		},
-		isPrimaryDraftAction(action) {
-			return action !== "quote_submit" && action !== "order_to_delivery_note";
-		},
 		async runDraftAction(invoice, action) {
 			if (!invoice?.name || !action) {
 				return;
