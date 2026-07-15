@@ -454,6 +454,10 @@ class TestDocumentFlows(IntegrationTestCase):
 		)
 		self.assertEqual(enq.call_args.kwargs.get("order_name"), r["name"])
 		self.assertEqual(enq.call_args.kwargs.get("payments"), payments)
+		self.assertTrue(
+			enq.call_args.kwargs.get("enqueue_after_commit"),
+			"advance-PE job must defer to after_commit or the worker can miss the uncommitted SO",
+		)
 
 	# ---------- Quotation ----------
 

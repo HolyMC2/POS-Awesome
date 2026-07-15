@@ -200,9 +200,16 @@ def submit_sales_order(order):
         so_doc.submit()
 
     if payments:
+        # enqueue_after_commit: the job runs in a separate worker that reads
+        # COMMITTED data. Without after_commit the worker can pop the job
+        # before this request's transaction commits → _payment_entry_job's
+        # get_doc("Sales Order", ...) misses the not-yet-committed SO and the
+        # advance PE is silently dropped (cash taken, no PE). Defer dispatch to
+        # after commit so the SO is always visible to the worker.
         frappe.enqueue(
             "posawesome.posawesome.api.sales_orders._payment_entry_job",
             queue="short",
+            enqueue_after_commit=True,
             order_name=so_doc.name,
             payments=payments,
         )
