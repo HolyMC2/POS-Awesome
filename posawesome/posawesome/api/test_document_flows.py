@@ -31,7 +31,7 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, today
 
 from posawesome.posawesome.api.invoice_processing import creation
-from posawesome.posawesome.api import sales_orders, quotations
+from posawesome.posawesome.api import sales_orders, quotations, invoices
 
 TEST_ITEM = "POSA-TEST-SVC"
 PROFILE = "Doco Ventas"
@@ -325,6 +325,101 @@ class TestDocumentFlows(IntegrationTestCase):
 		self.assertEqual(
 			frappe.db.get_value("Sales Order", r["name"], "docstatus"), 1
 		)
+
+	# ---------- Sales Order: picker filter, conversion, advance payment -----
+
+	def _so_payload(self, rate: float = 10, payments=None):
+		p = {
+			"doctype": "Sales Order",
+			"company": self.company,
+			"customer": self.customer,
+			"pos_profile": PROFILE,
+			"delivery_date": add_days(today(), 1),
+			"items": [
+				{
+					"item_code": self.item,
+					"qty": 1,
+					"rate": rate,
+					"price_list_rate": rate,
+					"delivery_date": add_days(today(), 1),
+				}
+			],
+		}
+		if payments is not None:
+			p["payments"] = payments
+		return p
+
+	def _submit_so(self, payload):
+		r = sales_orders.submit_sales_order(json.dumps(payload))
+		self._created.append(("Sales Order", r["name"]))
+		return r["name"]
+
+	def _enable_select_so(self):
+		"""Turn on the SO-picker feature flag for the test, then restore it."""
+		before = frappe.db.get_value("POS Profile", PROFILE, "custom_allow_select_sales_order")
+		frappe.db.set_value("POS Profile", PROFILE, "custom_allow_select_sales_order", 1)
+		frappe.clear_cache(doctype="POS Profile")
+		self.addCleanup(
+			lambda: (
+				frappe.db.set_value(
+					"POS Profile", PROFILE, "custom_allow_select_sales_order", before or 0
+				),
+				frappe.clear_cache(doctype="POS Profile"),
+			)
+		)
+
+	def test_search_orders_excludes_closed_order(self):
+		"""Regression: a Closed SO is still docstatus=1 with billing_status
+		'Not Billed', so it leaked into the POS 'Select S.O' picker. The
+		status filter must drop it while keeping a live Not-Billed SO."""
+		self._enable_select_so()
+		currency = frappe.db.get_value("Company", self.company, "default_currency")
+
+		live = self._submit_so(self._so_payload())
+		closed = self._submit_so(self._so_payload())
+		frappe.get_doc("Sales Order", closed).update_status("Closed")
+
+		rows = sales_orders.search_orders(self.company, currency, pos_profile=PROFILE)
+		names = {getattr(r, "name", None) or r.get("name") for r in rows}
+		self.assertIn(live, names, "live Not-Billed SO must be listed")
+		self.assertNotIn(closed, names, "Closed SO must NOT appear in the picker")
+
+	def test_order_to_invoice_backrefs_and_bills_so(self):
+		"""SO -> Sales Invoice via the whitelisted facade must copy the
+		sales_order/so_detail back-refs, and submitting the invoice must
+		flow billing back onto the SO (per_billed, billing_status)."""
+		self._enable_select_so()
+		so_name = self._submit_so(self._so_payload(rate=10))
+
+		inv = invoices.create_sales_invoice_from_order(so_name, pos_profile=PROFILE)
+		self.assertEqual(inv.items[0].sales_order, so_name, "invoice item must back-ref the SO")
+		self.assertTrue(inv.items[0].so_detail, "invoice item must carry so_detail row link")
+
+		inv.flags.ignore_permissions = True
+		inv.insert(ignore_permissions=True)
+		self._created.append(("Sales Invoice", inv.name))
+		inv.submit()
+
+		so = frappe.get_doc("Sales Order", so_name)
+		self.assertEqual(so.billing_status, "Fully Billed")
+		self.assertEqual(float(so.per_billed), 100.0)
+
+	def test_so_with_payments_creates_advance_payment_entry(self):
+		"""submit_sales_order with payments enqueues an advance Payment Entry
+		against the SO. Run the job body directly (enqueue_after_commit never
+		fires in tests) and assert the PE references the SO."""
+		payments = [{"mode_of_payment": "Cash", "amount": 10, "base_amount": 10}]
+		so_name = self._submit_so(self._so_payload(rate=10, payments=payments))
+
+		sales_orders._payment_entry_job(so_name, payments)
+
+		refs = frappe.get_all(
+			"Payment Entry Reference",
+			filters={"reference_doctype": "Sales Order", "reference_name": so_name},
+			fields=["parent", "allocated_amount"],
+		)
+		self.assertTrue(refs, "a Payment Entry must reference the SO")
+		self.assertEqual(float(refs[0].allocated_amount), 10.0)
 
 	# ---------- Quotation ----------
 
