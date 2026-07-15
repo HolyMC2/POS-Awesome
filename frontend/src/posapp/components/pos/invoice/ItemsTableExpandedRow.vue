@@ -1,12 +1,5 @@
 <template>
-	<td :colspan="colspan" class="ma-0 pa-0 posa-expanded-row-cell">
-		<div
-			v-if="isExpanded"
-			class="posa-expanded-content responsive-expanded-content"
-			:class="expandedContentClasses"
-		>
-			<!-- Item Details Form -->
-			<div class="posa-item-details-form">
+	<div class="posa-item-details-form responsive-expanded-content" :class="expandedContentClasses">
 				<!-- Basic Information Section -->
 				<div class="posa-form-section">
 					<div class="posa-section-header">
@@ -416,15 +409,6 @@
 					</div>
 				</div>
 			</div>
-		</div>
-		<!-- Lazy placeholder -->
-		<div v-else class="expanded-placeholder">
-			<div class="text-center pa-4">
-				<v-progress-circular indeterminate size="small"></v-progress-circular>
-				<div class="text-caption mt-2">{{ __("Loading details...") }}</div>
-			</div>
-		</div>
-	</td>
 </template>
 
 <script setup lang="ts">
@@ -433,14 +417,12 @@ import type { CartItem, POSProfile, InvoiceDoc } from "../../../types/models";
 
 interface Props {
 	item: CartItem | any;
-	isExpanded: boolean;
-	colspan: number;
 	pos_profile: POSProfile | any;
 	invoiceType?: string;
 	isReturnInvoice?: boolean;
 	invoice_doc?: InvoiceDoc | any;
 	hide_qty_decimals: boolean;
-	expandedContentClasses: any;
+	expandedContentClasses?: any;
 
 	// Formatters
 	formatFloat: (_val: any, _precision?: number) => string;
