@@ -2,6 +2,44 @@
 
 All notable changes.
 
+## 2026-07-15 (LIVE PROD) — Sales Order UX + POS dialog/layout fixes, CI green, origin gzip
+
+Full session, all lab-verified then shipped to `ventas.docomexico.com` +
+`ventas.mumulenceria.com`. Perf findings folded into `docs/PERF-get-items.md`.
+
+- **Sales Order flow**: `search_orders` now excludes Closed/Cancelled/Completed
+  SOs from the POS "Select S.O" picker (Closed SOs were leaking) while KEEPING
+  On Hold (apartado/layaway stays billable). New integration tests cover the
+  money paths that were untested: SO→Invoice back-ref + billing flowback, the
+  advance Payment Entry, and the `enqueue` wiring. Flipped
+  `posa_create_only_sales_order=1` on Doco Ventas so Type=Order→PAY creates a
+  real Sales Order — proven end-to-end (worker created a submitted advance PE),
+  then hardened with `enqueue_after_commit=True` (was a fire-and-forget race
+  that could drop the PE under load).
+- **Open Order vs Create Invoice disambiguation**: the two order-row buttons
+  were visually identical. Added per-action icons, rendered the charge actions
+  (order/quote/delivery → invoice) as filled buttons vs text for load actions,
+  and added Spanish labels (Abrir pedido / Facturar).
+- **Type dropdown width**: was a 3-col cell clipping the value to "In…"; now a
+  fixed 125px with the customer field flexing to fill.
+- **Item detail → scrollable dialog**: the inline expanded `<tr>` (~800px)
+  couldn't scroll inside the table/flex chain — it overflowed the card and
+  painted over the header. Moved into a `v-dialog scrollable` (teleported to
+  body). Single-select expand.
+- **Saldo Recarga/Servicio picker**: pinned the header/footer (card bounded to
+  90vh, only the grid scrolls — the "Atrás" control was scrolling into the
+  carrier cards) and boxed the Atrás/Cancelar buttons.
+- **CI**: synced the `@saldo` CI stub (`SaldoHoldsBadge.vue`) with the
+  auto-print arming test — the stub was a no-op `<span>`, so the Frontend job
+  failed in CI while passing locally against the real saldo. (Pre-existing
+  break, red since `1cadef3b`.)
+- **Origin gzip** (in `muelle` proxy): nginx now gzips the origin→Cloudflare
+  hop (JSON + text) — the ~4.7 MB `get_items` catalog + all API JSON were going
+  to CF uncompressed. See `docs/PERF-get-items.md` for the full get_items
+  payload analysis (compute is solved at ~50-85ms; the lever is payload, and
+  we deliberately did NOT trim `item_attributes` — it's load-bearing for
+  offline variant selection).
+
 ## 2026-07-11 (LAB — pending prod) — hold-until-confirm, upstream recon, audit sweep, profile security, roadmap + perf waves
 
 Full-day batch, all lab-verified + pushed. **Deploy runbook for the next

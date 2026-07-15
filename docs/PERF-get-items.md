@@ -111,3 +111,69 @@ Ship the pre-warm (done, lab-staged). **Defer the raw-SQL deep fix** until
 telemetry shows the cache-OFF reset path or scheduler cost is actually
 hurting. If built later, gate it behind a golden-output parity test
 (risk #1) and land it helper-by-helper, not all eight at once.
+
+## 2026-07-15 update — compute is SOLVED; the bottleneck is now PAYLOAD
+
+The pre-warm/cache work above paid off: prod `get_items` **server compute is
+now ~50-85ms warm** (140ms cold) for the full 5291-item catalog on
+`ventas.docomexico.com` — down from the ~2424ms this doc opened with. The
+"slowest operator call" framing is stale. The remaining cost is entirely
+**payload size** (client `JSON.parse` + building N reactive objects) and the
+wire hop.
+
+### Measured (prod, full no-limit call)
+- **4.7 MB JSON / 5291 items** (~888 B/item). Client round-trip telemetry
+  (`perf:api.items.get_items.ok`): p50 ~500ms, **p95 1.2s**, avg 612ms. The
+  scary maxes (31–76s) are **background/suspended-tab flushes** in low-load
+  minutes, not server or queue — confirmed by busy-minute correlation.
+- Per-field byte totals across the catalog: `item_attributes` 410K,
+  `item_uoms` 215K, `item_name` 172K, `modified` 148K, `item_barcode` 148K,
+  `item_group` 96K, `item_code`/`name` 58K each, `variant_of` 47K,
+  `attributes` 33K.
+
+### What we DID ship (2026-07-15)
+- **nginx gzip on the origin→Cloudflare hop** (`muelle` proxy
+  `nginx.conf.template`): origin was sending everything uncompressed to CF
+  (CF re-brotli's to clients, but the origin hop was raw). `application/json`
+  + text now gzip'd → the 4.7 MB origin→CF hop drops to ~1 MB. Verified: a
+  proxied `/login` returns `Content-Encoding: gzip`. **This is the payload win
+  that matters** — it's the only lever that's both real and zero-risk.
+
+### What we deliberately did NOT do (and why)
+- **Do NOT trim `item_attributes` (410 KB).** It LOOKS like dead weight, but
+  it is **load-bearing for OFFLINE variant selection**. Trace:
+  `add_item`→`handleVariantItem` (`useItemCreation.ts`) does
+  `items.filter(it => it.variant_of == parent)` against the LOCAL catalog and
+  only calls `get_item_variants` `if (!variants.length)`. For a fully-synced
+  offline catalog the variants are always local ⇒ the fetch is skipped ⇒ the
+  variant dialog builds its attribute filter from the **catalog rows'
+  `item_attributes`** (`Variants.vue:286-293`). Trimming it silently breaks
+  variant items (sizes/colours/storage) offline. `attributes` (33 KB) + `idx`
+  + `default_bom` + `conversion_rate==1` are the only genuinely-safe trims —
+  ~50–100 KB pre-gzip / ~10–20 KB post-gzip — not worth the cache-version
+  churn now.
+- **Delta-first bootstrap is ALREADY built** and is not a task.
+  `itemsStore.initialize` reads IndexedDB first (`loadCachedItems`) and skips
+  the full pull on a warm cache; the `SyncCoordinator`/`sync_items` resource
+  (`offline/sync/adapters/items.ts`) is a proper watermark delta with
+  deletion reconciliation + a separate `item_prices` resource (so it does NOT
+  have the "price change doesn't bump `Item.modified`" staleness trap that a
+  naive `get_items(modified_after=…)` would). On Doco (`posa_use_limit_search=1`)
+  the itemsStore does server-side search and never full-pulls in normal ops;
+  the 4.7 MB only fires on force-reload.
+
+### Tech-debt: the two-writer double-fetch (scoped, low urgency)
+Two systems write the same IndexedDB `items` store:
+1. `itemsStore.backgroundSyncItems` (`useItemsSync.ts`) — a full `get_items`
+   pager, **no watermark, no deletion handling** (the inferior one). Gated by
+   `shouldPersistItems()` which is **false when `limitSearchEnabled`**.
+2. `SyncCoordinator` `syncItemsResource` — the correct delta sync.
+
+So the double-fetch only fires on **limit-search-OFF** tenants
+(`ventas.mumulenceria.com`, the near-idle one); **Doco is unaffected**
+(Writer 1 gated off). Proper fix = **retire Writer 1's full-pager, make the
+SyncCoordinator the single catalog persister, hydrate the itemsStore display
+from IndexedDB** (`loadCachedItems` already exists). But it touches the
+boot/display/client-search hot path for a win confined to the idle tenant, and
+gzip already covers the wire cost — so treat it as **deliberate tech-debt: do
+it when that area is next touched, not as a standalone perf sprint.**
