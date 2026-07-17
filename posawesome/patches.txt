@@ -31,3 +31,4 @@ posawesome.patches.add_customer_credit_invoice_fields
 posawesome.patches.add_pos_delta_sync_indexes
 posawesome.patches.remove_dead_pos_profile_fields
 posawesome.patches.rename_pose_use_limit_search
+posawesome.patches.add_safe_transfer_settings

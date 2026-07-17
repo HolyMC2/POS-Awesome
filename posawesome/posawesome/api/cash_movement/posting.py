@@ -18,7 +18,8 @@ def create_journal_entry(
         frappe.throw(_("Amount must be greater than zero."))
 
     movement_type = (movement_type or "").strip()
-    if movement_type not in {"Expense", "Deposit"}:
+    # "Transfer" = POS Safe Transfer (safe -> bank), same debit/credit shape.
+    if movement_type not in {"Expense", "Deposit", "Transfer"}:
         frappe.throw(_("Invalid movement type for journal entry."))
 
     company_cost_center = cost_center or frappe.get_cached_value("Company", company, "cost_center")

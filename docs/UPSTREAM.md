@@ -30,6 +30,10 @@ Verdicts: **PICK** = cherry-pick as-is · **ADAPT** = concept good, reimplement
 Notes that keep triage honest:
 - Our Vue SPA is rebuilt (RecycleScroller, Pinia shallowRef, own offline/) —
   upstream frontend diffs almost never apply; judge the concept.
+- **Fork-only modules with no upstream counterpart** (never expect upstream
+  diffs to touch them): `doctype/pos_safe_transfer` + `api/safe_transfer/`
+  (2026-07-17, safe→bank deposits for mercado caja chica; posting.py's
+  movement-type set gained "Transfer" — keep that hunk when reconciling).
 - Upstream merges its own fork branches (retailmind etc.) → duplicate
   commits with different SHAs; triage by subject once.
 - Historical audits: `AUDIT.md` (vs b5992f70, 2026-05-11), CHANGELOG
