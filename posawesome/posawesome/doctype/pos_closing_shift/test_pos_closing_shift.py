@@ -237,6 +237,55 @@ class TestPOSClosingShift(unittest.TestCase):
         self.assertEqual(result[0].invoice, "SINV-RET-0001")
         self.assertEqual(result[0].return_against, "ACC-SINV-2026-00222")
 
+    @patch("posawesome.posawesome.doctype.pos_closing_shift.closing_processing.invoices.frappe")
+    def test_submit_printed_invoices_skips_unconfirmed_saldo_drafts(self, mock_frappe):
+        """A held Saldo sale whose recarga is not Success must be skipped, not
+        submitted — otherwise saldo's before_submit guard aborts the whole close."""
+
+        class DummyLine:
+            def __init__(self, sldo=None):
+                self._v = {"saldo_transaction": sldo}
+
+            def get(self, key, default=None):
+                return self._v.get(key, default)
+
+        class DummyInvoiceDoc:
+            def __init__(self, name, items):
+                self.name = name
+                self.doctype = "Sales Invoice"
+                self._values = {"is_return": 0, "return_against": None, "items": items}
+                self.submit = Mock()
+
+            def get(self, key, default=None):
+                return self._values.get(key, default)
+
+        held_saldo = DummyInvoiceDoc("SINV-SALDO-1", [DummyLine(sldo="SLDO-2026-000254")])
+        clean_invoice = DummyInvoiceDoc("SINV-0002", [DummyLine(sldo=None)])
+
+        mock_frappe.get_all.return_value = [
+            SimpleNamespace(name="SINV-SALDO-1"),
+            SimpleNamespace(name="SINV-0002"),
+        ]
+        mock_frappe.get_doc.side_effect = lambda doctype, name: {
+            "SINV-SALDO-1": held_saldo,
+            "SINV-0002": clean_invoice,
+        }[name]
+        # saldo child column present; the linked SLDO is Failed (not Success).
+        mock_frappe.db.has_column.return_value = True
+        mock_frappe.db.get_value.side_effect = lambda doctype, name, field: (
+            "Failed" if doctype == "Saldo Transaction" else None
+        )
+        mock_frappe._dict.side_effect = lambda d=None, **kw: SimpleNamespace(**(d or kw))
+
+        result = invoices.submit_printed_invoices("POS-OPEN-1", "Sales Invoice")
+
+        held_saldo.submit.assert_not_called()
+        clean_invoice.submit.assert_called_once_with()
+        mock_frappe.log_error.assert_called_once()
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].invoice, "SINV-SALDO-1")
+        self.assertEqual(result[0].reason, "saldo_unconfirmed")
+
     @patch("posawesome.posawesome.doctype.pos_closing_shift.closing_processing.overview.get_payments_entries")
     @patch("posawesome.posawesome.doctype.pos_closing_shift.closing_processing.overview.get_pos_invoices")
     @patch("posawesome.posawesome.doctype.pos_closing_shift.closing_processing.overview.frappe")

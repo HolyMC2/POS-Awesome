@@ -25,6 +25,7 @@ type SkippedPrintedInvoice = {
 	invoice?: string;
 	doctype?: string;
 	return_against?: string;
+	reason?: string;
 };
 
 type PendingDraftInvoice = {
@@ -47,31 +48,55 @@ const translateMessage = (value: string) => (typeof window !== "undefined" && wi
 export function buildSkippedClosingInvoicesPrompt(
 	skippedInvoices: SkippedPrintedInvoice[],
 ) {
-	const count = skippedInvoices.length;
-	const baseMessage = count === 1
-		? "1 printed return invoice references a cancelled invoice and will be excluded from closing."
-		: `${count} printed return invoices reference cancelled invoices and will be excluded from closing.`;
-	const details = skippedInvoices
-		.slice(0, 5)
-		.map((invoice) => {
-			const invoiceName = invoice?.invoice || translateMessage("Unknown invoice");
-			const returnAgainst = invoice?.return_against;
-			return returnAgainst
-				? `${invoiceName} (${translateMessage("Return Against")}: ${returnAgainst})`
-				: invoiceName;
-		})
-		.join(", ");
-	const detailMessage = details
-		? `${translateMessage("Invoices")}: ${details}.`
-		: "";
-	return [
-		translateMessage(baseMessage),
-		detailMessage,
-		translateMessage("The skipped invoice will remain a draft."),
-		translateMessage("Do you want to proceed?"),
-	]
-		.filter(Boolean)
-		.join(" ");
+	const saldoInvoices = skippedInvoices.filter((i) => i?.reason === "saldo_unconfirmed");
+	// Everything else is a cancelled-return skip (legacy entries have no reason).
+	const returnInvoices = skippedInvoices.filter((i) => i?.reason !== "saldo_unconfirmed");
+
+	const fmtNames = (list: SkippedPrintedInvoice[], withReturnAgainst: boolean) =>
+		list
+			.slice(0, 5)
+			.map((invoice) => {
+				const invoiceName = invoice?.invoice || translateMessage("Unknown invoice");
+				const returnAgainst = withReturnAgainst ? invoice?.return_against : undefined;
+				return returnAgainst
+					? `${invoiceName} (${translateMessage("Return Against")}: ${returnAgainst})`
+					: invoiceName;
+			})
+			.join(", ");
+
+	const lines: string[] = [];
+
+	if (returnInvoices.length) {
+		const count = returnInvoices.length;
+		// Keep the translatable part static (count prefixed) so the es-MX row matches.
+		lines.push(
+			count === 1
+				? translateMessage("1 printed return invoice references a cancelled invoice and will be excluded from closing.")
+				: `${count} ${translateMessage("printed return invoices reference cancelled invoices and will be excluded from closing.")}`,
+		);
+		const details = fmtNames(returnInvoices, true);
+		if (details) {
+			lines.push(`${translateMessage("Invoices")}: ${details}.`);
+		}
+	}
+
+	if (saldoInvoices.length) {
+		const count = saldoInvoices.length;
+		lines.push(
+			count === 1
+				? translateMessage("1 held recarga (Saldo) sale has no TAECEL confirmation and will be excluded from closing.")
+				: `${count} ${translateMessage("held recarga (Saldo) sales have no TAECEL confirmation and will be excluded from closing.")}`,
+		);
+		const details = fmtNames(saldoInvoices, false);
+		if (details) {
+			lines.push(`${translateMessage("Invoices")}: ${details}.`);
+		}
+	}
+
+	lines.push(translateMessage("The skipped invoice will remain a draft."));
+	lines.push(translateMessage("Do you want to proceed?"));
+
+	return lines.filter(Boolean).join(" ");
 }
 
 export function buildPendingDraftsPrompt(

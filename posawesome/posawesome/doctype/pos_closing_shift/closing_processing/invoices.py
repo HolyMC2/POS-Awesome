@@ -139,6 +139,32 @@ def _get_cancelled_return_against(invoice_doc, doctype):
     return None
 
 
+def _held_unconfirmed_saldo(invoice_doc, doctype):
+    """True when this printed draft is a Saldo hold-until-confirm sale whose
+    recarga(s) have not all reached Success.
+
+    Submitting such a draft trips the `saldo` app's `before_submit` guard
+    (recarga sin confirmar) and aborts the ENTIRE close — one stranded recarga
+    blocks every shift, indefinitely. Skip + surface it instead: the draft stays
+    editable in the Saldo panel where the cashier deletes it or retries the
+    number.
+
+    Soft-coupled to `saldo`: gated on the child table's `saldo_transaction`
+    column, so benches without the app installed no-op. No import of saldo — the
+    Saldo Transaction status is read by string doctype name.
+    """
+    child_dt = doctype + " Item"
+    if not frappe.db.has_column(child_dt, "saldo_transaction"):
+        return False
+    for line in invoice_doc.get("items") or []:
+        sldo = line.get("saldo_transaction")
+        if not sldo:
+            continue
+        if frappe.db.get_value("Saldo Transaction", sldo, "status") != "Success":
+            return True
+    return False
+
+
 def submit_printed_invoices(pos_opening_shift, doctype):
     skipped_invoices = []
     invoices_list = frappe.get_all(
@@ -159,6 +185,7 @@ def submit_printed_invoices(pos_opening_shift, doctype):
                         "invoice": invoice_doc.name,
                         "doctype": doctype,
                         "return_against": cancelled_return_against,
+                        "reason": "cancelled_return",
                     }
                 )
             )
@@ -167,6 +194,25 @@ def submit_printed_invoices(pos_opening_shift, doctype):
                 message=_(
                     "Skipped printed draft invoice {0} during close shift because Return Against {1} is cancelled."
                 ).format(invoice_doc.name, cancelled_return_against),
+            )
+            continue
+        if _held_unconfirmed_saldo(invoice_doc, doctype):
+            skipped_invoices.append(
+                frappe._dict(
+                    {
+                        "invoice": invoice_doc.name,
+                        "doctype": doctype,
+                        "reason": "saldo_unconfirmed",
+                    }
+                )
+            )
+            frappe.log_error(
+                title="POS Closing Shift Skipped Unconfirmed Saldo Draft",
+                message=_(
+                    "Skipped printed draft {0} during close shift: a Saldo recarga "
+                    "line is not yet confirmed (Success). Draft left editable — the "
+                    "cashier deletes it or retries the number from the Saldo panel."
+                ).format(invoice_doc.name),
             )
             continue
         invoice_doc.submit()
