@@ -59,6 +59,17 @@ DEFAULT_RETENTION_DAYS = 30
 WEBVITAL_MS_EVENTS = ("rum:lcp", "rum:fcp", "rum:inp", "rum:longtask")
 MAX_WEBVITAL_MS = 60000.0
 
+# QZ Tray fleet summary (get_qz_fleet). Each POS page session emits one
+# `pos:qz_connect` row per terminal carrying its printer inventory + cert
+# state; `warn:qz_failure` rows count print/connect errors. A terminal is
+# flagged "stale" only in a window wide enough (>= a week) for a 48h gap to
+# be meaningful — a 1-day window can't hold a 48h-old row.
+QZ_CONNECT_EVENT = "pos:qz_connect"
+QZ_FAILURE_EVENT = "warn:qz_failure"
+QZ_FLEET_MAX_ROWS = 5000
+QZ_STALE_HOURS = 48
+QZ_STALE_MIN_WINDOW_DAYS = 7
+
 
 def _sanitise_event(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Return a dict ready for `Document.update()` or None if the row
@@ -368,6 +379,140 @@ def get_pos_telemetry_summary(
         },
         "crashes": crashes,
         "events": summary,
+    }
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_qz_fleet(days: int = 7) -> dict:
+    """Per-terminal QZ Tray print-fleet summary for the ops dashboard.
+
+    One entry per terminal, built from the NEWEST ``pos:qz_connect`` row in
+    the window (printer inventory + cert state, emitted once per POS page
+    session) joined with the terminal's ``warn:qz_failure`` count over the
+    same window. Terminals with problems — no printers, a pinned printer that
+    isn't present, an untrusted cert, recent failures, or a stale last-seen —
+    are surfaced first via server-computed ``flags``.
+
+    Permission gate mirrors ``get_pos_telemetry_summary``: System Manager or
+    POS Manager only. Anyone can WRITE telemetry, but reading fleet state
+    across terminals is operator-level.
+    """
+    roles = set(frappe.get_roles(frappe.session.user))
+    if not ({"System Manager", "POS Manager"} & roles):
+        frappe.throw(_("Not permitted to read POS telemetry summaries"))
+
+    # `days` arrives as a str from HTTP; clamp to a sane 1..30 window.
+    days = max(1, min(cint(days) or 7, 30))
+    now = now_datetime()
+    since = frappe.utils.add_to_date(now, days=-days)
+
+    # Newest-first so the python-side dedupe below keeps the latest
+    # pos:qz_connect row per terminal. Bounded so a fleet that floods the
+    # window can't pull an unbounded result set.
+    rows = frappe.get_all(
+        "POS Telemetry Event",
+        filters={
+            "event_name": QZ_CONNECT_EVENT,
+            "event_timestamp": [">=", since],
+        },
+        fields=["terminal", "value", "event_timestamp", "metadata"],
+        order_by="event_timestamp desc",
+        limit_page_length=QZ_FLEET_MAX_ROWS,
+    )
+
+    # Failure counts per terminal over the SAME window, one aggregated query.
+    # Parameterised — `since` is the only bound value and the event name is a
+    # module constant, never user input.
+    failure_rows = frappe.db.sql(
+        """SELECT terminal, COUNT(*) AS failures
+             FROM `tabPOS Telemetry Event`
+            WHERE event_name = %(event)s
+              AND event_timestamp >= %(since)s
+         GROUP BY terminal""",
+        {"event": QZ_FAILURE_EVENT, "since": since},
+        as_dict=True,
+    )
+    failures_by_terminal: Dict[str, int] = {
+        (r.get("terminal") or ""): cint(r.get("failures")) for r in failure_rows
+    }
+
+    stale_cutoff = frappe.utils.add_to_date(now, hours=-QZ_STALE_HOURS)
+    window_supports_stale = days >= QZ_STALE_MIN_WINDOW_DAYS
+
+    seen: set = set()
+    terminals: List[Dict[str, Any]] = []
+    flag_totals: Dict[str, int] = {}
+    for row in rows:
+        terminal = row.get("terminal") or ""
+        if terminal in seen:
+            continue  # older row for a terminal we've already recorded
+        seen.add(terminal)
+
+        printer_count = cint(row.get("value"))
+
+        # Parse metadata defensively — a malformed payload must degrade to
+        # empty fields, never raise and drop the whole fleet response.
+        qz_version = default_printer = selected_printer = cert = ""
+        printers: List[str] = []
+        raw_meta = row.get("metadata")
+        if raw_meta:
+            try:
+                meta = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
+                if isinstance(meta, dict):
+                    qz_version = str(meta.get("qz_version") or "")
+                    default_printer = str(meta.get("default_printer") or "")
+                    selected_printer = str(meta.get("selected_printer") or "")
+                    cert = str(meta.get("cert") or "")
+                    raw_printers = meta.get("printers")
+                    if isinstance(raw_printers, list):
+                        printers = [str(p) for p in raw_printers]
+            except Exception:
+                pass
+
+        failures = failures_by_terminal.get(terminal, 0)
+        last_seen_dt = frappe.utils.get_datetime(row.get("event_timestamp"))
+
+        flags: List[str] = []
+        if printer_count == 0:
+            flags.append("no_printers")
+        if selected_printer and selected_printer not in printers:
+            flags.append("selected_missing")
+        if cert not in ("trusted",):
+            flags.append("cert_untrusted")
+        if window_supports_stale and last_seen_dt and last_seen_dt < stale_cutoff:
+            flags.append("stale")
+        if failures > 0:
+            flags.append("failures")
+
+        for flag in flags:
+            flag_totals[flag] = flag_totals.get(flag, 0) + 1
+
+        terminals.append(
+            {
+                "terminal": terminal,
+                "last_seen": last_seen_dt.isoformat() if last_seen_dt else None,
+                "qz_version": qz_version,
+                "printer_count": printer_count,
+                "printers": printers,
+                "default_printer": default_printer,
+                "selected_printer": selected_printer,
+                "cert": cert,
+                "failures": failures,
+                "flags": flags,
+            }
+        )
+
+    # Flagged terminals first (most flags first), then most-recent last_seen.
+    # ISO timestamps sort lexically in chronological order, so the string is a
+    # fine secondary key; a missing last_seen sorts last within its flag tier.
+    terminals.sort(
+        key=lambda t: (len(t["flags"]), t["last_seen"] or ""), reverse=True
+    )
+
+    return {
+        "window": {"days": days, "since": since.isoformat()},
+        "terminals": terminals,
+        "flag_totals": flag_totals,
     }
 
 

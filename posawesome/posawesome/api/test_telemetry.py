@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime
 import importlib.util
+import json
 import pathlib
 import sys
 import types
@@ -45,6 +46,17 @@ def _build_frappe_module() -> types.ModuleType:
     utils.getdate = lambda *a, **kw: datetime.date(2026, 6, 14)
     utils.now_datetime = lambda: datetime.datetime(2026, 6, 14, 12, 0, 0)
     utils.get_datetime = _get_datetime
+
+    def _add_to_date(value, days=0, hours=0, **kw):
+        # Enough of frappe.utils.add_to_date for get_qz_fleet (days + hours).
+        base = (
+            value
+            if isinstance(value, datetime.datetime)
+            else datetime.datetime(2026, 6, 14, 12, 0, 0)
+        )
+        return base + datetime.timedelta(days=days, hours=hours)
+
+    utils.add_to_date = _add_to_date
     frappe_module.utils = utils
     frappe_module.flt = utils.flt
 
@@ -242,6 +254,224 @@ class TelemetrySummaryOrderTests(unittest.TestCase):
         telemetry.frappe.get_roles = lambda user=None: ["POS Cashier"]
         with self.assertRaises(Exception):
             telemetry.get_pos_telemetry_summary()
+
+
+# Timestamps for the QZ fleet tests. now_datetime() is stubbed to 2026-06-14
+# 12:00:00, so RECENT/EARLIER sit within the 48h stale cutoff and OLD (4 days
+# back) sits beyond it.
+_QZ_RECENT = datetime.datetime(2026, 6, 14, 11, 0, 0)
+_QZ_EARLIER = datetime.datetime(2026, 6, 14, 9, 0, 0)
+_QZ_OLD = datetime.datetime(2026, 6, 10, 12, 0, 0)
+
+
+def _qz_connect_row(terminal, printer_count, ts, *, qz_version="2.2.0",
+                    printers=None, default_printer="", selected_printer="",
+                    cert="trusted", metadata="__DEFAULT__"):
+    """Build a pos:qz_connect row shaped like frappe.get_all output (metadata
+    is a JSON string, event_timestamp a datetime)."""
+    if metadata == "__DEFAULT__":
+        metadata = json.dumps({
+            "qz_version": qz_version,
+            "printers": list(printers) if printers is not None else [],
+            "default_printer": default_printer,
+            "selected_printer": selected_printer,
+            "cert": cert,
+        })
+    return {
+        "terminal": terminal,
+        "value": printer_count,
+        "event_timestamp": ts,
+        "metadata": metadata,
+    }
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class QzFleetTests(unittest.TestCase):
+    """get_qz_fleet: newest-per-terminal dedupe, defensive metadata parse,
+    server-computed flags, and the flagged-first / last_seen sort."""
+
+    def setUp(self):
+        telemetry.frappe.get_roles = lambda user=None: ["System Manager"]
+        self._connect_rows = []
+        self._failure_rows = []
+        self._captured = {}
+
+        def fake_get_all(doctype, filters=None, fields=None, order_by=None,
+                         limit_page_length=None, **kw):
+            self._captured["order_by"] = order_by
+            self._captured["limit"] = limit_page_length
+            self._captured["filters"] = filters
+            return list(self._connect_rows)
+
+        def fake_sql(query, values=None, as_dict=False, **kw):
+            self._captured["sql"] = query
+            self._captured["sql_values"] = values
+            return list(self._failure_rows)
+
+        telemetry.frappe.get_all = fake_get_all
+        telemetry.frappe.db = types.SimpleNamespace(sql=fake_sql)
+
+    def _by_terminal(self, res):
+        return {t["terminal"]: t for t in res["terminals"]}
+
+    def test_query_is_newest_first_and_bounded(self):
+        telemetry.get_qz_fleet()
+        self.assertEqual(self._captured["order_by"], "event_timestamp desc")
+        self.assertEqual(self._captured["limit"], telemetry.QZ_FLEET_MAX_ROWS)
+
+    def test_dedupe_keeps_newest_row_per_terminal(self):
+        # Newest-first (as the real query returns): the second T1 row is older
+        # and must be discarded.
+        self._connect_rows = [
+            _qz_connect_row("T1", 2, _QZ_RECENT, printers=["HP-1", "HP-2"]),
+            _qz_connect_row("T1", 5, _QZ_OLD, printers=["OLD"]),
+        ]
+        res = telemetry.get_qz_fleet()
+        self.assertEqual(len(res["terminals"]), 1)
+        t = res["terminals"][0]
+        self.assertEqual(t["terminal"], "T1")
+        self.assertEqual(t["printer_count"], 2)
+        self.assertEqual(t["printers"], ["HP-1", "HP-2"])
+        self.assertEqual(t["last_seen"], _QZ_RECENT.isoformat())
+
+    def test_flag_no_printers(self):
+        self._connect_rows = [_qz_connect_row("T1", 0, _QZ_RECENT, printers=[])]
+        t = telemetry.get_qz_fleet()["terminals"][0]
+        self.assertIn("no_printers", t["flags"])
+        self.assertEqual(t["printer_count"], 0)
+
+    def test_flag_selected_missing(self):
+        self._connect_rows = [
+            _qz_connect_row("MISS", 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="EPSON-X"),
+            _qz_connect_row("OK", 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="HP-1"),
+        ]
+        by = self._by_terminal(telemetry.get_qz_fleet())
+        self.assertIn("selected_missing", by["MISS"]["flags"])
+        self.assertNotIn("selected_missing", by["OK"]["flags"])
+
+    def test_flag_cert_untrusted(self):
+        self._connect_rows = [
+            _qz_connect_row("U", 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="HP-1", cert="untrusted"),
+            _qz_connect_row("K", 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="HP-1", cert="unknown"),
+            _qz_connect_row("T", 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="HP-1", cert="trusted"),
+        ]
+        by = self._by_terminal(telemetry.get_qz_fleet())
+        self.assertIn("cert_untrusted", by["U"]["flags"])
+        self.assertIn("cert_untrusted", by["K"]["flags"])
+        self.assertNotIn("cert_untrusted", by["T"]["flags"])
+
+    def test_failures_from_aggregate_query(self):
+        self._connect_rows = [
+            _qz_connect_row("F", 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="HP-1"),
+            _qz_connect_row("G", 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="HP-1"),
+        ]
+        self._failure_rows = [{"terminal": "F", "failures": 3}]
+        by = self._by_terminal(telemetry.get_qz_fleet())
+        self.assertEqual(by["F"]["failures"], 3)
+        self.assertIn("failures", by["F"]["flags"])
+        self.assertEqual(by["G"]["failures"], 0)
+        self.assertNotIn("failures", by["G"]["flags"])
+        # Aggregate query is parameterised, not string-interpolated.
+        self.assertIsInstance(self._captured["sql_values"], dict)
+        self.assertEqual(
+            self._captured["sql_values"]["event"], telemetry.QZ_FAILURE_EVENT
+        )
+
+    def test_malformed_metadata_does_not_raise(self):
+        self._connect_rows = [
+            _qz_connect_row("BAD", 1, _QZ_RECENT, metadata="{not valid json"),
+            _qz_connect_row("NONE", 1, _QZ_RECENT, metadata=None),
+            _qz_connect_row("LIST", 1, _QZ_RECENT, metadata=json.dumps([1, 2])),
+        ]
+        res = telemetry.get_qz_fleet()  # must not raise
+        by = self._by_terminal(res)
+        self.assertEqual(by["BAD"]["qz_version"], "")
+        self.assertEqual(by["BAD"]["printers"], [])
+        self.assertEqual(by["NONE"]["cert"], "")
+        self.assertEqual(by["LIST"]["default_printer"], "")
+
+    def test_days_clamped_to_1_30(self):
+        self.assertEqual(telemetry.get_qz_fleet(days=100)["window"]["days"], 30)
+        self.assertEqual(telemetry.get_qz_fleet(days="15")["window"]["days"], 15)
+        self.assertEqual(telemetry.get_qz_fleet(days=0)["window"]["days"], 7)
+        self.assertEqual(telemetry.get_qz_fleet(days=1)["window"]["days"], 1)
+
+    def test_window_since_is_now_minus_days(self):
+        res = telemetry.get_qz_fleet(days=7)
+        self.assertEqual(res["window"]["days"], 7)
+        self.assertEqual(res["window"]["since"], "2026-06-07T12:00:00")
+
+    def test_stale_only_flagged_in_wide_window(self):
+        self._connect_rows = [
+            _qz_connect_row("S", 1, _QZ_OLD, printers=["HP-1"],
+                            selected_printer="HP-1"),
+        ]
+        self.assertIn("stale", telemetry.get_qz_fleet(days=7)["terminals"][0]["flags"])
+        # A 1-day window can't meaningfully hold a 48h-old row → not computed.
+        self.assertNotIn(
+            "stale", telemetry.get_qz_fleet(days=1)["terminals"][0]["flags"]
+        )
+        # A recent row is never stale, even in a wide window.
+        self._connect_rows = [
+            _qz_connect_row("R", 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="HP-1"),
+        ]
+        self.assertNotIn(
+            "stale", telemetry.get_qz_fleet(days=7)["terminals"][0]["flags"]
+        )
+
+    def test_sort_most_flags_first_then_last_seen(self):
+        self._connect_rows = [
+            # 0 flags
+            _qz_connect_row("CLEAN", 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="HP-1", cert="trusted"),
+            # 1 flag (cert)
+            _qz_connect_row("ONE", 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="HP-1", cert="untrusted"),
+            # 2 flags (no_printers + cert)
+            _qz_connect_row("TWO", 0, _QZ_RECENT, printers=[], cert="untrusted"),
+        ]
+        order = [t["terminal"] for t in telemetry.get_qz_fleet()["terminals"]]
+        self.assertEqual(order, ["TWO", "ONE", "CLEAN"])
+
+    def test_sort_tiebreak_by_last_seen_desc(self):
+        # Same flag count (1: cert) — newer last_seen wins. Input order is the
+        # reverse of the expected output, proving the sort does the work.
+        self._connect_rows = [
+            _qz_connect_row("B", 1, _QZ_EARLIER, printers=["HP-1"],
+                            selected_printer="HP-1", cert="untrusted"),
+            _qz_connect_row("A", 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="HP-1", cert="untrusted"),
+        ]
+        order = [t["terminal"] for t in telemetry.get_qz_fleet()["terminals"]]
+        self.assertEqual(order, ["A", "B"])
+
+    def test_flag_totals_aggregated(self):
+        self._connect_rows = [
+            _qz_connect_row("X", 0, _QZ_RECENT, printers=[], cert="untrusted"),
+            _qz_connect_row("Y", 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="HP-1", cert="untrusted"),
+        ]
+        totals = telemetry.get_qz_fleet()["flag_totals"]
+        self.assertEqual(totals.get("cert_untrusted"), 2)
+        self.assertEqual(totals.get("no_printers"), 1)
+
+    def test_pos_manager_allowed(self):
+        telemetry.frappe.get_roles = lambda user=None: ["POS Manager"]
+        res = telemetry.get_qz_fleet()
+        self.assertIn("terminals", res)
+
+    def test_permission_gate_rejects_non_manager(self):
+        telemetry.frappe.get_roles = lambda user=None: ["POS Cashier"]
+        with self.assertRaises(Exception):
+            telemetry.get_qz_fleet()
 
 
 if __name__ == "__main__":
