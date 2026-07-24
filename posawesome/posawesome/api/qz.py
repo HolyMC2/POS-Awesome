@@ -183,20 +183,17 @@ def sign_message(message: str) -> str:
     return base64.b64encode(signature).decode("utf-8")
 
 
-@frappe.whitelist(methods=["POST"])
-def setup_qz_certificate() -> dict[str, str]:
-    """Generate self-signed certificate + private key for QZ Tray signing."""
-    frappe.only_for("System Manager")
+def _generate_qz_certificate() -> dict[str, str]:
+    """Write a fresh self-signed cert + private key pair into the QZ dir.
 
+    Unconditional: callers own the pre-existing-pair decision
+    (``setup_qz_certificate`` short-circuits on "exists";
+    ``rotate_qz_certificate`` archives the old pair first). Creates the QZ
+    dir, writes both files (key chmod 600), shows the operator import
+    reminder, and returns the shared "created" result dict.
+    """
     cert_path = _cert_path()
     key_path = _key_path()
-
-    if os.path.exists(cert_path) and os.path.exists(key_path):
-        return {
-            "status": "exists",
-            "message": _("QZ certificate already exists."),
-            "cert_path": cert_path,
-        }
 
     os.makedirs(_qz_dir(), exist_ok=True)
 
@@ -254,4 +251,65 @@ def setup_qz_certificate() -> dict[str, str]:
         "status": "created",
         "message": _("QZ certificate generated successfully."),
         "cert_path": cert_path,
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def setup_qz_certificate() -> dict[str, str]:
+    """Generate self-signed certificate + private key for QZ Tray signing."""
+    frappe.only_for("System Manager")
+
+    cert_path = _cert_path()
+    key_path = _key_path()
+
+    if os.path.exists(cert_path) and os.path.exists(key_path):
+        return {
+            "status": "exists",
+            "message": _("QZ certificate already exists."),
+            "cert_path": cert_path,
+        }
+
+    return _generate_qz_certificate()
+
+
+@frappe.whitelist(methods=["POST"])
+def rotate_qz_certificate() -> dict[str, str]:
+    """Archive the current QZ cert/key pair and generate a fresh one.
+
+    Operational consequence — coordinate the fleet re-deploy BEFORE calling:
+    rotation invalidates every terminal's trusted certificate. Each POS
+    machine keeps the OLD public cert imported into QZ Tray's trust store;
+    the moment this runs their signatures verify against a private key that
+    no longer exists, and QZ Tray shows the "Cannot verify trust - Invalid
+    Signature" Allow/Block dialog on every connection until the new bundle /
+    ``override.crt`` is re-deployed and re-imported on each machine.
+
+    When no pair exists yet this is equivalent to ``setup_qz_certificate``:
+    it generates the first pair and returns setup's "created" dict.
+    Otherwise it moves both ``digital-certificate.crt`` and
+    ``private-key.pem`` into ``private/qz/archive/<YYYYMMDD-HHMMSS>/``,
+    generates a fresh pair, and returns ``{"status": "rotated",
+    "cert_path": ..., "archived_to": ...}``.
+    """
+    frappe.only_for("System Manager")
+
+    cert_path = _cert_path()
+    key_path = _key_path()
+
+    # Nothing to rotate — first-time generation, same result as setup.
+    if not (os.path.exists(cert_path) and os.path.exists(key_path)):
+        return _generate_qz_certificate()
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    archive_dir = os.path.join(_qz_dir(), "archive", stamp)
+    os.makedirs(archive_dir, exist_ok=True)
+    # Same filesystem (both under _qz_dir()), so os.replace is an atomic move.
+    os.replace(cert_path, os.path.join(archive_dir, os.path.basename(cert_path)))
+    os.replace(key_path, os.path.join(archive_dir, os.path.basename(key_path)))
+
+    result = _generate_qz_certificate()
+    return {
+        "status": "rotated",
+        "cert_path": result["cert_path"],
+        "archived_to": archive_dir,
     }

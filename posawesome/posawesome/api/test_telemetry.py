@@ -29,9 +29,13 @@ def _build_frappe_module() -> types.ModuleType:
     frappe_module.throw = lambda message, exc=Exception: (_ for _ in ()).throw(
         Exception(message)
     )
+    frappe_module.PermissionError = type("PermissionError", (Exception,), {})
     frappe_module.whitelist = lambda *a, **kw: (lambda fn: fn)
     frappe_module.session = types.SimpleNamespace(user="cashier@doco")
     frappe_module.generate_hash = lambda length=10: "0" * length
+    # site_config gate for ingest_terminal_heartbeat; unset by default so the
+    # fail-closed path is the default. Heartbeat tests override per-case.
+    frappe_module.conf = {}
 
     def _get_datetime(value):
         # Mirror frappe.utils.get_datetime enough for the cap tests: the
@@ -47,14 +51,15 @@ def _build_frappe_module() -> types.ModuleType:
     utils.now_datetime = lambda: datetime.datetime(2026, 6, 14, 12, 0, 0)
     utils.get_datetime = _get_datetime
 
-    def _add_to_date(value, days=0, hours=0, **kw):
-        # Enough of frappe.utils.add_to_date for get_qz_fleet (days + hours).
+    def _add_to_date(value, days=0, hours=0, minutes=0, **kw):
+        # Enough of frappe.utils.add_to_date for get_qz_fleet: days (window),
+        # hours (stale cutoff) + minutes (beacon offline cutoff).
         base = (
             value
             if isinstance(value, datetime.datetime)
             else datetime.datetime(2026, 6, 14, 12, 0, 0)
         )
-        return base + datetime.timedelta(days=days, hours=hours)
+        return base + datetime.timedelta(days=days, hours=hours, minutes=minutes)
 
     utils.add_to_date = _add_to_date
     frappe_module.utils = utils
@@ -262,6 +267,9 @@ class TelemetrySummaryOrderTests(unittest.TestCase):
 _QZ_RECENT = datetime.datetime(2026, 6, 14, 11, 0, 0)
 _QZ_EARLIER = datetime.datetime(2026, 6, 14, 9, 0, 0)
 _QZ_OLD = datetime.datetime(2026, 6, 10, 12, 0, 0)
+# Beacon offline cutoff is 35 min (now - 0:35 = 11:25). A beat at 11:50 is
+# online; RECENT/EARLIER/OLD all fall the offline side of that line.
+_QZ_BEAT_FRESH = datetime.datetime(2026, 6, 14, 11, 50, 0)
 
 
 def _qz_connect_row(terminal, printer_count, ts, *, qz_version="2.2.0",
@@ -285,6 +293,12 @@ def _qz_connect_row(terminal, printer_count, ts, *, qz_version="2.2.0",
     }
 
 
+def _qz_beacon_row(terminal, ts):
+    """Build a pos:qz_heartbeat row shaped like frappe.get_all output
+    (get_qz_fleet only reads terminal + event_timestamp for beacons)."""
+    return {"terminal": terminal, "event_timestamp": ts}
+
+
 @unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class QzFleetTests(unittest.TestCase):
     """get_qz_fleet: newest-per-terminal dedupe, defensive metadata parse,
@@ -293,6 +307,7 @@ class QzFleetTests(unittest.TestCase):
     def setUp(self):
         telemetry.frappe.get_roles = lambda user=None: ["System Manager"]
         self._connect_rows = []
+        self._beacon_rows = []
         self._failure_rows = []
         self._captured = {}
 
@@ -301,6 +316,10 @@ class QzFleetTests(unittest.TestCase):
             self._captured["order_by"] = order_by
             self._captured["limit"] = limit_page_length
             self._captured["filters"] = filters
+            # get_qz_fleet now issues two get_all calls (connect + heartbeat);
+            # dispatch on the event_name filter so each sees its own fixture.
+            if (filters or {}).get("event_name") == telemetry.QZ_HEARTBEAT_EVENT:
+                return list(self._beacon_rows)
             return list(self._connect_rows)
 
         def fake_sql(query, values=None, as_dict=False, **kw):
@@ -463,6 +482,49 @@ class QzFleetTests(unittest.TestCase):
         self.assertEqual(totals.get("cert_untrusted"), 2)
         self.assertEqual(totals.get("no_printers"), 1)
 
+    # --- beacons (pos:qz_heartbeat, hostname-keyed, separate from terminals) ---
+
+    def test_beacons_newest_per_terminal(self):
+        # Newest-first (as the real query returns): the older host-a beat is
+        # discarded, and beacons are keyed independently of the terminals list.
+        self._beacon_rows = [
+            _qz_beacon_row("host-a", _QZ_BEAT_FRESH),
+            _qz_beacon_row("host-a", _QZ_RECENT),
+        ]
+        beacons = telemetry.get_qz_fleet()["beacons"]
+        self.assertEqual(len(beacons), 1)
+        self.assertEqual(beacons[0]["terminal"], "host-a")
+        self.assertEqual(beacons[0]["last_beat"], _QZ_BEAT_FRESH.isoformat())
+        self.assertFalse(beacons[0]["offline"])
+
+    def test_beacon_offline_flag_past_threshold(self):
+        # 10-min-old beat is online; a 60-min-old beat is past the 35-min line.
+        self._beacon_rows = [_qz_beacon_row("fresh", _QZ_BEAT_FRESH)]
+        self.assertFalse(telemetry.get_qz_fleet()["beacons"][0]["offline"])
+        self._beacon_rows = [_qz_beacon_row("stale", _QZ_RECENT)]
+        self.assertTrue(telemetry.get_qz_fleet()["beacons"][0]["offline"])
+
+    def test_beacons_sorted_offline_first(self):
+        # Input online-first; the offline host must sort ahead of it.
+        self._beacon_rows = [
+            _qz_beacon_row("online", _QZ_BEAT_FRESH),
+            _qz_beacon_row("offline", _QZ_RECENT),
+        ]
+        order = [b["terminal"] for b in telemetry.get_qz_fleet()["beacons"]]
+        self.assertEqual(order, ["offline", "online"])
+
+    def test_flag_totals_offline_count(self):
+        self._beacon_rows = [
+            _qz_beacon_row("off1", _QZ_RECENT),
+            _qz_beacon_row("off2", _QZ_EARLIER),
+            _qz_beacon_row("on1", _QZ_BEAT_FRESH),
+        ]
+        self.assertEqual(telemetry.get_qz_fleet()["flag_totals"].get("offline"), 2)
+
+    def test_flag_totals_omits_offline_when_all_online(self):
+        self._beacon_rows = [_qz_beacon_row("on", _QZ_BEAT_FRESH)]
+        self.assertNotIn("offline", telemetry.get_qz_fleet()["flag_totals"])
+
     def test_pos_manager_allowed(self):
         telemetry.frappe.get_roles = lambda user=None: ["POS Manager"]
         res = telemetry.get_qz_fleet()
@@ -472,6 +534,90 @@ class QzFleetTests(unittest.TestCase):
         telemetry.frappe.get_roles = lambda user=None: ["POS Cashier"]
         with self.assertRaises(Exception):
             telemetry.get_qz_fleet()
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class TerminalHeartbeatTests(unittest.TestCase):
+    """ingest_terminal_heartbeat: fail-closed shared-secret gate, per-terminal
+    insert throttle, and the single pos:qz_heartbeat row a beat writes."""
+
+    def setUp(self):
+        self._inserted = []
+        self._committed = False
+        self._cache_store = {}
+
+        def fake_bulk_insert(doctype, fields=None, values=None,
+                             ignore_duplicates=False, **kw):
+            self._insert_doctype = doctype
+            for row in values:
+                self._inserted.append(dict(zip(fields, row)))
+
+        def fake_commit():
+            self._committed = True
+
+        telemetry.frappe.db = types.SimpleNamespace(
+            bulk_insert=fake_bulk_insert, commit=fake_commit
+        )
+
+        store = self._cache_store
+
+        class _Cache:
+            def get_value(self, key):
+                return store.get(key)
+
+            def set_value(self, key, value, expires_in_sec=None):
+                store[key] = (value, expires_in_sec)
+
+        telemetry.frappe.cache = lambda: _Cache()
+        telemetry.frappe.conf = {"qz_heartbeat_token": "s3cr3t"}
+
+    def test_valid_token_inserts_row_and_ok(self):
+        res = telemetry.ingest_terminal_heartbeat(token="s3cr3t", terminal="POS-01")
+        self.assertEqual(res, {"ok": True})
+        self.assertEqual(len(self._inserted), 1)
+        row = self._inserted[0]
+        self.assertEqual(row["event_name"], telemetry.QZ_HEARTBEAT_EVENT)
+        self.assertEqual(row["value"], 1)
+        self.assertEqual(row["terminal"], "POS-01")
+        self.assertEqual(json.loads(row["metadata"]), {"source": "beacon"})
+        self.assertTrue(self._committed)
+        # Throttle key set only on insert.
+        self.assertIn("qz_hb:POS-01", self._cache_store)
+
+    def test_wrong_token_throws_and_no_insert(self):
+        with self.assertRaises(Exception):
+            telemetry.ingest_terminal_heartbeat(token="nope", terminal="POS-01")
+        self.assertEqual(self._inserted, [])
+
+    def test_unset_site_token_throws_even_on_empty_match(self):
+        # An unconfigured secret must never be a bypass, even token="" == "".
+        telemetry.frappe.conf = {}
+        with self.assertRaises(Exception):
+            telemetry.ingest_terminal_heartbeat(token="", terminal="POS-01")
+        self.assertEqual(self._inserted, [])
+
+    def test_rate_limited_second_beat_inserts_nothing(self):
+        telemetry.ingest_terminal_heartbeat(token="s3cr3t", terminal="POS-01")
+        self.assertEqual(len(self._inserted), 1)
+        res = telemetry.ingest_terminal_heartbeat(token="s3cr3t", terminal="POS-01")
+        self.assertEqual(res, {"ok": True})
+        self.assertEqual(len(self._inserted), 1)  # no second row within TTL
+
+    def test_terminal_capped_at_64(self):
+        telemetry.ingest_terminal_heartbeat(token="s3cr3t", terminal="H" * 100)
+        self.assertEqual(
+            self._inserted[0]["terminal"], "H" * telemetry.MAX_TERMINAL_LEN
+        )
+
+    def test_empty_terminal_rejected(self):
+        with self.assertRaises(Exception):
+            telemetry.ingest_terminal_heartbeat(token="s3cr3t", terminal="   ")
+        self.assertEqual(self._inserted, [])
+
+    def test_oversized_token_rejected(self):
+        with self.assertRaises(Exception):
+            telemetry.ingest_terminal_heartbeat(token="x" * 300, terminal="POS-01")
+        self.assertEqual(self._inserted, [])
 
 
 if __name__ == "__main__":

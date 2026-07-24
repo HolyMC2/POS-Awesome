@@ -24,6 +24,7 @@ Notes
 
 from __future__ import annotations
 
+import hmac
 import json
 import time
 from typing import Any, Dict, Iterable, List, Optional
@@ -69,6 +70,17 @@ QZ_FAILURE_EVENT = "warn:qz_failure"
 QZ_FLEET_MAX_ROWS = 5000
 QZ_STALE_HOURS = 48
 QZ_STALE_MIN_WINDOW_DAYS = 7
+
+# QZ Tray OS-level liveness beacon (ingest_terminal_heartbeat +
+# get_qz_fleet "beacons"). A scheduled task installed by the QZ bundle
+# (Windows schtasks / Linux cron) POSTs {token, terminal:<hostname>} every
+# ~15 min; each accepted beat writes one `pos:qz_heartbeat` row. Inserts are
+# throttled to one per terminal per QZ_HEARTBEAT_TTL_SECONDS so a
+# misconfigured beacon can't flood the table. A terminal is "offline" once
+# its newest beat is older than QZ_OFFLINE_MINUTES — >2 missed 15-min beats.
+QZ_HEARTBEAT_EVENT = "pos:qz_heartbeat"
+QZ_HEARTBEAT_TTL_SECONDS = 300
+QZ_OFFLINE_MINUTES = 35
 
 
 def _sanitise_event(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -509,11 +521,165 @@ def get_qz_fleet(days: int = 7) -> dict:
         key=lambda t: (len(t["flags"]), t["last_seen"] or ""), reverse=True
     )
 
+    # QZ beacons: OS-level heartbeats (ingest_terminal_heartbeat), keyed by
+    # the machine hostname the beacon reports. Deliberately NOT joined to the
+    # `terminals` list above — those are keyed by the browser-generated POS
+    # terminal UUID from pos:qz_connect, a different namespace. One host can
+    # run several browser terminals (and a browser terminal can move between
+    # hosts), so the two views are reported side by side, never merged.
+    beacon_rows = frappe.get_all(
+        "POS Telemetry Event",
+        filters={
+            "event_name": QZ_HEARTBEAT_EVENT,
+            "event_timestamp": [">=", since],
+        },
+        fields=["terminal", "event_timestamp"],
+        order_by="event_timestamp desc",
+        limit_page_length=QZ_FLEET_MAX_ROWS,
+    )
+
+    offline_cutoff = frappe.utils.add_to_date(now, minutes=-QZ_OFFLINE_MINUTES)
+    beacon_seen: set = set()
+    beacons: List[Dict[str, Any]] = []
+    offline_count = 0
+    for row in beacon_rows:
+        terminal = row.get("terminal") or ""
+        if terminal in beacon_seen:
+            continue  # older beat for a host we've already recorded
+        beacon_seen.add(terminal)
+
+        last_beat_dt = frappe.utils.get_datetime(row.get("event_timestamp"))
+        # Beat cadence is ~15 min; offline once the newest beat is older than
+        # QZ_OFFLINE_MINUTES (35 => >2 missed beats). Always meaningful — the
+        # window is >= 1 day, so no min-window guard as on `stale`.
+        offline = bool(last_beat_dt and last_beat_dt < offline_cutoff)
+        if offline:
+            offline_count += 1
+        beacons.append(
+            {
+                "terminal": terminal,
+                "last_beat": last_beat_dt.isoformat() if last_beat_dt else None,
+                "offline": offline,
+            }
+        )
+
+    # Offline hosts first, then most-recent last_beat. Same reverse-sorted
+    # (bool, iso-timestamp) key shape as the terminals sort above.
+    beacons.sort(key=lambda b: (b["offline"], b["last_beat"] or ""), reverse=True)
+
+    if offline_count > 0:
+        flag_totals["offline"] = offline_count
+
     return {
         "window": {"days": days, "since": since.isoformat()},
         "terminals": terminals,
+        "beacons": beacons,
         "flag_totals": flag_totals,
     }
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def ingest_terminal_heartbeat(token: str = "", terminal: str = "") -> dict:
+    """OS-level QZ Tray liveness beacon (public, fail-closed).
+
+    A scheduled task installed by the QZ bundle (Windows ``schtasks`` /
+    Linux ``cron``) POSTs ``{token, terminal:<hostname>}`` every ~15 min so
+    the fleet view can distinguish a machine that stopped beaconing (powered
+    off, lost network, task removed) from one that is merely idle. This runs
+    as Guest on the public internet, so security is fail-closed:
+
+      - A shared secret from ``site_config`` (``qz_heartbeat_token``) gates
+        the endpoint. When it is unset/empty EVERY call is rejected — an
+        unconfigured secret is never treated as "no auth required".
+      - The presented token is compared with ``hmac.compare_digest`` and, on
+        any failure, we raise the same generic permission error without ever
+        echoing the token or the expected value (no logs, no error text).
+      - One accepted beat writes a single ``pos:qz_heartbeat`` row. A per-
+        terminal cache key throttles inserts to one / ``QZ_HEARTBEAT_TTL_
+        SECONDS``; extra beats inside that window are accepted silently
+        (``{"ok": True}``) without a row so a misconfigured beacon can't
+        flood the table.
+
+    Returns ``{"ok": True}`` on accept, whether or not a row was written.
+    """
+    expected = frappe.conf.get("qz_heartbeat_token") or ""
+    presented = token or ""
+    # Fail closed: unconfigured secret (falsy `expected`) rejects everyone,
+    # an over-long token is rejected before it is compared, and a mismatch is
+    # indistinguishable from either. `or` short-circuits so compare_digest
+    # only runs on a configured secret and a bounded input. Never surface the
+    # token or expected value in the error.
+    if (
+        not expected
+        or len(presented) > 256
+        or not hmac.compare_digest(
+            presented.encode("utf-8"), expected.encode("utf-8")
+        )
+    ):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+    terminal = (terminal or "").strip()[:MAX_TERMINAL_LEN]
+    if not terminal:
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+    # Per-terminal insert throttle. Key present => a beat already landed in
+    # this window; accept silently without another row. Set only on insert.
+    cache = frappe.cache()
+    rate_key = f"qz_hb:{terminal}"
+    if cache.get_value(rate_key):
+        return {"ok": True}
+
+    # One raw row via the same bulk_insert path ingest() uses — a DB-level
+    # write that (like ingest) bypasses the ORM + permission layer, which is
+    # exactly what we want for an append-only observability beat written by a
+    # Guest request.
+    now = now_datetime()
+    session_user = frappe.session.user
+    frappe.db.bulk_insert(
+        "POS Telemetry Event",
+        fields=[
+            "name",
+            "owner",
+            "creation",
+            "modified",
+            "modified_by",
+            "docstatus",
+            "idx",
+            "event_name",
+            "value",
+            "terminal",
+            "user",
+            "pos_profile",
+            "build_version",
+            "user_agent",
+            "event_timestamp",
+            "metadata",
+        ],
+        values=[
+            (
+                frappe.generate_hash(length=10),
+                session_user,
+                now,
+                now,
+                session_user,
+                0,
+                0,
+                QZ_HEARTBEAT_EVENT,
+                1,
+                terminal,
+                session_user,
+                None,
+                None,
+                None,
+                now,
+                json.dumps({"source": "beacon"}),
+            )
+        ],
+        ignore_duplicates=True,
+    )
+    cache.set_value(rate_key, 1, expires_in_sec=QZ_HEARTBEAT_TTL_SECONDS)
+    frappe.db.commit()
+    return {"ok": True}
 
 
 def prune_old_events(days: int = DEFAULT_RETENTION_DAYS):
