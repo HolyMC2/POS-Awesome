@@ -16,6 +16,8 @@ const qzMock = vi.hoisted(() => {
 		}),
 		setClosedCallbacks: vi.fn(),
 		findPrinters: vi.fn(async () => [] as string[]),
+		getDefaultPrinter: vi.fn(async () => "" as string | undefined),
+		getVersion: vi.fn(async () => "2.2.5"),
 		setCertificatePromise: vi.fn(),
 		setSignatureAlgorithm: vi.fn(),
 		setSignaturePromise: vi.fn(),
@@ -42,6 +44,10 @@ vi.mock("qz-tray", () => ({
 		},
 		printers: {
 			find: qzMock.findPrinters,
+			getDefault: qzMock.getDefaultPrinter,
+		},
+		api: {
+			getVersion: qzMock.getVersion,
 		},
 		security: {
 			setCertificatePromise: qzMock.setCertificatePromise,
@@ -158,6 +164,44 @@ describe("qzTray service", () => {
 		await qzTray.findQzPrinters();
 
 		expect(qzTray.selectedQzPrinter.value).toBe("Printer A");
+	});
+
+	it("emits pos:qz_connect inventory once per session and re-warms printers on reconnect", async () => {
+		const qzTray = await import("../src/posapp/services/qzTray");
+		qzMock.findPrinters.mockResolvedValue(["Receipt Printer", "Kitchen"]);
+		qzMock.getDefaultPrinter.mockResolvedValue("Receipt Printer");
+
+		await expect(qzTray.connectQzTray({ userInitiated: true })).resolves.toBe(
+			true,
+		);
+
+		await vi.waitFor(() => {
+			expect(trackMock).toHaveBeenCalledWith(
+				"pos:qz_connect",
+				2,
+				expect.objectContaining({
+					qz_version: "2.2.5",
+					printers: ["Receipt Printer", "Kitchen"],
+					default_printer: "Receipt Printer",
+					selected_printer: "Receipt Printer",
+				}),
+			);
+		});
+		expect(qzTray.qzPrinters.value).toEqual(["Receipt Printer", "Kitchen"]);
+
+		// Reconnect (socket dropped): printer list re-warms, but the
+		// inventory row stays once per page session.
+		qzMock.setActive(false);
+		await expect(qzTray.connectQzTray({ userInitiated: true })).resolves.toBe(
+			true,
+		);
+		await vi.waitFor(() =>
+			expect(qzMock.findPrinters.mock.calls.length).toBeGreaterThanOrEqual(2),
+		);
+		const inventoryRows = trackMock.mock.calls.filter(
+			(call) => call[0] === "pos:qz_connect",
+		);
+		expect(inventoryRows).toHaveLength(1);
 	});
 
 	it("surfaces a toast + telemetry when a QZ print falls back to browser print", async () => {
