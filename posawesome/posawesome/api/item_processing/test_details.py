@@ -18,6 +18,7 @@ def _install_framework_stubs():
     frappe_module = types.ModuleType("frappe")
     frappe_utils = types.ModuleType("frappe.utils")
     frappe_utils.nowdate = lambda: "2026-03-21"
+    frappe_utils.cint = lambda value: int(value or 0)
 
     class _FrappeDict(AttrDict):
         pass
@@ -179,6 +180,62 @@ class TestGetItemDetailNormalization(unittest.TestCase):
 
         self.assertIs(captured["item"], item)
         self.assertIsInstance(captured["doc"], self.frappe._dict)
+
+    def test_payload_always_carries_is_stock_item_from_db(self):
+        """erpnext get_item_details omits is_stock_item; the SPA overwrites
+        its cart row with this payload, so a missing key clobbered the flag
+        to undefined and non-stock rows inherited the stock qty clamp
+        (removed from cart on any edit). The payload must echo DB truth."""
+
+        def run(db_is_stock_item, client_flag):
+            with (
+                patch.object(self.details, "get_stock_availability", return_value=7),
+                patch.object(self.details, "get_batches", return_value=[]),
+                patch.object(self.details.frappe, "get_all", return_value=[]),
+                patch.object(
+                    self.details.frappe.db,
+                    "get_value",
+                    side_effect=lambda doctype, name, field, as_dict=False: (
+                        {
+                            "max_discount": 0,
+                            "allow_negative_stock": 0,
+                            "stock_uom": "Nos",
+                            "is_stock_item": db_is_stock_item,
+                        }
+                        if doctype == "Item" and as_dict
+                        else "USD"
+                    ),
+                ),
+                patch.dict(
+                    sys.modules,
+                    {
+                        "erpnext.stock.get_item_details": types.SimpleNamespace(
+                            get_item_details=lambda *a, **k: {}
+                        )
+                    },
+                ),
+            ):
+                item = {"item_code": "ITEM-003"}
+                if client_flag is not None:
+                    item["is_stock_item"] = client_flag
+                return self.details.get_item_detail(
+                    item,
+                    doc=self.frappe._dict({"customer": "Test Customer"}),
+                    warehouse="WH-001",
+                    company="Test Company",
+                )
+
+        # Non-stock in DB: flag present as 0, no actual_qty computed —
+        # even when the client omits the flag entirely.
+        res = run(db_is_stock_item=0, client_flag=None)
+        self.assertEqual(res["is_stock_item"], 0)
+        self.assertNotIn("actual_qty", res)
+
+        # Stock item in DB: flag 1 + actual_qty computed, even when a stale
+        # client claims non-stock (DB wins over the client-supplied flag).
+        res = run(db_is_stock_item=1, client_flag=0)
+        self.assertEqual(res["is_stock_item"], 1)
+        self.assertEqual(res["actual_qty"], 7)
 
 
 if __name__ == "__main__":

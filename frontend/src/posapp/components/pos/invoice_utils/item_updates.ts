@@ -340,7 +340,11 @@ export function _applyItemDetailPayload(
 		item.serial_no = data.serial_no;
 	}
 	item.batch_no = data.batch_no;
-	item.is_stock_item = data.is_stock_item;
+	// A payload without the key must not clobber a known flag to undefined —
+	// the row would then be treated as a stock item by the qty-clamp path.
+	if (data.is_stock_item !== undefined && data.is_stock_item !== null) {
+		item.is_stock_item = data.is_stock_item;
+	}
 	item.is_fixed_asset = data.is_fixed_asset;
 	item.allow_alternative_item = data.allow_alternative_item;
 

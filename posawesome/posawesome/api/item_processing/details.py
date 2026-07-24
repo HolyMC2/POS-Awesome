@@ -1,5 +1,5 @@
 import frappe
-from frappe.utils import nowdate
+from frappe.utils import cint, nowdate
 from posawesome.posawesome.api.item_fetchers import ItemDetailAggregator, get_batches
 from posawesome.posawesome.api.item_processing.stock import get_stock_availability
 from posawesome.posawesome.api.utils import _ensure_pos_profile, log_perf_event
@@ -145,7 +145,7 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
         frappe.db.get_value(
             "Item",
             item_code,
-            ["max_discount", "allow_negative_stock", "stock_uom"],
+            ["max_discount", "allow_negative_stock", "stock_uom", "is_stock_item"],
             as_dict=True,
         )
         or {}
@@ -157,7 +157,14 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
         doc,
         overwrite_warehouse=False,
     )
-    if item.get("is_stock_item") and warehouse:
+    # DB truth, not the client-supplied flag: erpnext's get_item_details
+    # omits is_stock_item, and the SPA overwrites its cart row with this
+    # payload — a missing key here clobbered the flag to undefined and
+    # non-stock rows then inherited the stock clamp (removed from cart on
+    # any edit under posa_block_sale_beyond_available_qty).
+    is_stock_item = cint(item_meta.get("is_stock_item"))
+    res["is_stock_item"] = is_stock_item
+    if is_stock_item and warehouse:
         if item.get("has_batch_no"):
             res["actual_qty"] = non_expired_batch_qty
         else:

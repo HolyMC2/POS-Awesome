@@ -82,7 +82,12 @@ export function calc_stock_qty(context: any, item: any, value: any) {
 }
 
 export function update_qty_limits(context: any, item: any) {
-	if (item && item.is_stock_item === 0) {
+	// Clamp only KNOWN stock items. Rows loaded from a saved doc (Sales
+	// Invoice Item has no is_stock_item column) or hydrated from a payload
+	// that omits the flag would otherwise inherit max_qty=0 from the
+	// availability coordinator and be removed from the cart on any edit.
+	// Server-side stock validation still enforces at pay/submit.
+	if (item && !parseBooleanSetting(item.is_stock_item)) {
 		item.max_qty = undefined;
 		item.disable_increment = false;
 		return;
