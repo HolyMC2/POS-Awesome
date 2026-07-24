@@ -105,6 +105,30 @@
 					}}
 				</div>
 
+				<!-- Terminal beacons — OS-level heartbeats keyed by hostname.
+				     Deliberately separate from the fleet table: fleet rows are
+				     keyed by the browser's terminal UUID and the two cannot be
+				     joined automatically. -->
+				<div v-if="fleetBeacons.length" class="qz-fleet-row">
+					<h4 class="qz-fleet-row__title">{{ __("Terminal beacons") }}</h4>
+					<div class="qz-beacon-grid">
+						<div
+							v-for="b of fleetBeacons"
+							:key="b.terminal"
+							class="qz-stat-tile"
+						>
+							<div class="qz-stat-tile__label">{{ b.terminal }}</div>
+							<div
+								class="qz-stat-tile__value qz-stat-tile__value--small"
+								:class="{ 'qz-stat-tile__value--bad': b.offline }"
+							>
+								{{ b.offline ? __("OFFLINE") : __("online") }}
+								· {{ b.last_beat || "—" }}
+							</div>
+						</div>
+					</div>
+				</div>
+
 				<!-- Printer fleet — one row per terminal (get_qz_fleet, 7d) -->
 				<div class="qz-fleet-row">
 					<h4 class="qz-fleet-row__title">
@@ -236,9 +260,16 @@ type FleetTerminal = {
 	flags?: string[];
 };
 
+type FleetBeacon = {
+	terminal: string;
+	last_beat?: string;
+	offline?: boolean;
+};
+
 type FleetPayload = {
 	window?: { days?: number; since?: string };
 	terminals?: FleetTerminal[];
+	beacons?: FleetBeacon[];
 	flag_totals?: Record<string, number>;
 };
 
@@ -335,6 +366,8 @@ const windowLabel = computed(() => {
 const fleetTerminals = computed<FleetTerminal[]>(
 	() => fleet.value?.terminals ?? [],
 );
+
+const fleetBeacons = computed<FleetBeacon[]>(() => fleet.value?.beacons ?? []);
 
 const fleetWindowLabel = computed(() => {
 	const days = fleet.value?.window?.days;
@@ -479,6 +512,12 @@ onMounted(() => {
 	font-weight: 400;
 	opacity: 0.7;
 	margin-left: 6px;
+}
+
+.qz-beacon-grid {
+	display: grid;
+	gap: 8px;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .qz-fleet-table-wrap {
