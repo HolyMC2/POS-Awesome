@@ -166,6 +166,48 @@ describe("qzTray service", () => {
 		expect(qzTray.selectedQzPrinter.value).toBe("Printer A");
 	});
 
+	it("auto-persists the only printer when nothing is saved and no profile default exists", async () => {
+		qzMock.setActive(true);
+		qzMock.findPrinters.mockResolvedValue(["Solo Printer"]);
+
+		const qzTray = await import("../src/posapp/services/qzTray");
+
+		await qzTray.findQzPrinters();
+
+		expect(window.localStorage.getItem("posa_qz_printer_name")).toBe(
+			"Solo Printer",
+		);
+		expect(qzTray.selectedQzPrinter.value).toBe("Solo Printer");
+	});
+
+	it("does not auto-persist a single printer when the POS Profile pins a default", async () => {
+		qzMock.posProfile.value = {
+			posa_qz_printer_name: "Solo Printer",
+		};
+		qzMock.setActive(true);
+		qzMock.findPrinters.mockResolvedValue(["Solo Printer"]);
+
+		const qzTray = await import("../src/posapp/services/qzTray");
+
+		await qzTray.findQzPrinters();
+
+		// Profile pin resolves the selection; it must not be copied into a
+		// browser-local override.
+		expect(qzTray.selectedQzPrinter.value).toBe("Solo Printer");
+		expect(window.localStorage.getItem("posa_qz_printer_name")).toBeNull();
+	});
+
+	it("does not auto-persist when two or more printers are discovered", async () => {
+		qzMock.setActive(true);
+		qzMock.findPrinters.mockResolvedValue(["Printer A", "Printer B"]);
+
+		const qzTray = await import("../src/posapp/services/qzTray");
+
+		await qzTray.findQzPrinters();
+
+		expect(window.localStorage.getItem("posa_qz_printer_name")).toBeNull();
+	});
+
 	it("emits pos:qz_connect inventory once per session and re-warms printers on reconnect", async () => {
 		const qzTray = await import("../src/posapp/services/qzTray");
 		qzMock.findPrinters.mockResolvedValue(["Receipt Printer", "Kitchen"]);

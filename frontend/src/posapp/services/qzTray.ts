@@ -592,6 +592,16 @@ export async function findQzPrinters(): Promise<string[]> {
 
 		qzPrinters.value = printers;
 		setResolvedQzPrinter(resolvePreferredPrinter(printers));
+
+		// Single-printer terminals self-configure: with nothing saved and no
+		// profile pin, persist the only printer so the selection sticks with
+		// zero operator input. Ambiguity — 0 or 2+ printers, an existing save,
+		// or a profile pin — is left unset rather than guessed.
+		const onlyPrinter = printers.length === 1 ? printers[0] : "";
+		if (onlyPrinter && !getSavedPrinterName() && !getProfileDefaultPrinterName()) {
+			savePrinterName(onlyPrinter);
+		}
+
 		validateProfilePinnedPrinter(printers);
 
 		return printers;

@@ -66,7 +66,7 @@
 					<div class="qz-failure-grid">
 						<div class="qz-stat-tile">
 							<div class="qz-stat-tile__label">
-								{{ __("qz:failure count") }}
+								{{ __("warn:qz_failure count") }}
 							</div>
 							<div
 								class="qz-stat-tile__value"
@@ -104,6 +104,88 @@
 						)
 					}}
 				</div>
+
+				<!-- Printer fleet — one row per terminal (get_qz_fleet, 7d) -->
+				<div class="qz-fleet-row">
+					<h4 class="qz-fleet-row__title">
+						{{ __("Printer fleet") }}
+						<span v-if="fleetWindowLabel" class="qz-fleet-row__window">
+							{{ fleetWindowLabel }}
+						</span>
+					</h4>
+
+					<div v-if="fleetError" class="qz-telemetry-card__error">
+						{{ fleetError }}
+					</div>
+
+					<div
+						v-else-if="!fleetTerminals.length"
+						class="qz-telemetry-card__empty"
+					>
+						{{ __("No terminals reported QZ activity in the window.") }}
+					</div>
+
+					<div v-else class="qz-fleet-table-wrap">
+						<v-table density="compact" class="qz-fleet-table">
+							<thead>
+								<tr>
+									<th>{{ __("Terminal") }}</th>
+									<th>{{ __("Last seen") }}</th>
+									<th>{{ __("QZ version") }}</th>
+									<th>{{ __("Printers") }}</th>
+									<th>{{ __("Selected") }}</th>
+									<th>{{ __("Default") }}</th>
+									<th>{{ __("Cert") }}</th>
+									<th>{{ __("Failures") }}</th>
+									<th>{{ __("Flags") }}</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr v-for="t of fleetTerminals" :key="t.terminal">
+									<td class="qz-fleet-cell--id">{{ t.terminal }}</td>
+									<td>{{ t.last_seen || "—" }}</td>
+									<td>{{ t.qz_version || "—" }}</td>
+									<td>
+										<v-tooltip
+											v-if="t.printers && t.printers.length"
+											location="top"
+										>
+											<template #activator="{ props }">
+												<span v-bind="props" class="qz-fleet-printers">
+													{{ t.printer_count ?? t.printers.length }}
+												</span>
+											</template>
+											<span>{{ t.printers.join(", ") }}</span>
+										</v-tooltip>
+										<span v-else>{{ t.printer_count ?? 0 }}</span>
+									</td>
+									<td>{{ t.selected_printer || "—" }}</td>
+									<td>{{ t.default_printer || "—" }}</td>
+									<td>{{ t.cert || "—" }}</td>
+									<td
+										:class="{ 'qz-fleet-cell--bad': (t.failures ?? 0) > 0 }"
+									>
+										{{ t.failures ?? 0 }}
+									</td>
+									<td>
+										<span v-if="!t.flags || !t.flags.length">—</span>
+										<v-chip
+											v-for="flag of t.flags"
+											v-else
+											:key="flag"
+											size="x-small"
+											variant="tonal"
+											:color="flagColor(flag)"
+											class="qz-fleet-chip"
+										>
+											{{ flag }}
+										</v-chip>
+									</td>
+								</tr>
+							</tbody>
+						</v-table>
+					</div>
+				</div>
 			</template>
 		</v-card-text>
 	</v-card>
@@ -140,10 +222,40 @@ type FailureRow = {
 	metadata: string | null;
 };
 
+// Contract for posawesome.posawesome.api.telemetry.get_qz_fleet.
+type FleetTerminal = {
+	terminal: string;
+	last_seen?: string;
+	qz_version?: string;
+	printer_count?: number;
+	printers?: string[];
+	default_printer?: string;
+	selected_printer?: string;
+	cert?: string;
+	failures?: number;
+	flags?: string[];
+};
+
+type FleetPayload = {
+	window?: { days?: number; since?: string };
+	terminals?: FleetTerminal[];
+	flag_totals?: Record<string, number>;
+};
+
+// Flags whose meaning is "receipts are silently not printing" get the error
+// tone; the rest (stale heartbeat, non-zero failures) are advisory warnings.
+const FLEET_FLAG_ERROR = new Set([
+	"no_printers",
+	"selected_missing",
+	"cert_untrusted",
+]);
+
 const loading = ref(false);
 const error = ref<string | null>(null);
 const summary = ref<SummaryPayload>({});
 const lastFailure = ref<FailureRow | null>(null);
+const fleet = ref<FleetPayload>({});
+const fleetError = ref<string | null>(null);
 
 const sinceISO = computed(() => {
 	// 24h window
@@ -185,7 +297,7 @@ const stageStats = computed(() => {
 	});
 });
 
-const failureCount = computed(() => Number(row("qz:failure").count ?? 0));
+const failureCount = computed(() => Number(row("warn:qz_failure").count ?? 0));
 const printCount = computed(() => Number(row("perf:qz_print").count ?? 0));
 const failureRate = computed(() => {
 	const total = printCount.value + failureCount.value;
@@ -220,9 +332,40 @@ const windowLabel = computed(() => {
 	return `${__("Window")}: ${w.since} → ${w.until}`;
 });
 
+const fleetTerminals = computed<FleetTerminal[]>(
+	() => fleet.value?.terminals ?? [],
+);
+
+const fleetWindowLabel = computed(() => {
+	const days = fleet.value?.window?.days;
+	if (!days) return "";
+	return `${__("last")} ${days} ${__("days")}`;
+});
+
+function flagColor(flag: string): string {
+	return FLEET_FLAG_ERROR.has(flag) ? "error" : "warning";
+}
+
+// Isolated from refresh's try/catch: get_qz_fleet is a separate contract, so
+// its failure surfaces on its own error line and never blanks the rollup panel.
+async function loadFleet() {
+	try {
+		const resp = await frappe.call({
+			method: "posawesome.posawesome.api.telemetry.get_qz_fleet",
+			args: { days: 7 },
+		});
+		fleet.value = (resp?.message || resp || {}) as FleetPayload;
+	} catch (e: any) {
+		fleet.value = {};
+		fleetError.value =
+			(e && e.message) || String(e) || __("Failed to load QZ fleet");
+	}
+}
+
 async function refresh() {
 	loading.value = true;
 	error.value = null;
+	fleetError.value = null;
 	try {
 		const resp = await frappe.call({
 			method: "posawesome.posawesome.api.telemetry.get_pos_telemetry_summary",
@@ -235,7 +378,7 @@ async function refresh() {
 			args: {
 				doctype: "POS Telemetry Event",
 				filters: [
-					["event_name", "=", "qz:failure"],
+					["event_name", "=", "warn:qz_failure"],
 					["event_timestamp", ">", sinceISO.value],
 				],
 				fields: ["name", "event_name", "event_timestamp", "metadata"],
@@ -249,6 +392,9 @@ async function refresh() {
 		error.value =
 			(e && e.message) || String(e) || __("Failed to load QZ telemetry");
 	} finally {
+		// Runs regardless of the summary fetch outcome; loadFleet swallows its
+		// own errors so the fleet section stands alone.
+		await loadFleet();
 		loading.value = false;
 	}
 }
@@ -317,15 +463,49 @@ onMounted(() => {
 }
 
 .qz-stage-row,
-.qz-failure-row {
+.qz-failure-row,
+.qz-fleet-row {
 	margin-top: 16px;
 }
 .qz-stage-row__title,
-.qz-failure-row__title {
+.qz-failure-row__title,
+.qz-fleet-row__title {
 	font-size: 13px;
 	font-weight: 600;
 	opacity: 0.8;
 	margin: 0 0 8px;
+}
+.qz-fleet-row__window {
+	font-weight: 400;
+	opacity: 0.7;
+	margin-left: 6px;
+}
+
+.qz-fleet-table-wrap {
+	overflow-x: auto;
+}
+.qz-fleet-table {
+	font-size: 12px;
+}
+.qz-fleet-table :deep(th) {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	white-space: nowrap;
+}
+.qz-fleet-cell--id {
+	font-weight: 600;
+}
+.qz-fleet-cell--bad {
+	color: rgb(var(--v-theme-error));
+	font-weight: 600;
+}
+.qz-fleet-printers {
+	text-decoration: underline dotted;
+	cursor: help;
+}
+.qz-fleet-chip {
+	margin: 2px 4px 2px 0;
 }
 
 .qz-stage-tile {
