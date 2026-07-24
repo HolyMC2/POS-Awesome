@@ -81,6 +81,37 @@ export function notifyQzPrintFallback(error: unknown, context = "print") {
 	}
 }
 
+// Per-terminal printer inventory, one row per page session on first
+// successful connect. Answers "is every terminal's printer set up
+// correctly?" server-side (Q10 panel) without walking the shop floor:
+// QZ version, visible printers, which one the profile resolved to.
+let _qzInventoryReported = false;
+function reportQzInventory() {
+	const firstReport = !_qzInventoryReported;
+	_qzInventoryReported = true;
+	void (async () => {
+		try {
+			// Always pre-warm + populate the printer list on connect;
+			// the telemetry row itself is once per page session.
+			const printers = await findQzPrinters().catch(() => [] as string[]);
+			if (!firstReport) return;
+			const [version, defaultPrinter] = await Promise.all([
+				qz.api.getVersion().catch(() => ""),
+				qz.printers.getDefault().catch(() => ""),
+			]);
+			track("pos:qz_connect", printers.length, {
+				qz_version: String(version).slice(0, 32),
+				printers: printers.slice(0, 20).map(p => String(p).slice(0, 80)),
+				default_printer: String(defaultPrinter ?? "").slice(0, 80),
+				selected_printer: String(selectedQzPrinter.value ?? "").slice(0, 80),
+				cert: qzCertStatus.value,
+			});
+		} catch {
+			// telemetry dispatch must never bubble
+		}
+	})();
+}
+
 export type QzCertStatus = "unknown" | "trusted" | "untrusted";
 
 export interface QzPrintHtmlOptions {
@@ -496,7 +527,10 @@ export async function connectQzTray(options: { userInitiated?: boolean } = {}): 
 		try {
 			await qz.websocket.connect();
 			qzConnected.value = true;
-			qz.printers.find().catch(() => undefined);
+			// Pre-warm the printer list and, first time only, emit the
+			// per-terminal inventory row (replaces the old bare
+			// qz.printers.find() whose result was dropped).
+			reportQzInventory();
 			return true;
 		} catch (error) {
 			console.warn("Unable to connect to QZ Tray", error);

@@ -46,6 +46,10 @@ declare module "qz-tray" {
 		};
 		printers: {
 			find(): Promise<string | string[] | undefined>;
+			getDefault(): Promise<string | undefined>;
+		};
+		api: {
+			getVersion(): Promise<string>;
 		};
 		configs: {
 			create(printer: string, config?: QzPrinterConfig): QzConfigHandle;
