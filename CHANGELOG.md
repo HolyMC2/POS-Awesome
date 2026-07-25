@@ -2,6 +2,25 @@
 
 All notable changes.
 
+## Unreleased
+
+- **`/posapp` SPA is now the default boot path (opt-in → opt-out)**. The
+  `posa_use_web_route` POS Profile flag shipped with `default 0` while
+  `page/posapp/posapp.js` bounces every bare `/app/posapp` hit back to
+  `/posapp` — so any user whose profiles all sat at 0 (every profile created
+  after the flag landed, plus users with no POS Profile row at all) ping-ponged
+  between the two routes forever. `posa_user_opted_into_web_route`
+  (`api/utilities.py`) now returns True for no-profile users and on DB error
+  (fail open), False only when EVERY matching enabled profile is explicitly 0;
+  `www/posapp.py` redirects opt-outs to `/app/posapp?legacy=1` so the Desk
+  fallback no longer bounces back. Fixture default flipped to `1`, label /
+  description rewritten as a rollback switch, and patch
+  `set_web_route_default_on` backfills existing profiles (prod state before the
+  patch: `CONTROL` = 0 on `ventas.docomexico.com`, i.e. that cashier was
+  looping; `Doco Ventas` + `Ventas Mumu Escuinapa` already 1). Regression suite
+  `api/test_web_route_default.py` (9 tests) covers the decision table + guards
+  the `?legacy=1` suffix.
+
 ## 2026-07-15 (LIVE PROD) — Sales Order UX + POS dialog/layout fixes, CI green, origin gzip
 
 Full session, all lab-verified then shipped to `ventas.docomexico.com` +

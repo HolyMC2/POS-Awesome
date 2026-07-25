@@ -10,10 +10,12 @@ at `/posapp` (web route) instead of `/app/posapp` (Page DocType inside
 Desk) cuts the baseline DOM cost ~60 % and removes a ~5 s LCP overhead
 on slow devices. See `3-SIGMA.md §3 Phase 1` for the rationale + plan.
 
-This route is opt-in via the POS Profile flag `posa_use_web_route`
-(handled in the Page DocType controller `posapp.js`). End-users still
-land on `/app/posapp` until they toggle the flag; the legacy boot path
-remains the supported default for at least one release.
+This route is the DEFAULT for every logged-in POS user since 2026-07-24.
+The POS Profile flag `posa_use_web_route` survives only as a per-shop
+OPT-OUT (set it to 0 on every profile a user belongs to → Desk shell at
+`/app/posapp?legacy=1`). It used to be an opt-in defaulting to 0, which
+put every profile created after it landed into a /posapp ↔ /app/posapp
+redirect loop.
 
 Behaviour
 ---------
@@ -57,13 +59,17 @@ def get_context(context: Dict[str, Any]) -> Dict[str, Any]:
         frappe.local.flags.redirect_location = "/login?redirect-to=/posapp"
         raise frappe.Redirect
 
-    # Phase 1.E feature flag: opt-in per POS Profile. Until any of the
-    # current user's profiles has `posa_use_web_route` set, redirect
-    # back to the legacy `/app/posapp` Desk Page so non-opted shops
-    # get the well-tested boot path. Ops can roll back per-terminal
-    # by toggling the flag and reloading — no redeploy needed.
+    # Per-profile OPT-OUT (default is this SPA — see
+    # `posa_user_opted_into_web_route`). Only a shop that set
+    # `posa_use_web_route = 0` on EVERY one of the user's enabled profiles
+    # lands on the Desk shell.
+    #
+    # `?legacy=1` is REQUIRED on the redirect target: `page/posapp/posapp.js`
+    # bounces every bare /app/posapp hit back to /posapp, so redirecting to
+    # the un-suffixed path is an infinite ping-pong (the bug this flag's
+    # "rollback" actually shipped with).
     if not _user_opted_into_web_route(frappe.session.user):
-        frappe.local.flags.redirect_location = "/app/posapp"
+        frappe.local.flags.redirect_location = "/app/posapp?legacy=1"
         raise frappe.Redirect
 
     boot_payload = _build_boot_payload()
@@ -225,10 +231,10 @@ def _build_boot_payload() -> Dict[str, Any]:
 
 
 def _user_opted_into_web_route(user: str) -> bool:
-    """Phase 1.E feature-flag check. Delegates to the shared helper in
-    `posawesome.posawesome.api.utilities` so the web-route controller
-    and the Desk Page banner (`posapp.js` → Phase 1.F) agree on the
-    answer. Administrator is always opted in for ops + smoke specs.
+    """Opt-OUT check (default True). Delegates to the shared helper in
+    `posawesome.posawesome.api.utilities` so the web-route controller and
+    the whitelisted endpoint agree on the answer. Administrator, users
+    with no POS Profile rows, and DB errors all resolve to True.
     """
     if not user or user == "Administrator":
         return True

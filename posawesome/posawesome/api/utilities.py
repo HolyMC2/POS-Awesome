@@ -984,14 +984,24 @@ def log_client_error(payload=None):
 
 @frappe.whitelist(methods=["GET", "POST"])
 def posa_user_opted_into_web_route() -> bool:
-    """Return True if the current user has any POS Profile with the
-    `posa_use_web_route` flag set. Phase 1.F uses this from the Desk
-    Page controller (`posapp.js`) to decide whether to show the
-    redirect banner. Kept tiny so it can be polled on every Desk POS
-    visit without measurable cost.
+    """Return True when the current user should get the /posapp SPA.
 
-    Administrator always returns True so smoke specs + ops can land
-    on /posapp without touching profile data.
+    2026-07-24 SEMANTICS FLIP — the SPA is the DEFAULT, `posa_use_web_route`
+    is now an explicit per-profile OPT-OUT, not an opt-in:
+
+    - no POS Profile rows for the user (or profiles that list no users, i.e.
+      "applicable for all") → True. The old opt-in read of this returned
+      False here, and `www/posapp.py` bounced those users to /app/posapp,
+      whose Page controller bounces straight back to /posapp → an infinite
+      client/server redirect ping-pong. Any profile created after the flag
+      landed defaulted to 0 and fell into that loop.
+    - user has profiles → True unless EVERY matching enabled profile has the
+      flag explicitly 0 (a deliberate shop-level rollback to the Desk shell).
+    - DB error → True. Fail OPEN to the canonical route; the legacy Desk boot
+      path is the experimental one now.
+
+    Administrator always True so smoke specs + ops land on /posapp without
+    touching profile data. Kept tiny — polled on every POS visit.
     """
     user = frappe.session.user
     if not user or user == "Guest":
@@ -1010,7 +1020,9 @@ def posa_user_opted_into_web_route() -> bool:
             (user,),
         )
     except Exception:
-        return False
+        return True
+    if not rows:
+        return True
     return any(int(row[0] or 0) for row in rows)
 
 

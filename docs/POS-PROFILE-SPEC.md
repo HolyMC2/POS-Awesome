@@ -163,7 +163,7 @@ Removal = fixture churn + patch; batch them in one cleanup commit.
 | posa_use_percentage_discount | CLIENT-ONLY (mitigated) | ×25 | cap backs it |
 | posa_use_pos_awesome_payments | WIRED | processor.py | |
 | posa_use_server_cache | WIRED | cache_warmer.py ×8 | |
-| posa_use_web_route | WIRED (server) | utilities.py | |
+| posa_use_web_route | WIRED (server) | utilities.py + www/posapp.py | opt-OUT, default 1 (2026-07-24) |
 | pose_use_limit_search | CLIENT-ONLY (typo) | itemsStore.ts +5 | P2 rename |
 | use_cashback | CLIENT-ONLY✓ | PaymentOptions.vue | |
 | use_customer_credit | **SUSPECT⚠** | PaymentOptions.vue:50 + usePaymentMethods.ts:213 | P0-5 client mutation |

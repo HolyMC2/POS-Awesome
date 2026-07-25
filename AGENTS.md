@@ -32,8 +32,9 @@ SPA boot / Pinia stores / build pipeline.
 - ESC/POS thermal print path: HTML → wkhtmltopdf raster → QZ
   WebSocket → signed envelope → printer
 - Offline-tolerant cart via IndexedDB (Dexie) + sw.js
-- Phase 1.E `posa_use_web_route` per-profile gate (legacy — every
-  profile now opted in by default)
+- `posa_use_web_route` per-profile flag — since 2026-07-24 an
+  explicit OPT-OUT, default ON (was an opt-in defaulting to 0, which
+  looped new profiles between `/posapp` and `/app/posapp`)
 
 ## Repo layout
 
