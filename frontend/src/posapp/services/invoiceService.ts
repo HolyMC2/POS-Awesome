@@ -2,6 +2,17 @@ import api from "./api";
 import { unwrapApiResult, type ApiEnvelope } from "./api";
 import type { InvoiceDoc, POSProfile } from "../types/models";
 
+// Submit gets a longer leash than the 30s api.ts default. The server is allowed
+// 120s (gunicorn `--timeout=120`), so a 30s client timeout reported "failed" to
+// the cashier while the request was still legitimately running — the fetch has
+// no AbortController, so the server finished and submitted the sale anyway.
+// 2026-07-24: recargas that took 60-300s (hold-until-confirm + RQ queue wait)
+// showed up as false failures, and a cashier re-press stacked a second
+// execution (harmless — submit is idempotent on posa_client_request_id — but it
+// doubled the load that caused the stall). Matched to the server ceiling so the
+// client gives up only once the server truly has.
+const SUBMIT_TIMEOUT_MS = 120_000;
+
 function getSubmitInvoiceCall(
 	data: any,
 	invoiceDoc: InvoiceDoc | string,
@@ -43,7 +54,7 @@ const invoiceService = {
 			invoiceType,
 			posProfile,
 		);
-		return api.callEnvelope(method, args);
+		return api.callEnvelope(method, args, { timeoutMs: SUBMIT_TIMEOUT_MS });
 	},
 
 	async submitInvoiceData(

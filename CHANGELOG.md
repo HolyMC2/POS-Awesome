@@ -4,6 +4,15 @@ All notable changes.
 
 ## Unreleased
 
+- **Submit gets a 120s client timeout instead of the 30s api.ts default.** The
+  server is allowed 120s (gunicorn `--timeout=120`), and the shim's fetch has no
+  AbortController — so a 30s client timeout told the cashier "failed" while the
+  request kept running and the sale submitted anyway. On 2026-07-24 the recargas
+  that took 60-300s (hold-until-confirm behind a starved RQ queue — see the
+  saldo CHANGELOG) surfaced as false failures, and a re-press stacked a second
+  server-side execution (harmless: idempotent on `posa_client_request_id`, but
+  it doubled the load causing the stall). Matched to the server ceiling so the
+  client gives up only once the server truly has.
 - **`/posapp` SPA is now the default boot path (opt-in → opt-out)**. The
   `posa_use_web_route` POS Profile flag shipped with `default 0` while
   `page/posapp/posapp.js` bounces every bare `/app/posapp` hit back to
