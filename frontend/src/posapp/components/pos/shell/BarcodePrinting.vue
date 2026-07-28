@@ -294,6 +294,14 @@ import { useToastStore } from "../../../stores/toastStore";
 import { mapStores } from "pinia";
 import format from "../../../format";
 import { useUIStore } from "../../../stores/uiStore.js";
+import {
+	LABEL_PAGE_FORMATS,
+	buildBarcodeImageMarkup,
+	buildLabelSheetMarkup,
+	buildLabelSheetStyles,
+	computeBarcodeLabelLayout,
+	mm,
+} from "../../../utils/barcodeLabelLayout";
 
 export default {
 	name: "BarcodePrinting",
@@ -309,7 +317,7 @@ export default {
 			items: [],
 			nextRowId: 1,
 			pageFormat: "A4",
-			pageFormatOptions: ["A4"],
+			pageFormatOptions: Object.keys(LABEL_PAGE_FORMATS),
 			gridCols: 3,
 			gridRows: 7,
 			includePrice: true,
@@ -341,15 +349,47 @@ export default {
 	},
 	methods: {
 		parseLabelSize() {
-			if (this.pageFormat === "A4") {
-				return {
-					type: "A4",
-					cols: parseInt(this.gridCols) || 3,
-					rows: parseInt(this.gridRows) || 7,
-				};
-			}
-			// Fallback
-			return { type: "A4", cols: 3, rows: 7 };
+			const type = LABEL_PAGE_FORMATS[this.pageFormat] ? this.pageFormat : "A4";
+			return {
+				type,
+				cols: parseInt(this.gridCols) || 3,
+				rows: parseInt(this.gridRows) || 7,
+			};
+		},
+		/**
+		 * Resolves the printed geometry for the current page format / grid.
+		 *
+		 * Every millimetre both output paths use comes from here, so the PDF
+		 * and the browser print dialog lay the sheet out identically. The
+		 * longest barcode in the job drives the module-width budget so the
+		 * widest symbol still fits its cell.
+		 */
+		getLabelLayout(items) {
+			const size = this.parseLabelSize();
+			const printable = Array.isArray(items) ? items : [];
+			const longestBarcode = printable.reduce((longest, item) => {
+				const code = String(item?.barcode || "").trim();
+				return code.length > longest.length ? code : longest;
+			}, "");
+
+			return computeBarcodeLabelLayout({
+				pageFormat: size.type,
+				cols: size.cols,
+				rows: size.rows,
+				includePrice: this.includePrice,
+				includeBatchSerial: this.includeBatchSerial,
+				barcodeValue: longestBarcode,
+			});
+		},
+		warnIfLabelsTooSmall(layout) {
+			if (!layout || layout.fits) return;
+			this.toastStore.show({
+				title: __(
+					"{0} x {1} labels are too small for this page — text was shrunk to fit. Use fewer rows or columns.",
+					[layout.cols, layout.rows],
+				),
+				color: "warning",
+			});
 		},
 		getScaleSettingsSnapshot() {
 			const settings = this.scaleBarcodeSettings || {};
@@ -1191,14 +1231,16 @@ export default {
 			});
 		},
 		getPrintWindowContent() {
-			const style = this.getPrintStyles();
-			const content = this.generatePrintContent(this.getPrintableItems({ notify: false }));
+			const itemsToPrint = this.getPrintableItems({ notify: false });
+			const layout = this.getLabelLayout(itemsToPrint);
+			const style = this.getPrintStyles(layout);
+			const content = this.generatePrintContent(itemsToPrint, layout);
 			this.logDebug("getPrintWindowContent", {
 				style_length: style?.length || 0,
 				content_length: content?.length || 0,
 				settings: this.getScaleSettingsSnapshot(),
 			});
-			return { style, content };
+			return { style, content, layout };
 		},
 		printLabels() {
 			this.logDebug("printLabels:start", {
@@ -1224,8 +1266,10 @@ export default {
 				return;
 			}
 
-			const style = this.getPrintStyles();
-			const content = this.generatePrintContent(itemsToPrint);
+			const layout = this.getLabelLayout(itemsToPrint);
+			this.warnIfLabelsTooSmall(layout);
+			const style = this.getPrintStyles(layout);
+			const content = this.generatePrintContent(itemsToPrint, layout);
 			this.logDebug("printLabels:render", {
 				items_to_print: itemsToPrint.length,
 				style_length: style?.length || 0,
@@ -1284,28 +1328,42 @@ export default {
 				return;
 			}
 
-			const style = this.getPrintStyles();
-			const content = this.generatePrintContent(itemsToPrint);
-			const size = this.parseLabelSize();
-			const isA4 = size.type === "A4";
-
-			// Determine PDF format settings
-			let pdfFormat = "a4";
-			let pdfUnit = "mm";
-			let orientation = "portrait";
-
-			if (!isA4) {
-				pdfFormat = [size.width, size.height];
-			}
+			const layout = this.getLabelLayout(itemsToPrint);
+			this.warnIfLabelsTooSmall(layout);
+			const style = this.getPrintStyles(layout);
+			const content = this.generatePrintContent(itemsToPrint, layout);
 
 			const jsPdfOptions = {
-				unit: pdfUnit,
-				format: pdfFormat,
-				orientation: orientation,
+				unit: "mm",
+				format: [layout.page.widthMm, layout.page.heightMm],
+				orientation: layout.page.widthMm > layout.page.heightMm ? "landscape" : "portrait",
 			};
+
+			// html2pdf ignores @page and maps the source element's width onto
+			// `pageSize.inner.width`. Handing it the same margin the
+			// stylesheet uses makes that mapping exactly 1:1 in millimetres,
+			// so the PDF and the print dialog produce identical labels.
+			// `pagebreak.mode: []` disables the plugin's padding divs — inside
+			// a CSS grid each pad becomes an extra cell and scrambles the
+			// sheet; the per-page wrappers already break on the right rows.
+			const html2pdfOptions = {
+				margin: [
+					layout.page.marginMm,
+					layout.page.marginMm,
+					layout.page.marginMm,
+					layout.page.marginMm,
+				],
+				filename: "barcodes.pdf",
+				image: { type: "jpeg", quality: 0.98 },
+				html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+				pagebreak: { mode: [] },
+				jsPDF: jsPdfOptions,
+			};
+
 			this.logDebug("downloadPdf:render", {
 				items_to_print: itemsToPrint.length,
 				jsPdfOptions,
+				page_margin_mm: layout.page.marginMm,
 				style_length: style?.length || 0,
 				content_length: content?.length || 0,
 			});
@@ -1322,22 +1380,16 @@ export default {
 				<script src="/assets/posawesome/dist/js/libs/JsBarcode.all.min.js"></${"script"}>
           </head>
           <body>
-            <div id="print-content">
+            <div id="print-content" style="width: ${mm(layout.printableWidthMm)};">
                 ${content}
             </div>
             <script>
               window.onload = function() {
                 JsBarcode(".barcode").init();
-                
+
                 setTimeout(() => {
                     const element = document.getElementById('print-content');
-                    const opt = {
-                      margin:       0,
-                      filename:     'barcodes.pdf',
-                      image:        { type: 'jpeg', quality: 0.98 },
-                      html2canvas:  { scale: 2, useCORS: true },
-                      jsPDF:        ${JSON.stringify(jsPdfOptions)}
-                    };
+                    const opt = ${JSON.stringify(html2pdfOptions)};
 
                     html2pdf().set(opt).from(element).save().then(() => {
                         // Optional: close window after download
@@ -1354,172 +1406,78 @@ export default {
 				items_to_print: itemsToPrint.length,
 			});
 		},
-		getPrintStyles() {
-			const size = this.parseLabelSize();
-			this.logDebug("getPrintStyles", { size });
-			if (size.type === "A4") {
-				const { cols, rows } = size;
-				// Calculate approximate height based on A4 height (297mm) and margins
-				// A4 = 210mm x 297mm
-				// Default margins 10mm top/bottom
-				const availableHeight = 277; // 297 - 20
-				// Subtract total vertical gap space (assuming 3mm per gap)
-				const totalGapSpace = (rows - 1) * 3;
-				const rowHeight = Math.floor((availableHeight - totalGapSpace) / rows);
-
-				return `
-          @page { size: A4; margin: 10mm; }
-          body { font-family: sans-serif; margin: 0; padding: 0; }
-          .label-container {
-            display: grid;
-            grid-template-columns: repeat(${cols}, 1fr);
-            gap: 3mm;
-            page-break-after: always;
-          }
-          .label {
-            border: 1px dashed #ccc;
-            padding: 5px;
-            text-align: center;
-            height: ${rowHeight}mm;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            page-break-inside: avoid;
-            box-sizing: border-box;
-            overflow: hidden;
-          }
-          .item-name { 
-              font-size: 11px; 
-              font-weight: bold; 
-              overflow: hidden; 
-              white-space: nowrap; 
-              text-overflow: ellipsis; 
-              max-width: 95%;
-              margin-bottom: 2px;
-          }
-          .barcode-container { margin: 2px 0; width: 100%; display: flex; justify-content: center; flex-grow: 1; align-items: center; overflow: hidden; }
-          .barcode-text { font-size: 10px; }
-          .price { font-size: 11px; font-weight: bold; margin-top: 2px; }
-          .batch-serial { font-size: 9px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95%; }
-          img.barcode { max-width: 95%; height: auto; max-height: 100%; object-fit: contain; }
-        `;
-			} else {
-				// Thermal printer styles
-				return `
-          @page { size: ${size.width}mm ${size.height}mm; margin: 0; }
-          body { font-family: sans-serif; margin: 0; padding: 0; width: ${size.width}mm; height: ${size.height}mm; overflow: hidden; }
-          .label {
-            width: ${size.width}mm;
-            height: ${size.height}mm;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            page-break-after: always;
-            overflow: hidden;
-            box-sizing: border-box;
-            padding: 1mm;
-          }
-          .item-name { 
-              font-size: 11px; 
-              font-weight: bold; 
-              white-space: nowrap; 
-              overflow: hidden; 
-              text-overflow: ellipsis; 
-              max-width: 95%; 
-              line-height: 1.2; 
-              margin-bottom: 2px;
-          }
-          .barcode-container { 
-              flex-grow: 1; 
-              display: flex; 
-              align-items: center; 
-              justify-content: center; 
-              width: 100%; 
-              overflow: hidden; 
-              padding: 2px 0;
-          }
-          .price { 
-              font-size: 11px; 
-              font-weight: bold; 
-              line-height: 1.2; 
-              margin-top: 2px;
-          }
-          .batch-serial { font-size: 9px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95%; }
-          img.barcode { 
-              max-width: 95%; 
-              height: auto; 
-              max-height: 100%;
-              object-fit: contain; 
-          }
-        `;
-			}
+		getPrintStyles(layout) {
+			const l = layout || this.getLabelLayout(this.getPrintableItems({ notify: false }));
+			this.logDebug("getPrintStyles", {
+				page_format: this.pageFormat,
+				cols: l.cols,
+				rows: l.rows,
+				cell_mm: [l.cellWidthMm, l.cellHeightMm],
+				inner_height_mm: l.innerHeightMm,
+				content_height_mm: l.contentHeightMm,
+				barcode_area_mm: l.barcodeAreaMm,
+				fits: l.fits,
+				warnings: l.warnings,
+			});
+			return buildLabelSheetStyles(l);
 		},
-		generatePrintContent(items) {
+		generatePrintContent(items, layout) {
 			this.logDebug("generatePrintContent:start", {
 				items_count: Array.isArray(items) ? items.length : 0,
 			});
-			let html = "";
-			const size = this.parseLabelSize();
-			if (size.type === "A4") {
-				html += '<div class="label-container">';
-			}
+			const l = layout || this.getLabelLayout(items);
+			const barcode = l.barcode;
+			const labels = [];
 
 			items.forEach((item) => {
 				const labelsCount = this.normalizeLabelQty(item.qty);
 				const safeItemName = this.escapeHtml(item.item_name || item.item_code || "");
 				const safeBarcode = this.escapeHtml(item.barcode || "");
-				for (let i = 0; i < labelsCount; i++) {
-					let batchSerialHtml = "";
-					if (this.includeBatchSerial) {
-						let text = "";
-						if (item.batch_no) text += `Batch: ${item.batch_no} `;
-						if (item.serial_no) text += `Serial: ${item.serial_no}`;
-						// Check array data if flat fields are empty
-						if (!text) {
-							if (item.batch_no_data && item.batch_no_data.length)
-								text += `Batch: ${item.batch_no_data[0].batch_no} `;
-							if (item.serial_no_data && item.serial_no_data.length)
-								text += `Serial: ${item.serial_no_data[0].serial_no}`;
-						}
-						if (text.trim()) {
-							batchSerialHtml = `<div class="batch-serial">${this.escapeHtml(text.trim())}</div>`;
-						}
-					}
 
-					let priceHtml = "";
-					if (this.includePrice) {
-						priceHtml = `<div class="price">Price: ${this.escapeHtml(this.formatCurrency(item.price))}</div>`;
+				let batchSerialHtml = "";
+				if (this.includeBatchSerial) {
+					let text = "";
+					if (item.batch_no) text += `Batch: ${item.batch_no} `;
+					if (item.serial_no) text += `Serial: ${item.serial_no}`;
+					// Check array data if flat fields are empty
+					if (!text) {
+						if (item.batch_no_data && item.batch_no_data.length)
+							text += `Batch: ${item.batch_no_data[0].batch_no} `;
+						if (item.serial_no_data && item.serial_no_data.length)
+							text += `Serial: ${item.serial_no_data[0].serial_no}`;
 					}
+					if (text.trim()) {
+						batchSerialHtml = `<div class="batch-serial">${this.escapeHtml(text.trim())}</div>`;
+					}
+				}
 
-					html += `
+				let priceHtml = "";
+				if (this.includePrice) {
+					priceHtml = `<div class="price">Price: ${this.escapeHtml(this.formatCurrency(item.price))}</div>`;
+				}
+
+				const labelHtml = `
             <div class="label">
               <div class="item-name">${safeItemName}</div>
               <div class="barcode-container">
-                 <img class="barcode"
-                      jsbarcode-format="auto"
-                      jsbarcode-value="${safeBarcode}"
-                      jsbarcode-textmargin="0"
-                      jsbarcode-fontoptions="bold"
-                      jsbarcode-height="40"
-                      jsbarcode-width="1.5"
-                      jsbarcode-displayValue="true"
-                      jsbarcode-fontSize="12">
+                 ${buildBarcodeImageMarkup(barcode, safeBarcode)}
               </div>
               ${batchSerialHtml}
               ${priceHtml}
             </div>
           `;
+
+				for (let i = 0; i < labelsCount; i++) {
+					labels.push(labelHtml);
 				}
 			});
 
-			if (size.type === "A4") {
-				html += "</div>";
-			}
+			const html = buildLabelSheetMarkup(labels, l);
 			this.logDebug("generatePrintContent:done", {
 				items_count: Array.isArray(items) ? items.length : 0,
+				labels_count: labels.length,
+				labels_per_page: l.labelsPerPage,
+				pages: Math.ceil(labels.length / Math.max(1, l.labelsPerPage)),
 				html_length: html.length,
 			});
 			return html;
