@@ -368,10 +368,143 @@ async function deletePersistedKey(key: string) {
 	await Promise.all(tasks);
 }
 
+/**
+ * Hard ceiling on the startup `db.open()`.
+ *
+ * `IDBFactory.open()` has NO failure mode for "another connection is holding
+ * the previous version open": the request fires `blocked` and then simply
+ * waits. Dexie surfaces that as a promise that neither resolves nor rejects, so
+ * a single stuck connection (a second POS tab mid-upgrade, a customer-display
+ * window, a browser that kept the connection alive after a hard refresh) would
+ * hang `initPromise` — and with it every `await initPromise` on the boot path —
+ * for the life of the document. That is exactly the class of hang that only a
+ * tab close cures. Bound it and degrade instead.
+ */
+export const OFFLINE_DB_OPEN_TIMEOUT_MS = 8000;
+
+/**
+ * Upper bound on how long the idle scheduler may defer offline-store init.
+ * A bare `requestIdleCallback(cb)` is never guaranteed to fire — browsers do not
+ * run idle callbacks in hidden/background tabs — so always pass a timeout.
+ */
+export const OFFLINE_DB_INIT_IDLE_TIMEOUT_MS = 2000;
+
+export class OfflineDbOpenTimeoutError extends Error {
+	readonly timeoutMs: number;
+
+	constructor(timeoutMs: number) {
+		super(
+			`IndexedDB open did not settle within ${timeoutMs}ms (connection blocked)`,
+		);
+		this.name = "OfflineDbOpenTimeoutError";
+		this.timeoutMs = timeoutMs;
+	}
+}
+
+let offlineStorageDegraded = false;
+
+/**
+ * True when the offline store could not be opened and the POS is running from
+ * localStorage/RAM only. Callers should surface Limited mode.
+ */
+export function isOfflineStorageDegraded() {
+	return offlineStorageDegraded;
+}
+
+/** Test seam: reset the degraded flag between cases. */
+export function setOfflineStorageDegraded(state: boolean) {
+	offlineStorageDegraded = !!state;
+}
+
+/**
+ * Runs `open()` with a hard timeout. Rejects with `OfflineDbOpenTimeoutError`
+ * when the open neither resolves nor rejects in time; never leaves a timer
+ * behind.
+ */
+export async function openWithTimeout<T>(
+	open: () => Promise<T>,
+	timeoutMs = OFFLINE_DB_OPEN_TIMEOUT_MS,
+): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | null = null;
+	try {
+		return await Promise.race([
+			Promise.resolve().then(open),
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(() => {
+					reject(new OfflineDbOpenTimeoutError(timeoutMs));
+				}, timeoutMs);
+			}),
+		]);
+	} finally {
+		if (timer !== null) {
+			clearTimeout(timer);
+		}
+	}
+}
+
+function hydrateMemoryKeyFromLocalStorage(key: string) {
+	if (typeof localStorage === "undefined") {
+		return false;
+	}
+
+	const raw = localStorage.getItem(`posa_${key}`);
+	if (!raw) {
+		return false;
+	}
+
+	try {
+		memory[key] = JSON.parse(raw);
+		return true;
+	} catch (err) {
+		console.error("Failed to parse localStorage for", key, err);
+		return false;
+	}
+}
+
+/**
+ * Degraded hydration path: no IndexedDB, so only the small localStorage-mirrored
+ * settings survive. Everything else keeps its in-memory default.
+ */
+export function hydrateMemoryFromLocalStorage() {
+	for (const key of Object.keys(memory)) {
+		hydrateMemoryKeyFromLocalStorage(key);
+	}
+}
+
+// Breadcrumb for the multi-tab case: another connection is pinning the old
+// version, so this open will sit in `blocked` until that tab closes.
+try {
+	db.on("blocked", () => {
+		console.warn(
+			"[posa][offline] IndexedDB upgrade is blocked by another open POS tab/window. Close the other tab; this one will fall back to Limited mode.",
+		);
+	});
+} catch (err) {
+	console.warn("[posa][offline] Could not attach Dexie blocked handler", err);
+}
+
 export const initPromise = new Promise<void>((resolve) => {
 	const init = async () => {
 		try {
-			await db.open();
+			try {
+				await openWithTimeout(
+					() => db.open(),
+					OFFLINE_DB_OPEN_TIMEOUT_MS,
+				);
+			} catch (openError) {
+				if (openError instanceof OfflineDbOpenTimeoutError) {
+					offlineStorageDegraded = true;
+					console.warn(
+						`[posa][offline] IndexedDB did not open within ${OFFLINE_DB_OPEN_TIMEOUT_MS}ms — continuing in Limited mode from localStorage. Boot will NOT wait for it.`,
+						openError,
+					);
+					hydrateMemoryFromLocalStorage();
+					memory.bootstrap_limited_mode = true;
+					return;
+				}
+				throw openError;
+			}
+
 			for (const key of Object.keys(memory)) {
 				const table = tableForKey(key);
 				let stored = await db.table(table).get(key);
@@ -385,24 +518,12 @@ export const initPromise = new Promise<void>((resolve) => {
 					memory[key] = stored.value;
 					continue;
 				}
-				if (typeof localStorage !== "undefined") {
-					const ls = localStorage.getItem(`posa_${key}`);
-					if (ls) {
-						try {
-							memory[key] = JSON.parse(ls);
-							continue;
-						} catch (err) {
-							console.error(
-								"Failed to parse localStorage for",
-								key,
-								err,
-							);
-						}
-					}
-				}
+				hydrateMemoryKeyFromLocalStorage(key);
 			}
 		} catch (e) {
 			console.error("Failed to initialize offline DB", e);
+			offlineStorageDegraded = true;
+			memory.bootstrap_limited_mode = true;
 		} finally {
 			scheduleIdleOfflinePruning();
 			resolve();
@@ -410,7 +531,11 @@ export const initPromise = new Promise<void>((resolve) => {
 	};
 
 	if (typeof requestIdleCallback === "function") {
-		requestIdleCallback(init);
+		// Always pass a timeout: idle callbacks are throttled to never in
+		// hidden/background tabs, which would strand `initPromise` forever.
+		requestIdleCallback(init, {
+			timeout: OFFLINE_DB_INIT_IDLE_TIMEOUT_MS,
+		});
 	} else {
 		setTimeout(init, 0);
 	}

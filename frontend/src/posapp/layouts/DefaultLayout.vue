@@ -88,6 +88,7 @@ import UpdatePrompt from "../components/ui/UpdatePrompt.vue";
 import { useLoading } from "../composables/core/useLoading.js";
 import { usePosShift } from "../composables/pos/shared/usePosShift";
 import { loadingState, initLoadingSources, setSourceProgress, markSourceLoaded } from "../utils/loading.js";
+import { resolveBootLoadingSources } from "../utils/bootLoadingSources";
 import { useCustomersStore } from "../stores/customersStore.js";
 import { useSyncStore } from "../stores/syncStore.js";
 import { useToastStore } from "../stores/toastStore.js";
@@ -120,6 +121,7 @@ import {
 	syncOfflineCashMovements,
 	isOffline,
 	getLastSyncTotals,
+	isOfflineStorageDegraded,
 	getSyncResourceDefinitions,
 	getSyncResourceState,
 	listSyncResourceStates,
@@ -305,8 +307,19 @@ let removeBootstrapSnapshotListener = null;
 // Event Bus
 const eventBus = instance?.proxy?.eventBus;
 
-// Initialize loading sources immediately in setup so watchers can mark them 100%
-initLoadingSources(["init", "items", "customers"]);
+// Initialize loading sources immediately in setup so watchers can mark them 100%.
+// The list is resolved from the BOOT route: this layout is keyed by layout name
+// in App.vue, so it mounts once per document and its source list is frozen for
+// the life of the page. Only `/pos` mounts ItemsSelector (the sole `get_items`
+// caller) and runs `check_opening_entry()` (which registers the POS profile and
+// so triggers the customer load) — registering `items`/`customers` on any other
+// boot route left the blocking overlay pinned at "Initializing application 33%"
+// forever (1 of 3 sources complete).
+const bootLoadingSources = resolveBootLoadingSources(
+	typeof window !== "undefined" ? window.location?.pathname : null,
+);
+const bootRoutePreloadsCatalog = bootLoadingSources.includes("items");
+initLoadingSources(bootLoadingSources);
 
 const bootSync = useBootSync({
 	offlineSyncRuntime,
@@ -409,10 +422,15 @@ function persistBootstrapRuntime(validation, decision) {
 		primary_warning: decision.primaryWarning,
 	};
 
+	// A degraded offline store (IndexedDB blocked/unavailable — see
+	// `openWithTimeout` in offline/db.ts) is a hard Limited-mode condition no
+	// snapshot validation can clear.
+	const limitedMode = Boolean(decision.limitedMode) || isOfflineStorageDegraded();
+
 	bootstrapStatus.value = nextStatus;
-	bootstrapLimitedMode.value = decision.limitedMode;
+	bootstrapLimitedMode.value = limitedMode;
 	setBootstrapSnapshotStatus(nextStatus);
-	setBootstrapLimitedMode(decision.limitedMode);
+	setBootstrapLimitedMode(limitedMode);
 }
 
 function buildBootstrapConfirmationMessage(validation) {
@@ -820,7 +838,11 @@ watch(
 		const shouldLift = shouldLiftBootstrapWarningStartupGate({
 			loadingActive: Boolean(isLoading),
 			initialBootstrapSettled: Boolean(isBootstrapSettled),
-			itemsStartupSyncSettled: Boolean(areItemsLoaded) && !areItemsSyncing,
+			// Routes that never mount ItemsSelector can't settle an item sync;
+			// gating on it there would suppress bootstrap warnings forever.
+			itemsStartupSyncSettled: bootRoutePreloadsCatalog
+				? Boolean(areItemsLoaded) && !areItemsSyncing
+				: true,
 			startupGateLifted: startupBootstrapWarningsReady.value,
 		});
 
@@ -968,6 +990,11 @@ const runStartupBackgroundMaintenance = async () => {
 
 const initializeData = async () => {
 	await initPromise;
+	if (isOfflineStorageDegraded()) {
+		console.warn(
+			"[posa][boot] Offline storage is unavailable (IndexedDB blocked or failed to open). Booting in Limited mode — offline queueing and catalog cache are disabled for this session.",
+		);
+	}
 	// Offline-first bootstrap: hydrate register state from IndexedDB before server checks.
 	const openingData = getValidCachedOpeningForCurrentUser(getOpeningStorage(), frappe?.session?.user);
 	if (openingData) {
