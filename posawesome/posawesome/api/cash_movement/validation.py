@@ -106,13 +106,30 @@ def resolve_source_cash_account(payload, profile_doc):
     allow_override = bool(profile_doc.get("posa_allow_source_account_override"))
     allowed_sources = extract_allowed_accounts(profile_doc.get("posa_allowed_source_accounts"))
 
-    if selected_source and not allow_override:
+    # The frontend prefills the source field with the profile default and echoes
+    # it back on every submit, so a selection equal to the default is NOT a real
+    # override. Resolve the default defensively so a profile with a valid explicit
+    # selection isn't blocked by an unrelated default-resolution failure.
+    try:
+        default_source = _resolve_default_source_cash_account(profile_doc)
+    except Exception:
+        default_source = None
+
+    is_override = bool(selected_source) and selected_source != default_source
+    if is_override and not allow_override:
         frappe.throw(_("Source account override is disabled for this POS Profile."))
 
     if selected_source and allowed_sources and selected_source not in allowed_sources:
         frappe.throw(_("Selected source account is not allowed for this POS Profile."))
 
-    source_account = selected_source or _resolve_default_source_cash_account(profile_doc)
+    if selected_source:
+        source_account = selected_source
+    elif default_source:
+        source_account = default_source
+    else:
+        # No selection and no resolvable default → surface the canonical error.
+        source_account = _resolve_default_source_cash_account(profile_doc)
+
     if not selected_source and allowed_sources and source_account not in allowed_sources:
         source_account = allowed_sources[0]
 

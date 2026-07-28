@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 # Importing the real api package pulls frappe transitively (api/__init__).
 # Skip the module when discovered by the standalone stub-suite runner
@@ -177,6 +177,82 @@ class TestCashMovementQueries(unittest.TestCase):
         self.assertIn("or_filters", kwargs)
         self.assertTrue(kwargs["or_filters"])
         self.assertFalse(any("posting_date" in row for row in kwargs["or_filters"]))
+
+
+def _make_profile(allow_override=False, allowed_sources=None):
+    fields = {
+        "posa_allow_source_account_override": 1 if allow_override else 0,
+        "posa_allowed_source_accounts": allowed_sources or [],
+    }
+    profile = MagicMock()
+    profile.get.side_effect = lambda key, default=None: fields.get(key, default)
+    return profile
+
+
+class TestResolveSourceCashAccount(unittest.TestCase):
+    """Guard against the regression where the frontend echoes the prefilled
+    default source account back and the backend wrongly treats it as an override."""
+
+    @patch("posawesome.posawesome.api.cash_movement.validation._resolve_default_source_cash_account")
+    @patch("posawesome.posawesome.api.cash_movement.validation.frappe")
+    def test_echoed_default_source_not_treated_as_override(self, mock_frappe, mock_default):
+        mock_default.return_value = "Caja Chica - GD"
+        mock_frappe.db.get_value.return_value = "Cash"  # account_type check
+        mock_frappe.throw.side_effect = Exception("should not throw")
+        profile = _make_profile(allow_override=False)
+
+        # Payload carries the unchanged default (what the form always sends).
+        result = validation.resolve_source_cash_account(
+            {"source_account": "Caja Chica - GD"}, profile
+        )
+
+        self.assertEqual(result, "Caja Chica - GD")
+        mock_frappe.throw.assert_not_called()
+
+    @patch("posawesome.posawesome.api.cash_movement.validation._resolve_default_source_cash_account")
+    @patch("posawesome.posawesome.api.cash_movement.validation.frappe")
+    def test_divergent_source_rejected_when_override_disabled(self, mock_frappe, mock_default):
+        mock_default.return_value = "Caja Chica - GD"
+        mock_frappe.db.get_value.return_value = "Cash"
+        mock_frappe.throw.side_effect = Exception("override disabled")
+        profile = _make_profile(allow_override=False)
+
+        with self.assertRaises(Exception):
+            validation.resolve_source_cash_account(
+                {"source_account": "Other Cash - GD"}, profile
+            )
+
+        mock_frappe.throw.assert_called_once()
+
+    @patch("posawesome.posawesome.api.cash_movement.validation._resolve_default_source_cash_account")
+    @patch("posawesome.posawesome.api.cash_movement.validation.frappe")
+    def test_divergent_source_allowed_when_override_enabled(self, mock_frappe, mock_default):
+        mock_default.return_value = "Caja Chica - GD"
+        mock_frappe.db.get_value.return_value = "Cash"
+        mock_frappe.throw.side_effect = Exception("should not throw")
+        profile = _make_profile(
+            allow_override=True, allowed_sources=[{"account": "Other Cash - GD"}]
+        )
+
+        result = validation.resolve_source_cash_account(
+            {"source_account": "Other Cash - GD"}, profile
+        )
+
+        self.assertEqual(result, "Other Cash - GD")
+        mock_frappe.throw.assert_not_called()
+
+    @patch("posawesome.posawesome.api.cash_movement.validation._resolve_default_source_cash_account")
+    @patch("posawesome.posawesome.api.cash_movement.validation.frappe")
+    def test_empty_selection_falls_back_to_default(self, mock_frappe, mock_default):
+        mock_default.return_value = "Caja Chica - GD"
+        mock_frappe.db.get_value.return_value = "Cash"
+        mock_frappe.throw.side_effect = Exception("should not throw")
+        profile = _make_profile(allow_override=False)
+
+        result = validation.resolve_source_cash_account({}, profile)
+
+        self.assertEqual(result, "Caja Chica - GD")
+        mock_frappe.throw.assert_not_called()
 
 
 if __name__ == "__main__":
