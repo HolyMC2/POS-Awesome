@@ -2841,6 +2841,7 @@ import {
 	DASHBOARD_SECTION_KEYS,
 	type DashboardEnvelope,
 	type DashboardSectionKey,
+	getDashboardAccessCached,
 	fetchDashboardData,
 	fetchDashboardEnvelope,
 	fetchDashboardSection,
@@ -3266,7 +3267,14 @@ const availableProfiles = computed(() => dashboardData.value.available_profiles 
 const enabledProfiles = computed(() =>
 	availableProfiles.value.filter((profile) => profile.dashboard_enabled !== false),
 );
-const isPosSupervisor = computed(() => Boolean(employeeStore.currentCashier?.is_supervisor));
+// Server-verified access (null = probe pending). The cashier store only
+// learns is_supervisor after a terminal employee list loads, so on direct
+// /dashboard entry it reads false even for owners/managers — the server
+// probe is the authority; the store flag is just the pre-probe fallback.
+const viewerIsSupervisor = ref<boolean | null>(null);
+const isPosSupervisor = computed(
+	() => viewerIsSupervisor.value ?? Boolean(employeeStore.currentCashier?.is_supervisor),
+);
 
 const dashboardScopeItems = computed(() => {
 	const items = [
@@ -4908,6 +4916,18 @@ onBeforeUnmount(() => {
 });
 
 onMounted(() => {
+	// Ask the server whether this session may see the dashboard; the
+	// isPosSupervisor watcher reacts to the answer (load or reset).
+	getDashboardAccessCached()
+		.then((result) => {
+			viewerIsSupervisor.value = Boolean(result?.allowed);
+		})
+		.catch((error) => {
+			// Probe unreachable (offline/transport): leave null so the
+			// cashier-store fallback keeps deciding; server still enforces.
+			console.warn(`${DASHBOARD_LOG_PREFIX} access probe failed`, error);
+		});
+
 	if (!isPosSupervisor.value) {
 		resetDashboardState();
 		return;

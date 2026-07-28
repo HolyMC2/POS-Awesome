@@ -162,6 +162,7 @@ import SaldoHoldsBadge from "@saldo/SaldoHoldsBadge.vue";
 import CacheUsageMeter from "./navbar/CacheUsageMeter.vue";
 import AboutDialog from "./navbar/AboutDialog.vue";
 import OfflineInvoices from "./OfflineInvoices.vue";
+import { getDashboardAccessCached } from "../services/dashboardService";
 import EmployeeSwitchDialog from "./pos/employee/EmployeeSwitchDialog.vue";
 import posLogo from "./pos/pos.png";
 import { forceClearAllCache } from "../../offline/index";
@@ -316,6 +317,10 @@ export default {
 			syncNotificationPrimed: false,
 			employeeSwitchHandler: null,
 			lockPosHandler: null,
+			// Server-verified dashboard access (null until the probe answers).
+			// The cashier-flag alone both hides the item from supervisors
+			// pre-boot and can show it to non-supervisor sessions.
+			dashboardAccessAllowed: null,
 		};
 	},
 	watch: {
@@ -491,6 +496,14 @@ export default {
 		this.initializeNavbar();
 		this.setupEventListeners();
 		this.syncOfflineStatusSurface();
+		getDashboardAccessCached()
+			.then((result) => {
+				this.dashboardAccessAllowed = Boolean(result?.allowed);
+				this.updateNavigationItems();
+			})
+			.catch(() => {
+				// Probe unreachable (offline): keep the cashier-flag fallback.
+			});
 	},
 
 	created() {
@@ -549,7 +562,13 @@ export default {
 					to: "/gift-cards",
 				});
 			}
-			if (this.currentCashier?.is_supervisor) {
+			// Server verdict wins once known; cashier flag is only the
+			// pre-probe fallback. Plain employees never get the entry.
+			const canSeeDashboard =
+				this.dashboardAccessAllowed !== null
+					? this.dashboardAccessAllowed
+					: Boolean(this.currentCashier?.is_supervisor);
+			if (canSeeDashboard) {
 				items.splice(1, 0, {
 					text: "Awesome Dashboard",
 					icon: "mdi-view-dashboard-outline",

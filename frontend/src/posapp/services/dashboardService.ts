@@ -341,6 +341,8 @@ export interface TaxChargesDayRow {
 
 export interface DashboardResponse {
 	enabled: boolean;
+	/** Server-verified: the session passed the dashboard authz gate. */
+	viewer_is_supervisor?: boolean;
 	profile?: string;
 	scope?: "all" | "current" | "specific";
 	default_scope?: "all" | "current" | "specific";
@@ -745,6 +747,7 @@ export function fetchDashboardData(args: DashboardRequest = {}) {
 export type DashboardEnvelope = Pick<
 	DashboardResponse,
 	| "enabled"
+	| "viewer_is_supervisor"
 	| "profile"
 	| "scope"
 	| "default_scope"
@@ -805,4 +808,33 @@ export function fetchDashboardEnvelope(args: DashboardRequest = {}) {
 		"posawesome.posawesome.api.dashboard.get_dashboard_envelope",
 		args,
 	);
+}
+
+/**
+ * Non-throwing authz probe. The cashier store can't answer "may this session
+ * see the dashboard?" until a terminal employee list loads, so the gate asks
+ * the server directly on mount.
+ */
+export function fetchDashboardAccess() {
+	return api.call<{ allowed: boolean }>(
+		"posawesome.posawesome.api.dashboard.get_dashboard_access",
+		{},
+	);
+}
+
+let dashboardAccessPromise: Promise<{ allowed: boolean }> | null = null;
+
+/**
+ * Session-cached access probe shared by the router guard, the navbar item
+ * and the dashboard view — one round-trip per session, one answer for all
+ * three gates. Transport failures clear the cache so the next gate retries.
+ */
+export function getDashboardAccessCached(force = false) {
+	if (force || !dashboardAccessPromise) {
+		dashboardAccessPromise = fetchDashboardAccess().catch((error) => {
+			dashboardAccessPromise = null;
+			throw error;
+		});
+	}
+	return dashboardAccessPromise;
 }

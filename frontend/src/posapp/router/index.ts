@@ -8,6 +8,7 @@ import {
 	recoverFromChunkLoadError,
 } from "../utils/chunkLoadRecovery";
 import { resolvePosAppRouteFullPath } from "../../loader-utils";
+import { getDashboardAccessCached } from "../services/dashboardService";
 import OfflineRouteUnavailable from "../components/system/OfflineRouteUnavailable.vue";
 
 const OFFLINE_ROUTE_UNAVAILABLE_NAME = "offline-route-unavailable";
@@ -46,12 +47,18 @@ const routes = [
 			title: "Awesome Dashboard",
 			layout: "default",
 			loadingMessage: "Loading dashboard...",
+			requiresSupervisor: true,
 		},
 	},
 	{
 		path: "/reports",
 		component: () => import("@/posapp/components/reports/Reports.vue"),
-		meta: { title: "Reports", layout: "default", loadingMessage: "Loading reports..." },
+		meta: {
+			title: "Reports",
+			layout: "default",
+			loadingMessage: "Loading reports...",
+			requiresSupervisor: true,
+		},
 	},
 	{
 		path: "/barcode",
@@ -172,7 +179,22 @@ const createPosAppRouter = () => {
 		startRouteLoading({
 			message: resolveRouteLoadingMessage(to),
 		});
-		next();
+		if (!to.meta?.requiresSupervisor) {
+			next();
+			return;
+		}
+		// Supervisor-only views never render for plain employees — not even
+		// as a blocked shell. Probe unreachable (offline): let the view
+		// through; the server still refuses the data.
+		getDashboardAccessCached()
+			.then((result) => {
+				if (result?.allowed) {
+					next();
+				} else {
+					next("/pos");
+				}
+			})
+			.catch(() => next());
 	});
 
 	router.afterEach(() => {
