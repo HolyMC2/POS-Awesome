@@ -322,7 +322,9 @@ def get_pos_telemetry_summary(
     operator-level and could leak shop-floor activity to plain cashiers.
     """
     roles = set(frappe.get_roles(frappe.session.user))
-    if not ({"System Manager", "POS Manager"} & roles):
+    # POS Awesome Supervisor included: these panels render inside the Awesome
+    # Dashboard, which that role is exactly the grant for.
+    if not ({"System Manager", "POS Manager", "POS Awesome Supervisor"} & roles):
         frappe.throw(_("Not permitted to read POS telemetry summaries"))
     filters: Dict[str, Any] = {}
     if profile:
@@ -344,6 +346,9 @@ def get_pos_telemetry_summary(
         fields=["event_name", "value", "event_timestamp"],
         order_by=order,
         limit_page_length=limit,
+        # Authz is the explicit role gate above; supervisors don't carry a
+        # doctype-level read perm on the raw event table.
+        ignore_permissions=True,
     )
 
     by_name: Dict[str, List[float]] = {}
@@ -410,7 +415,9 @@ def get_qz_fleet(days: int = 7) -> dict:
     across terminals is operator-level.
     """
     roles = set(frappe.get_roles(frappe.session.user))
-    if not ({"System Manager", "POS Manager"} & roles):
+    # POS Awesome Supervisor included: these panels render inside the Awesome
+    # Dashboard, which that role is exactly the grant for.
+    if not ({"System Manager", "POS Manager", "POS Awesome Supervisor"} & roles):
         frappe.throw(_("Not permitted to read POS telemetry summaries"))
 
     # `days` arrives as a str from HTTP; clamp to a sane 1..30 window.
@@ -430,6 +437,9 @@ def get_qz_fleet(days: int = 7) -> dict:
         fields=["terminal", "value", "event_timestamp", "metadata"],
         order_by="event_timestamp desc",
         limit_page_length=QZ_FLEET_MAX_ROWS,
+        # Authz is the explicit role gate above; supervisors don't carry a
+        # doctype-level read perm on the raw event table.
+        ignore_permissions=True,
     )
 
     # Failure counts per terminal over the SAME window, one aggregated query.
@@ -536,6 +546,8 @@ def get_qz_fleet(days: int = 7) -> dict:
         fields=["terminal", "event_timestamp"],
         order_by="event_timestamp desc",
         limit_page_length=QZ_FLEET_MAX_ROWS,
+        # Same explicit-role-gate rationale as the reads above.
+        ignore_permissions=True,
     )
 
     offline_cutoff = frappe.utils.add_to_date(now, minutes=-QZ_OFFLINE_MINUTES)

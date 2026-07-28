@@ -153,6 +153,41 @@ def _user_can_view_all_profiles(user: str) -> bool:
     return bool(user_roles & DASHBOARD_MANAGER_ROLES)
 
 
+def _has_dashboard_access() -> bool:
+    """Whether the session user may read the dashboard.
+
+    Allowed: admin/manager roles, the app's own supervisor role (how shop
+    owners/managers are promoted), or the legacy per-user supervisor flag
+    that predates the role migration.
+    """
+
+    from .employees import POS_SUPERVISOR_ROLE, _is_pos_supervisor
+
+    user = frappe.session.user
+    if user == "Administrator":
+        return True
+    roles = set(frappe.get_roles(user))
+    if roles & (DASHBOARD_MANAGER_ROLES | {POS_SUPERVISOR_ROLE}):
+        return True
+    return _is_pos_supervisor(frappe.get_cached_doc("User", user))
+
+
+def _assert_dashboard_access():
+    """Server-side gate for every dashboard endpoint.
+
+    The dashboard exposes company-wide sales, profit, staff performance and
+    tax figures — operator-level data. The SPA hides the view from
+    non-supervisors, but hiding is not authz: any logged-in cashier could
+    call the endpoints directly.
+    """
+
+    if not _has_dashboard_access():
+        frappe.throw(
+            _("Awesome Dashboard is restricted to POS supervisors and managers."),
+            frappe.PermissionError,
+        )
+
+
 def _normalize_scope(scope: Any, default_scope: str, allow_all_profiles: bool) -> str:
     requested = cstr(scope).strip().lower()
     if requested in ("all", "company", "global"):
@@ -4590,13 +4625,21 @@ def _resolve_dashboard_context(
     tax_report_limit: int = 20,
     supplier_limit: int = 8,
     low_stock_limit: int = 20,
+    **_extra,
 ) -> dict[str, Any]:
     """Resolve profile/scope/date context shared by all dashboard endpoints.
 
     Centralises permission checks, scope normalisation, limit coercion, and
     available-profile resolution so each per-section endpoint avoids redoing
     that work and produces identical envelope metadata.
+
+    ``**_extra`` swallows params the HTTP layer forwards into ``**kwargs``
+    handlers (``cmd``, client correlation ids like ``request_id``) — without
+    it every per-section endpoint TypeErrors on every real request, which is
+    exactly how the dashboard went dark for supervisors (2026-07 prod).
     """
+
+    _assert_dashboard_access()
 
     user = frappe.session.user
     current_profile_doc = _resolve_profile(pos_profile)
@@ -4757,6 +4800,10 @@ def _build_dashboard_envelope(ctx: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "enabled": ctx["enabled"],
+        # Reaching an envelope at all means _assert_dashboard_access passed —
+        # the SPA gates its view on this server truth (the cashier-store flag
+        # is empty until a terminal employee list loads, so it can't be authz).
+        "viewer_is_supervisor": True,
         "profile": ctx["profile_label"],
         "scope": ctx["requested_scope"],
         "default_scope": ctx["default_scope"],
@@ -4823,6 +4870,8 @@ def get_dashboard_data(
     endpoints which let the frontend render sections as soon as their data
     arrives instead of blocking on the full payload.
     """
+
+    _assert_dashboard_access()
 
     user = frappe.session.user
     current_profile_doc = _resolve_profile(pos_profile)
@@ -5827,3 +5876,16 @@ def get_dashboard_envelope(**kwargs):
 
     ctx = _resolve_dashboard_context(**kwargs)
     return _build_dashboard_envelope(ctx)
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_dashboard_access(**_extra):
+    """Non-throwing access probe for the SPA's dashboard gate.
+
+    The cashier store only learns ``is_supervisor`` after a terminal employee
+    list loads (i.e. after POS boot), so on direct /dashboard entry the client
+    has no local signal. It asks the server instead of parsing a 403. Bool
+    check, not assert-and-catch: frappe.throw queues a red toast in
+    ``_server_messages`` even when the exception is caught."""
+
+    return {"allowed": _has_dashboard_access()}
