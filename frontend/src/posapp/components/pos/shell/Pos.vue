@@ -991,13 +991,14 @@ export default {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	padding: 7px 14px;
+	padding: 9px 14px;
 	border-bottom: 1px solid var(--pos-border);
 }
 
 .mobile-dock__totals {
 	display: flex;
 	flex-direction: column;
+	gap: 3px;
 	min-width: 0;
 	flex: 1 1 auto;
 }
@@ -1029,8 +1030,8 @@ export default {
 .mobile-dock__tabs {
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
-	gap: 4px;
-	padding: 6px 8px;
+	gap: 6px;
+	padding: 7px 10px 9px;
 }
 
 .mobile-dock__tab {

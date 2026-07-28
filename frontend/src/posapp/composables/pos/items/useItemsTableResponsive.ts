@@ -51,6 +51,26 @@ export function getResponsiveVisibleHeaders(
 		}));
 }
 
+/**
+ * Whether the cart table should render its header row.
+ *
+ * On a phone-width panel an empty cart's header is dead weight: it
+ * labels nothing and, because `table-layout: fixed` takes the column
+ * widths from the first row, it is what forces the table wider than
+ * the panel — which pushed the empty-state block off the visible
+ * width. Dropping it lets the single full-span empty row own the
+ * layout, so the block centres on what the operator can actually see.
+ */
+export function shouldShowColumnHeaders(
+	rowCount: number,
+	breakpoint: string,
+): boolean {
+	if (rowCount > 0) {
+		return true;
+	}
+	return breakpoint !== "xs";
+}
+
 export function buildFinalVisibleColumns(
 	headers: TableHeader[],
 	width: number,

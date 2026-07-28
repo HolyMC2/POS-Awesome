@@ -357,6 +357,21 @@ const connectivityLabel = computed(() => {
 	min-width: unset;
 }
 
+/* Phone navbar: the connectivity wording is ~120 px of the bar and
+   the coloured icon already carries the state (plus its tooltip and
+   aria-label). Dropping the text here is what leaves the brand title
+   enough room to render whole instead of as a one-letter ellipsis. */
+@media (max-width: 767px) {
+	.status-info-always-visible {
+		display: none;
+	}
+
+	.status-section-enhanced {
+		margin-right: 0;
+		gap: 0;
+	}
+}
+
 @keyframes status-spin {
 	from {
 		transform: rotate(0deg);

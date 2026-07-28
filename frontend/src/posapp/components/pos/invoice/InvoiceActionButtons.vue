@@ -294,16 +294,24 @@ const showSaldoButton = computed(() =>
 	}
 }
 
+/* Phone: keep the touch targets close to the 768px step instead of
+   dropping to 34 px — the sharp shrink is what made the action grid
+   read as cramped next to the (taller) bottom dock. */
 @media (max-width: 480px) {
 	.summary-btn {
-		font-size: 0.74rem !important;
-		padding: 3px 6px !important;
-		min-height: 34px !important;
+		font-size: 0.78rem !important;
+		padding: 4px 8px !important;
+		min-height: 40px !important;
 	}
 
 	.pay-btn {
-		font-size: 0.85rem !important;
-		min-height: 40px !important;
+		font-size: 0.92rem !important;
+		min-height: 46px !important;
+	}
+
+	.v-row.v-row--dense > .v-col {
+		padding-top: 3px !important;
+		padding-bottom: 3px !important;
 	}
 }
 

@@ -1046,8 +1046,20 @@ export default {
 	max-width: 28px !important;
 }
 
+/* The title is the only shrinkable box in the bar, so when the action
+   cluster ran long it absorbed the whole deficit and Vuetify's
+   placeholder ellipsis rendered the 3-letter brand as a meaningless
+   "P…". It is short enough to never need shrinking — the actions
+   cluster gives ground instead (StatusIndicator drops its inline
+   label at this width). */
 .mobile-navbar .pos-navbar-title {
 	font-size: 1rem !important;
+	flex: 0 0 auto;
+	max-width: none;
+}
+
+.mobile-navbar .pos-navbar-title :deep(.v-toolbar-title__placeholder) {
+	overflow: visible;
 }
 
 .mobile-navbar .pos-navbar-title-light,

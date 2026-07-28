@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	buildFinalVisibleColumns,
 	getResponsiveVisibleHeaders,
+	shouldShowColumnHeaders,
 } from "../src/posapp/composables/pos/items/useItemsTableResponsive";
 
 const headers = [
@@ -68,5 +69,21 @@ describe("items table final visible columns", () => {
 			"actions",
 			"data-table-expand",
 		]);
+	});
+});
+
+describe("cart header row visibility", () => {
+	it("drops the header row on a phone-width empty cart", () => {
+		expect(shouldShowColumnHeaders(0, "xs")).toBe(false);
+	});
+
+	it("keeps the header row as soon as the phone cart has a line", () => {
+		expect(shouldShowColumnHeaders(1, "xs")).toBe(true);
+	});
+
+	it("keeps the header row on wider panels even when the cart is empty", () => {
+		for (const breakpoint of ["sm", "md", "lg", "xl"]) {
+			expect(shouldShowColumnHeaders(0, breakpoint)).toBe(true);
+		}
 	});
 });

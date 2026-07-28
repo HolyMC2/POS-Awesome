@@ -20,7 +20,7 @@
 			class="posa-cart-table posa-cart-table--native elevation-2 pos-themed-card"
 			:class="[tableClasses, `density-${tableDensity}`]"
 		>
-			<thead :class="`responsive-header container-${breakpoint}`">
+			<thead v-if="showColumnHeaders" :class="`responsive-header container-${breakpoint}`">
 				<tr>
 					<th
 						v-for="column in finalVisibleColumns"
@@ -28,8 +28,9 @@
 						class="posa-cart-th"
 						:class="(column as any).cellClass || null"
 						:data-column-key="(column as any).key || (column as any).value"
+						:title="column.title || undefined"
 					>
-						{{ column.title }}
+						<span class="posa-cart-th__label">{{ column.title }}</span>
 					</th>
 				</tr>
 			</thead>
@@ -156,6 +157,7 @@ import { useItemsTableSearch } from "../../../composables/pos/items/useItemsTabl
 import { useItemsTableDragDrop } from "../../../composables/pos/items/useItemsTableDragDrop";
 import {
 	DATA_TABLE_EXPAND_COLUMN,
+	shouldShowColumnHeaders,
 	useItemsTableResponsive,
 } from "../../../composables/pos/items/useItemsTableResponsive";
 import { useItemsTableMerge } from "../../../composables/pos/items/useItemsTableMerge";
@@ -272,6 +274,10 @@ const {
 } = responsive;
 
 const finalVisibleColumns = computed(() => [...responsiveHeaders.value, DATA_TABLE_EXPAND_COLUMN]);
+
+const showColumnHeaders = computed(() =>
+	shouldShowColumnHeaders(visibleItems.value.length, breakpoint.value),
+);
 
 const hide_qty_decimals = computed(() => {
 	const opts = loadItemSelectorSettings();

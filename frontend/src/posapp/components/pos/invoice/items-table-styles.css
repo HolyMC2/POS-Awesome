@@ -107,50 +107,100 @@ table.posa-cart-table--native {
 	border-spacing: 0;
 }
 
-/* Cart column widths. Name gets the lion's share so long item names
-   (e.g. "Samsung A07 -Negro-64 GB-4") stay readable; QTY is just a
-   spin-control widget so it stays tight; Rate / Amount are short
-   numerics and don't need 1/N of the row each.
+/* Cart column widths. Name is deliberately LEFT UNSIZED: under
+   `table-layout: fixed` the used table width is
+   max(declared width, SUM of the column widths), so the old
+   `width: 42%` on Name pushed the table past the cart panel — the
+   table painted wider than its container, which is what made the qty
+   stepper spill into the next column and left the mobile empty state
+   centred on the overflow width instead of the visible width.
+   Unsized, Name is the elastic column: it absorbs whatever the sized
+   columns leave over.
    Use both <th data-column-key> and <td data-column-key> so the
    fixed layout reads the width from either header or first body row. */
 .posa-cart-table [data-column-key="item_name"] {
-	width: 42%;
+	/* no width on purpose — elastic column */
+	min-width: 0;
 }
+/* The sized columns are percentages so their sum tracks the panel and
+   can never push the table past it; the px floor in max() is the
+   width the widget inside genuinely needs (a 2-button stepper, an
+   icon button), below which the percentage alone would clip it. */
 .posa-cart-table [data-column-key="qty"] {
-	width: 130px;
+	/* 96px of stepper (2 x 24px buttons + gaps + the 32px display)
+	   plus the cell's own side padding. */
+	width: max(120px, 14%);
 }
 .posa-cart-table [data-column-key="uom"] {
-	width: 70px;
+	width: max(56px, 7%);
 }
 .posa-cart-table [data-column-key="price_list_rate"] {
-	width: 110px;
+	width: 11%;
 }
-.posa-cart-table [data-column-key="discount_percentage"],
+.posa-cart-table [data-column-key="discount_percentage"] {
+	width: 9%;
+}
 .posa-cart-table [data-column-key="discount_amount"] {
-	width: 100px;
+	width: 10%;
 }
 .posa-cart-table [data-column-key="rate"] {
-	width: 110px;
+	width: 11%;
 }
 .posa-cart-table [data-column-key="amount"] {
-	width: 110px;
+	width: 11%;
 }
 .posa-cart-table [data-column-key="posa_is_offer"] {
-	width: 70px;
+	width: max(60px, 7%);
 }
 .posa-cart-table [data-column-key="actions"] {
-	width: 80px;
+	width: max(44px, 6%);
 }
-/* Vuetify-generated expand-arrow column on the right; the SPA passes
-   it last via DATA_TABLE_EXPAND_COLUMN. Keep it narrow. */
-.posa-cart-table th:last-child:not([data-column-key]),
-.posa-cart-table td:last-child:not([data-column-key]) {
-	width: 48px;
+/* Expand-arrow column on the right; the SPA passes it last via
+   DATA_TABLE_EXPAND_COLUMN, which renders WITH a data-column-key —
+   the old `:last-child:not([data-column-key])` selector never matched
+   it, so the column stayed unsized and competed with Name for the
+   leftover space. */
+.posa-cart-table [data-column-key="data-table-expand"] {
+	width: max(40px, 5%);
+}
+
+/* Delete + expand hold a single icon each; trim their gutters and the
+   Vuetify default button box so the two chrome columns cost the row
+   ~40px instead of ~70px each. */
+.posa-cart-table [data-column-key="actions"],
+.posa-cart-table [data-column-key="data-table-expand"] {
+	padding-left: 4px;
+	padding-right: 4px;
+}
+
+.posa-cart-table__delete-btn.v-btn {
+	min-width: 34px !important;
+	width: 34px;
+	padding: 0 !important;
+}
+
+.posa-cart-table__expand-btn.v-btn {
+	min-width: 32px !important;
+	width: 32px;
+	height: 32px;
+}
+
+/* The empty row spans every column, so its cell is as wide as the
+   table. Keep the panel itself bounded to the cell so a long Spanish
+   title cannot push the table wider than the cart. */
+.posa-cart-table .posa-cart-empty-row td {
+	padding: 0;
+	height: auto;
+	overflow: hidden;
 }
 
 .posa-cart-empty-state {
 	min-height: 140px;
-	padding: 22px 20px;
+	padding: 22px 16px;
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+	overflow-wrap: anywhere;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -191,7 +241,7 @@ table.posa-cart-table--native {
 }
 
 .posa-cart-empty-state__subtitle {
-	max-width: 320px;
+	max-width: min(320px, 100%);
 	font-size: 0.92rem;
 	line-height: 1.6;
 	color: var(--pos-text-secondary);
@@ -200,20 +250,17 @@ table.posa-cart-table--native {
 /* Table headers */
 .posa-cart-table th {
 	font-weight: 600;
-	font-size: 0.8rem;
+	font-size: var(--header-font-size, 0.8rem);
 	text-transform: none;
 	letter-spacing: 0.02em;
-	padding: 12px;
+	padding: 10px var(--cell-padding-x, 6px);
 	border-bottom: 1px solid var(--pos-border-light);
 	background-color: var(--pos-surface-muted);
 	color: var(--pos-text-secondary);
 	position: sticky;
 	top: 0;
 	z-index: 3;
-	white-space: nowrap;
 	overflow: hidden;
-	text-overflow: ellipsis;
-	width: auto;
 	text-align: center;
 	vertical-align: middle !important;
 	line-height: 1.2 !important;
@@ -233,6 +280,21 @@ table.posa-cart-table--native {
 
 .posa-cart-table th:last-child {
 	border-right: none;
+}
+
+/* Header labels wrap to two lines before they truncate — the es
+   locale ships long titles ("Tarifa de lista", "Descuento importe")
+   that a single nowrap line could only render as "Tarifa de ...".
+   The full text stays reachable through the th `title` tooltip. */
+.posa-cart-th__label {
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	line-height: 1.2;
+	max-width: 100%;
 }
 
 /* Header hover effects */
@@ -288,18 +350,25 @@ table.posa-cart-table--native {
 	background-color: var(--pos-surface-muted);
 }
 
-/* Table cells */
+/* Table cells. The side padding follows the container breakpoint
+   (--cell-padding-x) so narrow cart panels give their width to the
+   fields instead of to gutters, and `overflow: hidden` keeps a field
+   that still outgrows its column inside its own cell rather than
+   painting over the neighbouring value. Vertical padding stays fixed
+   so the 60px row pitch doesn't move with the breakpoint. */
 .posa-cart-table td {
-	padding: 14px 12px;
+	padding: 12px var(--cell-padding-x, 10px);
 	vertical-align: middle;
 	height: 60px;
 	text-align: center;
 	color: var(--pos-text-primary);
 	position: relative;
+	overflow: hidden;
 }
 
 .posa-cart-table td > div {
 	width: 100%;
+	min-width: 0;
 	height: 100%;
 	display: flex;
 	align-items: center;
@@ -311,14 +380,19 @@ table.posa-cart-table--native {
    QUANTITY COUNTER COMPONENT
    ================================================================= */
 
+/* The stepper must fit the Cantidad column, not the other way round:
+   its old `min-width: 140px` was wider than the column's content box,
+   so the "+" button rendered outside the cell and read as a stray
+   glyph glued to the next column's value. Sized from its own parts
+   now (2 x 24px buttons + gaps + the elastic display). */
 .posa-cart-table__qty-counter {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 6px;
-	padding: 4px;
-	min-width: 140px;
-	max-width: 160px;
+	gap: 4px;
+	padding: 3px;
+	min-width: 0;
+	max-width: 100%;
 	width: auto;
 	height: auto;
 	background: var(--pos-surface-variant);
@@ -414,7 +488,7 @@ table.posa-cart-table--native {
 }
 
 .posa-cart-table__qty-display {
-	min-width: 40px;
+	min-width: 32px;
 	max-width: 80px;
 	width: auto;
 	flex: 1 1 auto;
@@ -455,10 +529,12 @@ table.posa-cart-table--native {
 	border-color: var(--pos-error);
 }
 
+/* Long quantities widen the display up to the room the cell has —
+   never past it. The full value stays on the element's `title`. */
 .posa-cart-table__qty-display.large-number,
 .posa-cart-table__qty-display--large {
-	min-width: 70px;
-	max-width: 120px;
+	min-width: 40px;
+	max-width: 100%;
 	font-size: 0.75rem;
 	padding: 6px 3px;
 	letter-spacing: -0.04em;
@@ -477,14 +553,19 @@ table.posa-cart-table--native {
 	position: relative;
 }
 
+/* Rate / discount pills: `min-width: 60px` plus 8px side padding made
+   a formatted "MX$ 1,250.00" wider than the Precio column, so the
+   outlined box overlapped Importe. Shrinkable now, with the number
+   itself truncating as the last resort (full value on `title`). */
 .posa-cart-table__editor-display {
-	min-width: 60px;
+	min-width: 0;
 	max-width: 100%;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 4px;
-	padding: 4px 8px;
+	gap: 2px;
+	padding: 4px 6px;
+	overflow: hidden;
 	border-radius: 6px;
 	border: 1px solid var(--pos-primary-variant);
 	/* Match Qty border strength */
@@ -509,13 +590,21 @@ table.posa-cart-table--native {
 	opacity: 0.7;
 	font-size: 0.8em;
 	font-weight: 500;
+	flex: 0 0 auto;
+}
+
+.posa-cart-table__editor-display .amount-value {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 /* Input field overrides within the table */
 .posa-cart-table__editor-input,
 .posa-cart-table__qty-input {
 	width: 100%;
-	max-width: 100px;
+	max-width: 100%;
 	margin: 0;
 	padding: 0;
 }
@@ -792,6 +881,7 @@ table.posa-cart-table--native {
 	--table-padding: 8px;
 	--header-font-size: 0.65rem;
 	--cell-padding: 8px 4px;
+	--cell-padding-x: 4px;
 	--cell-height: 48px;
 }
 
@@ -799,6 +889,7 @@ table.posa-cart-table--native {
 	--table-padding: 12px;
 	--header-font-size: 0.7rem;
 	--cell-padding: 12px 6px;
+	--cell-padding-x: 6px;
 	--cell-height: 52px;
 }
 
@@ -806,6 +897,7 @@ table.posa-cart-table--native {
 	--table-padding: 16px;
 	--header-font-size: 0.75rem;
 	--cell-padding: 14px 8px;
+	--cell-padding-x: 8px;
 	--cell-height: 56px;
 }
 
@@ -813,6 +905,7 @@ table.posa-cart-table--native {
 	--table-padding: 16px;
 	--header-font-size: 0.8rem;
 	--cell-padding: 16px 12px;
+	--cell-padding-x: 10px;
 	--cell-height: 60px;
 }
 
@@ -820,18 +913,45 @@ table.posa-cart-table--native {
 	--table-padding: 20px;
 	--header-font-size: 0.85rem;
 	--cell-padding: 18px 12px;
+	--cell-padding-x: 12px;
 	--cell-height: 64px;
+}
+
+/* Phone-width column budget. compact-view shrinks the stepper's
+   buttons to 20px, so the QTY floor comes down with them — every
+   pixel saved here goes to the item name, which is what the operator
+   actually reads on a phone. The responsive header filter leaves only
+   Name / QTY / Rate / Amount / Actions / expand at this width. */
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table [data-column-key="qty"] {
+	width: max(92px, 20%);
+}
+/* Fewer columns share the row at this width, so the money cells can
+   take a bigger slice and still print a whole amount. */
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table [data-column-key="rate"],
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table [data-column-key="price_list_rate"] {
+	width: 16%;
+}
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table [data-column-key="amount"] {
+	width: 18%;
+}
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table [data-column-key="actions"] {
+	width: max(40px, 10%);
+}
+.posa-responsive-table-container.breakpoint-xs
+	.posa-cart-table
+	[data-column-key="data-table-expand"] {
+	width: max(34px, 8%);
 }
 
 /* Container-aware responsive adjustments */
 .posa-responsive-table-container.compact-view .posa-cart-table__qty-counter {
-	min-width: 110px;
-	max-width: 140px;
+	min-width: 0;
+	max-width: 100%;
 	gap: 4px;
 }
 
 .posa-responsive-table-container.compact-view .posa-cart-table__qty-display {
-	min-width: 35px;
+	min-width: 28px;
 	max-width: 65px;
 	height: 24px;
 	font-size: 0.7rem;

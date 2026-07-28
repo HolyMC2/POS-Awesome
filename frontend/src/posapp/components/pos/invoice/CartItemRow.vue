@@ -3,8 +3,10 @@
 		<template v-for="column in visibleColumns" :key="column.key">
 			<!-- Item Name Column -->
 			<td v-if="column.key === 'item_name'" class="text-start" :data-column-key="'item_name'">
-				<div class="d-flex align-center">
-					<span>{{ item.item_name }}</span>
+				<div class="d-flex align-center posa-cart-item-row__name-cell">
+					<span class="posa-cart-item-row__name" :title="item.item_name">{{
+						item.item_name
+					}}</span>
 					<v-chip v-if="item.is_bundle" color="secondary" size="x-small" class="ml-1">
 						{{ __("Bundle") }}
 					</v-chip>
@@ -195,7 +197,7 @@
 				class="text-end"
 				:data-column-key="'price_list_rate'"
 			>
-				<div class="currency-display right-aligned">
+				<div class="currency-display right-aligned" :title="priceListRateLabel">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span
 						class="amount-value"
@@ -306,6 +308,7 @@
 						tabindex="0"
 						data-pos-keyboard-target="cart-rate"
 						role="button"
+						:title="rateLabel"
 						:aria-label="__('Edit rate')"
 						@keydown.enter.prevent="openRateEdit"
 						@keydown.space.prevent="openRateEdit"
@@ -335,7 +338,7 @@
 
 			<!-- Amount Column -->
 			<td v-else-if="column.key === 'amount'" class="text-center" :data-column-key="'amount'">
-				<div class="currency-display right-aligned">
+				<div class="currency-display right-aligned" :title="amountLabel">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span
 						class="amount-value"
@@ -504,6 +507,15 @@ const memoDeps = computed(() => {
 });
 
 const qtyLength = computed(() => String(Math.abs(props.item.qty || 0)).replace(".", "").length);
+
+// Narrow cart panels truncate the money cells with an ellipsis rather
+// than letting them paint over the next column, so every amount also
+// carries its full value as a hover title.
+const currencyLabel = (value) =>
+	`${props.currencySymbol(props.displayCurrency)}${props.formatCurrency(value)}`;
+const priceListRateLabel = computed(() => currencyLabel(props.item.price_list_rate));
+const rateLabel = computed(() => currencyLabel(props.item.rate));
+const amountLabel = computed(() => currencyLabel(props.item.qty * props.item.rate));
 
 const disableDecrement = computed(
 	() =>
@@ -718,9 +730,31 @@ function cancelDiscountAmountEdit() {
 	align-items: center;
 	justify-content: center;
 	width: 100%;
+	min-width: 0;
 	height: 100%;
 	padding: 0;
 	margin: 0;
+	overflow: hidden;
+}
+
+/* Name cell: the item name is the one field allowed to take two
+   lines. Without a shrinkable span the flex row kept it at its full
+   intrinsic width, so a narrow cart cut it mid-word with no ellipsis
+   to say so. Chips and the edit buttons keep their intrinsic size. */
+.posa-cart-item-row__name-cell {
+	min-width: 0;
+}
+
+.posa-cart-item-row__name {
+	min-width: 0;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	line-height: 1.25;
+	text-align: start;
 }
 
 .currency-display.right-aligned {
@@ -744,10 +778,22 @@ function cancelDiscountAmountEdit() {
 	text-align: center;
 }
 
+/* Money cells truncate rather than paint over the next column; the
+   full amount stays on the cell's `title`. Scoped to
+   .currency-display so it can't reach the qty display, which carries
+   .amount-value too but must keep its own minimum width. */
+.currency-display .amount-value {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .currency-symbol {
 	opacity: 0.7;
 	margin-right: 2px;
 	font-size: 0.85em;
+	flex: 0 0 auto;
 }
 
 .negative-number {
@@ -755,14 +801,18 @@ function cancelDiscountAmountEdit() {
 	font-weight: 600;
 }
 
-/* Add minimal padding for table cells as per ItemsTable.vue styles */
+/* Add minimal padding for table cells as per ItemsTable.vue styles.
+   Side padding follows the container breakpoint (--cell-padding-x,
+   set on .posa-responsive-table-container) so a phone-width cart
+   spends its width on the fields instead of on gutters. */
 td {
-	padding: 16px 12px;
+	padding: 12px var(--cell-padding-x, 10px);
 	vertical-align: middle;
 	height: 60px;
 	text-align: center;
 	color: var(--pos-text-primary);
 	position: relative;
+	overflow: hidden;
 }
 
 /* Keyboard focus styles */
