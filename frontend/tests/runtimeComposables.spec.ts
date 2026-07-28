@@ -81,6 +81,76 @@ describe("runtime composable lifecycle ownership", () => {
 		);
 	});
 
+	it("falls back to HTTP probing when the realtime socket is not connected", () => {
+		vi.useFakeTimers();
+		const check = vi.fn(async () => undefined);
+		const runtime = useNetworkLifecycle({
+			networkOnline: ref(true),
+			serverOnline: ref(false),
+			serverConnecting: ref(false),
+			internetReachable: ref(false),
+			realtime: { on: vi.fn(), off: vi.fn() },
+			isManualOffline: () => false,
+			checkNetworkConnectivity: check,
+		});
+
+		runtime.start();
+		// No connected socket at start → immediate forced probe.
+		expect(check).toHaveBeenCalledTimes(1);
+		expect(check).toHaveBeenCalledWith({ forceImmediate: true });
+
+		// Still socketless → the interval keeps probing.
+		vi.advanceTimersByTime(20_000);
+		expect(check).toHaveBeenCalledTimes(2);
+		vi.advanceTimersByTime(20_000);
+		expect(check).toHaveBeenCalledTimes(3);
+
+		runtime.stop();
+		vi.advanceTimersByTime(60_000);
+		expect(check).toHaveBeenCalledTimes(3);
+	});
+
+	it("does not HTTP-probe while the socket is connected, but re-verifies on disconnect", () => {
+		vi.useFakeTimers();
+		const check = vi.fn(async () => undefined);
+		const handlers: Record<string, (...args: any[]) => void> = {};
+		const realtime = {
+			socket: { connected: true },
+			on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+				handlers[event] = handler;
+			}),
+			off: vi.fn(),
+		};
+		const serverOnline = ref(false);
+		const runtime = useNetworkLifecycle({
+			networkOnline: ref(true),
+			serverOnline,
+			serverConnecting: ref(false),
+			internetReachable: ref(false),
+			realtime,
+			isManualOffline: () => false,
+			checkNetworkConnectivity: check,
+		});
+
+		runtime.start();
+		// Connected socket seeds serverOnline; no HTTP probe needed.
+		expect(serverOnline.value).toBe(true);
+		expect(check).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(20_000);
+		expect(check).not.toHaveBeenCalled();
+
+		// Socket dies: serverOnline drops AND an HTTP re-verify fires so a
+		// healthy backend can flip it right back.
+		realtime.socket.connected = false;
+		handlers.disconnect?.();
+		expect(serverOnline.value).toBe(false);
+		expect(check).toHaveBeenCalledTimes(1);
+		vi.advanceTimersByTime(20_000);
+		expect(check).toHaveBeenCalledTimes(2);
+
+		runtime.stop();
+	});
+
 	it("stops customer readiness watcher on unmount", async () => {
 		const profile = ref<any>({ name: "P1", modified: "1" });
 		const ensureCustomersReady = vi.fn(async () => true);

@@ -28,9 +28,19 @@ type UseNetworkLifecycleOptions = {
 	}) => Promise<void>;
 };
 
+// How often to fall back to the HTTP prober while the realtime socket is not
+// connected. The socket is the fast-path serverOnline signal, but it must not
+// be the ONLY one: on the /posapp web mount (or any socket auth/transport
+// failure) the socket never connects while HTTP is perfectly healthy — which
+// left serverOnline false forever, the "Server Offline / Limited" badge stuck
+// on, and the offline guard refusing cart adds (found live on demo.lab
+// 2026-07-28; the pre-refactor useNetwork probe loop had been orphaned).
+export const SOCKETLESS_HTTP_PROBE_INTERVAL_MS = 20_000;
+
 export function useNetworkLifecycle(options: UseNetworkLifecycleOptions) {
 	let started = false;
 	let stopWatchers: Array<() => void> = [];
+	let socketlessProbeTimer: ReturnType<typeof setInterval> | null = null;
 	const realtimeHandlers: Array<[string, (...args: any[]) => void]> = [];
 
 	const networkProxy = {
@@ -163,7 +173,22 @@ export function useNetworkLifecycle(options: UseNetworkLifecycleOptions) {
 			options.serverOnline.value = true;
 			(window as any).serverOnline = true;
 			options.serverConnecting.value = false;
+		} else if (!options.isManualOffline()) {
+			// No connected socket at start — establish server reachability
+			// over HTTP instead of waiting on a connect event that may never
+			// fire (web mount, socket auth failure, proxy without websocket).
+			void networkProxy.checkNetworkConnectivity({
+				forceImmediate: true,
+			});
 		}
+
+		socketlessProbeTimer = setInterval(() => {
+			const sock = (options.realtime as any)?.socket;
+			if (sock?.connected || options.isManualOffline()) {
+				return;
+			}
+			void networkProxy.checkNetworkConnectivity();
+		}, SOCKETLESS_HTTP_PROBE_INTERVAL_MS);
 
 		registerRealtime("connect", () => {
 			options.serverOnline.value = true;
@@ -174,6 +199,11 @@ export function useNetworkLifecycle(options: UseNetworkLifecycleOptions) {
 			options.serverOnline.value = false;
 			(window as any).serverOnline = false;
 			options.serverConnecting.value = false;
+			// The socket dying does not mean the server is down — re-verify
+			// over HTTP so a healthy backend flips serverOnline right back.
+			if (!options.isManualOffline()) {
+				void networkProxy.checkNetworkConnectivity();
+			}
 		});
 		registerRealtime("connecting", () => {
 			options.serverConnecting.value = true;
@@ -189,6 +219,10 @@ export function useNetworkLifecycle(options: UseNetworkLifecycleOptions) {
 			return;
 		}
 		started = false;
+		if (socketlessProbeTimer) {
+			clearInterval(socketlessProbeTimer);
+			socketlessProbeTimer = null;
+		}
 		window.removeEventListener("online", handleOnline);
 		window.removeEventListener("offline", handleOffline);
 		document.removeEventListener(
