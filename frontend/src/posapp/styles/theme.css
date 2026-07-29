@@ -752,6 +752,7 @@ body[data-page-route="posapp"] .desk-container {
 .posapp .action-btn-consistent,
 .posapp .view-toggle-btn,
 .posapp .mobile-dock__tab,
+.posapp .posa-customer-icon,
 .posapp [role="button"] {
 	touch-action: manipulation;
 }
@@ -783,5 +784,19 @@ body[data-page-route="posapp"] .desk-container {
 	   leave width to the flex layout so the cart row doesn't reflow. */
 	.posapp .posa-cart-table__qty-display {
 		height: auto !important;
+	}
+
+	/* The cart's two chrome buttons get the height floor but not the
+	   width one: their columns are 40px and 36px wide at phone width,
+	   so a 44px square would paint outside the cell. Their widths are
+	   set against the column budget in items-table-styles.css (36px
+	   delete, 32px expand, on halved gutters); height is what the row
+	   can absorb for free, since the qty stepper already makes it
+	   44px tall. Deliberately a separate rule from the block above —
+	   adding these two selectors to that list is the 463c0328
+	   collision waiting to happen. */
+	.posapp .posa-cart-table__delete-btn,
+	.posapp .posa-cart-table__expand-btn {
+		min-height: max(var(--pos-touch-target-min), 44px) !important;
 	}
 }

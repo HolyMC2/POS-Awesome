@@ -1007,6 +1007,82 @@ table.posa-cart-table--native {
 		min-width: 28px !important;
 		height: 44px !important;
 	}
+
+	/* UOM stepper. Its arrows were 20px boxes held at `opacity: 0`
+	   until `.posa-cart-table__editor-box:hover` — a reveal a touch
+	   screen never fires, so on a phone the control was invisible as
+	   well as untappable. Here they are always on and take the qty
+	   stepper's 32 x 44. Two of them plus the gaps and a readable
+	   unit need ~88px, so the column's 56px floor goes to 100px; the
+	   responsive header filter drops UOM entirely below a 450px
+	   container (useItemsTableResponsive.ts), so the extra width
+	   never lands on the narrow-phone layout. Only the floor moves —
+	   the 7% share is the base one, so a wide cashier tablet doesn't
+	   hand the unit column width it has no use for. */
+	.posa-cart-table [data-column-key="uom"] {
+		width: max(100px, 7%);
+		padding-left: 4px;
+		padding-right: 4px;
+	}
+
+	.posa-cart-table .uom-editor {
+		gap: 2px;
+	}
+
+	.posa-cart-table .uom-arrow {
+		width: 32px !important;
+		min-width: 32px !important;
+		height: 44px !important;
+		min-height: 44px !important;
+		opacity: 1;
+	}
+
+	/* The select only appears while the unit is being edited, and at
+	   that moment it is the whole cell — its 80px floor would push the
+	   arrows out. */
+	.posa-cart-table .uom-select {
+		min-width: 0;
+	}
+
+	/* Rate / discount / UOM pills are tap targets in their own right:
+	   tapping one opens its editor. The row already stands 50px tall
+	   for the stepper, so the full 44px costs nothing vertically. */
+	.posa-cart-table .posa-cart-table__editor-display {
+		min-height: 44px;
+	}
+
+	/* Delete and expand take the full 44px of height (free — see
+	   above) but NOT a 44px width: at phone width the actions column
+	   floor is 40px and the expand column's 34px, so a square target
+	   would paint outside its cell, the collision 463c0328 fixed.
+	   Instead both chrome columns halve their gutters, 4px -> 2px,
+	   which pays for a 36px delete and a 32px expand out of padding
+	   rather than out of the item name. Only the phone-width expand
+	   floor moves, 34px -> 36px, and it was already 6px short of
+	   holding its own 32px button. Target areas: delete 34x28 ->
+	   36x44, expand 32x32 -> 32x44. The height floor itself lives
+	   with the other touch floors in theme.css. */
+	.posa-cart-table [data-column-key="actions"],
+	.posa-cart-table [data-column-key="data-table-expand"] {
+		padding-left: 2px;
+		padding-right: 2px;
+	}
+
+	.posa-responsive-table-container.breakpoint-xs
+		.posa-cart-table
+		[data-column-key="data-table-expand"] {
+		width: max(36px, 8%);
+	}
+
+	.posa-cart-table .posa-cart-table__delete-btn.v-btn {
+		min-width: 36px !important;
+		width: 36px;
+	}
+
+	.posa-cart-table .posa-cart-table__expand-btn.v-btn {
+		min-width: 32px !important;
+		width: 32px;
+	}
 }
 
 /* =================================================================

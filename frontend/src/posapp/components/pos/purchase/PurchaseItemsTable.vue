@@ -479,4 +479,49 @@ export default {
 	margin-right: 2px;
 	font-size: 0.85em;
 }
+
+/* ==========================================================================
+   Touch targets. Every control in this table is a 24px box — under the 44px
+   floor (WCAG 2.5.5) that theme.css applies elsewhere. The qty buttons are
+   the dangerous ones: theme.css already targets `.posapp .qty-control-btn`
+   with a 44px min at specificity (0,2,0), and the local `24px !important`
+   rule scopes to `.qty-control-btn[data-v-…]` — also (0,2,0). The winner is
+   decided by stylesheet order alone, and both outcomes are wrong: theme.css
+   winning inflates buttons that are `flex-shrink: 0` inside a 100px
+   max-width counter, so the control overflows its cell; the local rule
+   winning leaves a 24px target. Everything below is a descendant selector,
+   (0,3,0) once scoped, so the intent wins either way and does not depend on
+   how the bundler orders CSS.
+
+   Sizes mirror the cart (see items-table-styles.css): 32 x 44, not a 44px
+   square. The budget is the container, and both boxes are 116px:
+     UOM   2 pad + 32 + 2 gap + 40 select + 2 gap + 32 + 2 pad = 112
+     Qty   2 pad + 32 + 2 gap + 40 display + 2 gap + 32 + 2 pad = 112
+   Two 44px squares would need 136 and the UOM column is 15% of the table —
+   116px already asks for a ~774px table before the column stops being the
+   binding constraint. Height is free: the row grows to fit.
+   Desktop is untouched; all of this is inside pointer: coarse.
+   ========================================================================== */
+@media (pointer: coarse) {
+	.pos-table__qty-counter,
+	.pos-table__editor-box {
+		max-width: 116px;
+	}
+
+	.pos-table__qty-counter .qty-control-btn,
+	.pos-table__editor-box .pos-table__editor-btn {
+		width: 32px !important;
+		min-width: 32px !important;
+		height: 44px !important;
+		min-height: 44px !important;
+	}
+
+	/* Both displays open an editor on tap, so they are targets in their own
+	   right. They stay elastic between the two fixed buttons — height only,
+	   width left to the flex layout. */
+	.pos-table__qty-counter .pos-table__qty-display,
+	.pos-table__editor-box .pos-table__editor-display {
+		height: 44px;
+	}
+}
 </style>

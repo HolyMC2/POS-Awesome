@@ -34,7 +34,7 @@
 						<template #activator="{ props }">
 							<v-icon
 								v-bind="props"
-								class="icon-button"
+								class="icon-button posa-customer-icon"
 								@mousedown.prevent.stop
 								@click.stop="edit_customer"
 							>
@@ -46,7 +46,7 @@
 						<template #activator="{ props }">
 							<v-icon
 								v-bind="props"
-								class="icon-button ml-1"
+								class="icon-button posa-customer-icon customer-icon-gap"
 								:class="{ 'disabled-icon': !networkOnline }"
 								@mousedown.prevent.stop
 								@click.stop="reload_customers"
@@ -66,7 +66,7 @@
 						<template #activator="{ props }">
 							<v-icon
 								v-bind="props"
-								class="icon-button"
+								class="icon-button posa-customer-icon"
 								@mousedown.prevent.stop
 								@click.stop="new_customer"
 							>
@@ -184,10 +184,40 @@
 	color: var(--v-theme-primary);
 }
 
+/* Reload sits between Edit and Add; 4px was the entire separation
+   between three 20px glyphs. */
+.customer-icon-gap {
+	margin-left: 4px;
+}
+
 .disabled-icon {
 	opacity: 0.3 !important;
 	pointer-events: none;
 	cursor: not-allowed;
+}
+
+/* Touch: theme.css lifts .posa-customer-icon to the 44px M1 floor, so
+   these three become real boxes rather than bare glyphs. That alone
+   moves the neighbours' centres from 24px apart to 54px, and the gap
+   grows with them because the middle one is Reload — a mis-tap there
+   refetches the whole customer list in the middle of a sale. The
+   glyph stays 20px; only its hit area grows, and the rounded tint on
+   press is what tells the cashier which of the three they actually
+   got. */
+@media (pointer: coarse) {
+	.customer-icon-gap {
+		margin-left: 10px;
+	}
+
+	.icon-button {
+		border-radius: 8px;
+		opacity: 0.85;
+	}
+
+	.icon-button:active {
+		background: var(--pos-hover-bg);
+		opacity: 1;
+	}
 }
 
 @media (max-width: 768px) {
