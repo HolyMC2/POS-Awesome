@@ -17,6 +17,10 @@
 						:label="frappe._('Search, scan or browse item')"
 						hide-details
 						data-pos-keyboard-target="item-search"
+						enterkeyhint="search"
+						autocapitalize="off"
+						autocorrect="off"
+						spellcheck="false"
 						:model-value="searchInput"
 						@update:model-value="
 							(val) => {
@@ -40,6 +44,7 @@
 								size="small"
 								color="primary"
 								variant="text"
+								class="search-field-action"
 								:disabled="scannerLocked"
 								@click="$emit('start-camera')"
 								:aria-label="
@@ -61,6 +66,7 @@
 								size="small"
 								color="primary"
 								variant="text"
+								class="search-field-action"
 								@click.stop="toolsOpen = !toolsOpen"
 								:aria-label="toolsOpen ? __('Hide search tools') : __('Show search tools')"
 							>
@@ -267,6 +273,23 @@ defineExpose({
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
+}
+
+/* Camera and search-tools live inside the search field's append-inner
+   slot. Vuetify's `size="small"` icon button is a 28px square — under a
+   thumb that is a miss waiting to happen. 44px (WCAG 2.5.5) does not fit:
+   the field is `density="compact"`, so its own box is 40px tall and a
+   44px control would overflow it and clip against the sticky header's
+   bottom border. 40x40 is the largest square the field can hold, and
+   still more than double the area of the 28px default. */
+@media (pointer: coarse) {
+	.search-field-shell :deep(.search-field-action) {
+		min-width: 40px;
+		min-height: 40px;
+		width: 40px;
+		height: 40px;
+		touch-action: manipulation;
+	}
 }
 
 .search-sync-progress {

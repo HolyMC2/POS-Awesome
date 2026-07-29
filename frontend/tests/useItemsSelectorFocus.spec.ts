@@ -1,8 +1,28 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useItemsSelectorFocus } from "../src/posapp/composables/pos/items/useItemsSelectorFocus";
+
+const originalMatchMedia = window.matchMedia;
+
+/** Make every pointer media query answer for the given pointer kind. */
+const stubPointer = (pointer: "coarse" | "fine") => {
+	window.matchMedia = ((query: string) => ({
+		matches: query.includes(pointer),
+		media: query,
+		addEventListener: () => undefined,
+		removeEventListener: () => undefined,
+	})) as unknown as typeof window.matchMedia;
+};
+
+const restoreMatchMedia = () => {
+	if (originalMatchMedia) {
+		window.matchMedia = originalMatchMedia;
+		return;
+	}
+	delete (window as Partial<Window>).matchMedia;
+};
 
 const createVm = (overrides: Record<string, unknown> = {}) => {
 	const focus = vi.fn();
@@ -24,6 +44,109 @@ const createVm = (overrides: Record<string, unknown> = {}) => {
 		...overrides,
 	};
 };
+
+describe("useItemsSelectorFocus soft-keyboard gate", () => {
+	afterEach(() => {
+		restoreMatchMedia();
+	});
+
+	it("does not pull focus on a touch device", () => {
+		// Panel switches, view changes and scanner closes all funnel into
+		// focusItemSearch. On a phone each one throws the soft keyboard
+		// back over half the screen.
+		stubPointer("coarse");
+		const vm = createVm();
+		const focusApi = useItemsSelectorFocus({
+			getVM: () => vm,
+			scannerInput: {},
+			itemSelection: { handleSearchKeydown: vi.fn(() => false) },
+		});
+
+		focusApi.focusItemSearch();
+
+		expect(vm._focusSpy).not.toHaveBeenCalled();
+	});
+
+	it("keeps focusing on a mouse-driven till", () => {
+		stubPointer("fine");
+		const vm = createVm();
+		const focusApi = useItemsSelectorFocus({
+			getVM: () => vm,
+			scannerInput: {},
+			itemSelection: { handleSearchKeydown: vi.fn(() => false) },
+		});
+
+		focusApi.focusItemSearch();
+
+		expect(vm._focusSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps focusing when the environment cannot answer the pointer question", () => {
+		// Only a positive coarse match disables focus — an absent
+		// matchMedia must not silently break the desktop till.
+		delete (window as Partial<Window>).matchMedia;
+		const vm = createVm();
+		const focusApi = useItemsSelectorFocus({
+			getVM: () => vm,
+			scannerInput: {},
+			itemSelection: { handleSearchKeydown: vi.fn(() => false) },
+		});
+
+		focusApi.focusItemSearch();
+
+		expect(vm._focusSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps focusing when the pointer query throws", () => {
+		window.matchMedia = (() => {
+			throw new Error("matchMedia unavailable");
+		}) as unknown as typeof window.matchMedia;
+		const vm = createVm();
+		const focusApi = useItemsSelectorFocus({
+			getVM: () => vm,
+			scannerInput: {},
+			itemSelection: { handleSearchKeydown: vi.fn(() => false) },
+		});
+
+		focusApi.focusItemSearch();
+
+		expect(vm._focusSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("leaves the touch keyboard alone after the camera scanner closes", () => {
+		stubPointer("coarse");
+		const vm = createVm({ cameraScannerActive: true });
+		const focusApi = useItemsSelectorFocus({
+			getVM: () => vm,
+			scannerInput: {},
+			itemSelection: { handleSearchKeydown: vi.fn(() => false) },
+		});
+
+		focusApi.onScannerClosed();
+
+		expect(vm.cameraScannerActive).toBe(false);
+		expect(vm._focusSpy).not.toHaveBeenCalled();
+	});
+
+	it("still blurs on a touch device, so the keyboard can be dismissed", () => {
+		stubPointer("coarse");
+		const blur = vi.fn();
+		const vm = createVm({
+			$refs: {
+				itemHeader: { debounce_search: { value: { focus: vi.fn(), blur } } },
+			},
+		});
+		const focusApi = useItemsSelectorFocus({
+			getVM: () => vm,
+			scannerInput: {},
+			itemSelection: { handleSearchKeydown: vi.fn(() => false) },
+		});
+
+		focusApi.blurItemSearch();
+
+		expect(blur).toHaveBeenCalledTimes(1);
+	});
+});
 
 describe("useItemsSelectorFocus", () => {
 	it("focuses the search input when requested", () => {

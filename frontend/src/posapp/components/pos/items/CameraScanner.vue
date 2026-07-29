@@ -1,18 +1,27 @@
 <template>
 	<v-dialog
 		v-model="scannerDialog"
-		max-width="520px"
+		:fullscreen="isPhone"
+		:max-width="isPhone ? undefined : '520px'"
 		persistent="false"
 		:scrim="false"
 		:retain-focus="false"
-		location="top right"
-		content-class="camera-scanner-dialog"
+		:location="isPhone ? undefined : 'top right'"
+		:content-class="isPhone ? undefined : 'camera-scanner-dialog'"
 	>
-		<v-card>
-			<v-card-title class="text-h5 text-primary d-flex align-center">
-				<v-icon class="mr-2" size="large">mdi-camera</v-icon>
+		<v-card :class="{ 'camera-scanner-card--fullscreen': isPhone }">
+			<!-- A wrapped two-line h5 plus a format chip is a row of the
+			     viewfinder on a 360px screen; the chip is informational and
+			     the title still names the dialog at subtitle size. -->
+			<v-card-title
+				:class="[
+					'text-primary d-flex align-center',
+					isPhone ? 'text-subtitle-1 py-2' : 'text-h5',
+				]"
+			>
+				<v-icon class="mr-2" :size="isPhone ? 'default' : 'large'">mdi-camera</v-icon>
 				{{ __("Scan QR Code/Barcode") }}
-				<v-chip class="ml-2" size="small" color="primary">
+				<v-chip v-if="!isPhone" class="ml-2" size="small" color="primary">
 					{{ scanType === "Both" ? "Auto Detect" : scanType }}
 				</v-chip>
 				<v-spacer></v-spacer>
@@ -27,8 +36,8 @@
 				></v-btn>
 			</v-card-title>
 
-			<v-card-text class="pa-0">
-				<div v-if="!cameraPermissionDenied">
+			<v-card-text class="pa-0 camera-scanner-body">
+				<div v-if="!cameraPermissionDenied" class="camera-scanner-live">
 					<!-- Scanner container -->
 					<div class="scanner-container" v-if="scannerDialog">
 						<qrcode-stream
@@ -41,7 +50,7 @@
 							@error="onError"
 							@camera-on="onCameraReady"
 							@camera-off="onCameraOff"
-							style="width: 100%; height: 400px; object-fit: cover"
+							:style="viewfinderStyle"
 						>
 							<!-- Overlay -->
 							<div v-if="!scanResult" class="scanning-overlay">
@@ -56,32 +65,53 @@
 						</qrcode-stream>
 					</div>
 
-					<!-- Status messages -->
-					<div class="status-messages pa-3">
-						<v-alert v-if="errorMessage" type="error" variant="tonal" class="mb-2">
+					<!-- Status messages. On a phone every line here is a line
+					     stolen from the viewfinder and pushes the torch button
+					     off-screen, so the secondary detail collapses away and
+					     only the one actionable line survives. -->
+					<div :class="['status-messages', isPhone ? 'pa-2' : 'pa-3']">
+						<v-alert
+							v-if="errorMessage"
+							type="error"
+							variant="tonal"
+							:density="isPhone ? 'compact' : 'default'"
+							class="mb-2"
+						>
 							<v-icon>mdi-alert-circle</v-icon>
 							{{ errorMessage }}
 						</v-alert>
 
-						<v-alert v-if="scanResult" type="success" variant="tonal" class="mb-2">
+						<v-alert
+							v-if="scanResult"
+							type="success"
+							variant="tonal"
+							:density="isPhone ? 'compact' : 'default'"
+							class="mb-2"
+						>
 							{{ __("Successfully scanned:") }} <strong>{{ scanResult }}</strong>
-							<br />
-							<small>Format: {{ scanFormat }}</small>
+							<template v-if="!isPhone">
+								<br />
+								<small>Format: {{ scanFormat }}</small>
+							</template>
 						</v-alert>
 
 						<v-alert
 							v-if="!scanResult && !errorMessage && isScanning && scannerDialog"
 							type="info"
 							variant="tonal"
+							:density="isPhone ? 'compact' : 'default'"
 						>
-							{{ __("Position the QR code or barcode within the scanning area") }}<br />
-							<small>{{ __("Detecting formats:") }} {{ readerFormats.join(", ") }}</small>
-							<div v-if="openCVEnabled" class="mt-2">
-								<small class="text-success">
-									<v-icon size="small">mdi-eye-plus</v-icon>
-									{{ __("OpenCV image processing enabled - Enhanced barcode detection") }}
-								</small>
-							</div>
+							{{ __("Position the QR code or barcode within the scanning area") }}
+							<template v-if="!isPhone">
+								<br />
+								<small>{{ __("Detecting formats:") }} {{ readerFormats.join(", ") }}</small>
+								<div v-if="openCVEnabled" class="mt-2">
+									<small class="text-success">
+										<v-icon size="small">mdi-eye-plus</v-icon>
+										{{ __("OpenCV image processing enabled - Enhanced barcode detection") }}
+									</small>
+								</div>
+							</template>
 						</v-alert>
 					</div>
 				</div>
@@ -94,8 +124,14 @@
 				</div>
 			</v-card-text>
 
-			<!-- Action buttons -->
-			<v-card-actions class="justify-space-between pa-3">
+			<!-- Action buttons. On a phone the labels drop and the icons
+			     take the coarse-pointer target size, so torch / camera /
+			     OpenCV / Cancel all fit one row that never wraps below the
+			     fold — the torch is the control an operator reaches for in
+			     a badly lit shop and it has to be one tap away. -->
+			<v-card-actions
+				:class="['justify-space-between', isPhone ? 'pa-2 camera-scanner-actions--phone' : 'pa-3']"
+			>
 				<div class="d-flex flex-wrap gap-2">
 					<!-- Flashlight toggle -->
 					<v-btn
@@ -103,10 +139,12 @@
 						@click="toggleTorch"
 						:color="torchActive ? 'warning' : 'default'"
 						variant="outlined"
-						size="small"
+						:size="isPhone ? 'default' : 'small'"
+						:title="torchActive ? __('Flash On') : __('Flash Off')"
+						:aria-label="torchActive ? __('Flash On') : __('Flash Off')"
 					>
 						<v-icon>{{ torchActive ? "mdi-flashlight" : "mdi-flashlight-off" }}</v-icon>
-						{{ torchActive ? __("Flash On") : __("Flash Off") }}
+						<span v-if="!isPhone">{{ torchActive ? __("Flash On") : __("Flash Off") }}</span>
 					</v-btn>
 
 					<!-- Camera switch -->
@@ -115,10 +153,12 @@
 						@click="switchCamera"
 						color="default"
 						variant="outlined"
-						size="small"
+						:size="isPhone ? 'default' : 'small'"
+						:title="__('Switch Camera')"
+						:aria-label="__('Switch Camera')"
 					>
 						<v-icon>mdi-camera-switch</v-icon>
-						{{ __("Switch Camera") }}
+						<span v-if="!isPhone">{{ __("Switch Camera") }}</span>
 					</v-btn>
 
 					<!-- OpenCV Processing Toggle -->
@@ -127,11 +167,13 @@
 						@click="toggleOpenCVProcessing"
 						:color="openCVEnabled ? 'primary' : 'default'"
 						variant="outlined"
-						size="small"
+						:size="isPhone ? 'default' : 'small'"
 						:loading="openCVLoading"
+						:title="openCVEnabled ? __('OpenCV On') : __('OpenCV Off')"
+						:aria-label="openCVEnabled ? __('OpenCV On') : __('OpenCV Off')"
 					>
 						<v-icon>mdi-eye-plus</v-icon>
-						{{ openCVEnabled ? __("OpenCV On") : __("OpenCV Off") }}
+						<span v-if="!isPhone">{{ openCVEnabled ? __("OpenCV On") : __("OpenCV Off") }}</span>
 					</v-btn>
 				</div>
 
@@ -231,6 +273,44 @@
 	justify-self: flex-end;
 	margin: 16px;
 }
+
+/* Fullscreen phone layout: one flex column, so the viewfinder absorbs
+   whatever height the title, status strip and action row leave — and the
+   action row (torch) is always the bottom of the screen rather than
+   somewhere past the fold. */
+.camera-scanner-card--fullscreen {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.camera-scanner-card--fullscreen .camera-scanner-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.camera-scanner-card--fullscreen .camera-scanner-live {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.camera-scanner-card--fullscreen .scanner-container {
+	flex: 1 1 auto;
+	min-height: 0;
+	border-radius: 0;
+}
+
+.camera-scanner-card--fullscreen .status-messages {
+	flex: 0 0 auto;
+}
+
+.camera-scanner-actions--phone {
+	padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
 .scanner-container:hover .scanning-overlay {
 	opacity: 0.9;
 }
@@ -244,6 +324,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue"
 import { QrcodeStream } from "vue-qrcode-reader";
 import opencvProcessor from "../../../utils/opencvProcessor";
 import { debugLog } from "../../../utils/debug";
+import { useResponsive } from "../../../composables/core/useResponsive";
 
 const __ = typeof window !== "undefined" && window.__ ? window.__ : (text) => text;
 
@@ -285,6 +366,18 @@ const frameSkipCounter = ref(0);
 let scanResetTimeoutId = null;
 let dialogCloseTimeoutId = null;
 const scannerLockedExternally = ref(false);
+
+const { isPhone } = useResponsive();
+
+// A 400px viewfinder is a third of a phone screen and leaves the alerts
+// and the torch below the fold; fullscreen lets the stream take whatever
+// the flex column has left. On desktop it stays a dialog, but capped
+// against short laptop viewports instead of a hard 400px.
+const viewfinderStyle = computed(() => ({
+	width: "100%",
+	height: isPhone.value ? "100%" : "min(400px, 52vh)",
+	objectFit: "cover",
+}));
 
 // Computed
 const cameraConstraints = computed(() => {

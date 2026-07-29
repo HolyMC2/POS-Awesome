@@ -13,6 +13,36 @@ export const useItemsSelectorFocus = ({
 }: FocusDependencies) => {
 	const MAX_FOCUS_RETRIES = 8;
 	const getVm = (): any => (typeof getVM === "function" ? getVM() : null);
+
+	/**
+	 * Touch devices get no programmatic focus.
+	 *
+	 * Every panel switch, view change and scanner close funnels into
+	 * `focusItemSearch` (Pos.vue's `focusItemSearchField` → the uiStore
+	 * trigger → here). On a desktop that is right: the caret lands in the
+	 * search box and the operator keeps typing. On a phone each of those
+	 * calls throws the soft keyboard back over half the screen, so tabbing
+	 * to the cart and back means dismissing the keyboard again.
+	 *
+	 * Typing still reaches the field without focus: the global
+	 * type-to-search handler (useItemsSelectorTypeToSearch) captures
+	 * keydown at the document and appends into the ref directly, which is
+	 * also how a USB/HID barcode scanner feeds the box. So this costs a
+	 * coarse-pointer device nothing it was actually using.
+	 *
+	 * Positive coarse match only — an unknown or absent matchMedia keeps
+	 * the previous behaviour rather than silently disabling focus.
+	 */
+	const isCoarsePointerDevice = () => {
+		if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+			return false;
+		}
+		try {
+			return window.matchMedia("(pointer: coarse)").matches === true;
+		} catch {
+			return false;
+		}
+	};
 	const isFocusableLike = (value: unknown) =>
 		Boolean(
 			value &&
@@ -144,6 +174,9 @@ export const useItemsSelectorFocus = ({
 	const focusItemSearch = (attempt = 0) => {
 		const vm = getVm();
 		if (!vm || vm.cameraScannerActive) {
+			return;
+		}
+		if (isCoarsePointerDevice()) {
 			return;
 		}
 		vm.$nextTick(() => {

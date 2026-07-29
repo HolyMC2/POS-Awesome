@@ -1,6 +1,10 @@
 <template>
 	<div
-		:class="['posa-catalog-row', rowClass, { 'posa-catalog-row--highlighted': highlighted }]"
+		:class="[
+			'posa-catalog-row',
+			rowClass,
+			{ 'posa-catalog-row--highlighted': highlighted, 'posa-catalog-row--compact': compact },
+		]"
 		:data-item-code="item.item_code"
 		:style="gridStyle"
 		role="row"
@@ -74,6 +78,7 @@ const props = defineProps({
 	hideQtyDecimals: { type: Boolean, default: false },
 	showRateInfo: { type: Boolean, default: true },
 	highlighted: { type: Boolean, default: false },
+	compact: { type: Boolean, default: false },
 	rowClass: { type: String, default: "" },
 	currencySymbol: { type: Function, required: true },
 	formatCurrency: { type: Function, required: true },
@@ -214,6 +219,13 @@ function onKeyboardSelect(event) {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* Narrow panels: 16px either side of every cell is whitespace the item
+   name needs more than the gutter does. */
+.posa-catalog-row--compact .posa-catalog-cell {
+	padding-left: 8px;
+	padding-right: 8px;
 }
 
 .posa-catalog-cell--rate,

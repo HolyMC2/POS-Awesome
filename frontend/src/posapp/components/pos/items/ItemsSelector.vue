@@ -257,6 +257,10 @@ import { useEmployeeStore } from "../../../stores/employeeStore";
 
 import { parseBooleanSetting } from "../../../utils/stock";
 import { createItemSearchFocusClearGuard } from "../../../utils/itemSearchFocusClearGuard";
+import {
+	loadItemsViewPreference,
+	saveItemsViewPreference,
+} from "../../../utils/itemSelectorSettings";
 
 const props = defineProps({
 	context: {
@@ -340,7 +344,10 @@ const {
 // 2. Local State & Settings
 const search_input = ref("");
 const first_search = ref("");
-const items_view = ref("list");
+// Seeded from the operator's last choice: cards suit a phone, the list
+// suits a counter monitor, and the pick should not snap back every
+// reload. `saveItemsViewPreference` validates on the way out.
+const items_view = ref(loadItemsViewPreference() || "list");
 const itemsPerPage = ref(50);
 const clearingSearch = ref(false);
 const isDragging = ref(false);
@@ -1096,6 +1103,10 @@ watch(activeView, (view) => {
 	if (view === "items") {
 		requestItemSearchFocus();
 	}
+});
+
+watch(items_view, (view) => {
+	saveItemsViewPreference(view);
 });
 
 watch(selectedCustomer, () => {

@@ -1,12 +1,12 @@
 <template>
-	<div class="items-table-container sleek-data-table">
+	<div ref="containerRef" class="items-table-container sleek-data-table">
 		<div
-			class="posa-catalog-header"
+			:class="['posa-catalog-header', { 'posa-catalog-header--compact': isCompact }]"
 			:style="gridTemplateStyle"
 			role="row"
 		>
 			<div
-				v-for="column in headers"
+				v-for="column in visibleHeaders"
 				:key="column.key"
 				:class="['posa-catalog-header-cell', alignClass(column.align)]"
 				role="columnheader"
@@ -44,7 +44,8 @@
 			<template #default="{ item }">
 				<CatalogItemRow
 					:item="item"
-					:columns="headers"
+					:columns="visibleHeaders"
+					:compact="isCompact"
 					:context="context"
 					:pos-profile="posProfile"
 					:selected-currency="selectedCurrency"
@@ -68,10 +69,15 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onBeforeUnmount, ref } from "vue";
+import * as _ from "lodash";
 import { RecycleScroller } from "vue-virtual-scroller";
 import "vue-virtual-scroller/dist/vue-virtual-scroller.css";
 import CatalogItemRow from "./CatalogItemRow.vue";
 import Skeleton from "../../ui/Skeleton.vue";
+import {
+	getResponsiveItemsTableHeaders,
+	isCompactCatalogWidth,
+} from "../../../utils/itemsTableHeaders";
 
 const props = defineProps({
 	displayedItems: { type: Array, default: () => [] },
@@ -105,8 +111,21 @@ const emit = defineEmits(["row-click", "list-scroll"]);
 // Single-line rows pad to the same height for a uniform grid.
 const rowHeight = computed(() => (props.posProfile?.posa_allow_multi_currency ? 72 : 56));
 
+// The catalog lives in a resizable panel, not a viewport-width column:
+// on a phone it is the whole screen, on desktop roughly half of it, and
+// the operator can drag the divider. So the column set follows the
+// measured container, the same way the cart table does.
+const containerRef = ref(null);
+const containerWidth = ref(0);
+let containerObserver = null;
+
+const visibleHeaders = computed(() =>
+	getResponsiveItemsTableHeaders(props.headers, containerWidth.value),
+);
+const isCompact = computed(() => isCompactCatalogWidth(containerWidth.value));
+
 const gridTemplateStyle = computed(() => ({
-	gridTemplateColumns: props.headers.map((c) => c.width || "1fr").join(" "),
+	gridTemplateColumns: visibleHeaders.value.map((c) => c.width || "1fr").join(" "),
 }));
 
 const alignClass = (align) => {
@@ -164,11 +183,38 @@ const attachScrollListener = () => {
 	scrollTarget.addEventListener("scroll", onScroll, { passive: true });
 };
 
+// Debounced like the cart's observer: every column change rebuilds the
+// grid template and every row's cells, and a divider drag would otherwise
+// do that on each animation frame.
+const applyContainerWidth = _.debounce((entries) => {
+	for (const entry of entries) {
+		const { width } = entry.contentRect;
+		if (containerWidth.value !== width) {
+			containerWidth.value = width;
+		}
+	}
+}, 100);
+
+const observeContainerWidth = () => {
+	const el = containerRef.value;
+	if (!el) return;
+	containerWidth.value = el.getBoundingClientRect().width;
+	if (typeof ResizeObserver === "undefined") return;
+	containerObserver = new ResizeObserver(applyContainerWidth);
+	containerObserver.observe(el);
+};
+
 onMounted(() => {
+	observeContainerWidth();
 	nextTick(attachScrollListener);
 });
 
 onBeforeUnmount(() => {
+	applyContainerWidth.cancel();
+	if (containerObserver) {
+		containerObserver.disconnect();
+		containerObserver = null;
+	}
 	if (scrollTarget) {
 		scrollTarget.removeEventListener("scroll", onScroll);
 		scrollTarget = null;
@@ -241,6 +287,11 @@ defineExpose({ scrollToIndex, getTableElement, tableRef: scrollerRef });
 	align-items: center;
 	min-height: 48px;
 	box-sizing: border-box;
+}
+
+.posa-catalog-header--compact .posa-catalog-header-cell {
+	padding-left: 8px;
+	padding-right: 8px;
 }
 
 .posa-catalog-empty {

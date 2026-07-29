@@ -80,6 +80,33 @@ const VTextFieldStub = defineComponent({
 	},
 });
 
+const mountHeader = (props: Record<string, unknown> = {}) =>
+	mount(ItemHeader, {
+		props: {
+			searchInput: "",
+			qtyInput: 1,
+			posProfile: {
+				posa_input_qty: false,
+				posa_enable_camera_scanning: false,
+			},
+			...props,
+		},
+		global: {
+			mocks: {
+				frappe: { _: (value: string) => value },
+				__: (value: string) => value,
+			},
+			components: {
+				VRow: VRowStub,
+				VCol: VColStub,
+				VBtn: VBtnStub,
+				VExpandTransition: VExpandTransitionStub,
+				VProgressLinear: VProgressLinearStub,
+				VTextField: VTextFieldStub,
+			},
+		},
+	});
+
 describe("ItemHeader", () => {
 	it("shows a non-blocking sync progress bar while keeping search input enabled", () => {
 		const wrapper = mount(ItemHeader, {
@@ -121,4 +148,26 @@ describe("ItemHeader", () => {
 		expect(wrapper.text()).toContain("128 items synced");
 	});
 
+	it("asks the soft keyboard for a search key and stops it mangling barcodes", () => {
+		const wrapper = mountHeader();
+		const input = wrapper.get('input[data-test="text-field-input"]');
+
+		// Barcodes and SKUs are the usual query: autocapitalise and
+		// autocorrect turn "ab-1200x" into "Ab-1200 x" on a phone, and the
+		// default Enter key says "Go" instead of "Search".
+		expect(input.attributes("enterkeyhint")).toBe("search");
+		expect(input.attributes("autocapitalize")).toBe("off");
+		expect(input.attributes("autocorrect")).toBe("off");
+		expect(input.attributes("spellcheck")).toBe("false");
+	});
+
+	it("tags the in-field camera and tools buttons for coarse-pointer sizing", () => {
+		const wrapper = mountHeader({
+			posProfile: { posa_input_qty: false, posa_enable_camera_scanning: true },
+		});
+
+		// Vuetify's size="small" icon button is a 28px square; the class is
+		// what the pointer:coarse rule grows to 40px.
+		expect(wrapper.findAll("button.search-field-action").length).toBe(2);
+	});
 });
