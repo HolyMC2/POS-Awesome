@@ -110,6 +110,10 @@ describe("useDialogFullscreen", () => {
 				isFullscreenDialog,
 				dialogProps,
 				secondaryProps: dialogPropsFor({ maxWidth: 480 }),
+				overrideProps: dialogPropsFor({
+					breakpoint: DIALOG_FULLSCREEN_BREAKPOINT,
+					maxWidth: 480,
+				}),
 			};
 		},
 		render: () => null,
@@ -185,6 +189,22 @@ describe("useDialogFullscreen", () => {
 			fullscreen: false,
 			width: "min(960px, 96vw)",
 			maxWidth: "960px",
+		});
+	});
+
+	it("lets an extra dialog keep the sm floor while the parent uses 1100", () => {
+		setViewportWidth(TABLET_WIDTH);
+
+		const wrapper = mount(Harness, {
+			props: { geometry: { breakpoint: 1100, maxWidth: "1420px" } },
+		});
+
+		// Inherits the parent's 1100 unless it says otherwise.
+		expect(wrapper.vm.dialogProps).toEqual({ fullscreen: true });
+		expect(wrapper.vm.secondaryProps).toEqual({ fullscreen: true });
+		expect(wrapper.vm.overrideProps).toEqual({
+			fullscreen: false,
+			maxWidth: 480,
 		});
 	});
 
@@ -389,6 +409,46 @@ describe("flows sheets below 1100", () => {
 				fullscreen: false,
 				width,
 				maxWidth,
+			});
+		});
+	});
+
+	// Layered over the sheet above, so it keeps the sm floor rather than 1100.
+	describe("invoice-detail sheet", () => {
+		const DETAIL_DIALOG_INDEX = 1;
+
+		it("goes fullscreen on a phone", () => {
+			setViewportWidth(PHONE_WIDTH);
+
+			const wrapper = mountWithDialogStub(InvoiceManagement);
+
+			expect(dialogPropsOf(wrapper, DETAIL_DIALOG_INDEX)).toMatchObject({
+				fullscreen: true,
+				maxWidth: undefined,
+			});
+		});
+
+		it("stays a centred card over a fullscreen parent between sm and 1100", () => {
+			setViewportWidth(TABLET_WIDTH);
+
+			const wrapper = mountWithDialogStub(InvoiceManagement);
+
+			// Parent fullscreen, detail still a layer on top of it.
+			expect(dialogPropsOf(wrapper)).toMatchObject({ fullscreen: true });
+			expect(dialogPropsOf(wrapper, DETAIL_DIALOG_INDEX)).toMatchObject({
+				fullscreen: false,
+				maxWidth: "1040px",
+			});
+		});
+
+		it("keeps its 1040px cap on desktop", () => {
+			setViewportWidth(DESKTOP_WIDTH);
+
+			const wrapper = mountWithDialogStub(InvoiceManagement);
+
+			expect(dialogPropsOf(wrapper, DETAIL_DIALOG_INDEX)).toMatchObject({
+				fullscreen: false,
+				maxWidth: "1040px",
 			});
 		});
 	});

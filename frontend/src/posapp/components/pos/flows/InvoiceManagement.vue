@@ -1224,7 +1224,12 @@
 		</v-dialog>
 	</v-row>
 
-	<v-dialog v-model="detailDialog" max-width="1040px" scrollable :theme="isDarkTheme ? 'dark' : 'light'">
+	<v-dialog
+		v-model="detailDialog"
+		v-bind="detailDialogProps"
+		scrollable
+		:theme="isDarkTheme ? 'dark' : 'light'"
+	>
 		<v-card
 			:class="[
 				'invoice-detail-card',
@@ -1379,7 +1384,10 @@ import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 import format from "../../../format";
 import { useTheme } from "../../../composables/core/useTheme";
-import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
+import {
+	DIALOG_FULLSCREEN_BREAKPOINT,
+	useDialogFullscreen,
+} from "../../../composables/core/useDialogFullscreen";
 import { useToastStore } from "../../../stores/toastStore";
 import { useUIStore } from "../../../stores/uiStore";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
@@ -1426,10 +1434,22 @@ export default {
 		const eventBus = inject("eventBus");
 		// Fullscreen below 1100 has to mean no inline geometry at all — VOverlay
 		// writes width/max-width as inline styles that beat the fullscreen rule.
-		const { isFullscreenDialog: isCompactInvoiceManagement, dialogProps } = useDialogFullscreen({
+		const {
+			isFullscreenDialog: isCompactInvoiceManagement,
+			dialogProps,
+			dialogPropsFor,
+		} = useDialogFullscreen({
 			breakpoint: 1100,
 			width: "min(1420px, 97vw)",
 			maxWidth: "1420px",
+		});
+		// The invoice-detail sheet layers over the one above. It keeps the normal
+		// sm floor rather than the parent's 1100: over a fullscreen parent a
+		// centred card still reads as a layer, but on a phone it has to own the
+		// screen — this is where a cashier inspects an invoice.
+		const detailDialogProps = dialogPropsFor({
+			breakpoint: DIALOG_FULLSCREEN_BREAKPOINT,
+			maxWidth: "1040px",
 		});
 		const { invoiceManagementDialog, invoiceManagementTargetTab, posProfile, posOpeningShift } =
 			storeToRefs(uiStore);
@@ -1451,6 +1471,7 @@ export default {
 			isOffline,
 			isCompactInvoiceManagement,
 			dialogProps,
+			detailDialogProps,
 		};
 	},
 	data: () => ({

@@ -55,7 +55,7 @@ export function useDialogFullscreen(options: DialogFullscreenOptions = {}): {
 	isFullscreenDialog: ComputedRef<boolean>;
 	dialogProps: ComputedRef<DialogFullscreenProps>;
 	dialogPropsFor: (
-		_geometry: DialogGeometry,
+		_options: DialogFullscreenOptions,
 	) => ComputedRef<DialogFullscreenProps>;
 } {
 	const { breakpoint = DIALOG_FULLSCREEN_BREAKPOINT, ...geometry } = options;
@@ -83,9 +83,19 @@ export function useDialogFullscreen(options: DialogFullscreenOptions = {}): {
 		resolveDialogProps(isFullscreenDialog.value, geometry),
 	);
 
-	// For components owning more than one dialog (cashier switch + terminal lock).
-	const dialogPropsFor = (other: DialogGeometry) =>
-		computed(() => resolveDialogProps(isFullscreenDialog.value, other));
+	// For components owning more than one dialog (cashier switch + terminal lock,
+	// or Invoice Management's sheet + its invoice-detail sheet). Each may set its
+	// own breakpoint; all of them share this one resize listener.
+	const dialogPropsFor = (other: DialogFullscreenOptions) => {
+		const { breakpoint: ownBreakpoint = breakpoint, ...otherGeometry } =
+			other;
+		return computed(() =>
+			resolveDialogProps(
+				windowWidth.value < ownBreakpoint,
+				otherGeometry,
+			),
+		);
+	};
 
 	return { windowWidth, isFullscreenDialog, dialogProps, dialogPropsFor };
 }
