@@ -12,18 +12,19 @@
 		@dragend="onDragEnd"
 	>
 		<div class="card-item-image-container">
-			<v-img
-				:src="item.image || placeholderImage"
+			<div class="image-placeholder">
+				<v-icon size="40" color="grey-lighten-2"> mdi-image </v-icon>
+			</div>
+			<img
+				:src="imageSrc"
 				class="card-item-image"
-				aspect-ratio="1"
+				:class="{ 'is-loaded': isLoaded }"
 				:alt="item.item_name"
-			>
-				<template #placeholder>
-					<div class="image-placeholder">
-						<v-icon size="40" color="grey-lighten-2"> mdi-image </v-icon>
-					</div>
-				</template>
-			</v-img>
+				loading="lazy"
+				decoding="async"
+				@load="onImageLoad"
+				@error="onImageError"
+			/>
 		</div>
 		<div class="card-item-content">
 			<div class="card-item-header">
@@ -74,7 +75,7 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import placeholderImage from "../placeholder-image.png";
 import ItemRateInfoMenu from "./ItemRateInfoMenu.vue";
 
@@ -95,6 +96,29 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["click", "dragstart", "dragend"]);
+
+const loadedSrc = ref("");
+const failedSrc = ref("");
+
+// A deleted attachment still leaves `item.image` set, so a 404 must fall back to
+// the bundled placeholder instead of the browser's broken-image glyph.
+const imageSrc = computed(() => {
+	const src = props.item.image;
+	return !src || src === failedSrc.value ? placeholderImage : src;
+});
+
+// Both flags store the URL rather than a boolean: RecycleScroller reuses these
+// cards for different items, and a stale `true` would paint the previous item's
+// photo as if it were loaded.
+const isLoaded = computed(() => loadedSrc.value === imageSrc.value);
+
+const onImageLoad = () => {
+	loadedSrc.value = imageSrc.value;
+};
+
+const onImageError = () => {
+	failedSrc.value = props.item.image || "";
+};
 
 const primaryCurrency = computed(() => {
 	if (props.context === "purchase") {
@@ -217,14 +241,26 @@ const onDragEnd = (event) => {
 }
 
 .card-item-image {
+	/* Positioned so it paints above the absolutely-placed placeholder, and
+	   transparent until decoded so the placeholder shows through meanwhile. */
+	position: relative;
+	display: block;
 	width: 100%;
 	height: 100%;
 	object-fit: contain; /* Changed to contain to ensure full image visibility */
 	background-color: rgb(var(--v-theme-surface-bright));
+	opacity: 0;
+	transition: opacity 0.2s ease;
+}
+
+.card-item-image.is-loaded {
+	opacity: 1;
 }
 
 /* Image Placeholder Style */
 .image-placeholder {
+	position: absolute;
+	inset: 0;
 	display: flex;
 	align-items: center;
 	justify-content: center;
