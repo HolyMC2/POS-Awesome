@@ -74,6 +74,79 @@ describe("ItemCard item image", () => {
 		expect(src).toBeTruthy();
 	});
 
+	it("prefers the server-side thumbnail over the full-size photo", () => {
+		const wrapper = mountCard({ posa_image_thumb: "/files/paracetamol_small.png" });
+
+		expect(wrapper.get("img.card-item-image").attributes("src")).toBe(
+			"/files/paracetamol_small.png",
+		);
+	});
+
+	// A tabFile.thumbnail_url row can outlive the thumbnail on disk (restore,
+	// manual cleanup). Blanking the card over that would be worse than serving
+	// the original photo.
+	it("falls back to the full-size photo when a stale thumbnail 404s", async () => {
+		const wrapper = mountCard({ posa_image_thumb: "/files/paracetamol_small.png" });
+
+		await wrapper.get("img.card-item-image").trigger("error");
+
+		expect(wrapper.get("img.card-item-image").attributes("src")).toBe(
+			"/files/paracetamol.png",
+		);
+	});
+
+	it("reaches the placeholder only after both the thumbnail and the photo 404", async () => {
+		const wrapper = mountCard({ posa_image_thumb: "/files/paracetamol_small.png" });
+
+		await wrapper.get("img.card-item-image").trigger("error");
+		await wrapper.get("img.card-item-image").trigger("error");
+
+		const src = wrapper.get("img.card-item-image").attributes("src");
+		expect(src).not.toBe("/files/paracetamol_small.png");
+		expect(src).not.toBe("/files/paracetamol.png");
+		expect(src).toBeTruthy();
+	});
+
+	it("uses the full-size photo for items the backfill has not reached", () => {
+		const wrapper = mountCard({ posa_image_thumb: undefined });
+
+		expect(wrapper.get("img.card-item-image").attributes("src")).toBe(
+			"/files/paracetamol.png",
+		);
+	});
+
+	it("shows the placeholder once for a card whose photo keeps failing", async () => {
+		const wrapper = mountCard({ posa_image_thumb: "/files/paracetamol_small.png" });
+
+		await wrapper.get("img.card-item-image").trigger("error");
+		await wrapper.get("img.card-item-image").trigger("error");
+		const placeholder = wrapper.get("img.card-item-image").attributes("src");
+		// The placeholder is bundled, so an error on it must not loop back into
+		// the chain — the src has to stay put.
+		await wrapper.get("img.card-item-image").trigger("error");
+
+		expect(wrapper.get("img.card-item-image").attributes("src")).toBe(placeholder);
+	});
+
+	it("retries the thumbnail when the card is recycled for another item", async () => {
+		const wrapper = mountCard({ posa_image_thumb: "/files/paracetamol_small.png" });
+		await wrapper.get("img.card-item-image").trigger("error");
+
+		await wrapper.setProps({
+			item: {
+				...baseProps.item,
+				item_code: "ITEM-002",
+				item_name: "Ibuprofeno",
+				image: "/files/ibuprofeno.png",
+				posa_image_thumb: "/files/ibuprofeno_small.png",
+			},
+		});
+
+		const img = wrapper.get("img.card-item-image");
+		expect(img.attributes("src")).toBe("/files/ibuprofeno_small.png");
+		expect(img.classes()).not.toContain("is-loaded");
+	});
+
 	it("uses the placeholder for items that carry no image at all", () => {
 		const wrapper = mountCard({ image: undefined });
 

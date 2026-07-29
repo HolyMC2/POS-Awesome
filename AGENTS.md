@@ -166,8 +166,10 @@ check `frappe.db.exists` first.
 >   existing `posa_use_server_cache` still works across gunicorn workers (same
 >   forked seed) but warms once-per-worker. Fix in `search.py get_items`:
 >   replaced the `hash()`-keyed `@redis_cache` `__get_items` with an explicit
->   `posa_get_items:v1:<sha1(json args)>` key via `frappe.cache()`. Now
->   prewarm + every worker share one entry (one cold load ever).
+>   `posa_get_items:v<N>:<sha1(json args)>` key via `frappe.cache()` (N =
+>   `GET_ITEMS_CACHE_VERSION` in search.py — bumped whenever the cached row
+>   shape changes, e.g. v2 added `posa_image_thumb`). Now prewarm + every
+>   worker share one entry (one cold load ever).
 > - Pre-warm `cache_warmer.prewarm_pos_item_cache`, `*/25 * * * *` cron
 >   (hooks.py `scheduler_events["cron"]`). Per `posa_use_server_cache=1`
 >   profile replays the SPA's exact non-reset walk (customer=None, group="",
@@ -181,7 +183,7 @@ check `frappe.db.exists` first.
 >   test green. Cron active (`*/25`, `stopped=0`).
 > - **Prod deploy = pull source + `bench migrate` (registers cron Scheduled
 >   Job Type) + restart backend/scheduler. No frontend build.** First loads
->   after deploy cold once (new `posa_get_items:v1` key namespace), then warm.
+>   after deploy cold once (fresh `posa_get_items:v<N>` key namespace), then warm.
 > - Telemetry verify of the 2026-06-01 deploy: all families flowing (rum
 >   11.7k + perf 512 / 24h), HTTP 417 close-shift crashes = zero since
 >   `aeaf0216`, no `crash:` family at all (focus fix `76939d60` clean).

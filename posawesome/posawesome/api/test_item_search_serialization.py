@@ -50,6 +50,10 @@ def _install_stubs():
     details.get_items_details = lambda *args, **kwargs: []
     sys.modules["posawesome.posawesome.api.item_processing.details"] = details
 
+    thumbnails = types.ModuleType("posawesome.posawesome.api.item_processing.thumbnails")
+    thumbnails.attach_item_thumbnails = lambda rows: rows
+    sys.modules["posawesome.posawesome.api.item_processing.thumbnails"] = thumbnails
+
 
 def _load_module():
     module_name = "test_item_search_serialization_target"
@@ -126,6 +130,87 @@ class TestItemSearchSerialization(unittest.TestCase):
         self.assertEqual(result[0]["item_code"], "ITEM-001")
         self.assertEqual(len(serialized_payloads), 1)
         self.assertIn("2026-04-23 10:30:00", serialized_payloads[0])
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class TestItemSearchThumbnailWiring(unittest.TestCase):
+    """The thumbnail lookup must see the page the caller actually gets back —
+    after the limit cap, so trimmed rows never cost a File lookup."""
+
+    @classmethod
+    def setUpClass(cls):
+        _install_stubs()
+        cls.module = _load_module()
+
+    def _run(self, plan, rows):
+        seen = []
+
+        def fake_get_all(*args, **kwargs):
+            if fake_get_all.calls == 0:
+                fake_get_all.calls += 1
+                return rows
+            return []
+
+        fake_get_all.calls = 0
+
+        def spy(batch):
+            seen.append(list(batch))
+            return batch
+
+        self.module.frappe.get_all = fake_get_all
+        self.module.get_items_details = lambda *args, **kwargs: []
+        self.module._build_attribute_maps = lambda *args, **kwargs: ({}, {})
+        self.module._shape_item_row = lambda item, detail, plan, **kwargs: item
+        self.module._matches_search_words = lambda *args, **kwargs: True
+        self.module.attach_item_thumbnails = spy
+
+        result = self.module._run_item_query({}, None, None, plan)
+        return result, seen
+
+    def _plan(self, **overrides):
+        args = dict(
+            filters={},
+            or_filters=[],
+            fields=["item_code", "image"],
+            limit_page_length=1,
+            limit_start=0,
+            order_by="item_name asc",
+            page_size=1,
+            fetch_page_size=2,
+            initial_page_start=0,
+            item_code_for_search=None,
+            search_words=[],
+            normalized_search_value="",
+            word_filter_active=False,
+            include_description=False,
+            include_image=True,
+            posa_display_items_in_stock=False,
+            posa_show_template_items=False,
+        )
+        args.update(overrides)
+        return self.module.SearchPlan(**args)
+
+    def test_receives_the_capped_page_only(self):
+        rows = [
+            {"item_code": "ITEM-001", "image": "/files/a.jpg"},
+            {"item_code": "ITEM-002", "image": "/files/b.jpg"},
+        ]
+
+        result, seen = self._run(self._plan(), rows)
+
+        self.assertEqual(len(seen), 1)
+        self.assertEqual([row["item_code"] for row in seen[0]], ["ITEM-001"])
+        self.assertEqual([row["item_code"] for row in result], ["ITEM-001"])
+
+    def test_lean_rows_reach_the_attacher_without_an_image_field(self):
+        rows = [{"item_code": "ITEM-001"}]
+
+        _result, seen = self._run(
+            self._plan(include_image=False, fields=["item_code"], limit_page_length=None),
+            rows,
+        )
+
+        self.assertEqual(seen, [[{"item_code": "ITEM-001"}]])
 
 
 @unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")

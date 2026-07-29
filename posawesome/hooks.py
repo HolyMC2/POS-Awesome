@@ -136,6 +136,15 @@ doc_events = {
         "validate": "posawesome.posawesome.api.customer.validate",
         "after_insert": "posawesome.posawesome.api.customer.after_insert",
     },
+    # Item photos arrive at camera resolution and render into a 132px card
+    # slot. Both handlers are fail-open — a thumbnail is an optimisation, so
+    # they never block the write that triggered them.
+    "Item": {
+        "on_update": "posawesome.posawesome.api.item_processing.thumbnails.on_item_update",
+    },
+    "File": {
+        "after_insert": "posawesome.posawesome.api.item_processing.thumbnails.on_file_insert",
+    },
     "Bin": {
         "after_insert": [
             "posawesome.posawesome.stock_realtime.publish_bin_stock_change",

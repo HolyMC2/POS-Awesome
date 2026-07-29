@@ -75,7 +75,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import placeholderImage from "../placeholder-image.png";
 import ItemRateInfoMenu from "./ItemRateInfoMenu.vue";
 
@@ -98,16 +98,22 @@ const props = defineProps({
 const emit = defineEmits(["click", "dragstart", "dragend"]);
 
 const loadedSrc = ref("");
-const failedSrc = ref("");
+const failedSrcs = ref([]);
 
-// A deleted attachment still leaves `item.image` set, so a 404 must fall back to
-// the bundled placeholder instead of the browser's broken-image glyph.
+// Photos are uploaded at camera resolution and painted into a 132px slot, so
+// the server hands us a 300px thumbnail (`posa_image_thumb`) when one exists.
+// The chain degrades one step at a time: a stale thumbnail row must fall back
+// to the full-size photo rather than blanking the card, and a deleted
+// attachment (which still leaves `item.image` set) must fall back to the
+// bundled placeholder instead of the browser's broken-image glyph.
 const imageSrc = computed(() => {
-	const src = props.item.image;
-	return !src || src === failedSrc.value ? placeholderImage : src;
+	const candidates = [props.item.posa_image_thumb, props.item.image];
+	return (
+		candidates.find((src) => src && !failedSrcs.value.includes(src)) || placeholderImage
+	);
 });
 
-// Both flags store the URL rather than a boolean: RecycleScroller reuses these
+// Both flags store URLs rather than booleans: RecycleScroller reuses these
 // cards for different items, and a stale `true` would paint the previous item's
 // photo as if it were loaded.
 const isLoaded = computed(() => loadedSrc.value === imageSrc.value);
@@ -117,8 +123,19 @@ const onImageLoad = () => {
 };
 
 const onImageError = () => {
-	failedSrc.value = props.item.image || "";
+	const src = imageSrc.value;
+	if (!src || src === placeholderImage || failedSrcs.value.includes(src)) return;
+	failedSrcs.value = [...failedSrcs.value, src];
 };
+
+// RecycleScroller hands this card a different item as the grid scrolls; without
+// the reset the failure list would grow for the lifetime of the shift.
+watch(
+	() => props.item.item_code,
+	() => {
+		failedSrcs.value = [];
+	},
+);
 
 const primaryCurrency = computed(() => {
 	if (props.context === "purchase") {

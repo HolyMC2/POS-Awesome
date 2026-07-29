@@ -23,6 +23,7 @@ from posawesome.posawesome.api.utils import (
 )
 from posawesome.posawesome.api.item_processing.barcode import search_serial_or_batch_or_barcode_number
 from posawesome.posawesome.api.item_processing.details import get_items_details
+from posawesome.posawesome.api.item_processing.thumbnails import attach_item_thumbnails
 
 
 @dataclass(frozen=True)
@@ -582,7 +583,12 @@ def _run_item_query(
         if len(items_data) < plan.fetch_page_size:
             break
 
-    return result[: plan.limit_page_length] if plan.limit_page_length else result
+    rows = result[: plan.limit_page_length] if plan.limit_page_length else result
+
+    # One indexed File lookup for the whole page, after the cap is applied so
+    # rows we are about to drop cost nothing. Lean searches carry no `image`
+    # field at all and pay zero queries.
+    return attach_item_thumbnails(rows)
 
 
 def _execute_item_search(
@@ -666,7 +672,8 @@ def _prepare_item_groups(profile_name: Optional[str], item_groups) -> ItemGroupC
 
 
 # Bump when the cached row SHAPE changes so a deploy invalidates stale entries.
-GET_ITEMS_CACHE_VERSION = "v1"
+# v2: rows carry `posa_image_thumb` next to `image`.
+GET_ITEMS_CACHE_VERSION = "v2"
 
 
 def _build_get_items_cache_key(
