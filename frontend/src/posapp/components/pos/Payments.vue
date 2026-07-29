@@ -1507,27 +1507,24 @@ const runDeferredPrintWorkflow = async ({
 
 	let resolvedDoctype = resolveSubmittedDoctype(doctype);
 
+	let runPatientWait = null;
+
 	try {
 		if (waitForInvoiceProcessing) {
-			let processedState;
-			try {
-				processedState = await waitForInvoiceSubmission(name, resolvedDoctype);
-			} catch (fastPathMiss) {
-				// A submit the server already reported FAILED must surface as
-				// the failure it is — not get the reassuring "still processing"
-				// toast over the red one, then a 300 s wait for nothing.
-				if (socketStore.processedInvoices?.[name]?.status === "failed") {
-					throw fastPathMiss;
+			// The bg submit can outlive the fast path (congested queue: prod
+			// lag runs 45-230 s). Don't abandon the ticket — tell the operator
+			// once and keep both channels open until it lands.
+			let patientToastShown = false;
+			runPatientWait = () => {
+				if (!patientToastShown) {
+					patientToastShown = true;
+					toastStore.show({
+						title: __("Sale is still processing — the ticket will print once it is confirmed."),
+						color: "info",
+						timeout: 6000,
+					});
 				}
-				// The bg submit outlived the fast path (congested queue: prod
-				// lag runs 45-230 s). Don't abandon the ticket — tell the
-				// operator and keep both channels open until it lands.
-				toastStore.show({
-					title: __("Sale is still processing — the ticket will print once it is confirmed."),
-					color: "info",
-					timeout: 6000,
-				});
-				processedState = await waitForLateSubmission(name, resolvedDoctype, {
+				return waitForLateSubmission(name, resolvedDoctype, {
 					waitForProcessed: (invoice, timeoutMs) =>
 						socketStore.waitForInvoiceProcessed(invoice, timeoutMs),
 					getDocstatus: async (dt, invoice) => {
@@ -1547,6 +1544,18 @@ const runDeferredPrintWorkflow = async ({
 						}
 					},
 				});
+			};
+			let processedState;
+			try {
+				processedState = await waitForInvoiceSubmission(name, resolvedDoctype);
+			} catch (fastPathMiss) {
+				// A submit the server already reported FAILED must surface as
+				// the failure it is — not get the reassuring "still processing"
+				// toast over the red one, then a 300 s wait for nothing.
+				if (socketStore.processedInvoices?.[name]?.status === "failed") {
+					throw fastPathMiss;
+				}
+				processedState = await runPatientWait();
 			}
 			resolvedDoctype = processedState?.doctype || resolvedDoctype;
 		}
@@ -1563,11 +1572,22 @@ const runDeferredPrintWorkflow = async ({
 			}
 		}
 
-		const freshDoc = await fetchSubmittedInvoiceDoc(name, resolvedDoctype);
+		let freshDoc = await fetchSubmittedInvoiceDoc(name, resolvedDoctype);
 
 		if (isOffline()) {
 			await printOfflineInvoice(freshDoc);
 			return;
+		}
+
+		// The FAST path resolves on socketStore's word, and socketStore
+		// fabricates {status:"processed"} whenever the realtime socket is
+		// down — the fetched doc is the truth. A draft here means the submit
+		// job is still running: enter the patient wait rather than hand the
+		// customer a receipt for an unrecorded sale (audit P1).
+		if (runPatientWait && Number(freshDoc?.docstatus) !== 1) {
+			const late = await runPatientWait();
+			resolvedDoctype = late?.doctype || resolvedDoctype;
+			freshDoc = await fetchSubmittedInvoiceDoc(name, resolvedDoctype);
 		}
 
 		await loadPrintPage({ doc: freshDoc, doctype: resolvedDoctype });

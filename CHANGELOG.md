@@ -29,7 +29,10 @@ All notable changes.
   while disconnected, so every print is gated on a DB `docstatus == 1`
   confirm (no draft receipts); and a submit the server already reported
   FAILED skips the reassuring toast + patient wait and surfaces the real
-  error. Spec: `tests/patientSubmitWait.spec.ts` (7 tests).
+  error. The FAST path is gated the same way: the doc fetched for printing
+  must be docstatus 1, else the flow routes into the patient wait instead of
+  printing a draft (socket-down whole-sale case — audit P1).
+  Spec: `tests/patientSubmitWait.spec.ts` (7 tests).
 
 - **Submit gets a 120s client timeout instead of the 30s api.ts default.** The
   server is allowed 120s (gunicorn `--timeout=120`), and the shim's fetch has no
