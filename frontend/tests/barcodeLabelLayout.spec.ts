@@ -133,6 +133,66 @@ describe("computeBarcodeLabelLayout", () => {
 		expect(full.contentHeightMm).toBeCloseTo(full.innerHeightMm, 6);
 	});
 
+	it("takes the shop-name line out of the barcode, never out of the cell", () => {
+		const without = computeBarcodeLabelLayout({ cols: 3, rows: 7 });
+		const withCompany = computeBarcodeLabelLayout({
+			cols: 3,
+			rows: 7,
+			includeCompany: true,
+		});
+
+		expect(without.companyFontMm).toBe(0);
+		expect(withCompany.companyFontMm).toBeGreaterThan(0);
+		expect(withCompany.includeCompany).toBe(true);
+		expect(withCompany.barcodeAreaMm).toBeLessThan(without.barcodeAreaMm);
+		expect(withCompany.contentHeightMm).toBeCloseTo(
+			withCompany.innerHeightMm,
+			6,
+		);
+	});
+
+	it("hands the value's line back to the bars when its text is hidden", () => {
+		const shown = computeBarcodeLabelLayout({
+			cols: 3,
+			rows: 7,
+			barcodeValue: "7501234567890",
+		});
+		const hidden = computeBarcodeLabelLayout({
+			cols: 3,
+			rows: 7,
+			showBarcodeText: false,
+			barcodeValue: "7501234567890",
+		});
+
+		expect(shown.barcode.displayValue).toBe(true);
+		expect(hidden.barcode.displayValue).toBe(false);
+		// Same printed box, taller bars inside it.
+		expect(hidden.barcodeAreaMm).toBeCloseTo(shown.barcodeAreaMm, 6);
+		expect(hidden.barcode.barHeightPx).toBeGreaterThan(
+			shown.barcode.barHeightPx,
+		);
+		expect(hidden.contentHeightMm).toBeCloseTo(hidden.innerHeightMm, 6);
+	});
+
+	it("keeps the fit invariant with every optional block at once", () => {
+		for (const grid of GRIDS) {
+			const layout = computeBarcodeLabelLayout({
+				...grid,
+				includePrice: true,
+				includeBatchSerial: true,
+				includeCompany: true,
+			});
+			const label = `${grid.cols}x${grid.rows}`;
+
+			expect(layout.contentHeightMm, label).toBeCloseTo(
+				layout.innerHeightMm,
+				6,
+			);
+			expect(layout.barcodeAreaMm, label).toBeGreaterThan(0);
+			expect(layout.companyFontMm, label).toBeGreaterThan(0);
+		}
+	});
+
 	it("keeps the grid inside the printable page with slack to spare", () => {
 		for (const grid of GRIDS) {
 			const layout = computeBarcodeLabelLayout({
@@ -299,7 +359,9 @@ describe("estimateBarcodeModules", () => {
 
 describe("resolveLabelPageFormat", () => {
 	it("defaults unknown formats to A4", () => {
-		expect(resolveLabelPageFormat({ pageFormat: "Letter" })).toEqual({
+		// "Letter" used to stand in for an unknown key here; it is real stock
+		// now, so the unknown-key case needs a format we do not carry.
+		expect(resolveLabelPageFormat({ pageFormat: "Legal" })).toEqual({
 			widthMm: 210,
 			heightMm: 297,
 			marginMm: 10,
@@ -307,6 +369,14 @@ describe("resolveLabelPageFormat", () => {
 		expect(resolveLabelPageFormat()).toEqual({
 			widthMm: 210,
 			heightMm: 297,
+			marginMm: 10,
+		});
+	});
+
+	it("carries US Letter alongside A4", () => {
+		expect(resolveLabelPageFormat({ pageFormat: "Letter" })).toEqual({
+			widthMm: 215.9,
+			heightMm: 279.4,
 			marginMm: 10,
 		});
 	});

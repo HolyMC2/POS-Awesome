@@ -32,38 +32,30 @@
 						<v-row dense class="mb-2 align-center">
 							<v-col cols="12" md="3">
 								<v-select
-									v-model="pageFormat"
-									:items="pageFormatOptions"
-									:label="__('Page Format')"
+									v-model="printerType"
+									:items="printerTypeOptions"
+									item-title="title"
+									item-value="value"
+									:label="__('Printer Type')"
 									density="compact"
 									variant="outlined"
 									hide-details
 									class="pos-themed-input"
 								></v-select>
 							</v-col>
-							<v-col cols="6" md="2">
-								<v-text-field
-									v-model.number="gridCols"
-									:label="__('Cols')"
-									type="number"
+							<v-col cols="12" md="4">
+								<v-select
+									v-model="presetId"
+									:items="presetOptions"
+									item-title="title"
+									item-value="id"
+									:label="__('Label Stock')"
+									:hint="layoutHint"
+									persistent-hint
 									density="compact"
 									variant="outlined"
-									hide-details
 									class="pos-themed-input"
-									min="1"
-								></v-text-field>
-							</v-col>
-							<v-col cols="6" md="2">
-								<v-text-field
-									v-model.number="gridRows"
-									:label="__('Rows')"
-									type="number"
-									density="compact"
-									variant="outlined"
-									hide-details
-									class="pos-themed-input"
-									min="1"
-								></v-text-field>
+								></v-select>
 							</v-col>
 							<v-col cols="12" md="5" class="d-flex gap-2">
 								<v-btn
@@ -89,8 +81,88 @@
 							</v-col>
 						</v-row>
 
+						<!-- Custom stock: the operator types what the box says. -->
+						<v-row v-if="isCustomPreset" dense class="mb-2">
+							<v-col cols="6" md="2">
+								<v-text-field
+									v-model.number="customPageWidthMm"
+									:label="__('Width (mm)')"
+									type="number"
+									min="10"
+									step="1"
+									density="compact"
+									variant="outlined"
+									hide-details
+									class="pos-themed-input"
+								></v-text-field>
+							</v-col>
+							<v-col cols="6" md="2">
+								<v-text-field
+									v-model.number="customPageHeightMm"
+									:label="__('Height (mm)')"
+									type="number"
+									min="10"
+									step="1"
+									density="compact"
+									variant="outlined"
+									hide-details
+									class="pos-themed-input"
+								></v-text-field>
+							</v-col>
+							<v-col cols="6" md="2">
+								<v-text-field
+									v-model.number="customMarginMm"
+									:label="__('Margin (mm)')"
+									type="number"
+									min="0"
+									step="0.5"
+									density="compact"
+									variant="outlined"
+									hide-details
+									class="pos-themed-input"
+								></v-text-field>
+							</v-col>
+							<v-col cols="6" md="2">
+								<v-text-field
+									v-model.number="customGapMm"
+									:label="__('Gap (mm)')"
+									type="number"
+									min="0.5"
+									step="0.5"
+									density="compact"
+									variant="outlined"
+									hide-details
+									class="pos-themed-input"
+								></v-text-field>
+							</v-col>
+							<v-col cols="6" md="2">
+								<v-text-field
+									v-model.number="customCols"
+									:label="__('Cols')"
+									type="number"
+									min="1"
+									density="compact"
+									variant="outlined"
+									hide-details
+									class="pos-themed-input"
+								></v-text-field>
+							</v-col>
+							<v-col cols="6" md="2">
+								<v-text-field
+									v-model.number="customRows"
+									:label="__('Rows')"
+									type="number"
+									min="1"
+									density="compact"
+									variant="outlined"
+									hide-details
+									class="pos-themed-input"
+								></v-text-field>
+							</v-col>
+						</v-row>
+
 						<v-row dense class="mb-2">
-							<v-col cols="12" md="6">
+							<v-col cols="12" md="3">
 								<v-checkbox
 									v-model="includePrice"
 									:label="__('Include Price')"
@@ -99,10 +171,28 @@
 									color="primary"
 								></v-checkbox>
 							</v-col>
-							<v-col cols="12" md="6">
+							<v-col cols="12" md="3">
 								<v-checkbox
 									v-model="includeBatchSerial"
 									:label="__('Include Batch / Serial')"
+									density="compact"
+									hide-details
+									color="primary"
+								></v-checkbox>
+							</v-col>
+							<v-col cols="12" md="3">
+								<v-checkbox
+									v-model="includeCompany"
+									:label="__('Include Shop Name')"
+									density="compact"
+									hide-details
+									color="primary"
+								></v-checkbox>
+							</v-col>
+							<v-col cols="12" md="3">
+								<v-checkbox
+									v-model="showBarcodeText"
+									:label="__('Show Barcode Number')"
 									density="compact"
 									hide-details
 									color="primary"
@@ -295,13 +385,25 @@ import { mapStores } from "pinia";
 import format from "../../../format";
 import { useUIStore } from "../../../stores/uiStore.js";
 import {
-	LABEL_PAGE_FORMATS,
 	buildBarcodeImageMarkup,
 	buildLabelSheetMarkup,
 	buildLabelSheetStyles,
 	computeBarcodeLabelLayout,
 	mm,
 } from "../../../utils/barcodeLabelLayout";
+import {
+	CUSTOM_LABEL_PRESET_ID,
+	LABEL_PRINTER_TYPES,
+	defaultPresetIdForType,
+	findLabelPreset,
+	labelPresetsForType,
+	presetLayoutInput,
+} from "../../../utils/barcodeLabelPresets";
+import {
+	DEFAULT_BARCODE_LABEL_SETTINGS,
+	loadBarcodeLabelSettings,
+	saveBarcodeLabelSettings,
+} from "../../../utils/barcodeLabelSettings";
 
 export default {
 	name: "BarcodePrinting",
@@ -316,12 +418,11 @@ export default {
 		return {
 			items: [],
 			nextRowId: 1,
-			pageFormat: "A4",
-			pageFormatOptions: Object.keys(LABEL_PAGE_FORMATS),
-			gridCols: 3,
-			gridRows: 7,
-			includePrice: true,
-			includeBatchSerial: false,
+			// Label stock + element toggles. Seeded from the defaults so the
+			// screen renders identically before `created()` restores what the
+			// operator last used.
+			...DEFAULT_BARCODE_LABEL_SETTINGS,
+			settingsRestored: false,
 			editingQtyValue: "",
 			pos_profile: null,
 			addItemDialog: false,
@@ -335,6 +436,59 @@ export default {
 	},
 	computed: {
 		...mapStores(useItemsStore),
+		printerTypeOptions() {
+			return LABEL_PRINTER_TYPES.map((option) => ({
+				value: option.value,
+				title: __(option.title),
+			}));
+		},
+		presetOptions() {
+			return labelPresetsForType(this.printerType).map((preset) => ({
+				id: preset.id,
+				title: __(preset.title),
+			}));
+		},
+		activePreset() {
+			return findLabelPreset(this.presetId);
+		},
+		isCustomPreset() {
+			return this.activePreset.id === CUSTOM_LABEL_PRESET_ID;
+		},
+		/**
+		 * The layout the current settings produce, with no job attached.
+		 *
+		 * The dropdown hint reads off this rather than off the preset table so
+		 * the millimetres shown are the millimetres printed — including the
+		 * safety band the geometry reserves, which is why a "58 x 40 mm" roll
+		 * reports a slightly smaller face.
+		 */
+		previewLayout() {
+			return this.buildLayout([]);
+		},
+		layoutHint() {
+			const layout = this.previewLayout;
+			const size = `${Math.round(layout.cellWidthMm)} x ${Math.round(layout.cellHeightMm)} mm`;
+			return layout.labelsPerPage > 1
+				? __("{0} — {1} per page", [size, layout.labelsPerPage])
+				: __("{0} — one per label", [size]);
+		},
+		/** Everything worth remembering between sessions. */
+		persistableSettings() {
+			return {
+				printerType: this.printerType,
+				presetId: this.presetId,
+				includePrice: this.includePrice,
+				includeBatchSerial: this.includeBatchSerial,
+				includeCompany: this.includeCompany,
+				showBarcodeText: this.showBarcodeText,
+				customCols: this.customCols,
+				customRows: this.customRows,
+				customPageWidthMm: this.customPageWidthMm,
+				customPageHeightMm: this.customPageHeightMm,
+				customMarginMm: this.customMarginMm,
+				customGapMm: this.customGapMm,
+			};
+		},
 		headers() {
 			return [
 				{ title: __("Item Code"), key: "item_code", width: "16%" },
@@ -348,24 +502,16 @@ export default {
 		},
 	},
 	methods: {
-		parseLabelSize() {
-			const type = LABEL_PAGE_FORMATS[this.pageFormat] ? this.pageFormat : "A4";
-			return {
-				type,
-				cols: parseInt(this.gridCols) || 3,
-				rows: parseInt(this.gridRows) || 7,
-			};
-		},
 		/**
-		 * Resolves the printed geometry for the current page format / grid.
+		 * Resolves the printed geometry for the selected stock.
 		 *
-		 * Every millimetre both output paths use comes from here, so the PDF
-		 * and the browser print dialog lay the sheet out identically. The
-		 * longest barcode in the job drives the module-width budget so the
-		 * widest symbol still fits its cell.
+		 * Every millimetre both output paths use comes from here — and so does
+		 * the hint under the stock dropdown, so what the operator is promised
+		 * and what the printer receives cannot drift apart. The longest
+		 * barcode in the job drives the module-width budget so the widest
+		 * symbol still fits its cell.
 		 */
-		getLabelLayout(items) {
-			const size = this.parseLabelSize();
+		buildLayout(items) {
 			const printable = Array.isArray(items) ? items : [];
 			const longestBarcode = printable.reduce((longest, item) => {
 				const code = String(item?.barcode || "").trim();
@@ -373,11 +519,21 @@ export default {
 			}, "");
 
 			return computeBarcodeLabelLayout({
-				pageFormat: size.type,
-				cols: size.cols,
-				rows: size.rows,
+				...presetLayoutInput(this.activePreset, {
+					cols: this.customCols,
+					rows: this.customRows,
+					pageWidthMm: this.customPageWidthMm,
+					pageHeightMm: this.customPageHeightMm,
+					marginMm: this.customMarginMm,
+					gapMm: this.customGapMm,
+				}),
 				includePrice: this.includePrice,
 				includeBatchSerial: this.includeBatchSerial,
+				// Only reserve the caption's height when there is a name to
+				// put in it, or a profile with no company would print labels
+				// with an empty band where the shop name should be.
+				includeCompany: this.includeCompany && !!this.pos_profile?.company,
+				showBarcodeText: this.showBarcodeText,
 				barcodeValue: longestBarcode,
 			});
 		},
@@ -1232,7 +1388,7 @@ export default {
 		},
 		getPrintWindowContent() {
 			const itemsToPrint = this.getPrintableItems({ notify: false });
-			const layout = this.getLabelLayout(itemsToPrint);
+			const layout = this.buildLayout(itemsToPrint);
 			const style = this.getPrintStyles(layout);
 			const content = this.generatePrintContent(itemsToPrint, layout);
 			this.logDebug("getPrintWindowContent", {
@@ -1266,7 +1422,7 @@ export default {
 				return;
 			}
 
-			const layout = this.getLabelLayout(itemsToPrint);
+			const layout = this.buildLayout(itemsToPrint);
 			this.warnIfLabelsTooSmall(layout);
 			const style = this.getPrintStyles(layout);
 			const content = this.generatePrintContent(itemsToPrint, layout);
@@ -1328,7 +1484,7 @@ export default {
 				return;
 			}
 
-			const layout = this.getLabelLayout(itemsToPrint);
+			const layout = this.buildLayout(itemsToPrint);
 			this.warnIfLabelsTooSmall(layout);
 			const style = this.getPrintStyles(layout);
 			const content = this.generatePrintContent(itemsToPrint, layout);
@@ -1354,7 +1510,12 @@ export default {
 					layout.page.marginMm,
 				],
 				filename: "barcodes.pdf",
-				image: { type: "jpeg", quality: 0.98 },
+				// PNG, not JPEG: a barcode is hard black-on-white edges, which
+				// is exactly what JPEG's chroma subsampling smears. The
+				// artefacts sit in the quiet zone between bars and are what a
+				// marginal scanner trips over. Lossless costs file size on a
+				// page that compresses well anyway.
+				image: { type: "png" },
 				html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
 				pagebreak: { mode: [] },
 				jsPDF: jsPdfOptions,
@@ -1407,9 +1568,11 @@ export default {
 			});
 		},
 		getPrintStyles(layout) {
-			const l = layout || this.getLabelLayout(this.getPrintableItems({ notify: false }));
+			const l = layout || this.buildLayout(this.getPrintableItems({ notify: false }));
 			this.logDebug("getPrintStyles", {
-				page_format: this.pageFormat,
+				printer_type: this.printerType,
+				preset_id: this.presetId,
+				page_mm: [l.page.widthMm, l.page.heightMm],
 				cols: l.cols,
 				rows: l.rows,
 				cell_mm: [l.cellWidthMm, l.cellHeightMm],
@@ -1425,9 +1588,14 @@ export default {
 			this.logDebug("generatePrintContent:start", {
 				items_count: Array.isArray(items) ? items.length : 0,
 			});
-			const l = layout || this.getLabelLayout(items);
+			const l = layout || this.buildLayout(items);
 			const barcode = l.barcode;
 			const labels = [];
+			// One shop name for the whole job — it comes from the profile, not
+			// from the item, so it is escaped once rather than per label.
+			const companyName = l.includeCompany
+				? this.escapeHtml(this.pos_profile?.company || "")
+				: "";
 
 			items.forEach((item) => {
 				const labelsCount = this.normalizeLabelQty(item.qty);
@@ -1437,14 +1605,14 @@ export default {
 				let batchSerialHtml = "";
 				if (this.includeBatchSerial) {
 					let text = "";
-					if (item.batch_no) text += `Batch: ${item.batch_no} `;
-					if (item.serial_no) text += `Serial: ${item.serial_no}`;
+					if (item.batch_no) text += `${__("Batch")}: ${item.batch_no} `;
+					if (item.serial_no) text += `${__("Serial")}: ${item.serial_no}`;
 					// Check array data if flat fields are empty
 					if (!text) {
 						if (item.batch_no_data && item.batch_no_data.length)
-							text += `Batch: ${item.batch_no_data[0].batch_no} `;
+							text += `${__("Batch")}: ${item.batch_no_data[0].batch_no} `;
 						if (item.serial_no_data && item.serial_no_data.length)
-							text += `Serial: ${item.serial_no_data[0].serial_no}`;
+							text += `${__("Serial")}: ${item.serial_no_data[0].serial_no}`;
 					}
 					if (text.trim()) {
 						batchSerialHtml = `<div class="batch-serial">${this.escapeHtml(text.trim())}</div>`;
@@ -1453,11 +1621,16 @@ export default {
 
 				let priceHtml = "";
 				if (this.includePrice) {
-					priceHtml = `<div class="price">Price: ${this.escapeHtml(this.formatCurrency(item.price))}</div>`;
+					priceHtml = `<div class="price">${this.escapeHtml(this.formatLabelPrice(item.price))}</div>`;
 				}
+
+				const companyHtml = companyName
+					? `<div class="company-name">${companyName}</div>`
+					: "";
 
 				const labelHtml = `
             <div class="label">
+              ${companyHtml}
               <div class="item-name">${safeItemName}</div>
               <div class="barcode-container">
                  ${buildBarcodeImageMarkup(barcode, safeBarcode)}
@@ -1482,11 +1655,47 @@ export default {
 			});
 			return html;
 		},
-		formatCurrency(value) {
-			if (this.pos_profile?.currency) {
-				return value + " " + this.pos_profile.currency;
+		/**
+		 * Formats a price for a printed label.
+		 *
+		 * This used to be a local `formatCurrency` override that returned
+		 * `value + " " + currency`, which shadowed the format mixin and put the
+		 * raw float on the label — a 149.99999 rate printed as "149.99999 MXN".
+		 * The mixin rounds to the site's currency precision and groups the
+		 * thousands; the symbol goes in front when Frappe can resolve one.
+		 */
+		/**
+		 * Restores the operator's last stock and toggles.
+		 *
+		 * `settingsRestored` gates the persist watcher so the restore itself
+		 * does not immediately write back what it just read.
+		 */
+		restoreLabelSettings() {
+			const settings = loadBarcodeLabelSettings();
+			Object.assign(this, settings);
+			this.$nextTick(() => {
+				this.settingsRestored = true;
+			});
+			this.logDebug("restoreLabelSettings", {
+				printer_type: settings.printerType,
+				preset_id: settings.presetId,
+			});
+		},
+		formatLabelPrice(value) {
+			const amount = this.formatCurrency(value);
+			const currency = this.pos_profile?.currency;
+			if (!currency) {
+				return amount;
 			}
-			return value;
+			let symbol = "";
+			try {
+				symbol = this.currencySymbol(currency) || "";
+			} catch (_error) {
+				// Frappe's get_currency_symbol is a desk global; fall back to
+				// the currency code when the label path runs without it.
+				symbol = "";
+			}
+			return symbol ? `${symbol}${amount}` : `${amount} ${currency}`;
 		},
 		openQtyEdit(item) {
 			this.logDebug("openQtyEdit", {
@@ -1524,10 +1733,32 @@ export default {
 			});
 		},
 	},
+	watch: {
+		printerType(type) {
+			// Presets belong to exactly one printer type, so switching the
+			// type has to move the selection with it — otherwise a roll
+			// printer would still be pointed at an A4 sheet.
+			if (findLabelPreset(this.presetId).type !== type) {
+				this.presetId = defaultPresetIdForType(type);
+			}
+		},
+		presetId(id) {
+			this.printerType = findLabelPreset(id).type;
+		},
+		persistableSettings: {
+			deep: true,
+			handler(settings) {
+				// Skip the write that the restore itself triggers.
+				if (!this.settingsRestored) return;
+				saveBarcodeLabelSettings(settings);
+			},
+		},
+	},
 	created() {
 		this.logDebug("created", {
 			settings_loaded: this.scaleBarcodeSettingsLoaded,
 		});
+		this.restoreLabelSettings();
 		this.$watch(
 			() => this.uiStore.posProfile,
 			(profile) => {

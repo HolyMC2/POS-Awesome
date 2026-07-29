@@ -1950,3 +1950,31 @@ Remaining Customer Credit Balance,Saldo Restante de Crédito del Cliente
 Invoices,Facturas
 Silent print failed — using browser print,Impresión silenciosa falló — usando navegador
 QZ Tray unreachable,QZ Tray inaccesible
+Printer Type,Tipo de Impresora
+Label Stock,Tipo de Etiqueta
+Width (mm),Ancho (mm)
+Height (mm),Alto (mm)
+Margin (mm),Margen (mm)
+Gap (mm),Separación (mm)
+Include Shop Name,Incluir Nombre de la Tienda
+Show Barcode Number,Mostrar Número de Código
+{0} — {1} per page,{0} — {1} por hoja
+{0} — one per label,{0} — una por etiqueta
+Sheet (A4 / Letter),Hoja (A4 / Carta)
+Thermal roll,Rollo térmico
+Die-cut / custom,Troquelada / personalizada
+A4 3 x 7 (21 labels),A4 3 x 7 (21 etiquetas)
+A4 3 x 8 (24 labels),A4 3 x 8 (24 etiquetas)
+A4 4 x 11 (44 labels),A4 4 x 11 (44 etiquetas)
+A4 2 x 5 (10 large labels),A4 2 x 5 (10 etiquetas grandes)
+Letter 3 x 7 (21 labels),Carta 3 x 7 (21 etiquetas)
+Letter 3 x 8 (24 labels),Carta 3 x 8 (24 etiquetas)
+Letter 4 x 10 (40 labels),Carta 4 x 10 (40 etiquetas)
+Roll 58 x 40 mm,Rollo 58 x 40 mm
+Roll 58 x 30 mm,Rollo 58 x 30 mm
+Roll 80 x 50 mm,Rollo 80 x 50 mm
+Roll 80 x 40 mm (2 across),Rollo 80 x 40 mm (2 por fila)
+Die-cut 50 x 25 mm (2 across),Troquelada 50 x 25 mm (2 por fila)
+Die-cut 40 x 30 mm,Troquelada 40 x 30 mm
+Die-cut 30 x 20 mm (jewelry),Troquelada 30 x 20 mm (joyería)
+Custom size,Medida personalizada

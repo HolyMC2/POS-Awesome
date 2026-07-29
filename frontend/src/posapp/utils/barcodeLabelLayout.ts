@@ -67,6 +67,8 @@ export interface LabelPageFormat {
  */
 export const LABEL_PAGE_FORMATS: Record<string, LabelPageFormat> = {
 	A4: { widthMm: 210, heightMm: 297, marginMm: 10 },
+	// US Letter, the other sheet stock sold in MX (8.5 x 11 in).
+	Letter: { widthMm: 215.9, heightMm: 279.4, marginMm: 10 },
 };
 
 export const DEFAULT_LABEL_PAGE_FORMAT = "A4";
@@ -78,6 +80,10 @@ export interface LabelLayoutInput {
 	rows?: number;
 	includePrice?: boolean;
 	includeBatchSerial?: boolean;
+	/** Shop/company name on a small line above the item name. */
+	includeCompany?: boolean;
+	/** JsBarcode's human-readable value under the bars. Defaults to true. */
+	showBarcodeText?: boolean;
 	/** Overrides for non-catalogued paper (roll/thermal stock). */
 	pageWidthMm?: number;
 	pageHeightMm?: number;
@@ -126,8 +132,10 @@ export interface BarcodeLabelLayout {
 	nameFontMm: number;
 	metaFontMm: number;
 	priceFontMm: number;
+	companyFontMm: number;
 	includePrice: boolean;
 	includeBatchSerial: boolean;
+	includeCompany: boolean;
 	/** Combined height of the text rows plus the gaps between all blocks. */
 	textHeightMm: number;
 	/** Height handed to the barcode block. */
@@ -250,6 +258,7 @@ export const computeBarcodeLabelLayout = (
 	const rows = toPositiveInt(input.rows, 7, MAX_ROWS);
 	const includePrice = Boolean(input.includePrice);
 	const includeBatchSerial = Boolean(input.includeBatchSerial);
+	const includeCompany = Boolean(input.includeCompany);
 
 	const printableWidthMm = Math.max(10, page.widthMm - 2 * page.marginMm);
 	const printableHeightMm = Math.max(10, page.heightMm - 2 * page.marginMm);
@@ -287,9 +296,12 @@ export const computeBarcodeLabelLayout = (
 
 	const blockGapMm = clamp(cellHeightMm * 0.02, 0.2, 0.8);
 
-	// name + barcode are always present; meta and price are optional.
+	// name + barcode are always present; company, meta and price are optional.
 	const blockCount =
-		2 + (includeBatchSerial ? 1 : 0) + (includePrice ? 1 : 0);
+		2 +
+		(includeCompany ? 1 : 0) +
+		(includeBatchSerial ? 1 : 0) +
+		(includePrice ? 1 : 0);
 	const gapTotalMm = (blockCount - 1) * blockGapMm;
 
 	let nameFontMm = clamp(
@@ -301,9 +313,15 @@ export const computeBarcodeLabelLayout = (
 		? clamp(cellHeightMm * 0.07, META_FONT_MIN_MM, META_FONT_MAX_MM)
 		: 0;
 	let priceFontMm = includePrice ? nameFontMm : 0;
+	// The shop name is a caption, not a heading — it sits above the item
+	// name and must never out-shout it.
+	let companyFontMm = includeCompany
+		? clamp(cellHeightMm * 0.06, META_FONT_MIN_MM, META_FONT_MAX_MM)
+		: 0;
 
 	const fontStackMm = () =>
-		(nameFontMm + metaFontMm + priceFontMm) * LABEL_LINE_HEIGHT;
+		(nameFontMm + metaFontMm + priceFontMm + companyFontMm) *
+		LABEL_LINE_HEIGHT;
 
 	let fontPartMm = fontStackMm();
 	let textHeightMm = fontPartMm + gapTotalMm;
@@ -319,6 +337,9 @@ export const computeBarcodeLabelLayout = (
 		metaFontMm = metaFontMm ? Math.max(MIN_FONT_MM, metaFontMm * scale) : 0;
 		priceFontMm = priceFontMm
 			? Math.max(MIN_FONT_MM, priceFontMm * scale)
+			: 0;
+		companyFontMm = companyFontMm
+			? Math.max(MIN_FONT_MM, companyFontMm * scale)
 			: 0;
 
 		fontPartMm = fontStackMm();
@@ -347,6 +368,7 @@ export const computeBarcodeLabelLayout = (
 			nameFontMm *= tightScale;
 			metaFontMm *= tightScale;
 			priceFontMm *= tightScale;
+			companyFontMm *= tightScale;
 
 			fontPartMm = fontStackMm();
 			textHeightMm = fontPartMm + gapTotalMm;
@@ -363,6 +385,7 @@ export const computeBarcodeLabelLayout = (
 		innerWidthMm,
 		value: input.barcodeValue,
 		valueLength: input.barcodeValueLength,
+		displayValue: input.showBarcodeText !== false,
 	});
 
 	return {
@@ -384,8 +407,10 @@ export const computeBarcodeLabelLayout = (
 		nameFontMm,
 		metaFontMm,
 		priceFontMm,
+		companyFontMm,
 		includePrice,
 		includeBatchSerial,
+		includeCompany,
 		textHeightMm,
 		barcodeAreaMm,
 		contentHeightMm,
@@ -400,6 +425,7 @@ interface RasterInput {
 	innerWidthMm: number;
 	value?: string;
 	valueLength?: number;
+	displayValue?: boolean;
 }
 
 /**
@@ -415,9 +441,11 @@ const buildBarcodeRaster = ({
 	innerWidthMm,
 	value,
 	valueLength,
+	displayValue: showValue,
 }: RasterInput): BarcodeRasterSpec => {
 	const areaMm = Math.max(1, barcodeAreaMm);
-	const displayValue = true;
+	// Hiding the human-readable value hands its line back to the bars.
+	const displayValue = showValue !== false;
 
 	const valueFontMm = displayValue ? clamp(areaMm * 0.22, 1.4, 2.8) : 0;
 	const barsMm = Math.max(1, areaMm - valueFontMm * LABEL_LINE_HEIGHT);
@@ -501,6 +529,17 @@ export const buildLabelSheetStyles = (layout: BarcodeLabelLayout): string => {
             break-inside: avoid;
             box-sizing: border-box;
             overflow: hidden;
+          }
+          .company-name {
+            flex: 0 0 auto;
+            width: 100%;
+            font-size: ${mm(layout.companyFontMm || layout.metaFontMm || layout.nameFontMm)};
+            line-height: ${LABEL_LINE_HEIGHT};
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
           .item-name {
             flex: 0 0 auto;

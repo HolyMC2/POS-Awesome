@@ -50,9 +50,18 @@ describe("buildLabelSheetStyles", () => {
 			a4Layout({ includeBatchSerial: true }),
 		);
 
-		// item name, batch/serial and price all ellipsise.
-		expect(style.match(/text-overflow: ellipsis/g) || []).toHaveLength(3);
-		expect(style.match(/white-space: nowrap/g) || []).toHaveLength(3);
+		// shop name, item name, batch/serial and price all ellipsise.
+		expect(style.match(/text-overflow: ellipsis/g) || []).toHaveLength(4);
+		expect(style.match(/white-space: nowrap/g) || []).toHaveLength(4);
+	});
+
+	it("sizes the shop-name caption below the item name", () => {
+		const layout = a4Layout({ includeCompany: true });
+		const style = buildLabelSheetStyles(layout);
+
+		expect(layout.companyFontMm).toBeGreaterThan(0);
+		expect(layout.companyFontMm).toBeLessThan(layout.nameFontMm);
+		expect(style).toContain(`font-size: ${round(layout.companyFontMm)}mm`);
 	});
 
 	it("keeps the page wrapper inside the printable box", () => {
