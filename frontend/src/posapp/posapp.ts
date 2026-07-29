@@ -1,8 +1,10 @@
 import { createApp } from "vue";
 // @ts-ignore
 import vuetify from "./plugins/vuetify";
-import "@mdi/font/css/materialdesignicons.css";
-import "@fontsource/roboto/100.css";
+// Roboto 100 is deliberately absent — nothing in the app or in the Vuetify
+// styles we bundle asks for it. 600 and 800 are absent too, but those ARE
+// requested by app CSS: the browser resolves them upward to 700 and 900, which
+// is what shipped before, so adding those faces would change how text renders.
 import "@fontsource/roboto/300.css";
 import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";

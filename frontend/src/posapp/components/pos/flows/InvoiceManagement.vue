@@ -1349,7 +1349,7 @@
 					v-if="selectedInvoiceDetail && isRepairCandidate(selectedInvoiceDetail)"
 					color="secondary"
 					variant="text"
-					prepend-icon="mdi-link-wrench"
+					prepend-icon="mdi-wrench-outline"
 					:loading="repairChangeLoading"
 					:disabled="repairChangeLoading || isOffline()"
 					@click="repairChangeAllocation(selectedInvoiceDetail)"

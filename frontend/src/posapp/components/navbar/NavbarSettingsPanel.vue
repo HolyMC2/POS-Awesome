@@ -24,7 +24,7 @@
 					data-test="navbar-settings-panel-close"
 					@click="emit('update:modelValue', false)"
 				>
-					<span class="mdi mdi-close" aria-hidden="true"></span>
+					<v-icon icon="mdi-close" size="1em" aria-hidden="true" />
 				</button>
 			</div>
 
@@ -49,7 +49,7 @@
 								class="navbar-settings-panel__category-icon"
 								:class="`navbar-settings-panel__category-icon--${getSectionTone(section.id)}`"
 							>
-								<span :class="['mdi', getSectionIcon(section.id)]" aria-hidden="true"></span>
+								<v-icon :icon="getSectionIcon(section.id)" size="1em" aria-hidden="true" />
 							</span>
 							<span class="navbar-settings-panel__category-copy">
 								<span class="navbar-settings-panel__category-title">{{ section.title }}</span>
@@ -68,7 +68,7 @@
 								class="navbar-settings-panel__detail-icon"
 								:class="`navbar-settings-panel__detail-icon--${getDetailTone()}`"
 							>
-								<span :class="['mdi', getDetailIcon()]" aria-hidden="true"></span>
+								<v-icon :icon="getDetailIcon()" size="1em" aria-hidden="true" />
 							</span>
 						</div>
 						<div class="navbar-settings-panel__detail-copy">
@@ -106,7 +106,7 @@
 								data-test="settings-panel-detail-back"
 								@click="clearActiveAction"
 							>
-								<span class="mdi mdi-arrow-left" aria-hidden="true"></span>
+								<v-icon icon="mdi-arrow-left" size="1em" aria-hidden="true" />
 								{{ __("Back to {0}", [activeSection.title]) }}
 							</button>
 							<NavbarCashierPinForm
@@ -143,7 +143,7 @@
 									@click="handleActionSelection(action)"
 								>
 									<span class="navbar-settings-panel__action-icon">
-										<span :class="['mdi', action.icon]" aria-hidden="true"></span>
+										<v-icon :icon="action.icon" size="1em" aria-hidden="true" />
 									</span>
 									<span class="navbar-settings-panel__action-copy">
 										<span class="navbar-settings-panel__action-title">{{

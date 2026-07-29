@@ -247,7 +247,7 @@ const visibleItems = computed(() => {
 	if (!term) return list;
 	return list.filter((row: any) => customItemFilter(row, term, row));
 });
-const emptyStateIcon = computed(() => (hasItemSearch.value ? "mdi-cart-search" : "mdi-cart-outline"));
+const emptyStateIcon = computed(() => (hasItemSearch.value ? "mdi-magnify" : "mdi-cart-outline"));
 const emptyStateTitle = computed(() =>
 	hasItemSearch.value ? __("No matching items in cart") : __("No items in cart"),
 );
