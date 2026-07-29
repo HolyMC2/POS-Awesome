@@ -154,6 +154,31 @@ export interface QzPrintDocumentOptions extends QzPrintHtmlOptions {
 	bypassDedupe?: boolean;
 }
 
+// Ceiling on a single qz.print round-trip — see the comment at the call site.
+const QZ_PRINT_TIMEOUT_MS = 60_000;
+
+function withQzCallTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => {
+			reject(
+				new Error(
+					`${label} timed out after ${Math.round(ms / 1000)}s — QZ Tray did not answer (blocked trust dialog?)`,
+				),
+			);
+		}, ms);
+		promise.then(
+			(value) => {
+				clearTimeout(timer);
+				resolve(value);
+			},
+			(error) => {
+				clearTimeout(timer);
+				reject(error);
+			},
+		);
+	});
+}
+
 const PRINTER_STORAGE_KEY = "posa_qz_printer_name";
 const CERT_READY_STORAGE_KEY = "posa_qz_cert_ready";
 const MANUAL_DISCONNECT_STORAGE_KEY = "posa_qz_manual_disconnect";
@@ -794,7 +819,15 @@ export async function printHtmlViaQz(html: string, options: QzPrintHtmlOptions =
 		});
 	}
 
-	await qz.print(config, data);
+	// qz-tray.js has NO call timeout: an unanswered tray dialog (untrusted
+	// cert after a rotation, blank signature from a missing server key) keeps
+	// the websocket open and this promise pending FOREVER — wedging the
+	// in-flight guards and taking the till's printing offline until a page
+	// reload. Reject past the ceiling so callers fall back to browser print
+	// and the guards release. A job the tray completes AFTER the timeout can
+	// double-print — accepted: the ceiling sits far above the observed
+	// perf:qz_print p99 (milliseconds-to-seconds), while the wedge is forever.
+	await withQzCallTimeout(qz.print(config, data), QZ_PRINT_TIMEOUT_MS, "qz.print");
 }
 
 // In-flight registry. Closes the "two paper copies" bug at the

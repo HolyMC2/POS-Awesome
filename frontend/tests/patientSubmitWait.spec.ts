@@ -32,20 +32,22 @@ describe("waitForLateSubmission", () => {
 	});
 
 	it("honors the socket event's doctype once the DB confirms docstatus 1", async () => {
+		// First (immediate) poll runs before the event's microtask lands and
+		// sees a draft; the post-sleep confirm then carries the event doctype.
 		const clock = makeClock();
 		const asked: string[] = [];
 		const result = await waitForLateSubmission("INV-2", "Sales Invoice", {
 			waitForProcessed: async () => ({ doctype: "POS Invoice" }),
 			getDocstatus: async (dt) => {
 				asked.push(dt);
-				return 1;
+				return asked.length >= 2 ? 1 : 0;
 			},
 			...clock,
 			ceilingMs: 100_000,
 			pollMs: 10_000,
 		});
 		expect(result).toEqual({ doctype: "POS Invoice" });
-		expect(asked[0]).toBe("POS Invoice");
+		expect(asked[asked.length - 1]).toBe("POS Invoice");
 	});
 
 	it("distrusts a socket 'processed' the DB contradicts — never prints a draft", async () => {

@@ -4,6 +4,22 @@ All notable changes.
 
 ## Unreleased
 
+- **Print-pipeline hardening (full-backtrace blocker wave).**
+  `pos_invoice_processed` now publishes `after_commit=True` — consumers fetch
+  + print the doc the moment it arrives, and a mid-transaction publish made
+  them read docstatus 0 (draft receipts pre-`b722e4f08`; spurious patient-wait
+  toast + 10-18 s ticket delay on every healthy background sale after it).
+  `qz.print` gets a 60 s ceiling (qz-tray.js has none: an unanswered trust
+  dialog kept the promise pending forever, wedging the in-flight guards and
+  taking the till's printing offline until reload). The reprint cache
+  (`setLastInvoice`) is docstatus-gated — a background submit answers with
+  docstatus 0 and the navbar reprint printed a DRAFT; the deferred workflow
+  stamps it once confirmed. Invoice-list reprint fixed (`posProfile.value` in
+  an Options-API method = ReferenceError → QZ silent print was unreachable
+  from that surface, 100% fallback to the browser dialog). Patient wait polls
+  immediately before its first sleep (~18 s → ~8 s typical slow path) and no
+  longer discards a lifecycle event that lands mid-check.
+
 - **`posa_force_close_stale_shift` survives tenants that never got the patch.**
   The column was PATCH-only schema; `set_all_patches_as_completed` marks every
   patch as run at install time, so any site provisioned after 2026-07-02 (both

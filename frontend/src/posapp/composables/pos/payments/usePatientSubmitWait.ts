@@ -68,7 +68,8 @@ export async function waitForLateSubmission(
 	// receipt for a still-draft sale. The DB is the truth; the event only
 	// tells us when to look and which doctype won.
 	const confirmSubmitted = async (): Promise<{ doctype: string } | null> => {
-		const eventDoctype = socketState?.doctype || doctype;
+		const observed = socketState;
+		const eventDoctype = observed?.doctype || doctype;
 		const docstatus = await getDocstatus(eventDoctype, invoice);
 		if (docstatus === 1) {
 			return { doctype: eventDoctype };
@@ -77,10 +78,24 @@ export async function waitForLateSubmission(
 			throw new Error(`Invoice ${invoice} was cancelled before it could print`);
 		}
 		// A "processed" the DB contradicts is the fabricated kind — discard
-		// it and keep polling. null (unreadable) / 0 (job queued) → wait on.
-		socketState = null;
+		// it and keep polling. Only discard what THIS check actually tested:
+		// a real event landing during the await above must survive to drive
+		// the next confirm. null (unreadable) / 0 (job queued) → wait on.
+		if (socketState === observed) {
+			socketState = null;
+		}
 		return null;
 	};
+
+	// One immediate look before the first sleep: the fast path already burned
+	// its 8 s, and a submit that landed in the gap should print NOW, not one
+	// poll interval later (backtrace N6 — this alone cuts the typical slow
+	// path from ~18 s to ~8 s).
+	if (socketError) throw socketError;
+	{
+		const confirmed = await confirmSubmitted();
+		if (confirmed) return confirmed;
+	}
 
 	while (now() < deadline) {
 		if (socketError) throw socketError;

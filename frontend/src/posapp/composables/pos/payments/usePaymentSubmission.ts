@@ -1144,10 +1144,13 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 				doctype: submittedDoctype,
 			});
 
-			if (stores?.uiStore) {
+			if (stores?.uiStore && Number(submittedDocstatus) === 1) {
 				// Store the server-assigned name, not the pre-submit doc.name —
 				// they diverge on amended/renamed invoices, which would make the
 				// reprint fetch a name that doesn't exist server-side.
+				// Docstatus-gated: a background submit answers with docstatus 0,
+				// and stamping then hands the navbar reprint a DRAFT to print
+				// (backtrace B3) — the deferred workflow stamps once confirmed.
 				stores.uiStore.setLastInvoice(responseInvoiceName);
 			}
 

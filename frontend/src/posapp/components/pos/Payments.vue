@@ -1590,6 +1590,14 @@ const runDeferredPrintWorkflow = async ({
 			freshDoc = await fetchSubmittedInvoiceDoc(name, resolvedDoctype);
 		}
 
+		// The background success path deliberately does NOT stamp the reprint
+		// cache (its docstatus is still 0 there — backtrace B3); stamp here,
+		// where the doc is confirmed submitted, so the navbar reprint serves
+		// this sale instead of the previous one.
+		if (Number(freshDoc?.docstatus) === 1) {
+			uiStore.setLastInvoice(name);
+		}
+
 		await loadPrintPage({ doc: freshDoc, doctype: resolvedDoctype });
 	} catch (error) {
 		console.error("Deferred print failed", error);

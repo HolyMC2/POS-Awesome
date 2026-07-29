@@ -55,7 +55,8 @@ RETURN_OUTSTANDING_MESSAGE_MARKERS = (
 )
 
 
-def _posa_publish_dual(event, message, user=None, doctype=None, docname=None):
+def _posa_publish_dual(event, message, user=None, doctype=None, docname=None,
+                       after_commit=False):
     """Publish a realtime event to BOTH the user room and the doc room.
 
     Frappe's `publish_realtime(..., user=...)` only routes to the
@@ -75,11 +76,21 @@ def _posa_publish_dual(event, message, user=None, doctype=None, docname=None):
       target (event-specific → task → user → doc → site). When `user`
       is set it never falls through to the doc room. So we explicitly
       issue two publishes.
+
+    ``after_commit=True`` defers delivery until the transaction commits.
+    Lifecycle events whose consumers immediately READ the document
+    (``pos_invoice_processed`` → client fetches + prints) must use it:
+    published mid-transaction, the client's fresh connection still sees
+    docstatus 0 and either prints a draft or false-escalates into the
+    patient wait. Failure events must NOT use it — a rollback would
+    discard the very event that reports the failure.
     """
     if user:
-        frappe.publish_realtime(event, message, user=user)
+        frappe.publish_realtime(event, message, user=user, after_commit=after_commit)
     if doctype and docname:
-        frappe.publish_realtime(event, message, doctype=doctype, docname=docname)
+        frappe.publish_realtime(
+            event, message, doctype=doctype, docname=docname, after_commit=after_commit
+        )
 
 
 def _json_dumps(value):
@@ -1802,6 +1813,10 @@ def submit_in_background_job(kwargs):
                 user=user,
                 doctype=invoice_doc.doctype,
                 docname=invoice_doc.name,
+                # Consumers fetch + print the doc the moment this arrives; a
+                # mid-transaction publish makes them read docstatus 0 (draft
+                # receipts / false patient-wait escalations — backtrace W1/B4).
+                after_commit=True,
             )
         _process_post_submit_payments(
             invoice_doc,
