@@ -2,9 +2,7 @@
 	<v-row justify="center">
 		<v-dialog
 			v-model="invoiceManagementDialog"
-			:max-width="invoiceManagementDialogMaxWidth"
-			:fullscreen="isCompactInvoiceManagement"
-			:width="invoiceManagementDialogWidth"
+			v-bind="dialogProps"
 			scrollable
 			:theme="isDarkTheme ? 'dark' : 'light'"
 			content-class="invoice-management-dialog-content"
@@ -1376,12 +1374,12 @@
 
 <script>
 /* global __ */
-import { inject, computed } from "vue";
+import { inject } from "vue";
 import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
 import format from "../../../format";
 import { useTheme } from "../../../composables/core/useTheme";
-import { useResponsive } from "../../../composables/core/useResponsive";
+import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import { useToastStore } from "../../../stores/toastStore";
 import { useUIStore } from "../../../stores/uiStore";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
@@ -1425,15 +1423,14 @@ export default {
 		const toastStore = useToastStore();
 		const router = useRouter();
 		const theme = useTheme();
-		const responsive = useResponsive();
 		const eventBus = inject("eventBus");
-		const isCompactInvoiceManagement = computed(() => responsive.windowWidth.value < 1100);
-		const invoiceManagementDialogWidth = computed(() =>
-			responsive.windowWidth.value < 600 ? "100vw" : "min(1420px, 97vw)",
-		);
-		const invoiceManagementDialogMaxWidth = computed(() =>
-			responsive.windowWidth.value < 1100 ? "100vw" : "1420px",
-		);
+		// Fullscreen below 1100 has to mean no inline geometry at all — VOverlay
+		// writes width/max-width as inline styles that beat the fullscreen rule.
+		const { isFullscreenDialog: isCompactInvoiceManagement, dialogProps } = useDialogFullscreen({
+			breakpoint: 1100,
+			width: "min(1420px, 97vw)",
+			maxWidth: "1420px",
+		});
 		const { invoiceManagementDialog, invoiceManagementTargetTab, posProfile, posOpeningShift } =
 			storeToRefs(uiStore);
 		const { currentCashier } = storeToRefs(employeeStore);
@@ -1453,8 +1450,7 @@ export default {
 			isDarkTheme: theme.isDark,
 			isOffline,
 			isCompactInvoiceManagement,
-			invoiceManagementDialogWidth,
-			invoiceManagementDialogMaxWidth,
+			dialogProps,
 		};
 	},
 	data: () => ({
@@ -3182,6 +3178,15 @@ export default {
 
 .invoice-detail-card--dark .summary-tile__value {
 	color: rgb(248, 250, 252);
+}
+
+/* The sheet is fullscreen from 1100 down, so the floating-card geometry has to
+   give way over the whole fullscreen range — not just at tablet width. */
+@media (max-width: 1099.98px) {
+	.invoice-management-card {
+		max-height: 100%;
+		border-radius: 0;
+	}
 }
 
 @media (max-width: 960px) {

@@ -86,7 +86,7 @@
 			 expanded <tr>, whose ~800px panel could not scroll inside the
 			 table/flex chain and painted over the header. v-dialog teleports to
 			 body, so `scrollable` gives a reliable viewport-bounded scroller. -->
-		<v-dialog v-model="detailDialogOpen" max-width="820" scrollable>
+		<v-dialog v-model="detailDialogOpen" v-bind="detailDialogProps" scrollable>
 			<v-card v-if="detailItem" class="posa-item-detail-dialog">
 				<v-card-title class="d-flex align-center pa-3 bg-primary text-white">
 					<v-icon class="mr-2">mdi-information-outline</v-icon>
@@ -164,6 +164,7 @@ import { useItemsTableMerge } from "../../../composables/pos/items/useItemsTable
 import { useItemsTableNameEdit } from "../../../composables/pos/items/useItemsTableNameEdit";
 import { useFormatters } from "../../../composables/core/useFormatters";
 import { useRtl } from "../../../composables/core/useRtl";
+import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import {
 	focusCartItemField,
 	type CartFieldFocusOptions,
@@ -316,6 +317,9 @@ const detailDialogOpen = computed({
 		if (!open) emit("update:expanded", []);
 	},
 });
+// The detail sheet is the phone's only route to serial/batch/rate editing,
+// so under sm it takes the viewport rather than an 820px card cropped to it.
+const { dialogProps: detailDialogProps } = useDialogFullscreen({ maxWidth: 820 });
 
 const handleQtyChange = (item: any, event: any) => {
 	const newQty = parseFloat(event.target.value) || 0;

@@ -1,7 +1,8 @@
 <template>
 	<v-dialog
 		:model-value="modelValue"
-		max-width="520"
+		v-bind="dialogProps"
+		:scrollable="isFullscreenDialog"
 		@update:model-value="$emit('update:modelValue', $event)"
 	>
 		<v-card class="gift-card-dialog">
@@ -151,6 +152,7 @@
 
 <script setup>
 import { computed } from "vue";
+import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 
 const props = defineProps({
 	modelValue: {
@@ -203,6 +205,10 @@ defineEmits([
 ]);
 
 const __ = window.__;
+
+// Scanned mid-payment on the terminal's own screen — under sm it takes the
+// whole viewport so the code field and the actions are both reachable.
+const { isFullscreenDialog, dialogProps } = useDialogFullscreen({ maxWidth: 520 });
 
 const redeemAmountDisplay = computed(() => {
 	const amount = props.redeemAmount;
@@ -392,6 +398,23 @@ const modeMeta = computed(() => {
 
 	.gift-card-dialog__stats {
 		grid-template-columns: 1fr;
+	}
+}
+
+/* Fullscreen under sm (useDialogFullscreen): square off the sheet and let the
+   three actions wrap clear of the home indicator. */
+@media (max-width: 599.98px) {
+	.gift-card-dialog {
+		border-radius: 0;
+	}
+
+	.gift-card-dialog__actions {
+		flex-wrap: wrap;
+		padding-bottom: calc(var(--pos-space-4) + env(safe-area-inset-bottom, 0px));
+	}
+
+	.gift-card-dialog__actions :deep(.v-btn) {
+		flex: 1 1 auto;
 	}
 }
 </style>

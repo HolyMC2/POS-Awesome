@@ -2,9 +2,7 @@
 	<v-row justify="center">
 		<v-dialog
 			v-model="draftsDialog"
-			:max-width="draftsDialogMaxWidth"
-			:fullscreen="isCompactDrafts"
-			:width="draftsDialogWidth"
+			v-bind="dialogProps"
 			scrollable
 			:theme="isDarkTheme ? 'dark' : 'light'"
 			content-class="drafts-dialog-content"
@@ -116,14 +114,13 @@
 </template>
 
 <script>
-import { computed } from "vue";
 import format from "../../../format";
 import { useToastStore } from "../../../stores/toastStore";
 import { useUIStore } from "../../../stores/uiStore";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { storeToRefs } from "pinia";
 import { useTheme } from "../../../composables/core/useTheme";
-import { useResponsive } from "../../../composables/core/useResponsive";
+import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import { fetchDraftInvoiceDoc } from "../../../utils/draftInvoices";
 
 export default {
@@ -134,14 +131,15 @@ export default {
 		const uiStore = useUIStore();
 		const invoiceStore = useInvoiceStore();
 		const theme = useTheme();
-		const responsive = useResponsive();
-		const isCompactDrafts = computed(() => responsive.windowWidth.value < 1100);
-		const draftsDialogWidth = computed(() =>
-			responsive.windowWidth.value < 600 ? "100vw" : "min(960px, 96vw)",
-		);
-		const draftsDialogMaxWidth = computed(() =>
-			responsive.windowWidth.value < 1100 ? "100vw" : "960px",
-		);
+		// Was fullscreen below 1100 while still passing width="min(960px, 96vw)",
+		// which VOverlay writes as an inline style and so beat the fullscreen
+		// rule — the "fullscreen" sheet sat 960px wide, pinned left. The helper
+		// drops all geometry when fullscreen and keeps the desktop pair intact.
+		const { isFullscreenDialog: isCompactDrafts, dialogProps } = useDialogFullscreen({
+			breakpoint: 1100,
+			width: "min(960px, 96vw)",
+			maxWidth: "960px",
+		});
 		const { draftsDialog, draftsData } = storeToRefs(uiStore);
 		return {
 			toastStore,
@@ -151,8 +149,7 @@ export default {
 			draftsData,
 			isDarkTheme: theme.isDark,
 			isCompactDrafts,
-			draftsDialogWidth,
-			draftsDialogMaxWidth,
+			dialogProps,
 		};
 	},
 	data: () => ({
@@ -438,6 +435,15 @@ export default {
 	background: color-mix(in srgb, var(--pos-surface-raised) 92%, transparent);
 	backdrop-filter: blur(10px);
 	border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+}
+
+/* The sheet is fullscreen from 1100 down, so the floating-card geometry has to
+   give way over the whole fullscreen range — not just at phone width. */
+@media (max-width: 1099.98px) {
+	.drafts-dialog-card {
+		max-height: 100%;
+		border-radius: 0;
+	}
 }
 
 @media (max-width: 959px) {

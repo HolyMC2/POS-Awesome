@@ -2,9 +2,7 @@
 	<v-row justify="center">
 		<v-dialog
 			v-model="invoicesDialog"
-			:max-width="returnsDialogMaxWidth"
-			:fullscreen="isCompactReturns"
-			:width="returnsDialogWidth"
+			v-bind="dialogProps"
 			scrollable
 			class="returns-dialog"
 			:theme="isDarkTheme ? 'dark' : 'light'"
@@ -331,8 +329,7 @@
 import format, { formatUtils } from "../../../format";
 import { useInvoiceStore } from "../../../stores/invoiceStore.js";
 import { useUIStore } from "../../../stores/uiStore.js";
-import { computed } from "vue";
-import { useResponsive } from "../../../composables/core/useResponsive";
+import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import { useTheme } from "../../../composables/core/useTheme";
 
 export default {
@@ -346,21 +343,19 @@ export default {
 	setup() {
 		const invoiceStore = useInvoiceStore();
 		const uiStore = useUIStore();
-		const responsive = useResponsive();
 		const theme = useTheme();
-		const isCompactReturns = computed(() => responsive.windowWidth.value < 1100);
-		const returnsDialogWidth = computed(() =>
-			responsive.windowWidth.value < 600 ? "100vw" : "min(1120px, 96vw)",
-		);
-		const returnsDialogMaxWidth = computed(() =>
-			responsive.windowWidth.value < 1100 ? "100vw" : "1120px",
-		);
+		// Fullscreen below 1100 has to mean no inline geometry at all — VOverlay
+		// writes width/max-width as inline styles that beat the fullscreen rule.
+		const { isFullscreenDialog: isCompactReturns, dialogProps } = useDialogFullscreen({
+			breakpoint: 1100,
+			width: "min(1120px, 96vw)",
+			maxWidth: "1120px",
+		});
 		return {
 			invoiceStore,
 			uiStore,
 			isCompactReturns,
-			returnsDialogWidth,
-			returnsDialogMaxWidth,
+			dialogProps,
 			isDarkTheme: theme.isDark,
 		};
 	},

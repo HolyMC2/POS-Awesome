@@ -2,9 +2,7 @@
 	<v-row justify="center">
 		<v-dialog
 			v-model="ordersDialog"
-			:max-width="ordersDialogMaxWidth"
-			:fullscreen="isCompactOrders"
-			:width="ordersDialogWidth"
+			v-bind="dialogProps"
 			scrollable
 			content-class="sales-orders-dialog-content"
 			:theme="isDarkTheme ? 'dark' : 'light'"
@@ -137,12 +135,11 @@
 </template>
 
 <script>
-import { computed } from "vue";
 import format from "../../../format";
 import { useUIStore } from "../../../stores/uiStore.js";
 import { useInvoiceStore } from "../../../stores/invoiceStore.js";
 import { storeToRefs } from "pinia";
-import { useResponsive } from "../../../composables/core/useResponsive";
+import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import { useTheme } from "../../../composables/core/useTheme";
 import { loadDocumentSourceRecord } from "../../../utils/documentSources";
 import {
@@ -155,15 +152,14 @@ export default {
 	setup() {
 		const uiStore = useUIStore();
 		const invoiceStore = useInvoiceStore();
-		const responsive = useResponsive();
 		const theme = useTheme();
-		const isCompactOrders = computed(() => responsive.windowWidth.value < 1100);
-		const ordersDialogWidth = computed(() =>
-			responsive.windowWidth.value < 600 ? "100vw" : "min(980px, 96vw)",
-		);
-		const ordersDialogMaxWidth = computed(() =>
-			responsive.windowWidth.value < 1100 ? "100vw" : "980px",
-		);
+		// Fullscreen below 1100 has to mean no inline geometry at all — VOverlay
+		// writes width/max-width as inline styles that beat the fullscreen rule.
+		const { isFullscreenDialog: isCompactOrders, dialogProps } = useDialogFullscreen({
+			breakpoint: 1100,
+			width: "min(980px, 96vw)",
+			maxWidth: "980px",
+		});
 		const { ordersDialog, ordersData } = storeToRefs(uiStore);
 		return {
 			uiStore,
@@ -171,8 +167,7 @@ export default {
 			ordersDialog,
 			ordersData,
 			isCompactOrders,
-			ordersDialogWidth,
-			ordersDialogMaxWidth,
+			dialogProps,
 			isDarkTheme: theme.isDark,
 		};
 	},
@@ -470,6 +465,15 @@ export default {
 
 .sales-orders-table :deep(tbody tr:hover) {
 	background: var(--pos-table-row-hover) !important;
+}
+
+/* The sheet is fullscreen from 1100 down, so the floating-card geometry has to
+   give way over the whole fullscreen range — not just at phone width. */
+@media (max-width: 1099.98px) {
+	.sales-orders-card {
+		max-height: 100%;
+		border-radius: 0;
+	}
 }
 
 @media (max-width: 959px) {

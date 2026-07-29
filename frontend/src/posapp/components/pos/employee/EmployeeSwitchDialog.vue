@@ -1,7 +1,7 @@
 <template>
 	<v-dialog
 		:model-value="switchDialogOpen"
-		max-width="520"
+		v-bind="switchDialogProps"
 		scrollable
 		@update:model-value="handleSwitchDialog"
 	>
@@ -99,7 +99,12 @@
 		</v-card>
 	</v-dialog>
 
-	<v-dialog :model-value="lockDialogOpen" max-width="480" persistent>
+	<v-dialog
+		:model-value="lockDialogOpen"
+		v-bind="lockDialogProps"
+		:scrollable="isFullscreenDialog"
+		persistent
+	>
 		<v-card class="pos-themed-card employee-lock-dialog">
 			<v-card-title class="employee-switch-dialog__title">
 				<div>
@@ -174,6 +179,16 @@ import { computed, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useEmployeeStore } from "../../../stores/employeeStore";
 import { useUIStore } from "../../../stores/uiStore";
+import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
+
+// A shared terminal is handed over wherever it stands, phone included: both
+// sheets go fullscreen under sm so the cashier list and the PIN field fit.
+const {
+	isFullscreenDialog,
+	dialogProps: switchDialogProps,
+	dialogPropsFor,
+} = useDialogFullscreen({ maxWidth: 520 });
+const lockDialogProps = dialogPropsFor({ maxWidth: 480 });
 
 const employeeStore = useEmployeeStore();
 const uiStore = useUIStore();
@@ -355,5 +370,13 @@ const __ = window.__;
 .employee-switch-dialog__help {
 	margin: 14px 0 12px;
 	border-radius: 14px;
+}
+
+/* Fullscreen under sm (useDialogFullscreen) — the action row sits on the
+   bezel, so keep it clear of the home indicator. */
+@media (max-width: 599.98px) {
+	.employee-switch-dialog__actions {
+		padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+	}
 }
 </style>

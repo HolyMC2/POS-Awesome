@@ -1,12 +1,12 @@
 <template>
 	<v-row justify="center">
-		<v-dialog v-model="dialog" max-width="800px" min-width="800px">
+		<v-dialog v-model="dialog" v-bind="dialogProps">
 			<v-card>
 				<v-card-title>
 					<span class="text-h5 text-primary">{{ __("Select Payment") }}</span>
 				</v-card-title>
 				<v-container>
-					<v-row class="mb-4">
+					<v-row class="mb-4 mpesa-payments__search">
 						<v-text-field
 							color="primary"
 							:label="frappe._('Full Name')"
@@ -86,6 +86,7 @@
 <script setup>
 import { inject, ref, watch } from "vue";
 import { formatUtils } from "../../../format";
+import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import {
 	extractServerErrorMessage,
 	showServerErrorToast,
@@ -116,6 +117,10 @@ const mobile_no = ref("");
 const isLoading = ref(false);
 const isSubmitting = ref(false);
 const errorMessage = ref("");
+
+// Was `min-width="800px"`, which held the sheet at 800px on every phone.
+// Fullscreen under sm, fluid up to 800px above it, unchanged from 848px up.
+const { dialogProps } = useDialogFullscreen({ maxWidth: "800px" });
 
 const headers = [
 	{
@@ -257,3 +262,19 @@ watch(
 	{ immediate: true },
 );
 </script>
+
+<style scoped>
+@media (max-width: 599.98px) {
+	/* Name, phone and Search sit on one flex line; at phone width that
+	   squeezes all three to unusable. Stack them instead. */
+	.mpesa-payments__search {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	/* beats Vuetify's `ml-2` utility, which ships !important */
+	.mpesa-payments__search .v-btn {
+		margin-left: 0 !important;
+	}
+}
+</style>

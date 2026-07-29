@@ -1,6 +1,6 @@
 <template>
 	<v-row justify="center">
-		<v-dialog v-model="isOpen" persistent max-width="800px" max-height="90vh">
+		<v-dialog v-model="isOpen" persistent v-bind="dialogProps">
 			<v-card elevation="8" class="opening-dialog-card">
 				<!-- Header Section - White Background with Blue Text -->
 				<v-card-title class="opening-dialog-header">
@@ -147,6 +147,7 @@ import {
 } from "../../../../offline/index";
 import { createBootstrapSnapshotFromRegisterData } from "../../../../offline/bootstrapSnapshot";
 import authService from "../../../services/authService";
+import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 
 defineOptions({
 	name: "OpeningDialog",
@@ -163,6 +164,9 @@ const BUILD_VERSION = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION
 
 const isOpen = ref(props.dialog ? props.dialog : false);
 const is_loading = ref(false);
+// First screen of the shift: it has to be usable on the phone the cashier
+// opened the till with, not an 800px card cropped to a 360px viewport.
+const { dialogProps } = useDialogFullscreen({ maxWidth: "800px", maxHeight: "90vh" });
 const companies = ref([]);
 const company = ref("");
 const pos_profiles_data = ref([]);
@@ -609,6 +613,31 @@ onMounted(() => {
 		margin-left: 4px;
 		padding: 6px 10px;
 		min-width: 60px;
+	}
+}
+
+/* Under sm the dialog is fullscreen (useDialogFullscreen), so the card owns
+   the viewport and its floating-card geometry has to give way. Three 120px
+   actions plus a spacer do not fit one phone-width row either. */
+@media (max-width: 599.98px) {
+	.opening-dialog-card {
+		max-height: 100%;
+		border-radius: 0;
+	}
+
+	.dialog-actions-container {
+		flex-wrap: wrap;
+		padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+	}
+
+	.dialog-actions-container :deep(.v-spacer) {
+		display: none;
+	}
+
+	.pos-action-btn {
+		flex: 1 1 40%;
+		min-width: 0;
+		padding: 12px 16px;
 	}
 }
 
