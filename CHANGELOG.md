@@ -24,7 +24,12 @@ All notable changes.
   event raced against a 10s DB docstatus poll under a 300s ceiling (the RQ
   job timeout), with an info toast telling the operator the ticket will print
   once the sale confirms. Server-reported submit failures and cancellations
-  abort immediately. Spec: `tests/patientSubmitWait.spec.ts` (6 tests).
+  abort (within one poll interval). Audit hardening: the wait never prints on
+  the socket's word alone — socketStore fabricates `{status:"processed"}`
+  while disconnected, so every print is gated on a DB `docstatus == 1`
+  confirm (no draft receipts); and a submit the server already reported
+  FAILED skips the reassuring toast + patient wait and surfaces the real
+  error. Spec: `tests/patientSubmitWait.spec.ts` (7 tests).
 
 - **Submit gets a 120s client timeout instead of the 30s api.ts default.** The
   server is allowed 120s (gunicorn `--timeout=120`), and the shim's fetch has no

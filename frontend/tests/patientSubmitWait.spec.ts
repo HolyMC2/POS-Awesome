@@ -31,16 +31,37 @@ describe("waitForLateSubmission", () => {
 		expect(statuses.length).toBe(0);
 	});
 
-	it("prefers the socket event's doctype when it lands first", async () => {
+	it("honors the socket event's doctype once the DB confirms docstatus 1", async () => {
 		const clock = makeClock();
+		const asked: string[] = [];
 		const result = await waitForLateSubmission("INV-2", "Sales Invoice", {
 			waitForProcessed: async () => ({ doctype: "POS Invoice" }),
-			getDocstatus: async () => 0,
+			getDocstatus: async (dt) => {
+				asked.push(dt);
+				return 1;
+			},
 			...clock,
 			ceilingMs: 100_000,
 			pollMs: 10_000,
 		});
 		expect(result).toEqual({ doctype: "POS Invoice" });
+		expect(asked[0]).toBe("POS Invoice");
+	});
+
+	it("distrusts a socket 'processed' the DB contradicts — never prints a draft", async () => {
+		// socketStore fabricates {status:"processed"} while disconnected; if
+		// the DB still says draft, the wait must keep polling, not print.
+		const clock = makeClock();
+		const statuses = [0, 0, 0, 1];
+		const result = await waitForLateSubmission("INV-2b", "Sales Invoice", {
+			waitForProcessed: async () => ({}),
+			getDocstatus: async () => statuses.shift() ?? 1,
+			...clock,
+			ceilingMs: 100_000,
+			pollMs: 10_000,
+		});
+		expect(result).toEqual({ doctype: "Sales Invoice" });
+		expect(statuses.length).toBe(0);
 	});
 
 	it("surfaces a server-reported submit failure instead of polling on", async () => {

@@ -1512,7 +1512,13 @@ const runDeferredPrintWorkflow = async ({
 			let processedState;
 			try {
 				processedState = await waitForInvoiceSubmission(name, resolvedDoctype);
-			} catch (_fastPathMiss) {
+			} catch (fastPathMiss) {
+				// A submit the server already reported FAILED must surface as
+				// the failure it is — not get the reassuring "still processing"
+				// toast over the red one, then a 300 s wait for nothing.
+				if (socketStore.processedInvoices?.[name]?.status === "failed") {
+					throw fastPathMiss;
+				}
 				// The bg submit outlived the fast path (congested queue: prod
 				// lag runs 45-230 s). Don't abandon the ticket — tell the
 				// operator and keep both channels open until it lands.

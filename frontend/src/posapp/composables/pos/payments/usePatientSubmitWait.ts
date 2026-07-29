@@ -62,24 +62,36 @@ export async function waitForLateSubmission(
 				error instanceof Error ? error : new Error(String(error ?? ""));
 		});
 
-	while (now() < deadline) {
-		if (socketError) throw socketError;
-		if (socketState) {
-			return { doctype: socketState.doctype || doctype };
-		}
-		await sleep(pollMs);
-		if (socketError) throw socketError;
-		if (socketState) {
-			return { doctype: socketState.doctype || doctype };
-		}
-		const docstatus = await getDocstatus(doctype, invoice);
+	// Never print on the socket's word alone: socketStore RESOLVES
+	// OPTIMISTICALLY with a fabricated {status:"processed"} whenever the
+	// socket is disconnected — printing then would hand the customer a
+	// receipt for a still-draft sale. The DB is the truth; the event only
+	// tells us when to look and which doctype won.
+	const confirmSubmitted = async (): Promise<{ doctype: string } | null> => {
+		const eventDoctype = socketState?.doctype || doctype;
+		const docstatus = await getDocstatus(eventDoctype, invoice);
 		if (docstatus === 1) {
-			return { doctype };
+			return { doctype: eventDoctype };
 		}
 		if (docstatus === 2) {
 			throw new Error(`Invoice ${invoice} was cancelled before it could print`);
 		}
-		// null (unreadable) or 0 (still draft / job queued) → keep waiting.
+		// A "processed" the DB contradicts is the fabricated kind — discard
+		// it and keep polling. null (unreadable) / 0 (job queued) → wait on.
+		socketState = null;
+		return null;
+	};
+
+	while (now() < deadline) {
+		if (socketError) throw socketError;
+		if (socketState) {
+			const confirmed = await confirmSubmitted();
+			if (confirmed) return confirmed;
+		}
+		await sleep(pollMs);
+		if (socketError) throw socketError;
+		const confirmed = await confirmSubmitted();
+		if (confirmed) return confirmed;
 	}
 	throw new Error(
 		`Invoice ${invoice} did not finish submitting within ${Math.round(ceilingMs / 1000)}s`,
