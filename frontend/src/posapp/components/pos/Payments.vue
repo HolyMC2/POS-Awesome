@@ -303,6 +303,7 @@ import { usePaymentCalculations } from "../../composables/pos/payments/usePaymen
 import { usePaymentSubmission } from "../../composables/pos/payments/usePaymentSubmission";
 import { useRedemptionLogic } from "../../composables/pos/payments/useRedemptionLogic";
 import { usePaymentPrinting } from "../../composables/pos/payments/usePaymentPrinting";
+import { waitForLateSubmission } from "../../composables/pos/payments/usePatientSubmitWait";
 import { usePaymentMethods } from "../../composables/pos/payments/usePaymentMethods";
 import { useInvoiceDetails } from "../../composables/pos/invoice/useInvoiceDetails";
 import { useFormat } from "../../format";
@@ -1508,7 +1509,39 @@ const runDeferredPrintWorkflow = async ({
 
 	try {
 		if (waitForInvoiceProcessing) {
-			const processedState = await waitForInvoiceSubmission(name, resolvedDoctype);
+			let processedState;
+			try {
+				processedState = await waitForInvoiceSubmission(name, resolvedDoctype);
+			} catch (_fastPathMiss) {
+				// The bg submit outlived the fast path (congested queue: prod
+				// lag runs 45-230 s). Don't abandon the ticket — tell the
+				// operator and keep both channels open until it lands.
+				toastStore.show({
+					title: __("Sale is still processing — the ticket will print once it is confirmed."),
+					color: "info",
+					timeout: 6000,
+				});
+				processedState = await waitForLateSubmission(name, resolvedDoctype, {
+					waitForProcessed: (invoice, timeoutMs) =>
+						socketStore.waitForInvoiceProcessed(invoice, timeoutMs),
+					getDocstatus: async (dt, invoice) => {
+						try {
+							const res = await frappe.call({
+								method: "frappe.client.get_value",
+								args: {
+									doctype: dt,
+									filters: { name: invoice },
+									fieldname: ["docstatus"],
+								},
+							});
+							const docstatus = res?.message?.docstatus;
+							return typeof docstatus === "number" ? docstatus : null;
+						} catch (_e) {
+							return null; // transient — keep waiting
+						}
+					},
+				});
+			}
 			resolvedDoctype = processedState?.doctype || resolvedDoctype;
 		}
 

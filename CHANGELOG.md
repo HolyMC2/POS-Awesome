@@ -4,6 +4,28 @@ All notable changes.
 
 ## Unreleased
 
+- **`posa_force_close_stale_shift` survives tenants that never got the patch.**
+  The column was PATCH-only schema; `set_all_patches_as_completed` marks every
+  patch as run at install time, so any site provisioned after 2026-07-02 (both
+  prod demo cells, every future B16 tenant) was missing it — and
+  `assert_shift_not_stale`'s raw `db.get_value` turned EVERY `submit_invoice`
+  into a 500 (`1054 Unknown column`, hit live on demo.muelle.mx 2026-07-29).
+  The Custom Field now ships in fixtures (created on install AND every
+  migrate), and both readers go through `_profile_force_close_stale_shift`,
+  which falls back to the schema default (ON) when the column is absent —
+  fresh tenants keep the cash-reconciliation gate instead of crashing.
+- **Deferred print no longer abandons the ticket at ~9s.** With
+  `posa_allow_submissions_in_background_job` ON, prod submit lag runs 45-230s
+  when the shared RQ queue is congested (5 of 7 docomexico sales on
+  2026-07-28/29) — the old flow threw after one 8s socket wait + one DB check,
+  so the receipt silently never printed and the cashier resorted to «print
+  last invoice». `runDeferredPrintWorkflow` now falls back to
+  `waitForLateSubmission` (`usePatientSubmitWait.ts`): doc-room lifecycle
+  event raced against a 10s DB docstatus poll under a 300s ceiling (the RQ
+  job timeout), with an info toast telling the operator the ticket will print
+  once the sale confirms. Server-reported submit failures and cancellations
+  abort immediately. Spec: `tests/patientSubmitWait.spec.ts` (6 tests).
+
 - **Submit gets a 120s client timeout instead of the 30s api.ts default.** The
   server is allowed 120s (gunicorn `--timeout=120`), and the shim's fetch has no
   AbortController — so a 30s client timeout told the cashier "failed" while the

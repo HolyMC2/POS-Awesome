@@ -1856,6 +1856,7 @@ Unable to load document,No se pudo cargar el documento
 Unable to load gift card balance.,No se pudo cargar el saldo de la tarjeta de regalo.
 Unable to load parked order,No se pudo cargar la orden en espera
 Unable to prepare document,No se pudo preparar el documento
+Sale is still processing — the ticket will print once it is confirmed.,La venta sigue procesándose — el ticket se imprimirá al confirmarse.
 Unable to print submitted invoice,No se pudo imprimir la factura enviada
 Unable to process document action,No se pudo procesar la acción del documento
 Unable to repair change allocation,No se pudo reparar la asignación de cambio
