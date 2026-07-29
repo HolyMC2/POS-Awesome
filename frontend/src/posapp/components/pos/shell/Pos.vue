@@ -135,6 +135,8 @@
 						variant="solo"
 						density="compact"
 						color="warning"
+						inputmode="decimal"
+						enterkeyhint="done"
 						:prefix="getCurrencySymbol(posProfile?.currency)"
 						:disabled="
 							!posProfile?.posa_allow_user_to_edit_additional_discount ||
@@ -156,6 +158,8 @@
 						variant="solo"
 						density="compact"
 						color="warning"
+						inputmode="decimal"
+						enterkeyhint="done"
 						:disabled="
 							!posProfile?.posa_allow_user_to_edit_additional_discount ||
 							!!discountPercentageOfferName

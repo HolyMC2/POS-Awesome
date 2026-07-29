@@ -32,6 +32,8 @@
 								@change="onQtyChange(item, $event)"
 								:rules="[isNumber]"
 								:disabled="!!item.posa_is_replace"
+								inputmode="decimal"
+								enterkeyhint="done"
 								prepend-inner-icon="mdi-numeric"
 							></v-text-field>
 							<div v-if="item.max_qty !== undefined" class="text-caption mt-1">
@@ -87,6 +89,8 @@
 								:disabled="
 									!pos_profile.posa_allow_user_to_edit_rate || !!item.posa_is_replace
 								"
+								inputmode="decimal"
+								enterkeyhint="done"
 								prepend-inner-icon="mdi-currency-usd"
 							></v-text-field>
 						</div>
@@ -109,6 +113,8 @@
 									!!item.posa_is_replace ||
 									!!item.posa_offer_applied
 								"
+								inputmode="decimal"
+								enterkeyhint="done"
 								prepend-inner-icon="mdi-percent"
 							></v-text-field>
 						</div>
@@ -131,6 +137,8 @@
 									!!item.posa_is_replace ||
 									!!item.posa_offer_applied
 								"
+								inputmode="decimal"
+								enterkeyhint="done"
 								prepend-inner-icon="mdi-tag-minus"
 							></v-text-field>
 						</div>

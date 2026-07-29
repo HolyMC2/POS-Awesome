@@ -51,6 +51,8 @@
 					:model-value="redeemAmount"
 					:label="__('Amount')"
 					type="number"
+					inputmode="decimal"
+					enterkeyhint="done"
 					hide-details="auto"
 					variant="outlined"
 					density="comfortable"

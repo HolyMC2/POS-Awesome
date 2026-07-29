@@ -55,6 +55,8 @@
 							density="compact"
 							color="warning"
 							:prefix="currencySymbol(pos_profile.currency)"
+							inputmode="decimal"
+							enterkeyhint="done"
 							:disabled="
 								!pos_profile.posa_allow_user_to_edit_additional_discount ||
 								!!discount_percentage_offer_name
@@ -77,6 +79,8 @@
 							variant="solo"
 							density="compact"
 							color="warning"
+							inputmode="decimal"
+							enterkeyhint="done"
 							:disabled="
 								!pos_profile.posa_allow_user_to_edit_additional_discount ||
 								!!discount_percentage_offer_name

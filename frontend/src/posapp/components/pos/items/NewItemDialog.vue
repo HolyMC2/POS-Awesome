@@ -85,6 +85,8 @@
 								data-test="new-item-standard-rate"
 								:label="frappe._('Standard Rate')"
 								type="number"
+								inputmode="decimal"
+								enterkeyhint="done"
 								density="compact"
 								variant="outlined"
 								class="pos-themed-input"

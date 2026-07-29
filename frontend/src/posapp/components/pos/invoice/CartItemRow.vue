@@ -118,6 +118,8 @@
 						ref="qtyInput"
 						:autofocus="true"
 						type="number"
+						inputmode="decimal"
+						enterkeyhint="next"
 						:disabled="disableInput"
 					></v-text-field>
 					<v-btn
@@ -252,6 +254,8 @@
 						ref="discountPercentInput"
 						:autofocus="true"
 						type="number"
+						inputmode="decimal"
+						enterkeyhint="done"
 						:disabled="disableDiscountEdit"
 					></v-text-field>
 				</div>
@@ -293,6 +297,8 @@
 						ref="discountAmountInput"
 						:autofocus="true"
 						type="number"
+						inputmode="decimal"
+						enterkeyhint="done"
 						:disabled="disableDiscountEdit"
 					></v-text-field>
 				</div>
@@ -331,6 +337,8 @@
 						ref="rateInput"
 						:autofocus="true"
 						type="number"
+						inputmode="decimal"
+						enterkeyhint="done"
 						:disabled="disableRateEdit"
 					></v-text-field>
 				</div>

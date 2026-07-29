@@ -77,6 +77,8 @@
 											v-model="item.amount"
 											:rules="[max25chars]"
 											type="number"
+											inputmode="decimal"
+											enterkeyhint="done"
 											density="compact"
 											variant="outlined"
 											color="primary"

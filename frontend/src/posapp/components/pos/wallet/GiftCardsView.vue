@@ -99,6 +99,8 @@
 					variant="outlined"
 					density="compact"
 					type="number"
+					inputmode="decimal"
+					enterkeyhint="done"
 					min="0"
 				/>
 

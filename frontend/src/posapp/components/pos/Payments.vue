@@ -2306,6 +2306,18 @@ defineExpose({
 	background: linear-gradient(180deg, rgba(255, 255, 255, 0), var(--pos-surface) 30%);
 }
 
+/* Below 1100px Pos.vue renders the fixed bottom dock (z-20, ~120px
+   tall) over everything; this footer is only sticky at z-8, so PAGAR
+   pinned BEHIND the dock on a phone. Lift the sticky line by the space
+   the dock already measures for the rest of the shell — same
+   --bottom-safe-space contract InvoiceSummary and ItemActionToolbar
+   use. The dialog variant is an overlay above the dock and keeps 0. */
+@media (max-width: 1099px) {
+	.payment-footer:not(.payment-footer--dialog) {
+		bottom: calc(var(--bottom-safe-space, 0px) + 8px);
+	}
+}
+
 .payment-footer--dialog {
 	margin-top: 0;
 }

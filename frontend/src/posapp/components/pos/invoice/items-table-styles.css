@@ -173,6 +173,15 @@ table.posa-cart-table--native {
 	padding-right: 4px;
 }
 
+/* QTY takes a fixed 4px gutter rather than the breakpoint's, so the
+   stepper's width budget is the same at every size — the control has a
+   hard minimum (two buttons + the number) and cannot give ground to a
+   gutter that grows with the panel. */
+.posa-cart-table [data-column-key="qty"] {
+	padding-left: 4px;
+	padding-right: 4px;
+}
+
 .posa-cart-table__delete-btn.v-btn {
 	min-width: 34px !important;
 	width: 34px;
@@ -917,16 +926,13 @@ table.posa-cart-table--native {
 	--cell-height: 64px;
 }
 
-/* Phone-width column budget. compact-view shrinks the stepper's
-   buttons to 20px, so the QTY floor comes down with them — every
-   pixel saved here goes to the item name, which is what the operator
-   actually reads on a phone. The responsive header filter leaves only
-   Name / QTY / Rate / Amount / Actions / expand at this width. */
-.posa-responsive-table-container.breakpoint-xs .posa-cart-table [data-column-key="qty"] {
-	width: max(92px, 20%);
-}
-/* Fewer columns share the row at this width, so the money cells can
-   take a bigger slice and still print a whole amount. */
+/* Phone-width column budget. QTY keeps the base 120px floor here too:
+   a touch stepper needs 108px of it (see the pointer:coarse block
+   below) and the phone is exactly where that matters, so this is the
+   one column that does not shrink with the panel. The responsive
+   header filter leaves only Name / QTY / Rate / Amount / Actions /
+   expand at this width, and with QTY pinned the money cells can take a
+   bigger slice of what is left and still print a whole amount. */
 .posa-responsive-table-container.breakpoint-xs .posa-cart-table [data-column-key="rate"],
 .posa-responsive-table-container.breakpoint-xs .posa-cart-table [data-column-key="price_list_rate"] {
 	width: 16%;
@@ -958,10 +964,49 @@ table.posa-cart-table--native {
 	padding: 2px;
 }
 
-.posa-responsive-table-container.compact-view .qty-control-btn {
-	width: 20px !important;
-	height: 20px !important;
-	min-width: 20px !important;
+/* Mouse-driven compact panels keep the tight stepper. Scoped to
+   pointer:fine because these width floors are (0,3,0) + !important and
+   were beating theme.css's (0,2,0) `pointer: coarse` 44px rule — the
+   min-height got through but the width did not, so a touch stepper
+   rendered 20px wide and 44px tall. */
+@media (pointer: fine) {
+	.posa-responsive-table-container.compact-view .qty-control-btn {
+		width: 20px !important;
+		height: 20px !important;
+		min-width: 20px !important;
+	}
+}
+
+/* Touch: full 44px of vertical target, but NOT a 44px width. Three
+   44px boxes plus gaps need 148px and the Cantidad column is 120px, so
+   square targets would push "+" back out of its cell — the collision
+   463c0328 fixed. 32 x 44 is a 1408px² target against the 20 x 44
+   (880px²) the two stylesheets were producing between them. */
+@media (pointer: coarse) {
+	.posa-responsive-table-container .posa-cart-table td {
+		padding-top: 3px;
+		padding-bottom: 3px;
+	}
+
+	.posa-responsive-table-container .posa-cart-table .posa-cart-table__qty-counter {
+		padding: 2px;
+	}
+
+	.posa-responsive-table-container .posa-cart-table .qty-control-btn,
+	.posa-responsive-table-container .posa-cart-table .posa-cart-table__qty-btn {
+		width: 32px !important;
+		min-width: 32px !important;
+		height: 44px !important;
+		min-height: 44px !important;
+	}
+
+	/* theme.css lifts this to a 44px square for touch; inside the cart
+	   the number is an elastic cell between two fixed buttons, so it
+	   takes the height and leaves the width to the flex layout. */
+	.posa-responsive-table-container .posa-cart-table .posa-cart-table__qty-display {
+		min-width: 28px !important;
+		height: 44px !important;
+	}
 }
 
 /* =================================================================

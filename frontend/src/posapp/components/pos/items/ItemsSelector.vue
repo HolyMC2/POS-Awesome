@@ -122,6 +122,7 @@
 								ref="itemsTable"
 								:headers="headers"
 								:displayed-items="displayedItems"
+								:is-loading="isLoadingOrSyncing"
 								:header-props="headerProps"
 								:context="context"
 								:pos-profile="pos_profile"

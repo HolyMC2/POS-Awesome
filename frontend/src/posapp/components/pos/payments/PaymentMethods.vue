@@ -33,6 +33,8 @@
 						@change="$emit('update-amount', payment, $event)"
 						:rules="[isNumber]"
 						:prefix="currencySymbol(currency)"
+						inputmode="decimal"
+						enterkeyhint="done"
 						@focus="$emit('set-rest-amount', payment, isReturn)"
 						@keydown.enter="blurTarget"
 						@keydown.esc="blurTarget"

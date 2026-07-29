@@ -152,8 +152,15 @@ const __ = window.__;
 		font-size: 0.82rem !important;
 	}
 
+	/* These are the money buttons — same thumb sizing as the invoice
+	   action grid (InvoiceActionButtons.vue), where 40px secondary /
+	   46px primary was already settled. Submit is the primary. */
 	:deep(.payment-footer-btn.v-btn) {
-		min-height: 38px !important;
+		min-height: 40px !important;
+	}
+
+	:deep(.payment-submit-btn.v-btn) {
+		min-height: 46px !important;
 	}
 
 	:deep(.payment-footer-btn .v-btn__content) {
@@ -164,15 +171,21 @@ const __ = window.__;
 
 @media (max-width: 480px) {
 	.payment-footer-btn {
-		font-size: 0.76rem !important;
+		font-size: 0.78rem !important;
 	}
 
+	/* The phone used to get SMALLER targets than the tablet (34px);
+	   hold the 40/46 line all the way down. */
 	:deep(.payment-footer-btn.v-btn) {
-		min-height: 34px !important;
+		min-height: 40px !important;
+	}
+
+	:deep(.payment-submit-btn.v-btn) {
+		min-height: 46px !important;
 	}
 
 	:deep(.payment-footer-btn .v-btn__content) {
-		font-size: 0.76rem !important;
+		font-size: 0.78rem !important;
 	}
 }
 </style>

@@ -85,6 +85,8 @@
 					@click.stop
 					autofocus
 					type="number"
+					inputmode="decimal"
+					enterkeyhint="done"
 					min="0"
 				></v-text-field>
 				<v-btn
@@ -120,6 +122,8 @@
 					@click.stop
 					autofocus
 					type="number"
+					inputmode="decimal"
+					enterkeyhint="done"
 					min="0"
 				></v-text-field>
 			</div>
@@ -132,6 +136,8 @@
 				variant="outlined"
 				hide-details
 				type="number"
+				inputmode="decimal"
+				enterkeyhint="done"
 				min="0"
 				:model-value="item.received_qty"
 				@update:model-value="(val) => $emit('update-received-qty', { item, value: val })"

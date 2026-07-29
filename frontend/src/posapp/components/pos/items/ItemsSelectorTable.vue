@@ -14,8 +14,19 @@
 				{{ column.title }}
 			</div>
 		</div>
+		<!-- First catalog load: rows are coming, so say "loading" rather
+			 than "no items found" — the card view has always done this
+			 (ItemsSelectorCards.vue), the list view never did. -->
+		<div v-if="isLoading && !displayedItems.length" class="posa-catalog-loading">
+			<Skeleton
+				v-for="n in 8"
+				:key="n"
+				class="posa-catalog-loading__row"
+				:height="rowHeight"
+			/>
+		</div>
 		<div
-			v-if="!displayedItems.length"
+			v-else-if="!displayedItems.length"
 			class="posa-catalog-empty"
 		>
 			{{ noDataText || "No items match your search." }}
@@ -60,9 +71,11 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref } from "vue";
 import { RecycleScroller } from "vue-virtual-scroller";
 import "vue-virtual-scroller/dist/vue-virtual-scroller.css";
 import CatalogItemRow from "./CatalogItemRow.vue";
+import Skeleton from "../../ui/Skeleton.vue";
 
 const props = defineProps({
 	displayedItems: { type: Array, default: () => [] },
+	isLoading: { type: Boolean, default: false },
 	headers: { type: Array, default: () => [] },
 	// Kept for prop-shape compatibility with the previous
 	// v-data-table-virtual implementation. Not used by the
@@ -238,6 +251,19 @@ defineExpose({ scrollToIndex, getTableElement, tableRef: scrollerRef });
 	color: var(--pos-text-secondary);
 	font-size: 0.9rem;
 	padding: 24px;
+}
+
+.posa-catalog-loading {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px 0;
+	overflow: hidden;
+}
+
+.posa-catalog-loading__row {
+	flex: 0 0 auto;
 }
 
 .posa-catalog-scroller {

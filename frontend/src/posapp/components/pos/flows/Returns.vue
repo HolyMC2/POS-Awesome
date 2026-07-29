@@ -138,6 +138,8 @@
 								density="compact"
 								clearable
 								type="number"
+								inputmode="decimal"
+								enterkeyhint="done"
 								min="0"
 								placeholder="0"
 							></v-text-field>
@@ -152,6 +154,8 @@
 								density="compact"
 								clearable
 								type="number"
+								inputmode="decimal"
+								enterkeyhint="done"
 								min="0"
 								placeholder="No limit"
 							></v-text-field>

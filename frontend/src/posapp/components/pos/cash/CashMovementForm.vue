@@ -52,6 +52,8 @@
 				<v-text-field
 					v-model.number="amount"
 					type="number"
+					inputmode="decimal"
+					enterkeyhint="done"
 					min="0"
 					step="0.01"
 					variant="outlined"

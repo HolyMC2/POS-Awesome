@@ -17,6 +17,8 @@
 							density="compact"
 							variant="solo"
 							type="number"
+							inputmode="numeric"
+							enterkeyhint="done"
 							min="0"
 							max="365"
 							class="sleek-field pos-themed-input"
@@ -61,6 +63,8 @@
 							hide-details
 							v-model="invoiceDoc.contact_mobile"
 							type="number"
+							inputmode="tel"
+							enterkeyhint="done"
 						></v-text-field>
 					</v-container>
 				</v-card-text>
