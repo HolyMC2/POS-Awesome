@@ -120,7 +120,19 @@
 			<div class="mobile-dock__summary">
 				<div class="mobile-dock__totals">
 					<strong class="mobile-dock__amount">{{ formattedCartTotal }}</strong>
-					<span class="mobile-dock__meta">{{ cartMetaLabel }}</span>
+					<div class="mobile-dock__subline">
+						<button
+							type="button"
+							class="mobile-dock__customer"
+							:title="dockCustomerLabel"
+							:aria-label="`${__('Customer')}: ${dockCustomerLabel}`"
+							@click="jumpToCustomer"
+						>
+							<v-icon icon="mdi-account-outline" size="14" />
+							<span class="mobile-dock__customer-name">{{ dockCustomerLabel }}</span>
+						</button>
+						<span class="mobile-dock__meta">{{ cartMetaLabel }}</span>
+					</div>
 				</div>
 				<div class="mobile-dock__field">
 					<v-text-field
@@ -184,6 +196,9 @@
 					:class="{ 'mobile-dock__tab--active': activeView === 'offers' }"
 					@click="setSelectorView('offers')"
 				>
+					<span v-if="offersCount" class="mobile-dock__pill mobile-dock__pill--sm">{{
+						offersCount
+					}}</span>
 					<v-icon icon="mdi-tag-outline" size="20" />
 					<span>{{ __("Offers") }}</span>
 				</button>
@@ -203,6 +218,9 @@
 					:class="{ 'mobile-dock__tab--active': activeView === 'coupons' }"
 					@click="setSelectorView('coupons')"
 				>
+					<span v-if="couponsCount" class="mobile-dock__pill mobile-dock__pill--sm">{{
+						couponsCount
+					}}</span>
 					<v-icon icon="mdi-ticket-percent-outline" size="20" />
 					<span>{{ __("Coupons") }}</span>
 				</button>
@@ -245,6 +263,7 @@ import { useRtl } from "../../../composables/core/useRtl";
 import { useUIStore } from "../../../stores/uiStore.js";
 import { useInvoiceStore } from "../../../stores/invoiceStore.js";
 import { useItemsStore } from "../../../stores/itemsStore.js";
+import { useCustomersStore } from "../../../stores/customersStore.js";
 import { storeToRefs } from "pinia";
 import { parseBooleanSetting } from "../../../utils/stock";
 import { useCustomerDisplayPublisher } from "../../../composables/pos/shared/useCustomerDisplayPublisher";
@@ -321,8 +340,10 @@ export default {
 		const uiStore = useUIStore();
 		const invoiceStore = useInvoiceStore();
 		const itemsStore = useItemsStore();
+		const customersStore = useCustomersStore();
 		const __ = window.__;
-		const { activeView, posProfile, paymentDialogOpen } = storeToRefs(uiStore);
+		const { activeView, posProfile, paymentDialogOpen, offersCount, couponsCount } = storeToRefs(uiStore);
+		const { selectedCustomer, customerInfo } = storeToRefs(customersStore);
 		const {
 			invoiceDoc,
 			itemsCount,
@@ -391,6 +412,12 @@ export default {
 			const qty = formatCompactNumber(totalQty.value || 0);
 			const itemCount = formatCompactNumber(itemsCount.value || 0);
 			return `${itemCount} ${__("lines")} | ${qty} ${__("qty")}`;
+		});
+		// The active customer is otherwise invisible while browsing the
+		// catalog on a phone — the cart panel that carries it is off-screen.
+		const dockCustomerLabel = computed(() => {
+			const info = customerInfo.value || {};
+			return info.customer_name || info.name || selectedCustomer.value || __("No customer");
 		});
 
 		const discountPercentageOfferName = computed(
@@ -501,6 +528,12 @@ export default {
 				uiStore.setActiveView("items");
 			}
 		};
+		const jumpToCustomer = () => {
+			showInvoicePanel();
+			nextTick(() => {
+				invoicePanel.value?.openCustomerDetails?.();
+			});
+		};
 		const showPaymentPanel = () => {
 			compactPanel.value = "selector";
 			if (usePaymentDialog.value) {
@@ -527,13 +560,20 @@ export default {
 			const parsed = Number.parseFloat(String(rawValue || "0"));
 			return Number.isFinite(parsed) ? parsed : 24;
 		};
+		// Published on the document root so overlays that Vuetify teleports out
+		// of this subtree (the Navbar snackbar) can still clear the dock.
+		const publishDockHeight = (height) => {
+			document.documentElement?.style?.setProperty("--pos-dock-height", `${height}px`);
+		};
 		const updateBottomDockHeight = () => {
 			const dockElement = mobileDock.value;
 			if (!showBottomDock.value || !dockElement) {
 				bottomDockHeight.value = 0;
+				publishDockHeight(0);
 				return;
 			}
 			bottomDockHeight.value = dockElement.offsetHeight + 10;
+			publishDockHeight(bottomDockHeight.value);
 		};
 		const layoutStyleOverrides = computed(() => {
 			const fallbackBottomSpace = getFallbackBottomSpace();
@@ -670,6 +710,7 @@ export default {
 		onBeforeUnmount(() => {
 			document.removeEventListener("keydown", handlePosKeyboardNavigation);
 			document.removeEventListener("keydown", handlePosTabFocus, true);
+			publishDockHeight(0);
 			if (mobileDockObserver) {
 				mobileDockObserver.disconnect();
 				mobileDockObserver = null;
@@ -755,6 +796,9 @@ export default {
 			formattedCartTotal,
 			formattedDiscountTotal,
 			cartMetaLabel,
+			dockCustomerLabel,
+			offersCount,
+			couponsCount,
 			posProfile,
 			additionalDiscountField,
 			additionalDiscountDisplay,
@@ -772,6 +816,7 @@ export default {
 			setSelectorView,
 			showInvoicePanel,
 			showPaymentPanel,
+			jumpToCustomer,
 			triggerInvoicePay,
 			isSelectorViewActive,
 			handleAdditionalDiscountUpdate,
@@ -1014,12 +1059,54 @@ export default {
 	color: var(--pos-text-primary);
 }
 
+.mobile-dock__subline {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
 .mobile-dock__meta {
 	font-size: 0.72rem;
 	color: var(--pos-text-secondary);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+/* Customer chip — keeps the active customer visible while the cart panel
+ * is off-screen. Lives inside the flexible totals column so it never
+ * competes with the discount field for the summary row's fixed slot; the
+ * name ellipsizes first, then the line/qty meta gives way. */
+.mobile-dock__customer {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 60%;
+	min-height: 30px;
+	padding: 3px 9px;
+	border: 1px solid var(--pos-border);
+	border-radius: 999px;
+	background: rgba(var(--v-theme-primary), 0.08);
+	color: var(--pos-text-primary);
+	font: inherit;
+	font-size: 0.72rem;
+	font-weight: 600;
+	line-height: 1.1;
+	cursor: pointer;
+}
+
+.mobile-dock__customer:active {
+	transform: scale(0.97);
+}
+
+.mobile-dock__customer-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .mobile-dock__field {
@@ -1102,11 +1189,24 @@ export default {
 	text-align: center;
 }
 
+/* Offers/Coupons tabs carry a 20px icon (Cart's is 22) — pull their badge
+ * in so it hugs the glyph instead of drifting toward the next cell. */
+.mobile-dock__pill--sm {
+	right: calc(50% - 20px);
+}
+
 :deep(.v-theme--dark) .mobile-dock,
 :deep([data-theme="dark"]) .mobile-dock,
 :deep([data-theme-mode="dark"]) .mobile-dock {
 	box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.5);
 	border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+:deep(.v-theme--dark) .mobile-dock__customer,
+:deep([data-theme="dark"]) .mobile-dock__customer,
+:deep([data-theme-mode="dark"]) .mobile-dock__customer {
+	background: rgba(var(--v-theme-primary), 0.18);
+	border-color: rgba(255, 255, 255, 0.12);
 }
 
 :deep(.v-theme--dark) .mobile-dock__tab--active,

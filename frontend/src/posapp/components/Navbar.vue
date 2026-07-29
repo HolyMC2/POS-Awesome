@@ -133,7 +133,9 @@
 			v-model="visible"
 			:timeout="timeout"
 			:color="color"
-			:location="isRtl ? 'top left' : 'top right'"
+			:location="snackbarLocation"
+			:style="snackbarOffsetStyle"
+			class="pos-snackbar"
 			@update:modelValue="(val) => !val && toastStore.onSnackbarClosed()"
 		>
 			<div class="d-flex align-center ga-3">
@@ -169,6 +171,7 @@ import { forceClearAllCache } from "../../offline/index";
 import { clearAllCaches } from "../../utils/clearAllCaches";
 import { isOffline } from "../../offline/index";
 import { useRtl } from "../composables/core/useRtl";
+import { useResponsive } from "../composables/core/useResponsive";
 
 const ServerUsageGadget = defineAsyncComponent(() => import("./navbar/ServerUsageGadget.vue"));
 const DatabaseUsageGadget = defineAsyncComponent(() => import("./navbar/DatabaseUsageGadget.vue"));
@@ -183,6 +186,7 @@ export default {
 	name: "NavBar",
 	setup() {
 		const { isRtl, rtlStyles, rtlClasses } = useRtl();
+		const { isPhone: isPhoneViewport } = useResponsive();
 		const toastStore = useToastStore();
 		const uiStore = useUIStore();
 		const employeeStore = useEmployeeStore();
@@ -203,6 +207,7 @@ export default {
 
 		return {
 			isRtl,
+			isPhoneViewport,
 			rtlStyles,
 			rtlClasses,
 			toastStore,
@@ -361,6 +366,27 @@ export default {
 		},
 	},
 	computed: {
+		// Top-right paints straight over the sticky item-search header on a
+		// phone — the one row the cashier is looking at. Bottom-centre puts
+		// the toast in dead space above the dock instead.
+		snackbarLocation() {
+			if (this.isPhoneViewport) {
+				return "bottom center";
+			}
+			return this.isRtl ? "top left" : "top right";
+		},
+		// Lift the phone toast clear of the mobile dock. --pos-dock-height is
+		// published on the document root by Pos.vue: Vuetify teleports the
+		// snackbar out of the POS subtree, so --bottom-safe-space is not in
+		// scope here. Inline rather than scoped CSS because the teleported
+		// root is only reachable through the style/class the component
+		// forwards to it.
+		snackbarOffsetStyle() {
+			if (!this.isPhoneViewport) {
+				return null;
+			}
+			return { paddingBottom: "calc(var(--pos-dock-height, 0px) + 12px)" };
+		},
 		appBarColor() {
 			return this.isDark ? this.$vuetify.theme.themes.dark.colors.surface : "white";
 		},

@@ -32,115 +32,154 @@
 					{{ __("Invoices saved as POS Invoices") }}
 				</v-alert>
 				<div class="invoice-sections">
-					<div class="invoice-top-grid">
-						<v-card flat class="invoice-section-card pos-themed-card">
-							<div class="invoice-section-heading">
-								<h3 class="invoice-section-heading__title">{{ __("Customer Details") }}</h3>
-							</div>
-							<InvoiceCustomerSection
-								ref="customerSection"
-								:pos_profile="pos_profile"
-								:invoiceTypes="invoiceTypes"
-								v-model="invoiceType"
-							/>
-						</v-card>
-
-						<v-card
-							v-if="pos_profile.posa_use_delivery_charges"
-							flat
-							class="invoice-section-card pos-themed-card"
+					<!-- Config cards (customer, delivery, posting/price list,
+					     currency). On phones they collapse into one "Sale
+					     details" disclosure and move BELOW the items table, so
+					     the cart opens on what the cashier is actually doing.
+					     Desktop renders them expanded, in the original order. -->
+					<div class="invoice-config-sections">
+						<button
+							v-if="isCompactInvoice"
+							type="button"
+							class="invoice-details-toggle"
+							:aria-expanded="saleDetailsOpen ? 'true' : 'false'"
+							aria-controls="invoice-sale-details"
+							@click="toggleSaleDetails()"
 						>
-							<div class="invoice-section-heading">
-								<h3 class="invoice-section-heading__title">{{ __("Delivery Charges") }}</h3>
-							</div>
-							<DeliveryCharges
-								ref="deliveryChargesComponent"
-								:pos_profile="pos_profile"
-								:delivery_charges="delivery_charges"
-								:selected_delivery_charge="selected_delivery_charge"
-								:delivery_charges_rate="delivery_charges_rate"
-								:deliveryChargesFilter="deliveryChargesFilter"
-								:formatCurrency="formatCurrency"
-								:currencySymbol="currencySymbol"
-								:readonly="readonly"
-								@update:selected_delivery_charge="
-									(val) => {
-										selected_delivery_charge = val;
-										update_delivery_charges(conversion_rate, currency_precision);
-									}
-								"
+							<v-icon
+								:icon="saleDetailsOpen ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+								size="20"
 							/>
-						</v-card>
-					</div>
-
-					<div class="invoice-meta-grid">
-						<v-card
-							v-if="pos_profile.posa_allow_change_posting_date"
-							flat
-							class="invoice-section-card pos-themed-card"
+							<span class="invoice-details-toggle__label">{{ __("Sale details") }}</span>
+							<span class="invoice-details-toggle__value">{{ saleCustomerLabel }}</span>
+						</button>
+						<div
+							v-show="!isCompactInvoice || saleDetailsOpen"
+							id="invoice-sale-details"
+							class="invoice-config-sections__body"
 						>
-							<div class="invoice-section-heading">
-								<h3 class="invoice-section-heading__title">
-									{{ __("Posting and Price List") }}
-								</h3>
-							</div>
-							<PostingDateRow
-								ref="postingDateComponent"
-								:pos_profile="pos_profile"
-								:posting_date_display="posting_date_display"
-								:customer_balance="customer_balance"
-								:price-list="selected_price_list"
-								:price-lists="price_lists"
-								:formatCurrency="formatCurrency"
-								@update:posting_date_display="
-									(val) => {
-										posting_date_display = val;
-									}
-								"
-								@update:priceList="
-									(val) => {
-										selected_price_list = val;
-									}
-								"
-							/>
-						</v-card>
+							<div class="invoice-top-grid">
+								<v-card
+									ref="customerCard"
+									flat
+									class="invoice-section-card pos-themed-card"
+									:class="{ 'invoice-section-card--flash': customerFlash }"
+								>
+									<div class="invoice-section-heading">
+										<h3 class="invoice-section-heading__title">
+											{{ __("Customer Details") }}
+										</h3>
+									</div>
+									<InvoiceCustomerSection
+										ref="customerSection"
+										:pos_profile="pos_profile"
+										:invoiceTypes="invoiceTypes"
+										v-model="invoiceType"
+									/>
+								</v-card>
 
-						<v-card
-							v-if="pos_profile.posa_allow_multi_currency"
-							flat
-							class="invoice-section-card pos-themed-card"
-						>
-							<div class="invoice-section-heading">
-								<h3 class="invoice-section-heading__title">{{ __("Multi Currency") }}</h3>
+								<v-card
+									v-if="pos_profile.posa_use_delivery_charges"
+									flat
+									class="invoice-section-card pos-themed-card"
+								>
+									<div class="invoice-section-heading">
+										<h3 class="invoice-section-heading__title">
+											{{ __("Delivery Charges") }}
+										</h3>
+									</div>
+									<DeliveryCharges
+										ref="deliveryChargesComponent"
+										:pos_profile="pos_profile"
+										:delivery_charges="delivery_charges"
+										:selected_delivery_charge="selected_delivery_charge"
+										:delivery_charges_rate="delivery_charges_rate"
+										:deliveryChargesFilter="deliveryChargesFilter"
+										:formatCurrency="formatCurrency"
+										:currencySymbol="currencySymbol"
+										:readonly="readonly"
+										@update:selected_delivery_charge="
+											(val) => {
+												selected_delivery_charge = val;
+												update_delivery_charges(conversion_rate, currency_precision);
+											}
+										"
+									/>
+								</v-card>
 							</div>
-							<MultiCurrencyRow
-								:pos_profile="pos_profile"
-								:selected_currency="selected_currency"
-								:plc_conversion_rate="exchange_rate"
-								:conversion_rate="conversion_rate"
-								:available_currencies="available_currencies"
-								:isNumber="isNumber"
-								:price_list_currency="price_list_currency"
-								@update:selected_currency="
-									(val) => {
-										selected_currency = val;
-										update_currency(val);
-									}
-								"
-								@update:plc_conversion_rate="
-									(val) => {
-										exchange_rate = val;
-										update_exchange_rate();
-									}
-								"
-								@update:conversion_rate="
-									(val) => {
-										conversion_rate = val;
-										update_conversion_rate();
-									}
-								"
-							/>
-						</v-card>
+
+							<div class="invoice-meta-grid">
+								<v-card
+									v-if="pos_profile.posa_allow_change_posting_date"
+									flat
+									class="invoice-section-card pos-themed-card"
+								>
+									<div class="invoice-section-heading">
+										<h3 class="invoice-section-heading__title">
+											{{ __("Posting and Price List") }}
+										</h3>
+									</div>
+									<PostingDateRow
+										ref="postingDateComponent"
+										:pos_profile="pos_profile"
+										:posting_date_display="posting_date_display"
+										:customer_balance="customer_balance"
+										:price-list="selected_price_list"
+										:price-lists="price_lists"
+										:formatCurrency="formatCurrency"
+										@update:posting_date_display="
+											(val) => {
+												posting_date_display = val;
+											}
+										"
+										@update:priceList="
+											(val) => {
+												selected_price_list = val;
+											}
+										"
+									/>
+								</v-card>
+
+								<v-card
+									v-if="pos_profile.posa_allow_multi_currency"
+									flat
+									class="invoice-section-card pos-themed-card"
+								>
+									<div class="invoice-section-heading">
+										<h3 class="invoice-section-heading__title">
+											{{ __("Multi Currency") }}
+										</h3>
+									</div>
+									<MultiCurrencyRow
+										:pos_profile="pos_profile"
+										:selected_currency="selected_currency"
+										:plc_conversion_rate="exchange_rate"
+										:conversion_rate="conversion_rate"
+										:available_currencies="available_currencies"
+										:isNumber="isNumber"
+										:price_list_currency="price_list_currency"
+										@update:selected_currency="
+											(val) => {
+												selected_currency = val;
+												update_currency(val);
+											}
+										"
+										@update:plc_conversion_rate="
+											(val) => {
+												exchange_rate = val;
+												update_exchange_rate();
+											}
+										"
+										@update:conversion_rate="
+											(val) => {
+												conversion_rate = val;
+												update_conversion_rate();
+											}
+										"
+									/>
+								</v-card>
+							</div>
+						</div>
 					</div>
 
 					<v-card flat class="invoice-section-card invoice-items-card pos-themed-card">
@@ -286,12 +325,13 @@ import { useToastStore } from "../../stores/toastStore.js";
 import { useUIStore } from "../../stores/uiStore.js";
 import { storeToRefs } from "pinia";
 import stockCoordinator from "../../utils/stockCoordinator";
-import { getCurrentInstance, ref } from "vue";
+import { computed, getCurrentInstance, ref } from "vue";
 import { save_and_clear_invoice as saveAndClearInvoiceAction } from "./invoice_utils/actions";
 import { fetchDraftInvoices } from "../../utils/draftInvoices";
 
 // Composables
 import { useOnlineStatus } from "../../composables/core/useOnlineStatus";
+import { useResponsive } from "../../composables/core/useResponsive";
 import { useInvoiceCurrency } from "../../composables/pos/invoice/useInvoiceCurrency";
 import { useInvoiceItems } from "../../composables/pos/invoice/useInvoiceItems";
 import { useInvoiceOffers } from "../../composables/pos/invoice/useInvoiceOffers";
@@ -318,7 +358,16 @@ export default {
 		const { isOnline } = useOnlineStatus();
 
 		const { activeView, posProfile: livePosProfile } = storeToRefs(uiStore);
-		const { selectedCustomer, refreshToken: customerRefreshToken } = storeToRefs(customersStore);
+		const {
+			selectedCustomer,
+			customerInfo: activeCustomerInfo,
+			refreshToken: customerRefreshToken,
+		} = storeToRefs(customersStore);
+		// Same boundary as the ≤768px media query that reorders this panel:
+		// below it the config cards collapse into one disclosure BELOW the
+		// items table, above it everything stays expanded and in place.
+		const { windowWidth } = useResponsive();
+		const isCompactInvoice = computed(() => windowWidth.value <= 768);
 		const {
 			items,
 			packedItems: packed_items,
@@ -361,6 +410,8 @@ export default {
 			invoiceStore,
 			customersStore,
 			selectedCustomer,
+			activeCustomerInfo,
+			isCompactInvoice,
 			customerRefreshToken,
 			invoiceType,
 			flowToLoad,
@@ -392,6 +443,9 @@ export default {
 			expanded: [],
 			singleExpand: true,
 			cancel_dialog: false,
+			saleDetailsOpen: false,
+			customerFlash: false,
+			_customerFlashTimer: null,
 			available_stock_cache: {},
 			item_detail_cache: {},
 			item_stock_cache: {},
@@ -489,6 +543,11 @@ export default {
 				this.invoiceStore.setPostingDate(val);
 			},
 		},
+		// Collapsed, the disclosure still has to answer "who am I selling to?".
+		saleCustomerLabel() {
+			const info = this.activeCustomerInfo || {};
+			return info.customer_name || info.name || this.selectedCustomer || __("No customer");
+		},
 		return_discount_meta() {
 			if (!this.isReturnInvoice || !this.return_doc || this.pos_profile?.posa_use_percentage_discount) {
 				return null;
@@ -526,6 +585,32 @@ export default {
 		},
 		...shortcutMethods,
 		...invoiceItemMethods,
+		toggleSaleDetails(open) {
+			this.saleDetailsOpen = typeof open === "boolean" ? open : !this.saleDetailsOpen;
+		},
+
+		// Entry point for the dock's customer chip (Pos.vue): open the panel
+		// on the customer card wherever it currently sits. No autofocus — the
+		// soft keyboard opening mid-scroll fights the scroll itself.
+		openCustomerDetails() {
+			this.toggleSaleDetails(true);
+			this.$nextTick(() => {
+				const card = this.$refs.customerCard?.$el || this.$refs.customerCard;
+				if (card && typeof card.scrollIntoView === "function") {
+					card.scrollIntoView({ behavior: "smooth", block: "center" });
+				}
+				this.flashCustomerCard();
+			});
+		},
+
+		flashCustomerCard() {
+			window.clearTimeout(this._customerFlashTimer);
+			this.customerFlash = true;
+			this._customerFlashTimer = window.setTimeout(() => {
+				this.customerFlash = false;
+			}, 1400);
+		},
+
 		focusCustomerSearchField() {
 			const customerSection = this.$refs.customerSection;
 			if (customerSection && typeof customerSection.focusCustomerSearch === "function") {
@@ -1125,6 +1210,8 @@ export default {
 		});
 	},
 	beforeUnmount() {
+		window.clearTimeout(this._customerFlashTimer);
+
 		if (typeof this.price_list_rate_dialog_resolver === "function") {
 			this.price_list_rate_dialog_resolver(null);
 			this.price_list_rate_dialog_resolver = null;
@@ -1312,6 +1399,51 @@ export default {
 	align-items: stretch;
 }
 
+/* Wrapper around the config grids. Reproduces the gap they used to get as
+ * direct children of .invoice-sections, so desktop spacing is unchanged. */
+.invoice-config-sections,
+.invoice-config-sections__body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--dynamic-sm);
+	flex: 0 0 auto;
+	min-width: 0;
+}
+
+.invoice-details-toggle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 44px;
+	padding: 8px 14px;
+	border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+	border-radius: var(--pos-radius-md, 18px);
+	background: var(--pos-card-bg);
+	color: var(--pos-text-primary);
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 700;
+	text-align: start;
+	cursor: pointer;
+}
+
+.invoice-details-toggle__label {
+	flex: 0 0 auto;
+}
+
+.invoice-details-toggle__value {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: end;
+	font-weight: 500;
+	font-size: 0.82rem;
+	color: var(--pos-text-secondary);
+}
+
 .invoice-top-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1334,6 +1466,29 @@ export default {
 	overflow: hidden;
 	flex: 0 0 auto;
 	min-height: fit-content;
+}
+
+/* Jump target feedback for the dock's customer chip — without it the
+ * scroll lands silently and the cashier has to hunt for what moved. */
+.invoice-section-card--flash {
+	animation: invoice-section-flash 1.4s ease-out;
+}
+
+@keyframes invoice-section-flash {
+	0%,
+	60% {
+		box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.55);
+	}
+	100% {
+		box-shadow: 0 10px 30px rgba(var(--v-theme-on-surface), 0.05);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.invoice-section-card--flash {
+		animation: none;
+		box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.55);
+	}
 }
 
 .invoice-section-heading {
@@ -1399,6 +1554,10 @@ export default {
 	.invoice-items-card {
 		flex: 0 0 auto;
 		min-height: 320px;
+		/* Cart opens on the goods, not on four config cards. Totals + PAY
+		 * (InvoiceSummary) already sit below this card, so the only thing
+		 * between items and the pay button is the collapsed disclosure. */
+		order: -1;
 	}
 
 	.items-table-wrapper {
