@@ -145,9 +145,28 @@ def check_opening_shift(user):
         # assert_shift_not_stale is the server-side backstop at submit time.
         data["stale_shift"] = is_shift_stale(data["pos_opening_shift"])
         data["force_close_stale_shift"] = bool(
-            cint(data["pos_profile"].get("posa_force_close_stale_shift") or 0)
+            cint(_profile_force_close_stale_shift(data["pos_profile"].name))
         )
     return data
+
+
+def _profile_force_close_stale_shift(pos_profile):
+    """The profile's stale-shift gate, tolerating a missing column.
+
+    posa_force_close_stale_shift is PATCH-only schema: a tenant created after
+    the patch was written has it marked executed without ever running
+    (set_all_patches_as_completed), so the column can be absent outright — a
+    raw SELECT then 500s every submit_invoice (bit the demo fleet 2026-07-29).
+    Absent column falls back to the schema default (ON): a fresh tenant keeps
+    the cash-reconciliation protection instead of silently losing it. The
+    fixture now ships the field too, so the fallback only covers sites that
+    have not migrated since.
+    """
+    if not frappe.db.has_column("POS Profile", "posa_force_close_stale_shift"):
+        return 1
+    return cint(
+        frappe.db.get_value("POS Profile", pos_profile, "posa_force_close_stale_shift") or 0
+    )
 
 
 def assert_shift_not_stale(pos_opening_shift):
@@ -183,9 +202,7 @@ def assert_shift_not_stale(pos_opening_shift):
         return
     if not is_shift_stale(row):
         return
-    if not cint(
-        frappe.db.get_value("POS Profile", row.pos_profile, "posa_force_close_stale_shift") or 0
-    ):
+    if not cint(_profile_force_close_stale_shift(row.pos_profile)):
         return
     frappe.throw(
         _(

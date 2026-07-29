@@ -290,6 +290,7 @@ fixtures = [
                     "POS Invoice-gift_card_redemptions",
                     "POS Profile-use_cashback",
                     "POS Profile-posa_hide_closing_shift",
+                    "POS Profile-posa_force_close_stale_shift",
                     "Customer-posa_discount",
                     "Sales Invoice-posa_offers",
                     "POS Invoice-posa_offers",
