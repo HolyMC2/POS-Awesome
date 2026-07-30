@@ -27,7 +27,7 @@
  * `waitForPostSubmitPayments` before marking the transaction complete.
  */
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { ref, type Ref } from "vue";
 import { useToastStore } from "./toastStore";
 import { useUIStore } from "./uiStore";
 import { dispatchRealtimeStockPayload } from "../utils/realtimeStock";
@@ -63,6 +63,26 @@ export const useSocketStore = defineStore("socket", () => {
   const postSubmitPayments = ref<Record<string, PostSubmitPaymentState>>({});
   const invoiceWaiters = new Map<string, Array<{ resolve: (value?: any) => void; reject: (reason?: any) => void }>>();
   const paymentWaiters = new Map<string, Array<{ resolve: (value?: any) => void; reject: (reason?: any) => void }>>();
+
+  // Both maps are keyed by invoice name and were never pruned: a till that
+  // runs a 12-hour shift without reloading accumulates one permanent entry
+  // per sale in each, and every entry is deeply reactive — so the cost is
+  // not just the retained payloads but Vue walking a monotonically growing
+  // object on each write. Keep a bounded tail of the most recent sales;
+  // nothing reads an entry once its own print has resolved.
+  const MAX_TRACKED_INVOICES = 200;
+
+  const pruneOldest = <T extends { updatedAt: number }>(
+    registry: Ref<Record<string, T>>,
+  ) => {
+    const entries = Object.entries(registry.value);
+    if (entries.length <= MAX_TRACKED_INVOICES) return;
+    // Oldest first, drop the overflow.
+    entries.sort((a, b) => (a[1]?.updatedAt || 0) - (b[1]?.updatedAt || 0));
+    for (const [key] of entries.slice(0, entries.length - MAX_TRACKED_INVOICES)) {
+      delete registry.value[key];
+    }
+  };
 
   const resolveWaiters = (
     registry: Map<string, Array<{ resolve: (value?: any) => void; reject: (reason?: any) => void }>>,
@@ -123,14 +143,22 @@ export const useSocketStore = defineStore("socket", () => {
   // doc_subscribe takes TWO positional args (NOT an object). Earlier
   // attempt sent `{doctype, docname}` to "doctype_subscribe" which
   // joined the wrong room (or none).
-  function subscribeToInvoiceDoc(invoice: string, doctype = "Sales Invoice") {
+  //
+  // The doctype MATTERS: a profile with
+  // `create_pos_invoice_instead_of_sales_invoice` submits POS Invoices, and
+  // the backend publishes to `doc:POS Invoice/<name>`. Defaulting to
+  // "Sales Invoice" put those tills in a room nothing is ever published to,
+  // so every background sale burned the full wait before the DB fallback
+  // rescued it (backtrace W2). Callers that know the doctype pass it.
+  function subscribeToInvoiceDoc(invoice: string, doctype?: string) {
+    const room = (doctype || "").trim() || "Sales Invoice";
     try {
       if (typeof frappe === "undefined" || !frappe.realtime) return;
       const realtime: any = frappe.realtime;
       if (typeof realtime.emit === "function") {
-        realtime.emit("doc_subscribe", doctype, invoice);
+        realtime.emit("doc_subscribe", room, invoice);
       } else if (realtime.socket && typeof realtime.socket.emit === "function") {
-        realtime.socket.emit("doc_subscribe", doctype, invoice);
+        realtime.socket.emit("doc_subscribe", room, invoice);
       }
     } catch {
       // Subscribe failure is non-fatal — the user room may still
@@ -153,7 +181,11 @@ export const useSocketStore = defineStore("socket", () => {
     }
   }
 
-  const waitForInvoiceProcessed = async (invoice: string, timeoutMs = 45000) => {
+  const waitForInvoiceProcessed = async (
+    invoice: string,
+    timeoutMs = 45000,
+    doctype?: string,
+  ) => {
     const existing = processedInvoices.value[invoice];
     if (existing?.status === "processed") {
       return existing;
@@ -170,11 +202,15 @@ export const useSocketStore = defineStore("socket", () => {
         updatedAt: Date.now(),
       };
     }
-    subscribeToInvoiceDoc(invoice);
+    subscribeToInvoiceDoc(invoice, doctype);
     return withTimeout<InvoiceProcessingState>(invoiceWaiters, invoice, timeoutMs);
   };
 
-  const waitForPostSubmitPayments = async (invoice: string, timeoutMs = 45000) => {
+  const waitForPostSubmitPayments = async (
+    invoice: string,
+    timeoutMs = 45000,
+    doctype?: string,
+  ) => {
     const existing = postSubmitPayments.value[invoice];
     if (existing?.status === "completed") {
       return existing;
@@ -192,7 +228,7 @@ export const useSocketStore = defineStore("socket", () => {
         updatedAt: Date.now(),
       };
     }
-    subscribeToInvoiceDoc(invoice);
+    subscribeToInvoiceDoc(invoice, doctype);
     return withTimeout<PostSubmitPaymentState>(paymentWaiters, invoice, timeoutMs);
   };
 
@@ -221,6 +257,7 @@ export const useSocketStore = defineStore("socket", () => {
         error: message,
         updatedAt: Date.now(),
       };
+      pruneOldest(processedInvoices);
       resolveWaiters(invoiceWaiters, invoice, new Error(message), true);
 
       if (typeof frappe.msgprint === "function") {
@@ -252,6 +289,7 @@ export const useSocketStore = defineStore("socket", () => {
         updatedAt: Date.now(),
       };
       processedInvoices.value[invoice] = state;
+      pruneOldest(processedInvoices);
       resolveWaiters(invoiceWaiters, invoice, state);
 
       if (hasPostSubmitPaymentWork) {
@@ -282,6 +320,7 @@ export const useSocketStore = defineStore("socket", () => {
         doctype: data.doctype,
         updatedAt: Date.now(),
       };
+      pruneOldest(postSubmitPayments);
 
       toastStore.show({
         key: `invoice-processing::${invoice}`,
@@ -303,6 +342,7 @@ export const useSocketStore = defineStore("socket", () => {
         updatedAt: Date.now(),
       };
       postSubmitPayments.value[invoice] = state;
+      pruneOldest(postSubmitPayments);
       resolveWaiters(paymentWaiters, invoice, state);
 
       toastStore.show({
@@ -326,6 +366,7 @@ export const useSocketStore = defineStore("socket", () => {
         error: message,
         updatedAt: Date.now(),
       };
+      pruneOldest(postSubmitPayments);
       resolveWaiters(paymentWaiters, invoice, new Error(message), true);
 
       toastStore.show({

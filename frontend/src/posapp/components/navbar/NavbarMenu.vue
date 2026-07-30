@@ -26,6 +26,13 @@
 					{{ __("Menu") }}
 					<v-icon end size="16" class="ml-1 pos-text-primary">mdi-menu-down</v-icon>
 				</template>
+				<span
+					v-if="usesSilentPrint && printHealthLevel !== 'unknown'"
+					class="print-health-dot"
+					:class="`print-health-dot--${printHealthLevel}`"
+					:title="__('Print status — open Printer Setup')"
+					data-test="print-health-dot"
+				></span>
 			</v-btn>
 		</template>
 		<v-card
@@ -309,6 +316,11 @@ const FALLBACK_LANGUAGES = [
 ];
 
 import { useLastInvoicePrinting } from "../../composables/core/useLastInvoicePrinting";
+import {
+	startPrintHealthMonitor,
+	stopPrintHealthMonitor,
+	usePrintHealthShared,
+} from "../../composables/core/usePrintHealthShared";
 import { useUpdateStore } from "../../stores/updateStore";
 import { useEmployeeStore } from "../../stores/employeeStore";
 import { storeToRefs } from "pinia";
@@ -335,7 +347,18 @@ export default {
 		const updateStore = useUpdateStore();
 		const employeeStore = useEmployeeStore();
 		const { currentCashier, currentCashierDisplay } = storeToRefs(employeeStore);
-		return { printLastInvoice, updateStore, employeeStore, currentCashier, currentCashierDisplay };
+		// The dot reads the SAME instance the dialog and wizard mutate — a dot
+		// that disagrees with the panel it opens is worse than no dot. Navbar.vue
+		// owns the boot refresh and the 10-min re-check for it.
+		const navPrintHealth = usePrintHealthShared();
+		return {
+			printLastInvoice,
+			updateStore,
+			employeeStore,
+			currentCashier,
+			currentCashierDisplay,
+			navPrintHealth,
+		};
 	},
 	data() {
 		return {
@@ -344,6 +367,9 @@ export default {
 			showLanguageDialog: false,
 			showQzTrayDialog: false,
 			showQzTestPrintDialog: false,
+			printHealthStarted: false,
+			printHealthWizardOffered: false,
+			printHealthToasted: false,
 			showChargeRequestsDialog: false,
 			selectedLanguage: "en",
 			currentLanguage: "en",
@@ -364,8 +390,21 @@ export default {
 	beforeUnmount() {
 		// Clean up the event listener
 		window.removeEventListener("resize", this.handleResize);
+		stopPrintHealthMonitor();
 	},
 	watch: {
+		printHealthLevel: {
+			handler(level) {
+				this.handlePrintHealth(level);
+			},
+			immediate: true,
+		},
+		posProfile: {
+			handler() {
+				this.handlePrintHealth(this.printHealthLevel);
+			},
+			immediate: true,
+		},
 		menuOpen(isOpen) {
 			if (!isOpen) {
 				this.activePanel = "main";
@@ -373,6 +412,12 @@ export default {
 		},
 	},
 	computed: {
+		usesSilentPrint() {
+			return Boolean(this.posProfile?.posa_silent_print);
+		},
+		printHealthLevel() {
+			return this.navPrintHealth?.rollup?.value ?? "unknown";
+		},
 		canChangeLanguage() {
 			return (
 				(this.selectedLanguage !== this.currentLanguage ||
@@ -509,6 +554,16 @@ export default {
 							: null,
 						this.isEnabledSetting(this.posProfile?.posa_silent_print)
 							? {
+									id: "print-health",
+									label: __("Printing status"),
+									subtitle: __("Check printing and run a test page"),
+									icon: "mdi-printer-check",
+									tone: "primary",
+									handler: "openPrintHealth",
+								}
+							: null,
+						this.isEnabledSetting(this.posProfile?.posa_silent_print)
+							? {
 									id: "qz-tray-setup",
 									label: __("QZ Tray Setup"),
 									subtitle: __("Connect printer and manage certificate"),
@@ -633,6 +688,43 @@ export default {
 		this.initializeWesternNumerals();
 	},
 	methods: {
+		// Boot behaviour for print readiness on silent-print registers. Two
+		// one-shot events, so it never becomes a nag the cashier learns to
+		// dismiss blindly:
+		//   * a terminal that has never completed setup gets the wizard, once
+		//     — and that REPLACES the toast for this boot;
+		//   * an already-set-up terminal that is currently broken gets a
+		//     single session toast pointing at the menu entry.
+		// Neither blocks selling. Driven off the shared health instance, so the
+		// dot, this logic, the dialog and the wizard cannot disagree.
+		handlePrintHealth(level) {
+			if (!this.usesSilentPrint) return;
+
+			// First moment we know this profile prints through QZ: run the
+			// checks and arm the 10-min re-check. Deferred to here rather than
+			// boot so a browser-print tenant never pays for the signing
+			// round-trip it has no use for.
+			if (!this.printHealthStarted) {
+				this.printHealthStarted = true;
+				startPrintHealthMonitor();
+			}
+
+			if (!this.printHealthWizardOffered && !this.navPrintHealth.isSetupDone()) {
+				this.printHealthWizardOffered = true;
+				this.$emit("open-print-wizard");
+				return;
+			}
+
+			if (level === "fail" && !this.printHealthToasted) {
+				this.printHealthToasted = true;
+				this.showNotification(
+					"Printing is not ready — open Printer Setup from the menu.",
+					"warning",
+					8000,
+				);
+			}
+		},
+
 		openSettingsPanel() {
 			this.activePanel = "settings";
 		},
@@ -691,6 +783,10 @@ export default {
 				case "openQzTestPrint":
 					this.closeMenu();
 					this.showQzTestPrintDialog = true;
+					break;
+				case "openPrintHealth":
+					this.closeMenu();
+					this.$emit("open-print-health");
 					break;
 				case "clearCacheAction":
 					this.closeMenu();
@@ -904,11 +1000,32 @@ export default {
 		"toggle-theme",
 		"logout",
 		"refresh-cache-usage",
+		"open-print-health",
+		"open-print-wizard",
 	],
 };
 </script>
 
 <style scoped>
+.print-health-dot {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	border: 1px solid rgb(var(--v-theme-surface));
+}
+.print-health-dot--ok {
+	background-color: #43a047;
+}
+.print-health-dot--warn {
+	background-color: #fb8c00;
+}
+.print-health-dot--fail {
+	background-color: #e53935;
+}
+
 /* Elite Menu Button - Refined Navbar Integration */
 .menu-btn-compact {
 	margin-left: 8px;

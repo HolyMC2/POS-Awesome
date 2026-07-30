@@ -319,6 +319,7 @@ import { resolvePaymentPrintFormatDoctypes } from "../../utils/paymentPrintDocty
 import { resolvePaymentPrintFormat } from "../../utils/paymentPrintFormat";
 import { parseBooleanSetting } from "../../utils/stock";
 import { focusFirstKeyboardTarget } from "../../utils/keyboardNavigation";
+import { track } from "../../utils/telemetry";
 
 // Components
 import PaymentSummary from "./payments/PaymentSummary.vue";
@@ -607,16 +608,14 @@ const {
 	eventBus: eventBus,
 	onSubmit: (args, submitPrint) => {
 		submitInvoiceWrapper(submitPrint, {
+			// onPrint only ever fires on the IMMEDIATE path: usePaymentSubmission
+			// guards the call with `!waitForInvoiceProcessing && !hasPostSubmitPaymentWork`,
+			// so both flags are false here by construction. Deferred sales reach
+			// runDeferredPrintWorkflow through onScheduleBackgroundCheck instead —
+			// this branch was unreachable (backtrace N1).
 			onPrint: (doc, printOptions = {}) => {
 				if (submitPrint) {
-					if (printOptions.waitForPostSubmitPayments || printOptions.waitForInvoiceProcessing) {
-						void runDeferredPrintWorkflow({
-							name: printOptions.name || doc?.name,
-							doctype: printOptions.doctype,
-							waitForPostSubmitPayments: Boolean(printOptions.waitForPostSubmitPayments),
-							waitForInvoiceProcessing: Boolean(printOptions.waitForInvoiceProcessing),
-						});
-					} else if (isOffline()) {
+					if (isOffline()) {
 						printOfflineInvoice(doc);
 					} else {
 						loadPrintPage({
@@ -1477,7 +1476,11 @@ const waitForInvoiceSubmission = async (invoiceName, doctype) => {
 	// hits the DB and confirms docstatus — typically <500 ms. Total
 	// worst case ~9 s vs the previous 45+ s hang (#150 follow-up).
 	try {
-		return await socketStore.waitForInvoiceProcessed(invoiceName, 8000);
+		return await socketStore.waitForInvoiceProcessed(
+			invoiceName,
+			8000,
+			resolveSubmittedDoctype(doctype),
+		);
 	} catch (error) {
 		const result = await frappe.call({
 			method: "frappe.client.get_value",
@@ -1526,7 +1529,7 @@ const runDeferredPrintWorkflow = async ({
 				}
 				return waitForLateSubmission(name, resolvedDoctype, {
 					waitForProcessed: (invoice, timeoutMs) =>
-						socketStore.waitForInvoiceProcessed(invoice, timeoutMs),
+						socketStore.waitForInvoiceProcessed(invoice, timeoutMs, resolvedDoctype),
 					getDocstatus: async (dt, invoice) => {
 						try {
 							const res = await frappe.call({
@@ -1565,7 +1568,7 @@ const runDeferredPrintWorkflow = async ({
 			// creation is fast (no external IO); 8 s is generous. Falls
 			// through silently — payment entries land in DB regardless.
 			try {
-				await socketStore.waitForPostSubmitPayments(name, 8000);
+				await socketStore.waitForPostSubmitPayments(name, 8000, resolvedDoctype);
 			} catch (_e) {
 				// Don't block print on missed payment-entry event;
 				// receipt prints from invoice doc + DB-side payments.
@@ -1601,6 +1604,20 @@ const runDeferredPrintWorkflow = async ({
 		await loadPrintPage({ doc: freshDoc, doctype: resolvedDoctype });
 	} catch (error) {
 		console.error("Deferred print failed", error);
+		// Terminal event: every other print signal says an attempt was made
+		// and how it went. This one says the ticket for a completed sale was
+		// never printed at all — the pathology the whole deferred workflow
+		// exists to prevent — so it is the number to alert on, not a ratio.
+		try {
+			track("warn:print_never_printed", 1, {
+				invoice: name,
+				reason: String(error?.message || "unknown").slice(0, 280),
+				doctype: resolvedDoctype,
+				waited_for_submit: Boolean(waitForInvoiceProcessing),
+			});
+		} catch {
+			// telemetry dispatch must never bubble
+		}
 		toastStore.show({
 			title: __("Unable to print submitted invoice"),
 			color: "error",
@@ -1696,16 +1713,11 @@ const submitInvoiceWrapper = async (print, callbackOverrides = {}, options = {})
 			return;
 		}
 		await submitInvoice(print, {
+			// Immediate path only — see the note on the other onPrint above
+			// (backtrace N1: the deferred branch here was unreachable).
 			onPrint: (doc, printOptions = {}) => {
 				if (print) {
-					if (printOptions.waitForPostSubmitPayments || printOptions.waitForInvoiceProcessing) {
-						void runDeferredPrintWorkflow({
-							name: printOptions.name || doc?.name,
-							doctype: printOptions.doctype,
-							waitForPostSubmitPayments: Boolean(printOptions.waitForPostSubmitPayments),
-							waitForInvoiceProcessing: Boolean(printOptions.waitForInvoiceProcessing),
-						});
-					} else if (isOffline()) {
+					if (isOffline()) {
 						printOfflineInvoice(doc);
 					} else {
 						loadPrintPage({

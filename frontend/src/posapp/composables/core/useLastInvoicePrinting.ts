@@ -6,6 +6,10 @@ import {
 	watchPrintWindow,
 } from "../../plugins/print";
 import { notifyQzPrintFallback, printDocumentViaQz } from "../../services/qzTray";
+import {
+	reportPrintPopupBlocked,
+	trackPrintPopupBlocked,
+} from "../../utils/printPopupBlocked";
 
 declare const frappe: any;
 declare const __: (text: string, args?: any[]) => string;
@@ -175,9 +179,10 @@ export function useLastInvoicePrinting() {
 				});
 				return;
 			}
-			console.warn(
-				"Popup blocked while opening print preview tab, falling back to browser print",
-			);
+			// Recoverable: we fall through to browser print below, and the
+			// alert already explains that. Count it anyway — an operator
+			// whose preview tab is blocked every time is a fleet signal.
+			trackPrintPopupBlocked("reprint-last-new-tab");
 			frappe?.show_alert?.(
 				{
 					message:
@@ -219,16 +224,9 @@ export function useLastInvoicePrinting() {
 			return;
 		}
 
-		console.warn("Popup blocked or failed to open print window");
-		frappe?.show_alert?.(
-			{
-				message: __(
-					"Could not open the print window — check the browser's popup blocker.",
-				),
-				indicator: "red",
-			},
-			6,
-		);
+		// Terminal: no iframe fallback on this branch, so the reprint ends
+		// here with no paper. Toast + telemetry.
+		reportPrintPopupBlocked("reprint-last");
 	}
 
 	return {

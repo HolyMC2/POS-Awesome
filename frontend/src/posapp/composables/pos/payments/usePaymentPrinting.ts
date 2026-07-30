@@ -72,6 +72,13 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 		};
 	};
 
+	const reportPopupBlocked = async (context: string) => {
+		const { reportPrintPopupBlocked } = await import(
+			"../../../utils/printPopupBlocked"
+		);
+		reportPrintPopupBlocked(context);
+	};
+
 	const openOfflineInvoicePreview = async (
 		invoice: any,
 		{ debugPrint = false, printFormatStr = "" } = {},
@@ -79,7 +86,10 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 		if (!invoice) return;
 		const html = await renderOfflineInvoice(invoice);
 		const win = window.open("", "_blank");
-		if (!win) return;
+		if (!win) {
+			await reportPopupBlocked("offline-preview");
+			return;
+		}
 		win.document.write(html);
 		win.document.close();
 		win.focus();
@@ -99,7 +109,12 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 		if (!invoice) return;
 		const html = await renderOfflineInvoice(invoice);
 		const win = window.open("", "_blank");
-		if (!win) return;
+		if (!win) {
+			// The offline path has no iframe fallback — a blocked popup here
+			// means the sale completed and the customer gets no ticket at all.
+			await reportPopupBlocked("offline-print");
+			return;
+		}
 		win.document.write(html);
 		win.document.close();
 		win.focus();
@@ -177,6 +192,8 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 					triggerPrint: "0",
 					shouldPrint: false,
 				});
+			} else {
+				await reportPopupBlocked("payment-print-new-tab");
 			}
 			return;
 		}
@@ -206,11 +223,7 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 			if (printWindow) {
 				watchPrintWindow(printWindow, printOptions);
 			} else {
-				// Popup blocked = receipt silently never printed. Count it —
-				// completes the print-outcome picture (attempted = qz ok +
-				// fallback + popup-blocked) for a real success rate.
-				const { track } = await import("../../../utils/telemetry");
-				track("warn:print_popup_blocked", 1, { context: "payment-print" });
+				await reportPopupBlocked("payment-print");
 			}
 		}
 	};

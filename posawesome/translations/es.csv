@@ -1981,3 +1981,93 @@ Die-cut 30 x 20 mm (jewelry),Troquelada 30 x 20 mm (joyería)
 Custom size,Medida personalizada
 Sale details,Detalles de venta
 No customer,Sin cliente
+Print status — open Printer Setup,Estado de impresión — abre Configuración de Impresora
+Printer Setup,Configuración de impresora
+Download for Windows,Descargar para Windows
+Download for Linux,Descargar para Linux
+Ready to print,Listo para imprimir
+Needs attention,Requiere atención
+Not ready,No está listo
+Failed to download the QZ Tray installer.,No se pudo descargar el instalador de QZ Tray.
+Connected to QZ Tray.,Conectado a QZ Tray.
+Certificate downloaded.,Certificado descargado.
+Failed to download certificate.,No se pudo descargar el certificado.
+No printers found. Make sure QZ Tray is running.,No se encontraron impresoras. Verifique que QZ Tray esté abierto.
+Failed to discover printers.,No se pudieron detectar las impresoras.
+Selected printer saved as the POS Profile default.,Impresora seleccionada guardada como predeterminada del Perfil POS.
+Failed to save POS Profile printer.,No se pudo guardar la impresora del Perfil POS.
+Printer confirmed. This terminal is ready.,Impresora confirmada. Esta terminal está lista.
+Installer available,Instalador disponible
+QZ Tray,QZ Tray
+QZ Tray connected,QZ Tray conectado
+Version,Versión
+QZ Tray not connected,QZ Tray no conectado
+Receipts print without a confirmation prompt.,Los tickets se imprimen sin pedir confirmación.
+No printer selected,Ninguna impresora seleccionada
+Choose the receipt printer for this terminal.,Elija la impresora de tickets de esta terminal.
+Printer selected,Impresora seleccionada
+QZ Tray is up to date,QZ Tray está actualizado
+Never tested,Nunca se ha probado
+Last test failed,La última prueba falló
+The operator reported that nothing printed.,El cajero reportó que no se imprimió nada.
+The print window was blocked,Se bloqueó la ventana de impresión
+"Allow pop-ups for this site, then reprint the ticket from the menu.",Permita las ventanas emergentes para este sitio y reimprima el ticket desde el menú.
+PRINT TEST,PRUEBA DE IMPRESIÓN
+"If you can read this, printing works.","Si puede leer esto, la impresión funciona."
+Terminal,Terminal
+Return to the POS and confirm what you see.,Regrese al POS y confirme lo que ve.
+Printing status,Estado de impresión
+Check printing and run a test page,Revisar la impresión y hacer una página de prueba
+Printer setup,Configuración de impresora
+Check again,Volver a comprobar
+Print test page,Imprimir página de prueba
+Setup assistant,Asistente de configuración
+Did the ticket come out?,¿Salió el ticket?
+Install QZ Tray,Instalar QZ Tray
+No installer has been published for this site yet.,Aún no se ha publicado un instalador para este sitio.
+The test page could not be sent to the printer.,No se pudo enviar la página de prueba a la impresora.
+"Recorded. Check the hints above, then test again.",Registrado. Revise las indicaciones de arriba y pruebe de nuevo.
+No installer published,Sin instalador publicado
+"Install QZ Tray manually, or ask support to publish the installer for this site.","Instale QZ Tray manualmente, o pida a soporte que publique el instalador para este sitio."
+"Start QZ Tray on this computer, then press Check again.",Abra QZ Tray en esta computadora y luego presione Volver a comprobar.
+QZ Tray version unknown,Versión de QZ Tray desconocida
+Connect to QZ Tray to compare it against the version this site publishes.,Conéctese a QZ Tray para compararlo con la versión que publica este sitio.
+QZ Tray version does not match,La versión de QZ Tray no coincide
+Download and reinstall QZ Tray from this panel.,Descargue y reinstale QZ Tray desde este panel.
+Signing not checked yet,Firma aún sin comprobar
+Certificate signing works,La firma del certificado funciona
+Certificate signing failed,Falló la firma del certificado
+The site's QZ certificate is missing on the server. Ask support to run Setup QZ Certificate.,Falta el certificado QZ del sitio en el servidor. Pida a soporte que ejecute Setup QZ Certificate.
+No printers found,No se encontraron impresoras
+"Check that the printer is installed and switched on, then press Check again.","Verifique que la impresora esté instalada y encendida, y presione Volver a comprobar."
+Selected printer not found,No se encontró la impresora seleccionada
+This printer is not installed on this terminal. Pick one from the list.,Esta impresora no está instalada en esta terminal. Elija una de la lista.
+Print a test page to confirm paper actually comes out.,Imprima una página de prueba para confirmar que sí sale papel.
+"Check the printer power, cable, paper and selected printer name, then test again.","Revise la corriente, el cable, el papel y el nombre de la impresora seleccionada, y pruebe de nuevo."
+Test is out of date,La prueba está desactualizada
+Run the test again to confirm this terminal still prints.,Vuelva a hacer la prueba para confirmar que esta terminal sigue imprimiendo.
+Test page confirmed,Página de prueba confirmada
+Extract the archive: tar xzf <file>,Extraiga el archivo: tar xzf <archivo>
+Run the installer: sudo ./install.sh,Ejecute el instalador: sudo ./install.sh
+QZ Tray starts automatically and stays in the system tray.,QZ Tray se inicia automáticamente y permanece en la bandeja del sistema.
+Unzip the downloaded file.,Descomprima el archivo descargado.
+Right-click install.bat and choose «Run as administrator».,Haga clic derecho en install.bat y elija «Ejecutar como administrador».
+QZ Tray did not answer. Is it running on this computer?,QZ Tray no respondió. ¿Está abierto en esta computadora?
+Looking for QZ Tray on this computer...,Buscando QZ Tray en esta computadora...
+QZ Tray is not running on this computer.,QZ Tray no se está ejecutando en esta computadora.
+QZ Tray is not installed yet. Install it on this computer to print receipts.,QZ Tray aún no está instalado. Instálelo en esta computadora para imprimir tickets.
+I installed it — check,Ya lo instalé — comprobar
+Nothing printed. Check these:,No se imprimió nada. Revise lo siguiente:
+Is the printer switched on?,¿La impresora está encendida?
+Is the cable or network connection in place?,¿El cable o la conexión de red están conectados?
+Does the selected printer name match the one on this computer?,¿El nombre de la impresora seleccionada coincide con el de esta computadora?
+Is the printer driver installed?,¿El controlador de la impresora está instalado?
+Change printer,Cambiar impresora
+This terminal is ready to print.,Esta terminal está lista para imprimir.
+Set up later,Configurar después
+"Installer downloaded. Run it, then press «I installed it».",Instalador descargado. Ejecútelo y luego presione «Ya lo instalé».
+No,No
+Continue,Continuar
+Try again,Intentar de nuevo
+Done,Listo
+Printing is not ready — open Printer Setup from the menu.,La impresión no está lista — abre Configuración de Impresora desde el menú.

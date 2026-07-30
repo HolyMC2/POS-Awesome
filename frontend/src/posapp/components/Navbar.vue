@@ -81,6 +81,8 @@
 					@open-employee-switch="openEmployeeSwitch"
 					@lock-pos="lockPosScreen"
 					@open-customer-display="$emit('open-customer-display')"
+					@open-print-health="showPrintHealthDialog = true"
+					@open-print-wizard="showPrintSetupWizard = true"
 					@clear-cache="clearCache"
 					@show-about="showAboutDialog = true"
 					@toggle-theme="toggleTheme"
@@ -111,6 +113,11 @@
 
 		<!-- Use the modular AboutDialog component -->
 		<AboutDialog v-model="showAboutDialog" />
+		<PrintHealthDialog
+			v-model="showPrintHealthDialog"
+			@open-wizard="showPrintSetupWizard = true"
+		/>
+		<PrintSetupWizard v-model="showPrintSetupWizard" />
 		<EmployeeSwitchDialog />
 
 		<!-- Keep existing dialogs -->
@@ -160,6 +167,8 @@ import NavbarSettingsPanel from "./navbar/NavbarSettingsPanel.vue";
 import NotificationBell from "./navbar/NotificationBell.vue";
 import OfflineStatusPanel from "./navbar/OfflineStatusPanel.vue";
 import StatusIndicator from "./navbar/StatusIndicator.vue";
+import PrintHealthDialog from "./pos/PrintHealthDialog.vue";
+import PrintSetupWizard from "./pos/PrintSetupWizard.vue";
 import SaldoHoldsBadge from "@saldo/SaldoHoldsBadge.vue";
 import CacheUsageMeter from "./navbar/CacheUsageMeter.vue";
 import AboutDialog from "./navbar/AboutDialog.vue";
@@ -238,6 +247,8 @@ export default {
 		OfflineStatusPanel,
 		StatusIndicator,
 		SaldoHoldsBadge,
+		PrintHealthDialog,
+		PrintSetupWizard,
 		CacheUsageMeter,
 		AboutDialog,
 		EmployeeSwitchDialog,
@@ -305,6 +316,8 @@ export default {
 		return {
 			drawer: false,
 			mini: true,
+			showPrintHealthDialog: false,
+			showPrintSetupWizard: false,
 			item: 0,
 			baseItems: [
 				{ text: "POS", icon: "mdi-network-pos", to: "/pos" },
@@ -558,156 +571,6 @@ export default {
 		}
 	},
 	methods: {
-		preInitialize() {
-			// Early initialization to prevent cache-related element destruction
-			// Use reactive assignment instead of direct property modification
-			if (typeof frappe !== "undefined" && frappe.boot) {
-				// Set company reactively
-				if (frappe.boot.sysdefaults && frappe.boot.sysdefaults.company) {
-					this.$set
-						? this.$set(this, "company", frappe.boot.sysdefaults.company)
-						: (this.company = frappe.boot.sysdefaults.company);
-				}
-
-				// Set company logo reactively - prioritize app_logo over banner_image
-				if (frappe.boot.website_settings) {
-					const logo =
-						frappe.boot.website_settings.app_logo || frappe.boot.website_settings.banner_image;
-					if (logo) {
-						this.$set ? this.$set(this, "companyImg", logo) : (this.companyImg = logo);
-					}
-				}
-			}
-		},
-		updateNavigationItems() {
-			const items = [...this.baseItems];
-			if (this.posProfile?.posa_use_gift_cards) {
-				items.splice(2, 0, {
-					text: "Gift Cards",
-					icon: "mdi-card-account-details-outline",
-					to: "/gift-cards",
-				});
-			}
-			// Server verdict wins once known; cashier flag is only the
-			// pre-probe fallback. Plain employees never get the entry.
-			const canSeeDashboard =
-				this.dashboardAccessAllowed !== null
-					? this.dashboardAccessAllowed
-					: Boolean(this.currentCashier?.is_supervisor);
-			if (canSeeDashboard) {
-				items.splice(1, 0, {
-					text: "Awesome Dashboard",
-					icon: "mdi-view-dashboard-outline",
-					to: "/dashboard",
-				});
-			}
-			if (this.posProfile?.posa_enable_cash_movement) {
-				items.push({
-					text: "Cash Movement",
-					icon: "mdi-cash-sync",
-					to: "/cash-movement",
-				});
-			}
-			this.items = items;
-		},
-		async fetchTerminalEmployees() {
-			if (!this.posProfile?.name) {
-				this.employeeStore.setTerminalEmployees([]);
-				return;
-			}
-
-			try {
-				const response = await frappe.call({
-					method: "posawesome.posawesome.api.employees.get_terminal_employees",
-					args: {
-						pos_profile: this.posProfile.name,
-					},
-				});
-				this.employeeStore.setTerminalEmployees(response?.message || []);
-			} catch (error) {
-				console.error("Failed to load terminal employees", error);
-				this.employeeStore.setTerminalEmployees([]);
-			}
-		},
-		openEmployeeSwitch() {
-			this.employeeStore.openEmployeeSwitch();
-		},
-		lockPosScreen() {
-			this.employeeStore.lockTerminal();
-		},
-
-		initializeNavbar() {
-			// Watch store for company changes
-			this.$watch(
-				() => this.uiStore.companyDoc,
-				(doc) => {
-					this.handleSetCompany(doc);
-				},
-				{ deep: true, immediate: true },
-			);
-
-			// Enhanced initialization with better reactivity handling
-			const updateCompanyInfo = () => {
-				let updated = false;
-
-				// Update company if not already set or changed
-				if (frappe.boot && frappe.boot.sysdefaults && frappe.boot.sysdefaults.company) {
-					if (this.company !== frappe.boot.sysdefaults.company) {
-						this.company = frappe.boot.sysdefaults.company;
-						updated = true;
-					}
-				}
-
-				// Update logo if not already set or changed
-				if (frappe.boot && frappe.boot.website_settings) {
-					const newLogo =
-						frappe.boot.website_settings.app_logo || frappe.boot.website_settings.banner_image;
-					if (newLogo && this.companyImg !== newLogo) {
-						this.companyImg = newLogo;
-						updated = true;
-					}
-				}
-
-				// Only force update if something actually changed
-				if (updated) {
-					this.$nextTick(() => {
-						// Emit event to parent components if needed
-						this.$emit("navbar-updated");
-					});
-				}
-			};
-
-			// Check if frappe is available
-			if (typeof frappe !== "undefined") {
-				updateCompanyInfo();
-			} else {
-				// Wait for frappe to become available
-				const checkFrappe = setInterval(() => {
-					if (typeof frappe !== "undefined") {
-						clearInterval(checkFrappe);
-						updateCompanyInfo();
-					}
-				}, 100);
-
-				// Clear interval after 5 seconds to prevent infinite checking
-				setTimeout(() => clearInterval(checkFrappe), 5000);
-			}
-		},
-
-		setupEventListeners() {
-			if (this.eventBus) {
-				this.eventBus.on("show_message", (data) => this.toastStore.show(data));
-				this.eventBus.on("invoice_submission_failed", this.handleInvoiceSubmissionFailed);
-				this.employeeSwitchHandler = () => this.openEmployeeSwitch();
-				this.lockPosHandler = () => this.lockPosScreen();
-				this.eventBus.on("open_employee_switch", this.employeeSwitchHandler);
-				this.eventBus.on("lock_pos_screen", this.lockPosHandler);
-			}
-		},
-		handleNavClick() {
-			this.drawer = !this.drawer;
-			this.$emit("nav-click");
-		},
 		openSettingsPanel() {
 			this.drawer = false;
 			this.closeOfflineStatusPanel();

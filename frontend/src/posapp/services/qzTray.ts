@@ -156,6 +156,9 @@ export interface QzPrintDocumentOptions extends QzPrintHtmlOptions {
 
 // Ceiling on a single qz.print round-trip — see the comment at the call site.
 const QZ_PRINT_TIMEOUT_MS = 60_000;
+// Metadata calls answer immediately or not at all; no reason to make the
+// health panel wait a minute to learn the tray is wedged.
+const QZ_VERSION_TIMEOUT_MS = 8_000;
 
 function withQzCallTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
@@ -463,6 +466,81 @@ function setupSecurity() {
 				});
 		};
 	});
+}
+
+/**
+ * Version string of the QZ Tray the websocket is talking to, or "" when it
+ * isn't connected / doesn't answer.
+ *
+ * The print-health check compares this against the version in the site's
+ * deployed bundle: a till running an installer older than the one the
+ * tenant ships is the shape of "silent print works everywhere except that
+ * one register". Never throws — an unknown version is a soft finding.
+ */
+export async function getQzVersion(): Promise<string> {
+	if (!qz.websocket.isActive()) return "";
+	try {
+		const version = await withQzCallTimeout(
+			Promise.resolve(qz.api.getVersion()),
+			QZ_VERSION_TIMEOUT_MS,
+			"qz.api.getVersion",
+		);
+		return String(version ?? "").slice(0, 32);
+	} catch {
+		return "";
+	}
+}
+
+export interface QzSigningProbe {
+	certificate: boolean;
+	signature: boolean;
+	error: string;
+}
+
+// A payload shaped like what qz-tray.js signs per call. `sign_message`
+// dropped envelope-shape validation in 2026-05 (it broke the handshake
+// path), so any small string signs — but keeping this QZ-shaped means the
+// probe exercises the same route a real print does.
+const QZ_SIGNING_PROBE_PAYLOAD = '{"call":"getVersion","timestamp":0}';
+
+/**
+ * Round-trip the server's signing pair without printing anything.
+ *
+ * `get_certificate` and `sign_message` both returning non-empty is the only
+ * proof that the site's QZ key material is actually on disk. Either coming
+ * back empty means the server files are missing — which presents to the
+ * operator as QZ Tray's "Cannot verify trust" dialog on every single
+ * receipt, a symptom nobody traces back to a missing file without this
+ * check. Never throws; a transport failure reports as "not proven".
+ */
+export async function probeQzSigning(): Promise<QzSigningProbe> {
+	try {
+		const certificate = await callServer<string>(
+			"posawesome.posawesome.api.qz.get_certificate",
+		);
+		if (!certificate) {
+			return {
+				certificate: false,
+				signature: false,
+				error: "get_certificate returned empty",
+			};
+		}
+		const signature = await callServer<string>(
+			"posawesome.posawesome.api.qz.sign_message",
+			{ message: QZ_SIGNING_PROBE_PAYLOAD },
+		);
+		return {
+			certificate: true,
+			signature: Boolean(signature),
+			error: signature ? "" : "sign_message returned empty",
+		};
+	} catch (error) {
+		return {
+			certificate: false,
+			signature: false,
+			error: error instanceof Error ? error.message : String(error ?? ""),
+		};
+	}
 }
 
 export function getSavedPrinterName() {

@@ -2691,8 +2691,10 @@ export default {
 			if (printWindow) {
 				watchPrintWindow(printWindow, printOptions);
 			} else {
-				const { track } = await import("../../../utils/telemetry");
-				track("warn:print_popup_blocked", 1, { context: "invoice-management" });
+				const { reportPrintPopupBlocked } = await import(
+					"../../../utils/printPopupBlocked"
+				);
+				reportPrintPopupBlocked("invoice-management");
 			}
 		},
 	},

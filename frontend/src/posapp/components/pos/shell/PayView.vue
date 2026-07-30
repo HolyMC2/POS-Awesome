@@ -224,6 +224,7 @@ import {
 	watchPrintWindow,
 } from "../../../plugins/print";
 import { notifyQzPrintFallback, printDocumentViaQz } from "../../../services/qzTray";
+import { reportPrintPopupBlocked } from "../../../utils/printPopupBlocked";
 
 import { useRtl } from "../../../composables/core/useRtl";
 import { useCustomersStore } from "../../../stores/customersStore.js";
@@ -433,7 +434,13 @@ export default {
 				silentPrint(url, printOptions);
 			} else {
 				const printWindow = window.open(url, "_blank");
-				watchPrintWindow(printWindow, printOptions);
+				if (printWindow) {
+					watchPrintWindow(printWindow, printOptions);
+				} else {
+					// watchPrintWindow no-ops on null, so a blocked popup used
+					// to leave the Payment Entry receipt unprinted in silence.
+					reportPrintPopupBlocked("payment-entry-print");
+				}
 			}
 		};
 

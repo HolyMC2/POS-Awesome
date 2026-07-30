@@ -4,6 +4,26 @@ All notable changes.
 
 ## Unreleased
 
+- **Print health, guided install, and a first-terminal setup wizard — printing
+  works out of the box.** Six terminal-side checks (installer bundle published,
+  QZ connection, tray version vs the site's bundle, live cert+sign round-trip,
+  printer selection, operator-confirmed self-test) roll up into a navbar dot
+  on silent-print registers; PrintHealthDialog shows the checklist with
+  per-item fixes, downloads the tenant installer straight from the POS
+  (win/linux, served by `download_qz_bundle`), and prints a test slip that
+  only counts once the operator answers «¿Salió el ticket?» — a send proves
+  the job left the websocket, not that paper came out, so the verdict is
+  human. `pos:print_selftest` feeds `get_qz_fleet.last_selftest`.
+  PrintSetupWizard auto-opens ONCE on a terminal that has never met it
+  (detect → install → printer → confirmed test → done; skippable everywhere;
+  `pos:print_setup_wizard` telemetry per step; a connected tray jumps straight
+  to printer pick). Backtrace warning wave riding along: doctype-aware
+  lifecycle-event rooms (POS Invoice tills joined the wrong doc room),
+  «Submit & Print» on duplicate-recovery now prints, blocked popups on the
+  offline/new-tab/PayView/reprint paths all surface + count,
+  `warn:print_never_printed` makes the worst outcome countable, socketStore
+  maps capped, dead deferred branches deleted.
+
 - **Print-pipeline hardening (full-backtrace blocker wave).**
   `pos_invoice_processed` now publishes `after_commit=True` — consumers fetch
   + print the doc the moment it arrives, and a mid-transaction publish made

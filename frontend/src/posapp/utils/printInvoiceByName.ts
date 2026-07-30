@@ -12,6 +12,7 @@ import {
 	watchPrintWindow,
 } from "../plugins/print";
 import { notifyQzPrintFallback, printDocumentViaQz } from "../services/qzTray";
+import { reportPrintPopupBlocked } from "./printPopupBlocked";
 import { isOffline } from "../../offline/index";
 
 declare const frappe: any;
@@ -67,7 +68,6 @@ export async function printInvoiceByName(
 	if (printWindow) {
 		watchPrintWindow(printWindow, printOptions);
 	} else {
-		const { track } = await import("./telemetry");
-		track("warn:print_popup_blocked", 1, { context: "hold-confirm-print" });
+		reportPrintPopupBlocked("hold-confirm-print");
 	}
 }

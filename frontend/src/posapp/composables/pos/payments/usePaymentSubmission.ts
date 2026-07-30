@@ -1285,6 +1285,20 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 						);
 					}
 
+					// The sale IS submitted — `fetchSubmittedDocstatus` just
+					// confirmed docstatus 1 — it merely came back through the
+					// duplicate-submission door. Every other success path
+					// prints here; without this the operator's timestamp
+					// collision cost the customer their ticket, silently
+					// (backtrace W4). No deferred wait: the doc is already
+					// confirmed, so this is the immediate print path.
+					if (print && onPrint) {
+						onPrint(doc, {
+							name: doc?.name,
+							doctype: doc?.doctype,
+						});
+					}
+
 					if (onSuccess) {
 						onSuccess({
 							name: doc?.name,
