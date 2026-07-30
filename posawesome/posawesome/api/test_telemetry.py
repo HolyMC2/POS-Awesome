@@ -44,8 +44,22 @@ def _build_frappe_module() -> types.ModuleType:
             return value
         return datetime.datetime(2026, 6, 14, 12, 0, 0)
 
+    def _cint(value=0, default=0):
+        # Mirrors frappe.utils.cint closely enough that a non-numeric payload
+        # (e.g. a self-test `ok` that arrived as "sí") degrades to 0 here the
+        # same way it would on a real site instead of raising.
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except Exception:
+            try:
+                return int(float(value))
+            except Exception:
+                return default
+
     utils = types.ModuleType("frappe.utils")
-    utils.cint = lambda v: int(v or 0)
+    utils.cint = _cint
     utils.flt = lambda v=0, precision=None: float(v or 0)
     utils.getdate = lambda *a, **kw: datetime.date(2026, 6, 14)
     utils.now_datetime = lambda: datetime.datetime(2026, 6, 14, 12, 0, 0)
@@ -299,6 +313,27 @@ def _qz_beacon_row(terminal, ts):
     return {"terminal": terminal, "event_timestamp": ts}
 
 
+def _qz_selftest_row(terminal, ts, *, ok=1, printer="HP-1", qz_version="2.2.5",
+                     source="manual", value=None, metadata="__DEFAULT__"):
+    """Build a pos:print_selftest row shaped like frappe.get_all output.
+
+    ``value`` mirrors ``ok`` unless overridden — the client sends both, and the
+    server falls back to ``value`` when metadata is missing/truncated."""
+    if metadata == "__DEFAULT__":
+        metadata = json.dumps({
+            "ok": ok,
+            "printer": printer,
+            "qz_version": qz_version,
+            "source": source,
+        })
+    return {
+        "terminal": terminal,
+        "value": ok if value is None else value,
+        "event_timestamp": ts,
+        "metadata": metadata,
+    }
+
+
 @unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class QzFleetTests(unittest.TestCase):
     """get_qz_fleet: newest-per-terminal dedupe, defensive metadata parse,
@@ -308,18 +343,32 @@ class QzFleetTests(unittest.TestCase):
         telemetry.frappe.get_roles = lambda user=None: ["System Manager"]
         self._connect_rows = []
         self._beacon_rows = []
+        self._selftest_rows = []
         self._failure_rows = []
         self._captured = {}
+        self._calls = []
 
         def fake_get_all(doctype, filters=None, fields=None, order_by=None,
                          limit_page_length=None, **kw):
             self._captured["order_by"] = order_by
             self._captured["limit"] = limit_page_length
             self._captured["filters"] = filters
-            # get_qz_fleet now issues two get_all calls (connect + heartbeat);
-            # dispatch on the event_name filter so each sees its own fixture.
-            if (filters or {}).get("event_name") == telemetry.QZ_HEARTBEAT_EVENT:
+            # get_qz_fleet issues three get_all calls (connect + selftest +
+            # heartbeat); dispatch on the event_name filter so each sees its
+            # own fixture instead of the connect rows.
+            event = (filters or {}).get("event_name")
+            # Every call, in order — lets a test assert one batch query per
+            # event kind (no N+1) instead of only the last one.
+            self._calls.append({
+                "event": event,
+                "order_by": order_by,
+                "limit": limit_page_length,
+                "filters": filters,
+            })
+            if event == telemetry.QZ_HEARTBEAT_EVENT:
                 return list(self._beacon_rows)
+            if event == telemetry.QZ_SELFTEST_EVENT:
+                return list(self._selftest_rows)
             return list(self._connect_rows)
 
         def fake_sql(query, values=None, as_dict=False, **kw):
@@ -481,6 +530,108 @@ class QzFleetTests(unittest.TestCase):
         totals = telemetry.get_qz_fleet()["flag_totals"]
         self.assertEqual(totals.get("cert_untrusted"), 2)
         self.assertEqual(totals.get("no_printers"), 1)
+
+    # --- last_selftest (pos:print_selftest, joined onto the terminals list) ---
+
+    def _connected(self, *terminals):
+        self._connect_rows = [
+            _qz_connect_row(t, 1, _QZ_RECENT, printers=["HP-1"],
+                            selected_printer="HP-1")
+            for t in terminals
+        ]
+
+    def test_selftest_joined_onto_its_terminal(self):
+        self._connected("T1")
+        self._selftest_rows = [
+            _qz_selftest_row("T1", _QZ_RECENT, ok=1, printer="EPSON-TM",
+                             qz_version="2.2.5"),
+        ]
+        selftest = telemetry.get_qz_fleet()["terminals"][0]["last_selftest"]
+        self.assertEqual(
+            selftest,
+            {
+                "ok": True,
+                "at": _QZ_RECENT.isoformat(),
+                "printer": "EPSON-TM",
+                "qz_version": "2.2.5",
+            },
+        )
+
+    def test_terminal_without_a_selftest_reports_none(self):
+        self._connected("T1")
+        self.assertIsNone(telemetry.get_qz_fleet()["terminals"][0]["last_selftest"])
+
+    def test_newest_selftest_per_terminal_wins(self):
+        # Newest-first, as the real query returns: a passing test yesterday
+        # must not mask today's failure.
+        self._connected("T1")
+        self._selftest_rows = [
+            _qz_selftest_row("T1", _QZ_RECENT, ok=0),
+            _qz_selftest_row("T1", _QZ_OLD, ok=1),
+        ]
+        selftest = telemetry.get_qz_fleet()["terminals"][0]["last_selftest"]
+        self.assertFalse(selftest["ok"])
+        self.assertEqual(selftest["at"], _QZ_RECENT.isoformat())
+
+    def test_failed_selftest_adds_no_flag(self):
+        # last_selftest is reporting only; the panel/dialog decide what a
+        # failed test means. A new flag here would reshuffle the sort.
+        self._connected("T1")
+        self._selftest_rows = [_qz_selftest_row("T1", _QZ_RECENT, ok=0)]
+        res = telemetry.get_qz_fleet()
+        self.assertEqual(res["terminals"][0]["flags"], [])
+        self.assertEqual(res["flag_totals"], {})
+
+    def test_selftest_falls_back_to_row_value_without_metadata(self):
+        self._connected("OK", "BAD")
+        self._selftest_rows = [
+            _qz_selftest_row("OK", _QZ_RECENT, value=1, metadata=None),
+            _qz_selftest_row("BAD", _QZ_RECENT, value=0,
+                             metadata="{truncated"),
+        ]
+        by = self._by_terminal(telemetry.get_qz_fleet())
+        self.assertTrue(by["OK"]["last_selftest"]["ok"])
+        self.assertEqual(by["OK"]["last_selftest"]["printer"], "")
+        self.assertFalse(by["BAD"]["last_selftest"]["ok"])
+
+    def test_selftest_ok_variants_normalised_to_bool(self):
+        for raw, expected in ((1, True), ("1", True), (True, True), (0, False),
+                              (False, False), ("0", False), ("sí", False),
+                              (None, False)):
+            self._connected("T1")
+            self._selftest_rows = [
+                _qz_selftest_row("T1", _QZ_RECENT, ok=raw, value=0)
+            ]
+            selftest = telemetry.get_qz_fleet()["terminals"][0]["last_selftest"]
+            self.assertIs(selftest["ok"], expected, raw)
+
+    def test_selftest_row_for_an_unseen_terminal_is_ignored(self):
+        # The terminals list is defined by pos:qz_connect; a self-test from a
+        # terminal that never reported a connect in the window adds no entry.
+        self._connected("T1")
+        self._selftest_rows = [_qz_selftest_row("GHOST", _QZ_RECENT, ok=1)]
+        res = telemetry.get_qz_fleet()
+        self.assertEqual([t["terminal"] for t in res["terminals"]], ["T1"])
+        self.assertIsNone(res["terminals"][0]["last_selftest"])
+
+    def test_selftest_is_one_bounded_windowed_batch_query(self):
+        self._connected("A", "B", "C")
+        self._selftest_rows = [
+            _qz_selftest_row("A", _QZ_RECENT),
+            _qz_selftest_row("B", _QZ_RECENT),
+            _qz_selftest_row("C", _QZ_RECENT),
+        ]
+        telemetry.get_qz_fleet(days=7)
+
+        calls = [c for c in self._calls
+                 if c["event"] == telemetry.QZ_SELFTEST_EVENT]
+        self.assertEqual(len(calls), 1, "one batch query, never per terminal")
+        self.assertEqual(calls[0]["order_by"], "event_timestamp desc")
+        self.assertEqual(calls[0]["limit"], telemetry.QZ_FLEET_MAX_ROWS)
+        self.assertEqual(
+            calls[0]["filters"]["event_timestamp"],
+            [">=", datetime.datetime(2026, 6, 7, 12, 0, 0)],
+        )
 
     # --- beacons (pos:qz_heartbeat, hostname-keyed, separate from terminals) ---
 

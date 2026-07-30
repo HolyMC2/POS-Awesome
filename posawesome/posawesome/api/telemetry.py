@@ -82,6 +82,13 @@ QZ_HEARTBEAT_EVENT = "pos:qz_heartbeat"
 QZ_HEARTBEAT_TTL_SECONDS = 300
 QZ_OFFLINE_MINUTES = 35
 
+# User-confirmed print self-test (the POS print-health dialog prints a test
+# ticket, then asks "¿Salió el ticket?"). One row per answer, `value` = 1|0 and
+# metadata = {ok, printer, qz_version, source}. get_qz_fleet joins the newest
+# row per terminal onto that terminal's entry — the only fleet signal that
+# reflects paper actually coming out of a printer rather than software state.
+QZ_SELFTEST_EVENT = "pos:print_selftest"
+
 
 def _sanitise_event(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Return a dict ready for `Document.update()` or None if the row
@@ -278,6 +285,21 @@ def ingest(events=None):
     }
 
 
+def _json_object(raw: Any) -> Dict[str, Any]:
+    """Parse a telemetry ``metadata`` payload into a dict, never raising.
+
+    Rows are written by the browser, so a truncated or non-object payload has
+    to degrade to "no metadata" instead of dropping the response it belongs to.
+    """
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw) if isinstance(raw, str) else raw
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
 def _quantile(values: List[float], q: float) -> float:
     if not values:
         return 0.0
@@ -405,10 +427,12 @@ def get_qz_fleet(days: int = 7) -> dict:
 
     One entry per terminal, built from the NEWEST ``pos:qz_connect`` row in
     the window (printer inventory + cert state, emitted once per POS page
-    session) joined with the terminal's ``warn:qz_failure`` count over the
-    same window. Terminals with problems — no printers, a pinned printer that
-    isn't present, an untrusted cert, recent failures, or a stale last-seen —
-    are surfaced first via server-computed ``flags``.
+    session) joined with the terminal's ``warn:qz_failure`` count and its
+    newest ``pos:print_selftest`` confirmation (``last_selftest``:
+    ``{ok, at, printer, qz_version}`` or None) over the same window. Terminals
+    with problems — no printers, a pinned printer that isn't present, an
+    untrusted cert, recent failures, or a stale last-seen — are surfaced first
+    via server-computed ``flags``.
 
     Permission gate mirrors ``get_pos_telemetry_summary``: System Manager or
     POS Manager only. Anyone can WRITE telemetry, but reading fleet state
@@ -457,6 +481,39 @@ def get_qz_fleet(days: int = 7) -> dict:
     failures_by_terminal: Dict[str, int] = {
         (r.get("terminal") or ""): cint(r.get("failures")) for r in failure_rows
     }
+
+    # Newest user-confirmed self-test per terminal over the same window: one
+    # bounded newest-first batch read + python dedupe, exactly like the connect
+    # rows above (never a per-terminal query). Keyed by the same browser
+    # terminal id pos:qz_connect uses, so the join is a plain dict lookup and a
+    # terminal that never ran a test simply reports None.
+    selftest_rows = frappe.get_all(
+        "POS Telemetry Event",
+        filters={
+            "event_name": QZ_SELFTEST_EVENT,
+            "event_timestamp": [">=", since],
+        },
+        fields=["terminal", "value", "event_timestamp", "metadata"],
+        order_by="event_timestamp desc",
+        limit_page_length=QZ_FLEET_MAX_ROWS,
+        # Same explicit-role-gate rationale as the reads above.
+        ignore_permissions=True,
+    )
+    selftest_by_terminal: Dict[str, Dict[str, Any]] = {}
+    for row in selftest_rows:
+        selftest_terminal = row.get("terminal") or ""
+        if selftest_terminal in selftest_by_terminal:
+            continue  # older answer for a terminal already recorded
+        meta = _json_object(row.get("metadata"))
+        # The client sends `ok` in metadata as 1|0; the row `value` carries the
+        # same signal and covers a payload whose metadata was lost/truncated.
+        confirmed_at = frappe.utils.get_datetime(row.get("event_timestamp"))
+        selftest_by_terminal[selftest_terminal] = {
+            "ok": bool(cint(meta.get("ok", row.get("value")))),
+            "at": confirmed_at.isoformat() if confirmed_at else None,
+            "printer": str(meta.get("printer") or ""),
+            "qz_version": str(meta.get("qz_version") or ""),
+        }
 
     stale_cutoff = frappe.utils.add_to_date(now, hours=-QZ_STALE_HOURS)
     window_supports_stale = days >= QZ_STALE_MIN_WINDOW_DAYS
@@ -520,6 +577,11 @@ def get_qz_fleet(days: int = 7) -> dict:
                 "selected_printer": selected_printer,
                 "cert": cert,
                 "failures": failures,
+                # None until someone confirms a test ticket on this terminal.
+                # Deliberately does NOT feed `flags`: the fleet panel and the
+                # POS dialog decide what a failed/stale test means, and adding a
+                # flag here would silently reshuffle the flagged-first sort.
+                "last_selftest": selftest_by_terminal.get(terminal),
                 "flags": flags,
             }
         )
