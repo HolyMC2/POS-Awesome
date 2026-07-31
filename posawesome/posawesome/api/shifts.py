@@ -113,6 +113,18 @@ def create_opening_voucher(pos_profile, company, balance_details):
     return data
 
 
+def is_demo_pos_site() -> bool:
+    """True on a Muelle demo tenant (site_config ``muelle_demo: 1``).
+
+    A demo is a marketing fixture: its integrity story is the nightly golden
+    restore, never cash reconciliation. Selling must therefore never hard-block
+    there — the golden snapshot can legitimately carry an old open shift, and
+    the stale-shift wall would then deadlock every visitor (sale blocked by the
+    stale shift, close blocked by the visitor's own unsynced offline sale,
+    sync blocked by the stale shift — bit demo.muelle.mx 2026-07-31)."""
+    return bool(cint(frappe.conf.get("muelle_demo") or 0))
+
+
 def is_shift_stale(opening_shift) -> bool:
     """An open shift whose period started on a previous day is stale."""
 
@@ -143,10 +155,15 @@ def check_opening_shift(user):
         # Single source of truth for Desk AND the /posapp web route: the SPA
         # routes a stale shift straight into the closing flow, and
         # assert_shift_not_stale is the server-side backstop at submit time.
-        data["stale_shift"] = is_shift_stale(data["pos_opening_shift"])
-        data["force_close_stale_shift"] = bool(
-            cint(_profile_force_close_stale_shift(data["pos_profile"].name))
-        )
+        # Demo tenants report never-stale so the SPA shows no wall/toast at all.
+        if is_demo_pos_site():
+            data["stale_shift"] = False
+            data["force_close_stale_shift"] = False
+        else:
+            data["stale_shift"] = is_shift_stale(data["pos_opening_shift"])
+            data["force_close_stale_shift"] = bool(
+                cint(_profile_force_close_stale_shift(data["pos_profile"].name))
+            )
     return data
 
 
@@ -175,9 +192,15 @@ def assert_shift_not_stale(pos_opening_shift):
     The SPA routes stale shifts into the closing flow at boot; this stops
     anything that bypasses the UI (stale cached tab, direct API call) from
     selling into yesterday's shift when the profile enforces closure.
+
+    Demo tenants skip the whole gate — including the closed-shift reject: on a
+    demo a dead-lettered sale is strictly worse than a corte mismatch the
+    nightly golden restore wipes anyway (see is_demo_pos_site).
     """
 
     if not pos_opening_shift:
+        return
+    if is_demo_pos_site():
         return
     row = frappe.db.get_value(
         "POS Opening Shift",
