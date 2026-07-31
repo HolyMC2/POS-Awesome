@@ -285,6 +285,18 @@
 	</div>
 </template>
 
+<script>
+// One deferred-print workflow per invoice (backtrace W9): a submit retry
+// after a request exception re-schedules the same invoice while the first
+// workflow may still be inside its 300 s patient wait — both would confirm
+// docstatus 1 and the customer gets two tickets. MODULE scope, not setup
+// scope: dialog-mode mounts Payments behind a v-if, so the instance dies
+// between sales while the spawned workflow keeps running detached — a
+// per-instance set would forget it on remount. Entries release in
+// `finally`, so a workflow that ended (even in error) can be retried.
+const deferredPrintInFlight = new Set();
+</script>
+
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, getCurrentInstance, nextTick } from "vue";
 import { storeToRefs } from "pinia";
@@ -303,7 +315,10 @@ import { usePaymentCalculations } from "../../composables/pos/payments/usePaymen
 import { usePaymentSubmission } from "../../composables/pos/payments/usePaymentSubmission";
 import { useRedemptionLogic } from "../../composables/pos/payments/useRedemptionLogic";
 import { usePaymentPrinting } from "../../composables/pos/payments/usePaymentPrinting";
-import { waitForLateSubmission } from "../../composables/pos/payments/usePatientSubmitWait";
+import {
+	waitForLateSubmission,
+	assertSubmitNotKnownFailed,
+} from "../../composables/pos/payments/usePatientSubmitWait";
 import { usePaymentMethods } from "../../composables/pos/payments/usePaymentMethods";
 import { useInvoiceDetails } from "../../composables/pos/invoice/useInvoiceDetails";
 import { useFormat } from "../../format";
@@ -1507,6 +1522,15 @@ const runDeferredPrintWorkflow = async ({
 	waitForInvoiceProcessing = false,
 }) => {
 	if (!name) return;
+	if (deferredPrintInFlight.has(name)) {
+		try {
+			track("warn:print_deferred_duplicate", 1, { invoice: name });
+		} catch {
+			// telemetry dispatch must never bubble
+		}
+		return;
+	}
+	deferredPrintInFlight.add(name);
 
 	let resolvedDoctype = resolveSubmittedDoctype(doctype);
 
@@ -1519,6 +1543,10 @@ const runDeferredPrintWorkflow = async ({
 			// once and keep both channels open until it lands.
 			let patientToastShown = false;
 			runPatientWait = () => {
+				// W3: BOTH entry points (fast-path miss below AND the
+				// draft-after-fetch re-entry) must short-circuit on a failure
+				// the server already reported — before the toast goes up.
+				assertSubmitNotKnownFailed(socketStore.processedInvoices?.[name], name);
 				if (!patientToastShown) {
 					patientToastShown = true;
 					toastStore.show({
@@ -1551,13 +1579,9 @@ const runDeferredPrintWorkflow = async ({
 			let processedState;
 			try {
 				processedState = await waitForInvoiceSubmission(name, resolvedDoctype);
-			} catch (fastPathMiss) {
-				// A submit the server already reported FAILED must surface as
-				// the failure it is — not get the reassuring "still processing"
-				// toast over the red one, then a 300 s wait for nothing.
-				if (socketStore.processedInvoices?.[name]?.status === "failed") {
-					throw fastPathMiss;
-				}
+			} catch {
+				// runPatientWait short-circuits with the server's real error
+				// when the submit already failed (W3) — no wait for nothing.
 				processedState = await runPatientWait();
 			}
 			resolvedDoctype = processedState?.doctype || resolvedDoctype;
@@ -1618,11 +1642,20 @@ const runDeferredPrintWorkflow = async ({
 		} catch {
 			// telemetry dispatch must never bubble
 		}
+		// W5: a nameless failure left the operator with no next move — point
+		// at the recovery path. Phrasing is conditional («once confirmed») so
+		// the advice stays safe even when the sale never lands.
 		toastStore.show({
 			title: __("Unable to print submitted invoice"),
 			color: "error",
-			detail: error?.message || __("Background processing did not finish in time."),
+			detail:
+				error?.message ||
+				`${__("Background processing did not finish in time.")} ${__(
+					"Once the sale is confirmed, reprint the ticket from the menu: Print Last Invoice.",
+				)}`,
 		});
+	} finally {
+		deferredPrintInFlight.delete(name);
 	}
 };
 

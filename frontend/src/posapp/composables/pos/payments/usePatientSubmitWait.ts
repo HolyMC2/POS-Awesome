@@ -33,6 +33,23 @@ export interface PatientWaitDeps {
 const DEFAULT_CEILING_MS = 300_000;
 const DEFAULT_POLL_MS = 10_000;
 
+/**
+ * Terminal-error short-circuit for the deferred-print entry points
+ * (backtrace W3): a submit the server has ALREADY reported failed is a
+ * real answer, not a delay — entering the patient wait would put the
+ * reassuring "still processing" toast over the red one and burn up to the
+ * full ceiling on a wait that cannot succeed. Callers pass the
+ * socketStore's recorded state for the invoice (or undefined).
+ */
+export function assertSubmitNotKnownFailed(
+	state: { status?: string; error?: string } | null | undefined,
+	invoice: string,
+): void {
+	if (state?.status === "failed") {
+		throw new Error(state.error || `Invoice ${invoice} failed to submit`);
+	}
+}
+
 export async function waitForLateSubmission(
 	invoice: string,
 	doctype: string,

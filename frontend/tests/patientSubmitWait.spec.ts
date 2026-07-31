@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { waitForLateSubmission } from "../src/posapp/composables/pos/payments/usePatientSubmitWait";
+import {
+	waitForLateSubmission,
+	assertSubmitNotKnownFailed,
+} from "../src/posapp/composables/pos/payments/usePatientSubmitWait";
 
 // Deterministic clock: `now` advances only when `sleep` is awaited, so the
 // loop's timing is fully scripted and the suite never actually waits.
@@ -118,5 +121,27 @@ describe("waitForLateSubmission", () => {
 				pollMs: 10_000,
 			}),
 		).rejects.toThrow(/did not finish submitting/);
+	});
+});
+
+describe("assertSubmitNotKnownFailed", () => {
+	// W3: the deferred-print entry points call this BEFORE showing the
+	// "still processing" toast or starting the 300 s wait.
+	it("throws the server's recorded error for a known-failed submit", () => {
+		expect(() =>
+			assertSubmitNotKnownFailed({ status: "failed", error: "Valuation rate missing" }, "INV-7"),
+		).toThrow("Valuation rate missing");
+	});
+
+	it("names the invoice when the failure carries no error text", () => {
+		expect(() => assertSubmitNotKnownFailed({ status: "failed" }, "INV-8")).toThrow(
+			/INV-8 failed to submit/,
+		);
+	});
+
+	it("passes through when nothing is recorded or the submit succeeded", () => {
+		expect(() => assertSubmitNotKnownFailed(undefined, "INV-9")).not.toThrow();
+		expect(() => assertSubmitNotKnownFailed(null, "INV-9")).not.toThrow();
+		expect(() => assertSubmitNotKnownFailed({ status: "processed" }, "INV-9")).not.toThrow();
 	});
 });
