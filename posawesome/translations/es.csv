@@ -2072,3 +2072,5 @@ Try again,Intentar de nuevo
 Done,Listo
 Printing is not ready — open Printer Setup from the menu.,La impresión no está lista — abre Configuración de Impresora desde el menú.
 "Once the sale is confirmed, reprint the ticket from the menu: Print Last Invoice.","Cuando se confirme la venta, reimprima el ticket desde el menú: Imprimir Última Factura."
+"Rate edit is not permitted for this POS Profile. Line {0} ({1}): {2} vs price-list rate {3}.","No se permite editar el precio en este Perfil de POS. Línea {0} ({1}): {2} vs precio de lista {3}."
+"Price list rate mismatch for this POS Profile. Line {0} ({1}): declared {2} vs price-list rate {3}.","El precio de lista no coincide para este Perfil de POS. Línea {0} ({1}): declarado {2} vs precio de lista {3}."

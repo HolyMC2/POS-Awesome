@@ -23,9 +23,11 @@ This module provides three invariants called from ``update_invoice`` /
 
   * ``assert_rates_within_band(invoice_doc, profile_doc, ...)``
       If the POS Profile's ``posa_allow_user_to_edit_rate`` is OFF,
-      every line rate must match the Item Price for the profile's
-      price list (within rounding). If ON, rate must stay within a
-      configurable ±band (default 20%) of the Item Price.
+      every line's declared pre-discount ``price_list_rate`` must match
+      the Item Price for the profile's price list, and ``rate`` must be
+      exactly that price with the line's declared discount applied
+      (offers/pricing rules are not rate edits). If ON, any rate passes
+      (band cap disabled — see docs/TODO.md).
 
 Full re-fetch + recompute (``reprice_invoice_items``) is intentionally
 deferred to a follow-up commit gated by ``posa_server_side_reprice``
@@ -209,10 +211,12 @@ def assert_rates_within_band(
     """Validate line rates against Item Price for the profile's price list.
 
     Three behaviors:
-      * Profile blocks rate edits → rate must match Item Price exactly
-        (within rounding).
-      * Profile allows rate edits → rate must be within ±band of Item
-        Price. Default band is ``DEFAULT_RATE_BAND_PCT`` (20%).
+      * Profile blocks rate edits → the declared pre-discount
+        ``price_list_rate`` must match Item Price (within rounding) and
+        ``rate`` must equal it with the line's declared discount applied
+        — offer/pricing-rule discounts are not rate edits.
+      * Profile allows rate edits → any rate passes (±band cap disabled;
+        see docs/TODO.md → "Rate-band cap").
       * No Item Price found for the item × price-list combo → skip
         validation for that line (legacy items without price master).
 
@@ -220,15 +224,11 @@ def assert_rates_within_band(
     job of full reprice (deferred).
     """
 
-    # Demo tenants: the no-edit branch compares the POST-discount line
-    # `rate` to the Item Price master, so any seeded auto-offer (the demo
-    # dress ships several) reads as a forbidden "rate edit" and 403s the
-    # sale. Demos must never hard-block selling; their integrity story is
-    # the nightly golden restore, not this gate. Inline conf read (twin of
-    # shifts.is_demo_pos_site) — importing shifts here would drag its
-    # module deps into the stub-frappe unit harness.
-    # Follow-up (real tenants): make the gate offer-aware — validate the
-    # declared pre-discount price_list_rate instead of post-discount rate.
+    # Demo tenants skip the gate entirely: demos must never hard-block
+    # selling; their integrity story is the nightly golden restore, not
+    # this gate. Inline conf read (twin of shifts.is_demo_pos_site) —
+    # importing shifts here would drag its module deps into the
+    # stub-frappe unit harness.
     try:
         if int(getattr(frappe, "conf", {}).get("muelle_demo") or 0):
             return
@@ -275,7 +275,42 @@ def assert_rates_within_band(
             continue
 
         if not allow_edit:
-            if abs(client_rate - master_rate) > 0.01:
+            # An offer / pricing-rule discount is NOT a rate edit: the line
+            # ships the pre-discount price in `price_list_rate` plus the
+            # discount applied (`discount_percentage`, else per-unit
+            # `discount_amount`), and `rate` is their result. So validate in
+            # two steps: the declared pre-discount price must match the Item
+            # Price master, and `rate` must be exactly that price with the
+            # declared discount applied. A hand-typed rate still fails both;
+            # a seeded offer passes. Discount SIZE is enforce_discount_limit's
+            # job, not this gate's. (Was: rate-vs-master directly, which
+            # 403'd every offer-discounted line — bit demo.muelle.mx
+            # 2026-07-31.) Lines that omit price_list_rate fall back to the
+            # master price, preserving the old exact-match behavior.
+            declared_plr = flt(_line_value(line, "price_list_rate") or 0)
+            if declared_plr > 0 and abs(declared_plr - master_rate) > 0.01:
+                frappe.throw(
+                    _(
+                        "Price list rate mismatch for this POS Profile. "
+                        "Line {0} ({1}): declared {2} vs price-list rate {3}."
+                    ).format(
+                        _line_value(line, "idx") or "?",
+                        item_code,
+                        declared_plr,
+                        master_rate,
+                    ),
+                    frappe.PermissionError,
+                )
+            base_rate = declared_plr if declared_plr > 0 else master_rate
+            disc_pct = flt(_line_value(line, "discount_percentage") or 0)
+            disc_amt = flt(_line_value(line, "discount_amount") or 0)
+            if disc_pct:
+                expected_rate = base_rate * (1 - disc_pct / 100.0)
+            elif disc_amt:
+                expected_rate = base_rate - disc_amt
+            else:
+                expected_rate = base_rate
+            if abs(client_rate - expected_rate) > 0.01:
                 frappe.throw(
                     _(
                         "Rate edit is not permitted for this POS Profile. "

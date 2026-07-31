@@ -228,6 +228,48 @@ class RateBandTests(unittest.TestCase):
         with self.assertRaises(_PermissionError):
             rp.assert_rates_within_band(invoice, profile)
 
+    def test_no_edit_offer_discount_passes(self):
+        # Offer/pricing-rule discount is not a rate edit: declared
+        # pre-discount price matches master, rate = price minus discount.
+        rp = _import_reprice(_basic_scenario())
+        invoice = {"items": [{
+            "idx": 1, "item_code": "IT-1", "rate": 90.00,
+            "price_list_rate": 100.00, "discount_percentage": 10,
+        }]}
+        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        rp.assert_rates_within_band(invoice, profile)
+
+    def test_no_edit_discount_amount_passes(self):
+        rp = _import_reprice(_basic_scenario())
+        invoice = {"items": [{
+            "idx": 1, "item_code": "IT-1", "rate": 85.00,
+            "price_list_rate": 100.00, "discount_amount": 15.00,
+        }]}
+        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        rp.assert_rates_within_band(invoice, profile)
+
+    def test_no_edit_declared_price_tamper_raises(self):
+        # Inflated price_list_rate with a fake discount must not pass.
+        rp = _import_reprice(_basic_scenario())
+        invoice = {"items": [{
+            "idx": 1, "item_code": "IT-1", "rate": 180.00,
+            "price_list_rate": 200.00, "discount_percentage": 10,
+        }]}
+        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(invoice, profile)
+
+    def test_no_edit_rate_beyond_declared_discount_raises(self):
+        # Declared 10% but rate hand-typed lower — still a rate edit.
+        rp = _import_reprice(_basic_scenario())
+        invoice = {"items": [{
+            "idx": 1, "item_code": "IT-1", "rate": 50.00,
+            "price_list_rate": 100.00, "discount_percentage": 10,
+        }]}
+        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(invoice, profile)
+
     def test_edit_within_band_passes(self):
         rp = _import_reprice(_basic_scenario())
         # Item Price 100; 90 is within ±20% (range 80..120)
