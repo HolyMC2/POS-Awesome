@@ -22,7 +22,7 @@ except ImportError:
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, now_datetime, today
 
-from posawesome.posawesome.api import shifts
+from posawesome.posawesome.api import _reprice, shifts
 from posawesome.posawesome.api.test_document_flows import PROFILE
 
 
@@ -116,6 +116,39 @@ class TestStaleShiftDemoBypass(IntegrationTestCase):
             )
         with _DemoConfPatch(1):
             shifts.assert_shift_not_stale(name)  # must not throw
+
+    def test_rate_band_gate_skipped_on_demo_site(self):
+        # An offer-discounted line (rate < Item Price) on a no-rate-edit
+        # profile: blocked for real tenants, allowed on a demo.
+        row = frappe.db.get_value(
+            "Item Price",
+            {"price_list": "Standard Selling", "price_list_rate": [">", 1]},
+            ["item_code", "price_list_rate"],
+            as_dict=True,
+        )
+        if not row:
+            self.skipTest("no Item Price on Standard Selling")
+        invoice = {
+            "selling_price_list": "Standard Selling",
+            "items": [
+                {
+                    "idx": 1,
+                    "item_code": row.item_code,
+                    "rate": float(row.price_list_rate) * 0.9,
+                    "price_list_rate": float(row.price_list_rate),
+                }
+            ],
+        }
+        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Standard Selling"}
+        with _DemoConfPatch(0):
+            self.assertRaises(
+                frappe.PermissionError,
+                _reprice.assert_rates_within_band,
+                invoice,
+                profile,
+            )
+        with _DemoConfPatch(1):
+            _reprice.assert_rates_within_band(invoice, profile)  # must not throw
 
     def test_check_opening_shift_reports_never_stale_on_demo(self):
         name = self._make_shift()

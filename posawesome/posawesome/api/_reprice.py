@@ -220,6 +220,21 @@ def assert_rates_within_band(
     job of full reprice (deferred).
     """
 
+    # Demo tenants: the no-edit branch compares the POST-discount line
+    # `rate` to the Item Price master, so any seeded auto-offer (the demo
+    # dress ships several) reads as a forbidden "rate edit" and 403s the
+    # sale. Demos must never hard-block selling; their integrity story is
+    # the nightly golden restore, not this gate. Inline conf read (twin of
+    # shifts.is_demo_pos_site) — importing shifts here would drag its
+    # module deps into the stub-frappe unit harness.
+    # Follow-up (real tenants): make the gate offer-aware — validate the
+    # declared pre-discount price_list_rate instead of post-discount rate.
+    try:
+        if int(getattr(frappe, "conf", {}).get("muelle_demo") or 0):
+            return
+    except (TypeError, ValueError, AttributeError):
+        pass
+
     allow_edit = bool(_profile_value(profile_doc, "posa_allow_user_to_edit_rate"))
     price_list = _profile_value(profile_doc, "selling_price_list") or _line_value(
         invoice_doc, "selling_price_list"
