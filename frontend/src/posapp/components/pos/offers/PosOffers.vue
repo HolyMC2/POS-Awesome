@@ -20,6 +20,14 @@
 					:items-per-page="itemsPerPage"
 					hide-default-footer
 				>
+					<!-- apply_on / offer hold raw DocType select values ("Item Group",
+					     "Grand Total", …) — render through __() so es.csv rows apply. -->
+					<template v-slot:item.apply_on="{ item }">
+						{{ __(item.apply_on) }}
+					</template>
+					<template v-slot:item.offer="{ item }">
+						{{ __(item.offer) }}
+					</template>
 					<template v-slot:item.offer_applied="{ item }">
 						<v-btn
 							v-if="!item.offer_applied"
