@@ -711,6 +711,7 @@ const { ensureReturnPaymentsAreNegative, restoreReturnPayments, validateSubmissi
 		is_credit_sale: is_credit_sale,
 		loyaltyAmount: loyalty_amount,
 		formatFloat: (val, prec) => flt(val, prec),
+		formatCurrency,
 		stores: {
 			toastStore,
 			syncStore,

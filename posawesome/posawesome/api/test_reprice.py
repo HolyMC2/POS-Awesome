@@ -203,6 +203,48 @@ class PaymentTotalsTests(unittest.TestCase):
         }
         rp.assert_payments_match_grand_total(invoice)
 
+    def test_overpay_with_declared_change_passes(self):
+        # Cashier receives 1900 on a 1882 ticket, declares 18 change.
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "grand_total": 1882.00,
+            "is_pos": 1,
+            "payments": [{"amount": 1900.00}],
+        }
+        rp.assert_payments_match_grand_total(invoice, declared_change=18.00)
+
+    def test_overpay_without_declared_change_raises(self):
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "grand_total": 1882.00,
+            "is_pos": 1,
+            "payments": [{"amount": 1900.00}],
+        }
+        with self.assertRaises(_ValidationError):
+            rp.assert_payments_match_grand_total(invoice)
+
+    def test_declared_change_exceeding_overpay_raises(self):
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "grand_total": 1882.00,
+            "is_pos": 1,
+            "payments": [{"amount": 1900.00}],
+        }
+        with self.assertRaises(_ValidationError):
+            rp.assert_payments_match_grand_total(invoice, declared_change=100.00)
+
+    def test_negative_declared_change_cannot_hide_underpayment(self):
+        # paid 50 for a 100 cart must still fail even if the client sends
+        # a negative "change" trying to bend the equality.
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "grand_total": 100.00,
+            "is_pos": 1,
+            "payments": [{"amount": 50.00}],
+        }
+        with self.assertRaises(_ValidationError):
+            rp.assert_payments_match_grand_total(invoice, declared_change=-50.00)
+
 
 # ---------------------------------------------------------------------------
 # rate band

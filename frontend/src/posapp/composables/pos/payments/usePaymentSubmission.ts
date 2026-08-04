@@ -94,6 +94,7 @@ export interface PaymentSubmissionOptions {
 	invoiceType: Ref<string>;
 	is_write_off_change?: Ref<boolean>;
 	formatFloat: (_val: any, _prec?: number) => number;
+	formatCurrency?: (_val: any, _currency?: string) => string;
 	currencyPrecision?: Ref<number>;
 	isCashback?: Ref<boolean>;
 	paidChange?: Ref<number>;
@@ -1202,6 +1203,22 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 
 			if (frappe?.utils?.play_sound) {
 				frappe.utils.play_sound("submit");
+			}
+
+			// The cashier's next physical act is handing money back — say
+			// how much, loudly, so nobody re-reads the Cambio field or does
+			// drawer math. pChange is what the server just booked as the
+			// change Payment Entry, so toast and GL always agree.
+			if (pChange > 0 && !doc.is_return) {
+				stores?.toastStore?.show({
+					title: __("Give back change: {0}", [
+						options.formatCurrency
+							? options.formatCurrency(pChange, doc.currency)
+							: `${pChange}`,
+					]),
+					color: "warning",
+					timeout: 12000,
+				});
 			}
 
 			const submittedItems = Array.isArray(submittedDocument.items)

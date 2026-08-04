@@ -145,8 +145,9 @@ def assert_payments_match_grand_total(
     invoice_doc: Any,
     tolerance: float | None = None,
     is_credit_sale: bool = False,
+    declared_change: float = 0.0,
 ) -> None:
-    """Require sum(payments[].amount) == grand_total within tolerance.
+    """Require sum(payments[].amount) - declared_change == grand_total.
 
     Catches the "client sends payments=[$0] for a $1000 cart" attack.
     Frappe re-sums line totals in ``calculate_taxes_and_totals`` but
@@ -159,6 +160,15 @@ def assert_payments_match_grand_total(
     "$0 for $1000 cart" threat doesn't apply — the outstanding IS the
     deferred liability, not an exfiltration. Skip the equality check
     when the caller flags the request as a credit sale.
+
+    ``declared_change`` is the cash-back the register hands over when
+    the customer tenders above the total (``data.paid_change`` +
+    ``data.credit_change``): cashier receives $1900 on a $1882 ticket,
+    payments carry the $1900 actually tendered and the $18 comes back
+    out of the drawer as a post-submit change Payment Entry
+    (``_create_change_payment_entries``). The invariant therefore holds
+    on the NET amount — under-payment stays blocked, and change larger
+    than the tender fails the same equality.
     """
 
     if is_credit_sale:
@@ -189,7 +199,15 @@ def assert_payments_match_grand_total(
     if not payments and not is_pos:
         return
 
-    if abs(paid - grand_total) > tol:
+    change = max(flt(declared_change), 0.0)
+    if abs(paid - change - grand_total) > tol:
+        if change:
+            frappe.throw(
+                _(
+                    "Payment total {0} minus change {1} does not match grand total {2} (difference {3})."
+                ).format(paid, change, grand_total, paid - change - grand_total),
+                frappe.ValidationError,
+            )
         frappe.throw(
             _(
                 "Payment total {0} does not match grand total {1} (difference {2})."

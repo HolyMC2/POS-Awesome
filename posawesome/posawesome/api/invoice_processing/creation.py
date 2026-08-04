@@ -1453,9 +1453,13 @@ def submit_invoice(invoice, data, submit_in_background=False):
     # the operator collect a partial payment intentionally — remainder
     # becomes outstanding (anticipo). Pass the flag through so the
     # payments-vs-total invariant skips the equality check in that case.
+    # Cash tendered above the total is fine when the client declares the
+    # change (paid_change/credit_change) — _create_change_payment_entries
+    # books that exact amount back out of the drawer after submit.
     assert_payments_match_grand_total(
         invoice_doc,
         is_credit_sale=cint(data.get("is_credit_sale")),
+        declared_change=flt(data.get("paid_change")) + flt(data.get("credit_change")),
     )
 
     # posa_auto_set_batch is enforced client-side (useItemAddition.ts);
@@ -1782,6 +1786,8 @@ def submit_in_background_job(kwargs):
             _assert_payments(
                 invoice_doc,
                 is_credit_sale=cint((data or {}).get("is_credit_sale")),
+                declared_change=flt((data or {}).get("paid_change"))
+                + flt((data or {}).get("credit_change")),
             )
 
         from posawesome.posawesome.api._perms import account_perm_bypass
