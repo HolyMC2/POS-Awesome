@@ -70,6 +70,27 @@ export async function reconcileAlreadySubmitted(
 	}
 }
 
+/**
+ * Capability-payload version from the current opening's POS Profile
+ * (posa_capability_json.version — plan C7). Undefined when no preset is
+ * linked (retail default), which is the common case; the guard only bites
+ * when both the queued entry and the live opening carry a version and they
+ * disagree.
+ */
+export function getOfflineCapabilityVersion(): number | undefined {
+	const openingStorage = memory.pos_opening_storage || {};
+	const raw = openingStorage?.pos_profile?.posa_capability_json;
+	if (!raw || typeof raw !== "string") {
+		return undefined;
+	}
+	try {
+		const version = JSON.parse(raw)?.version;
+		return typeof version === "number" ? version : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 function shouldValidateOfflineInvoiceStock(invoice: AnyRecord) {
 	if (!invoice || invoice.is_return) {
 		return false;
@@ -221,6 +242,16 @@ function prepareOfflineInvoiceEntry(entry: AnyRecord) {
 		throw error;
 	}
 
+	// Stamp the capability-payload version the invoice was BUILT under, so a
+	// replay against a server whose profile version has since changed is
+	// held for review rather than auto-submitted (plan C7). Absent when the
+	// register runs the retail default (no preset) — the guard is inert then.
+	const capabilityVersion = getOfflineCapabilityVersion();
+	if (capabilityVersion !== undefined) {
+		cleanEntry.data = cleanEntry.data || {};
+		cleanEntry.data.posa_capability_version = capabilityVersion;
+	}
+
 	const replaySources = Array.isArray(cleanEntry?.data?.customer_credit_dict)
 		? cleanEntry.data.customer_credit_dict.filter(
 				(row: AnyRecord) => Number(row?.credit_to_redeem || 0) > 0,
@@ -354,8 +385,46 @@ export async function syncOfflineInvoices() {
 		let synced = 0;
 		let drafted = 0;
 
+		const currentCapabilityVersion = getOfflineCapabilityVersion();
+
 		for (const entry of claimedEntries) {
 			const queuedInvoice = entry.payload;
+			// Capability version guard (plan C7): an invoice built under a
+			// different capability payload than the register now runs must
+			// not auto-submit — its line/flow semantics may not match. Route
+			// it to a draft for a human to reconcile instead of applying it
+			// blind or losing it.
+			const stampedVersion = queuedInvoice?.data?.posa_capability_version;
+			if (
+				typeof stampedVersion === "number" &&
+				typeof currentCapabilityVersion === "number" &&
+				stampedVersion !== currentCapabilityVersion
+			) {
+				console.warn(
+					`Offline invoice built under capability v${stampedVersion} ` +
+						`but register now runs v${currentCapabilityVersion} — drafting for review`,
+				);
+				try {
+					await frappe.call({
+						method: "posawesome.posawesome.api.invoices.update_invoice",
+						args: { data: queuedInvoice.invoice },
+					});
+					drafted += 1;
+					await markWriteQueueEntrySynced(
+						INVOICE_ENTITY,
+						Number(entry.queue_id),
+						entry.last_attempt_at,
+					);
+				} catch (draftError) {
+					await markWriteQueueEntryFailed(
+						INVOICE_ENTITY,
+						Number(entry.queue_id),
+						draftError,
+						entry.last_attempt_at,
+					);
+				}
+				continue;
+			}
 			try {
 				await frappe.call({
 					method: "posawesome.posawesome.api.invoices.submit_invoice",

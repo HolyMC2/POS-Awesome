@@ -43,14 +43,16 @@ vi.mock("../src/offline/invoiceOutbox", () => ({
 }));
 vi.mock("../src/offline/db", () => ({
 	isOffline: () => false,
-	memory: { pos_last_sync_totals: null },
+	memory: { pos_last_sync_totals: null, pos_opening_storage: {} },
 	persist: vi.fn(),
 }));
 
 import {
+	getOfflineCapabilityVersion,
 	reconcileAlreadySubmitted,
 	syncOfflineInvoices,
 } from "../src/offline/invoices";
+import { memory } from "../src/offline/db";
 
 const frappeCall = vi.fn();
 (globalThis as any).frappe = { call: frappeCall };
@@ -143,5 +145,66 @@ describe("syncOfflineInvoices — ack-miss does not orphan a duplicate", () => {
 
 		expect(methodsCalled().some((m) => m.endsWith("update_invoice"))).toBe(true);
 		expect(totals).toMatchObject({ synced: 0, drafted: 1 });
+	});
+});
+
+describe("syncOfflineInvoices — capability version guard (plan C7)", () => {
+	function versionedEntry(version: number) {
+		const e = entry();
+		e.payload.data = { posa_capability_version: version };
+		return e;
+	}
+
+	function setOpeningVersion(version: number | null) {
+		(memory as any).pos_opening_storage = {
+			pos_profile:
+				version === null
+					? {}
+					: { posa_capability_json: JSON.stringify({ name: "p", version }) },
+		};
+	}
+
+	it("reads the current version from the opening storage", () => {
+		setOpeningVersion(3);
+		expect(getOfflineCapabilityVersion()).toBe(3);
+		setOpeningVersion(null);
+		expect(getOfflineCapabilityVersion()).toBeUndefined();
+	});
+
+	it("drafts (does not auto-submit) an invoice built under a different version", async () => {
+		setOpeningVersion(2);
+		claimRetryableQueueEntries.mockResolvedValueOnce([versionedEntry(1)]);
+		frappeCall.mockImplementation(async ({ method }: any) => {
+			if (method.endsWith("update_invoice")) return { message: {} };
+			return {};
+		});
+
+		const totals = await syncOfflineInvoices();
+
+		expect(methodsCalled().some((m) => m.endsWith("submit_invoice"))).toBe(false);
+		expect(methodsCalled().some((m) => m.endsWith("update_invoice"))).toBe(true);
+		expect(totals).toMatchObject({ synced: 0, drafted: 1 });
+	});
+
+	it("submits normally when the versions match", async () => {
+		setOpeningVersion(2);
+		claimRetryableQueueEntries.mockResolvedValueOnce([versionedEntry(2)]);
+		frappeCall.mockResolvedValue({ message: {} });
+
+		const totals = await syncOfflineInvoices();
+
+		expect(methodsCalled().some((m) => m.endsWith("submit_invoice"))).toBe(true);
+		expect(totals).toMatchObject({ synced: 1, drafted: 0 });
+	});
+
+	it("submits normally when the register has no preset (retail default)", async () => {
+		setOpeningVersion(null);
+		claimRetryableQueueEntries.mockResolvedValueOnce([versionedEntry(1)]);
+		frappeCall.mockResolvedValue({ message: {} });
+
+		const totals = await syncOfflineInvoices();
+
+		expect(methodsCalled().some((m) => m.endsWith("submit_invoice"))).toBe(true);
+		expect(totals).toMatchObject({ synced: 1, drafted: 0 });
 	});
 });
