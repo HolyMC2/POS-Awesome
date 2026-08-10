@@ -19,7 +19,7 @@ def execute():
                     "options": _OPTIONS,
                     "insert_after": "posa_rt_guest_count",
                     "no_copy": 1,
-                    "in_standard_filter": 1,
+                    "hidden": 1,
                     "print_hide": 0,
                 },
             )
