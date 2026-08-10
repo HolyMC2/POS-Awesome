@@ -7,6 +7,8 @@ a dangling link degrades to None instead of raising into shift-opening.
 
 from __future__ import annotations
 
+import os
+import re
 import unittest
 
 try:
@@ -18,6 +20,7 @@ from frappe.tests import IntegrationTestCase
 
 from posawesome.posawesome.api import vertical
 from posawesome.posawesome.api.test_document_flows import PROFILE
+from posawesome.posawesome.doctype.pos_capability_profile import pos_capability_profile
 
 
 class TestCapabilityResolution(IntegrationTestCase):
@@ -88,3 +91,51 @@ class TestCapabilityResolution(IntegrationTestCase):
                     "dock_tabs": "browse, teleport, pay",
                 }
             ).insert()
+
+
+class TestDockTabCrossStackParity(unittest.TestCase):
+    """The dock-tab vocabulary lives in two hand-maintained places: backend
+    `VALID_DOCK_TABS` (pos_capability_profile.py) and the frontend
+    `DOCK_TAB_IDS` tuple (viewContracts.ts). They are unbound — a backend
+    change the frontend build hasn't followed makes a validated preset render
+    a silent blank tab. This is the only machine check that keeps them equal.
+    """
+
+    def _view_contracts_path(self):
+        return os.path.join(
+            frappe.get_app_path("posawesome"),
+            "..",
+            "frontend",
+            "src",
+            "posapp",
+            "vertical",
+            "viewContracts.ts",
+        )
+
+    def test_frontend_dock_tab_ids_match_backend(self):
+        path = self._view_contracts_path()
+        if not os.path.exists(path):
+            self.skipTest(f"frontend source not checked out at {path}")
+
+        with open(path, encoding="utf-8") as handle:
+            source = handle.read()
+
+        # Grab the array literal:  DOCK_TAB_IDS = [ "browse", "offers", ... ]
+        match = re.search(r"DOCK_TAB_IDS\s*=\s*\[(.*?)\]", source, re.DOTALL)
+        self.assertIsNotNone(
+            match,
+            f"could not find `DOCK_TAB_IDS = [...]` in {path}",
+        )
+
+        # Pull the quoted tokens in source order (single or double quotes).
+        frontend_ids = tuple(re.findall(r"""['"]([^'"]+)['"]""", match.group(1)))
+        backend_ids = tuple(pos_capability_profile.VALID_DOCK_TABS)
+
+        self.assertEqual(
+            frontend_ids,
+            backend_ids,
+            "dock-tab vocabulary drift: frontend DOCK_TAB_IDS "
+            f"({list(frontend_ids)}) in viewContracts.ts must equal backend "
+            f"VALID_DOCK_TABS ({list(backend_ids)}) in pos_capability_profile.py "
+            "(same ids, same order) — a mismatch renders a silent blank dock tab.",
+        )

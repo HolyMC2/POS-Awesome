@@ -58,5 +58,11 @@ export type PosViewContext = "pos" | "purchase" | "barcode";
 export type CartStyle = "table";
 export type ItemsPanelStyle = "standard";
 
-/** Dock tab identifiers the shell knows how to render. */
-export type DockTabId = "browse" | "offers" | "cart" | "coupons" | "pay";
+/**
+ * Dock tab identifiers the shell knows how to render — the single frontend
+ * source of truth. This tuple must equal backend `VALID_DOCK_TABS`
+ * (pos_capability_profile.py) in membership AND order; a cross-stack parity
+ * test asserts it. A backend-allowed id absent from here renders a blank tab.
+ */
+export const DOCK_TAB_IDS = ["browse", "offers", "cart", "coupons", "pay"] as const;
+export type DockTabId = (typeof DOCK_TAB_IDS)[number];

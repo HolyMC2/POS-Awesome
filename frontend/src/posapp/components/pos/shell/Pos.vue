@@ -620,7 +620,17 @@ export default {
 			},
 		};
 		const dockTabs = computed(() =>
-			vertical.layout.dock_tabs.map((id) => ({ id, ...DOCK_TAB_DEFS[id] })).filter((tab) => tab.icon),
+			vertical.layout.dock_tabs
+				.map((id) => {
+					// A backend-allowed dock tab id the frontend build has no def
+					// for is dropped below (graceful in prod); shout in dev so the
+					// backend↔frontend drift surfaces instead of a silent blank tab.
+					if (import.meta.env.DEV && !DOCK_TAB_DEFS[id]) {
+						console.warn(`[dock] preset dock tab "${id}" has no DOCK_TAB_DEFS entry — dropped`);
+					}
+					return { id, ...DOCK_TAB_DEFS[id] };
+				})
+				.filter((tab) => tab.icon),
 		);
 		const getFallbackBottomSpace = () => {
 			const rawValue = responsive.responsiveStyles.value["--bottom-safe-space"];
