@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useUIStore } from "./uiStore";
 
 /**
@@ -52,6 +52,31 @@ const RETAIL_PHONES: VerticalProfile = {
 	capabilities: ["serial_imei", "saldo", "offers", "coupons"],
 };
 
+/**
+ * POS Profile loads async at boot — without a cache a lean register
+ * paints the wide 2-column layout first and then snaps to stacked.
+ * The last RESOLVED layout is persisted and applied optimistically
+ * until the profile lands; the profile remains the source of truth
+ * the moment it arrives.
+ */
+const LAYOUT_CACHE_KEY = "posa_vertical_layout_cache";
+
+const readLayoutCache = (): { lean_vertical?: boolean } => {
+	try {
+		return JSON.parse(window.localStorage.getItem(LAYOUT_CACHE_KEY) || "{}") || {};
+	} catch {
+		return {};
+	}
+};
+
+const writeLayoutCache = (value: { lean_vertical: boolean }) => {
+	try {
+		window.localStorage.setItem(LAYOUT_CACHE_KEY, JSON.stringify(value));
+	} catch {
+		/* private mode / quota — optimistic boot just degrades to a flash */
+	}
+};
+
 export const useVerticalStore = defineStore("vertical", () => {
 	const uiStore = useUIStore();
 
@@ -61,16 +86,33 @@ export const useVerticalStore = defineStore("vertical", () => {
 
 	const has = (capability: string): boolean => capabilitySet.value.has(capability);
 
+	const cachedLayout = ref(readLayoutCache());
+
 	/**
 	 * Layout resolution: preset defaults + per-register POS Profile
 	 * overrides. `posa_lean_vertical_layout` is the first profile-driven
 	 * layout flag with a real renderer (it shipped in a patch with no
-	 * consumer — the plan's rehearsal slice).
+	 * consumer — the plan's rehearsal slice). Before the profile loads,
+	 * the persisted last-resolved layout answers (boot-flash guard).
 	 */
 	const layout = computed<VerticalLayout>(() => ({
 		...profile.value.layout,
-		lean_vertical: Boolean(uiStore.posProfile?.posa_lean_vertical_layout),
+		lean_vertical: uiStore.posProfile
+			? Boolean(uiStore.posProfile.posa_lean_vertical_layout)
+			: Boolean(cachedLayout.value.lean_vertical),
 	}));
+
+	watch(
+		() => uiStore.posProfile?.posa_lean_vertical_layout,
+		(flag) => {
+			if (!uiStore.posProfile) {
+				return;
+			}
+			const resolved = { lean_vertical: Boolean(flag) };
+			cachedLayout.value = resolved;
+			writeLayoutCache(resolved);
+		},
+	);
 
 	const leanVerticalLayout = computed(() => layout.value.lean_vertical);
 

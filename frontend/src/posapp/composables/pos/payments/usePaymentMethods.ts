@@ -14,6 +14,7 @@ export interface PaymentMethodsOptions {
 	stores: {
 		toastStore: any;
 		uiStore: any;
+		customersStore?: any;
 	};
 	eventBus?: any;
 	onSubmit?: (_args: any, _submitPrint: boolean) => void;
@@ -297,7 +298,10 @@ export function usePaymentMethods(options: PaymentMethodsOptions) {
 				title: __("Please set the customer's mobile number"),
 				color: "error",
 			});
-			if (eventBus) eventBus.emit("open_edit_customer");
+			// Open the customer editor so the operator can add the mobile
+			// number (the old "open_edit_customer" bus event had no
+			// listener — this path showed a toast and went nowhere).
+			stores.customersStore?.openUpdateCustomerDialog?.(null);
 			if (options.onBackToInvoice) options.onBackToInvoice();
 			return;
 		}

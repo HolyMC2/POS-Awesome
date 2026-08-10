@@ -342,6 +342,9 @@ export default {
 		const handleSubmitClosingPos = (data) => {
 			shift.submit_closing_pos(data);
 		};
+		const handleOpenShiftDetails = () => {
+			shift.get_closing_data();
+		};
 		const offers = useOffers();
 		const uiStore = useUIStore();
 		const invoiceStore = useInvoiceStore();
@@ -699,6 +702,9 @@ export default {
 			}
 			if (eventBus) {
 				eventBus.on("submit_closing_pos", handleSubmitClosingPos);
+				// F7 — shift overview / closing dialog. The listener was lost
+				// in an old refactor and F7 emitted into the void.
+				eventBus.on("open_shift_details", handleOpenShiftDetails);
 				eventBus.on("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.on("set_compact_panel", setCompactPanel);
 				eventBus.on("open_returns", handleOpenReturns);
@@ -726,6 +732,7 @@ export default {
 				// removes EVERY listener for the event, including ones other
 				// components registered.
 				eventBus.off("submit_closing_pos", handleSubmitClosingPos);
+				eventBus.off("open_shift_details", handleOpenShiftDetails);
 				eventBus.off("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.off("set_compact_panel", setCompactPanel);
 				eventBus.off("open_returns", handleOpenReturns);
@@ -932,16 +939,8 @@ export default {
 			this.dialog = true;
 		},
 		get_pos_setting() {
-			frappe.db.get_doc("POS Settings", undefined).then((_doc) => {
-				// Update store directly instead of emitting event
-				// If Payments.vue or others need this, they should watch uiStore.posSettings
-				// For now, we assume uiStore.setStockSettings or similar is sufficient,
-				// or we add a new generic settings store.
-				// However, the original code used eventBus.emit("set_pos_settings", doc);
-				// We'll attach it to uiStore if a suitable method exists, or just log for now as
-				// clean separation implies components fetch what they need or use a centralized config store.
-				// Assuming uiStore handles global config:
-				// this.uiStore.setPosSettings(doc); // We might need to implement this if it doesn't exist
+			frappe.db.get_doc("POS Settings", undefined).then((doc) => {
+				this.uiStore.setPosSettings(doc);
 			});
 		},
 		// handleAddItem removed as ItemsSelector handles pos addition internally

@@ -55,14 +55,12 @@ export type Events = {
 	set_new_line: boolean;
 	focus_cart_item_qty: { item?: CartItem; rowId?: string; itemCode?: string };
 	remote_stock_adjustment: RealtimeStockPayload;
-	calc_uom: unknown; // listener exists (Invoice.vue), no emitter found — deletion candidate
 
 	// ---- invoice lifecycle --------------------------------------------------
 	clear_invoice: void;
 	draft_saved: { doctype?: string; name?: string };
 	load_return_invoice: { invoice_doc: PartialInvoiceDoc; return_doc?: InvoiceDoc };
 	reset_invoice_type_to_invoice: void;
-	update_invoice_type: string; // emitter only — no listener today
 	send_invoice_doc_payment: InvoiceDoc;
 	invoice_submission_failed: { invoice?: string; reason?: string; timestamp?: number };
 	recalculate_return_discount: { defer?: boolean };
@@ -80,8 +78,8 @@ export type Events = {
 	// ---- offers / coupons ---------------------------------------------------
 	update_pos_offers: PosOfferRow[];
 	update_invoice_offers: PosOfferRow[];
-	/** Carries OFFER rows (the coupon_based subset), not coupons — historical misnomer. */
-	update_pos_coupons: PosOfferRow[];
+	/** Applied OFFER rows (the coupon_based subset) — consumed by PosCoupons. */
+	update_applied_coupon_offers: PosOfferRow[];
 	update_invoice_coupons: PosCouponRow[];
 	set_pos_coupons: PosCouponRow[];
 	update_discount_percentage_offer_name: { value: string | null };
@@ -90,46 +88,28 @@ export type Events = {
 	focus_item_search: void;
 	focus_additional_discount: void;
 	set_compact_panel: "selector" | "invoice";
-	change_active_view: string; // emitter only — no listener today
 
 	// ---- dialogs / shell ----------------------------------------------------
 	open_returns: string; // company
 	open_new_address: string; // customer
 	open_customer_display: void;
-	open_edit_customer: void; // emitter only — no listener today
 	open_employee_switch: void;
-	open_shift_details: void; // F7 emits this; its listener was lost — restore or delete
+	open_shift_details: void; // F7 → shift overview / closing dialog
 	lock_pos_screen: void;
 	open_mpesa_payments: { company: string; mode_of_payment: string; customer: string };
 	set_mpesa_payment: Record<string, any>;
 	open_ClosingDialog: Record<string, any>;
 	add_the_new_address: { name: string; [key: string]: any };
-	set_customer_readonly: boolean; // 6 emitters; sole listener commented out — known regression
+	set_customer_readonly: boolean; // returns flow locks the customer selector
 	submit_closing_pos: Record<string, any>;
 
-	// ---- profile / settings -------------------------------------------------
-	register_pos_profile: { pos_profile: POSProfile; stock_settings?: Record<string, any> };
-	payments_register_pos_profile: {
-		pos_profile: POSProfile;
-		pos_opening_shift?: Record<string, any>;
-		company?: { name?: string; default_currency?: string };
-	};
-	set_pos_settings: Record<string, any>;
-
 	// ---- payments -----------------------------------------------------------
-	payment_ui_ready: void; // emitter only — no listener today
 	queue_submit_payment_shortcut: { print?: boolean };
-	submit_payment_shortcut: { print?: boolean };
-	/** Emits the STRINGS "true"/"false", not booleans. No listener today. */
-	show_payment: "true" | "false";
 
 	// ---- notifications ------------------------------------------------------
 	show_message: NotificationData;
-	/** Shape does not match NotificationData — never wired to the toast store. */
-	show_notification: { message: string; type: "success" | "warning"; duration: number };
 
 	// ---- offline / sync / boot ----------------------------------------------
-	sync_invoices: void;
 	"data-loaded": string;
 	"data-load-progress": { name: string; progress: number };
 	"network-online": void;

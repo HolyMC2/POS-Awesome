@@ -1789,11 +1789,6 @@ export default {
 			{ deep: true, immediate: true },
 		);
 		this.ensureScaleBarcodeSettings();
-		/*
-		this.eventBus.on("register_pos_profile", (data) => {
-			this.pos_profile = data.pos_profile || {};
-		});
-		*/
 	},
 	beforeUnmount() {
 		this.logDebug("beforeUnmount", {

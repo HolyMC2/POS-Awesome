@@ -298,14 +298,7 @@ export default {
 			},
 			{ immediate: true },
 		);
-		/*
-		this.$nextTick(function () {
-			this.eventBus.on("register_pos_profile", (data) => {
-				this.pos_profile = data.pos_profile;
-			});
-		});
-		*/
-		this.eventBus.on("update_pos_coupons", (data) => {
+		this.eventBus.on("update_applied_coupon_offers", (data) => {
 			this.updatePosCoupons(data);
 		});
 		this.eventBus.on("set_pos_coupons", (data) => {
@@ -314,7 +307,11 @@ export default {
 	},
 	beforeUnmount() {
 		if (this.eventBus) {
-			this.eventBus.off("update_pos_coupons");
+			// Bare off(event) removes EVERY listener for the event — this
+			// component is the sole listener of both, but keep the pattern
+			// from spreading; handlers are inline, so scope the removal to
+			// events only this component consumes.
+			this.eventBus.off("update_applied_coupon_offers");
 			this.eventBus.off("set_pos_coupons");
 		}
 	},

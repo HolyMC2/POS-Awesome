@@ -57,7 +57,15 @@ const __ = window.__ || ((s) => s);
 const frappe = window.frappe;
 // @ts-ignore
 
-const emitBus = <K extends keyof Events>(eventName: K, payload?: Events[K]) => {
+// Mirrors mitt's own overload gate: events whose payload can be
+// undefined may omit it; everything else must pass one — an optional
+// `payload?` here would let a required-payload event ship undefined.
+const emitBus = <K extends keyof Events>(
+	...args: undefined extends Events[K]
+		? [eventName: K] | [eventName: K, payload: Events[K]]
+		: [eventName: K, payload: Events[K]]
+) => {
+	const [eventName, payload] = args;
 	if (bus && typeof bus.emit === "function") {
 		bus.emit(eventName, payload as Events[K]);
 	}

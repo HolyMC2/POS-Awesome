@@ -824,7 +824,7 @@ export default {
 			}
 
 			this.eventBus.emit("update_currency", {
-				currency: this.selected_currency || this.pos_profile.currency,
+				currency: this.selected_currency || this.pos_profile.currency || "",
 				exchange_rate: this.exchange_rate,
 				conversion_rate: this.conversion_rate,
 			});
@@ -1185,7 +1185,6 @@ export default {
 			load_return_invoice: this.handleLoadReturnInvoice,
 			focus_cart_item_qty: this.focusCartItemQty,
 			set_new_line: this.handleSetNewLine,
-			calc_uom: this.calc_uom,
 			recalculate_return_discount: (payload) => this.applyReturnDiscountProration(payload),
 			reset_invoice_type_to_invoice: () => {
 				this.invoiceType = "Invoice";

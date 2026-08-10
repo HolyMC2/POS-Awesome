@@ -331,7 +331,9 @@ export default {
 			const applyedOffers = this.pos_offers.filter(
 				(offer) => offer.offer_applied && offer.coupon_based,
 			);
-			this.eventBus.emit("update_pos_coupons", applyedOffers);
+			// Renamed from "update_pos_coupons": the payload is applied
+			// OFFER rows (coupon_based subset), not coupon rows.
+			this.eventBus.emit("update_applied_coupon_offers", applyedOffers);
 		},
 	},
 
@@ -371,13 +373,6 @@ export default {
 			{ immediate: true },
 		);
 
-		/*
-		this.$nextTick(function () {
-			this.eventBus.on("register_pos_profile", (data) => {
-				this.pos_profile = data.pos_profile;
-			});
-		});
-		*/
 		this.eventBus.on("update_pos_offers", (data) => {
 			this.updatePosOffers(data);
 		});

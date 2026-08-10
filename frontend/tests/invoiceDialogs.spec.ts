@@ -59,7 +59,8 @@ describe("invoice payment dialogs", () => {
 
 		expect(context.uiStore.setActiveView).toHaveBeenCalledWith("payment");
 		expect(context.eventBus.emit).toHaveBeenCalledWith("set_compact_panel", "selector");
-		expect(context.eventBus.emit).toHaveBeenCalledWith("show_payment", "true");
+		// "show_payment" was a dead emit (no listener ever) — removed.
+		expect(context.eventBus.emit).not.toHaveBeenCalledWith("show_payment", "true");
 	});
 
 	it("switches compact layout back to the invoice when closing payments", () => {
@@ -78,6 +79,7 @@ describe("invoice payment dialogs", () => {
 
 		expect(context.uiStore.setActiveView).toHaveBeenCalledWith("items");
 		expect(context.eventBus.emit).toHaveBeenCalledWith("set_compact_panel", "invoice");
-		expect(context.eventBus.emit).toHaveBeenCalledWith("show_payment", "false");
+		// "show_payment" was a dead emit (no listener ever) — removed.
+		expect(context.eventBus.emit).not.toHaveBeenCalledWith("show_payment", "false");
 	});
 });

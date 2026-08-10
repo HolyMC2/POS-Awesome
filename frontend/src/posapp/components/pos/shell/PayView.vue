@@ -824,7 +824,6 @@ export default {
 			company.value = data.company?.name || data.pos_profile?.company || "";
 			companyCurrency.value = data.company?.default_currency || data.pos_profile?.currency || null;
 			uiStore.setRegisterData(data);
-			proxy?.eventBus?.emit("payments_register_pos_profile", data);
 			set_payment_methods();
 			await loadPaymentMethodCurrencies();
 			payment_methods_list.value = Array.isArray(pos_profile.value?.payments)

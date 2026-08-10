@@ -526,7 +526,7 @@ export default {
 
 		const busHandlers = [];
 
-		const _registerBus = (event, handler) => {
+		const registerBus = (event, handler) => {
 			if (eventBus && typeof eventBus.on === "function") {
 				eventBus.on(event, handler);
 				busHandlers.push({ event, handler });
@@ -545,23 +545,13 @@ export default {
 				{ immediate: true },
 			);
 
-			// registerBus("set_customer", (customer) => {
-			// 	customersStore.setSelectedCustomer(customer);
-			// 	internalCustomer.value = customer || null;
-			// });
-
-			// registerBus("add_customer_to_list", async (customer) => {
-			// 	await customersStore.addOrUpdateCustomer(customer);
-			// 	internalCustomer.value = customer?.name || null;
-			// });
-
-			// registerBus("set_customer_readonly", (value) => {
-			// 	readonlyState.value = Boolean(value);
-			// });
-
-			// registerBus("set_customer_info_to_edit", (data) => {
-			// 	customersStore.setCustomerInfo(data || {});
-			// });
+			// Locks the customer selector while a return invoice is loaded —
+			// the returns flow emits true on load, false on clear. The
+			// listener was lost in the Composition-API refactor and returns
+			// silently allowed customer switching until 2026-08-09.
+			registerBus("set_customer_readonly", (value) => {
+				readonlyState.value = Boolean(value);
+			});
 		});
 
 		onBeforeUnmount(() => {

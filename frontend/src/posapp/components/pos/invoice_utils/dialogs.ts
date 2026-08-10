@@ -160,7 +160,6 @@ export async function show_payment(context: any) {
 			invoice_doc.posa_refundable_amount = carriedRefundableAmount;
 		}
 
-		context.eventBus.emit("show_payment", "true");
 		context.eventBus.emit("send_invoice_doc_payment", invoice_doc);
 	} catch (error: any) {
 		console.error("Error in show_payment:", error);
@@ -309,8 +308,6 @@ export function close_payments(context: any) {
 		context.uiStore.setActiveView("items");
 	}
 	showCompactPanel(context, "invoice");
-
-	context.eventBus.emit("show_payment", "false");
 }
 
 export async function change_price_list_rate(

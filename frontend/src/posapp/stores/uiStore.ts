@@ -158,6 +158,11 @@ export const useUIStore = defineStore("ui", () => {
   // POS Profile & Settings
   const posProfile = ref<POSProfile | null>(null);
   const stockSettings = ref<Record<string, any>>({});
+  // Global POS Settings doc. The bus handoff ("set_pos_settings") was
+  // removed in an old refactor but the store side was never wired, so
+  // consumers (Payments' invoice_fields, the global return-validity
+  // fallback) read {} forever. Fetched by Pos.vue's get_pos_setting().
+  const posSettings = ref<Record<string, any> | null>(null);
   const companyDoc = ref<any>(null);
   const posOpeningShift = ref<any>(null);
 
@@ -166,6 +171,10 @@ export const useUIStore = defineStore("ui", () => {
 
   function setPosProfile(profile: POSProfile) {
     posProfile.value = profile;
+  }
+
+  function setPosSettings(doc: Record<string, any> | null) {
+    posSettings.value = doc || null;
   }
 
   function setStockSettings(settings: Record<string, any>) {
@@ -304,6 +313,8 @@ export const useUIStore = defineStore("ui", () => {
   return {
     isLoading,
     loadingText,
+    posSettings,
+    setPosSettings,
     isFrozen,
     freezeTitle,
     freezeMessage,

@@ -185,10 +185,6 @@ const invoiceWatchers: Record<string, unknown> & ThisType<InvoiceWatchersVm> = {
 	// If legacy code mutates items directly without store, this won't catch it,
 	// but our new architecture pushes updates through store actions.
 
-	// Watch for invoice type change and emit
-	invoiceType() {
-		this.eventBus.emit("update_invoice_type", this.invoiceType);
-	},
 	// Watch for additional discount and update percentage accordingly
 	additional_discount() {
 		const normalizedDiscount = Number(this.additional_discount || 0);
@@ -315,7 +311,9 @@ const invoiceWatchers: Record<string, unknown> & ThisType<InvoiceWatchersVm> = {
 		clearPriceListCache();
 		if (this.eventBus) {
 			this.eventBus.emit("update_currency", {
-				currency: this.selected_currency || this.pos_profile?.currency,
+				// Both sources can be unset during boot — the payload type
+				// says string, keep it one.
+				currency: this.selected_currency || this.pos_profile?.currency || "",
 				exchange_rate: this.exchange_rate,
 				conversion_rate: this.conversion_rate,
 			});

@@ -214,11 +214,13 @@ export function usePosPaySubmission({
 				const currency = response.message.exchange_gain_loss_summary?.[0]?.currency || '';
 				const label = netAmount >= 0 ? __("Gain") : __("Loss");
 
-				// Use toast notification (auto-dismiss)
-				eventBus.emit("show_notification", {
-					message: __("{0}: {1} {2}", [label, Math.abs(netAmount).toFixed(2), currency]),
-					type: netAmount >= 0 ? "success" : "warning",
-					duration: 4000,
+				// "show_notification" never had a listener — the exchange
+				// gain/loss toast silently vanished. show_message is the
+				// wired toast channel.
+				eventBus.emit("show_message", {
+					title: __("{0}: {1} {2}", [label, Math.abs(netAmount).toFixed(2), currency]),
+					color: netAmount >= 0 ? "success" : "warning",
+					timeout: 4000,
 				});
 			}
 

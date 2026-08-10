@@ -913,9 +913,7 @@ onBeforeUnmount(() => {
 	customerReadiness.stop();
 	if (eventBus) {
 		eventBus.off("data-loaded");
-		eventBus.off("register_pos_profile");
 		eventBus.off("data-load-progress");
-		eventBus.off("sync_invoices");
 	}
 
 	window.removeEventListener("resize", adjust_frappe_sidebar_offset);
@@ -1031,10 +1029,6 @@ const setupEventListeners = () => {
 			setSourceProgress(name, progress);
 		});
 
-		// Manual trigger to sync offline invoices
-		eventBus.on("sync_invoices", () => {
-			handleSyncInvoices();
-		});
 	}
 };
 

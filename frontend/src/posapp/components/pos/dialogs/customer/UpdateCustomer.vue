@@ -757,16 +757,6 @@ export default {
 			{ deep: true, immediate: true },
 		);
 
-		/*
-		this.eventBus.on("register_pos_profile", (data) => {
-			this.pos_profile = data.pos_profile;
-			this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
-		});
-		this.eventBus.on("payments_register_pos_profile", (data) => {
-			this.pos_profile = data.pos_profile;
-			this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
-		});
-		*/
 		this.getCustomerGroups();
 		this.getCustomerTerritorys();
 		this.getGenders();

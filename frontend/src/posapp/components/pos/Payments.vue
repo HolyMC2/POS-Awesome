@@ -619,6 +619,7 @@ const {
 	stores: {
 		toastStore,
 		uiStore,
+		customersStore,
 	},
 	eventBus: eventBus,
 	onSubmit: (args, submitPrint) => {
@@ -655,7 +656,13 @@ const {
 	getTotalChange: () => Math.max(-diff_payment.value, 0),
 	getPaidChange: () => paid_change.value,
 	getCreditChange: () => credit_change.value,
-	onBackToInvoice: () => eventBus.emit("change_active_view", "Invoice"),
+	// "change_active_view" had no listener — the operator stayed stuck on
+	// the payment screen. Close the dialog (wide layouts) and switch the
+	// compact panel back to the invoice (stacked layouts).
+	onBackToInvoice: () => {
+		uiStore.closePaymentDialog();
+		eventBus.emit("set_compact_panel", "invoice");
+	},
 });
 
 const {
@@ -1332,9 +1339,6 @@ const handleShowPayment = () => {
 	nextTick(() => {
 		setTimeout(() => {
 			focusFirstPaymentTarget();
-			if (eventBus && typeof eventBus.emit === "function") {
-				eventBus.emit("payment_ui_ready");
-			}
 			if (queuedShortcutSubmit.value) {
 				const payload = queuedShortcutSubmit.value;
 				queuedShortcutSubmit.value = null;
@@ -1856,6 +1860,21 @@ watch(
 	{ immediate: true },
 );
 
+// POS Settings ride uiStore (Pos.vue's get_pos_setting fetches them);
+// the old "set_pos_settings" bus handoff was removed without wiring
+// this side, so invoice_fields and the global return-validity fallback
+// read {} forever.
+watch(
+	() => uiStore.posSettings,
+	(doc) => {
+		pos_settings.value = doc || {};
+		if (invoice_doc.value && !invoice_doc.value.is_return) {
+			initializeReturnValidity(invoice_doc.value);
+		}
+	},
+	{ immediate: true },
+);
+
 watch(
 	invoiceType,
 	(data) => {
@@ -2176,15 +2195,8 @@ const applyIncomingInvoiceDoc = (doc) => {
 // Lifecycle
 // mitt's off(event) with NO handler removes EVERY handler for that event —
 // including other components'. This panel mounts/unmounts on every payment
-// dialog open/close, so anonymous inline handlers + bare off() wiped the
-// register_pos_profile listeners of PosOffers/PosCoupons/UpdateCustomer
-// (which stay mounted) after the first dialog cycle. Keep named refs and
-// always pass them to off().
+// dialog open/close; keep named refs and always pass them to off().
 const onNetworkOnline = () => syncStore.syncPendingInvoices();
-const onRegisterPosProfile = (data) => {
-	pos_profile.value = data.pos_profile;
-	stock_settings.value = data.stock_settings;
-};
 const onAddTheNewAddress = (data) => {
 	const normalized = normalizeAddress(data);
 	if (normalized) {
@@ -2193,12 +2205,6 @@ const onAddTheNewAddress = (data) => {
 		if (invoice_doc.value) {
 			invoice_doc.value.shipping_address_name = normalized.name;
 		}
-	}
-};
-const onSetPosSettings = (data) => {
-	pos_settings.value = data || {};
-	if (invoice_doc.value && !invoice_doc.value.is_return) {
-		initializeReturnValidity(invoice_doc.value);
 	}
 };
 const onSetMpesaPayment = (data) => {
@@ -2225,12 +2231,9 @@ onMounted(() => {
 
 	if (eventBus) {
 		eventBus.on("send_invoice_doc_payment", applyIncomingInvoiceDoc);
-		eventBus.on("register_pos_profile", onRegisterPosProfile);
 		eventBus.on("add_the_new_address", onAddTheNewAddress);
-		eventBus.on("set_pos_settings", onSetPosSettings);
 		eventBus.on("set_mpesa_payment", onSetMpesaPayment);
 		eventBus.on("queue_submit_payment_shortcut", queueShortcutSubmit);
-		eventBus.on("submit_payment_shortcut", handleSubmitPaymentShortcut);
 		eventBus.on("clear_invoice", onClearInvoice);
 	}
 
@@ -2250,12 +2253,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
 	eventBus.off("send_invoice_doc_payment", applyIncomingInvoiceDoc);
-	eventBus.off("register_pos_profile", onRegisterPosProfile);
 	eventBus.off("add_the_new_address", onAddTheNewAddress);
-	eventBus.off("set_pos_settings", onSetPosSettings);
 	eventBus.off("set_mpesa_payment", onSetMpesaPayment);
 	eventBus.off("queue_submit_payment_shortcut", queueShortcutSubmit);
-	eventBus.off("submit_payment_shortcut", handleSubmitPaymentShortcut);
 	eventBus.off("clear_invoice", onClearInvoice);
 	eventBus.off("network-online", onNetworkOnline);
 	eventBus.off("server-online", onNetworkOnline);
