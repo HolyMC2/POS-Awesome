@@ -35,4 +35,4 @@ posawesome.patches.add_safe_transfer_settings
 posawesome.patches.set_web_route_default_on
 posawesome.patches.add_capability_profile_link
 posawesome.patches.remove_dead_lean_wizard_flag
-posawesome.patches.add_capability_json_field
+posawesome.patches.drop_capability_json_field

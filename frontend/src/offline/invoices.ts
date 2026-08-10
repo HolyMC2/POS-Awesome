@@ -79,16 +79,10 @@ export async function reconcileAlreadySubmitted(
  */
 export function getOfflineCapabilityVersion(): number | undefined {
 	const openingStorage = memory.pos_opening_storage || {};
-	const raw = openingStorage?.pos_profile?.posa_capability_json;
-	if (!raw || typeof raw !== "string") {
-		return undefined;
-	}
-	try {
-		const version = JSON.parse(raw)?.version;
-		return typeof version === "number" ? version : undefined;
-	} catch {
-		return undefined;
-	}
+	// capability_profile is a sibling of the opening data (plan C7); its
+	// version stamps queued invoices. Undefined when no preset is linked.
+	const version = openingStorage?.capability_profile?.version;
+	return typeof version === "number" ? version : undefined;
 }
 
 function shouldValidateOfflineInvoiceStock(invoice: AnyRecord) {

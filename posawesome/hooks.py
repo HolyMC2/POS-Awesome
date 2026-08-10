@@ -136,13 +136,6 @@ doc_events = {
         "validate": "posawesome.posawesome.api.customer.validate",
         "after_insert": "posawesome.posawesome.api.customer.after_insert",
     },
-    # posa_capability_json is a TRANSIENT field: stamped in-memory at shift
-    # open for the SPA, never meant to persist. Null it before any save so a
-    # stray write can't freeze a stale capability payload that would then
-    # override the live resolve. See api/vertical.py.
-    "POS Profile": {
-        "before_save": "posawesome.posawesome.api.vertical.clear_transient_capability_json",
-    },
     # Item photos arrive at camera resolution and render into a 132px card
     # slot. Both handlers are fail-open — a thumbnail is an optimisation, so
     # they never block the write that triggered them.
@@ -458,7 +451,6 @@ fixtures = [
                     "POS Profile-posa_gift_card_liability_account",
                     "POS Profile-posa_sales_persons",
                     "POS Profile-posa_capability_profile",
-                    "POS Profile-posa_capability_json",
                     # Present in the pre-2026-08-09 fixture file but never in
                     # this list — an export against any site would silently
                     # drop them (and did). Several are live prod behaviour

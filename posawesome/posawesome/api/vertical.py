@@ -3,8 +3,6 @@
 
 from __future__ import unicode_literals
 
-import json
-
 import frappe
 
 # Bumped whenever the resolved payload's SHAPE changes in a way a queued
@@ -52,34 +50,20 @@ def resolve_capability_json(pos_profile_name):
     return payload
 
 
-def stamp_capability_json(pos_profile_doc):
-    """Attach the resolved capability JSON onto a POS Profile doc dict in
-    place, under `posa_capability_json`, so it rides the opening payload into
-    the offline shift snapshot with no extra fetch (plan C7).
+def opening_capability_payload(pos_profile_name):
+    """Resolved capability payload for the opening response, tolerant of any
+    failure (capability resolution must never take down shift opening).
 
-    Stores a JSON STRING (not a nested object) because the profile is later
-    round-tripped through JSON.stringify in the offline cache; a string is
-    inert to that and the frontend parses it once.
+    Injected as a SIBLING key in the opening `data` dict (plan C7's
+    "denormalise into the opening payload") — NOT onto the POS Profile doc.
+    The opening blob rides the offline shift snapshot wholesale, so this
+    survives cold boot with no fake profile field to keep clean.
     """
     try:
-        payload = resolve_capability_json(pos_profile_doc.name)
+        return resolve_capability_json(pos_profile_name)
     except Exception:
-        # Never let capability resolution take down shift opening.
-        frappe.log_error(frappe.get_traceback(), "posawesome.vertical.stamp")
-        payload = None
-    pos_profile_doc.set_onload("posa_capability_json", None)
-    # set_onload isn't read by the SPA (it reads the doc dict), so assign the
-    # attribute directly — get_doc(...).as_dict() will carry it.
-    pos_profile_doc.posa_capability_json = json.dumps(payload) if payload else None
-
-
-def clear_transient_capability_json(doc, method=None):
-    """before_save guard: posa_capability_json is derived + stamped in-memory
-    only, never stored. Null it on save so a persisted stale value can never
-    shadow the live resolve (defensive — no current path saves a stamped
-    profile, but this closes the class)."""
-    if doc.get("posa_capability_json"):
-        doc.posa_capability_json = None
+        frappe.log_error(frappe.get_traceback(), "posawesome.vertical.opening_payload")
+        return None
 
 
 @frappe.whitelist()

@@ -157,10 +157,8 @@ describe("syncOfflineInvoices — capability version guard (plan C7)", () => {
 
 	function setOpeningVersion(version: number | null) {
 		(memory as any).pos_opening_storage = {
-			pos_profile:
-				version === null
-					? {}
-					: { posa_capability_json: JSON.stringify({ name: "p", version }) },
+			// capability_profile is a sibling of the opening data (plan C7).
+			capability_profile: version === null ? null : { name: "p", version },
 		};
 	}
 

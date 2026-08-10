@@ -7,7 +7,6 @@ a dangling link degrades to None instead of raising into shift-opening.
 
 from __future__ import annotations
 
-import json
 import unittest
 
 try:
@@ -67,15 +66,18 @@ class TestCapabilityResolution(IntegrationTestCase):
         # exists() is False for a deleted preset → None, no raise.
         self.assertIsNone(vertical.resolve_capability_json(PROFILE))
 
-    def test_stamp_writes_json_string_onto_profile(self):
+    def test_opening_payload_returns_resolved_dict(self):
         self._make_preset()
         frappe.db.set_value("POS Profile", PROFILE, "posa_capability_profile", self.PRESET)
-        doc = frappe.get_doc("POS Profile", PROFILE)
-        vertical.stamp_capability_json(doc)
+        payload = vertical.opening_capability_payload(PROFILE)
 
-        self.assertIsInstance(doc.posa_capability_json, str)
-        parsed = json.loads(doc.posa_capability_json)
-        self.assertEqual(parsed["name"], self.PRESET)
+        self.assertIsInstance(payload, dict)
+        self.assertEqual(payload["name"], self.PRESET)
+        self.assertEqual(payload["version"], vertical.CAPABILITY_PAYLOAD_VERSION)
+
+    def test_opening_payload_none_without_link(self):
+        frappe.db.set_value("POS Profile", PROFILE, "posa_capability_profile", None)
+        self.assertIsNone(vertical.opening_capability_payload(PROFILE))
 
     def test_unknown_dock_tab_rejected_at_validate(self):
         with self.assertRaises(frappe.ValidationError):

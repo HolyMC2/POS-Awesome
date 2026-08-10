@@ -76,43 +76,36 @@ const RETAIL_PHONES: VerticalProfile = {
 const LAYOUT_CACHE_KEY = "posa_vertical_layout_cache";
 
 /**
- * Parse the capability JSON the backend denormalised onto POS Profile
- * (posa_capability_json — plan C7), merging it over the retail defaults so
- * a sparse preset only overrides what it names. Returns the built-in
- * retail-phones profile when the field is absent/blank/malformed — an
- * unresolvable preset must never blank the counter.
+ * Merge the resolved capability payload (a sibling of the opening data —
+ * plan C7) over the retail defaults, so a sparse preset only overrides what
+ * it names. Returns the built-in retail-phones profile when the payload is
+ * absent/malformed — an unresolvable preset must never blank the counter.
+ * The payload is a plain object (no JSON string to parse anymore).
  */
-const parseProfilePayload = (raw: unknown): VerticalProfile => {
-	if (!raw || typeof raw !== "string") {
+const mergeProfilePayload = (raw: unknown): VerticalProfile => {
+	if (!raw || typeof raw !== "object") {
 		return RETAIL_PHONES;
 	}
-	try {
-		const parsed = JSON.parse(raw) as Partial<VerticalProfile> & {
-			layout?: Partial<VerticalLayout>;
-		};
-		const layout: Partial<VerticalLayout> = parsed.layout || {};
-		return {
-			name: parsed.name || RETAIL_PHONES.name,
-			layout: {
-				items_view: layout.items_view || RETAIL_PHONES.layout.items_view,
-				items_panel: layout.items_panel || RETAIL_PHONES.layout.items_panel,
-				cart_style: layout.cart_style || RETAIL_PHONES.layout.cart_style,
-				dock_tabs:
-					Array.isArray(layout.dock_tabs) && layout.dock_tabs.length
-						? layout.dock_tabs
-						: RETAIL_PHONES.layout.dock_tabs,
-			},
-			capabilities: Array.isArray(parsed.capabilities)
-				? parsed.capabilities
-				: RETAIL_PHONES.capabilities,
-			labels:
-				parsed.labels && typeof parsed.labels === "object" ? parsed.labels : RETAIL_PHONES.labels,
-			print_format:
-				typeof parsed.print_format === "string" ? parsed.print_format : RETAIL_PHONES.print_format,
-		};
-	} catch {
-		return RETAIL_PHONES;
-	}
+	const parsed = raw as Partial<VerticalProfile> & { layout?: Partial<VerticalLayout> };
+	const layout: Partial<VerticalLayout> = parsed.layout || {};
+	return {
+		name: parsed.name || RETAIL_PHONES.name,
+		layout: {
+			items_view: layout.items_view || RETAIL_PHONES.layout.items_view,
+			items_panel: layout.items_panel || RETAIL_PHONES.layout.items_panel,
+			cart_style: layout.cart_style || RETAIL_PHONES.layout.cart_style,
+			dock_tabs:
+				Array.isArray(layout.dock_tabs) && layout.dock_tabs.length
+					? layout.dock_tabs
+					: RETAIL_PHONES.layout.dock_tabs,
+		},
+		capabilities: Array.isArray(parsed.capabilities)
+			? parsed.capabilities
+			: RETAIL_PHONES.capabilities,
+		labels: parsed.labels && typeof parsed.labels === "object" ? parsed.labels : RETAIL_PHONES.labels,
+		print_format:
+			typeof parsed.print_format === "string" ? parsed.print_format : RETAIL_PHONES.print_format,
+	};
 };
 
 const readLayoutCache = (): { lean_vertical?: boolean } => {
@@ -134,11 +127,11 @@ const writeLayoutCache = (value: { lean_vertical: boolean }) => {
 export const useVerticalStore = defineStore("vertical", () => {
 	const uiStore = useUIStore();
 
-	// The linked preset (posa_capability_json) if the profile carries one,
-	// else retail-phones. Null link → retail defaults → zero data change for
-	// existing tenants (plan C12).
+	// The resolved preset if the opening carried one (uiStore.capabilityPayload,
+	// a sibling of the opening data), else retail-phones. No payload → retail
+	// defaults → zero data change for existing tenants (plan C12).
 	const profile = computed<VerticalProfile>(() =>
-		parseProfilePayload(uiStore.posProfile?.posa_capability_json),
+		mergeProfilePayload(uiStore.capabilityPayload),
 	);
 
 	// Capability resolution is f(profile, roles) (plan C10). A capability

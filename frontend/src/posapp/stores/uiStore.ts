@@ -163,6 +163,9 @@ export const useUIStore = defineStore("ui", () => {
   // consumers (Payments' invoice_fields, the global return-validity
   // fallback) read {} forever. Fetched by Pos.vue's get_pos_setting().
   const posSettings = ref<Record<string, any> | null>(null);
+  // Resolved capability payload — a sibling of the opening data (plan C7),
+  // NOT a field on the profile doc. verticalStore reads this.
+  const capabilityPayload = ref<Record<string, any> | null>(null);
   const companyDoc = ref<any>(null);
   const posOpeningShift = ref<any>(null);
 
@@ -185,11 +188,27 @@ export const useUIStore = defineStore("ui", () => {
     companyDoc.value = doc;
   }
 
-  function setRegisterData(data: { pos_profile?: POSProfile; stock_settings?: any; company?: any; pos_opening_shift?: any }) {
+  function setCapabilityPayload(payload: Record<string, any> | null) {
+    capabilityPayload.value = payload || null;
+  }
+
+  function setRegisterData(data: {
+    pos_profile?: POSProfile;
+    stock_settings?: any;
+    company?: any;
+    pos_opening_shift?: any;
+    capability_profile?: Record<string, any> | null;
+  }) {
     if (data.pos_profile) posProfile.value = data.pos_profile;
     if (data.stock_settings) stockSettings.value = data.stock_settings;
     if (data.company) companyDoc.value = data.company;
     if (data.pos_opening_shift) posOpeningShift.value = data.pos_opening_shift;
+    // The capability payload is a sibling of the opening data (plan C7).
+    // Always assign — an opening with no preset carries null, which must
+    // reset any prior preset rather than linger.
+    if ("capability_profile" in data) {
+      capabilityPayload.value = data.capability_profile || null;
+    }
   }
 
   const LAST_INVOICE_STORAGE_KEY = "posa_last_invoice_id";
@@ -315,6 +334,8 @@ export const useUIStore = defineStore("ui", () => {
     loadingText,
     posSettings,
     setPosSettings,
+    capabilityPayload,
+    setCapabilityPayload,
     isFrozen,
     freezeTitle,
     freezeMessage,
