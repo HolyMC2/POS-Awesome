@@ -98,6 +98,7 @@ describe("tab_identity input gating (InvoiceSummary)", () => {
 
 describe("parked-order row identity (ParkedOrdersList)", () => {
 	beforeEach(() => {
+		setActivePinia(createPinia()); // ParkedOrdersList uses verticalStore
 		vi.stubGlobal("__", (value: string) => value);
 	});
 

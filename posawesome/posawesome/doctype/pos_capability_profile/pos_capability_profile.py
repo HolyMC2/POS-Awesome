@@ -8,9 +8,10 @@ import json
 import frappe
 from frappe.model.document import Document
 
-# The dock tab ids the shell knows how to render. A preset that names an
-# unknown id has it dropped (matches the frontend registry's filter), so a
-# typo degrades gracefully instead of rendering a dead tab.
+# The dock tab ids the shell knows how to render. validate() REJECTS a preset
+# that names an unknown id (fail at edit time, not the counter); the payload
+# builder and the frontend registry additionally filter unknowns as a drift
+# defense for presets saved before a shipped id list catches up.
 VALID_DOCK_TABS = ("browse", "offers", "cart", "coupons", "pay")
 
 # Layout keys the frontend view registry has entries for. Kept in sync with

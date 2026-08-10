@@ -3,6 +3,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { defineComponent, h } from "vue";
 import { mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 
 import ParkedOrdersRail from "../src/posapp/components/pos/invoice/ParkedOrdersRail.vue";
 
@@ -64,6 +65,7 @@ const mountRail = (props: Record<string, unknown> = {}) =>
 
 describe("ParkedOrdersRail", () => {
 	beforeEach(() => {
+		setActivePinia(createPinia()); // ParkedOrdersRail uses verticalStore
 		(globalThis as any).__ = (value: string) => value;
 		(window as any).__ = (value: string) => value;
 	});

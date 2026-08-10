@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 
 import ParkedOrdersList from "../src/posapp/components/pos/invoice/ParkedOrdersList.vue";
 
@@ -26,6 +27,7 @@ const drafts = [
 
 describe("ParkedOrdersList keyboard control", () => {
 	beforeEach(() => {
+		setActivePinia(createPinia()); // ParkedOrdersList uses verticalStore
 		vi.stubGlobal("__", (value: string) => value);
 	});
 

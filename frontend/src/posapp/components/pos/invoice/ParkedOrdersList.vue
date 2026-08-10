@@ -54,7 +54,7 @@
 				</div>
 				<div class="drafts-list__meta">
 					<span v-if="draft.posa_rt_guest_count">{{ draft.posa_rt_guest_count }} {{ __("guests") }}</span>
-					<span v-if="draft.posa_rt_service_type">{{ __(draft.posa_rt_service_type) }}</span>
+					<span v-if="draft.posa_rt_service_type">{{ verticalStore.t(draft.posa_rt_service_type) }}</span>
 					<span>{{ draft.name }}</span>
 					<span>{{ draft.posting_date }}</span>
 					<span>{{ draft.posting_time?.split(".")[0] || "" }}</span>
@@ -70,6 +70,11 @@
 
 <script setup>
 import { nextTick, ref, watch } from "vue";
+import { useVerticalStore } from "../../../stores/verticalStore";
+
+// Service-type label through the vocabulary (matches the InvoiceSummary select),
+// so a preset's "Dine In" → "Para aquí" shows the same word on both screens.
+const verticalStore = useVerticalStore();
 
 const props = defineProps({
 	parkedOrders: {
