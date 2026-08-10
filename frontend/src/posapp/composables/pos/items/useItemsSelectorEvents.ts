@@ -1,8 +1,13 @@
 import type { Ref } from "vue";
 
+import type { Emitter } from "mitt";
+import type { Events } from "../../../bus";
+
+// Typed against the closed Events map so a renamed/mistyped event fails
+// vue-tsc here instead of dying silently at runtime.
 type EventBusLike = {
-	on?: (_event: string, _handler: (..._args: any[]) => void) => void;
-	off?: (_event: string, _handler?: (..._args: any[]) => void) => void;
+	on?: Emitter<Events>["on"];
+	off?: Emitter<Events>["off"];
 };
 
 type CurrencyPayload =

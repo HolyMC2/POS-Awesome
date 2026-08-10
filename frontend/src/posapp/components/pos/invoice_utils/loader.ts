@@ -426,6 +426,8 @@ export async function load_invoice(
 	if (data.is_return) {
 		context.return_doc = data;
 	} else {
-		context.eventBus.emit("set_pos_coupons", data.posa_coupons);
+		// posa_coupons is absent on invoices with no coupon rows — the
+		// listener assigns the payload straight into component state.
+		context.eventBus.emit("set_pos_coupons", data.posa_coupons || []);
 	}
 }

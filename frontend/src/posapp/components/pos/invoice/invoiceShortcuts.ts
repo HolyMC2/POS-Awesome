@@ -1,3 +1,6 @@
+import type { Emitter } from "mitt";
+import type { Events } from "../../../bus";
+
 const isAltOnly = (event: KeyboardEvent) =>
 	event.altKey && !event.ctrlKey && !event.metaKey;
 const consumeEvent = (event: KeyboardEvent) => {
@@ -30,9 +33,9 @@ type ShortcutField = "qty" | "uom" | "rate";
 interface InvoiceShortcutsVm {
 	toastStore: { show: (_payload: { title: string; color: string }) => void };
 	eventBus: {
-		emit: (_event: string, _payload?: unknown) => void;
-		on?: (_event: string, _handler: (_payload?: unknown) => void) => void;
-		off?: (_event: string, _handler: (_payload?: unknown) => void) => void;
+		emit: Emitter<Events>["emit"];
+		on?: Emitter<Events>["on"];
+		off?: Emitter<Events>["off"];
 	};
 	uiStore: {
 		setActiveView: (_view: string) => void;

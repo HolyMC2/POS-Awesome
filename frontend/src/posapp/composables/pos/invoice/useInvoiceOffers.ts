@@ -49,6 +49,7 @@ import { useToastStore } from "../../../stores/toastStore";
 import { storeToRefs } from "pinia";
 import itemService from "../../../services/itemService";
 import { bus } from "../../../bus";
+import type { Events } from "../../../bus";
 
 // @ts-ignore
 const __ = window.__ || ((s) => s);
@@ -56,9 +57,9 @@ const __ = window.__ || ((s) => s);
 const frappe = window.frappe;
 // @ts-ignore
 
-const emitBus = (eventName: string, payload?: any) => {
+const emitBus = <K extends keyof Events>(eventName: K, payload?: Events[K]) => {
 	if (bus && typeof bus.emit === "function") {
-		bus.emit(eventName, payload);
+		bus.emit(eventName, payload as Events[K]);
 	}
 };
 

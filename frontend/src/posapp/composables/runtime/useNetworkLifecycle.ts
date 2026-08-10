@@ -1,8 +1,10 @@
 import type { Ref } from "vue";
 import { watch } from "vue";
+import type { Emitter } from "mitt";
+import type { Events } from "../../bus";
 
 type EventBusLike = {
-	emit?: (event: string, ...args: any[]) => void;
+	emit?: Emitter<Events>["emit"];
 };
 
 type RealtimeLike = {
