@@ -107,21 +107,27 @@ def get_draft_invoices(
     if frappe.db.has_column(doctype, "posa_is_printed"):
         filters["posa_is_printed"] = 0
 
+    fields = [
+        "name",
+        "customer",
+        "customer_name",
+        "posting_date",
+        "posting_time",
+        "grand_total",
+        "currency",
+        "pos_profile",
+        "owner",
+        "modified_by",
+    ]
+    # Held-ticket "name on the cup" label (cafetería vertical). Guarded so a
+    # tenant that has not yet run the add_tab_name_field patch does not 500.
+    if frappe.db.has_column(doctype, "posa_rt_tab_name"):
+        fields.append("posa_rt_tab_name")
+
     invoices_list = frappe.get_list(
         doctype,
         filters=filters,
-        fields=[
-            "name",
-            "customer",
-            "customer_name",
-            "posting_date",
-            "posting_time",
-            "grand_total",
-            "currency",
-            "pos_profile",
-            "owner",
-            "modified_by",
-        ],
+        fields=fields,
         limit_page_length=limit_page_length,
         order_by="modified desc",
     )

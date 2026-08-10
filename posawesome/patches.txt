@@ -36,3 +36,4 @@ posawesome.patches.set_web_route_default_on
 posawesome.patches.add_capability_profile_link
 posawesome.patches.remove_dead_lean_wizard_flag
 posawesome.patches.drop_capability_json_field
+posawesome.patches.add_tab_name_field

@@ -47,7 +47,7 @@
 				@click="$emit('resume', draft)"
 			>
 				<div class="drafts-list__card-top">
-					<strong>{{ draft.customer_name || __("Walk-in Customer") }}</strong>
+					<strong>{{ draft.posa_rt_tab_name || draft.customer_name || __("Walk-in Customer") }}</strong>
 					<span class="drafts-list__amount">
 						{{ currencySymbol(draft.currency) }}{{ formatCurrency(draft.grand_total) }}
 					</span>

@@ -426,6 +426,7 @@ export function get_invoice_doc(context: any) {
 	doc.posa_delivery_charges = context.selected_delivery_charge?.name || null;
 	doc.posa_delivery_charges_rate = context.delivery_charges_rate || 0;
 	doc.posa_notes = sourceDoc.posa_notes ?? null;
+	doc.posa_rt_tab_name = sourceDoc.posa_rt_tab_name ?? null;
 	doc.posa_authorization_code = sourceDoc.posa_authorization_code ?? null;
 	doc.posa_return_valid_upto = sourceDoc.posa_return_valid_upto ?? null;
 	doc.posting_date = normalizeBackendDate(

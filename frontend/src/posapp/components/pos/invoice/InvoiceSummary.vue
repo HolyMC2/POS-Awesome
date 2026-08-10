@@ -3,6 +3,24 @@
 		class="cards sticky-summary-card mb-0 py-2 px-3 rounded-lg pos-themed-card"
 		:class="{ 'sticky-summary-card--dock-safe': useCompactSaleDock }"
 	>
+		<!-- Tab identity (cafetería "name on the cup") — hidden unless the vertical
+		     preset enables the tab_identity capability; retail never renders this. -->
+		<div v-if="showTabName && invoice_doc" class="summary-tab-name" data-test="tab-name-field">
+			<v-text-field
+				v-model="invoice_doc.posa_rt_tab_name"
+				:label="tabNameLabel"
+				prepend-inner-icon="mdi-tag-outline"
+				variant="solo"
+				density="compact"
+				color="primary"
+				hide-details
+				clearable
+				autocomplete="off"
+				maxlength="60"
+				class="summary-field sleek-field pos-themed-input"
+			/>
+		</div>
+
 		<v-row dense class="summary-content">
 			<v-col
 				v-if="!useCompactSaleDock || showReturnDiscountAlert"
@@ -201,6 +219,7 @@ import { storeToRefs } from "pinia";
 import { loadItemSelectorSettings } from "../../../utils/itemSelectorSettings";
 import { useResponsive } from "../../../composables/core/useResponsive";
 import { useUIStore } from "../../../stores/uiStore";
+import { useVerticalStore } from "../../../stores/verticalStore";
 import {
 	getAvailableDocumentSources,
 	getDefaultDocumentSource,
@@ -217,6 +236,10 @@ defineOptions({
 
 const props = defineProps({
 	pos_profile: Object,
+	invoice_doc: {
+		type: [Object, String],
+		default: null,
+	},
 	total_qty: [Number, String],
 	additional_discount: Number,
 	additional_discount_percentage: Number,
@@ -266,7 +289,13 @@ const desktopDraftsList = ref(null);
 const mobileDraftsList = ref(null);
 const responsive = useResponsive();
 const uiStore = useUIStore();
+const verticalStore = useVerticalStore();
 const { parkedOrders, draftSource } = storeToRefs(uiStore);
+
+// Cafetería "name on the cup" — only surfaces when the vertical preset enables
+// the tab_identity capability. Off (retail) → nothing renders, no layout shift.
+const showTabName = computed(() => verticalStore.has("tab_identity"));
+const tabNameLabel = computed(() => verticalStore.t("Tab Name"));
 
 const additionalDiscountDisplay = ref(normalizeAdditionalDiscountDisplay(props.additional_discount));
 const additionalDiscountPercentageDisplay = ref(
@@ -593,6 +622,10 @@ defineExpose({
 
 .summary-content {
 	row-gap: 6px;
+}
+
+.summary-tab-name {
+	margin-bottom: 8px;
 }
 
 .summary-hero {

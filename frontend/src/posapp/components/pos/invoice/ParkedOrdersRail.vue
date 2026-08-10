@@ -29,7 +29,7 @@
 				@click="$emit('resume', draft)"
 			>
 				<div class="drafts-rail__card-top">
-					<strong>{{ draft.customer_name || __("Walk-in Customer") }}</strong>
+					<strong>{{ draft.posa_rt_tab_name || draft.customer_name || __("Walk-in Customer") }}</strong>
 					<span class="drafts-rail__amount">
 						{{ currencySymbol(draft.currency) }}{{ formatCurrency(draft.grand_total) }}
 					</span>
@@ -52,7 +52,7 @@
 					:data-test="`draft-card-${draft.name}`"
 					@click="$emit('resume', draft)"
 				>
-					<strong>{{ draft.customer_name || __("Walk-in Customer") }}</strong>
+					<strong>{{ draft.posa_rt_tab_name || draft.customer_name || __("Walk-in Customer") }}</strong>
 					<span class="drafts-rail__chip-meta">
 						{{ currencySymbol(draft.currency) }}{{ formatCurrency(draft.grand_total) }}
 					</span>
