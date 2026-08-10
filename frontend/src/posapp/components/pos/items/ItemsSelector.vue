@@ -1348,10 +1348,19 @@ defineExpose({
 	display: flex;
 	flex-direction: column;
 	gap: var(--dynamic-sm);
-	/* Definite height so the results card (flex:1) and the table's
-	   height:100% chain resolve — without this the table's min-height
-	   floor decides, the card overflows, and rows scroll behind the
-	   sticky search bar. */
+}
+
+/* Definite height so the results card (flex:1) and the table's
+   height:100% chain resolve — without this the table's min-height
+   floor decides, the card overflows, and rows scroll behind the
+   sticky search bar.
+   CHILD COMBINATOR IS LOAD-BEARING: Vue scoped CSS stamps this
+   component's scope attr onto child component ROOT nodes, and
+   ItemActionToolbar's root also carries class "dynamic-padding" — a
+   bare `.dynamic-padding{height:100%}` turned that sticky toolbar
+   into a full-height overlay covering the item list on desktop
+   (prod, 2026-08-10). */
+.selection-card > .dynamic-padding {
 	height: 100%;
 	min-height: 0;
 }
