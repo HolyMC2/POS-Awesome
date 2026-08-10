@@ -420,6 +420,61 @@ fixtures = [
                     "POS Invoice-posa_return_valid_upto",
                     "Sales Invoice-posa_return_valid_upto",
                     "User-posa_pos_pin",
+                    # Fields below were historically created only by patch
+                    # scripts and never exported — invisible to fixture
+                    # delivery (vertical-profiles plan C8). Keep every
+                    # patch-created Custom Field listed here; CI enforces it
+                    # (scripts/check_fixture_coverage.py).
+                    "POS Profile-posa_hide_items_until_search",
+                    "POS Profile-posa_lean_vertical_layout",
+                    "POS Profile-posa_lean_wizard_layout",
+                    "POS Profile-posa_section_customer_display",
+                    "POS Profile-posa_enable_customer_display",
+                    "POS Profile-posa_auto_open_customer_display",
+                    "POS Profile-posa_closing_shift_print_format",
+                    "POS Profile-posa_use_charge_requests",
+                    "POS Profile-posa_qz_printer_name",
+                    "POS Profile-posa_qz_density",
+                    "POS Profile-posa_qz_interpolation",
+                    "POS Profile-posa_qz_cut_after_print",
+                    "POS Profile-posa_scale_barcode_start",
+                    "POS Invoice-posa_redeemed_customer_credit",
+                    "POS Invoice-posa_remaining_customer_credit_balance",
+                    "Sales Invoice-posa_redeemed_customer_credit",
+                    "Sales Invoice-posa_remaining_customer_credit_balance",
+                    # Merged from a former SECOND "Custom Field" fixtures
+                    # entry: frappe writes one file per doctype, so a second
+                    # entry for the same doctype OVERWRITES the first's
+                    # export (custom_field.json shrank to 2 records). Never
+                    # add another Custom Field entry to this list.
+                    "POS Profile-posa_allow_multi_currency",
+                    "POS Profile-posa_decimal_precision",
+                    "POS Profile-posa_gift_card_liability_account",
+                    "POS Profile-posa_sales_persons",
+                    # Present in the pre-2026-08-09 fixture file but never in
+                    # this list — an export against any site would silently
+                    # drop them (and did). Several are live prod behaviour
+                    # (client_request_id idempotency, the stock clamp).
+                    "POS Invoice-posa_client_request_id",
+                    "Sales Invoice-posa_client_request_id",
+                    "Payment Entry-posa_client_request_id",
+                    "Sales Invoice Item-name_overridden",
+                    "POS Profile-custom_allow_create_quotation",
+                    "POS Profile-posa_allow_delete_offline_invoice",
+                    "POS Profile-posa_allow_line_item_name_override",
+                    "POS Profile-posa_allow_offline_sale_without_stock_verification",
+                    "POS Profile-posa_allow_price_list_rate_change",
+                    "POS Profile-posa_block_sale_beyond_available_qty",
+                    "POS Profile-posa_default_country",
+                    "POS Profile-posa_force_price_from_customer_price_list",
+                    "POS Profile-posa_force_reload_items",
+                    "POS Profile-posa_open_print_in_new_tab",
+                    "POS Profile-posa_print_format_rules",
+                    "POS Profile-posa_search_limit",
+                    "POS Profile-posa_show_custom_name_marker_on_print",
+                    "POS Profile-posa_show_customer_balance",
+                    "POS Profile-posa_silent_print",
+                    "POS Profile-posa_tab",
                 ),
             ]
         ],
@@ -440,19 +495,6 @@ fixtures = [
                     "Sales Invoice Reference-sales_invoice-reqd",
                     "Sales Invoice-update_outstanding_for_self-default",
                 ),
-            ]
-        ],
-    },
-    {
-        "doctype": "Custom Field",
-        "filters": [
-            [
-                "name",
-                "in",
-                [
-                    "POS Profile-posa_allow_multi_currency",
-                    "POS Profile-posa_decimal_precision",
-                ],
             ]
         ],
     },

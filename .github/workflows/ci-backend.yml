@@ -56,6 +56,9 @@ jobs:
       - name: Ruff syntax smoke
         run: python -m ruff check --select E9,F63,F7 posawesome
 
+      - name: Fixture coverage guard
+        run: python scripts/check_fixture_coverage.py
+
       - name: Initialize Frappe bench
         run: bench init --frappe-branch version-15 --python python3 frappe-bench
 
