@@ -2,7 +2,7 @@
 	<v-menu
 		location="bottom end"
 		offset="8"
-		open-on-hover
+		:open-on-hover="!isCoarsePointer"
 		:open-on-click="true"
 		:open-on-focus="true"
 		:open-delay="80"
@@ -52,6 +52,11 @@ import type { ItemRateInfoEntry, ItemRateInfoPayload } from "../../../composable
 
 const __ = (window as any).__;
 
+// On touch, hover-open means the FIRST tap on a row can open this menu
+// instead of adding the item — click/focus only there.
+const isCoarsePointer =
+	typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches === true;
+
 const props = defineProps({
 	rateInfo: {
 		type: Object as () => ItemRateInfoPayload,
@@ -93,6 +98,17 @@ const formatMeta = (info: ItemRateInfoEntry) => {
 	width: 24px;
 	height: 24px;
 	color: rgba(var(--v-theme-on-surface), 0.62);
+}
+
+/* 24px is a mis-tap inside the row's own tap-to-add area — grow the
+   TARGET on touch without growing the 16px glyph (the row is 56px
+   tall, so 44px costs no vertical space). */
+@media (pointer: coarse) {
+	.item-rate-info-trigger {
+		min-width: 44px;
+		width: 44px;
+		height: 44px;
+	}
 }
 
 .item-rate-info-menu {

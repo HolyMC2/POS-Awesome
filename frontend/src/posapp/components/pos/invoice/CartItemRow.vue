@@ -376,15 +376,20 @@
 
 			<!-- Actions -->
 			<td v-else-if="column.key === 'actions'" class="text-center" :data-column-key="'actions'">
+				<!-- Touch: first tap arms (turns red), second tap within 2.5s
+				     deletes — a stray tap 4px from the row's tap-to-add area
+				     must not silently drop a line. Mouse deletes in one click
+				     as before. -->
 				<v-btn
 					:disabled="!!item.posa_is_replace"
 					size="small"
 					variant="flat"
 					class="posa-cart-table__delete-btn delete-action-btn"
-					@click.stop="$emit('remove-item', item)"
-					:aria-label="__('Remove item')"
+					:class="{ 'delete-action-btn--armed': deleteArmed }"
+					@click.stop="handleDeleteClick"
+					:aria-label="deleteArmed ? __('Tap again to remove') : __('Remove item')"
 				>
-					<v-icon size="small">mdi-delete-outline</v-icon>
+					<v-icon size="small">{{ deleteArmed ? "mdi-delete-alert" : "mdi-delete-outline" }}</v-icon>
 				</v-btn>
 			</td>
 
@@ -463,6 +468,27 @@ const emit = defineEmits([
 
 const __ = window.__ || ((text) => text);
 
+const COARSE_POINTER =
+	typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches === true;
+const deleteArmed = ref(false);
+let deleteArmTimer = null;
+const handleDeleteClick = () => {
+	if (!COARSE_POINTER) {
+		emit("remove-item", props.item);
+		return;
+	}
+	if (deleteArmed.value) {
+		window.clearTimeout(deleteArmTimer);
+		deleteArmed.value = false;
+		emit("remove-item", props.item);
+		return;
+	}
+	deleteArmed.value = true;
+	deleteArmTimer = window.setTimeout(() => {
+		deleteArmed.value = false;
+	}, 2500);
+};
+
 const isEditingQty = ref(false);
 const editingQtyValue = ref("");
 const isEditingUom = ref(false);
@@ -504,6 +530,8 @@ const memoDeps = computed(() => {
 		isEditingUom.value,
 		isEditingDiscountPercent.value,
 		isEditingDiscountAmount.value,
+		// v-memo would swallow the armed-delete repaint without this
+		deleteArmed.value,
 	];
 	debugLog(`[CartItemRow] memoDeps updated for ${props.item.item_code}`, {
 		uom: props.item.uom,
@@ -733,6 +761,11 @@ function cancelDiscountAmountEdit() {
 
 <style scoped>
 /* Local styles specific to the row only */
+.delete-action-btn--armed {
+	background: rgb(var(--v-theme-error)) !important;
+	color: #fff !important;
+}
+
 .currency-display {
 	display: flex;
 	align-items: center;

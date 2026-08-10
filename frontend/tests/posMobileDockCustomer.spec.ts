@@ -39,16 +39,16 @@ describe("mobile dock customer chip", () => {
 		);
 	});
 
-	it("rides in the flexible totals column so it never displaces the discount field", () => {
+	it("rides in the totals column beside the collapsed discount toggle", () => {
 		const totals = between(
 			'class="mobile-dock__totals"',
-			'class="mobile-dock__field"',
+			'class="mobile-dock__discount-toggle"',
 		);
 		expect(totals).toContain('class="mobile-dock__customer"');
-		// The field keeps its own slot and its existing <360px hide rule.
-		expect(source).toMatch(
-			/@media \(max-width: 360px\) \{\s*\.mobile-dock__field \{\s*display: none;/,
-		);
+		// The always-on 190px discount field is gone — the toggle expands
+		// a full-width row on demand instead of squeezing the summary.
+		expect(source).not.toContain('class="mobile-dock__field"');
+		expect(source).toContain('class="mobile-dock__discount-row"');
 	});
 
 	it("falls back through customer name, id, then a neutral label", () => {

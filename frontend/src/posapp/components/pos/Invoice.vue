@@ -1643,6 +1643,13 @@ export default {
 		max-width: 100%;
 		margin-right: 0;
 	}
+
+	/* Card mode (phone) has no columns to configure — the dialog's
+	   switches were silently discarded by the <450px column filter
+	   anyway, and the button cost the search field its full row. */
+	.column-selector-btn {
+		display: none;
+	}
 }
 
 .column-selector-container {

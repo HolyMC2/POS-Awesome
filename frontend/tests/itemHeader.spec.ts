@@ -161,13 +161,15 @@ describe("ItemHeader", () => {
 		expect(input.attributes("spellcheck")).toBe("false");
 	});
 
-	it("tags the in-field camera and tools buttons for coarse-pointer sizing", () => {
+	it("keeps tools in-field and renders the camera as a sibling target", () => {
 		const wrapper = mountHeader({
 			posProfile: { posa_input_qty: false, posa_enable_camera_scanning: true },
 		});
 
-		// Vuetify's size="small" icon button is a 28px square; the class is
-		// what the pointer:coarse rule grows to 40px.
-		expect(wrapper.findAll("button.search-field-action").length).toBe(2);
+		// Camera moved OUT of append-inner (it sat next to the clearable ×
+		// — a mis-tap generator — and paid its width out of the label).
+		// Tools toggle stays in-field with the coarse-pointer sizing class.
+		expect(wrapper.findAll("button.search-field-action").length).toBe(1);
+		expect(wrapper.findAll("button.search-camera-btn").length).toBe(1);
 	});
 });

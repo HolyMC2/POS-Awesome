@@ -134,7 +134,30 @@
 						<span class="mobile-dock__meta">{{ cartMetaLabel }}</span>
 					</div>
 				</div>
-				<div class="mobile-dock__field">
+				<!-- The always-on discount field held a 190px slot in this row
+				     down to 360px viewports, squeezing the customer chip at
+				     every common phone width. It now lives in an expandable
+				     row; the toggle shows the applied value while collapsed. -->
+				<button
+					v-if="showDockDiscountToggle"
+					type="button"
+					class="mobile-dock__discount-toggle"
+					:class="{ 'mobile-dock__discount-toggle--active': dockDiscountOpen || dockDiscountApplied }"
+					:aria-expanded="dockDiscountOpen ? 'true' : 'false'"
+					:aria-label="__('Additional discount')"
+					@click="toggleDockDiscount"
+				>
+					<v-icon
+						:icon="posProfile?.posa_use_percentage_discount ? 'mdi-percent' : 'mdi-cash-minus'"
+						size="18"
+					/>
+					<span v-if="dockDiscountApplied" class="mobile-dock__discount-value">{{
+						dockDiscountLabel
+					}}</span>
+				</button>
+			</div>
+			<v-expand-transition>
+				<div v-show="dockDiscountOpen" class="mobile-dock__discount-row">
 					<v-text-field
 						v-if="!posProfile?.posa_use_percentage_discount"
 						ref="additionalDiscountField"
@@ -179,7 +202,7 @@
 						hide-details
 					/>
 				</div>
-			</div>
+			</v-expand-transition>
 			<div class="mobile-dock__tabs">
 				<button
 					type="button"
@@ -617,10 +640,46 @@ export default {
 			isEditingAdditionalDiscountPercentage.value = false;
 			commitAdditionalDiscountPercentage();
 		};
+		const dockDiscountOpen = ref(false);
+		const dockDiscountApplied = computed(() => {
+			const value = posProfile.value?.posa_use_percentage_discount
+				? Number(additionalDiscountPercentage.value)
+				: Number(additionalDiscount.value);
+			return Number.isFinite(value) && value !== 0;
+		});
+		const dockDiscountLabel = computed(() => {
+			if (posProfile.value?.posa_use_percentage_discount) {
+				return `${Math.abs(Number(additionalDiscountPercentage.value))}%`;
+			}
+			const symbol = getCurrencySymbol(posProfile.value?.currency) || "";
+			return `${symbol}${Math.abs(Number(additionalDiscount.value)).toFixed(2)}`;
+		});
+		// Show the toggle when the operator may edit the discount, or when
+		// one is applied and must stay visible (even if read-only).
+		const showDockDiscountToggle = computed(
+			() =>
+				(posProfile.value?.posa_allow_user_to_edit_additional_discount &&
+					!discountPercentageOfferName.value) ||
+				dockDiscountApplied.value,
+		);
+		const toggleDockDiscount = () => {
+			dockDiscountOpen.value = !dockDiscountOpen.value;
+			if (dockDiscountOpen.value) {
+				nextTick(() => {
+					const field = additionalDiscountField.value;
+					field?.focus?.();
+					field?.$el?.querySelector?.("input")?.focus?.();
+				});
+			}
+		};
 		const focusAdditionalDiscountField = () => {
-			const field = additionalDiscountField.value;
-			field?.focus?.();
-			field?.$el?.querySelector?.("input")?.focus?.();
+			// Bus consumers (keyboard shortcut) expect the field visible.
+			dockDiscountOpen.value = true;
+			nextTick(() => {
+				const field = additionalDiscountField.value;
+				field?.focus?.();
+				field?.$el?.querySelector?.("input")?.focus?.();
+			});
 		};
 		const handleOpenReturns = (company) => {
 			returnsMounted.value = true;
@@ -819,6 +878,11 @@ export default {
 			additionalDiscountField,
 			additionalDiscountDisplay,
 			additionalDiscountPercentageDisplay,
+			dockDiscountOpen,
+			dockDiscountApplied,
+			dockDiscountLabel,
+			showDockDiscountToggle,
+			toggleDockDiscount,
 			activeView,
 			paymentDialogOpen,
 			isPhone,
@@ -1111,6 +1175,36 @@ export default {
 	transform: scale(0.97);
 }
 
+.mobile-dock__discount-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	flex: 0 0 auto;
+	min-width: 44px;
+	min-height: 44px;
+	padding: 0 10px;
+	border: 1px solid var(--pos-border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--pos-text-secondary);
+	font: inherit;
+	font-size: 0.72rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	cursor: pointer;
+	justify-content: center;
+}
+
+.mobile-dock__discount-toggle--active {
+	background: rgba(var(--v-theme-warning), 0.16);
+	border-color: rgb(var(--v-theme-warning));
+	color: var(--pos-text-primary);
+}
+
+.mobile-dock__discount-row {
+	padding: 8px 14px 2px;
+}
+
 @media (pointer: coarse) {
 	.mobile-dock__customer {
 		min-height: 44px;
@@ -1126,12 +1220,7 @@ export default {
 	white-space: nowrap;
 }
 
-.mobile-dock__field {
-	flex: 0 1 190px;
-	min-width: 0;
-}
-
-.mobile-dock__field :deep(.v-field) {
+.mobile-dock__discount-row :deep(.v-field) {
 	background: rgba(var(--v-theme-surface), 0.6);
 }
 
@@ -1265,10 +1354,6 @@ export default {
 }
 
 @media (max-width: 360px) {
-	.mobile-dock__field {
-		display: none;
-	}
-
 	.mobile-dock__summary {
 		justify-content: space-between;
 	}
@@ -1282,7 +1367,7 @@ export default {
 		border-bottom: 0;
 	}
 
-	.mobile-dock__field,
+	.mobile-dock__discount-row,
 	.mobile-dock__meta {
 		display: none;
 	}

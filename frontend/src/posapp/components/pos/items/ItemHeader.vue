@@ -7,7 +7,8 @@
 				:sm="posProfile.posa_input_qty && !isPhone ? 9 : 12"
 			>
 				<div class="search-field-shell">
-					<v-text-field
+					<div class="search-field-row">
+						<v-text-field
 						density="compact"
 						clearable
 						:autofocus="!isPhone"
@@ -52,29 +53,6 @@
 								×{{ qtyInput }}
 							</v-chip>
 							<v-btn
-								v-if="posProfile.posa_enable_camera_scanning"
-								icon="mdi-camera"
-								size="small"
-								color="primary"
-								variant="text"
-								class="search-field-action"
-								:disabled="scannerLocked"
-								@click="$emit('start-camera')"
-								:aria-label="
-									scannerLocked
-										? __(
-												'Camera scanner is locked until the current error is acknowledged',
-											)
-										: __('Scan with camera')
-								"
-								:title="
-									scannerLocked
-										? __('Acknowledge the error to resume scanning')
-										: __('Scan with Camera')
-								"
-							>
-							</v-btn>
-							<v-btn
 								icon="mdi-tune-vertical"
 								size="small"
 								color="primary"
@@ -86,6 +64,30 @@
 							</v-btn>
 						</template>
 					</v-text-field>
+					<!-- Camera lives OUTSIDE append-inner: inside the field it
+					     sat next to the clearable × (mis-tap generator) and
+					     paid its width out of the label. -->
+					<v-btn
+						v-if="posProfile.posa_enable_camera_scanning"
+						icon="mdi-camera"
+						color="primary"
+						variant="tonal"
+						class="search-camera-btn"
+						:disabled="scannerLocked"
+						@click="$emit('start-camera')"
+						:aria-label="
+							scannerLocked
+								? __('Camera scanner is locked until the current error is acknowledged')
+								: __('Scan with camera')
+						"
+						:title="
+							scannerLocked
+								? __('Acknowledge the error to resume scanning')
+								: __('Scan with Camera')
+						"
+					>
+					</v-btn>
+					</div>
 					<div
 						v-if="showSyncProgress"
 						class="search-sync-progress"
@@ -316,6 +318,30 @@ defineExpose({
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
+}
+
+.search-field-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.search-field-row > .pos-themed-input {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.search-camera-btn {
+	flex: 0 0 auto;
+	width: 40px;
+	height: 40px;
+}
+
+@media (pointer: coarse) {
+	.search-camera-btn {
+		width: 44px;
+		height: 44px;
+	}
 }
 
 /* Camera and search-tools live inside the search field's append-inner
