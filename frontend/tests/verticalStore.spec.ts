@@ -52,4 +52,54 @@ describe("verticalStore", () => {
 		expect(vertical.leanVerticalLayout).toBe(true);
 		expect(vertical.layout.lean_vertical).toBe(true);
 	});
+
+	it("stays on retail-phones when posa_capability_json is absent", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.posProfile = profileWith({});
+		expect(vertical.profile.name).toBe("retail-phones");
+		expect(vertical.layout.dock_tabs).toEqual(["browse", "offers", "cart", "coupons", "pay"]);
+	});
+
+	it("resolves a linked preset from posa_capability_json", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.posProfile = profileWith({
+			posa_capability_json: JSON.stringify({
+				name: "coffee-quickserve",
+				layout: {
+					items_view: { default: "card", allow: ["card"] },
+					items_panel: "standard",
+					cart_style: "table",
+					dock_tabs: ["browse", "cart", "pay"],
+				},
+				capabilities: ["quick_modifiers"],
+				version: 1,
+			}),
+		});
+		expect(vertical.profile.name).toBe("coffee-quickserve");
+		expect(vertical.layout.items_view.default).toBe("card");
+		expect(vertical.layout.dock_tabs).toEqual(["browse", "cart", "pay"]);
+		expect(vertical.has("quick_modifiers")).toBe(true);
+		expect(vertical.has("saldo")).toBe(false);
+	});
+
+	it("falls back to retail defaults for fields a sparse preset omits", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.posProfile = profileWith({
+			posa_capability_json: JSON.stringify({ name: "sparse", capabilities: ["x"] }),
+		});
+		expect(vertical.profile.name).toBe("sparse");
+		// layout omitted entirely → retail defaults
+		expect(vertical.layout.dock_tabs).toEqual(["browse", "offers", "cart", "coupons", "pay"]);
+		expect(vertical.layout.cart_style).toBe("table");
+	});
+
+	it("degrades to retail-phones on malformed capability json", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.posProfile = profileWith({ posa_capability_json: "{ not json" });
+		expect(vertical.profile.name).toBe("retail-phones");
+	});
 });

@@ -237,6 +237,12 @@ def assert_shift_not_stale(pos_opening_shift):
 
 def update_opening_shift_data(data, pos_profile):
     data["pos_profile"] = frappe.get_doc("POS Profile", pos_profile)
+    # Denormalise the resolved capability preset onto the profile so it rides
+    # the offline shift snapshot for free (VERTICAL_PROFILES_PLAN.md C7).
+    # None → the SPA uses its retail-phones default.
+    from posawesome.posawesome.api.vertical import stamp_capability_json
+
+    stamp_capability_json(data["pos_profile"])
     if data["pos_profile"].get("posa_language"):
         frappe.local.lang = data["pos_profile"].posa_language
     data["company"] = frappe.get_doc("Company", data["pos_profile"].company)

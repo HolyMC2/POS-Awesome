@@ -33,3 +33,4 @@ posawesome.patches.remove_dead_pos_profile_fields
 posawesome.patches.rename_pose_use_limit_search
 posawesome.patches.add_safe_transfer_settings
 posawesome.patches.set_web_route_default_on
+posawesome.patches.add_capability_profile_link

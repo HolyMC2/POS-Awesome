@@ -1,0 +1,131 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:profile_name",
+ "creation": "2026-08-10 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "profile_name",
+  "vertical",
+  "column_break_axes",
+  "lean_vertical",
+  "section_layout",
+  "items_panel",
+  "items_view_default",
+  "cart_style",
+  "column_break_layout",
+  "dock_tabs",
+  "section_capabilities",
+  "capabilities"
+ ],
+ "fields": [
+  {
+   "fieldname": "profile_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Profile Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "description": "Domain vertical this preset belongs to (repair_shop, restaurant, …). Layout is independent of domain.",
+   "fieldname": "vertical",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Vertical",
+   "options": "Doco Vertical"
+  },
+  {
+   "fieldname": "column_break_axes",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "Force the stacked single-panel layout + bottom dock at any viewport width.",
+   "fieldname": "lean_vertical",
+   "fieldtype": "Check",
+   "label": "Lean Vertical Layout"
+  },
+  {
+   "fieldname": "section_layout",
+   "fieldtype": "Section Break",
+   "label": "Layout"
+  },
+  {
+   "default": "standard",
+   "description": "Registry key for the whole items panel.",
+   "fieldname": "items_panel",
+   "fieldtype": "Select",
+   "label": "Items Panel",
+   "options": "standard"
+  },
+  {
+   "default": "list",
+   "description": "Default list style inside the standard items panel (operator may still toggle).",
+   "fieldname": "items_view_default",
+   "fieldtype": "Select",
+   "label": "Items View Default",
+   "options": "list\ncard"
+  },
+  {
+   "default": "table",
+   "description": "Registry key for the cart view.",
+   "fieldname": "cart_style",
+   "fieldtype": "Select",
+   "label": "Cart Style",
+   "options": "table"
+  },
+  {
+   "fieldname": "column_break_layout",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "browse, offers, cart, coupons, pay",
+   "description": "Comma-separated bottom-dock tab ids, in render order. Valid: browse, offers, cart, coupons, pay.",
+   "fieldname": "dock_tabs",
+   "fieldtype": "Small Text",
+   "label": "Dock Tabs"
+  },
+  {
+   "fieldname": "section_capabilities",
+   "fieldtype": "Section Break",
+   "label": "Capabilities"
+  },
+  {
+   "description": "Comma-separated capability flags components check via verticalStore.has(). e.g. serial_imei, saldo, offers, coupons.",
+   "fieldname": "capabilities",
+   "fieldtype": "Small Text",
+   "label": "Capabilities"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "POSAwesome",
+ "name": "POS Capability Profile",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "POS Awesome Supervisor"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

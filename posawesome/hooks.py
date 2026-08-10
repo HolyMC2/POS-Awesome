@@ -451,6 +451,7 @@ fixtures = [
                     "POS Profile-posa_decimal_precision",
                     "POS Profile-posa_gift_card_liability_account",
                     "POS Profile-posa_sales_persons",
+                    "POS Profile-posa_capability_profile",
                     # Present in the pre-2026-08-09 fixture file but never in
                     # this list — an export against any site would silently
                     # drop them (and did). Several are live prod behaviour
