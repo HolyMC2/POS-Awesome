@@ -54,20 +54,18 @@ export function getResponsiveVisibleHeaders(
 /**
  * Whether the cart table should render its header row.
  *
- * On a phone-width panel an empty cart's header is dead weight: it
- * labels nothing and, because `table-layout: fixed` takes the column
- * widths from the first row, it is what forces the table wider than
- * the panel — which pushed the empty-state block off the visible
- * width. Dropping it lets the single full-span empty row own the
- * layout, so the block centres on what the operator can actually see.
+ * At breakpoint-xs the rows render as 2-row grid cards (see the
+ * PHONE CARD MODE block in items-table-styles.css), so there are no
+ * columns for a header to label — filled or empty, the header row is
+ * dead weight there. On an empty phone cart it was also what forced
+ * the table wider than the panel (`table-layout: fixed` takes column
+ * widths from the first row), pushing the empty-state block off the
+ * visible width. Wider panels keep the header always.
  */
 export function shouldShowColumnHeaders(
-	rowCount: number,
+	_rowCount: number,
 	breakpoint: string,
 ): boolean {
-	if (rowCount > 0) {
-		return true;
-	}
 	return breakpoint !== "xs";
 }
 

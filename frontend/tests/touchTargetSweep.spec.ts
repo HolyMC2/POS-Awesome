@@ -73,22 +73,6 @@ const pxOf = (value: string | undefined) => {
 	return Number(found[1]);
 };
 
-/**
- * Width floor the LAST rule in the sheet declares for a column at phone
- * width — later rule wins between equal-specificity duplicates, which is
- * how the touch overrides are layered onto the breakpoint budget.
- */
-const phoneColumnFloor = (css: string, columnKey: string) => {
-	const pattern = new RegExp(
-		`breakpoint-xs[^{}]*data-column-key="${columnKey}"[^{}]*\\{([^{}]*)\\}`,
-		"g",
-	);
-	const bodies = [...css.matchAll(pattern)].map((match) => match[1]);
-	if (bodies.length === 0) throw new Error(`no phone rule for ${columnKey}`);
-	const last = bodies[bodies.length - 1] as string;
-	return pxOf(/width\s*:\s*([^;]+)/.exec(last)?.[1]);
-};
-
 const cartCss = readCss("posapp/components/pos/invoice/items-table-styles.css");
 const themeCss = readCss("posapp/styles/theme.css");
 const customerSource = readFileSync(
@@ -197,23 +181,24 @@ describe("cart delete and expand buttons on touch", () => {
 		}
 	});
 
-	it("fits both buttons inside their phone-width columns", () => {
-		const gutter = pxOf(
-			declaration(cartTouch, 'data-column-key="actions"', "padding-left"),
-		);
-		const deleteWidth = pxOf(
-			declaration(cartTouch, ".posa-cart-table__delete-btn", "width"),
-		);
-		const expandWidth = pxOf(
-			declaration(cartTouch, ".posa-cart-table__expand-btn", "width"),
-		);
+	it("replaces the phone column budget with card mode", () => {
+		// At breakpoint-xs the row is a grid card (PHONE CARD MODE block):
+		// the actions cell is a grid area sized by its content, so the
+		// delete button always fits, and the expand chevron is gone — the
+		// whole-row tap opens the same fullscreen sheet. The LAST xs rule
+		// for each column must therefore be the card-mode one.
+		const lastBody = (columnKey: string) => {
+			const pattern = new RegExp(
+				`breakpoint-xs[^{}]*data-column-key="${columnKey}"[^{}]*\\{([^{}]*)\\}`,
+				"g",
+			);
+			const bodies = [...cartCss.matchAll(pattern)].map((match) => match[1]);
+			expect(bodies.length).toBeGreaterThan(0);
+			return bodies[bodies.length - 1] as string;
+		};
 
-		expect(deleteWidth + 2 * gutter).toBeLessThanOrEqual(
-			phoneColumnFloor(cartCss, "actions"),
-		);
-		expect(expandWidth + 2 * gutter).toBeLessThanOrEqual(
-			phoneColumnFloor(cartCss, "data-table-expand"),
-		);
+		expect(lastBody("actions")).toMatch(/grid-area\s*:\s*del/);
+		expect(lastBody("data-table-expand")).toMatch(/display\s*:\s*none/);
 	});
 
 	it("grows the target area rather than shrinking it", () => {

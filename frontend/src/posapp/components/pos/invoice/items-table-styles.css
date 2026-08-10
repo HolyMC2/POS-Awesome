@@ -1086,6 +1086,163 @@ table.posa-cart-table--native {
 }
 
 /* =================================================================
+   PHONE CARD MODE (container < 500px)
+
+   At breakpoint-xs the fixed-table column budget is bankrupt: qty
+   (120px floor) + rate (16%) + amount (18%) + actions (40px floor)
+   + expand (36px floor) claim ~330px of a ~395px container before
+   the item name gets a pixel, so the name clamps at ~57px and both
+   money columns clip. No per-column tuning can recover that — the
+   table formatting context itself is abandoned here and each row
+   re-flows into a 2-row grid card. Cells keep their DOM order and
+   data-column-key attrs; everything below is pure CSS re-flow, so
+   the inline editors, v-memo, and cartFieldFocus DOM walking are
+   untouched. Every selector is prefixed with breakpoint-xs — wider
+   containers never see any of it.
+
+   NOTE for touchTargetSweep.spec.ts: no rule in this block may set
+   a `width:` on a selector containing data-column-key="actions" or
+   ="data-table-expand" — the sweep greps the LAST such match and
+   requires a px length. grid-area / display:none only.
+   ================================================================= */
+
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table--native {
+	display: block;
+}
+
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table--native thead {
+	display: none;
+}
+
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table--native tbody {
+	display: block;
+}
+
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table--native tr.posa-cart-item-row {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	grid-template-areas:
+		"name name   del"
+		"qty  rate   amount";
+	column-gap: 8px;
+	row-gap: 6px;
+	padding: 10px 12px;
+	height: auto;
+	min-height: 0;
+	border-bottom: 1px solid var(--pos-border);
+}
+
+/* Neutralise the table-cell box model inside a card row. The width
+   reset matters: the fixed-table budget rules (qty 120px floor, rate
+   16%, amount 18%) still match these cells, and width constrains a
+   grid item just like a table cell — without auto here the money
+   cells clamp to slivers and clip. (Generic td selector on purpose —
+   see the touchTargetSweep note above.) */
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table--native tr.posa-cart-item-row td {
+	height: auto;
+	padding: 0;
+	overflow: visible;
+	text-align: start;
+	width: auto;
+	min-width: 0;
+	max-width: none;
+}
+
+.posa-responsive-table-container.breakpoint-xs
+	.posa-cart-table--native
+	tr.posa-cart-item-row
+	td
+	> div {
+	height: auto;
+	justify-content: flex-start;
+}
+
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table--native [data-column-key="item_name"] {
+	grid-area: name;
+}
+
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table--native [data-column-key="qty"] {
+	grid-area: qty;
+}
+
+/* The qty column sits in an auto-sized grid track: when its inline
+   editor opens, Vuetify's text field wants ~205px and the track would
+   swallow the whole second row, crushing rate to a sliver. Cap the
+   editor — 3-digit quantities fit comfortably. */
+.posa-responsive-table-container.breakpoint-xs
+	.posa-cart-table--native
+	tr.posa-cart-item-row
+	[data-column-key="qty"]
+	.v-input {
+	max-width: 96px;
+}
+
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table--native [data-column-key="rate"] {
+	grid-area: rate;
+}
+
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table--native [data-column-key="amount"] {
+	grid-area: amount;
+}
+
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table--native [data-column-key="actions"] {
+	grid-area: del;
+}
+
+/* Amount is the row's answer — make it read as such without a
+   column header: bold, larger, right-aligned in its own corner. */
+.posa-responsive-table-container.breakpoint-xs
+	.posa-cart-table--native
+	[data-column-key="amount"]
+	> div {
+	justify-content: flex-end;
+	font-weight: 700;
+	font-size: 0.95rem;
+}
+
+/* Row tap already opens the fullscreen detail sheet on phones —
+   the chevron duplicates it, so its 36px go back to the name. */
+.posa-responsive-table-container.breakpoint-xs
+	.posa-cart-table--native
+	[data-column-key="data-table-expand"] {
+	display: none;
+}
+
+/* Optional columns (uom, price_list_rate, discounts, offer flag)
+   are filtered out below a 450px container today; if that filter
+   ever loosens they must stack full-width instead of auto-placing
+   into the 2-row grid. */
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table--native [data-column-key="uom"],
+.posa-responsive-table-container.breakpoint-xs
+	.posa-cart-table--native
+	[data-column-key="price_list_rate"],
+.posa-responsive-table-container.breakpoint-xs
+	.posa-cart-table--native
+	[data-column-key="discount_percentage"],
+.posa-responsive-table-container.breakpoint-xs
+	.posa-cart-table--native
+	[data-column-key="discount_amount"],
+.posa-responsive-table-container.breakpoint-xs
+	.posa-cart-table--native
+	[data-column-key="posa_is_offer"] {
+	grid-column: 1 / -1;
+}
+
+/* The empty-state row is not a card — restore block flow so its
+   colspan cell spans the container. */
+.posa-responsive-table-container.breakpoint-xs .posa-cart-table--native tr.posa-cart-empty-row {
+	display: block;
+}
+
+.posa-responsive-table-container.breakpoint-xs
+	.posa-cart-table--native
+	tr.posa-cart-empty-row
+	td {
+	display: block;
+	width: 100%;
+}
+
+/* =================================================================
    RTL SUPPORT
    ================================================================= */
 

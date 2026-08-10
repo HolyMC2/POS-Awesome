@@ -77,8 +77,8 @@ describe("cart header row visibility", () => {
 		expect(shouldShowColumnHeaders(0, "xs")).toBe(false);
 	});
 
-	it("keeps the header row as soon as the phone cart has a line", () => {
-		expect(shouldShowColumnHeaders(1, "xs")).toBe(true);
+	it("drops the header row on a phone cart even with lines — card mode has no columns", () => {
+		expect(shouldShowColumnHeaders(1, "xs")).toBe(false);
 	});
 
 	it("keeps the header row on wider panels even when the cart is empty", () => {
