@@ -473,6 +473,44 @@ capability, `invoice_mode`, vocabulary, and the kitchen print format. The POS
 Capability Profile doctype itself stays out of `fixtures` (presets are
 per-tenant).
 
+### 2.9 Tax by service type — DEFERRED design (recorded, not wired)
+
+`posa_rt_service_type` (Dine In / Takeout / Delivery) **ships recorded-only** —
+the value rides the held ticket for reporting and future kitchen routing, and it
+does **not** touch tax. This section captures how it *would* drive tax if a venue
+needs it, so the wiring is a known quantity, not a redesign.
+
+**Why deferred:** whether service type changes tax is a per-venue, per-country
+rule (in MX, prepared-food IVA can differ dine-in vs takeout for some
+establishments, but it is establishment-specific, not universal). Wiring a wrong
+tax mapping silently mis-invoices every sale — far worse than recording the
+value and mapping it later once a real venue's rule is known.
+
+**Design when needed (smallest viable):**
+1. A per-preset (or POS-Profile) map `service_type → Sales Taxes and Charges
+   Template` — e.g. a small child table `POS Service Type Tax` (service_type,
+   taxes_and_charges) on the capability profile or POS Profile. Empty map = the
+   current behaviour (profile default template), so retail and unmapped venues
+   are unaffected.
+2. Resolve at the point the SPA sets `taxes_and_charges` on the doc — the same
+   place the profile's default template is applied — keyed on the chosen
+   `posa_rt_service_type`. Re-resolve when the cashier changes the service type
+   (recompute taxes on the open cart), mirroring how a customer/price-list change
+   already recomputes.
+3. Server-side, re-derive the template from `posa_rt_service_type` at
+   `update_invoice`/`submit_invoice` rather than trusting the client's
+   `taxes_and_charges` (a client could otherwise pick a cheaper template). Assert
+   the resolved template belongs to the profile's company (the `_scope`
+   discipline of §1.1).
+4. Offline: the map must ride the capability payload / opening snapshot so a
+   queued offline sale resolves the same template it would online, and bump
+   `CAPABILITY_PAYLOAD_VERSION` (§6.9) when the map's shape changes so a queued
+   invoice built under the old map is drafted for review instead of blind-submitted.
+
+**Non-goals for the first cut:** per-item service-type tax (a takeout drink vs a
+dine-in pastry taxed differently within one ticket) — start ticket-level; go
+per-line only if a venue's rule actually requires it.
+
 ---
 
 ## 3. State machine
