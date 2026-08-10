@@ -1,136 +1,216 @@
-# POS Vertical Profiles — Architecture Plan (v1, pre-review)
+# POS Vertical Profiles — Architecture Plan (v2, post-review)
 
-Status: DRAFT — pending adversarial audit + industry research pass.
-Owner: Marco. Scope: POSAwesome fork (`HolyMC2/POS-Awesome`, `doco-customizations`) inside the muelle multi-tenant stack.
+Status: REVISED — v1 was adversarially audited against the actual codebase
+(15 findings, 5 fatal) and checked against industry practice (Square, Odoo,
+Shopify POS, Lightspeed, Fowler, SPL literature). This version incorporates
+both. Full reports: session scratchpad `plan-critique.md`, `industry-research.md`.
+Owner: Marco. Scope: POSAwesome fork inside the muelle multi-tenant stack.
 
-## Problem
+## Problem (unchanged)
 
 One POS codebase must serve visually and functionally different businesses:
-phone retail (current), **taller / repair shop (own shop — first-class seed)**,
-restaurants, coffee shops, autoservice, warehouses. Today the app is a single
-retail-shaped UI configured by scattered `posa_*` flags on POS Profile. Forking
-per vertical is maintenance death; a fully schema-driven "UI engine" is a year
-of work for a mediocre generic renderer.
+phone retail (current), taller/repair delivery desk, restaurants, coffee
+shops, autoservice, warehouses. Forking per vertical is maintenance death;
+a schema-driven UI engine is a year of work for a mediocre renderer.
 
-## Decision (proposed): three orthogonal axes
+## What industry evidence settled
 
-### Axis 1 — Capability profile (what the POS does)
+- **One app, not separate vertical apps.** Square ran the split-app
+  experiment at scale and publicly reversed it in 2025 ("overhead…
+  maintaining many separate tools"); their replacement is one app with
+  **7 named modes, mutually exclusive per device** — a closed preset set,
+  not a free capability matrix. Real merchants are mixed-vertical (their
+  stated trigger), and taller+mercado is exactly that hybrid.
+- **Bind the profile per register (POS Profile), not per tenant.** Odoo puts
+  `module_pos_restaurant` on `pos.config`; one company runs a restaurant
+  register and a retail register side by side. ERPNext's POS Profile is the
+  identical hook and we already have it.
+- **Fine capability granularity, coarse preset surface.** Odoo ships ~60
+  small `pos_*` modules and zero vertical mega-modules; verticals are named
+  bundles of small capabilities. We test the presets, never the cross-product.
+- **Capability checks live behind a resolver, not scattered `v-if`s.**
+  Vertical capabilities are Fowler's longest-lived toggle class; his explicit
+  warning is against sprinkling if/else for exactly this category.
+- **Offline capability resolution is a correctness requirement.** A POS is
+  offline-first; a wrong fallback is a cashier seeing the wrong screen
+  mid-sale.
 
-New doctype **`POS Vertical Profile`**, linked from POS Profile. Declarative
-JSON payload:
+## The axes (revised: four, not three)
 
-```json
-{
-  "layout": {
-    "items_view": "grid-categories",
-    "cart_style": "ticket",
-    "dock_tabs": ["browse", "orders", "cart", "pay"]
-  },
-  "capabilities": ["repair_intake", "serial_imei", "device_lookup"],
-  "item_fields": ["warranty_months", "device_model"],
-  "customer_fields": ["device_imei"],
-  "flows": { "checkout": "standard", "park_orders": true }
-}
-```
+1. **Capability profile** — what this register can do. JSON resolved through
+   one store (`verticalStore.has(cap)`), enum-valued layout keys, closed
+   preset list. Free-form capability mixes are an unsupported/advanced path.
+2. **View registry** — how the sales screen is structurally laid out
+   (`items_view`, `cart_style`). Hand-crafted lazy views behind typed
+   interfaces. **Prerequisite: the decoupling work in M2 below — the audit
+   showed today's views are NOT swappable leaves.**
+3. **Theme tokens** — visual skin (`--pos-*` vars, per-tenant). Already
+   half-built; fully orthogonal; the 2026-08 mobile overhaul hardened it.
+4. **Vocabulary + documents** *(new, from audit finding 12)* — a `labels: {}`
+   map resolved through a `t(key)` helper falling back to `__()` (Mesa /
+   Comanda / Platillo is what makes a restaurant POS feel like one; Frappe
+   translation CSVs are per-app, not per-tenant, so this must live in the
+   profile), plus per-preset print-format bindings (repair ticket, kitchen
+   ticket, pick list are different documents).
 
-- Shipped as **fixtures**: 5–6 official presets (see Seeds below).
-- Per-customer tweak = duplicate preset, edit. Versioned, migratable, testable.
-- **Rule #1: components check capabilities, never vertical names.**
-  `profile.has('tables')`, never `if vertical === 'restaurant'`. Capability
-  checks compose (coffee = restaurant − tables + quick-modifiers); name checks
-  metastasize into combinatorial if-jungles.
-- Frontend: one Pinia store (`verticalStore`) loads the JSON at POS boot
-  alongside POS Profile. Components read capabilities/fields from it.
+Rule #1 stands: components consult capabilities, never vertical names — and
+per the audit, they consult them through the resolver, not inline flag reads.
 
-### Axis 2 — View registry (how it looks structurally)
+## Corrections the audit forced (v1 → v2)
 
-Small registry keyed by layout mode:
+### C1. The registry is the LAST thing built, not the first (was fatal #1)
+`Pos.vue` reaches into `Invoice.vue` imperatively at 7 sites
+(`invoicePanel.value?.subtotal`, `?.return_discount_meta`,
+`?.handleShowPaymentRequest()`, …) with optional chaining that turns a
+missing member into a silent wrong total or a dead Pay button.
+`ItemsSelector.vue` exposes 92 members and mounts in THREE contexts (pos,
+purchase, barcode-printing). Before any registry:
+- move the reached-into state (`subtotal`, `return_discount_meta`,
+  `discount_percentage_offer_name`) into `invoiceStore`; replace method
+  reach-ins with store actions;
+- type the event bus (55 events, 81 emit sites, currently `any`) so a view
+  that mishandles the contract fails `vue-tsc`; migrate cart-view-contract
+  events to store actions (bus stays for shell fan-out);
+- define `CartView` / `ItemsView` TS interfaces; registry keyed on
+  **(layout, context)**, never layout alone.
+(The bare `eventBus.off("submit_closing_pos")` bug the audit found is
+already fixed — f1d5e0f49.)
 
-- `items_view`: `grid` | `list` | `tile-menu` | `scan-first` …
-- `cart_style`: `table` | `ticket` | `cards` …
+### C2. Taller seed redefined: delivery-day checkout, not intake (was fatal #2)
+Taller is a live 20k-line frappe-ui/Tailwind app with intake, tech flows,
+and its own workflow doc (`Repair Order`: status chain, checklist, PIN,
+parts/serials; **no invoice until delivery**). Porting intake into a
+Vuetify sales-invoice shell is a rewrite wearing a costume.
+The honest seed: **`external_document_checkout` capability** — pull a
+finished Repair Order into the cart as billable lines at the counter
+(~200 lines against the real boundary). Taller stays the first seam test —
+it exercises the cross-app boundary harder than a fake intake would — and
+the fuller `taller-repair` preset (scan-first layout, repair vocabulary,
+repair-ticket print format) builds on that capability. First *layout*
+vertical remains coffee (smallest delta), exactly as v1's own M5 conceded.
 
-Each entry = a real hand-crafted Vue component, lazy-loaded via
-`defineAsyncComponent` (pattern already used for `Payments.vue`). Warehouse
-tenants never download restaurant chunks. Registry itself ≈ 50 lines. Quality
-lives here — views are designed, not generated.
+### C3. M1 is additive, not a port (was fatal #3)
+267 frontend read-sites across 85 files consume 76 POS Profile flags (plus
+571 backend sites; 79 of 197 test specs fixture them). Nothing "ports".
+`verticalStore` ships as a pure addition answering capabilities that have
+**no existing flag**; the `posa_*` reads stay where they are and migrate
+one at a time only when a second vertical needs that flag to mean something
+different. Rehearsal slice first: implement or delete
+`posa_lean_vertical_layout` / `posa_lean_wizard_layout` — two shipped,
+admin-visible layout flags that are read **nowhere** (audit finding 7).
+If a one-preset slice can't ship, six presets won't.
 
-### Axis 3 — Theme tokens (visual skin)
+### C4. Naming + delivery reuse what exists (was fatal #4)
+Three "vertical" taxonomies already live in this stack: `Doco Vertical`
+(+5 child doctypes, in doco), taller's own `vertical` axis
+(repair_shop/car_repair_shop/…, domain not layout), and boat's
+`Doco Vertical Template` + `execute_apply_template()` (working per-tenant
+fixture delivery with usage counting). Therefore:
+- the new doctype is **`POS Capability Profile`** (not "Vertical"), holding
+  the JSON + enum layout fields;
+- it **links** to `Doco Vertical` (`vertical_code`) instead of redeclaring
+  the concept — domain axis and layout axis stay distinct (an autoservice
+  tenant is `car_repair_shop` × autoservice-layout);
+- per-tenant preset delivery goes through `Doco Vertical Template` /
+  `execute_apply_template`, not posawesome app fixtures (which are
+  app-scoped and would land all six presets on every site).
 
-Existing `--pos-*` CSS custom properties, formalized into named theme sets per
-tenant. Fully independent of the functional axis: warehouse can run dark-dense,
-coffee shop warm-spacious, both on `list` view. (The 2026-08 mobile overhaul is
-hardening exactly this token layer.)
+### C5. Honest bundle/module story (was fatal #5)
+One built bundle serves every tenant in a cell (shared `assets` volume);
+lazy chunks save download, **not** isolation — a restaurant-module bug
+ships to the warehouse tenant's bundle. State that plainly. Heavy vertical
+*backend* features are separate Frappe apps installed per tenant via boat
+(`install_app` + the existing rebake path in `service_provisioning.py`),
+mirroring how saldo integrates today — while acknowledging the saldo
+precedent is a build-time alias: posawesome's build grows a hard sibling
+dependency per frontend module, which is the price of the shared bundle.
 
-## Heavy vertical features = modules, not config
+### C6. `items_view` collision (finding 6)
+The cashier already owns `items_view` (localStorage, runtime-toggleable,
+drives Cards vs Table today). The profile therefore sets
+`{ default, allow: [...] }`; the localStorage value survives as an override
+validated against `allow`; the profile key gets a distinct name so it never
+shadows the shipped ref.
 
-Tables/courses/KOT (restaurant), scale integration (warehouse), bay assignment
-(autoservice), **repair intake / device history (taller)** are feature
-packages: backend doctypes + lazy frontend chunk, activated by a capability
-flag. Config decides *if* the module loads; the module itself is normal code.
-Taller already exists as its own Frappe app — its POS surface becomes the
-first real module consumer, which keeps the abstraction honest.
+### C7. Offline contract (finding 9 — was an "open question", now closed)
+- The capability JSON lives **on POS Profile itself** (JSON field), so the
+  existing shift-open snapshot (`persistOpeningEntities` → Dexie
+  `pos_profiles`) carries it with zero new offline plumbing. No separate
+  doctype fetch on cold boot, no white screen at the counter.
+- The profile is **shift-scoped by design**: snapshotted at shift open,
+  never refreshed mid-shift (the alternative is the Pay button relocating
+  between customers).
+- Queued offline invoices get a `capability_profile_version` stamp; replay
+  on mismatch is rejected for review. `pos_profile.modified` (already
+  tracked in `bootstrapSnapshot`) is the invalidation key.
 
-## Seed presets
+### C8. Fixture hygiene precedes presets (finding 8)
+30 of 139 POS Profile fields exist only in patch scripts, invisible to the
+fixture system (including `posa_hide_items_until_search`, which gates the
+whole catalog). Before M3: re-export all fields to `custom_field.json`, add
+a CI check that fails when a patch inserts a Custom Field absent from
+fixtures. Custom Field names are globally unique per site (`{dt}-{fieldname}`,
+last writer wins, silently) — per-vertical fieldname prefixes
+(`posa_rt_*`, `posa_tl_*`) are mandatory, enforced by a fixture lint.
 
-| Preset | Layout | Distinctive capabilities |
-|---|---|---|
-| `retail-phones` (current default) | list + table cart | serial_imei, saldo, offers |
-| **`taller-repair` (own shop, seed #2)** | scan-first + ticket cart | repair_intake, device_lookup, serial_imei, service_items, park_orders |
-| `restaurant` | tile-menu + ticket | tables, courses, kitchen_ticket, split_bill |
-| `coffee-quickserve` | tile-menu + cards | quick_modifiers, order_names, no_tables |
-| `autoservice` | list + ticket | bay_assignment, vehicle_lookup, estimates |
-| `warehouse` | scan-first + table | bin_locations, bulk_qty, scale, pick_lists |
+### C9. Upstream decision made explicit (finding 10)
+Upstream is `defendicon/POS-Awesome-V15` (not yrestom), it is alive, and it
+merged as recently as 2026-07-28. The fork is 383 commits / 65k insertions
+ahead; upstream's three hottest files (Payments 191 commits, Invoice 134,
+ItemsSelector 88) are exactly the registry's targets. **Decision required
+from Marco before M2**: (a) declare the fork terminal and stop merging —
+registry refactors become free; or (b) keep merging — the registry is then
+confined to new wrapper files and the three hot files stay structurally
+recognizable to `git merge`. The C1 store-extraction work is compatible
+with either.
 
-`taller-repair` is the forcing function: it is a real shop (Marco's), already
-has its own app + data model, and is maximally different from retail in flow
-(intake → diagnose → quote → repair → deliver) while sharing payments/customers.
-If the seams hold for taller, they hold.
+### C10. Roles enter the capability function (finding 13)
+The frontend has zero role awareness today (all gating is backend
+whitelist — buttons render for everyone and the API rejects the click).
+Capability resolution is `f(profile, roles)`: roles ride the boot payload,
+and role-gated capabilities (`void_kitchen_ticket: manager`) resolve
+per-user. Aligns with the standing manager-only approver rule.
 
-## What Frappe already gives us (don't rebuild)
+### C11. Explicit non-goals (finding 14)
+Through M5, verticals do **not** change: Reports (5,393 lines),
+InvoiceManagement (3,251), closing shift, offline invoice management —
+every tenant gets the retail set. Named here so it's a decision, not a
+discovery. Per-vertical reporting is its own future program.
 
-- POS Profile = per-outlet config anchor. Link, don't replace.
-- Custom Fields + fixtures = per-vertical data fields on Item/Customer/Invoice.
-- Multi-tenant muelle stack = preset→tenant mapping (boat provisioning can
-  install vertical fixtures per tenant plan).
-- Frappe permissions = role gating per flow.
+### C12. Live-tenant migration (finding 15)
+M3 ships the link **nullable** with `null ⇒ retail-phones` resolution in
+`verticalStore` — every existing tenant keeps working with zero data
+change. Backfill is per-tenant, explicitly gated, with the rollback
+(switch a tenant back to null) written before the roll-forward. Fresh
+installs skip patches (known trap) — presets must land identically via
+fixture import on both fresh and migrated sites, verified in the B16 drill.
 
-## Migration path (incremental, no big-bang)
+## Revised milestones
 
-1. **M0 (now)**: mobile overhaul lands design tokens + solid shell.
-2. **M1**: extract `verticalStore` reading a hardcoded `retail-phones` JSON;
-   port the scattered `posa_*` UI flags that are really capabilities into it.
-   Zero visible change.
-3. **M2**: view registry for `items_view` + `cart_style`; current components
-   become the `list`/`table` entries. Dock tabs become config.
-4. **M3**: `POS Vertical Profile` doctype + fixtures; boat installs per tenant.
-5. **M4**: `taller-repair` preset + repair-intake module (POS surface for the
-   existing taller app).
-6. **M5+**: next vertical by market pull (coffee likely smallest delta).
+- **M0 (done)**: mobile overhaul — tokens + solid shell + the bus fix.
+- **M1**: rehearsal slice: implement `posa_lean_vertical_layout` as the
+  first profile-driven layout (or delete both dead flags). Additive
+  `verticalStore` with hardcoded `retail-phones`; zero flag ports.
+- **M1.5**: fixture hygiene (C8) + bus typing + store extraction (C1).
+  Upstream decision (C9) gates the depth of C1.
+- **M2**: typed `CartView`/`ItemsView` interfaces; registry keyed
+  (layout, context); current components become the `list`/`table` entries.
+  Dock tabs become config.
+- **M3**: `POS Capability Profile` (JSON on POS Profile per C7; doctype
+  linked to `Doco Vertical` per C4); delivery via `Doco Vertical Template`;
+  nullable + default per C12.
+- **M4**: `external_document_checkout` — Repair Order → cart at delivery
+  (the taller seam test, C2). Repair vocabulary + repair-ticket print
+  format via axis 4.
+- **M5**: `coffee-quickserve` — first full layout vertical (tile-menu +
+  quick modifiers). `taller-repair` preset completes on top of M4.
+- **M6+**: next vertical by market pull.
 
-Engine pieces are extracted **when the second consumer forces the seam**, never
-speculatively.
+## What survived v1 unchanged
 
-## Open questions (for review pass)
-
-- Where does the profile JSON live: dedicated doctype vs JSON field on POS
-  Profile vs child tables? (Child tables = better list-view UX for non-dev
-  admins; JSON = cheaper migrations. Lean: doctype with JSON field + a few
-  top-level select fields for the layout axis.)
-- Capability granularity: how fine before config soup? Guardrail proposal: a
-  capability must gate ≥1 module or ≥1 registry view or ≥3 components,
-  otherwise it's just a boolean setting on the profile.
-- Offline: profile JSON must be in the offline cache (posawesome has offline
-  invoices) — cache invalidation story when a profile changes mid-shift?
-- Upstream drift: we track yrestom/POS-Awesome loosely; how much of the
-  registry refactor makes rebases harder? (Fork is already deeply diverged —
-  measure before caring.)
-- Per-tenant custom fields at scale: fixture collision strategy when two
-  verticals define the same fieldname differently.
-
-## Explicitly rejected
-
-- **Fork per vertical** — N× maintenance on every bugfix.
-- **Full schema-driven UI engine** (JSON describes every screen, generic
-  renderer) — enormous cost, mediocre UX ceiling, abstraction leaks on the
-  first genuinely different vertical (restaurant table map).
-- **Vertical-name conditionals in components** — see Rule #1.
+Theme-token axis; capability-not-name rule; `defineAsyncComponent`
+precedent; closed official preset set with per-customer derived profiles;
+incremental extraction ("engine pieces extracted when the second consumer
+forces the seam") — the audit reinforced rather than refuted that instinct,
+it just moved the seam-forcing work (C1) in front of the registry instead
+of behind it.
