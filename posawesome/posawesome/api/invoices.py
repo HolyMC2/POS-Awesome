@@ -123,6 +123,8 @@ def get_draft_invoices(
     # tenant that has not yet run the add_tab_name_field patch does not 500.
     if frappe.db.has_column(doctype, "posa_rt_tab_name"):
         fields.append("posa_rt_tab_name")
+    if frappe.db.has_column(doctype, "posa_rt_guest_count"):
+        fields.append("posa_rt_guest_count")
 
     invoices_list = frappe.get_list(
         doctype,

@@ -70,13 +70,14 @@ describe("tab_identity input gating (InvoiceSummary)", () => {
 		expect(wrapper.find('[data-test="tab-name-field"]').exists()).toBe(false);
 	});
 
-	it("shows the tab-name input when the tab_identity capability is on", () => {
+	it("shows the tab-name + guest-count inputs when the tab_identity capability is on", () => {
 		useUIStore().setCapabilityPayload({
 			name: "coffee-quickserve",
 			capabilities: ["tab_identity"],
 		});
 		const wrapper = mountSummary();
 		expect(wrapper.find('[data-test="tab-name-field"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="guest-count-field"]').exists()).toBe(true);
 	});
 });
 
@@ -92,6 +93,7 @@ describe("parked-order row identity (ParkedOrdersList)", () => {
 					{
 						name: "ACC-SINV-0001",
 						posa_rt_tab_name: "Marco (grande)",
+						posa_rt_guest_count: 4,
 						customer_name: "Walk-in Customer",
 						posting_date: "2026-08-10",
 						posting_time: "10:15:00.000000",
@@ -113,6 +115,8 @@ describe("parked-order row identity (ParkedOrdersList)", () => {
 		const title = wrapper.get(".drafts-list__card-top strong");
 		expect(title.text()).toBe("Marco (grande)");
 		expect(title.text()).not.toBe("Walk-in Customer");
+		// guest count surfaces in the row meta when present
+		expect(wrapper.get(".drafts-list__meta").text()).toContain("4 guests");
 	});
 
 	it("falls back to customer_name when no tab name is present (retail)", () => {

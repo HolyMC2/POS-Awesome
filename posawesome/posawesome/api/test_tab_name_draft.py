@@ -96,6 +96,7 @@ class TestTabNameDraft(IntegrationTestCase):
 			"is_pos": 1,
 			"posa_pos_opening_shift": shift,
 			"posa_rt_tab_name": tab_label,
+			"posa_rt_guest_count": 4,
 			"items": [
 				{
 					"item_code": self.item,
@@ -117,6 +118,10 @@ class TestTabNameDraft(IntegrationTestCase):
 			frappe.db.get_value("Sales Invoice", name, "posa_rt_tab_name"), tab_label,
 			"tab name must persist on the draft",
 		)
+		self.assertEqual(
+			frappe.db.get_value("Sales Invoice", name, "posa_rt_guest_count"), 4,
+			"guest count must persist on the draft",
+		)
 
 		rows = invoices.get_draft_invoices(shift, doctype="Sales Invoice")
 		row = next((r for r in rows if r.get("name") == name), None)
@@ -126,6 +131,11 @@ class TestTabNameDraft(IntegrationTestCase):
 			"get_draft_invoices must return the posa_rt_tab_name field",
 		)
 		self.assertEqual(row.get("posa_rt_tab_name"), tab_label)
+		self.assertIn(
+			"posa_rt_guest_count", row,
+			"get_draft_invoices must return the posa_rt_guest_count field",
+		)
+		self.assertEqual(row.get("posa_rt_guest_count"), 4)
 
 
 if __name__ == "__main__":

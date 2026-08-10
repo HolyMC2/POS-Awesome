@@ -5,7 +5,11 @@
 	>
 		<!-- Tab identity (cafetería "name on the cup") — hidden unless the vertical
 		     preset enables the tab_identity capability; retail never renders this. -->
-		<div v-if="showTabName && invoice_doc" class="summary-tab-name" data-test="tab-name-field">
+		<div
+			v-if="showTabName && invoice_doc"
+			class="summary-tab-name d-flex ga-2"
+			data-test="tab-name-field"
+		>
 			<v-text-field
 				v-model="invoice_doc.posa_rt_tab_name"
 				:label="tabNameLabel"
@@ -17,6 +21,22 @@
 				clearable
 				autocomplete="off"
 				maxlength="60"
+				class="summary-field sleek-field pos-themed-input flex-grow-1"
+			/>
+			<v-text-field
+				v-model.number="invoice_doc.posa_rt_guest_count"
+				:label="guestCountLabel"
+				type="number"
+				min="0"
+				inputmode="numeric"
+				prepend-inner-icon="mdi-account-group-outline"
+				variant="solo"
+				density="compact"
+				color="primary"
+				hide-details
+				autocomplete="off"
+				data-test="guest-count-field"
+				style="max-width: 96px"
 				class="summary-field sleek-field pos-themed-input"
 			/>
 		</div>
@@ -296,6 +316,7 @@ const { parkedOrders, draftSource } = storeToRefs(uiStore);
 // the tab_identity capability. Off (retail) → nothing renders, no layout shift.
 const showTabName = computed(() => verticalStore.has("tab_identity"));
 const tabNameLabel = computed(() => verticalStore.t("Tab Name"));
+const guestCountLabel = computed(() => verticalStore.t("Guests"));
 
 const additionalDiscountDisplay = ref(normalizeAdditionalDiscountDisplay(props.additional_discount));
 const additionalDiscountPercentageDisplay = ref(
