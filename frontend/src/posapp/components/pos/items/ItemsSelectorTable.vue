@@ -244,8 +244,12 @@ defineExpose({ scrollToIndex, getTableElement, tableRef: scrollerRef });
 .items-table-container {
 	display: flex;
 	flex-direction: column;
-	height: calc(100% - 80px);
-	min-height: 400px;
+	/* The height chain above (dynamic-padding → results card → row/col)
+	   is definite now — the old `calc(100% - 80px)` and 400px floor were
+	   compensations for it resolving against auto, and the floor is what
+	   overflowed short phone viewports. */
+	height: 100%;
+	min-height: 0;
 	margin: 0;
 	background-color: transparent;
 	border-radius: var(--pos-radius-md);
@@ -271,8 +275,6 @@ defineExpose({ scrollToIndex, getTableElement, tableRef: scrollerRef });
 	position: sticky;
 	top: 0;
 	z-index: 10;
-	backdrop-filter: blur(8px);
-	-webkit-backdrop-filter: blur(8px);
 	min-height: 48px;
 	font-family:
 		"SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",

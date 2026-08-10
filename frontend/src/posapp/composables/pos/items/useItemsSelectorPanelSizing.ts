@@ -33,7 +33,10 @@ export function useItemsSelectorPanelSizing({
 				? "calc(var(--viewport-height) * 0.46)"
 				: containerHeight,
 			resize: canResizeSelectorPanel.value ? "vertical" : "none",
-			overflow: "auto",
+			// On phone the virtual scroller owns all vertical scroll; letting
+			// the card scroll too gave two nested scrollers and rows sliding
+			// behind the sticky search bar.
+			overflow: isPhone.value ? "hidden" : "auto",
 			position: "relative",
 		};
 	});

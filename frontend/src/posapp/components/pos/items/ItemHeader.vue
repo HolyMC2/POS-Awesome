@@ -3,18 +3,19 @@
 		<v-row class="items">
 			<v-col
 				class="pb-0"
-				:cols="posProfile.posa_input_qty ? 8 : 12"
-				:sm="posProfile.posa_input_qty ? 9 : 12"
+				:cols="posProfile.posa_input_qty && !isPhone ? 8 : 12"
+				:sm="posProfile.posa_input_qty && !isPhone ? 9 : 12"
 			>
 				<div class="search-field-shell">
 					<v-text-field
 						density="compact"
 						clearable
-						autofocus
+						:autofocus="!isPhone"
 						variant="solo"
 						color="primary"
 						class="pos-themed-input"
-						:label="frappe._('Search, scan or browse item')"
+						:label="isPhone ? frappe._('Search') : frappe._('Search, scan or browse item')"
+						:aria-label="frappe._('Search, scan or browse item')"
 						hide-details
 						data-pos-keyboard-target="item-search"
 						enterkeyhint="search"
@@ -38,6 +39,18 @@
 						ref="debounce_search"
 					>
 						<template v-slot:append-inner>
+							<v-chip
+								v-if="isPhone && posProfile.posa_input_qty && qtyMultiplierActive"
+								size="small"
+								color="primary"
+								variant="flat"
+								class="qty-multiplier-chip"
+								:aria-label="__('Quantity for next item — tap to reset')"
+								:title="__('Quantity for next item — tap to reset')"
+								@click.stop="$emit('update:qtyInput', 1)"
+							>
+								×{{ qtyInput }}
+							</v-chip>
 							<v-btn
 								v-if="posProfile.posa_enable_camera_scanning"
 								icon="mdi-camera"
@@ -99,7 +112,7 @@
 					</div>
 				</div>
 			</v-col>
-			<v-col cols="4" sm="3" class="pb-0" v-if="posProfile.posa_input_qty">
+			<v-col cols="4" sm="3" class="pb-0" v-if="posProfile.posa_input_qty && !isPhone">
 				<v-text-field
 					density="compact"
 					variant="solo"
@@ -122,6 +135,29 @@
 		</v-row>
 		<v-expand-transition>
 			<div v-if="toolsOpen" class="tools-panel">
+				<div
+					v-if="isPhone && posProfile.posa_input_qty"
+					class="tools-panel__qty"
+				>
+					<span class="tools-panel__qty-label">{{ __("Qty for next item") }}</span>
+					<v-text-field
+						density="compact"
+						variant="solo"
+						color="primary"
+						class="pos-themed-input tools-panel__qty-field"
+						hide-details
+						data-pos-keyboard-target="item-qty"
+						:model-value="qtyInput"
+						@update:model-value="$emit('update:qtyInput', $event)"
+						type="text"
+						inputmode="decimal"
+						@keydown.enter="$emit('enter')"
+						@keydown.esc="blurTarget"
+						@focus="$emit('clear-qty')"
+						@click="$emit('clear-qty')"
+						@blur="$emit('blur-qty')"
+					></v-text-field>
+				</div>
 				<div class="tools-panel__actions">
 					<v-btn
 						v-if="context === 'purchase'"
@@ -186,6 +222,7 @@ const props = defineProps({
 	syncProgress: { type: Number, default: 0 },
 	syncItemsCount: { type: Number, default: 0 },
 	context: { type: String, default: "pos" },
+	isPhone: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -208,6 +245,13 @@ const emit = defineEmits([
 
 const debounce_search = ref(null);
 const toolsOpen = ref(false);
+// The "multiply the next tap" state only surfaces on phone when it is
+// armed (≠1) — as a chip on the bar, tappable to disarm. The permanent
+// QTY field stays desktop-only.
+const qtyMultiplierActive = computed(() => {
+	const parsed = Number(props.qtyInput);
+	return Number.isFinite(parsed) && parsed !== 1 && String(props.qtyInput) !== "";
+});
 const clampedSyncProgress = computed(() => {
 	const normalized = Number(props.syncProgress);
 	if (!Number.isFinite(normalized) || normalized <= 0) {
@@ -255,13 +299,12 @@ defineExpose({
 </script>
 
 <style scoped>
+/* The header card (selector-header-card) is the sticky element and owns
+   the surface; a second sticky + background here painted a stacked
+   double panel on phones. */
 .sticky-header {
-	position: sticky;
-	top: 0;
-	z-index: 5;
-	background: var(--pos-surface);
+	background: transparent;
 	padding: 12px 12px 0 12px;
-	border-bottom: 1px solid var(--pos-border);
 	margin-bottom: 0;
 }
 
@@ -355,6 +398,29 @@ defineExpose({
 	gap: 6px;
 }
 
+.tools-panel__qty {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding-bottom: 8px;
+}
+
+.tools-panel__qty-label {
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--pos-text-secondary);
+	white-space: nowrap;
+}
+
+.tools-panel__qty-field {
+	max-width: 110px;
+}
+
+.qty-multiplier-chip {
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
 .tools-panel__meta {
 	display: flex;
 	align-items: center;
@@ -385,9 +451,14 @@ defineExpose({
 
 @media (max-width: 768px) {
 	.sticky-header {
-		top: 0;
-		z-index: 13;
-		padding: 12px 12px 2px;
+		padding: 8px 10px;
+	}
+
+	/* Reclaim Vuetify's 12px col gutters — at 360px they cost the search
+	   label 48px it does not have. */
+	.sticky-header .items > .v-col {
+		padding-left: 0;
+		padding-right: 0;
 	}
 
 	.tools-panel {

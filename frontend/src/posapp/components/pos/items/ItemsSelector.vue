@@ -30,11 +30,12 @@
 
 			<!-- Add dynamic-padding wrapper like Invoice component -->
 			<div class="dynamic-padding">
-				<v-card flat class="selector-section-card selector-header-card pos-themed-card">
+				<v-card flat class="selector-header-card pos-themed-card">
 					<ItemHeader
 						v-model:search-input="search_input"
 						v-model:qty-input="debounce_qty"
 						:pos-profile="pos_profile"
+						:is-phone="isPhone"
 						:scanner-locked="scannerLocked"
 						:enable-background-sync="enable_background_sync"
 						:last-sync-time="lastSyncTimeLabel"
@@ -1341,6 +1342,12 @@ defineExpose({
 	display: flex;
 	flex-direction: column;
 	gap: var(--dynamic-sm);
+	/* Definite height so the results card (flex:1) and the table's
+	   height:100% chain resolve — without this the table's min-height
+	   floor decides, the card overflows, and rows scroll behind the
+	   sticky search bar. */
+	height: 100%;
+	min-height: 0;
 }
 
 .selection-card {
@@ -1370,18 +1377,42 @@ defineExpose({
 	color: var(--pos-text-primary);
 }
 
+/* The search header intentionally does NOT take .selector-section-card:
+   on phone it must read as the top edge of the list (a bar), not a
+   floating card over it. Desktop keeps the card look via this rule. */
 .selector-header-card {
 	padding: 0;
 	overflow: hidden;
 	position: sticky;
 	top: 0;
 	z-index: 8;
+	/* Never cede height to the flex column — the results card absorbs
+	   all shortfall; without this the bar collapses to 0 on phones. */
+	flex: 0 0 auto;
+	background: var(--pos-surface-muted);
+	border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+	border-radius: var(--pos-radius-md, 18px);
 }
 
 .selector-results-card {
 	padding: var(--dynamic-xs);
 	overflow: hidden;
 	min-width: 0;
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* The v-row/v-col wrapper between the results card and the table adds
+   Vuetify gutters and breaks the height chain the virtual scroller
+   needs; neutralise both. */
+.selector-results-card .items,
+.selector-results-card .items > .v-col {
+	height: 100%;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
 }
 
 .dynamic-scroll {
@@ -1498,9 +1529,18 @@ defineExpose({
 	}
 
 	.selector-header-card {
-		top: max(4px, env(safe-area-inset-top));
+		/* NOT env(safe-area-inset-top): this element is sticky inside the
+		   selector card's scrollport, ~290px below the viewport top — the
+		   status-bar inset pushed it 31px down and let rows show through
+		   the transparent band above it (the "floating window" bug). */
+		top: 0;
 		z-index: 12;
-		box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+		border-radius: 0;
+		border-left: 0;
+		border-right: 0;
+		box-shadow: none;
+		/* Cancel the .dynamic-padding inset → edge-to-edge bar. */
+		margin-inline: calc(var(--dynamic-xs) * -1);
 	}
 
 	.items-card-grid {
