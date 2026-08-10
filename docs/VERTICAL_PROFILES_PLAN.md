@@ -153,16 +153,16 @@ fixtures. Custom Field names are globally unique per site (`{dt}-{fieldname}`,
 last writer wins, silently) — per-vertical fieldname prefixes
 (`posa_rt_*`, `posa_tl_*`) are mandatory, enforced by a fixture lint.
 
-### C9. Upstream decision made explicit (finding 10)
-Upstream is `defendicon/POS-Awesome-V15` (not yrestom), it is alive, and it
-merged as recently as 2026-07-28. The fork is 383 commits / 65k insertions
-ahead; upstream's three hottest files (Payments 191 commits, Invoice 134,
-ItemsSelector 88) are exactly the registry's targets. **Decision required
-from Marco before M2**: (a) declare the fork terminal and stop merging —
-registry refactors become free; or (b) keep merging — the registry is then
-confined to new wrapper files and the three hot files stay structurally
-recognizable to `git merge`. The C1 store-extraction work is compatible
-with either.
+### C9. Upstream decision — DECIDED 2026-08-09: terminal fork (finding 10)
+Upstream is `defendicon/POS-Awesome-V15` (not yrestom), alive, last merged
+2026-07-28. The fork is 383 commits / 65k insertions ahead.
+**Marco's decision: (a) — the fork is terminal.** No more upstream merges;
+upstream is watched from time to time and good fixes are **cherry-picked**
+individually. Consequences: registry and store-extraction refactors are
+unconstrained (no merge-recognizability requirement on Payments.vue /
+Invoice.vue / ItemsSelector.vue); the "Upstream rebase: keep these lines"
+markers become historical; cherry-picks are evaluated against our tree,
+never rebased onto.
 
 ### C10. Roles enter the capability function (finding 13)
 The frontend has zero role awareness today (all gating is backend

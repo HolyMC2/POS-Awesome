@@ -147,7 +147,11 @@
 				</v-card>
 			</div>
 		</v-card>
+		<!-- Lean layout hides the extras toolbar on the SALES register only:
+		     this component also mounts in purchase and barcode-printing
+		     contexts, which keep their filters regardless of the flag. -->
 		<ItemActionToolbar
+			v-if="!(verticalStore.leanVerticalLayout && context === 'pos')"
 			v-model="item_group"
 			:items-group="items_group"
 			v-model:items-view="items_view"
@@ -254,6 +258,7 @@ import { useCustomersStore } from "../../../stores/customersStore";
 import { useToastStore } from "../../../stores/toastStore";
 import { useUIStore } from "../../../stores/uiStore";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
+import { useVerticalStore } from "../../../stores/verticalStore";
 import { useEmployeeStore } from "../../../stores/employeeStore";
 
 import { parseBooleanSetting } from "../../../utils/stock";
@@ -281,6 +286,7 @@ const vmInstance = getCurrentInstance();
 const customersStore = useCustomersStore();
 const toastStore = useToastStore();
 const uiStore = useUIStore();
+const verticalStore = useVerticalStore();
 const invoiceStore = useInvoiceStore();
 const employeeStore = useEmployeeStore();
 const { selectedCustomer } = storeToRefs(customersStore);

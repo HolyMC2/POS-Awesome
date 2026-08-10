@@ -17,6 +17,9 @@
  *   updates and provides build-version string formatting for display.
  * - `usePricingRulesStore` — offline pricing-rules snapshot and rule evaluation
  *   applied to cart items during price calculation.
+ * - `useVerticalStore` — capability + layout resolution for vertical presets;
+ *   components ask `has(capability)` / read resolved layout, never a vertical
+ *   name (docs/VERTICAL_PROFILES_PLAN.md).
  */
 
 import { createPinia } from "pinia";
@@ -31,5 +34,6 @@ export { useItemsStore } from "./itemsStore";
 export { useInvoiceStore } from "./invoiceStore";
 export { useUpdateStore, formatBuildVersion } from "./updateStore";
 export { usePricingRulesStore } from "./pricingRulesStore";
+export { useVerticalStore } from "./verticalStore";
 
 export default pinia;

@@ -265,6 +265,7 @@ import { connectQzTray } from "../../../services/qzTray";
 import { useRtl } from "../../../composables/core/useRtl";
 import { useUIStore } from "../../../stores/uiStore.js";
 import { useInvoiceStore } from "../../../stores/invoiceStore.js";
+import { useVerticalStore } from "../../../stores/verticalStore";
 import { useItemsStore } from "../../../stores/itemsStore.js";
 import { useCustomersStore } from "../../../stores/customersStore.js";
 import { storeToRefs } from "pinia";
@@ -368,10 +369,17 @@ export default {
 			parseBooleanSetting(posProfile.value?.saldo_enabled),
 		);
 
-		const useCompactPosSwitcher = computed(() => responsive.windowWidth.value < 1100);
+		// Lean vertical layout (verticalStore) forces the stacked
+		// single-panel mode + dock at any width; otherwise width decides.
+		const vertical = useVerticalStore();
+		const useCompactPosSwitcher = computed(
+			() => vertical.leanVerticalLayout || responsive.windowWidth.value < 1100,
+		);
 		const compactPanel = ref("selector");
 		const isPhone = computed(() => responsive.isPhone.value);
-		const showBottomDock = computed(() => !dialog.value && responsive.windowWidth.value < 1100);
+		const showBottomDock = computed(
+			() => !dialog.value && (vertical.leanVerticalLayout || responsive.windowWidth.value < 1100),
+		);
 		const bottomDockHeight = ref(0);
 		let mobileDockObserver = null;
 		const returnsMounted = ref(false);
