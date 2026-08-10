@@ -339,6 +339,9 @@ export default {
 		const shift = usePosShift(() => {
 			dialog.value = true;
 		});
+		const handleSubmitClosingPos = (data) => {
+			shift.submit_closing_pos(data);
+		};
 		const offers = useOffers();
 		const uiStore = useUIStore();
 		const invoiceStore = useInvoiceStore();
@@ -693,9 +696,7 @@ export default {
 				});
 			}
 			if (eventBus) {
-				eventBus.on("submit_closing_pos", (data) => {
-					shift.submit_closing_pos(data);
-				});
+				eventBus.on("submit_closing_pos", handleSubmitClosingPos);
 				eventBus.on("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.on("set_compact_panel", setCompactPanel);
 				eventBus.on("open_returns", handleOpenReturns);
@@ -719,7 +720,10 @@ export default {
 				mobileDockObserver = null;
 			}
 			if (eventBus) {
-				eventBus.off("submit_closing_pos");
+				// Always pass the handler: a bare off("submit_closing_pos")
+				// removes EVERY listener for the event, including ones other
+				// components registered.
+				eventBus.off("submit_closing_pos", handleSubmitClosingPos);
 				eventBus.off("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.off("set_compact_panel", setCompactPanel);
 				eventBus.off("open_returns", handleOpenReturns);
