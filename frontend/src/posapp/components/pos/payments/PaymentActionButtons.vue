@@ -1,7 +1,12 @@
 <template>
-	<v-card flat :class="['cards mb-0 mt-3 pa-0', { compact }]">
-		<v-row align="start" no-gutters>
-			<v-col cols="12" sm="6">
+	<v-card flat :class="['cards mb-0 mt-2 pa-0', { compact }]">
+		<!-- Submit + Submit&Print share ONE row on every width (phone included)
+		     so the footer stays ~one thumb-row tall instead of three stacked
+		     full-width bars that float over the numpad on a phone. Cancel is
+		     de-emphasised to a slim text row — it is the rare exit, not a peer
+		     of the money buttons. -->
+		<v-row align="center" no-gutters class="payment-action-row">
+			<v-col cols="6" class="pr-1">
 				<v-btn
 					ref="submitButton"
 					block
@@ -18,7 +23,7 @@
 					{{ __("Submit") }}
 				</v-btn>
 			</v-col>
-			<v-col cols="12" sm="6" class="payment-action-col">
+			<v-col cols="6" class="pl-1">
 				<v-btn
 					block
 					size="large"
@@ -36,10 +41,10 @@
 			<v-col cols="12">
 				<v-btn
 					block
-					size="large"
+					size="small"
 					color="error"
-					variant="flat"
-					class="mt-2 pa-1 payment-cancel-btn payment-footer-btn"
+					variant="text"
+					class="mt-1 payment-cancel-btn payment-cancel-btn--slim"
 					data-pos-keyboard-target="payment-cancel"
 					@click="$emit('cancel')"
 				>
@@ -91,8 +96,18 @@ const __ = window.__;
 	background-color: rgb(var(--v-theme-success)) !important;
 }
 
-.payment-cancel-btn {
-	background-color: rgb(var(--v-theme-error)) !important;
+/* Slim, low-emphasis exit — a text row, not a full red bar competing with the
+   two money buttons above it. */
+.payment-cancel-btn--slim {
+	min-height: 32px !important;
+	font-size: 0.8rem !important;
+	letter-spacing: 0;
+	opacity: 0.85;
+}
+
+.payment-cancel-btn--slim:hover,
+.payment-cancel-btn--slim:focus-visible {
+	opacity: 1;
 }
 
 .payment-footer-btn:hover,
@@ -117,17 +132,6 @@ const __ = window.__;
 	background-color: rgba(var(--v-theme-success), 0.9) !important;
 }
 
-.payment-cancel-btn:hover,
-.payment-cancel-btn:focus,
-.payment-cancel-btn:focus-visible,
-.payment-cancel-btn:active {
-	background-color: rgba(var(--v-theme-error), 0.9) !important;
-}
-
-.payment-action-col {
-	padding-left: 4px;
-}
-
 .payment-footer-btn:active {
 	transform: translateY(0);
 }
@@ -141,11 +145,6 @@ const __ = window.__;
 @media (max-width: 768px) {
 	.cards {
 		margin-top: 0 !important;
-	}
-
-	.payment-action-col {
-		padding-left: 0;
-		padding-top: 6px;
 	}
 
 	.payment-footer-btn {
