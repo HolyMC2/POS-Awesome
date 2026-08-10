@@ -96,6 +96,42 @@ export const useInvoiceStore = defineStore("invoice", () => {
 	const grossTotal = ref(0);
 	const discountTotal = ref(0);
 
+	// ── Derived state PUBLISHED by the invoice panel ────────────────────
+	// The shell (Pos.vue) used to reach into the Invoice component
+	// instance (`invoicePanel.value?.subtotal` …) — optional chaining
+	// turned a missing member into a silent wrong total. The panel now
+	// pushes these via publishDerivedTotals(); any cart view that renders
+	// an invoice must publish them (part of the CartView contract —
+	// docs/VERTICAL_PROFILES_PLAN.md C1).
+	const liveSubtotal = ref<number | null>(null);
+	const returnDiscountMeta = ref<{
+		ratio: number;
+		original_discount: number;
+		prorated_discount: number;
+	} | null>(null);
+	const discountPercentageOfferName = ref<string | null>(null);
+
+	const publishDerivedTotals = (payload: {
+		subtotal?: number | null;
+		returnDiscountMeta?: {
+			ratio: number;
+			original_discount: number;
+			prorated_discount: number;
+		} | null;
+		discountPercentageOfferName?: string | null;
+	}) => {
+		if ("subtotal" in payload) {
+			const parsed = Number(payload.subtotal);
+			liveSubtotal.value = Number.isFinite(parsed) ? parsed : null;
+		}
+		if ("returnDiscountMeta" in payload) {
+			returnDiscountMeta.value = payload.returnDiscountMeta ?? null;
+		}
+		if ("discountPercentageOfferName" in payload) {
+			discountPercentageOfferName.value = payload.discountPercentageOfferName ?? null;
+		}
+	};
+
 	/**
 	 * Bumps `metadata.changeVersion` and records `lastUpdated = Date.now()`.
 	 * Called after every state mutation so that watchers and downstream computed
@@ -656,6 +692,10 @@ export const useInvoiceStore = defineStore("invoice", () => {
 		totalQty,
 		grossTotal,
 		discountTotal,
+		liveSubtotal,
+		returnDiscountMeta,
+		discountPercentageOfferName,
+		publishDerivedTotals,
 		itemsCount,
 		itemsMap,
 		setInvoiceDoc,

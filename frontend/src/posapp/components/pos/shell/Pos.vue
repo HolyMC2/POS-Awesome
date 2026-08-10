@@ -113,7 +113,7 @@
 				cols="12"
 				class="pos dynamic-col dynamic-col--invoice"
 			>
-				<Invoice ref="invoicePanel" @open-saldo-picker="openSaldoPicker"></Invoice>
+				<Invoice @open-saldo-picker="openSaldoPicker"></Invoice>
 			</v-col>
 		</v-row>
 		<div v-if="showBottomDock" ref="mobileDock" class="mobile-dock">
@@ -292,7 +292,6 @@ export default {
 		const eventBus = inject("eventBus");
 		const dialog = ref(false);
 		const posRoot = ref(null);
-		const invoicePanel = ref(null);
 		const additionalDiscountField = ref(null);
 		const mobileDock = ref(null);
 		// SALDO-INTEGRATION-POINT — picker open state + handlers live in
@@ -391,8 +390,10 @@ export default {
 		const isEditingAdditionalDiscount = ref(false);
 		const isEditingAdditionalDiscountPercentage = ref(false);
 		const invoiceTotal = computed(() => {
-			const liveSubtotal = Number(invoicePanel.value?.subtotal);
-			if (Number.isFinite(liveSubtotal)) {
+			// Published by the invoice panel (CartView contract) — never read
+			// off the component instance.
+			const liveSubtotal = Number(invoiceStore.liveSubtotal);
+			if (invoiceStore.liveSubtotal !== null && Number.isFinite(liveSubtotal)) {
 				return liveSubtotal;
 			}
 
@@ -435,11 +436,10 @@ export default {
 		});
 
 		const discountPercentageOfferName = computed(
-			() => invoicePanel.value?.discount_percentage_offer_name || null,
+			() => invoiceStore.discountPercentageOfferName || null,
 		);
 		const showUnsignedReturnDiscount = computed(
-			() =>
-				!!invoicePanel.value?.return_discount_meta && !posProfile.value?.posa_use_percentage_discount,
+			() => !!invoiceStore.returnDiscountMeta && !posProfile.value?.posa_use_percentage_discount,
 		);
 		const normalizeDiscountDisplay = (value) => {
 			if (value === 0 || value === "0") {
@@ -452,7 +452,7 @@ export default {
 				return "";
 			}
 			if (showUnsignedReturnDiscount.value) {
-				const proratedValue = Number(invoicePanel.value?.return_discount_meta?.prorated_discount);
+				const proratedValue = Number(invoiceStore.returnDiscountMeta?.prorated_discount);
 				if (Number.isFinite(proratedValue)) {
 					return Math.abs(proratedValue);
 				}
@@ -486,7 +486,7 @@ export default {
 		watch(
 			() => [
 				additionalDiscount.value,
-				invoicePanel.value?.return_discount_meta?.prorated_discount,
+				invoiceStore.returnDiscountMeta?.prorated_discount,
 				posProfile.value?.posa_use_percentage_discount,
 			],
 			([value]) => {
@@ -545,7 +545,7 @@ export default {
 		const jumpToCustomer = () => {
 			showInvoicePanel();
 			nextTick(() => {
-				invoicePanel.value?.openCustomerDetails?.();
+				eventBus.emit("open_customer_details");
 			});
 		};
 		const showPaymentPanel = () => {
@@ -558,15 +558,9 @@ export default {
 			uiStore.setActiveView("payment");
 		};
 		const triggerInvoicePay = () => {
-			if (typeof invoicePanel.value?.handleShowPaymentRequest === "function") {
-				invoicePanel.value.handleShowPaymentRequest();
-				return;
-			}
-			if (typeof invoicePanel.value?.show_payment === "function") {
-				invoicePanel.value.show_payment();
-				return;
-			}
-			showPaymentPanel();
+			// The invoice panel owns the pre-payment validation; it is
+			// always mounted (v-show, not v-if), so the event always lands.
+			eventBus.emit("request_invoice_payment");
 		};
 		const isSelectorViewActive = (view) => compactPanel.value === "selector" && activeView.value === view;
 		const getFallbackBottomSpace = () => {
@@ -614,7 +608,7 @@ export default {
 			isEditingAdditionalDiscountPercentage.value = true;
 		};
 		const commitAdditionalDiscountPercentage = () => {
-			invoicePanel.value?.update_discount_umount?.();
+			eventBus.emit("recalc_additional_discount");
 		};
 		const handleAdditionalDiscountPercentageBlur = () => {
 			isEditingAdditionalDiscountPercentage.value = false;
@@ -846,7 +840,6 @@ export default {
 			discountPercentageOfferName,
 			getCurrencySymbol,
 			posRoot,
-			invoicePanel,
 			eventBus,
 			dialog,
 			returnsMounted,

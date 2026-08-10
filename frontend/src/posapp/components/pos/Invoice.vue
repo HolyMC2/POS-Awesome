@@ -1169,6 +1169,11 @@ export default {
 		this._busHandlers = {
 			add_item: this.add_item,
 			clear_invoice: this.handleClearInvoice,
+			// Shell → panel requests (replace the old invoicePanel ref
+			// reach-ins — VERTICAL_PROFILES_PLAN.md C1):
+			open_customer_details: () => this.openCustomerDetails(),
+			request_invoice_payment: () => this.handleShowPaymentRequest(),
+			recalc_additional_discount: () => this.update_discount_umount(),
 			apply_pricing_rules: () => {
 				if (typeof this.schedulePricingRuleApplication === "function") {
 					this.schedulePricingRuleApplication();
@@ -1283,6 +1288,30 @@ export default {
 					}, 100);
 				});
 			}
+		},
+		// ── CartView contract: publish derived totals to invoiceStore ──
+		// The shell reads these from the store; it must never reach into
+		// this component instance (VERTICAL_PROFILES_PLAN.md C1).
+		subtotal: {
+			immediate: true,
+			handler(value) {
+				this.invoiceStore.publishDerivedTotals({ subtotal: value });
+			},
+		},
+		return_discount_meta: {
+			immediate: true,
+			deep: true,
+			handler(value) {
+				this.invoiceStore.publishDerivedTotals({ returnDiscountMeta: value });
+			},
+		},
+		discount_percentage_offer_name: {
+			immediate: true,
+			handler(value) {
+				this.invoiceStore.publishDerivedTotals({
+					discountPercentageOfferName: value || null,
+				});
+			},
 		},
 	},
 };

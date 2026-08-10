@@ -32,8 +32,10 @@ describe("mobile dock customer chip", () => {
 		expect(source).toMatch(
 			/class="mobile-dock__customer"[\s\S]{0,400}@click="jumpToCustomer"/,
 		);
+		// The shell asks the invoice panel over the bus — it must not reach
+		// into the component instance (VERTICAL_PROFILES_PLAN.md C1).
 		expect(source).toMatch(
-			/const jumpToCustomer = \(\) => \{[\s\S]*?showInvoicePanel\(\)[\s\S]*?openCustomerDetails/,
+			/const jumpToCustomer = \(\) => \{[\s\S]*?showInvoicePanel\(\)[\s\S]*?emit\("open_customer_details"\)/,
 		);
 	});
 
