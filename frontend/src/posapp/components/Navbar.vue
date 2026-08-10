@@ -1117,5 +1117,8 @@ export default {
 	position: relative;
 	display: flex;
 	align-items: center;
+	/* Allow the status+saldo cluster to give ground before the navbar
+	   overflows at phone width. */
+	min-width: 0;
 }
 </style>

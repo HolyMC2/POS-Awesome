@@ -188,41 +188,44 @@
 					@click="setSelectorView('items')"
 				>
 					<v-icon icon="mdi-magnify" size="20" />
-					<span>{{ __("Browse") }}</span>
+					<span class="mobile-dock__tab-label">{{ __("Browse") }}</span>
 				</button>
 				<button
 					type="button"
 					class="mobile-dock__tab"
 					:class="{ 'mobile-dock__tab--active': activeView === 'offers' }"
+					:aria-label="offersCount ? `${__('Offers')} — ${offersCount}` : __('Offers')"
 					@click="setSelectorView('offers')"
 				>
 					<span v-if="offersCount" class="mobile-dock__pill mobile-dock__pill--sm">{{
 						offersCount
 					}}</span>
 					<v-icon icon="mdi-tag-outline" size="20" />
-					<span>{{ __("Offers") }}</span>
+					<span class="mobile-dock__tab-label">{{ __("Offers") }}</span>
 				</button>
 				<button
 					type="button"
 					class="mobile-dock__tab mobile-dock__tab--cart"
 					:class="{ 'mobile-dock__tab--active': compactPanel === 'invoice' }"
+					:aria-label="itemsCount ? `${__('Cart')} — ${itemsCount} ${__('items')}` : __('Cart')"
 					@click="showInvoicePanel"
 				>
 					<span v-if="itemsCount" class="mobile-dock__pill">{{ itemsCount }}</span>
 					<v-icon icon="mdi-cart-outline" size="22" />
-					<span>{{ __("Cart") }}</span>
+					<span class="mobile-dock__tab-label">{{ __("Cart") }}</span>
 				</button>
 				<button
 					type="button"
 					class="mobile-dock__tab"
 					:class="{ 'mobile-dock__tab--active': activeView === 'coupons' }"
+					:aria-label="couponsCount ? `${__('Coupons')} — ${couponsCount}` : __('Coupons')"
 					@click="setSelectorView('coupons')"
 				>
 					<span v-if="couponsCount" class="mobile-dock__pill mobile-dock__pill--sm">{{
 						couponsCount
 					}}</span>
 					<v-icon icon="mdi-ticket-percent-outline" size="20" />
-					<span>{{ __("Coupons") }}</span>
+					<span class="mobile-dock__tab-label">{{ __("Coupons") }}</span>
 				</button>
 				<button
 					type="button"
@@ -231,7 +234,7 @@
 					@click="triggerInvoicePay"
 				>
 					<v-icon icon="mdi-credit-card-outline" size="20" />
-					<span>{{ __("Pay") }}</span>
+					<span class="mobile-dock__tab-label">{{ __("Pay") }}</span>
 				</button>
 			</div>
 		</div>
@@ -1087,6 +1090,8 @@ export default {
 	max-width: 60%;
 	min-height: 30px;
 	padding: 3px 9px;
+	/* Visual chip stays 30px; the tap target reaches 44 via margin-less
+	   padding on coarse pointers below. */
 	border: 1px solid var(--pos-border);
 	border-radius: 999px;
 	background: rgba(var(--v-theme-primary), 0.08);
@@ -1100,6 +1105,14 @@ export default {
 
 .mobile-dock__customer:active {
 	transform: scale(0.97);
+}
+
+@media (pointer: coarse) {
+	.mobile-dock__customer {
+		min-height: 44px;
+		padding-top: 10px;
+		padding-bottom: 10px;
+	}
 }
 
 .mobile-dock__customer-name {
@@ -1149,7 +1162,10 @@ export default {
 		transform 0.1s ease;
 }
 
-.mobile-dock__tab span {
+/* Label spans only — a bare `span` selector also matched the count
+   pill, whose absolute box then took width:100% of the tab cell and
+   rendered as a 70px blue bar over the icon. */
+.mobile-dock__tab-label {
 	display: block;
 	width: 100%;
 	min-width: 0;
@@ -1164,8 +1180,11 @@ export default {
 }
 
 .mobile-dock__tab--active {
-	background: rgba(var(--v-theme-primary), 0.14);
+	background: rgba(var(--v-theme-primary), 0.18);
 	color: rgb(var(--v-theme-primary));
+	/* Colour alone was too faint a signal on the dark card — the inset
+	   top rule marks the active tab unmistakably. */
+	box-shadow: inset 0 2px 0 rgb(var(--v-theme-primary));
 }
 
 .mobile-dock__tab--pay.mobile-dock__tab--active {
@@ -1175,24 +1194,32 @@ export default {
 
 .mobile-dock__pill {
 	position: absolute;
-	top: 2px;
-	right: calc(50% - 24px);
-	min-width: 16px;
-	height: 16px;
-	padding: 0 4px;
+	top: 3px;
+	/* Left-anchored at the icon's top-right corner (icon half-width 11px
+	   − 7px overlap): 2-3 digit counts grow outward, never across the
+	   glyph or into the next cell. */
+	left: calc(50% + 4px);
+	right: auto;
+	width: auto;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 5px;
 	border-radius: 999px;
 	background: rgb(var(--v-theme-primary));
 	color: #fff;
-	font-size: 0.62rem;
+	font-size: 0.68rem;
 	font-weight: 700;
-	line-height: 16px;
+	line-height: 18px;
 	text-align: center;
+	/* Ring separates the badge from the icon; never swallows the tap. */
+	box-shadow: 0 0 0 2px var(--pos-card-bg);
+	pointer-events: none;
 }
 
 /* Offers/Coupons tabs carry a 20px icon (Cart's is 22) — pull their badge
  * in so it hugs the glyph instead of drifting toward the next cell. */
 .mobile-dock__pill--sm {
-	right: calc(50% - 20px);
+	left: calc(50% + 3px);
 }
 
 :deep(.v-theme--dark) .mobile-dock,

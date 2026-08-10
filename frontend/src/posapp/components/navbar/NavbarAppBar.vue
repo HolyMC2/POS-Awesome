@@ -1,7 +1,7 @@
 <template>
 	<v-app-bar
 		flat
-		:height="isMobile ? 64 : 56"
+		:height="isNarrow ? 56 : isMobile ? 64 : 56"
 		:class="[
 			'pos-navbar-enhanced elevation-2 pos-themed-card pos-theme-immediate',
 			rtlClasses,
@@ -374,6 +374,10 @@ export default {
 			return this.windowWidth < 768;
 		},
 
+		isNarrow() {
+			return this.windowWidth < 480;
+		},
+
 		isTablet() {
 			return this.windowWidth >= 768 && this.windowWidth < 1024;
 		},
@@ -590,9 +594,6 @@ export default {
 }
 
 @media (max-width: 768px) {
-	.mobile-navbar .pos-navbar-brand-section {
-		flex: 1;
-	}
 	.mobile-navbar .pos-navbar-actions-section {
 		gap: 4px;
 	}
@@ -1037,34 +1038,30 @@ export default {
 	padding: 0 8px !important;
 }
 
+/* Track content size, allow shrinking. The old `flex: 1` (basis 0%)
+   collapsed the brand box to the leftover ~35px and its ~110px of
+   content painted straight across the status button — the overlapped
+   wordmark in the phone screenshots. */
 .mobile-navbar .pos-navbar-brand-section {
 	gap: 8px;
-	flex-shrink: 0;
+	flex: 0 1 auto;
+	min-width: 0;
 }
 
 .mobile-navbar .pos-navbar-logo {
 	max-width: 28px !important;
 }
 
-/* The title is the only shrinkable box in the bar, so when the action
-   cluster ran long it absorbed the whole deficit and Vuetify's
-   placeholder ellipsis rendered the 3-letter brand as a meaningless
-   "P…". It is short enough to never need shrinking — the actions
-   cluster gives ground instead (StatusIndicator drops its inline
-   label at this width). */
+/* Shrinkable WITH Vuetify's own placeholder ellipsis (do not restore
+   the old `overflow: visible` override — it made the wordmark paint
+   over the status button instead of truncating). Space is freed at
+   phone width by hiding the logo bitmap and collapsing the saldo chip
+   to icon-only, so in practice the title never needs to truncate. */
 .mobile-navbar .pos-navbar-title {
 	font-size: 1rem !important;
-	flex: 0 0 auto;
+	flex: 0 1 auto;
 	max-width: none;
-}
-
-.mobile-navbar .pos-navbar-title :deep(.v-toolbar-title__placeholder) {
-	overflow: visible;
-}
-
-.mobile-navbar .pos-navbar-title-light,
-.mobile-navbar .pos-navbar-title-bold {
-	font-size: 0.9rem !important;
+	min-width: 0;
 }
 
 .mobile-navbar .pos-navbar-actions-section {
@@ -1090,37 +1087,32 @@ export default {
 
 /* Enhanced mobile responsiveness */
 @media (max-width: 480px) {
+	/* Height comes from the :height prop (isNarrow) — VAppBar reserves
+	   layout space from the measured toolbar, so forcing height here
+	   made paint (56) and reserved space (64) disagree by 8px. */
 	.mobile-navbar {
 		padding: 0 4px !important;
-		height: 56px !important;
 	}
 
 	.mobile-navbar .pos-navbar-brand-section {
 		gap: 6px;
 	}
 
-	.mobile-navbar .pos-navbar-logo {
-		max-width: 24px !important;
-	}
-
 	.mobile-navbar .pos-navbar-title {
 		font-size: 0.9rem !important;
-	}
-
-	.mobile-navbar .pos-navbar-title-light {
-		display: none !important; /* Hide "POS" part on very small screens */
-	}
-
-	.mobile-navbar .mobile-btn,
-	.mobile-navbar .nav-icon {
-		min-width: 32px !important;
-		min-height: 32px !important;
-		padding: 4px !important;
 	}
 
 	/* Hide hamburger icon text on very small screens */
 	.mobile-navbar .v-app-bar-nav-icon .v-icon {
 		font-size: 20px !important;
+	}
+}
+
+/* The wordmark and the logo bitmap are the same Desk link — the bitmap
+   is redundant at phone width and its ~36px go to the search/actions. */
+@media (max-width: 600px) {
+	.mobile-navbar .pos-navbar-logo {
+		display: none !important;
 	}
 }
 
