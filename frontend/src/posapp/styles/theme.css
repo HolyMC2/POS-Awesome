@@ -47,6 +47,20 @@
 	--pos-info: #2196f3;
 	--pos-info-container: #e3f2fd;
 
+	/* Qty stepper buttons (minus = warning, plus = success). These were
+	   referenced by items-table-styles.css but never defined, so the
+	   buttons fell back to Vuetify's flat grey — two identical slabs. */
+	--pos-button-warning-bg: #fff3e0;
+	--pos-button-warning-text: #e65100;
+	--pos-button-warning-border: #ff9800;
+	--pos-button-warning-hover-bg: #ff9800;
+	--pos-button-warning-hover-text: #1f1300;
+	--pos-button-success-bg: #e8f5e8;
+	--pos-button-success-text: #1b5e20;
+	--pos-button-success-border: #66bb6a;
+	--pos-button-success-hover-bg: #66bb6a;
+	--pos-button-success-hover-text: #06230a;
+
 	/* Border and Divider Colors */
 	--pos-border: rgba(0, 0, 0, 0.12);
 	--pos-border-light: rgba(0, 0, 0, 0.06);
@@ -159,6 +173,18 @@
 	--pos-info: #2196f3;
 	--pos-info-container: #1565c0;
 
+	/* Qty stepper buttons — dark pairs (see light block note). */
+	--pos-button-warning-bg: #3a2b10;
+	--pos-button-warning-text: #ffd54f;
+	--pos-button-warning-border: #f57c00;
+	--pos-button-warning-hover-bg: #f57c00;
+	--pos-button-warning-hover-text: #1f1300;
+	--pos-button-success-bg: #1e3323;
+	--pos-button-success-text: #81c784;
+	--pos-button-success-border: #2e7d32;
+	--pos-button-success-hover-bg: #2e7d32;
+	--pos-button-success-hover-text: #eaffea;
+
 	/* Border and Divider Colors */
 	--pos-border: rgba(255, 255, 255, 0.12);
 	--pos-border-light: rgba(255, 255, 255, 0.06);
@@ -230,6 +256,18 @@
 		--pos-error-container: #c62828;
 		--pos-info: #2196f3;
 		--pos-info-container: #1565c0;
+
+		/* Qty stepper buttons — dark pairs (see light block note). */
+		--pos-button-warning-bg: #3a2b10;
+		--pos-button-warning-text: #ffd54f;
+		--pos-button-warning-border: #f57c00;
+		--pos-button-warning-hover-bg: #f57c00;
+		--pos-button-warning-hover-text: #1f1300;
+		--pos-button-success-bg: #1e3323;
+		--pos-button-success-text: #81c784;
+		--pos-button-success-border: #2e7d32;
+		--pos-button-success-hover-bg: #2e7d32;
+		--pos-button-success-hover-text: #eaffea;
 		--pos-border: rgba(255, 255, 255, 0.12);
 		--pos-border-light: rgba(255, 255, 255, 0.06);
 		--pos-divider: #373737;
