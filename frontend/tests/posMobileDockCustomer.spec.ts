@@ -73,25 +73,21 @@ describe("mobile dock tab badges", () => {
 			"offersCount, couponsCount } = storeToRefs(uiStore)",
 		);
 
-		const offersTab = between(
-			"@click=\"setSelectorView('offers')\"",
-			"mdi-tag-outline",
-		);
-		expect(offersTab).toContain('v-if="offersCount"');
-		expect(offersTab).toContain("mobile-dock__pill");
+		// Tabs now render from the profile-driven dock_tabs list; the badge
+		// counts come from the per-tab defs.
+		const offersDef = between("offers: {", 'isActive: () => activeView.value === "offers"');
+		expect(offersDef).toContain("badge: () => offersCount.value");
+		expect(offersDef).toContain("badgeSm: true");
 
-		const couponsTab = between(
-			"@click=\"setSelectorView('coupons')\"",
-			"mdi-ticket-percent-outline",
-		);
-		expect(couponsTab).toContain('v-if="couponsCount"');
-		expect(couponsTab).toContain("mobile-dock__pill");
+		const couponsDef = between("coupons: {", 'isActive: () => activeView.value === "coupons"');
+		expect(couponsDef).toContain("badge: () => couponsCount.value");
 	});
 
-	it("keeps the cart badge untouched", () => {
-		expect(source).toMatch(
-			/<span v-if="itemsCount" class="mobile-dock__pill">\{\{ itemsCount \}\}<\/span>/,
-		);
+	it("renders one shared pill element driven by tab.badge()", () => {
+		// Single data-driven pill instead of per-tab hardcoded spans.
+		expect(source).toContain('v-if="tab.badge && tab.badge()"');
+		expect(source).toContain("cart: {");
+		expect(source).toContain("badge: () => itemsCount.value");
 	});
 });
 

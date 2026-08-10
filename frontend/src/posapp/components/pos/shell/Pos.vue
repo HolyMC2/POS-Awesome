@@ -64,7 +64,7 @@
 				cols="12"
 				class="pos dynamic-col dynamic-col--selector"
 			>
-				<ItemsSelector context="pos" />
+				<component :is="ItemsView" context="pos" />
 			</v-col>
 			<v-col
 				v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'offers'"
@@ -113,7 +113,7 @@
 				cols="12"
 				class="pos dynamic-col dynamic-col--invoice"
 			>
-				<Invoice @open-saldo-picker="openSaldoPicker"></Invoice>
+				<component :is="CartView" @open-saldo-picker="openSaldoPicker" />
 			</v-col>
 		</v-row>
 		<div v-if="showBottomDock" ref="mobileDock" class="mobile-dock">
@@ -203,61 +203,24 @@
 					/>
 				</div>
 			</v-expand-transition>
-			<div class="mobile-dock__tabs">
+			<div class="mobile-dock__tabs" :style="{ '--dock-tab-count': dockTabs.length }">
 				<button
+					v-for="tab in dockTabs"
+					:key="tab.id"
 					type="button"
 					class="mobile-dock__tab"
-					:class="{ 'mobile-dock__tab--active': isSelectorViewActive('items') }"
-					@click="setSelectorView('items')"
+					:class="[tab.cls, { 'mobile-dock__tab--active': tab.isActive() }]"
+					:aria-label="tab.ariaLabel()"
+					@click="tab.onTap()"
 				>
-					<v-icon icon="mdi-magnify" size="20" />
-					<span class="mobile-dock__tab-label">{{ __("Browse") }}</span>
-				</button>
-				<button
-					type="button"
-					class="mobile-dock__tab"
-					:class="{ 'mobile-dock__tab--active': activeView === 'offers' }"
-					:aria-label="offersCount ? `${__('Offers')} — ${offersCount}` : __('Offers')"
-					@click="setSelectorView('offers')"
-				>
-					<span v-if="offersCount" class="mobile-dock__pill mobile-dock__pill--sm">{{
-						offersCount
-					}}</span>
-					<v-icon icon="mdi-tag-outline" size="20" />
-					<span class="mobile-dock__tab-label">{{ __("Offers") }}</span>
-				</button>
-				<button
-					type="button"
-					class="mobile-dock__tab mobile-dock__tab--cart"
-					:class="{ 'mobile-dock__tab--active': compactPanel === 'invoice' }"
-					:aria-label="itemsCount ? `${__('Cart')} — ${itemsCount} ${__('items')}` : __('Cart')"
-					@click="showInvoicePanel"
-				>
-					<span v-if="itemsCount" class="mobile-dock__pill">{{ itemsCount }}</span>
-					<v-icon icon="mdi-cart-outline" size="22" />
-					<span class="mobile-dock__tab-label">{{ __("Cart") }}</span>
-				</button>
-				<button
-					type="button"
-					class="mobile-dock__tab"
-					:class="{ 'mobile-dock__tab--active': activeView === 'coupons' }"
-					:aria-label="couponsCount ? `${__('Coupons')} — ${couponsCount}` : __('Coupons')"
-					@click="setSelectorView('coupons')"
-				>
-					<span v-if="couponsCount" class="mobile-dock__pill mobile-dock__pill--sm">{{
-						couponsCount
-					}}</span>
-					<v-icon icon="mdi-ticket-percent-outline" size="20" />
-					<span class="mobile-dock__tab-label">{{ __("Coupons") }}</span>
-				</button>
-				<button
-					type="button"
-					class="mobile-dock__tab mobile-dock__tab--pay"
-					:class="{ 'mobile-dock__tab--active': activeView === 'payment' }"
-					@click="triggerInvoicePay"
-				>
-					<v-icon icon="mdi-credit-card-outline" size="20" />
-					<span class="mobile-dock__tab-label">{{ __("Pay") }}</span>
+					<span
+						v-if="tab.badge && tab.badge()"
+						class="mobile-dock__pill"
+						:class="{ 'mobile-dock__pill--sm': tab.badgeSm }"
+						>{{ tab.badge() }}</span
+					>
+					<v-icon :icon="tab.icon" :size="tab.iconSize" />
+					<span class="mobile-dock__tab-label">{{ tab.label() }}</span>
 				</button>
 			</div>
 		</div>
@@ -265,9 +228,18 @@
 </template>
 
 <script>
-import { defineAsyncComponent, inject, ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from "vue";
-import ItemsSelector from "../items/ItemsSelector.vue";
-import Invoice from "../Invoice.vue";
+import {
+	defineAsyncComponent,
+	inject,
+	markRaw,
+	ref,
+	onMounted,
+	onBeforeUnmount,
+	computed,
+	watch,
+	nextTick,
+} from "vue";
+import { resolveCartView, resolveItemsView } from "../../../vertical/viewRegistry";
 import OpeningDialog from "../shift/OpeningDialog.vue";
 import PosOffers from "../offers/PosOffers.vue";
 import PosCoupons from "../offers/PosCoupons.vue";
@@ -397,6 +369,10 @@ export default {
 		// Lean vertical layout (verticalStore) forces the stacked
 		// single-panel mode + dock at any width; otherwise width decides.
 		const vertical = useVerticalStore();
+		// Panels resolve through the view registry keyed (layout, context)
+		// — an unknown layout key throws at setup, never a blank counter.
+		const ItemsView = markRaw(resolveItemsView(vertical.layout.items_panel, "pos"));
+		const CartView = markRaw(resolveCartView(vertical.layout.cart_style, "pos"));
 		const useCompactPosSwitcher = computed(
 			() => vertical.leanVerticalLayout || responsive.windowWidth.value < 1100,
 		);
@@ -589,6 +565,63 @@ export default {
 			eventBus.emit("request_invoice_payment");
 		};
 		const isSelectorViewActive = (view) => compactPanel.value === "selector" && activeView.value === view;
+		// Dock tabs render from the capability profile's dock_tabs list —
+		// the shell owns HOW each id is drawn, the profile owns WHICH ids
+		// appear and in what order (plan M2). Unknown ids are dropped.
+		const DOCK_TAB_DEFS = {
+			browse: {
+				icon: "mdi-magnify",
+				iconSize: 20,
+				label: () => __("Browse"),
+				ariaLabel: () => __("Browse"),
+				isActive: () => isSelectorViewActive("items"),
+				onTap: () => setSelectorView("items"),
+			},
+			offers: {
+				icon: "mdi-tag-outline",
+				iconSize: 20,
+				badgeSm: true,
+				badge: () => offersCount.value,
+				label: () => __("Offers"),
+				ariaLabel: () => (offersCount.value ? `${__("Offers")} — ${offersCount.value}` : __("Offers")),
+				isActive: () => activeView.value === "offers",
+				onTap: () => setSelectorView("offers"),
+			},
+			cart: {
+				icon: "mdi-cart-outline",
+				iconSize: 22,
+				cls: "mobile-dock__tab--cart",
+				badge: () => itemsCount.value,
+				label: () => __("Cart"),
+				ariaLabel: () =>
+					itemsCount.value ? `${__("Cart")} — ${itemsCount.value} ${__("items")}` : __("Cart"),
+				isActive: () => compactPanel.value === "invoice",
+				onTap: () => showInvoicePanel(),
+			},
+			coupons: {
+				icon: "mdi-ticket-percent-outline",
+				iconSize: 20,
+				badgeSm: true,
+				badge: () => couponsCount.value,
+				label: () => __("Coupons"),
+				ariaLabel: () =>
+					couponsCount.value ? `${__("Coupons")} — ${couponsCount.value}` : __("Coupons"),
+				isActive: () => activeView.value === "coupons",
+				onTap: () => setSelectorView("coupons"),
+			},
+			pay: {
+				icon: "mdi-credit-card-outline",
+				iconSize: 20,
+				cls: "mobile-dock__tab--pay",
+				label: () => __("Pay"),
+				ariaLabel: () => __("Pay"),
+				isActive: () => activeView.value === "payment",
+				onTap: () => triggerInvoicePay(),
+			},
+		};
+		const dockTabs = computed(() =>
+			vertical.layout.dock_tabs.map((id) => ({ id, ...DOCK_TAB_DEFS[id] })).filter((tab) => tab.icon),
+		);
 		const getFallbackBottomSpace = () => {
 			const rawValue = responsive.responsiveStyles.value["--bottom-safe-space"];
 			const parsed = Number.parseFloat(String(rawValue || "0"));
@@ -883,6 +916,9 @@ export default {
 			dockDiscountLabel,
 			showDockDiscountToggle,
 			toggleDockDiscount,
+			ItemsView,
+			CartView,
+			dockTabs,
 			activeView,
 			paymentDialogOpen,
 			isPhone,
@@ -922,8 +958,6 @@ export default {
 		};
 	},
 	components: {
-		ItemsSelector,
-		Invoice,
 		OpeningDialog,
 		Payments,
 		Drafts,
@@ -1226,7 +1260,7 @@ export default {
 
 .mobile-dock__tabs {
 	display: grid;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-template-columns: repeat(var(--dock-tab-count, 5), minmax(0, 1fr));
 	gap: 6px;
 	padding: 7px 10px 9px;
 }

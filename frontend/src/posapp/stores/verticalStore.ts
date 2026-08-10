@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 import { useUIStore } from "./uiStore";
+import type { CartStyle, DockTabId, ItemsPanelStyle } from "../vertical/viewContracts";
 
 /**
  * Capability resolution for vertical presets (VERTICAL_PROFILES_PLAN.md).
@@ -21,9 +22,14 @@ import { useUIStore } from "./uiStore";
  */
 
 export interface VerticalLayout {
-	/** Structural layout of the sales screen. */
+	/** Operator-facing list style INSIDE the standard items panel. */
 	items_view: { default: "list" | "card"; allow: Array<"list" | "card"> };
-	cart_style: "table";
+	/** Registry key for the whole items panel (viewRegistry). */
+	items_panel: ItemsPanelStyle;
+	/** Registry key for the cart view (viewRegistry). */
+	cart_style: CartStyle;
+	/** Bottom-dock tabs, in render order (shell knows how to draw each id). */
+	dock_tabs: readonly DockTabId[];
 	/**
 	 * Force the stacked single-panel layout (selector/cart panels switched
 	 * via the bottom dock) regardless of viewport width. Off = width-based
@@ -47,7 +53,9 @@ const RETAIL_PHONES: VerticalProfile = {
 	name: "retail-phones",
 	layout: {
 		items_view: { default: "list", allow: ["list", "card"] },
+		items_panel: "standard",
 		cart_style: "table",
+		dock_tabs: ["browse", "offers", "cart", "coupons", "pay"],
 	},
 	capabilities: ["serial_imei", "saldo", "offers", "coupons"],
 };
