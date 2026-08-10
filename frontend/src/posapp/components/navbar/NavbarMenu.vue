@@ -323,6 +323,7 @@ import {
 } from "../../composables/core/usePrintHealthShared";
 import { useUpdateStore } from "../../stores/updateStore";
 import { useEmployeeStore } from "../../stores/employeeStore";
+import { useVerticalStore } from "../../stores/verticalStore";
 import { storeToRefs } from "pinia";
 import QzTrayDialog from "./QzTrayDialog.vue";
 import QzTestPrintDialog from "../settings/QzTestPrintDialog.vue";
@@ -351,6 +352,7 @@ export default {
 		// that disagrees with the panel it opens is worse than no dot. Navbar.vue
 		// owns the boot refresh and the 10-min re-check for it.
 		const navPrintHealth = usePrintHealthShared();
+		const verticalStore = useVerticalStore();
 		return {
 			printLastInvoice,
 			updateStore,
@@ -358,6 +360,7 @@ export default {
 			currentCashier,
 			currentCashierDisplay,
 			navPrintHealth,
+			verticalStore,
 		};
 	},
 	data() {
@@ -412,6 +415,11 @@ export default {
 		},
 	},
 	computed: {
+		externalDocumentCheckout() {
+			// Capability OR legacy flag (verticalStore resolver) — surfaces
+			// the charge-request pull-model (taller Repair Order → cart).
+			return this.verticalStore.externalDocumentCheckout;
+		},
 		usesSilentPrint() {
 			return Boolean(this.posProfile?.posa_silent_print);
 		},
@@ -483,7 +491,7 @@ export default {
 					tone: "info",
 					handler: "syncInvoices",
 				},
-				this.posProfile?.posa_use_charge_requests
+				this.externalDocumentCheckout
 					? {
 							id: "charge-requests",
 							label: __("Pending Charges"),

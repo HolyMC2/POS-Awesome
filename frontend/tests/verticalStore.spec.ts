@@ -102,4 +102,31 @@ describe("verticalStore", () => {
 		ui.posProfile = profileWith({ posa_capability_json: "{ not json" });
 		expect(vertical.profile.name).toBe("retail-phones");
 	});
+
+	it("resolves external-document checkout from the legacy flag", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.posProfile = profileWith({ posa_use_charge_requests: 1 });
+		expect(vertical.externalDocumentCheckout).toBe(true);
+	});
+
+	it("resolves external-document checkout from the capability", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.posProfile = profileWith({
+			posa_capability_json: JSON.stringify({
+				name: "taller-repair",
+				capabilities: ["external_document_checkout", "repair_intake"],
+			}),
+		});
+		expect(vertical.externalDocumentCheckout).toBe(true);
+		expect(vertical.has("repair_intake")).toBe(true);
+	});
+
+	it("keeps external-document checkout off for plain retail", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.posProfile = profileWith({});
+		expect(vertical.externalDocumentCheckout).toBe(false);
+	});
 });

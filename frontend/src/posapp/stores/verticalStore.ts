@@ -165,5 +165,19 @@ export const useVerticalStore = defineStore("vertical", () => {
 
 	const leanVerticalLayout = computed(() => layout.value.lean_vertical);
 
-	return { profile, has, layout, leanVerticalLayout };
+	/**
+	 * External-document checkout — pull a finished cross-app document (a
+	 * taller Repair Order, via the POS Charge Request pull-model already in
+	 * prod) into the cart as billable lines. Resolved as capability OR the
+	 * legacy `posa_use_charge_requests` flag: additive per plan C3, so
+	 * existing charge-request tenants keep working while a vertical preset
+	 * can now declare the capability instead of the raw flag (the taller-
+	 * repair preset does). This is the Fowler "resolver, not a scattered
+	 * flag" the research called for — consumers read one thing.
+	 */
+	const externalDocumentCheckout = computed(
+		() => has("external_document_checkout") || Boolean(uiStore.posProfile?.posa_use_charge_requests),
+	);
+
+	return { profile, has, layout, leanVerticalLayout, externalDocumentCheckout };
 });

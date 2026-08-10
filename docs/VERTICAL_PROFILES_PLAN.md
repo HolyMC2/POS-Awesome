@@ -76,6 +76,25 @@ purchase, barcode-printing). Before any registry:
 (The bare `eventBus.off("submit_closing_pos")` bug the audit found is
 already fixed — f1d5e0f49.)
 
+### M4 delivered differently than scoped — the boundary already shipped
+The plan estimated `external_document_checkout` as "~200 lines of a new
+Repair Order → cart mapper". Recon (scratch `taller-repair-model.md`) found
+the whole cross-app loop **already in prod**: taller emits a `POS Charge
+Request` per finished Repair Order (`taller/api/billing/charge_requests.py`),
+posawesome consumes it (`posawesome/api/charge_requests.py`:
+get_open/load/prepare_invoice/mark_charged), the ChargeRequestsDialog +
+NavbarMenu "Pending Charges" pull it into the cart, and taller's
+`on_pos_charge_request_charged` links the invoice back. Writing a second
+mapper would have duplicated 11 documented gotchas (Customer-Supplied
+exclusion, labor-item resolution, WIP warehouse, no_charge, already-invoiced
+guard) and risked orphaning invoices. So M4 = **thread the existing checkout
+into the capability system**, not reinvent it: verticalStore exposes
+`externalDocumentCheckout` = `has("external_document_checkout") ||
+posa_use_charge_requests` (additive per C3 — charge-request tenants keep
+working; the taller-repair preset declares the capability), and NavbarMenu
+gates the entry on the resolver instead of the raw flag. The honest win is a
+resolver where there were scattered flags (Fowler), delivered in ~30 lines.
+
 ### C2. Taller seed redefined: delivery-day checkout, not intake (was fatal #2)
 Taller is a live 20k-line frappe-ui/Tailwind app with intake, tech flows,
 and its own workflow doc (`Repair Order`: status chain, checklist, PIN,
