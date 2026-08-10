@@ -115,6 +115,15 @@ export const useInvoiceStore = defineStore("invoice", () => {
 	} | null>(null);
 	const discountPercentageOfferName = ref<string | null>(null);
 
+	// Cafetería identity (tab name / covers / service type). These live from
+	// cart-start and are NOT derived from `invoiceDoc` — that is null until a
+	// server round-trip (hold / Pay), so binding the inputs to the doc hid them
+	// on a fresh cart. get_invoice_doc reads these when building the doc;
+	// load_invoice repopulates them from a resumed doc; clear() resets them.
+	const posaTabName = ref<string | null>(null);
+	const posaGuestCount = ref<number | null>(null);
+	const posaServiceType = ref<string | null>(null);
+
 	const publishDerivedTotals = (payload: {
 		subtotal?: number | null;
 		returnDiscountMeta?: {
@@ -659,6 +668,11 @@ export const useInvoiceStore = defineStore("invoice", () => {
 		liveSubtotal.value = null;
 		returnDiscountMeta.value = null;
 		discountPercentageOfferName.value = null;
+		// Identity is per-ticket, never a sticky — reset on every clear. A
+		// resume clears with preserveStickies then load_invoice re-sets these.
+		posaTabName.value = null;
+		posaGuestCount.value = null;
+		posaServiceType.value = null;
 
 		if (!preserveStickies) {
 			resetInvoiceType();
@@ -719,6 +733,9 @@ export const useInvoiceStore = defineStore("invoice", () => {
 		liveSubtotal,
 		returnDiscountMeta,
 		discountPercentageOfferName,
+		posaTabName,
+		posaGuestCount,
+		posaServiceType,
 		publishDerivedTotals,
 		itemsCount,
 		itemsMap,

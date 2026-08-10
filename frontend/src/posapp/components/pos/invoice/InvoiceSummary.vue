@@ -6,12 +6,12 @@
 		<!-- Tab identity (cafetería "name on the cup") — hidden unless the vertical
 		     preset enables the tab_identity capability; retail never renders this. -->
 		<div
-			v-if="showTabName && invoice_doc"
+			v-if="showTabName"
 			class="summary-tab-name d-flex ga-2"
 			data-test="tab-name-field"
 		>
 			<v-text-field
-				v-model="invoice_doc.posa_rt_tab_name"
+				v-model="invoiceStore.posaTabName"
 				:label="tabNameLabel"
 				prepend-inner-icon="mdi-tag-outline"
 				variant="solo"
@@ -24,7 +24,7 @@
 				class="summary-field sleek-field pos-themed-input flex-grow-1"
 			/>
 			<v-text-field
-				v-model.number="invoice_doc.posa_rt_guest_count"
+				v-model.number="invoiceStore.posaGuestCount"
 				:label="guestCountLabel"
 				type="number"
 				min="0"
@@ -44,12 +44,12 @@
 		<!-- Service type (Dine In / Takeout / Delivery) — its own orthogonal
 		     service_types capability; records the value only, tax unaffected. -->
 		<div
-			v-if="showServiceType && invoice_doc"
+			v-if="showServiceType"
 			class="summary-service-type"
 			data-test="service-type-field"
 		>
 			<v-select
-				v-model="invoice_doc.posa_rt_service_type"
+				v-model="invoiceStore.posaServiceType"
 				:items="serviceTypeItems"
 				:label="serviceTypeLabel"
 				prepend-inner-icon="mdi-silverware-fork-knife"
@@ -261,6 +261,7 @@ import { loadItemSelectorSettings } from "../../../utils/itemSelectorSettings";
 import { useResponsive } from "../../../composables/core/useResponsive";
 import { useUIStore } from "../../../stores/uiStore";
 import { useVerticalStore } from "../../../stores/verticalStore";
+import { useInvoiceStore } from "../../../stores/invoiceStore";
 import {
 	getAvailableDocumentSources,
 	getDefaultDocumentSource,
@@ -277,10 +278,6 @@ defineOptions({
 
 const props = defineProps({
 	pos_profile: Object,
-	invoice_doc: {
-		type: [Object, String],
-		default: null,
-	},
 	total_qty: [Number, String],
 	additional_discount: Number,
 	additional_discount_percentage: Number,
@@ -331,6 +328,7 @@ const mobileDraftsList = ref(null);
 const responsive = useResponsive();
 const uiStore = useUIStore();
 const verticalStore = useVerticalStore();
+const invoiceStore = useInvoiceStore();
 const { parkedOrders, draftSource } = storeToRefs(uiStore);
 
 // Cafetería "name on the cup" — only surfaces when the vertical preset enables

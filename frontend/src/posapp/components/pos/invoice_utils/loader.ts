@@ -156,6 +156,16 @@ export async function load_invoice(
 		}
 	}
 
+	// Cafetería identity from the resumed doc — clear_invoice() above reset the
+	// store refs, so re-seed them from the loaded ticket (null for non-cafetería
+	// docs, which harmlessly blanks them). Off the context so a store-less test
+	// context is a no-op.
+	if (context.invoiceStore) {
+		context.invoiceStore.posaTabName = data.posa_rt_tab_name ?? null;
+		context.invoiceStore.posaGuestCount = data.posa_rt_guest_count ?? null;
+		context.invoiceStore.posaServiceType = data.posa_rt_service_type ?? null;
+	}
+
 	if (data?.is_return) {
 		if (context._normalizeReturnDocTotals) {
 			context._normalizeReturnDocTotals(data);

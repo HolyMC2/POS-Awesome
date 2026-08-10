@@ -272,7 +272,6 @@
 		<InvoiceSummary
 			ref="invoiceSummary"
 			:pos_profile="pos_profile"
-			:invoice_doc="invoice_doc"
 			:total_qty="total_qty"
 			:additional_discount="additional_discount"
 			:additional_discount_percentage="additional_discount_percentage"

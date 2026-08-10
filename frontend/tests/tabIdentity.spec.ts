@@ -32,7 +32,6 @@ const summaryProps = {
 		posa_use_percentage_discount: 0,
 		posa_allow_user_to_edit_additional_discount: 1,
 	},
-	invoice_doc: { name: "SINV-TAB-1", posa_rt_tab_name: "" },
 	total_qty: 1,
 	additional_discount: 0,
 	additional_discount_percentage: 0,
@@ -47,9 +46,13 @@ const summaryProps = {
 	return_discount_meta: null,
 };
 
+// No invoice_doc prop — the identity inputs bind to the invoiceStore, which is
+// live from cart-start. This mount IS the fresh-cart state (F1 regression: the
+// inputs used to gate on invoice_doc, which is null until a server round-trip,
+// so they never showed while building a new ticket).
 const mountSummary = () =>
 	mount(InvoiceSummary, {
-		props: { ...summaryProps, invoice_doc: { ...summaryProps.invoice_doc } },
+		props: { ...summaryProps },
 		global: {
 			stubs: summaryStubs,
 			// The template resolves __ and frappe as render-context globals.
@@ -60,7 +63,11 @@ const mountSummary = () =>
 describe("tab_identity input gating (InvoiceSummary)", () => {
 	beforeEach(() => {
 		setActivePinia(createPinia());
-		vi.stubGlobal("frappe", { _: (value: string) => value });
+		// invoiceStore reads frappe.datetime.nowdate() at setup (postingDate).
+		vi.stubGlobal("frappe", {
+			_: (value: string) => value,
+			datetime: { nowdate: () => "2026-08-10" },
+		});
 		vi.stubGlobal("__", (value: string) => value);
 	});
 

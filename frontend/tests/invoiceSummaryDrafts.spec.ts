@@ -67,7 +67,12 @@ const draftRows = [
 describe("InvoiceSummary drafts placement", () => {
 	beforeEach(() => {
 		setActivePinia(createPinia());
-		vi.stubGlobal("frappe", { _: (value: string) => value });
+		// InvoiceSummary now uses invoiceStore, whose setup reads
+		// frappe.datetime.nowdate() (postingDate).
+		vi.stubGlobal("frappe", {
+			_: (value: string) => value,
+			datetime: { nowdate: () => "2026-08-10" },
+		});
 		vi.stubGlobal("__", (value: string) => value);
 	});
 

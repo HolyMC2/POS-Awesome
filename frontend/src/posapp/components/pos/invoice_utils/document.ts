@@ -426,9 +426,18 @@ export function get_invoice_doc(context: any) {
 	doc.posa_delivery_charges = context.selected_delivery_charge?.name || null;
 	doc.posa_delivery_charges_rate = context.delivery_charges_rate || 0;
 	doc.posa_notes = sourceDoc.posa_notes ?? null;
-	doc.posa_rt_tab_name = sourceDoc.posa_rt_tab_name ?? null;
-	doc.posa_rt_guest_count = sourceDoc.posa_rt_guest_count ?? null;
-	doc.posa_rt_service_type = sourceDoc.posa_rt_service_type ?? null;
+	// Cafetería identity rides the store (live from cart-start), falling back to
+	// a resumed doc's values. Read it off the passed context (the component owns
+	// the store) rather than useInvoiceStore() so this stays callable without an
+	// active pinia in unit tests. The store is source of truth once typed;
+	// sourceDoc covers a doc built before load_invoice syncs the store.
+	const identity = context.invoiceStore || {};
+	doc.posa_rt_tab_name =
+		identity.posaTabName ?? sourceDoc.posa_rt_tab_name ?? null;
+	doc.posa_rt_guest_count =
+		identity.posaGuestCount ?? sourceDoc.posa_rt_guest_count ?? null;
+	doc.posa_rt_service_type =
+		identity.posaServiceType ?? sourceDoc.posa_rt_service_type ?? null;
 	doc.posa_authorization_code = sourceDoc.posa_authorization_code ?? null;
 	doc.posa_return_valid_upto = sourceDoc.posa_return_valid_upto ?? null;
 	doc.posting_date = normalizeBackendDate(
