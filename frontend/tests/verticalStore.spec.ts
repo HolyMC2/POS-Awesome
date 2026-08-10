@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useVerticalStore } from "../src/posapp/stores/verticalStore";
@@ -128,5 +130,64 @@ describe("verticalStore", () => {
 		const vertical = useVerticalStore();
 		ui.posProfile = profileWith({});
 		expect(vertical.externalDocumentCheckout).toBe(false);
+	});
+
+	it("t() falls back to the global translator when no preset override", () => {
+		const prev = (globalThis as any).__;
+		(globalThis as any).__ = (k: string) => (k === "Customer" ? "Cliente" : k);
+		(window as any).__ = (globalThis as any).__;
+		const vertical = useVerticalStore();
+		// No labels loaded → falls through to __()
+		expect(vertical.t("Customer")).toBe("Cliente");
+		(globalThis as any).__ = prev;
+		(window as any).__ = prev;
+	});
+
+	it("t() applies a preset's label override", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.posProfile = profileWith({
+			posa_capability_json: JSON.stringify({
+				name: "restaurant",
+				labels: { Customer: "Mesa", Order: "Comanda" },
+			}),
+		});
+		expect(vertical.t("Customer")).toBe("Mesa");
+		expect(vertical.t("Order")).toBe("Comanda");
+		// Unlisted key still falls through
+		expect(vertical.t("Pay")).toBe("Pay");
+	});
+
+	it("exposes the preset's default print format", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		expect(vertical.printFormat).toBe(null);
+		ui.posProfile = profileWith({
+			posa_capability_json: JSON.stringify({
+				name: "taller-repair",
+				print_format: "Repair Ticket 80mm",
+			}),
+		});
+		expect(vertical.printFormat).toBe("Repair Ticket 80mm");
+	});
+
+	it("role-gates a capability with capability:role syntax", () => {
+		const ui = useUIStore();
+		(window as any).frappe = { boot: { user: { roles: ["Sales User"] } } };
+		const vertical = useVerticalStore();
+		ui.posProfile = profileWith({
+			posa_capability_json: JSON.stringify({
+				name: "restaurant",
+				capabilities: ["kitchen_ticket", "void_kitchen_ticket:Restaurant Manager"],
+			}),
+		});
+		// plain capability → true for anyone
+		expect(vertical.has("kitchen_ticket")).toBe(true);
+		// role-gated, user lacks the role → false
+		expect(vertical.has("void_kitchen_ticket")).toBe(false);
+		// grant the role → true
+		(window as any).frappe.boot.user.roles = ["Sales User", "Restaurant Manager"];
+		expect(vertical.has("void_kitchen_ticket")).toBe(true);
+		delete (window as any).frappe;
 	});
 });

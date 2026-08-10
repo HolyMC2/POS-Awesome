@@ -354,7 +354,20 @@ const first_search = ref("");
 // Seeded from the operator's last choice: cards suit a phone, the list
 // suits a counter monitor, and the pick should not snap back every
 // reload. `saveItemsViewPreference` validates on the way out.
-const items_view = ref(loadItemsViewPreference() || "list");
+// Precedence (plan C6): the cashier's saved preference wins, validated
+// against the preset's allowed set; otherwise the preset's default; then
+// "list". So a coffee-quickserve register opens on its card menu until the
+// operator picks otherwise, and a preset that only allows one style pins it.
+function resolveInitialItemsView() {
+	const cfg = verticalStore.layout.items_view;
+	const allowed = Array.isArray(cfg?.allow) && cfg.allow.length ? cfg.allow : ["list", "card"];
+	const saved = loadItemsViewPreference();
+	if (saved && allowed.includes(saved)) {
+		return saved;
+	}
+	return allowed.includes(cfg?.default) ? cfg.default : allowed[0];
+}
+const items_view = ref(resolveInitialItemsView());
 const itemsPerPage = ref(50);
 const clearingSearch = ref(false);
 const isDragging = ref(false);
@@ -1112,9 +1125,37 @@ watch(activeView, (view) => {
 	}
 });
 
+let suppressItemsViewSave = false;
 watch(items_view, (view) => {
+	if (suppressItemsViewSave) {
+		// Preset-default application, not an operator choice — do not persist.
+		suppressItemsViewSave = false;
+		return;
+	}
 	saveItemsViewPreference(view);
 });
+
+// The preset's items_view.default lands async with the profile (after the
+// ref above initialised from the retail fallback). Apply it ONCE the
+// profile resolves, but only when the operator has no saved pick — their
+// choice always wins (plan C6). Guarded so a manual toggle isn't clobbered.
+watch(
+	() => verticalStore.layout.items_view,
+	(cfg) => {
+		if (loadItemsViewPreference()) {
+			return; // operator has an explicit preference
+		}
+		const allowed = Array.isArray(cfg?.allow) && cfg.allow.length ? cfg.allow : ["list", "card"];
+		const next = allowed.includes(cfg?.default) ? cfg.default : allowed[0];
+		if (next && next !== items_view.value) {
+			// Assign without persisting: this is the preset default, not an
+			// operator choice, so it must not become a saved preference.
+			suppressItemsViewSave = true;
+			items_view.value = next;
+		}
+	},
+	{ immediate: true },
+);
 
 watch(selectedCustomer, () => {
 	itemsIntegration.customer.value = selectedCustomer.value || null;

@@ -42,6 +42,10 @@ export interface VerticalProfile {
 	name: string;
 	layout: Omit<VerticalLayout, "lean_vertical">;
 	capabilities: readonly string[];
+	/** Per-vertical label overrides resolved by t(); empty for retail. */
+	labels: Record<string, string>;
+	/** Default print format for this vertical, or null. */
+	print_format: string | null;
 }
 
 /**
@@ -58,6 +62,8 @@ const RETAIL_PHONES: VerticalProfile = {
 		dock_tabs: ["browse", "offers", "cart", "coupons", "pay"],
 	},
 	capabilities: ["serial_imei", "saldo", "offers", "coupons"],
+	labels: {},
+	print_format: null,
 };
 
 /**
@@ -99,6 +105,10 @@ const parseProfilePayload = (raw: unknown): VerticalProfile => {
 			capabilities: Array.isArray(parsed.capabilities)
 				? parsed.capabilities
 				: RETAIL_PHONES.capabilities,
+			labels:
+				parsed.labels && typeof parsed.labels === "object" ? parsed.labels : RETAIL_PHONES.labels,
+			print_format:
+				typeof parsed.print_format === "string" ? parsed.print_format : RETAIL_PHONES.print_format,
 		};
 	} catch {
 		return RETAIL_PHONES;
@@ -131,9 +141,38 @@ export const useVerticalStore = defineStore("vertical", () => {
 		parseProfilePayload(uiStore.posProfile?.posa_capability_json),
 	);
 
-	const capabilitySet = computed(() => new Set(profile.value.capabilities));
+	// Capability resolution is f(profile, roles) (plan C10). A capability
+	// entry may be role-gated with `capability:role` syntax — e.g.
+	// "void_kitchen_ticket:Doco Repair Manager" resolves true only for a
+	// user holding that role. Plain entries need no role. The frontend had
+	// no role awareness before this; Frappe exposes the user's roles on the
+	// boot payload.
+	const userRoles = (): Set<string> => {
+		const roles = (window as any)?.frappe?.boot?.user?.roles;
+		return new Set(Array.isArray(roles) ? roles.map(String) : []);
+	};
 
-	const has = (capability: string): boolean => capabilitySet.value.has(capability);
+	const capabilityMap = computed(() => {
+		const map = new Map<string, string | null>();
+		for (const raw of profile.value.capabilities) {
+			const [name, role] = String(raw).split(":");
+			if (name?.trim()) {
+				map.set(name.trim(), role?.trim() || null);
+			}
+		}
+		return map;
+	});
+
+	const has = (capability: string): boolean => {
+		if (!capabilityMap.value.has(capability)) {
+			return false;
+		}
+		const requiredRole = capabilityMap.value.get(capability);
+		if (!requiredRole) {
+			return true;
+		}
+		return userRoles().has(requiredRole);
+	};
 
 	const cachedLayout = ref(readLayoutCache());
 
@@ -166,6 +205,27 @@ export const useVerticalStore = defineStore("vertical", () => {
 	const leanVerticalLayout = computed(() => layout.value.lean_vertical);
 
 	/**
+	 * Vocabulary resolver (plan axis 4). A vertical preset can rename the
+	 * app's nouns (Customer → Mesa, Order → Comanda) without a per-tenant
+	 * translation layer, which Frappe's per-app CSVs cannot provide. Falls
+	 * back to the normal Frappe translation `__(key)` when the preset does
+	 * not override the key — so retail sees no change and one call site
+	 * covers both. Consumers use t(key) in place of __(key) where the noun
+	 * is vertical-specific.
+	 */
+	const globalTranslate: (key: string) => string =
+		typeof window !== "undefined" && typeof (window as any).__ === "function"
+			? (window as any).__
+			: (key: string) => key;
+	const t = (key: string): string => {
+		const override = profile.value.labels?.[key];
+		return typeof override === "string" && override ? override : globalTranslate(key);
+	};
+
+	/** Default print format for this vertical, or null (retail). */
+	const printFormat = computed(() => profile.value.print_format);
+
+	/**
 	 * External-document checkout — pull a finished cross-app document (a
 	 * taller Repair Order, via the POS Charge Request pull-model already in
 	 * prod) into the cart as billable lines. Resolved as capability OR the
@@ -179,5 +239,13 @@ export const useVerticalStore = defineStore("vertical", () => {
 		() => has("external_document_checkout") || Boolean(uiStore.posProfile?.posa_use_charge_requests),
 	);
 
-	return { profile, has, layout, leanVerticalLayout, externalDocumentCheckout };
+	return {
+		profile,
+		has,
+		layout,
+		leanVerticalLayout,
+		externalDocumentCheckout,
+		t,
+		printFormat,
+	};
 });

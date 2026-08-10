@@ -17,7 +17,11 @@
   "column_break_layout",
   "dock_tabs",
   "section_capabilities",
-  "capabilities"
+  "capabilities",
+  "section_vocabulary",
+  "labels",
+  "column_break_vocabulary",
+  "print_format"
  ],
  "fields": [
   {
@@ -97,6 +101,28 @@
    "fieldname": "capabilities",
    "fieldtype": "Small Text",
    "label": "Capabilities"
+  },
+  {
+   "fieldname": "section_vocabulary",
+   "fieldtype": "Section Break",
+   "label": "Vocabulary & Print"
+  },
+  {
+   "description": "JSON map of label overrides resolved by verticalStore.t(key). e.g. {\"Customer\": \"Mesa\", \"Order\": \"Comanda\"}. Frappe translations are per-app, not per-tenant, so vocabulary lives here.",
+   "fieldname": "labels",
+   "fieldtype": "Small Text",
+   "label": "Label Overrides (JSON)"
+  },
+  {
+   "fieldname": "column_break_vocabulary",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Default print format for sales from this vertical (repair ticket, kitchen ticket, …). Carried in the capability contract; the print path reads it when set.",
+   "fieldname": "print_format",
+   "fieldtype": "Link",
+   "label": "Default Print Format",
+   "options": "Print Format"
   }
  ],
  "index_web_pages_for_search": 1,

@@ -3,6 +3,8 @@
 
 from __future__ import unicode_literals
 
+import json
+
 import frappe
 from frappe.model.document import Document
 
@@ -40,6 +42,17 @@ class POSCapabilityProfile(Document):
                 f"Unknown dock tab(s): {', '.join(unknown)}. Valid: {', '.join(VALID_DOCK_TABS)}"
             )
 
+        # Fail at edit time on malformed vocabulary JSON — a parse error at
+        # boot would strand the label map and the SPA would show raw keys.
+        if self.labels and self.labels.strip():
+            try:
+                parsed = json.loads(self.labels)
+            except (ValueError, TypeError):
+                frappe.throw("Label Overrides must be valid JSON.")
+                return
+            if not isinstance(parsed, dict):
+                frappe.throw("Label Overrides must be a JSON object of key → label.")
+
     def as_frontend_payload(self):
         """The shape verticalStore consumes.
 
@@ -52,6 +65,14 @@ class POSCapabilityProfile(Document):
         items_view_default = self.items_view_default or "list"
         allow = ["list", "card"] if items_view_default in ("list", "card") else [items_view_default]
         dock_tabs = [t for t in _split_csv(self.dock_tabs) if t in VALID_DOCK_TABS]
+        labels = {}
+        if self.labels and self.labels.strip():
+            try:
+                parsed = json.loads(self.labels)
+                if isinstance(parsed, dict):
+                    labels = {str(k): str(v) for k, v in parsed.items()}
+            except (ValueError, TypeError):
+                labels = {}
         return {
             "name": self.name,
             "vertical": self.vertical or None,
@@ -63,4 +84,6 @@ class POSCapabilityProfile(Document):
                 "lean_vertical": bool(self.lean_vertical),
             },
             "capabilities": _split_csv(self.capabilities),
+            "labels": labels,
+            "print_format": self.print_format or None,
         }

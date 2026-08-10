@@ -427,7 +427,6 @@ fixtures = [
                     # (scripts/check_fixture_coverage.py).
                     "POS Profile-posa_hide_items_until_search",
                     "POS Profile-posa_lean_vertical_layout",
-                    "POS Profile-posa_lean_wizard_layout",
                     "POS Profile-posa_section_customer_display",
                     "POS Profile-posa_enable_customer_display",
                     "POS Profile-posa_auto_open_customer_display",
@@ -452,6 +451,7 @@ fixtures = [
                     "POS Profile-posa_gift_card_liability_account",
                     "POS Profile-posa_sales_persons",
                     "POS Profile-posa_capability_profile",
+                    "POS Profile-posa_capability_json",
                     # Present in the pre-2026-08-09 fixture file but never in
                     # this list — an export against any site would silently
                     # drop them (and did). Several are live prod behaviour
