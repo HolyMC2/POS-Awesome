@@ -1,10 +1,10 @@
 <template>
-	<v-dialog v-model="closingDialog" max-width="900px" persistent>
+	<v-dialog v-model="closingDialog" v-bind="dialogProps" persistent scrollable>
 		<v-card elevation="8" class="closing-dialog-card">
 			<ClosingHeader @close="closeDialog" />
 
 			<v-card-text class="pa-0 white-background">
-				<v-container class="pa-6">
+				<v-container class="closing-container">
 					<v-row class="mb-6">
 						<v-col cols="12" class="pa-1">
 							<ShiftOverview
@@ -78,6 +78,7 @@ import { useUIStore } from "../../../stores/uiStore.js";
 import { ref, inject, onMounted, onBeforeUnmount, watch } from "vue";
 import { useClosingShift } from "../../../composables/pos/closing/useClosingShift";
 import { useClosingSummary } from "../../../composables/pos/closing/useClosingSummary";
+import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 
 import ClosingHeader from "../closing/ClosingHeader.vue";
 import ShiftOverview from "../closing/ShiftOverview.vue";
@@ -94,6 +95,11 @@ export default {
 		const uiStore = useUIStore();
 		const eventBus = inject("eventBus");
 		const __ = window.__ || ((t) => t);
+
+		// Fullscreen on phones — a 900px card at 390px was a floating sheet
+		// scrolling in two axes over a wall of stat cards + a wide recon
+		// table (user report 2026-08-10).
+		const { dialogProps } = useDialogFullscreen({ maxWidth: 900 });
 
 		// Initialize composables
 		const {
@@ -222,6 +228,7 @@ export default {
 		return {
 			uiStore,
 			eventBus,
+			dialogProps,
 			closingDialog,
 			dialog_data,
 			overview,
@@ -251,6 +258,29 @@ export default {
 .closing-dialog-card {
 	border-radius: 16px;
 	overflow: hidden;
+}
+
+.closing-container {
+	padding: 24px;
+}
+
+/* Fullscreen sheet on phones: square the card, reclaim the padding the
+   stat grid + recon table need, and let actions stay reachable. */
+@media (max-width: 600px) {
+	.closing-dialog-card {
+		border-radius: 0;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+	}
+
+	.closing-container {
+		padding: 10px;
+	}
+
+	.closing-container :deep(.mb-6) {
+		margin-bottom: 12px !important;
+	}
 }
 
 .white-background {

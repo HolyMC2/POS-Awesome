@@ -73,6 +73,15 @@ def stamp_capability_json(pos_profile_doc):
     pos_profile_doc.posa_capability_json = json.dumps(payload) if payload else None
 
 
+def clear_transient_capability_json(doc, method=None):
+    """before_save guard: posa_capability_json is derived + stamped in-memory
+    only, never stored. Null it on save so a persisted stale value can never
+    shadow the live resolve (defensive — no current path saves a stamped
+    profile, but this closes the class)."""
+    if doc.get("posa_capability_json"):
+        doc.posa_capability_json = None
+
+
 @frappe.whitelist()
 def get_capability_json(pos_profile):
     """Direct fetch for the SPA when it needs the payload outside the opening

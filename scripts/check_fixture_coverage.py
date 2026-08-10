@@ -40,6 +40,9 @@ PATCH_ALLOWLIST: set[str] = {
 	# DocType it creates (istable), not a Custom Field — the doctype schema
 	# ships with the app, not via fixtures.
 	"sales_person",
+	# add_lean_layout_flags.py still creates it, but remove_dead_lean_wizard_flag
+	# deletes it (M5 decision — never had a renderer). Not a fixture field.
+	"posa_lean_wizard_layout",
 }
 
 

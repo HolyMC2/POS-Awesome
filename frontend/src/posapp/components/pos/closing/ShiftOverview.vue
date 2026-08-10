@@ -19,7 +19,7 @@
 					<v-col
 						v-for="card in primaryInsights"
 						:key="card.key"
-						cols="12"
+						cols="6"
 						sm="6"
 						md="3"
 						class="d-flex"
@@ -40,7 +40,7 @@
 					<v-col
 						v-for="card in secondaryInsights"
 						:key="card.key"
-						cols="12"
+						cols="6"
 						sm="6"
 						md="3"
 						class="d-flex"
@@ -898,5 +898,57 @@ const __ = window.__ || ((t) => t);
 	border-radius: 8px;
 	opacity: 0.6;
 	font-style: italic;
+}
+
+/* Phone: 2-up compact stat cards, tighter sections + table cells, smaller
+   type so the closing sheet reads without endless scroll or clipping. */
+@media (max-width: 600px) {
+	.overview-wrapper {
+		gap: 12px;
+	}
+
+	.insight-card,
+	.insight-card.compact {
+		padding: 10px;
+		gap: 10px;
+		flex-direction: column;
+	}
+
+	.insight-icon,
+	.insight-card.compact .insight-icon {
+		width: 32px;
+		height: 32px;
+	}
+
+	.insight-label {
+		font-size: 0.62rem;
+		margin-bottom: 2px;
+	}
+
+	.insight-value,
+	.insight-card.compact .insight-value {
+		font-size: 0.95rem;
+	}
+
+	.insight-caption {
+		font-size: 0.62rem;
+	}
+
+	.table-header {
+		margin-bottom: 12px;
+	}
+
+	.table-section {
+		padding: 12px;
+	}
+
+	.overview-table {
+		font-size: 0.78rem;
+	}
+
+	.overview-table th,
+	.overview-table td {
+		padding: 8px 10px;
+	}
 }
 </style>

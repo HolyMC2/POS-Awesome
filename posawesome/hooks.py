@@ -136,6 +136,13 @@ doc_events = {
         "validate": "posawesome.posawesome.api.customer.validate",
         "after_insert": "posawesome.posawesome.api.customer.after_insert",
     },
+    # posa_capability_json is a TRANSIENT field: stamped in-memory at shift
+    # open for the SPA, never meant to persist. Null it before any save so a
+    # stray write can't freeze a stale capability payload that would then
+    # override the live resolve. See api/vertical.py.
+    "POS Profile": {
+        "before_save": "posawesome.posawesome.api.vertical.clear_transient_capability_json",
+    },
     # Item photos arrive at camera resolution and render into a 132px card
     # slot. Both handlers are fail-open — a thumbnail is an optimisation, so
     # they never block the write that triggered them.

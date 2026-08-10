@@ -742,21 +742,13 @@ const add_item = async (item, optionsOrQty: any = {}) => {
 
 		if (isValid) {
 			await useItemAddition().prepareItemForCart(item, requestedQty, context);
-			const addedLine = await useItemAddition().addItem(item, context);
+			await useItemAddition().addItem(item, context);
 			if (eventBus && typeof eventBus.emit === "function") {
 				eventBus.emit("apply_pricing_rules");
 			}
 			qty.value = 1;
-			if (addedLine && eventBus && typeof eventBus.emit === "function") {
-				const focusedLine: any = addedLine;
-				window.setTimeout(() => {
-					eventBus.emit("focus_cart_item_qty", {
-						item: focusedLine,
-						rowId: focusedLine?.posa_row_id,
-						itemCode: focusedLine?.item_code || item?.item_code,
-					});
-				}, 0);
-			}
+			// No auto-focus into the cart qty field on add — the cursor
+			// hijack interrupts fast tapping/scanning (user report 2026-08-10).
 		}
 	} else {
 		emit("add-item", item);
