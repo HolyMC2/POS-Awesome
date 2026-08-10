@@ -41,6 +41,27 @@
 			/>
 		</div>
 
+		<!-- Service type (Dine In / Takeout / Delivery) — its own orthogonal
+		     service_types capability; records the value only, tax unaffected. -->
+		<div
+			v-if="showServiceType && invoice_doc"
+			class="summary-service-type"
+			data-test="service-type-field"
+		>
+			<v-select
+				v-model="invoice_doc.posa_rt_service_type"
+				:items="serviceTypeItems"
+				:label="serviceTypeLabel"
+				prepend-inner-icon="mdi-silverware-fork-knife"
+				variant="solo"
+				density="compact"
+				color="primary"
+				hide-details
+				clearable
+				class="summary-field sleek-field pos-themed-input"
+			/>
+		</div>
+
 		<v-row dense class="summary-content">
 			<v-col
 				v-if="!useCompactSaleDock || showReturnDiscountAlert"
@@ -317,6 +338,15 @@ const { parkedOrders, draftSource } = storeToRefs(uiStore);
 const showTabName = computed(() => verticalStore.has("tab_identity"));
 const tabNameLabel = computed(() => verticalStore.t("Tab Name"));
 const guestCountLabel = computed(() => verticalStore.t("Guests"));
+// Service type is an orthogonal capability — a taquería can enable it without
+// the tab-name identity. Option titles run through the vocabulary so a preset
+// can localise "Dine In" → "Para aquí", etc.
+const SERVICE_TYPES = ["Dine In", "Takeout", "Delivery"];
+const showServiceType = computed(() => verticalStore.has("service_types"));
+const serviceTypeLabel = computed(() => verticalStore.t("Service Type"));
+const serviceTypeItems = computed(() =>
+	SERVICE_TYPES.map((value) => ({ value, title: verticalStore.t(value) })),
+);
 
 const additionalDiscountDisplay = ref(normalizeAdditionalDiscountDisplay(props.additional_discount));
 const additionalDiscountPercentageDisplay = ref(

@@ -97,6 +97,7 @@ class TestTabNameDraft(IntegrationTestCase):
 			"posa_pos_opening_shift": shift,
 			"posa_rt_tab_name": tab_label,
 			"posa_rt_guest_count": 4,
+			"posa_rt_service_type": "Takeout",
 			"items": [
 				{
 					"item_code": self.item,
@@ -136,6 +137,11 @@ class TestTabNameDraft(IntegrationTestCase):
 			"get_draft_invoices must return the posa_rt_guest_count field",
 		)
 		self.assertEqual(row.get("posa_rt_guest_count"), 4)
+		self.assertIn(
+			"posa_rt_service_type", row,
+			"get_draft_invoices must return the posa_rt_service_type field",
+		)
+		self.assertEqual(row.get("posa_rt_service_type"), "Takeout")
 
 
 if __name__ == "__main__":

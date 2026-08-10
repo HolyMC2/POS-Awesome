@@ -36,6 +36,7 @@
 				</div>
 				<div class="drafts-rail__meta">
 					<span v-if="draft.posa_rt_guest_count">{{ draft.posa_rt_guest_count }} {{ __("guests") }}</span>
+					<span v-if="draft.posa_rt_service_type">{{ __(draft.posa_rt_service_type) }}</span>
 					<span>{{ draft.name }}</span>
 					<span>{{ formatDraftAge(draft) }}</span>
 					<span class="drafts-rail__status">{{ draft.status || __("Draft") }}</span>

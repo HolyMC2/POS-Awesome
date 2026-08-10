@@ -259,6 +259,8 @@ fixtures = [
                     "POS Invoice-posa_rt_tab_name",
                     "Sales Invoice-posa_rt_guest_count",
                     "POS Invoice-posa_rt_guest_count",
+                    "Sales Invoice-posa_rt_service_type",
+                    "POS Invoice-posa_rt_service_type",
                     "POS Profile-posa_pos_awesome_settings",
                     "POS Profile-posa_section_pricing_controls",
                     "POS Profile-posa_section_sales_returns",

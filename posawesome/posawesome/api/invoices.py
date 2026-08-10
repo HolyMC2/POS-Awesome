@@ -125,6 +125,8 @@ def get_draft_invoices(
         fields.append("posa_rt_tab_name")
     if frappe.db.has_column(doctype, "posa_rt_guest_count"):
         fields.append("posa_rt_guest_count")
+    if frappe.db.has_column(doctype, "posa_rt_service_type"):
+        fields.append("posa_rt_service_type")
 
     invoices_list = frappe.get_list(
         doctype,

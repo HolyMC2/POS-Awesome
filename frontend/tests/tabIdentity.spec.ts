@@ -79,6 +79,14 @@ describe("tab_identity input gating (InvoiceSummary)", () => {
 		expect(wrapper.find('[data-test="tab-name-field"]').exists()).toBe(true);
 		expect(wrapper.find('[data-test="guest-count-field"]').exists()).toBe(true);
 	});
+
+	it("gates the service-type select on the orthogonal service_types capability", () => {
+		useUIStore().setCapabilityPayload({ name: "taqueria", capabilities: ["service_types"] });
+		const wrapper = mountSummary();
+		expect(wrapper.find('[data-test="service-type-field"]').exists()).toBe(true);
+		// tab-name identity is a separate capability and must stay hidden
+		expect(wrapper.find('[data-test="tab-name-field"]').exists()).toBe(false);
+	});
 });
 
 describe("parked-order row identity (ParkedOrdersList)", () => {
@@ -94,6 +102,7 @@ describe("parked-order row identity (ParkedOrdersList)", () => {
 						name: "ACC-SINV-0001",
 						posa_rt_tab_name: "Marco (grande)",
 						posa_rt_guest_count: 4,
+						posa_rt_service_type: "Takeout",
 						customer_name: "Walk-in Customer",
 						posting_date: "2026-08-10",
 						posting_time: "10:15:00.000000",
@@ -115,8 +124,9 @@ describe("parked-order row identity (ParkedOrdersList)", () => {
 		const title = wrapper.get(".drafts-list__card-top strong");
 		expect(title.text()).toBe("Marco (grande)");
 		expect(title.text()).not.toBe("Walk-in Customer");
-		// guest count surfaces in the row meta when present
+		// guest count + service type surface in the row meta when present
 		expect(wrapper.get(".drafts-list__meta").text()).toContain("4 guests");
+		expect(wrapper.get(".drafts-list__meta").text()).toContain("Takeout");
 	});
 
 	it("falls back to customer_name when no tab name is present (retail)", () => {

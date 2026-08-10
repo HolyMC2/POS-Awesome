@@ -38,3 +38,4 @@ posawesome.patches.remove_dead_lean_wizard_flag
 posawesome.patches.drop_capability_json_field
 posawesome.patches.add_tab_name_field
 posawesome.patches.add_guest_count_field
+posawesome.patches.add_service_type_field
