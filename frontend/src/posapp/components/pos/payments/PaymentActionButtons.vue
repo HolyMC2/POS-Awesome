@@ -99,10 +99,19 @@ const __ = window.__;
 /* Slim, low-emphasis exit — a text row, not a full red bar competing with the
    two money buttons above it. */
 .payment-cancel-btn--slim {
-	min-height: 32px !important;
+	/* Slim visually (text variant, no bar) but hold the 40px touch line the
+	   rest of this file settled on — 32px was below the coarse-pointer floor. */
+	min-height: 40px !important;
 	font-size: 0.8rem !important;
 	letter-spacing: 0;
 	opacity: 0.85;
+}
+
+/* Long locales ("Enviar e Imprimir") must WRAP in the cols=6 money button
+   rather than clip — Vuetify's btn content is nowrap by default. */
+:deep(.payment-footer-btn .v-btn__content) {
+	white-space: normal;
+	line-height: 1.12;
 }
 
 .payment-cancel-btn--slim:hover,
