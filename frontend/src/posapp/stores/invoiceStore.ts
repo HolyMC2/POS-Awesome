@@ -103,6 +103,10 @@ export const useInvoiceStore = defineStore("invoice", () => {
 	// pushes these via publishDerivedTotals(); any cart view that renders
 	// an invoice must publish them (part of the CartView contract —
 	// docs/VERTICAL_PROFILES_PLAN.md C1).
+	// Freshness contract: values are watcher-flush fresh (one flush behind
+	// the panel's computeds), not synchronously fresh like the old
+	// instance reach-in. Consumers must not assume same-tick coherence
+	// with panel internals.
 	const liveSubtotal = ref<number | null>(null);
 	const returnDiscountMeta = ref<{
 		ratio: number;
@@ -125,7 +129,21 @@ export const useInvoiceStore = defineStore("invoice", () => {
 			liveSubtotal.value = Number.isFinite(parsed) ? parsed : null;
 		}
 		if ("returnDiscountMeta" in payload) {
-			returnDiscountMeta.value = payload.returnDiscountMeta ?? null;
+			const next = payload.returnDiscountMeta ?? null;
+			const prev = returnDiscountMeta.value;
+			// The panel's computed returns a FRESH object per evaluation —
+			// without this content check every cart tick on a return
+			// invoice would replace the ref and re-fire every consumer.
+			const changed =
+				(next === null) !== (prev === null) ||
+				(next !== null &&
+					prev !== null &&
+					(next.ratio !== prev.ratio ||
+						next.original_discount !== prev.original_discount ||
+						next.prorated_discount !== prev.prorated_discount));
+			if (changed) {
+				returnDiscountMeta.value = next;
+			}
 		}
 		if ("discountPercentageOfferName" in payload) {
 			discountPercentageOfferName.value = payload.discountPercentageOfferName ?? null;
@@ -635,6 +653,12 @@ export const useInvoiceStore = defineStore("invoice", () => {
 		flowToLoad.value = null;
 		clearItems();
 		packedItems.value = [];
+		// Panel-published state must not outlive the invoice: with no
+		// mounted panel to re-publish, stale non-null values would pass
+		// the liveSubtotal !== null guard for any future consumer.
+		liveSubtotal.value = null;
+		returnDiscountMeta.value = null;
+		discountPercentageOfferName.value = null;
 
 		if (!preserveStickies) {
 			resetInvoiceType();

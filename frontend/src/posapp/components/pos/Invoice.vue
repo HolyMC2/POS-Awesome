@@ -1298,9 +1298,11 @@ export default {
 				this.invoiceStore.publishDerivedTotals({ subtotal: value });
 			},
 		},
+		// No `deep`: the computed returns a fresh object per evaluation,
+		// so identity changes are the only signal deep could ever see;
+		// the store's content check absorbs the spurious re-fires.
 		return_discount_meta: {
 			immediate: true,
-			deep: true,
 			handler(value) {
 				this.invoiceStore.publishDerivedTotals({ returnDiscountMeta: value });
 			},
