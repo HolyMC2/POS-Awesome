@@ -1,6 +1,6 @@
 <template>
-	<v-row align="center" class="items px-3 py-2">
-		<v-col class="pb-0 pr-0">
+	<v-row align="center" class="items px-3 py-2 customer-section-row">
+		<v-col class="pb-0 pr-0 customer-section-col">
 			<!-- Customer selection component (flexes to fill; full width when
 			     the Type select is hidden) -->
 			<Customer ref="customerComponent" />
@@ -8,7 +8,11 @@
 		<!-- Invoice Type Selection (Only shown if sales orders are allowed).
 		     Fixed width so the value (Invoice/Order/Quotation) isn't clipped;
 		     cols=3 was only ~35px of text room → "In…". -->
-		<v-col v-if="pos_profile.posa_allow_sales_order" cols="auto" class="pb-4">
+		<v-col
+			v-if="pos_profile.posa_allow_sales_order"
+			cols="auto"
+			class="pb-4 customer-section-type-col"
+		>
 			<v-select
 				density="compact"
 				hide-details
@@ -76,3 +80,22 @@ defineExpose({
 
 const frappe = window.frappe;
 </script>
+
+<style scoped>
+/* Below 500px the two columns split ~187px of usable width between them
+   and the customer field lost. Type is a three-item select the cashier
+   touches once a shift; the customer field is the control of the sale, so
+   it takes the whole line and Type drops underneath. */
+@media (max-width: 499px) {
+	.customer-section-row > .customer-section-col,
+	.customer-section-row > .customer-section-type-col {
+		flex: 1 1 100%;
+		max-width: 100%;
+	}
+
+	.customer-section-row > .customer-section-type-col {
+		padding-top: 4px;
+		padding-bottom: 8px;
+	}
+}
+</style>
