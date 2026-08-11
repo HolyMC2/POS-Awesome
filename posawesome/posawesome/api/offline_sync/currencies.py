@@ -14,7 +14,7 @@ from posawesome.posawesome.api.offline_sync.common import (
     _resolve_profile,
 )
 
-SYNC_SCHEMA_VERSION = "2026-04-09"
+SYNC_SCHEMA_VERSION = "2026-08-11"
 
 
 def _coerce_limit(value, default=200, maximum=1000):

@@ -12,7 +12,7 @@ from posawesome.posawesome.api.utilities import (
     get_selling_price_lists,
 )
 
-SYNC_SCHEMA_VERSION = "2026-04-09"
+SYNC_SCHEMA_VERSION = "2026-08-11"
 
 
 def _coerce_limit(value, default=100, maximum=1000):

@@ -9,7 +9,7 @@ from posawesome.posawesome.api.payment_processing.utils import (
     get_mode_of_payment_accounts,
 )
 
-SYNC_SCHEMA_VERSION = "2026-04-09"
+SYNC_SCHEMA_VERSION = "2026-08-11"
 
 
 def _should_include(modified, watermark):

@@ -13,7 +13,7 @@ from posawesome.posawesome.api.utils import (
     get_item_groups,
 )
 
-SYNC_SCHEMA_VERSION = "2026-04-09"
+SYNC_SCHEMA_VERSION = "2026-08-11"
 
 
 def _coerce_limit(value, default=200, maximum=2000):

@@ -4,7 +4,13 @@ import frappe
 
 from posawesome.posawesome.api.utils import get_active_pos_profile
 
-SYNC_SCHEMA_VERSION = "2026-04-09"
+# Bumped when a pulled resource's FIELD LIST or the resource set changes, to
+# force every device through a full resync. 2026-08-11: the pos_floor and
+# pos_table catalogs joined the registry (restaurant tables v1).
+# The per-module copies below must stay equal to this — the response carries
+# THIS value while each module's request gate compares against its own, so a
+# split pair pins a client in permanent full-resync.
+SYNC_SCHEMA_VERSION = "2026-08-11"
 
 
 def _normalize_timestamp(value):
