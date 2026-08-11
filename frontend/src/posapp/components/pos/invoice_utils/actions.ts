@@ -151,19 +151,31 @@ export async function cancel_invoice(context: any) {
 	context.posting_date = frappe.datetime.nowdate();
 
 	if (doc.name && context.pos_profile.posa_allow_delete) {
-		await frappe.call({
-			method: "posawesome.posawesome.api.invoices.delete_invoice",
-			args: { invoice: doc.name },
-			async: true,
-			callback: function (r) {
-				if (r.message) {
-					context.toastStore.show({
-						text: r.message,
-						color: "warning",
-					});
-				}
-			},
-		});
+		try {
+			await frappe.call({
+				method: "posawesome.posawesome.api.invoices.delete_invoice",
+				args: { invoice: doc.name },
+				async: true,
+				callback: function (r) {
+					if (r.message) {
+						context.toastStore.show({
+							text: r.message,
+							color: "warning",
+						});
+					}
+				},
+			});
+		} catch (error) {
+			// A rejected delete must not strand the cashier on a ticket they
+			// cannot cancel: report it and clear the register anyway. The server
+			// draft simply stays in the drafts list, still resumable/deletable —
+			// strictly better than a cart nobody can get out of.
+			console.error("Error deleting invoice on cancel:", error);
+			context.toastStore?.show({
+				title: __("Could not delete the draft — it stays in your drafts"),
+				color: "warning",
+			});
+		}
 	}
 
 	// Use the clear_invoice logic

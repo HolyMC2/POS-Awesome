@@ -231,7 +231,13 @@ def delete_invoice(invoice):
     ):
         frappe.throw(_("Deleting invoices is not enabled in POS Profile"))
 
-    frappe.delete_doc(doctype, invoice, force=1)
+    # ignore_permissions: the gates above (company, profile, posa_is_printed,
+    # posa_allow_delete) ARE the authorization surface — a minimal-role cashier
+    # holds no Sales Invoice delete perm and would 403 here after the cart was
+    # already cleared client-side, orphaning the server draft. frappe's
+    # submitted-record guard is unconditional and still applies; the ledger
+    # cleanup on the next line already runs with ignore_permissions.
+    frappe.delete_doc(doctype, invoice, force=1, ignore_permissions=True)
     delete_invoice_submission_ledger_entries_for_invoice(doctype, invoice)
     return _("Invoice {0} Deleted").format(invoice)
 
