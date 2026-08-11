@@ -476,8 +476,11 @@ defineExpose({
 }
 
 @media (max-width: 768px) {
+	/* Keep the bar lean: the 40px compact field is the touch floor (see
+	   the append-inner note above), so height savings come from chrome,
+	   not the field. */
 	.sticky-header {
-		padding: 8px 10px;
+		padding: 4px 8px;
 	}
 
 	/* Reclaim Vuetify's 12px col gutters — at 360px they cost the search

@@ -15,6 +15,51 @@
 			</v-card-title>
 			<v-divider></v-divider>
 			<v-card-text class="pa-4">
+				<!-- Browse controls: on phone the bottom toolbar (item group /
+				     price list / list-card toggle) is hidden so the selector
+				     card owns the whole viewport and the search bar never
+				     scrolls away — those controls live here instead. They
+				     apply IMMEDIATELY (filters, not settings): Save/Cancel
+				     below only governs the switches. -->
+				<template v-if="props.showBrowseControls">
+					<div class="browse-section-label">{{ __("Browse") }}</div>
+					<v-select
+						:items="props.itemsGroup"
+						:label="__('Items Group')"
+						density="compact"
+						variant="outlined"
+						color="primary"
+						hide-details
+						class="mb-2 pos-themed-input"
+						:model-value="props.itemGroup"
+						@update:model-value="emit('update:itemGroup', $event)"
+					></v-select>
+					<v-btn-toggle
+						:model-value="props.itemsView"
+						@update:model-value="$event && emit('update:itemsView', $event)"
+						color="primary"
+						group
+						density="compact"
+						rounded
+						mandatory
+						class="browse-view-toggle mb-2"
+					>
+						<v-btn size="small" value="list">{{ __("List") }}</v-btn>
+						<v-btn size="small" value="card">{{ __("Card") }}</v-btn>
+					</v-btn-toggle>
+					<v-text-field
+						v-if="props.showPriceList"
+						density="compact"
+						variant="outlined"
+						color="primary"
+						:label="__('Price List')"
+						hide-details
+						class="mb-2 pos-themed-input"
+						:model-value="props.activePriceList"
+						readonly
+					></v-text-field>
+					<v-divider class="mb-3 mt-1"></v-divider>
+				</template>
 				<v-switch
 					v-if="props.allowNewLineSetting"
 					v-model="form.new_line"
@@ -122,9 +167,16 @@ const props = defineProps({
 	modelValue: { type: Boolean, default: false },
 	initialSettings: { type: Object, required: true },
 	allowNewLineSetting: { type: Boolean, default: false },
+	// Phone-only browse controls (the bottom toolbar is hidden there).
+	showBrowseControls: { type: Boolean, default: false },
+	itemsGroup: { type: Array, default: () => [] },
+	itemGroup: { type: String, default: "ALL" },
+	itemsView: { type: String, default: "list" },
+	activePriceList: { type: String, default: "" },
+	showPriceList: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["update:modelValue", "save"]);
+const emit = defineEmits(["update:modelValue", "save", "update:itemGroup", "update:itemsView"]);
 
 const dialogModel = computed({
 	get: () => props.modelValue,
@@ -158,3 +210,24 @@ const onSave = () => {
 	dialogModel.value = false;
 };
 </script>
+
+<style scoped>
+.browse-section-label {
+	font-size: 0.8rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--pos-text-secondary);
+	margin-bottom: 8px;
+}
+
+.browse-view-toggle {
+	width: 100%;
+	border: 1px solid var(--pos-border-light);
+	border-radius: var(--pos-radius-sm);
+}
+
+.browse-view-toggle :deep(.v-btn) {
+	flex: 1 1 50%;
+}
+</style>

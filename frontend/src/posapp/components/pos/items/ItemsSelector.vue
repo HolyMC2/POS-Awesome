@@ -66,6 +66,12 @@
 					v-if="show_item_settings"
 					v-model="show_item_settings"
 					:allow-new-line-setting="!!pos_profile?.posa_new_line"
+					:show-browse-controls="hideToolbarOnPhone"
+					:items-group="items_group"
+					v-model:item-group="item_group"
+					v-model:items-view="items_view"
+					:active-price-list="active_price_list"
+					:show-price-list="pos_profile?.posa_enable_price_list_dropdown !== false"
 					:initial-settings="{
 						new_line,
 						hide_qty_decimals,
@@ -149,9 +155,14 @@
 		</v-card>
 		<!-- Lean layout hides the extras toolbar on the SALES register only:
 		     this component also mounts in purchase and barcode-printing
-		     contexts, which keep their filters regardless of the flag. -->
+		     contexts, which keep their filters regardless of the flag.
+		     On PHONE the toolbar is hidden too: the selector card is sized
+		     to the full viewport (useItemsSelectorPanelSizing), so anything
+		     below it hands the page a scrollbar and the search bar scrolls
+		     out of reach — its controls move into ItemSettingsDialog, and
+		     offers/coupons already live on the mobile dock. -->
 		<ItemActionToolbar
-			v-if="!(verticalStore.leanVerticalLayout && context === 'pos')"
+			v-if="!(verticalStore.leanVerticalLayout && context === 'pos') && !hideToolbarOnPhone"
 			v-model="item_group"
 			:items-group="items_group"
 			v-model:items-view="items_view"
@@ -256,7 +267,7 @@ import { useItemsSelectorDisplayBindings } from "../../../composables/pos/items/
 
 import { useCustomersStore } from "../../../stores/customersStore";
 import { useToastStore } from "../../../stores/toastStore";
-import { useUIStore } from "../../../stores/uiStore";
+import { useUIStore, type PosActiveView } from "../../../stores/uiStore";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { useVerticalStore } from "../../../stores/verticalStore";
 import { useEmployeeStore } from "../../../stores/employeeStore";
@@ -1207,6 +1218,11 @@ const startCameraScanning = () => {
 const { responsiveStyles } = responsive;
 const { rtlClasses } = rtl;
 const isPhone = computed(() => responsive.isPhone.value);
+// Phone + sales register: the bottom toolbar is suppressed (the selector
+// card owns the whole viewport height, so a sibling below it would give
+// the page a scrollbar and let the search bar scroll away) and its
+// controls render inside ItemSettingsDialog instead.
+const hideToolbarOnPhone = computed(() => isPhone.value && props.context === "pos");
 const { selectorCardStyle } = useItemsSelectorPanelSizing({
 	isPhone,
 	windowWidth: responsive.windowWidth,
@@ -1234,7 +1250,9 @@ const {
 	searchFocusGuard: itemSearchFocusClearGuard,
 	clearHighlightedItem: () => itemSelection.clearHighlightedItem(),
 	focusItemSearch: () => itemsSelectorFocus.focusItemSearch(),
-	setActiveView: (view) => uiStore.setActiveView(view),
+	// The search-input composable only ever asks for "items"; its context
+	// type stays (view: string), so narrow here at the store boundary.
+	setActiveView: (view) => uiStore.setActiveView(view as PosActiveView),
 	triggerItemSearchFocus: () => uiStore.triggerItemSearchFocus(),
 });
 cleanupSearchInput = stopSearchInputWatcher;
