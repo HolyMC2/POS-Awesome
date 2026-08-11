@@ -9,7 +9,7 @@
  *
  * **Active view**
  * `activeView` drives the main content panel: `"items"` | `"payment"` |
- * `"offers"` | `"coupons"`. Updated via `setActiveView()`.
+ * `"offers"` | `"coupons"` | `"floor"`. Updated via `setActiveView()`.
  *
  * **POS session data**
  * `posProfile`, `stockSettings`, `companyDoc`, and `posOpeningShift` are set once
@@ -34,6 +34,14 @@ import { defineStore } from "pinia";
 import { ref, shallowRef, computed } from "vue";
 import type { POSProfile } from "../types/models";
 
+/**
+ * The selector-column panels the shell knows how to mount. Each member has a
+ * `v-show` block in Pos.vue; a value with no block renders an empty column,
+ * which is why this is a union and not `string` — a typo in `setActiveView`
+ * now fails `vue-tsc` instead of blanking the register.
+ */
+export type PosActiveView = "items" | "offers" | "coupons" | "payment" | "floor";
+
 export const useUIStore = defineStore("ui", () => {
   // Loading Overlay State
   const isLoading = ref(false);
@@ -45,7 +53,7 @@ export const useUIStore = defineStore("ui", () => {
   const freezeMessage = ref("");
 
   // Main POS View State (Active View)
-  const activeView = ref<string>("items"); // 'items', 'payment', 'offers', 'coupons'
+  const activeView = ref<PosActiveView>("items");
   const paymentDialogOpen = ref(false);
 
   const invoiceManagementDialog = ref(false);
@@ -64,7 +72,7 @@ export const useUIStore = defineStore("ui", () => {
   const ordersDialog = ref(false);
   const ordersData = shallowRef<any[]>([]);
 
-  const setActiveView = (view: string) => {
+  const setActiveView = (view: PosActiveView) => {
     activeView.value = view;
   };
 

@@ -98,6 +98,23 @@
 				<PosCoupons></PosCoupons>
 			</v-col>
 			<v-col
+				v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'floor'"
+				:xl="useCompactPosSwitcher ? 12 : 5"
+				:lg="useCompactPosSwitcher ? 12 : 5"
+				:md="useCompactPosSwitcher ? 12 : 5"
+				:sm="useCompactPosSwitcher ? 12 : 5"
+				cols="12"
+				class="pos dynamic-col dynamic-col--selector"
+			>
+				<!-- The panel's visibility is v-show like every other selector
+				     column; this v-if is the CAPABILITY gate, so a retail
+				     register never fetches the floor chunk and never opens a
+				     socket room. On a restaurant register it mounts with the
+				     shell and stays mounted, which is what keeps the dock badge
+				     honest before anyone has opened the floor. -->
+				<FloorView v-if="floorEnabled"></FloorView>
+			</v-col>
+			<v-col
 				v-if="
 					(!useCompactPosSwitcher || compactPanel === 'selector') &&
 					activeView === 'payment' &&
@@ -253,6 +270,7 @@ import {
 	watch,
 	nextTick,
 } from "vue";
+import { useRoute } from "vue-router";
 import { resolveCartView, resolveItemsView } from "../../../vertical/viewRegistry";
 import { buildDockTabDefs } from "../../../vertical/viewContracts";
 import OpeningDialog from "../shift/OpeningDialog.vue";
@@ -280,6 +298,7 @@ import { useRtl } from "../../../composables/core/useRtl";
 import { useUIStore } from "../../../stores/uiStore";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { useVerticalStore } from "../../../stores/verticalStore";
+import { useFloorStore } from "../../../stores/floorStore";
 import { useItemsStore } from "../../../stores/itemsStore";
 import { useCustomersStore } from "../../../stores/customersStore";
 import { storeToRefs } from "pinia";
@@ -293,6 +312,7 @@ import {
 } from "../../../utils/keyboardNavigation";
 
 const Payments = defineAsyncComponent(() => import("../Payments.vue"));
+const FloorView = defineAsyncComponent(() => import("../../floor/FloorView.vue"));
 const Drafts = defineAsyncComponent(() => import("../flows/Drafts.vue"));
 const InvoiceManagement = defineAsyncComponent(() => import("../flows/InvoiceManagement.vue"));
 const SalesOrders = defineAsyncComponent(() => import("../flows/SalesOrders.vue"));
@@ -304,6 +324,7 @@ const MpesaPayments = defineAsyncComponent(() => import("../payments/Mpesa-Payme
 export default {
 	setup() {
 		const eventBus = inject("eventBus");
+		const route = useRoute();
 		const dialog = ref(false);
 		const posRoot = ref(null);
 		const additionalDiscountField = ref(null);
@@ -388,6 +409,11 @@ export default {
 		// Lean vertical layout (verticalStore) forces the stacked
 		// single-panel mode + dock at any width; otherwise width decides.
 		const vertical = useVerticalStore();
+		// Restaurant floor: state + realtime live in the store, the panel is
+		// mounted below only when the preset carries the `tables` capability.
+		const floorStore = useFloorStore();
+		const floorEnabled = computed(() => vertical.has("tables"));
+		const floorOpenOrdersCount = computed(() => floorStore.openOrdersCount);
 		// Panels resolve through the view registry keyed (layout, context)
 		// — an unknown layout key throws at setup, never a blank counter.
 		const ItemsView = markRaw(resolveItemsView(vertical.layout.items_panel, "pos"));
@@ -555,6 +581,13 @@ export default {
 			focusItemSearchField();
 		};
 
+		// Tapping a table opens its order and the waiter's next act is adding
+		// food, so the shell follows them to the cart. The floor panel stays
+		// mounted behind it (v-show) and keeps its socket room.
+		const handleFloorOrderOpened = () => {
+			showInvoicePanel();
+		};
+
 		const handlePaymentDialogUpdate = (value) => {
 			if (value || !usePaymentDialog.value) {
 				return;
@@ -631,9 +664,11 @@ export default {
 		// carry that annotation itself.
 		const DOCK_TAB_DEFS = buildDockTabDefs({
 			__,
+			t: vertical.t,
 			offersCount,
 			couponsCount,
 			itemsCount,
+			floorOpenOrdersCount,
 			activeView,
 			compactPanel,
 			paymentPending,
@@ -853,6 +888,7 @@ export default {
 				eventBus.on("open_new_address", handleOpenNewAddress);
 				eventBus.on("open_mpesa_payments", handleOpenMpesaPayments);
 				eventBus.on("show_change_due", handleShowChangeDue);
+				eventBus.on("floor_order_opened", handleFloorOrderOpened);
 			}
 			nextTick(() => {
 				updateBottomDockHeight();
@@ -860,6 +896,12 @@ export default {
 					mobileDockObserver.observe(mobileDock.value);
 				}
 			});
+			// /floor mounts this same shell and asks for the floor panel. The
+			// capability is re-checked here because the route guard runs before
+			// the register has resolved its preset.
+			if (route?.meta?.initialView === "floor" && floorEnabled.value) {
+				setSelectorView("floor");
+			}
 		});
 
 		onBeforeUnmount(() => {
@@ -883,6 +925,7 @@ export default {
 				eventBus.off("open_new_address", handleOpenNewAddress);
 				eventBus.off("open_mpesa_payments", handleOpenMpesaPayments);
 				eventBus.off("show_change_due", handleShowChangeDue);
+				eventBus.off("floor_order_opened", handleFloorOrderOpened);
 			}
 			stopQzPrewarm();
 		});
@@ -915,8 +958,17 @@ export default {
 				return;
 			}
 
-			if (["items", "offers", "coupons", "payment"].includes(view)) {
+			if (["items", "offers", "coupons", "payment", "floor"].includes(view)) {
 				compactPanel.value = "selector";
+			}
+		});
+
+		// A preset can lose the `tables` capability under a live register (a
+		// profile swap at shift open). Leaving the shell on a floor it no longer
+		// mounts would show an empty column with no way back.
+		watch(floorEnabled, (enabled) => {
+			if (!enabled && activeView.value === "floor") {
+				uiStore.setActiveView("items");
 			}
 		});
 
@@ -926,7 +978,7 @@ export default {
 				return;
 			}
 
-			if (["offers", "coupons", "payment"].includes(activeView.value)) {
+			if (["offers", "coupons", "payment", "floor"].includes(activeView.value)) {
 				compactPanel.value = "selector";
 			}
 		});
@@ -981,6 +1033,7 @@ export default {
 			toggleDockDiscount,
 			ItemsView,
 			CartView,
+			floorEnabled,
 			dockTabs,
 			dockTabCount,
 			activeView,
@@ -1029,6 +1082,7 @@ export default {
 	components: {
 		OpeningDialog,
 		Payments,
+		FloorView,
 		ChangeDueDialog,
 		Drafts,
 		InvoiceManagement,

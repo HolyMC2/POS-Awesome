@@ -10,8 +10,29 @@ import {
 import { resolvePosAppRouteFullPath } from "../../loader-utils";
 import { getDashboardAccessCached } from "../services/dashboardService";
 import OfflineRouteUnavailable from "../components/system/OfflineRouteUnavailable.vue";
+import { pinia } from "../stores";
+import { useUIStore } from "../stores/uiStore";
+import { useVerticalStore } from "../stores/verticalStore";
 
 const OFFLINE_ROUTE_UNAVAILABLE_NAME = "offline-route-unavailable";
+
+/**
+ * Capability gate for the floor route. The preset arrives with the shift-open
+ * payload, so before a register has booted there is nothing to ask: let the
+ * route through and let the shell drop back to Browse once the capability
+ * resolves (Pos.vue watches `floorEnabled`). Refusing early would break a
+ * cold-boot deep link into the floor on a genuine restaurant register.
+ */
+function allowsTableFeatures(): boolean {
+	try {
+		if (!useUIStore(pinia).capabilityPayload) {
+			return true;
+		}
+		return useVerticalStore(pinia).has("tables");
+	} catch {
+		return true;
+	}
+}
 
 const routes = [
 	{ path: "/", redirect: "/pos" },
@@ -19,6 +40,20 @@ const routes = [
 		path: "/pos",
 		component: () => import("../components/pos/shell/Pos.vue"),
 		meta: { title: "POS", layout: "default", loadingMessage: "Loading POS..." },
+	},
+	{
+		// The floor is a panel of the POS shell, not a screen of its own (spec
+		// §1) — this route exists so it can be linked and bookmarked. It mounts
+		// the same shell and asks it to open on the floor.
+		path: "/floor",
+		component: () => import("../components/pos/shell/Pos.vue"),
+		meta: {
+			title: "Floor",
+			layout: "default",
+			loadingMessage: "Loading floor...",
+			requiresTables: true,
+			initialView: "floor",
+		},
 	},
 	{
 		path: "/orders",
@@ -179,6 +214,10 @@ const createPosAppRouter = () => {
 		startRouteLoading({
 			message: resolveRouteLoadingMessage(to),
 		});
+		if (to.meta?.requiresTables && !allowsTableFeatures()) {
+			next("/pos");
+			return;
+		}
 		if (!to.meta?.requiresSupervisor) {
 			next();
 			return;

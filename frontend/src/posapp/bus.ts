@@ -10,6 +10,7 @@ import type {
 } from "./types/models";
 import type { NotificationData } from "./stores/toastStore";
 import type { RealtimeStockPayload } from "./utils/realtimeStock";
+import type { KotProjection } from "../offline/restaurantTypes";
 
 /** A row of the POS Offer table as held by PosOffers.vue (`pos_offers`). Untyped upstream. */
 export interface PosOfferRow {
@@ -112,6 +113,20 @@ export type Events = {
 
 	// ---- payments -----------------------------------------------------------
 	queue_submit_payment_shortcut: { print?: boolean };
+
+	// ---- restaurant floor ---------------------------------------------------
+	/**
+	 * A table order was opened or resumed on the floor screen. The shell answers
+	 * by moving to the cart — tapping a table means "take this table's order",
+	 * and the floor has nothing left to say until the next tap.
+	 */
+	floor_order_opened: { order_uid: string };
+	/**
+	 * A course was fired and the server returned the kitchen projection. Nothing
+	 * listens yet — printing is the QZ path's job and lands with the kitchen
+	 * ticket format — but the event is the seam it will attach to.
+	 */
+	floor_course_fired: KotProjection;
 
 	// ---- notifications ------------------------------------------------------
 	show_message: NotificationData;

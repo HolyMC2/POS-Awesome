@@ -65,7 +65,7 @@ export type ItemsPanelStyle = "standard";
  * (pos_capability_profile.py) in membership AND order; a cross-stack parity
  * test asserts it. A backend-allowed id absent from here renders a blank tab.
  */
-export const DOCK_TAB_IDS = ["browse", "offers", "cart", "coupons", "pay"] as const;
+export const DOCK_TAB_IDS = ["browse", "offers", "cart", "coupons", "pay", "floor"] as const;
 export type DockTabId = (typeof DOCK_TAB_IDS)[number];
 
 /** How the shell draws one dock tab. */
@@ -89,9 +89,17 @@ export interface DockTabDef {
 /** What the defs below need from the shell's setup() scope. */
 export interface DockTabContext {
 	__: (key: string) => string;
+	/**
+	 * Vertical vocabulary resolver (`verticalStore.t`). Only the nouns a preset
+	 * renames go through it — "Floor" is "Salón" on a restaurant and has no
+	 * retail meaning at all, so it cannot be a plain `__()` string.
+	 */
+	t: (key: string) => string;
 	offersCount: Ref<number>;
 	couponsCount: Ref<number>;
 	itemsCount: Ref<number>;
+	/** Open table orders on the register's floors — the floor tab's badge. */
+	floorOpenOrdersCount: Ref<number>;
 	activeView: Ref<string>;
 	compactPanel: Ref<string>;
 	paymentPending: Ref<boolean>;
@@ -167,5 +175,21 @@ export const buildDockTabDefs = (ctx: DockTabContext): Record<DockTabId, DockTab
 		isActive: () => ctx.activeView.value === "payment",
 		busy: () => ctx.paymentPending.value,
 		onTap: () => ctx.triggerInvoicePay(),
+	},
+	floor: {
+		icon: "mdi-table-furniture",
+		iconSize: 20,
+		badgeSm: true,
+		// Open orders across the register's floors, not the active floor: the
+		// badge answers "is anything still owed to me?", which a floor switch
+		// must not change.
+		badge: () => ctx.floorOpenOrdersCount.value,
+		label: () => ctx.t("Floor"),
+		ariaLabel: () =>
+			ctx.floorOpenOrdersCount.value
+				? `${ctx.t("Floor")} — ${ctx.floorOpenOrdersCount.value}`
+				: ctx.t("Floor"),
+		isActive: () => ctx.activeView.value === "floor",
+		onTap: () => ctx.setSelectorView("floor"),
 	},
 });
