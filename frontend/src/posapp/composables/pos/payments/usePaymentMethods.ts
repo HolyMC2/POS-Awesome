@@ -301,7 +301,12 @@ export function usePaymentMethods(options: PaymentMethodsOptions) {
 			// Open the customer editor so the operator can add the mobile
 			// number (the old "open_edit_customer" bus event had no
 			// listener — this path showed a toast and went nowhere).
-			stores.customersStore?.openUpdateCustomerDialog?.(null);
+			// Passing the current customer opens the EDIT form; null opens a
+			// blank new-customer form, which loses the customer being paid.
+			// Same convention as Customer.vue's edit_customer().
+			stores.customersStore?.openUpdateCustomerDialog?.(
+				stores.customersStore.customerInfo || {},
+			);
 			if (options.onBackToInvoice) options.onBackToInvoice();
 			return;
 		}
