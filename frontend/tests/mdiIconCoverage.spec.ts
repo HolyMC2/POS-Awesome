@@ -16,6 +16,18 @@ import { mdiIconPaths } from "../src/posapp/plugins/icons/mdiIconPaths";
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src");
 
+// The saldo app's Vue sources compile into this bundle via the `@saldo` vite
+// alias and resolve icons through the same set — so they must be scanned too,
+// or an icon referenced only there ships blank (bit prod: the Recarga/Servicio
+// picker rendered empty 48px boxes for every unregistered category icon).
+// CI builds without a saldo checkout fall back to the stubs, mirroring
+// vite.config.js.
+const SALDO_REAL = path.resolve(
+	path.dirname(fileURLToPath(import.meta.url)),
+	"../../../saldo/saldo/public/saldo_pos",
+);
+const SALDO_STUBS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../ci/saldo-stubs");
+
 // Keep in sync with the generator that writes mdiIconPaths.ts
 const SCAN_EXTENSIONS = [".vue", ".ts", ".js"];
 const ICON_TOKEN = /(?<![\w-])mdi-[a-z0-9]+(?:-[a-z0-9]+)*/g;
@@ -33,9 +45,20 @@ function collectSourceFiles(dir: string, out: string[] = []): string[] {
 	return out;
 }
 
+function scanRoots(): string[] {
+	const roots = [SRC];
+	try {
+		readdirSync(SALDO_REAL);
+		roots.push(SALDO_REAL);
+	} catch {
+		roots.push(SALDO_STUBS);
+	}
+	return roots;
+}
+
 function collectIconReferences(): Map<string, string[]> {
 	const refs = new Map<string, string[]>();
-	for (const file of collectSourceFiles(SRC)) {
+	for (const file of scanRoots().flatMap((root) => collectSourceFiles(root))) {
 		readFileSync(file, "utf8")
 			.split("\n")
 			.forEach((line, index) => {
