@@ -3,7 +3,8 @@
 	<div
 		ref="paymentRoot"
 		data-pos-keyboard-root="payment"
-		:class="['payment-shell', { 'payment-shell--dialog': dialogMode }]"
+		:class="['payment-shell', dialogMode ? 'payment-shell--dialog' : 'payment-shell--anchored']"
+		:style="anchoredShellStyle"
 		data-perf-tag="payment"
 	>
 		<v-card
@@ -24,6 +25,16 @@
 					<section class="payment-section payment-section--summary">
 						<div class="payment-section__header">
 							<h3 class="payment-section__title">{{ __("Payment Summary") }}</h3>
+						</div>
+						<!-- Phone: lead with the number the cashier is about to
+						     charge. On desk it is one of nine fields in the totals
+						     breakdown below; here it is the headline, so the three
+						     rows that survive the fold read Total / Paid / Change. -->
+						<div v-if="compactPaymentLayout && invoice_doc" class="payment-total-strip">
+							<span class="payment-total-strip__label">{{ __("Total") }}</span>
+							<strong class="payment-total-strip__amount">{{
+								formatCurrency(invoiceChargeTotal, invoice_doc.currency)
+							}}</strong>
 						</div>
 						<PaymentSummary
 							:invoice_doc="invoice_doc"
@@ -53,26 +64,49 @@
 						<div class="payment-section__header">
 							<h3 class="payment-section__title">{{ __("Payment Methods") }}</h3>
 						</div>
+						<!-- Phone: the default method keeps its full card (amount +
+						     quick-cash chips) and the remaining methods collapse
+						     behind one disclosure row, so the sheet is not a scroll
+						     of identical cards. Desk is untouched —
+						     `compactPaymentLayout` is false in dialog mode, and both
+						     lists are the same component fed the same props, so a
+						     split payment behaves identically either side of the
+						     disclosure. -->
 						<PaymentMethods
-							:payments="visiblePaymentMethods"
-							:currency="invoice_doc.currency"
-							:isReturn="invoice_doc.is_return"
-							:requestPaymentField="request_payment_field"
-							:currencySymbol="currencySymbol"
-							:formatCurrency="formatCurrency"
-							:isNumber="isNumber"
-							:getVisibleDenominations="getVisibleDenominations"
-							:isCashLikePayment="isCashLikePayment"
-							:isMpesaC2bPayment="is_mpesa_c2b_payment"
-							:isGiftCardPayment="isGiftCardPayment"
-							@update-amount="handlePaymentAmountChange"
-							@set-full-amount="set_full_amount"
-							@set-denomination="setPaymentToDenomination"
-							@mpesa-dialog="mpesa_c2b_dialog"
-							@request-payment="request_payment"
-							@set-rest-amount="set_rest_amount"
-							@open-gift-card="openGiftCardDialog"
+							v-bind="paymentMethodsProps"
+							v-on="paymentMethodsHandlers"
+							:payments="compactPaymentLayout ? primaryPaymentMethods : visiblePaymentMethods"
 						/>
+						<div
+							v-if="compactPaymentLayout && secondaryPaymentMethods.length"
+							class="payment-more-methods"
+						>
+							<button
+								type="button"
+								class="payment-disclosure"
+								:aria-expanded="moreMethodsExpanded ? 'true' : 'false'"
+								aria-controls="payment-more-methods"
+								@click="toggleMoreMethods()"
+							>
+								<v-icon
+									:icon="moreMethodsExpanded ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+									size="18"
+								/>
+								<span class="payment-disclosure__label">{{
+									__("More payment methods")
+								}}</span>
+								<span class="payment-disclosure__count">{{
+									secondaryPaymentMethods.length
+								}}</span>
+							</button>
+							<div id="payment-more-methods" v-show="moreMethodsExpanded">
+								<PaymentMethods
+									v-bind="paymentMethodsProps"
+									v-on="paymentMethodsHandlers"
+									:payments="secondaryPaymentMethods"
+								/>
+							</div>
+						</div>
 						<PaymentGiftCardSection
 							:enabled="Boolean(pos_profile?.posa_use_gift_cards)"
 							:expanded="giftCardInlineExpanded"
@@ -111,15 +145,32 @@
 							:currency-symbol="currencySymbol"
 							@set-formatted-currency="handleRedemptionFormattedCurrency"
 						/>
-						<InvoiceTotals
-							:invoice_doc="invoice_doc"
-							:displayCurrency="displayCurrency"
-							:diff_payment="diff_payment"
-							:diff_label="diff_label"
-							:item-discount-total="paymentItemDiscountTotal"
-							:currencySymbol="currencySymbol"
-							:formatCurrency="formatCurrency"
-						/>
+						<!-- Nine read-only totals fields are the single biggest block
+						     of desk-list scroll on a phone. The headline number moved
+						     to the summary strip above; the breakdown stays one tap
+						     away. Desk renders it open, as today. -->
+						<button
+							v-if="compactPaymentLayout"
+							type="button"
+							class="payment-disclosure"
+							:aria-expanded="breakdownOpen ? 'true' : 'false'"
+							aria-controls="payment-totals-breakdown"
+							@click="toggleBreakdown()"
+						>
+							<v-icon :icon="breakdownOpen ? 'mdi-chevron-up' : 'mdi-chevron-down'" size="18" />
+							<span class="payment-disclosure__label">{{ __("Full breakdown") }}</span>
+						</button>
+						<div id="payment-totals-breakdown" v-show="!compactPaymentLayout || breakdownOpen">
+							<InvoiceTotals
+								:invoice_doc="invoice_doc"
+								:displayCurrency="displayCurrency"
+								:diff_payment="diff_payment"
+								:diff_label="diff_label"
+								:item-discount-total="paymentItemDiscountTotal"
+								:currencySymbol="currencySymbol"
+								:formatCurrency="formatCurrency"
+							/>
+						</div>
 						<div class="payment-section__subsection">
 							<h3 class="payment-section__title payment-section__title--subsection">
 								{{ __("Fulfillment Details") }}
@@ -237,7 +288,7 @@
 			</div>
 		</v-card>
 
-		<div :class="['payment-footer', { 'payment-footer--dialog': dialogMode }]">
+		<div :class="['payment-footer', dialogMode ? 'payment-footer--dialog' : 'payment-footer--anchored']">
 			<PaymentActionButtons
 				ref="submitButton"
 				:loading="loading"
@@ -246,7 +297,7 @@
 				:compact="dialogMode"
 				@submit="submit"
 				@submit-and-print="submit(undefined, false, true)"
-				@cancel="back_to_invoice"
+				@cancel="cancel_payment()"
 			/>
 		</div>
 		<!-- Dialogs Section (Custom Days, Phone Payment) -->
@@ -302,11 +353,11 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, getCurrentInstance, n
 import { storeToRefs } from "pinia";
 
 // Stores
-import { useInvoiceStore } from "../../stores/invoiceStore.js";
-import { useCustomersStore } from "../../stores/customersStore.js";
-import { useUIStore } from "../../stores/uiStore.js";
-import { useToastStore } from "../../stores/toastStore.js";
-import { useSyncStore } from "../../stores/syncStore.ts";
+import { useInvoiceStore } from "../../stores/invoiceStore";
+import { useCustomersStore } from "../../stores/customersStore";
+import { useUIStore } from "../../stores/uiStore";
+import { useToastStore } from "../../stores/toastStore";
+import { useSyncStore } from "../../stores/syncStore";
 import { useSocketStore } from "../../stores/socketStore";
 import { useEmployeeStore } from "../../stores/employeeStore";
 
@@ -446,6 +497,68 @@ const giftCardLoading = ref(false);
 const giftCardMode = ref("redeem");
 const giftCardError = ref("");
 const giftCardRedemptions = ref([]);
+
+// ── Compact ("payment sheet") layout ─────────────────────────────────────
+// Pos.vue renders this component inline below 992px and inside the payment
+// dialog at or above it, so the inline view is always the compact one. The
+// width test uses the shell's own dock band (1100px) so the class and the
+// stylesheet agree, and it is pinned to false in dialog mode — desk must not
+// see any of the compact branches.
+const COMPACT_PAYMENT_WIDTH = 1100;
+// Seeded from the width so the first paint is already the right layout — a
+// frame of the full desk list before the measurement lands reads as a flash.
+const compactPaymentLayout = ref(
+	typeof window !== "undefined" && !props.dialogMode && window.innerWidth < COMPACT_PAYMENT_WIDTH,
+);
+// Distance from the top of this panel to the bottom of the viewport. The
+// navbar, the POS toolbar and the offline banner all sit above the panel, so
+// the offset is measured rather than guessed; the stylesheet subtracts the
+// dock from it. Document-relative (rect.top + scrollY) so a page that is
+// still scrolled from the cart view does not measure short.
+const shellViewportSpace = ref(0);
+const moreMethodsOpen = ref(false);
+const breakdownOpen = ref(false);
+let shellMeasureFrame = null;
+
+const measureShell = () => {
+	if (typeof window === "undefined") return;
+	compactPaymentLayout.value = !props.dialogMode && window.innerWidth < COMPACT_PAYMENT_WIDTH;
+
+	const el = paymentRoot.value;
+	if (!el || props.dialogMode) {
+		shellViewportSpace.value = 0;
+		return;
+	}
+	const documentTop = el.getBoundingClientRect().top + (window.scrollY || 0);
+	// Floor it: a soft keyboard can shrink innerHeight below the panel's own
+	// top, and a sheet with no room left is worse than one that overflows.
+	shellViewportSpace.value = Math.max(Math.round(window.innerHeight - documentTop), 360);
+};
+
+const scheduleShellMeasure = () => {
+	if (typeof window === "undefined") return;
+	if (shellMeasureFrame) {
+		cancelAnimationFrame(shellMeasureFrame);
+	}
+	shellMeasureFrame = requestAnimationFrame(() => {
+		shellMeasureFrame = null;
+		measureShell();
+	});
+};
+
+const anchoredShellStyle = computed(() =>
+	props.dialogMode || !shellViewportSpace.value
+		? null
+		: { "--payment-shell-space": `${shellViewportSpace.value}px` },
+);
+
+const toggleMoreMethods = (open) => {
+	moreMethodsOpen.value = typeof open === "boolean" ? open : !moreMethodsOpen.value;
+};
+
+const toggleBreakdown = (open) => {
+	breakdownOpen.value = typeof open === "boolean" ? open : !breakdownOpen.value;
+};
 
 // Computed Properties
 const invoice_doc = computed({
@@ -657,12 +770,13 @@ const {
 	getPaidChange: () => paid_change.value,
 	getCreditChange: () => credit_change.value,
 	// "change_active_view" had no listener — the operator stayed stuck on
-	// the payment screen. Close the dialog (wide layouts) and switch the
-	// compact panel back to the invoice (stacked layouts).
-	onBackToInvoice: () => {
-		uiStore.closePaymentDialog();
-		eventBus.emit("set_compact_panel", "invoice");
-	},
+	// the payment screen. This is the same back-out as Cancel Payment (the
+	// sale is still alive), so it takes the same exit. It used to emit
+	// set_compact_panel alone, which showed the cart but left activeView on
+	// "payment": the dock kept PAGAR lit and the next panel sync threw the
+	// cashier back onto payment. No refocus — this path has just opened the
+	// customer form, and that dialog owns the focus.
+	onBackToInvoice: () => cancel_payment({ refocusSearch: false }),
 });
 
 const {
@@ -744,6 +858,75 @@ const visiblePaymentMethods = computed(() =>
 		(payment) => !isGiftCardPayment(payment),
 	),
 );
+
+// The card a cashier reaches for first: the profile's default line, falling
+// back to the first visible one so a profile with no default still leads with
+// something usable.
+const primaryPaymentMethod = computed(() => {
+	const methods = visiblePaymentMethods.value;
+	if (!methods.length) return null;
+	return methods.find((payment) => payment?.default === 1) || methods[0];
+});
+
+const primaryPaymentMethods = computed(() =>
+	primaryPaymentMethod.value ? [primaryPaymentMethod.value] : [],
+);
+
+const secondaryPaymentMethods = computed(() =>
+	visiblePaymentMethods.value.filter((payment) => payment !== primaryPaymentMethod.value),
+);
+
+// A split payment must never hide behind the disclosure: any amount already
+// sitting on a secondary method (typed here, or restored with a draft) forces
+// the section open regardless of the toggle.
+const secondaryMethodsHaveAmount = computed(() =>
+	secondaryPaymentMethods.value.some(
+		(payment) => flt(payment?.amount || 0, currency_precision.value) !== 0,
+	),
+);
+
+const moreMethodsExpanded = computed(() => moreMethodsOpen.value || secondaryMethodsHaveAmount.value);
+
+// Both method lists are the same component with the same wiring — bound once
+// so the collapsed list can never drift from the primary one. Computeds are
+// lazy, so referencing handlers declared further down is safe: they resolve at
+// render, not at setup.
+const paymentMethodsProps = computed(() => ({
+	currency: invoice_doc.value?.currency,
+	isReturn: invoice_doc.value?.is_return,
+	requestPaymentField: request_payment_field.value,
+	currencySymbol,
+	formatCurrency,
+	isNumber,
+	getVisibleDenominations,
+	isCashLikePayment,
+	isMpesaC2bPayment: is_mpesa_c2b_payment,
+	isGiftCardPayment,
+}));
+
+const paymentMethodsHandlers = computed(() => ({
+	"update-amount": handlePaymentAmountChange,
+	"set-full-amount": set_full_amount,
+	"set-denomination": setPaymentToDenomination,
+	"mpesa-dialog": mpesa_c2b_dialog,
+	"request-payment": request_payment,
+	"set-rest-amount": set_rest_amount,
+	"open-gift-card": openGiftCardDialog,
+}));
+
+// The amount the cashier is settling. Mirrors the rule diff_payment uses in
+// usePaymentCalculations — a foreign-currency invoice under multi-currency is
+// charged at grand_total, everything else at the rounded total — so the strip
+// and "To Be Paid" can never disagree.
+const invoiceChargeTotal = computed(() => {
+	const doc = invoice_doc.value;
+	if (!doc) return 0;
+	const profile = pos_profile.value || {};
+	if (profile.posa_allow_multi_currency && doc.currency !== profile.currency) {
+		return flt(doc.grand_total, currency_precision.value);
+	}
+	return flt(doc.rounded_total || doc.grand_total, currency_precision.value);
+});
 
 const giftCardAppliedAmount = computed(() =>
 	(Array.isArray(giftCardRedemptions.value) ? giftCardRedemptions.value : []).reduce(
@@ -1075,6 +1258,11 @@ const queueSearchRefocusRecovery = () => {
 	}, 10000);
 };
 
+// Two ways out of the payment view, and they land in different places.
+//
+// back_to_invoice() — the sale is DONE (submitted, cart possibly cleared).
+// The next sale starts at item search, so Browse is right and the refocus
+// recovery belongs here.
 const back_to_invoice = () => {
 	releaseActiveFocus();
 	paymentVisible.value = false;
@@ -1085,6 +1273,49 @@ const back_to_invoice = () => {
 		uiStore.setActiveView("items");
 	}
 	queueSearchRefocusRecovery();
+};
+
+// cancel_payment() — the cashier BACKED OUT with the sale still alive: the
+// Cancel Payment button, or the phone-payment path that bounces to the
+// customer form because there is no mobile number. They came from the cart
+// and the cart still holds their items, so the cart is where they belong —
+// not Browse with the item search autofocused and the Android keyboard up.
+//
+// The shell owns that transition: Pos.vue's showInvoicePanel sets the compact
+// panel AND suppresses the activeView watcher that would otherwise force the
+// selector straight back. Setting either half from here would race that
+// watcher, so it is asked for over the bus instead.
+const cancel_payment = ({ refocusSearch = true } = {}) => {
+	releaseActiveFocus();
+	paymentVisible.value = false;
+
+	if (paymentDialogOpen.value) {
+		// Desk: the cart never left the screen behind the overlay, so closing
+		// the dialog already IS landing on the cart. Unchanged behaviour.
+		uiStore.closePaymentDialog();
+		if (refocusSearch) {
+			queueSearchRefocusRecovery();
+		}
+		return;
+	}
+
+	if (activeView.value !== "payment") {
+		return;
+	}
+
+	eventBus?.emit?.("show_invoice_panel");
+
+	// The shell answers synchronously (mitt dispatches inline) and
+	// showInvoicePanel moves activeView off "payment", so a handled event has
+	// already landed by the time we look. Until the listener exists, fall
+	// back to the old Browse exit rather than strand the cashier on a view
+	// they asked to leave.
+	if (activeView.value === "payment") {
+		uiStore.setActiveView("items");
+		if (refocusSearch) {
+			queueSearchRefocusRecovery();
+		}
+	}
 };
 
 const finishSubmissionNavigation = (clearInvoice = false) => {
@@ -2107,12 +2338,17 @@ watch(isPaymentOpen, (isOpen) => {
 	if (isOpen) {
 		ensurePaymentLinesInitialized();
 		handleShowPayment();
+		// The panel only has a box to measure once it is on screen.
+		nextTick(scheduleShellMeasure);
 	} else {
 		releaseActiveFocus();
 		paymentVisible.value = false;
 		highlightSubmit.value = false;
 		queuedShortcutSubmit.value = null;
 		giftCardDialogOpen.value = false;
+		// Next sale starts as a sheet again, not wherever this one was left.
+		moreMethodsOpen.value = false;
+		breakdownOpen.value = false;
 	}
 });
 
@@ -2225,6 +2461,11 @@ onMounted(() => {
 	_shortcutHandlers.value.handlePaymentShortcut = handlePaymentShortcut.bind(this);
 	document.addEventListener("keydown", _shortcutHandlers.value.handlePaymentShortcut);
 
+	measureShell();
+	nextTick(scheduleShellMeasure);
+	window.addEventListener("resize", scheduleShellMeasure);
+	window.addEventListener("orientationchange", scheduleShellMeasure);
+
 	syncStore.syncPendingInvoices();
 	eventBus.on("network-online", onNetworkOnline);
 	eventBus.on("server-online", onNetworkOnline);
@@ -2260,6 +2501,13 @@ onBeforeUnmount(() => {
 	eventBus.off("network-online", onNetworkOnline);
 	eventBus.off("server-online", onNetworkOnline);
 	clearBackgroundStatusCheck();
+
+	window.removeEventListener("resize", scheduleShellMeasure);
+	window.removeEventListener("orientationchange", scheduleShellMeasure);
+	if (shellMeasureFrame) {
+		cancelAnimationFrame(shellMeasureFrame);
+		shellMeasureFrame = null;
+	}
 
 	if (_shortcutHandlers.value.handlePaymentShortcut) {
 		document.removeEventListener("keydown", _shortcutHandlers.value.handlePaymentShortcut);
@@ -2402,6 +2650,87 @@ defineExpose({
 	font-size: 0.92rem;
 }
 
+/* Phone-only headline: the amount to charge, big enough to read at arm's
+   length. Rendered behind `compactPaymentLayout`, so desk never sees it. */
+.payment-total-strip {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--pos-space-2);
+	padding: 10px 12px;
+	border-radius: var(--pos-radius-sm);
+	background: var(--pos-surface-raised);
+	border: 1px solid var(--pos-border-light);
+}
+
+.payment-total-strip__label {
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--pos-text-secondary);
+}
+
+.payment-total-strip__amount {
+	font-size: 1.35rem;
+	font-weight: 800;
+	line-height: 1.1;
+	color: var(--pos-text-primary);
+}
+
+/* Shared disclosure row (more methods / full breakdown). Dashed edge so it
+   reads as "there is more here", not as another action button competing with
+   the money buttons in the bar. */
+.payment-disclosure {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 44px;
+	padding: 0 12px;
+	/* --pos-border, not --pos-border-light: at 6% the dashed edge reads as a
+	   rendering artefact in dark mode instead of an affordance. The label and
+	   chevron carry the contrast; the border only frames them. */
+	border: 1px dashed var(--pos-border);
+	border-radius: var(--pos-radius-sm);
+	background: var(--pos-surface-raised);
+	color: var(--pos-text-primary);
+	font-size: 0.86rem;
+	font-weight: 700;
+	text-align: start;
+	cursor: pointer;
+	transition:
+		border-color 0.18s ease,
+		background-color 0.18s ease;
+}
+
+.payment-disclosure:hover,
+.payment-disclosure:focus-visible {
+	border-color: rgba(var(--v-theme-primary), 0.55);
+	background: rgba(var(--v-theme-primary), 0.06);
+}
+
+.payment-disclosure__label {
+	min-width: 0;
+}
+
+.payment-disclosure__count {
+	margin-inline-start: auto;
+	min-width: 22px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: rgba(var(--v-theme-primary), 0.12);
+	color: rgb(var(--v-theme-primary));
+	font-size: 0.78rem;
+	text-align: center;
+}
+
+.payment-more-methods {
+	display: flex;
+	flex-direction: column;
+	gap: var(--pos-space-2);
+}
+
 :deep(.payment-section .v-divider) {
 	display: none;
 }
@@ -2417,18 +2746,6 @@ defineExpose({
 	z-index: 8;
 	padding-top: 8px;
 	background: linear-gradient(180deg, rgba(255, 255, 255, 0), var(--pos-surface) 30%);
-}
-
-/* Below 1100px Pos.vue renders the fixed bottom dock (z-20, ~120px
-   tall) over everything; this footer is only sticky at z-8, so PAGAR
-   pinned BEHIND the dock on a phone. Lift the sticky line by the space
-   the dock already measures for the rest of the shell — same
-   --bottom-safe-space contract InvoiceSummary and ItemActionToolbar
-   use. The dialog variant is an overlay above the dock and keeps 0. */
-@media (max-width: 1099px) {
-	.payment-footer:not(.payment-footer--dialog) {
-		bottom: calc(var(--bottom-safe-space, 0px) + 8px);
-	}
 }
 
 .payment-footer--dialog {
@@ -2511,14 +2828,10 @@ defineExpose({
 		display: flex;
 		flex-direction: column;
 		gap: var(--pos-space-2);
-		overflow: visible;
 	}
 
 	.payment-card {
 		padding: var(--pos-space-1);
-		height: auto !important;
-		max-height: none !important;
-		overflow: visible !important;
 	}
 
 	.payment-shell--dialog {
@@ -2528,9 +2841,6 @@ defineExpose({
 	.payment-scroll {
 		padding: var(--pos-space-2);
 		gap: var(--pos-space-2);
-		overflow: visible !important;
-		min-height: auto;
-		max-height: none;
 	}
 
 	.payment-sections {
@@ -2549,11 +2859,66 @@ defineExpose({
 		padding: var(--pos-space-2);
 		gap: var(--pos-space-2);
 	}
+}
 
-	.payment-footer {
-		position: sticky;
+/* ── Compact payment sheet ────────────────────────────────────────────────
+   Below 992px Pos.vue renders this panel inline (the dialog is >=992px only),
+   and it used to grow to full content height with the DOCUMENT as its
+   scrollport. `.payment-footer` was position:sticky, so instead of holding
+   the bottom it was pulled UP off the end of that long panel and drew as a
+   band floating mid-screen, with the rest of the card still rendering
+   underneath it and the dock below that (Marco, phone screenshots
+   2026-08-10). A shorter bar (52cd77a6a) made the band smaller, not absent —
+   the mechanism was untouched.
+
+   The mechanism is what changes here: the panel becomes a height-constrained
+   flex column whose MIDDLE scrolls, with the action bar as a flex sibling
+   BELOW the scrollport. That is what the dialog variant already does, and
+   what ClosingDialog does with v-card-actions outside v-card-text. Nothing
+   can render under the bar because there is no "under" left — the content is
+   inside an overflow box that stops where the bar starts.
+
+   Last block in the file on purpose: several rules here tie on specificity
+   with the phone block above, and the sheet has to win those ties. */
+@media (max-width: 1099px) {
+	.payment-shell--anchored {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		/* Measured top offset (JS, republished on resize) minus the dock the
+		   rest of the shell already reserves via --bottom-safe-space. */
+		height: calc(var(--payment-shell-space, calc(100dvh - 96px)) - var(--bottom-safe-space, 0px) - 4px);
+		min-height: 240px;
+		overflow: hidden;
+	}
+
+	.payment-shell--anchored .payment-card {
+		flex: 1 1 auto;
+		min-height: 0;
+		height: auto;
+		max-height: none;
+		margin-top: 0 !important;
+		overflow: hidden;
+	}
+
+	.payment-shell--anchored .payment-scroll {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+		overflow-x: hidden;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.payment-footer--anchored {
+		position: static;
+		flex: 0 0 auto;
 		margin-top: 0;
-		padding-bottom: calc(env(safe-area-inset-bottom) + 4px);
+		padding: 8px 4px calc(env(safe-area-inset-bottom) + 6px);
+		/* Opaque. Nothing scrolls behind the bar any more, and the old
+		   white-to-surface gradient washed its top edge in dark mode. */
+		background: var(--pos-surface);
+		border-top: 1px solid var(--pos-border-light);
+		box-shadow: 0 -4px 14px var(--pos-shadow);
 	}
 }
 </style>

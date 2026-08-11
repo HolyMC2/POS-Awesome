@@ -41,6 +41,13 @@ describe("PaymentActionButtons", () => {
 		expect(cancel.classes()).not.toContain("payment-footer-btn");
 	});
 
+	it("puts the compact marker on the root the sizing rule descends from", () => {
+		// The surviving rule is `.compact :deep(.v-btn)`, which only reaches
+		// the buttons while `.compact` is on this component's root element.
+		expect(mountButtons({ compact: true }).classes()).toContain("compact");
+		expect(mountButtons().classes()).not.toContain("compact");
+	});
+
 	it("Submit and Submit & Print sit in half-width columns (one row)", () => {
 		const wrapper = mountButtons();
 		const cols = wrapper.findAll("v-col");

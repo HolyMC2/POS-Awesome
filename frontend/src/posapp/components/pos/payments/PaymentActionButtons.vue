@@ -73,8 +73,12 @@ const __ = window.__;
 	background: transparent !important;
 }
 
-.compact :deep(.v-btn),
-:deep(.compact .v-btn) {
+/* `.compact` sits on THIS component's root, so it is reachable as a scoped
+   descendant selector. The mirrored `:deep(.compact .v-btn)` that used to sit
+   here compiled to `[data-v-x] .compact .v-btn` and matched nothing — the root
+   is the only element carrying the scope id, and it cannot be its own
+   descendant. */
+.compact :deep(.v-btn) {
 	min-height: 42px;
 }
 

@@ -2077,3 +2077,8 @@ Printing is not ready — open Printer Setup from the menu.,La impresión no est
 Give back change: {0},Entregue el cambio: {0}
 Payment total {0} does not match grand total {1} (difference {2}).,El total pagado {0} no coincide con el total de la factura {1} (diferencia {2}).
 Payment total {0} minus change {1} does not match grand total {2} (difference {3}).,El total pagado {0} menos el cambio {1} no coincide con el total de la factura {2} (diferencia {3}).
+This sale is being saved from another tab or device. Please try again.,La venta se está guardando desde otra pestaña o dispositivo. Intenta de nuevo.
+Sale busy,Venta ocupada
+Processing,Procesando
+More payment methods,Más métodos de pago
+Full breakdown,Ver desglose
