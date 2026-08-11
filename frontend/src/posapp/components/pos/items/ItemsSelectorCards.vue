@@ -146,6 +146,23 @@ defineExpose({ scrollToItem, getScrollerElement, scrollerRef });
 </script>
 
 <style scoped>
+/* The card root must bound its own height for the scroller's `height:100%`
+   to resolve — the height chain above (dynamic-padding → results card →
+   row/col) is definite. Without this the container is auto-height, the
+   scroller grows to full content, and nothing scrolls: on a phone every
+   item past the fold hides behind the fixed dock. This mirrors
+   .items-table-container, which got the fix in the mobile overhaul; the
+   card view was left on the old broken `calc(100% - 80px)` pattern because
+   retail defaults to list view and only the cafetería preset defaults to
+   cards, so the bug went unseen. */
+.items-card-container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
+}
+
 .item-container {
 	overflow-y: auto;
 	scrollbar-gutter: stable;
@@ -166,7 +183,9 @@ defineExpose({ scrollToItem, getScrollerElement, scrollerRef });
 }
 
 .virtual-scroller {
-	height: calc(100% - 80px);
+	flex: 1 1 auto;
+	min-height: 0;
+	height: 100%;
 	overflow-y: auto;
 	position: relative;
 }
