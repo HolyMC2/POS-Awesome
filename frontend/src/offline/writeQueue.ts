@@ -10,7 +10,8 @@ export type OfflineEntityType =
 	| "invoice"
 	| "customer"
 	| "payment"
-	| "cash_movement";
+	| "cash_movement"
+	| "restaurant_order";
 
 export type OfflineQueueStatus =
 	| "pending"
@@ -57,8 +58,12 @@ const ENTITY_MEMORY_KEYS: Record<OfflineEntityType, string> = {
 	customer: "offline_customers",
 	payment: "offline_payments",
 	cash_movement: "offline_cash_movements",
+	restaurant_order: "offline_restaurant_orders",
 };
 
+// Entity types that ever lived in the pre-write_queue array storage and so
+// still need the one-time migration + legacy-key wipe. `restaurant_order` is
+// write_queue-native and deliberately absent.
 const LEGACY_QUEUE_CONFIG: Array<{
 	entityType: OfflineEntityType;
 	memoryKey: string;
@@ -67,6 +72,18 @@ const LEGACY_QUEUE_CONFIG: Array<{
 	{ entityType: "customer", memoryKey: "offline_customers" },
 	{ entityType: "payment", memoryKey: "offline_payments" },
 	{ entityType: "cash_movement", memoryKey: "offline_cash_movements" },
+];
+
+// Every entity the queue serves — drives memory refresh and the dead-letter
+// surface. Keep in sync with OfflineEntityType, NOT with LEGACY_QUEUE_CONFIG:
+// a type missing here never refreshes its memory snapshot and its dead-letters
+// stay invisible to the operator.
+const ALL_QUEUE_ENTITY_TYPES: OfflineEntityType[] = [
+	"invoice",
+	"customer",
+	"payment",
+	"cash_movement",
+	"restaurant_order",
 ];
 
 const ACTIVE_STATUSES = new Set<OfflineQueueStatus>([
@@ -150,6 +167,37 @@ function toErrorMessage(error: unknown) {
 	}
 }
 
+// ---- per-entity queue plugins ---------------------------------------------
+// The four shipped entities have their normalise/key/coalesce rules inline
+// below. Newer entities (restaurant orders) register theirs instead of growing
+// this module: their merge semantics are domain logic, not queue plumbing.
+// Register at module load of the owning module, which every enqueue path for
+// that entity imports, so the plugin is always present before its first write.
+
+export interface WriteQueuePlugin {
+	/** Stamp ids / strip volatile fields before the payload is stored. */
+	normalizePayload?: (payload: AnyRecord) => AnyRecord;
+	/** Queue identity. Returning null falls back to the generic hash key. */
+	deriveIdempotencyKey?: (payload: AnyRecord) => string | null;
+	/**
+	 * Merge an incoming payload into the one already queued under the same
+	 * key. Return null to keep the queued entry untouched (plain dedupe).
+	 */
+	coalesce?: (
+		existing: OfflineQueueEntry,
+		incoming: AnyRecord,
+	) => AnyRecord | null;
+}
+
+const QUEUE_PLUGINS = new Map<OfflineEntityType, WriteQueuePlugin>();
+
+export function registerWriteQueuePlugin(
+	entityType: OfflineEntityType,
+	plugin: WriteQueuePlugin,
+) {
+	QUEUE_PLUGINS.set(entityType, plugin);
+}
+
 function normalizePaymentPayload(payload: AnyRecord) {
 	const nextPayload = cloneSerializable(payload);
 	const paymentPayload = nextPayload?.args?.payload;
@@ -180,6 +228,11 @@ function normalizePayload(
 	entityType: OfflineEntityType,
 	payload: AnyRecord,
 ): AnyRecord {
+	const plugin = QUEUE_PLUGINS.get(entityType);
+	if (plugin?.normalizePayload) {
+		return plugin.normalizePayload(cloneSerializable(payload));
+	}
+
 	if (entityType === "payment") {
 		return normalizePaymentPayload(payload);
 	}
@@ -199,6 +252,13 @@ function deriveIdempotencyKey(
 	entityType: OfflineEntityType,
 	payload: AnyRecord,
 ): string {
+	const pluginKey = QUEUE_PLUGINS.get(entityType)?.deriveIdempotencyKey?.(
+		payload,
+	);
+	if (pluginKey) {
+		return pluginKey;
+	}
+
 	if (entityType === "invoice") {
 		const requestId = String(payload?.invoice?.posa_client_request_id || "").trim();
 		if (requestId) {
@@ -338,8 +398,8 @@ export async function refreshQueueMemory(entityType: OfflineEntityType) {
 }
 
 export async function refreshAllQueueMemory() {
-	for (const config of LEGACY_QUEUE_CONFIG) {
-		await refreshQueueMemory(config.entityType);
+	for (const entityType of ALL_QUEUE_ENTITY_TYPES) {
+		await refreshQueueMemory(entityType);
 	}
 }
 
@@ -368,6 +428,17 @@ async function enqueueWriteQueueEntryInternal(
 				await table.put(coalescedEntry);
 				return coalescedEntry;
 			}
+
+			const merged = QUEUE_PLUGINS.get(entityType)?.coalesce?.(
+				existing,
+				normalizedPayload,
+			);
+			if (merged) {
+				const coalescedEntry = buildCoalescedQueueEntry(existing, merged);
+				await table.put(coalescedEntry);
+				return coalescedEntry;
+			}
+
 			return existing;
 		}
 
@@ -582,6 +653,35 @@ export async function markWriteQueueEntryFailed(
 	);
 }
 
+/**
+ * Hand a claimed entry back to `pending` WITHOUT charging it a retry.
+ *
+ * Needed by drains that must preserve per-key ordering: when an earlier entry
+ * for the same order fails, the later ones it depends on have to go back in
+ * the queue untouched. Marking them failed would burn their retry budget (and
+ * dead-letter them after MAX_RETRY_COUNT) for someone else's error; leaving
+ * them "syncing" would stall them until the 5-minute lease expired.
+ */
+export async function releaseClaimedQueueEntry(
+	entityType: OfflineEntityType,
+	queueId: number,
+	expectedLastAttemptAt: string | null | undefined,
+) {
+	await ensureOfflineQueueReady();
+
+	return updateClaimedQueueEntry(
+		entityType,
+		queueId,
+		expectedLastAttemptAt,
+		(current) => ({
+			...current,
+			status: "pending",
+			last_attempt_at: null,
+			next_attempt_at: null,
+		}),
+	);
+}
+
 export async function updateQueuedPayloads(
 	entityType: OfflineEntityType,
 	updater: (payload: AnyRecord) => AnyRecord,
@@ -655,9 +755,7 @@ export async function ensureOfflineQueueReady() {
 export async function getWriteQueueDeadLetterRows(
 	entityType?: OfflineEntityType,
 ) {
-	const types = entityType
-		? [entityType]
-		: LEGACY_QUEUE_CONFIG.map((config) => config.entityType);
+	const types = entityType ? [entityType] : ALL_QUEUE_ENTITY_TYPES;
 	const rows: ReturnType<typeof toPublicSnapshot>[] = [];
 	for (const type of types) {
 		const entries = await getQueueEntries(type, {

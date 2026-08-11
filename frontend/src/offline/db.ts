@@ -62,6 +62,12 @@ const BASE_SCHEMA = {
 	pricing_rules: "&key",
 	settings: "&key",
 	sync_state: "&key,resourceId,status,nextRetryAt,lastAttemptAt,updated_at",
+	pos_floors: "&name,floor_uid,pos_profile,sequence",
+	pos_tables: "&name,table_uid,floor,table_label",
+	// Local mirror of open table orders: server-confirmed rows pulled with a
+	// snapshot, plus rows this device created offline that no other device can
+	// see until they drain (spec §6.8).
+	pos_table_orders: "&order_uid,name,table,status,updated_at",
 };
 
 export const KEY_TABLE_MAP: Record<string, string> = {
@@ -69,6 +75,7 @@ export const KEY_TABLE_MAP: Record<string, string> = {
 	offline_customers: "queue",
 	offline_payments: "queue",
 	offline_cash_movements: "queue",
+	offline_restaurant_orders: "queue",
 	item_details_cache: "cache",
 	customer_storage: "cache",
 	stored_value_snapshot_cache: "cache",
@@ -190,6 +197,11 @@ const DERIVED_OFFLINE_TABLES_TO_CLEAR = Object.freeze([
 	"item_groups",
 	"translations",
 	"pricing_rules",
+	// Pulled catalog — safe to wipe, the next sync refetches it.
+	// `pos_table_orders` is deliberately NOT here: it holds orders this device
+	// created offline that exist nowhere else until the queue drains.
+	"pos_floors",
+	"pos_tables",
 ]);
 
 function tableForKey(key: string) {
@@ -236,6 +248,8 @@ db.version(10).stores(BASE_SCHEMA);
 db.version(11).stores(BASE_SCHEMA);
 db.version(12).stores(BASE_SCHEMA);
 db.version(13).stores(BASE_SCHEMA);
+// v14 adds pos_floors / pos_tables / pos_table_orders (restaurant tables).
+db.version(14).stores(BASE_SCHEMA);
 
 let persistWorker: Worker | null = null;
 if (typeof Worker !== "undefined") {
@@ -255,6 +269,7 @@ const MEMORY_DEFAULTS: AnyRecord = {
 	offline_customers: [],
 	offline_payments: [],
 	offline_cash_movements: [],
+	offline_restaurant_orders: [],
 	invoice_outbox_mode: "off",
 	pos_last_sync_totals: { pending: 0, synced: 0, drafted: 0 },
 	uom_cache: {},

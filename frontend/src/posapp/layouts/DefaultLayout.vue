@@ -183,7 +183,10 @@ const instance = getCurrentInstance();
 const $theme = instance?.proxy?.$theme || { toggle: () => {}, isDark: false }; // Fallback
 const __ = instance?.proxy?.__ || ((value) => value);
 const BUILD_VERSION = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : null;
-const OFFLINE_SYNC_SCHEMA_VERSION = "2026-04-09";
+// Must equal SYNC_SCHEMA_VERSION in
+// posawesome/posawesome/api/offline_sync/common.py — a mismatch forces every
+// resource into a full resync. Bumped for the pos_floor / pos_table field lists.
+const OFFLINE_SYNC_SCHEMA_VERSION = "2026-08-11";
 const OFFLINE_SYNC_TIMER_INTERVAL_MS = 60_000;
 const PRODUCT_SYNC_SETTLE_TIMEOUT_MS = 120_000;
 const PRODUCT_SYNC_SETTLE_POLL_MS = 250;

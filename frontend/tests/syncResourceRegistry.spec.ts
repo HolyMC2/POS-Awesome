@@ -22,6 +22,9 @@ describe("sync resource registry", () => {
 			"stock",
 			"customers",
 			"invoice_outbox",
+			"pos_floor",
+			"pos_table",
+			"restaurant_orders",
 			"customer_addresses",
 			"delivery_charges",
 		]);
@@ -60,6 +63,9 @@ describe("sync resource registry", () => {
 			"stock",
 			"customers",
 			"invoice_outbox",
+			"pos_floor",
+			"pos_table",
+			"restaurant_orders",
 			"customer_addresses",
 			"delivery_charges",
 		]);
@@ -93,6 +99,9 @@ describe("sync resource registry", () => {
 			"stock",
 			"customers",
 			"invoice_outbox",
+			"pos_floor",
+			"pos_table",
+			"restaurant_orders",
 		]);
 	});
 });

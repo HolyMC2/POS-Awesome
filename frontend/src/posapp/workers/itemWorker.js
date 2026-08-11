@@ -167,6 +167,7 @@ const KEY_TABLE_MAP = {
 	offline_customers: "queue",
 	offline_payments: "queue",
 	offline_cash_movements: "queue",
+	offline_restaurant_orders: "queue",
 	item_details_cache: "cache",
 	customer_storage: "cache",
 	stored_value_snapshot_cache: "cache",

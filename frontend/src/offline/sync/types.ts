@@ -15,7 +15,10 @@ export type SyncResourceId =
 	| "customers"
 	| "invoice_outbox"
 	| "customer_addresses"
-	| "delivery_charges";
+	| "delivery_charges"
+	| "pos_floor"
+	| "pos_table"
+	| "restaurant_orders";
 
 /**
  * How a resource is synchronised from the server:

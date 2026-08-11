@@ -166,6 +166,43 @@ const SYNC_RESOURCES: ReadonlyArray<SyncResourceDefinition> = Object.freeze([
 		fullResyncSupported: false,
 	},
 	{
+		// Floors/tables are the restaurant catalog: small, slow-changing, and
+		// required before the floor screen renders anything. "warm" rather than
+		// boot_critical — a register without the tables capability must not pay
+		// for them at boot, and the floor view pulls on open regardless.
+		id: "pos_floor",
+		scope: "profile",
+		mode: "delta",
+		priority: "warm",
+		triggers: ["online_resume", "timer", "profile_change", "user_action"],
+		storageKey: "pos_floors",
+		watermarkType: "timestamp",
+		fullResyncSupported: true,
+	},
+	{
+		id: "pos_table",
+		scope: "profile",
+		mode: "delta",
+		priority: "warm",
+		triggers: ["online_resume", "timer", "profile_change", "user_action"],
+		storageKey: "pos_tables",
+		watermarkType: "timestamp",
+		fullResyncSupported: true,
+	},
+	{
+		// The table-order WRITE drain, modelled as a resource so the coordinator
+		// schedules it and the offline panel can surface stuck orders — the same
+		// shape `invoice_outbox` uses. No watermark: the queue is the cursor.
+		id: "restaurant_orders",
+		scope: "profile",
+		mode: "scoped",
+		priority: "warm",
+		triggers: ["online_resume", "timer", "user_action"],
+		storageKey: "pos_table_orders",
+		watermarkType: "none",
+		fullResyncSupported: false,
+	},
+	{
 		id: "customer_addresses",
 		scope: "customer",
 		mode: "on_demand",

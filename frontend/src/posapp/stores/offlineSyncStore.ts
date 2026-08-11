@@ -73,6 +73,9 @@ const RESOURCE_LABELS: Record<SyncResourceId, string> = {
 	invoice_outbox: "Invoice Outbox",
 	customer_addresses: "Customer Addresses",
 	delivery_charges: "Delivery Charges",
+	pos_floor: "Floors",
+	pos_table: "Tables",
+	restaurant_orders: "Table Orders",
 };
 
 function createDefaultSummary(): OfflineStatusSummary {

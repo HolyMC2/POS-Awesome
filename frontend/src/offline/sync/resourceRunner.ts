@@ -4,10 +4,13 @@ import {
 	syncCustomersResource,
 	syncItemsResource,
 	syncPaymentMethodCurrenciesResource,
+	syncPosFloorsResource,
+	syncPosTablesResource,
 	syncPriceListMetaResource,
 	syncStockResource,
 } from "./adapters";
 import { syncInvoiceOutboxResource } from "../invoiceOutbox";
+import { syncRestaurantOrdersResource } from "../restaurantQueue";
 import type { SyncScopedProfile } from "./adapters/common";
 import type {
 	SyncResourceDefinition,
@@ -25,6 +28,9 @@ const SUPPORTED_OFFLINE_SYNC_RESOURCE_IDS = new Set<SyncResourceId>([
 	"stock",
 	"customers",
 	"invoice_outbox",
+	"pos_floor",
+	"pos_table",
+	"restaurant_orders",
 ]);
 
 type SupportedSyncProfile = SyncScopedProfile & {
@@ -248,6 +254,36 @@ export async function runSupportedOfflineSyncResource({
 						},
 					),
 			});
+		case "pos_floor":
+			return syncPosFloorsResource({
+				...sharedArgs,
+				fetcher: ({ posProfile, watermark, schemaVersion }) =>
+					callOfflineSyncMethod(
+						"posawesome.posawesome.api.offline_sync.floors.sync_floors",
+						{
+							pos_profile: posProfile,
+							watermark,
+							schema_version: schemaVersion,
+						},
+					),
+			});
+		case "pos_table":
+			return syncPosTablesResource({
+				...sharedArgs,
+				fetcher: ({ posProfile, watermark, schemaVersion }) =>
+					callOfflineSyncMethod(
+						"posawesome.posawesome.api.offline_sync.tables.sync_tables",
+						{
+							pos_profile: posProfile,
+							watermark,
+							schema_version: schemaVersion,
+						},
+					),
+			});
+		case "restaurant_orders":
+			// A write drain, not a pull — it talks to the restaurant endpoints
+			// directly and needs no fetcher.
+			return syncRestaurantOrdersResource();
 		case "invoice_outbox":
 			return syncInvoiceOutboxResource(callOfflineSyncMethod);
 		default:
