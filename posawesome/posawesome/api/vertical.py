@@ -26,6 +26,24 @@ def _profile_capability_link(pos_profile_name):
     return frappe.db.get_value("POS Profile", pos_profile_name, "posa_capability_profile") or None
 
 
+def _log_dangling_link(pos_profile_name, link):
+    """Error Log a dangling preset link at most once an hour per profile.
+
+    Resolution runs on every opening AND on a whitelisted endpoint the SPA may
+    poll — a row per call would bury the Error Log while saying the same thing.
+    The cache is site-scoped, so the throttle is per (site, profile, link).
+    """
+    key = f"posawesome:vertical:dangling:{pos_profile_name}:{link}"
+    cache = frappe.cache()
+    if cache.get_value(key):
+        return
+    cache.set_value(key, 1, expires_in_sec=3600)
+    frappe.log_error(
+        f"POS Profile {pos_profile_name} links missing capability profile {link}",
+        "posawesome.vertical",
+    )
+
+
 def resolve_capability_json(pos_profile_name):
     """Resolved capability payload for a POS Profile, or None.
 
@@ -39,10 +57,7 @@ def resolve_capability_json(pos_profile_name):
         return None
     if not frappe.db.exists("POS Capability Profile", link):
         # A dangling link (preset deleted) must not break the counter.
-        frappe.log_error(
-            f"POS Profile {pos_profile_name} links missing capability profile {link}",
-            "posawesome.vertical",
-        )
+        _log_dangling_link(pos_profile_name, link)
         return None
     doc = frappe.get_cached_doc("POS Capability Profile", link)
     payload = doc.as_frontend_payload()

@@ -132,7 +132,10 @@ async function selectRequest(request) {
 			args: {
 				name: request.name,
 				pos_profile: props.posProfile?.name,
-				pos_opening_shift: uiStore.posOpeningShift,
+				// The server resolves this with db.exists({"name": ...}), so it
+				// must be the shift NAME — posting the whole doc matched
+				// nothing and every pending charge failed to load.
+				pos_opening_shift: uiStore.posOpeningShift?.name ?? uiStore.posOpeningShift ?? null,
 			},
 		});
 		if (!r?.message?.name) {

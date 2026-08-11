@@ -7,7 +7,9 @@ requests, loads one into the cart (invoice is born in THEIR shift, priced
 from the request's current lines), and after submitting calls mark-charged.
 
 Everything is gated twice: the doctype must exist (doco installed) and the
-POS Profile must opt in via posa_use_charge_requests — the feature is
+POS Profile must opt in — either via the legacy posa_use_charge_requests flag
+or by declaring the external_document_checkout capability on its linked
+capability preset (the same additive gate the SPA uses). The feature is
 invisible otherwise, keeping this fork feature vertical-neutral.
 """
 
@@ -20,16 +22,40 @@ from frappe import _
 from frappe.utils import cint
 
 from posawesome.posawesome.api._scope import assert_company, assert_profile
+from posawesome.posawesome.api.vertical import resolve_capability_json
 
 CHARGE_REQUEST_DOCTYPE = "POS Charge Request"
+CHARGE_REQUEST_CAPABILITY = "external_document_checkout"
+
+
+def _capability_enabled(pos_profile: str) -> bool:
+    """True when the profile's capability preset declares
+    external_document_checkout.
+
+    Mirrors verticalStore's additive gate: a preset that declares the
+    capability shows the Pending Charges UI, so the endpoints behind it must
+    agree or every click throws "not enabled". A role-gated entry
+    (``capability:Some Role``) counts here — the role scopes the UI, while
+    these endpoints scope by the caller's own company and shift. Never raises:
+    an unresolvable preset just means "not enabled".
+    """
+    try:
+        payload = resolve_capability_json(pos_profile) or {}
+        capabilities = payload.get("capabilities") or []
+        return any(
+            str(entry).split(":")[0].strip() == CHARGE_REQUEST_CAPABILITY
+            for entry in capabilities
+        )
+    except Exception:
+        return False
 
 
 def _feature_enabled(pos_profile: str) -> bool:
     if not frappe.db.exists("DocType", CHARGE_REQUEST_DOCTYPE):
         return False
-    return bool(
-        cint(frappe.db.get_value("POS Profile", pos_profile, "posa_use_charge_requests") or 0)
-    )
+    if cint(frappe.db.get_value("POS Profile", pos_profile, "posa_use_charge_requests") or 0):
+        return True
+    return _capability_enabled(pos_profile)
 
 
 def _assert_feature(pos_profile: str):

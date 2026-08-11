@@ -20,6 +20,12 @@ VALID_ITEMS_PANELS = ("standard",)
 VALID_CART_STYLES = ("table",)
 VALID_ITEMS_VIEWS = ("list", "card")
 
+# The capability names something in this stack actually asks has() about. A
+# typo ("tab_identiy") is a silent no-op at the counter otherwise — same
+# reasoning as the dock tabs: reject it while an admin is still looking at it.
+# An entry may carry a `:Role` suffix; only the base name is checked here.
+KNOWN_CAPABILITIES = ("tab_identity", "service_types", "external_document_checkout")
+
 
 def _split_csv(value):
     return [part.strip() for part in (value or "").split(",") if part.strip()]
@@ -41,6 +47,16 @@ class POSCapabilityProfile(Document):
         if unknown:
             frappe.throw(
                 f"Unknown dock tab(s): {', '.join(unknown)}. Valid: {', '.join(VALID_DOCK_TABS)}"
+            )
+
+        unknown = [
+            entry for entry in _split_csv(self.capabilities)
+            if entry.split(":")[0].strip() not in KNOWN_CAPABILITIES
+        ]
+        if unknown:
+            frappe.throw(
+                f"Unknown capability(ies): {', '.join(unknown)}. "
+                f"Valid: {', '.join(KNOWN_CAPABILITIES)}"
             )
 
         # Fail at edit time on malformed vocabulary JSON — a parse error at
