@@ -101,13 +101,22 @@ const formatMeta = (info: ItemRateInfoEntry) => {
 }
 
 /* 24px is a mis-tap inside the row's own tap-to-add area — grow the
-   TARGET on touch without growing the 16px glyph (the row is 56px
-   tall, so 44px costs no vertical space). */
+   TARGET on touch without growing the 16px glyph.
+
+   The negative margins are load-bearing: this trigger sits in a catalog
+   row that is min-height 48px with 8px cell padding (CatalogItemRow.vue),
+   so a bare 44px box made every list row 60px — ~20% fewer items per
+   screen — and overflowed ItemCard's fixed price slot, clipping the
+   secondary currency line. (The "56px row" the earlier note assumed is
+   not this row.) At -10px per side the box still HIT-tests at 44px while
+   contributing the same 24px of layout as the fine-pointer rule, so the
+   row stays 48px. Keep box size and margin in lockstep: 44 - 2*10 = 24. */
 @media (pointer: coarse) {
 	.item-rate-info-trigger {
 		min-width: 44px;
 		width: 44px;
 		height: 44px;
+		margin: -10px;
 	}
 }
 

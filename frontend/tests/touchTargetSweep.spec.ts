@@ -95,10 +95,21 @@ const purchaseStyles = stripComments(
 	)?.[1] ?? "",
 );
 
+const scopedStyles = (relativePath: string) =>
+	stripComments(
+		/<style scoped>([\s\S]*?)<\/style>/.exec(
+			readFileSync(sourcePath(relativePath), "utf8"),
+		)?.[1] ?? "",
+	);
+
+const rateInfoStyles = scopedStyles("posapp/components/pos/items/ItemRateInfoMenu.vue");
+const catalogRowStyles = scopedStyles("posapp/components/pos/items/CatalogItemRow.vue");
+
 const cartTouch = coarseRules(cartCss);
 const themeTouch = coarseRules(themeCss);
 const customerTouch = coarseRules(customerStyles);
 const purchaseTouch = coarseRules(purchaseStyles);
+const rateInfoTouch = coarseRules(rateInfoStyles);
 
 describe("cart UOM stepper on touch", () => {
 	it("shows the arrows without waiting for a hover that never comes", () => {
@@ -314,5 +325,35 @@ describe("customer field icons on touch", () => {
 
 		expect(touch).toBeGreaterThanOrEqual(8);
 		expect(touch).toBeGreaterThan(base);
+	});
+});
+
+describe("catalog rate-info trigger on touch", () => {
+	it("reaches the 44px target the coarse pointer needs", () => {
+		for (const property of ["width", "height", "min-width"]) {
+			expect(
+				pxOf(declaration(rateInfoTouch, ".item-rate-info-trigger", property)),
+			).toBe(44);
+		}
+	});
+
+	it("pays for that target with negative margin, not with layout space", () => {
+		// A bare 44px box grew every catalog list row from 48px to 60px and
+		// pushed ItemCard's secondary price out of its fixed slot. Bleeding
+		// the extra size outside the layout box keeps the hit area at 44px
+		// while contributing exactly what the fine-pointer rule does.
+		const margin = declaration(rateInfoTouch, ".item-rate-info-trigger", "margin");
+		expect(margin).toMatch(/^-/);
+
+		const box = pxOf(declaration(rateInfoTouch, ".item-rate-info-trigger", "width"));
+		const base = pxOf(declaration(rateInfoStyles, ".item-rate-info-trigger", "width"));
+		expect(box - 2 * pxOf(margin)).toBe(base);
+	});
+
+	it("is measured against the row it actually sits in", () => {
+		// The rule above is sized against these two numbers; if the catalog
+		// row or its cell padding changes, the margin has to be revisited.
+		expect(pxOf(declaration(catalogRowStyles, ".posa-catalog-row", "min-height"))).toBe(48);
+		expect(pxOf(declaration(catalogRowStyles, ".posa-catalog-cell", "padding"))).toBe(8);
 	});
 });

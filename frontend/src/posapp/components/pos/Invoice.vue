@@ -1646,8 +1646,10 @@ export default {
 
 	/* Card mode (phone) has no columns to configure — the dialog's
 	   switches were silently discarded by the <450px column filter
-	   anyway, and the button cost the search field its full row. */
-	.column-selector-btn {
+	   anyway, and the button cost the search field its full row.
+	   :deep because the button renders inside InvoiceItemsActionToolbar
+	   (not on its root), so the scoped attribute never reaches it. */
+	:deep(.column-selector-btn) {
 		display: none;
 	}
 }
