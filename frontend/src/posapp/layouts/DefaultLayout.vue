@@ -1281,8 +1281,18 @@ const adjust_frappe_sidebar_offset = () => {
 	margin-top: 4px;
 }
 
-/* Ensure proper spacing and prevent layout shifts */
-:deep(.v-main__wrap) {
+/* Gives VMain's inner element a definite height so .main-content's
+   height:100% resolves and .page-content's flex:1 1 auto + overflow:auto
+   become a real scrollport. Without it .container1's height:100dvh +
+   overflow:hidden simply clips everything below the fold — unreachable,
+   no scrollbar (bit 769-1099px, where the mobile band below does not
+   rescue it).
+   Vuetify renamed this element's class from v-main__wrap to
+   v-main__scroller; both are listed because the dep is pinned with a
+   caret, so an install can move minors under us. tests/defaultLayoutMainScroller.spec.ts
+   cross-checks this list against what the installed VMain actually renders. */
+:deep(.v-main__wrap),
+:deep(.v-main__scroller) {
 	display: flex;
 	flex-direction: column;
 	width: 100%;
@@ -1309,7 +1319,10 @@ const adjust_frappe_sidebar_offset = () => {
 		min-height: 0;
 	}
 
-	:deep(.v-main__wrap) {
+	/* Must track the block above: phones scroll .container1 itself, so the
+	   definite height there would clip them instead. */
+	:deep(.v-main__wrap),
+	:deep(.v-main__scroller) {
 		height: auto;
 		min-height: 100%;
 		overflow: visible;

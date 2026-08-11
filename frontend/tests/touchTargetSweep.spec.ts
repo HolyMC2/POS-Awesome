@@ -293,38 +293,80 @@ describe("purchase items table on touch", () => {
 	});
 });
 
-describe("customer field icons on touch", () => {
-	it("carries the class the touch floor actually targets", () => {
-		const tagged = customerMarkup.match(/posa-customer-icon/g) ?? [];
-		expect(tagged).toHaveLength(3);
-		expect(customerSource).toMatch(
-			/class="icon-button posa-customer-icon[^"]*"[\s\S]*?@click\.stop="edit_customer"/,
+describe("customer selector on touch", () => {
+	// Three 44px glyphs inside the field plus Vuetify's clear-x left the
+	// input with no width to be tapped at all, so the x became the fleet's
+	// de-facto search button — every cashier had to be told. Nothing
+	// interactive may move back inside the field.
+	const insideField = customerMarkup.slice(
+		customerMarkup.indexOf("<v-autocomplete"),
+		customerMarkup.indexOf("#prepend-item"),
+	);
+
+	it("empties the field of controls so the field itself is the target", () => {
+		expect(customerMarkup).not.toContain("posa-customer-icon");
+		expect(insideField).not.toMatch(/@click/);
+		// What is left inside is a search cue that takes no click of its own.
+		expect(insideField).toContain('prepend-inner-icon="mdi-magnify"');
+	});
+
+	it("opens the search from a tap anywhere on the field's box", () => {
+		expect(customerMarkup).toMatch(
+			/class="customer-field-shell"\s+@click="onCustomerFieldClick"/,
 		);
 		expect(customerSource).toMatch(
-			/class="icon-button posa-customer-icon[^"]*"[\s\S]*?@click\.stop="reload_customers"/,
+			/const onCustomerFieldClick = \(\) => \{[\s\S]*?focusCustomerSearch\(\)/,
 		);
+		// …and stays out of the way of the close, or a second tap could
+		// never dismiss it.
 		expect(customerSource).toMatch(
-			/class="icon-button posa-customer-icon[^"]*"[\s\S]*?@click\.stop="new_customer"/,
+			/const onCustomerFieldClick = \(\) => \{[\s\S]*?if \(isMenuOpen\.value\) \{\s*return;/,
 		);
 	});
 
-	it("is inside the theme's 44px floor and tap-delay list", () => {
-		const floor = declaration(themeTouch, ".posa-customer-icon", "min-height");
-		expect(pxOf(floor)).toBe(44);
-		expect(pxOf(declaration(themeTouch, ".posa-customer-icon", "min-width"))).toBe(44);
-		expect(themeCss).toMatch(
-			/\.posapp \.posa-customer-icon,[\s\S]{0,120}\{[^}]*touch-action:\s*manipulation/,
-		);
+	it("gives the field and both labelled buttons the 44px floor", () => {
+		expect(
+			pxOf(declaration(customerTouch, ".v-field", "min-height")),
+		).toBeGreaterThanOrEqual(44);
+		expect(
+			pxOf(declaration(customerTouch, ".customer-action-btn", "min-height")),
+		).toBe(44);
 	});
 
-	it("spaces reload from its neighbours once the boxes are full size", () => {
-		// First occurrence is the mouse-width rule, declared above the
-		// coarse block it is overridden in.
-		const base = pxOf(declaration(customerStyles, ".customer-icon-gap", "margin-left"));
-		const touch = pxOf(declaration(customerTouch, ".customer-icon-gap", "margin-left"));
+	it("keeps the demoted reload a full list row rather than a glyph", () => {
+		expect(
+			pxOf(declaration(customerStyles, ".customer-menu-action", "min-height")),
+		).toBeGreaterThanOrEqual(44);
+	});
 
-		expect(touch).toBeGreaterThanOrEqual(8);
-		expect(touch).toBeGreaterThan(base);
+	it("names both demoted actions at the top of the open list", () => {
+		// The list is teleported out of the component, so its rows are pinned
+		// here rather than in tests/customerSelectorAffordances.spec.ts. They
+		// have to be labelled, and they have to be in `prepend-item` — above
+		// the results, where someone who opened the field to search meets
+		// them without hunting.
+		const prependItem = customerMarkup.slice(
+			customerMarkup.indexOf("#prepend-item"),
+			customerMarkup.indexOf('#item="{ props, item }"'),
+		);
+
+		expect(prependItem).toContain('__("New Customer")');
+		expect(prependItem).toContain('__("Reload customers")');
+		expect(prependItem).toMatch(/@click="new_customer"/);
+		expect(prependItem).toMatch(/@click="reload_customers"/);
+		// Offline still greys reload out; it just does it as a disabled row
+		// now instead of a 0.3-opacity glyph.
+		expect(prependItem).toContain(':disabled="!networkOnline"');
+	});
+
+	it("lets the two labelled buttons split the row once it has wrapped", () => {
+		// The phone gets the field on its own line; the buttons underneath
+		// then take half the width each instead of huddling at the left.
+		const phone = /@media\s*\(max-width:\s*599px\)/.exec(customerStyles);
+		expect(phone).not.toBeNull();
+		const phoneRules = blockBody(customerStyles, (phone as RegExpExecArray).index);
+		expect(declaration(phoneRules, ".customer-quick-actions", "width")).toBe("100%");
+		expect(declaration(phoneRules, ".customer-action-btn", "flex")).toBe("1 1 0");
 	});
 });
 

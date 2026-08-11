@@ -1333,11 +1333,15 @@ export default {
 	overflow: auto;
 }
 
-@media (max-width: 1099px) {
-	.invoice-shell {
-		padding-bottom: calc(var(--bottom-safe-space) + var(--dynamic-xs));
-	}
-}
+/* No dock reservation here. The shell root is `class="pa-0 invoice-shell"`,
+ * and Vuetify's `.pa-0 { padding: 0px !important }` beat the
+ * `padding-bottom: calc(var(--bottom-safe-space) + …)` this block used to
+ * carry — measured computed padding-bottom was 0px at both 630 px and 900 px,
+ * so the rule never reserved anything. The live reservation is Pos.vue's
+ * `.dynamic-container` padding-bottom, which sits below this whole column and
+ * is inside whichever element scrolls; re-adding one here (with !important)
+ * would stack a second ~135 px gap under the action grid.
+ * Pinned by tests/cartActionBarLayout.spec.ts. */
 
 .invoice-main-card {
 	display: flex;

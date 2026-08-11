@@ -678,9 +678,14 @@ defineExpose({
 	box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
 }
 
-.sticky-summary-card--dock-safe {
-	margin-bottom: calc(var(--bottom-safe-space) + 8px);
-}
+/* `sticky-summary-card--dock-safe` deliberately carries no margin. The card is
+ * `class="cards sticky-summary-card mb-0 …"`, and Vuetify's
+ * `.mb-0 { margin-bottom: 0px !important }` beat every
+ * `margin-bottom: calc(var(--bottom-safe-space) + …)` this class used to
+ * declare — measured computed margin-bottom was 0px at 630 px and 900 px, in
+ * all three bands. Clearance under the action grid comes from Pos.vue's
+ * `.dynamic-container` padding-bottom instead; see the note in Invoice.vue.
+ * Pinned by tests/cartActionBarLayout.spec.ts. */
 
 .summary-content {
 	row-gap: 6px;
@@ -771,12 +776,6 @@ defineExpose({
 	}
 }
 
-@media (max-width: 1099px) {
-	.sticky-summary-card--dock-safe {
-		margin-bottom: calc(var(--bottom-safe-space) + 12px);
-	}
-}
-
 @media (max-width: 768px) {
 	.sticky-summary-card {
 		position: static;
@@ -804,10 +803,6 @@ defineExpose({
 
 	.summary-field {
 		font-size: 0.875rem;
-	}
-
-	.sticky-summary-card--dock-safe {
-		margin-bottom: calc(var(--bottom-safe-space) + 8px);
 	}
 }
 </style>

@@ -280,12 +280,32 @@ const showSaldoButton = computed(() =>
 	transform: translateY(-2px);
 }
 
+/* PAY must pin its FOREGROUND next to the gradient above, not just the
+   background. On phones secondaryVariant is `tonal`, and Vuetify routes the
+   `color` prop of a non-elevated variant to the text instead of the fill
+   (vuetify/lib/composables/variant.js: ['elevated','flat'].includes(variant)
+   ? 'background' : 'text'). So color="success" emits `.text-success`
+   { color: rgb(var(--v-theme-success)) !important } — green letters laid over
+   the green gradient, i.e. the "just a green button, no text" PAY Marco hit
+   on Android. Two classes beat that one-class !important. The tonal underlay
+   is currentColor at activated-opacity, which would now wash the gradient
+   white, so it goes too. */
+.pay-btn,
+.pay-btn :deep(.v-btn__content),
+.pay-btn :deep(.v-icon) {
+	color: #fff !important;
+}
+
+.pay-btn :deep(.v-btn__underlay) {
+	opacity: 0;
+}
+
 /* Responsive optimizations */
 @media (max-width: 768px) {
 	.summary-btn {
 		font-size: 0.8rem !important;
 		padding: 4px 8px !important;
-		min-height: 42px !important;
+		min-height: 44px !important;
 	}
 
 	.pay-btn {
@@ -301,12 +321,17 @@ const showSaldoButton = computed(() =>
 	.summary-btn {
 		font-size: 0.78rem !important;
 		padding: 4px 8px !important;
-		min-height: 40px !important;
+		/* 44 px is the touch floor theme.css enforces for every other coarse
+		   target (see tests/touchTargetSweep.spec.ts); the narrowest phone was
+		   the only place the action grid dropped below it. */
+		min-height: 44px !important;
 	}
 
 	.pay-btn {
 		font-size: 0.92rem !important;
-		min-height: 46px !important;
+		/* Never below the 768 px step — PAY is the primary target and must not
+		   shrink as the screen does. */
+		min-height: 48px !important;
 	}
 
 	.v-row.v-row--dense > .v-col {
