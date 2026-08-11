@@ -5,6 +5,7 @@ import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 import ParkedOrdersList from "../src/posapp/components/pos/invoice/ParkedOrdersList.vue";
+import { useUIStore } from "../src/posapp/stores/uiStore";
 
 const drafts = [
 	{
@@ -36,13 +37,13 @@ describe("ParkedOrdersList keyboard control", () => {
 		vi.unstubAllGlobals();
 	});
 
-	function mountList() {
+	function mountList(parkedOrders: Record<string, unknown>[] = drafts) {
 		const onResume = vi.fn();
 		const onClose = vi.fn();
 		const wrapper = mount(ParkedOrdersList, {
 			attachTo: document.body,
 			props: {
-				parkedOrders: drafts,
+				parkedOrders,
 				formatCurrency: (value: number) => String(value),
 				currencySymbol: () => "Rs ",
 				showManageAll: true,
@@ -88,5 +89,19 @@ describe("ParkedOrdersList keyboard control", () => {
 
 		expect(onClose).toHaveBeenCalledTimes(1);
 		expect(onResume).not.toHaveBeenCalled();
+	});
+
+	it("renders the service type through the preset's vocabulary, not __()", () => {
+		// Same contract as the rail: the row noun resolves through
+		// verticalStore.t(), so a preset can rename it per vertical.
+		useUIStore().setCapabilityPayload({
+			name: "coffee-quickserve",
+			labels: { Takeout: "Para llevar" },
+		});
+
+		const { wrapper } = mountList([{ ...drafts[0], posa_rt_service_type: "Takeout" }]);
+
+		expect(wrapper.text()).toContain("Para llevar");
+		expect(wrapper.text()).not.toContain("Takeout");
 	});
 });

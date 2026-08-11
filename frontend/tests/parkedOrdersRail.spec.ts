@@ -6,6 +6,7 @@ import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
 import ParkedOrdersRail from "../src/posapp/components/pos/invoice/ParkedOrdersRail.vue";
+import { useUIStore } from "../src/posapp/stores/uiStore";
 
 const VBtnStub = defineComponent({
 	name: "VBtnStub",
@@ -87,5 +88,33 @@ describe("ParkedOrdersRail", () => {
 		});
 
 		expect(wrapper.get('[data-test="parked-orders-view-all"]').exists()).toBe(true);
+	});
+
+	it("renders the service type through the preset's vocabulary, not __()", () => {
+		// The row noun is vertical-specific: a preset renames it via labels
+		// and verticalStore.t() resolves it. Reverting the call site to __()
+		// would print the raw English key here.
+		useUIStore().setCapabilityPayload({
+			name: "coffee-quickserve",
+			labels: { Takeout: "Para llevar" },
+		});
+
+		const wrapper = mountRail({
+			layout: "desktop",
+			parkedOrders: [
+				{
+					name: "ACC-SINV-0001",
+					customer_name: "Walk-in Customer",
+					posa_rt_service_type: "Takeout",
+					posting_date: "2026-04-04",
+					posting_time: "10:15:00.000000",
+					grand_total: 450,
+					currency: "PKR",
+				},
+			],
+		});
+
+		expect(wrapper.text()).toContain("Para llevar");
+		expect(wrapper.text()).not.toContain("Takeout");
 	});
 });
