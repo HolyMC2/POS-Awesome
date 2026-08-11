@@ -34,7 +34,7 @@
 									v-model="customer_name"
 								></v-text-field>
 							</v-col>
-							<v-col cols="6">
+							<v-col v-if="!cfdiEnabled" cols="6">
 								<v-text-field
 									density="compact"
 									color="primary"
@@ -44,7 +44,7 @@
 									v-model="tax_id"
 								></v-text-field>
 							</v-col>
-							<v-col cols="6">
+							<v-col :cols="cfdiEnabled ? 12 : 6" :sm="6">
 								<v-text-field
 									density="compact"
 									color="primary"
@@ -53,6 +53,18 @@
 									hide-details
 									v-model="mobile_no"
 								></v-text-field>
+							</v-col>
+							<v-col v-if="cfdiEnabled" cols="12">
+								<div class="text-subtitle-2 text-primary mt-1 mb-1">
+									{{ __("Datos fiscales (CFDI)") }}
+								</div>
+								<CustomerFiscalFields
+									v-model="fiscal"
+									:catalogs="cfdiStore.catalogs"
+									:uses-for-regime="cfdiStore.usesForRegime"
+									:show-name="false"
+									@select-existing="loadExistingFiscalCustomer"
+								/>
 							</v-col>
 							<v-col cols="12" v-if="!hideNonEssential">
 								<v-text-field
@@ -220,22 +232,28 @@
 
 <script>
 import { isOffline, saveOfflineCustomer } from "../../../../../offline/index";
+import { getCustomerFiscal, saveCustomerFiscal } from "../../../../api/cfdi";
+import CustomerFiscalFields from "../../cfdi/CustomerFiscalFields.vue";
+import { useCfdiStore } from "../../../../stores/cfdiStore";
 import { useCustomersStore } from "../../../../stores/customersStore.js";
 import { useUIStore } from "../../../../stores/uiStore.js";
 import { storeToRefs } from "pinia";
 import { useToastStore } from "../../../../stores/toastStore.js";
 
 export default {
+	components: { CustomerFiscalFields },
 	setup() {
 		const customersStore = useCustomersStore();
 		const uiStore = useUIStore();
 		const toastStore = useToastStore();
+		const cfdiStore = useCfdiStore();
 		const { selectedCustomer, isUpdateCustomerDialogOpen, customerToUpdate } =
 			storeToRefs(customersStore);
 		return {
 			selectedCustomer,
 			uiStore,
 			toastStore,
+			cfdiStore,
 			isUpdateCustomerDialogOpen,
 			customerToUpdate,
 			customersStore,
@@ -265,6 +283,15 @@ export default {
 		gender: "",
 		loyalty_points: null,
 		loyalty_program: null,
+		// CFDI fiscal companion fields — saved via save_customer_fiscal after
+		// the base create/update succeeds (never blocks the base save).
+		fiscal: {
+			customer: "",
+			tax_id: "",
+			tax_regime: "",
+			mx_cfdi_use: "",
+			zip_code: "",
+		},
 		hideNonEssential: false,
 		countries: [
 			"Afghanistan",
@@ -364,8 +391,60 @@ export default {
 			}
 		},
 	},
-	computed: {},
+	computed: {
+		cfdiEnabled() {
+			return Boolean(this.pos_profile && this.pos_profile.posa_cfdi_enable_stamping);
+		},
+	},
 	methods: {
+		resetFiscal() {
+			this.fiscal = { customer: "", tax_id: "", tax_regime: "", mx_cfdi_use: "", zip_code: "" };
+		},
+		async loadFiscalFor(customerId) {
+			try {
+				const data = await getCustomerFiscal(customerId);
+				this.fiscal = {
+					customer: data.customer,
+					tax_id: data.tax_id || "",
+					tax_regime: data.mx_tax_regime || "",
+					mx_cfdi_use: data.mx_cfdi_use || "",
+					zip_code: data.zip_code || "",
+				};
+				if (data.tax_id) this.tax_id = data.tax_id;
+			} catch (error) {
+				console.warn("cfdi: could not load fiscal data for customer", error);
+			}
+		},
+		loadExistingFiscalCustomer(owner) {
+			// The RFC already belongs to another customer — switch this dialog
+			// to editing THAT customer instead of creating a duplicate (the
+			// server would reject the duplicate RFC anyway).
+			this.customer_id = owner.customer;
+			this.customer_name = owner.customer_name;
+			void this.loadFiscalFor(owner.customer);
+		},
+		async saveFiscalCompanion(customerName) {
+			const hasFiscalData =
+				this.fiscal.tax_id || this.fiscal.tax_regime || this.fiscal.mx_cfdi_use || this.fiscal.zip_code;
+			if (!this.cfdiEnabled || !hasFiscalData || isOffline()) return;
+			try {
+				await saveCustomerFiscal(this.pos_profile?.name, {
+					customer: customerName,
+					tax_id: this.fiscal.tax_id || undefined,
+					tax_regime: this.fiscal.tax_regime || undefined,
+					mx_cfdi_use: this.fiscal.mx_cfdi_use || undefined,
+					zip_code: this.fiscal.zip_code || undefined,
+				});
+			} catch (error) {
+				console.error("cfdi: fiscal save failed", error);
+				this.toastStore.show({
+					title: __("Customer saved, but the fiscal data was rejected"),
+					message: error?.message || "",
+					color: "warning",
+					timeout: 10000,
+				});
+			}
+		},
 		focusCustomerNameField() {
 			this.$nextTick(() => {
 				const field = this.$refs.customerNameField;
@@ -449,6 +528,7 @@ export default {
 			this.gender = "";
 			this.loyalty_points = null;
 			this.loyalty_program = null;
+			this.resetFiscal();
 		},
 		getCustomerGroups() {
 			if (this.groups.length > 0) return;
@@ -583,11 +663,12 @@ export default {
 				}
 			}
 
-			// Create args object to use in callback
+			// Create args object to use in callback. With the CFDI section
+			// active the RFC lives in the fiscal group, not the plain field.
 			const args = {
 				customer_id: this.customer_id,
 				customer_name: this.customer_name,
-				tax_id: this.tax_id,
+				tax_id: this.cfdiEnabled ? this.fiscal.tax_id || this.tax_id : this.tax_id,
 				mobile_no: this.mobile_no,
 				address_line1: this.address_line1,
 				city: this.city,
@@ -640,6 +721,7 @@ export default {
 						});
 						args.name = r.message.name;
 						frappe.utils.play_sound("submit");
+						await vm.saveFiscalCompanion(r.message.name);
 						await customersStore.addOrUpdateCustomer({
 							name: args.name,
 							customer_name: args.customer_name,
@@ -717,7 +799,15 @@ export default {
 			(isOpen) => {
 				if (isOpen) {
 					this.focusCustomerNameField();
+					if (this.cfdiEnabled) {
+						void this.cfdiStore.loadBootstrap(this.pos_profile?.name);
+					}
 					const data = this.customerToUpdate;
+					if (data && data.name && this.cfdiEnabled) {
+						void this.loadFiscalFor(data.name);
+					} else {
+						this.resetFiscal();
+					}
 					if (data) {
 						this.customer_name = data.customer_name || data.name || ""; // fallback
 						this.customer_id = data.name;

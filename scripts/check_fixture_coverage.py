@@ -60,6 +60,7 @@ PATCH_ALLOWLIST: set[str] = {
 VERTICAL_PREFIXES: tuple[str, ...] = (
 	"posa_rt_",  # restaurante — tables, floors, kitchen routing
 	"posa_tl_",  # taller — repair vertical
+	"posa_cfdi_",  # CFDI-POS glue — facturación surface (emc integration)
 )
 
 # Fieldnames that shipped BEFORE the prefix rule existed. Frozen on purpose:

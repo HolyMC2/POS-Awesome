@@ -489,6 +489,9 @@ fixtures = [
                     "POS Profile-posa_show_customer_balance",
                     "POS Profile-posa_silent_print",
                     "POS Profile-posa_tab",
+                    # CFDI-POS glue (posa_cfdi_ prefix — see
+                    # scripts/check_fixture_coverage.py VERTICAL_PREFIXES).
+                    "POS Profile-posa_cfdi_enable_stamping",
                 ),
             ]
         ],

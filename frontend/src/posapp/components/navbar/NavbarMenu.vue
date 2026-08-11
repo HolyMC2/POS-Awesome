@@ -290,6 +290,7 @@
 	<QzTrayDialog v-model="showQzTrayDialog" />
 	<QzTestPrintDialog v-model="showQzTestPrintDialog" />
 	<ChargeRequestsDialog v-model="showChargeRequestsDialog" :pos-profile="posProfile" />
+	<FacturacionDialog v-model="showFacturacionDialog" :pos-profile="posProfile" />
 
 	<!-- Notification Snackbars -->
 	<v-snackbar
@@ -328,6 +329,7 @@ import { storeToRefs } from "pinia";
 import QzTrayDialog from "./QzTrayDialog.vue";
 import QzTestPrintDialog from "../settings/QzTestPrintDialog.vue";
 import ChargeRequestsDialog from "./ChargeRequestsDialog.vue";
+import FacturacionDialog from "../pos/cfdi/FacturacionDialog.vue";
 
 export default {
 	name: "NavbarMenu",
@@ -335,6 +337,7 @@ export default {
 		QzTrayDialog,
 		QzTestPrintDialog,
 		ChargeRequestsDialog,
+		FacturacionDialog,
 	},
 	props: {
 		posProfile: { type: Object, default: () => ({}) },
@@ -374,6 +377,7 @@ export default {
 			printHealthWizardOffered: false,
 			printHealthToasted: false,
 			showChargeRequestsDialog: false,
+			showFacturacionDialog: false,
 			selectedLanguage: "en",
 			currentLanguage: "en",
 			availableLanguages: FALLBACK_LANGUAGES,
@@ -499,6 +503,16 @@ export default {
 							icon: "mdi-cash-register",
 							tone: "warning",
 							handler: "openChargeRequests",
+						}
+					: null,
+				this.isEnabledSetting(this.posProfile?.posa_cfdi_enable_stamping)
+					? {
+							id: "facturacion",
+							label: __("Facturación"),
+							subtitle: __("Stamp CFDI invoices (timbrar)"),
+							icon: "mdi-text-box-check-outline",
+							tone: "info",
+							handler: "openFacturacion",
 						}
 					: null,
 				!this.posProfile?.posa_hide_closing_shift
@@ -771,6 +785,10 @@ export default {
 				case "openChargeRequests":
 					this.closeMenu();
 					this.showChargeRequestsDialog = true;
+					break;
+				case "openFacturacion":
+					this.closeMenu();
+					this.showFacturacionDialog = true;
 					break;
 				case "openLanguageDialog":
 					this.closeMenu();
