@@ -321,3 +321,38 @@ def save_floor_layout(
         )
         or [],
     }
+
+
+@frappe.whitelist(methods=["POST"])
+def mark_table_clean(pos_profile, company, table, source_device=None):
+    """Clear the bussing latch settle sets (needs_cleaning=1, spec §0.2/§3).
+
+    Without this, the flag is one-way: after its first settle a table shows
+    the broom forever and the kanban's cleaning column only ever grows.
+
+    Deliberately NOT gated on POS Table write permission: bussing is a
+    counter action, and the settle path already flips this same flag under
+    cashier permissions via db.set_value. Scope asserts + the fetched
+    company check are the tenant boundary (spec §1.1); the flag write
+    touches nothing but the two bussing fields.
+    """
+    from posawesome.posawesome.api._scope import assert_company, assert_profile
+
+    assert_profile(frappe.session.user, pos_profile)
+    assert_company(frappe.session.user, company)
+
+    table_doc = frappe.get_doc("POS Table", table)
+    floor_company = frappe.db.get_value("POS Floor", table_doc.floor, "company")
+    if floor_company != company:
+        frappe.throw(_("Table {0} does not belong to company {1}.").format(table, company))
+
+    frappe.db.set_value(
+        "POS Table",
+        table_doc.name,
+        {"needs_cleaning": 0, "bill_printed_at": None},
+        update_modified=True,
+    )
+
+    _publish_floor_update(table_doc.floor, source_device=source_device)
+
+    return {"table": table_doc.name, "needs_cleaning": 0}

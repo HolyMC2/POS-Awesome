@@ -391,5 +391,69 @@ class TestDeleteGuards(RestaurantTestCase):
         self.assertEqual(doc.table_label, label)
 
 
+class TestMarkTableClean(RestaurantTestCase):
+    """The bussing latch must be two-way: settle sets it, this clears it.
+
+    Before mark_table_clean existed the flag was one-way — after its first
+    settle a table showed the broom forever and the kanban cleaning column
+    only ever grew.
+    """
+
+    def _dirty(self, table):
+        frappe.db.set_value(
+            "POS Table",
+            table,
+            {"needs_cleaning": 1, "bill_printed_at": frappe.utils.now_datetime()},
+        )
+
+    def test_clears_the_latch_and_the_proforma_stamp(self):
+        self._dirty(self.table_a)
+
+        result = floors.mark_table_clean(self.profile, self.company, self.table_a)
+
+        self.assertEqual(result["needs_cleaning"], 0)
+        row = frappe.db.get_value(
+            "POS Table", self.table_a, ["needs_cleaning", "bill_printed_at"], as_dict=True
+        )
+        self.assertEqual(row.needs_cleaning, 0)
+        self.assertIsNone(row.bill_printed_at)
+
+    def test_is_idempotent_on_an_already_clean_table(self):
+        result = floors.mark_table_clean(self.profile, self.company, self.table_a)
+        self.assertEqual(result["needs_cleaning"], 0)
+
+    def test_refuses_a_table_from_another_company(self):
+        self._dirty(self.table_a)
+        with mock.patch(
+            "posawesome.posawesome.api.restaurant.floors.frappe.db.get_value",
+            wraps=frappe.db.get_value,
+        ) as get_value:
+            # Redirect only the floor-company lookup so the guard sees a
+            # foreign company while everything else stays real.
+            real = frappe.db.get_value
+
+            def fake(doctype, *args, **kwargs):
+                if doctype == "POS Floor" and args[1:2] == ("company",):
+                    return "Some Other Company"
+                return real(doctype, *args, **kwargs)
+
+            get_value.side_effect = fake
+            with self.assertRaises(frappe.exceptions.ValidationError):
+                floors.mark_table_clean(self.profile, self.company, self.table_a)
+        self.assertEqual(
+            frappe.db.get_value("POS Table", self.table_a, "needs_cleaning"), 1
+        )
+
+    def test_the_cleaning_device_is_echoed_on_the_broadcast(self):
+        self._dirty(self.table_a)
+        with mock.patch(
+            "posawesome.posawesome.api.restaurant.floors._publish_floor_update"
+        ) as published:
+            floors.mark_table_clean(
+                self.profile, self.company, self.table_a, source_device="busser-1"
+            )
+        self.assertEqual(published.call_args.kwargs["source_device"], "busser-1")
+
+
 if __name__ == "__main__":
     unittest.main()
