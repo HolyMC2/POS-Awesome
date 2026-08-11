@@ -49,6 +49,15 @@
 		>
 			<Payments v-if="paymentDialogOpen" dialog-mode />
 		</v-dialog>
+		<!-- Mounted on the shell, above the payment dialog it outlives — see
+		     the onChangeDue note in Payments.vue. -->
+		<ChangeDueDialog
+			v-model="changeDueOpen"
+			:amount="changeDueAmount"
+			:currency-symbol="changeDueSymbol"
+			:format-amount="formatChangeAmount"
+			@confirm="onChangeDueConfirmed"
+		></ChangeDueDialog>
 		<v-row
 			v-show="!dialog"
 			dense
@@ -249,6 +258,9 @@ import { buildDockTabDefs } from "../../../vertical/viewContracts";
 import OpeningDialog from "../shift/OpeningDialog.vue";
 import PosOffers from "../offers/PosOffers.vue";
 import PosCoupons from "../offers/PosCoupons.vue";
+// Static, not async: it is asked for at the instant a sale lands, and a chunk
+// fetch there is exactly the moment the network is least trustworthy.
+import ChangeDueDialog from "../payments/ChangeDueDialog.vue";
 // SALDO-INTEGRATION-POINT — Vue sources live in the saldo Frappe app
 // (see saldo/saldo/public/saldo_pos/). Resolved via Vite alias `@saldo`
 // declared in vite.config.js. Upstream rebase: keep these lines.
@@ -262,6 +274,7 @@ import { useOffers } from "../../../composables/pos/shared/useOffers";
 // Import the cache cleanup function
 import { clearExpiredCustomerBalances } from "../../../../offline/index";
 import { useResponsive } from "../../../composables/core/useResponsive";
+import { useFormat } from "../../../format";
 import { connectQzTray } from "../../../services/qzTray";
 import { useRtl } from "../../../composables/core/useRtl";
 import { useUIStore } from "../../../stores/uiStore";
@@ -515,6 +528,31 @@ export default {
 				uiStore.triggerItemSearchFocus();
 				eventBus?.emit?.("focus_item_search");
 			});
+		};
+
+		// Change due — raised by Payments.vue via the bus the moment a sale with
+		// change is submitted, and dismissed only by the cashier confirming the
+		// money left the drawer.
+		const { formatCurrency } = useFormat();
+		const changeDueOpen = ref(false);
+		const changeDueAmount = ref(0);
+		const changeDueCurrency = ref("");
+		const changeDueSymbol = computed(() => getCurrencySymbol(changeDueCurrency.value));
+		const formatChangeAmount = (value) => formatCurrency(value);
+		const handleShowChangeDue = (payload = {}) => {
+			const amount = Number(payload.amount) || 0;
+			if (amount <= 0) {
+				return;
+			}
+			changeDueAmount.value = amount;
+			changeDueCurrency.value = payload.currency || "";
+			changeDueOpen.value = true;
+		};
+		const onChangeDueConfirmed = () => {
+			changeDueOpen.value = false;
+			// The sale already cleared itself; this only returns the cashier's
+			// hands to where the next one starts.
+			focusItemSearchField();
 		};
 
 		const handlePaymentDialogUpdate = (value) => {
@@ -814,6 +852,7 @@ export default {
 				eventBus.on("open_returns", handleOpenReturns);
 				eventBus.on("open_new_address", handleOpenNewAddress);
 				eventBus.on("open_mpesa_payments", handleOpenMpesaPayments);
+				eventBus.on("show_change_due", handleShowChangeDue);
 			}
 			nextTick(() => {
 				updateBottomDockHeight();
@@ -843,6 +882,7 @@ export default {
 				eventBus.off("open_returns", handleOpenReturns);
 				eventBus.off("open_new_address", handleOpenNewAddress);
 				eventBus.off("open_mpesa_payments", handleOpenMpesaPayments);
+				eventBus.off("show_change_due", handleShowChangeDue);
 			}
 			stopQzPrewarm();
 		});
@@ -968,6 +1008,11 @@ export default {
 			commitAdditionalDiscountPercentage,
 			handlePaymentDialogUpdate,
 			handlePaymentDialogAfterLeave,
+			changeDueOpen,
+			changeDueAmount,
+			changeDueSymbol,
+			formatChangeAmount,
+			onChangeDueConfirmed,
 			discountPercentageOfferName,
 			getCurrencySymbol,
 			posRoot,
@@ -984,6 +1029,7 @@ export default {
 	components: {
 		OpeningDialog,
 		Payments,
+		ChangeDueDialog,
 		Drafts,
 		InvoiceManagement,
 

@@ -126,6 +126,11 @@ export interface SubmissionCallbacks {
 		},
 	) => void;
 	onFinishNavigation?: (_success: boolean) => void;
+	onChangeDue?: (_payload: {
+		amount: number;
+		currency?: string;
+		invoice?: string;
+	}) => void;
 	onScheduleBackgroundCheck?: (_payload: {
 		name?: string;
 		doctype?: string;
@@ -788,6 +793,7 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			onSuccess,
 			onPrint,
 			onFinishNavigation,
+			onChangeDue,
 			onScheduleBackgroundCheck,
 		} = callbacks;
 
@@ -1208,17 +1214,32 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			// The cashier's next physical act is handing money back — say
 			// how much, loudly, so nobody re-reads the Cambio field or does
 			// drawer math. pChange is what the server just booked as the
-			// change Payment Entry, so toast and GL always agree.
+			// change Payment Entry, so the number and the GL always agree.
+			// The handler raises a blocking dialog the cashier must dismiss:
+			// the toast this replaced was small and self-dismissing, and at a
+			// live counter it was routinely missed (Marco, 2026-08-10). It is
+			// called after onPrint above and never awaited, so Submit & Print
+			// keeps printing behind the dialog. The toast survives only as the
+			// fallback for a caller that wires no handler.
 			if (pChange > 0 && !doc.is_return) {
-				stores?.toastStore?.show({
-					title: __("Give back change: {0}", [
-						options.formatCurrency
-							? options.formatCurrency(pChange, doc.currency)
-							: `${pChange}`,
-					]),
-					color: "warning",
-					timeout: 12000,
-				});
+				const changeDue = {
+					amount: pChange,
+					currency: doc.currency,
+					invoice: responseInvoiceName,
+				};
+				if (onChangeDue) {
+					onChangeDue(changeDue);
+				} else {
+					stores?.toastStore?.show({
+						title: __("Give back change: {0}", [
+							options.formatCurrency
+								? options.formatCurrency(pChange, doc.currency)
+								: `${pChange}`,
+						]),
+						color: "warning",
+						timeout: 12000,
+					});
+				}
 			}
 
 			const submittedItems = Array.isArray(submittedDocument.items)

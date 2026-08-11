@@ -2008,6 +2008,15 @@ const submitInvoiceWrapper = async (print, callbackOverrides = {}, options = {})
 			onFinishNavigation: (clearInvoice) => {
 				finishSubmissionNavigation(clearInvoice);
 			},
+			// Handed to the shell, not shown from here: in dialog mode this
+			// component is behind a v-if and dies with the payment dialog that
+			// onFinishNavigation closes moments later, taking any overlay it
+			// owns with it. Pos.vue outlives both and centres the dialog over
+			// the register in either payment mode. mitt dispatches inline, so
+			// the shell has the amount before this instance goes away.
+			onChangeDue: (payload) => {
+				eventBus?.emit?.("show_change_due", payload);
+			},
 			onScheduleBackgroundCheck: (payload) => {
 				scheduleBackgroundStatusCheck(payload);
 			},

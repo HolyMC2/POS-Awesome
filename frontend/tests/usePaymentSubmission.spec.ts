@@ -1075,4 +1075,146 @@ describe("usePaymentSubmission", () => {
 			expect.any(Object),
 		);
 	});
+
+	// Change due — the cashier's next physical act after a cash sale. The
+	// small auto-dismissing toast this replaced was routinely missed at a live
+	// counter, so the amount now goes to a handler that blocks until confirmed.
+	describe("change due", () => {
+		const buildCashSale = async (
+			overrides: {
+				paidChange?: number;
+				diff?: number;
+				isReturn?: boolean;
+			} = {},
+		) => {
+			const invoiceService = (
+				await import("../src/posapp/services/invoiceService")
+			).default;
+			(invoiceService.submitInvoice as any).mockResolvedValue({
+				name: "ACC-SINV-0100",
+				doctype: "Sales Invoice",
+				docstatus: 1,
+			});
+
+			const invoiceDoc = ref<any>({
+				name: "ACC-SINV-0100",
+				doctype: "Sales Invoice",
+				currency: "MXN",
+				is_return: overrides.isReturn ? 1 : 0,
+				items: [{ item_code: "ITEM-1", qty: 1 }],
+				payments: [{ mode_of_payment: "Cash", amount: 500, type: "Cash" }],
+				rounded_total: 480,
+				grand_total: 480,
+			});
+			const toastStore = { show: vi.fn() };
+
+			const { submitInvoice } = usePaymentSubmission({
+				invoiceDoc,
+				posProfile: ref({
+					// Off, so the sale takes the immediate path and change is
+					// not deferred behind a background job.
+					posa_allow_submissions_in_background_job: 0,
+					create_pos_invoice_instead_of_sales_invoice: 0,
+				}),
+				stockSettings: ref({}),
+				invoiceType: ref("Invoice"),
+				formatFloat: (value) => Number(value || 0),
+				formatCurrency: (value: number) => Number(value).toFixed(2),
+				stores: {
+					toastStore,
+					uiStore: {
+						setLastInvoice: vi.fn(),
+						setLastStockAdjustment: vi.fn(),
+					},
+					customersStore: { setSelectedCustomer: vi.fn() },
+					invoiceStore: { invoiceDoc: invoiceDoc.value },
+				},
+				isCashback: ref(true),
+				paidChange: ref(overrides.paidChange ?? 20),
+				creditChange: ref(0),
+				redeemedCustomerCredit: ref(0),
+				customerCreditDict: ref([]),
+				diff_payment: ref(overrides.diff ?? -20),
+			});
+
+			return { submitInvoice, toastStore };
+		};
+
+		const changeToasts = (toastStore: { show: any }) =>
+			toastStore.show.mock.calls.filter((call: any[]) =>
+				String(call[0]?.title || "").includes("Give back change"),
+			);
+
+		it("hands the booked change to the handler instead of toasting it", async () => {
+			const { submitInvoice, toastStore } = await buildCashSale();
+			const onChangeDue = vi.fn();
+
+			await submitInvoice(false, {
+				onChangeDue,
+				onFinishNavigation: vi.fn(),
+			});
+
+			expect(onChangeDue).toHaveBeenCalledWith({
+				amount: 20,
+				currency: "MXN",
+				invoice: "ACC-SINV-0100",
+			});
+			expect(changeToasts(toastStore)).toHaveLength(0);
+		});
+
+		it("still toasts when a caller wires no handler", async () => {
+			const { submitInvoice, toastStore } = await buildCashSale();
+
+			await submitInvoice(false, { onFinishNavigation: vi.fn() });
+
+			expect(changeToasts(toastStore)).toHaveLength(1);
+		});
+
+		it("prints before it asks about the change", async () => {
+			// Submit & Print must keep printing while the dialog is up; if the
+			// order flipped, the ticket would wait on the cashier's tap.
+			const order: string[] = [];
+			const { submitInvoice } = await buildCashSale();
+
+			await submitInvoice(true, {
+				onPrint: () => {
+					order.push("print");
+				},
+				onChangeDue: () => {
+					order.push("change");
+				},
+				onFinishNavigation: vi.fn(),
+			});
+
+			expect(order).toEqual(["print", "change"]);
+		});
+
+		it("stays silent when the sale owes no change", async () => {
+			const { submitInvoice, toastStore } = await buildCashSale({
+				paidChange: 0,
+				diff: 0,
+			});
+			const onChangeDue = vi.fn();
+
+			await submitInvoice(false, {
+				onChangeDue,
+				onFinishNavigation: vi.fn(),
+			});
+
+			expect(onChangeDue).not.toHaveBeenCalled();
+			expect(changeToasts(toastStore)).toHaveLength(0);
+		});
+
+		it("stays silent on a return, where money moves the other way", async () => {
+			const { submitInvoice } = await buildCashSale({ isReturn: true });
+			const onChangeDue = vi.fn();
+
+			await submitInvoice(false, {
+				onChangeDue,
+				onFinishNavigation: vi.fn(),
+			});
+
+			expect(onChangeDue).not.toHaveBeenCalled();
+		});
+	});
 });
