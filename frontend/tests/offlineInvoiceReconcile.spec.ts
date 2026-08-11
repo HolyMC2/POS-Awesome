@@ -8,12 +8,14 @@ const {
 	markWriteQueueEntryFailed,
 	getQueuedPayloadCount,
 	getQueuedPayloadSnapshots,
+	enqueueWriteQueueEntry,
 } = vi.hoisted(() => ({
 	claimRetryableQueueEntries: vi.fn(),
 	markWriteQueueEntrySynced: vi.fn(async () => true),
 	markWriteQueueEntryFailed: vi.fn(async () => true),
 	getQueuedPayloadCount: vi.fn(() => 0),
 	getQueuedPayloadSnapshots: vi.fn(() => [{ invoice: {} }]),
+	enqueueWriteQueueEntry: vi.fn(async (_entity: string, entry: any) => entry),
 }));
 
 vi.mock("../src/offline/writeQueue", () => ({
@@ -24,7 +26,7 @@ vi.mock("../src/offline/writeQueue", () => ({
 	getQueuedPayloadSnapshots,
 	clearWriteQueueEntries: vi.fn(),
 	deleteWriteQueueEntryByIndex: vi.fn(),
-	enqueueWriteQueueEntry: vi.fn(),
+	enqueueWriteQueueEntry,
 }));
 vi.mock("../src/offline/customers", () => ({
 	syncOfflineCustomers: vi.fn(async () => {}),
@@ -50,6 +52,7 @@ vi.mock("../src/offline/db", () => ({
 import {
 	getOfflineCapabilityVersion,
 	reconcileAlreadySubmitted,
+	saveOfflineInvoice,
 	syncOfflineInvoices,
 } from "../src/offline/invoices";
 import { memory } from "../src/offline/db";
@@ -204,5 +207,61 @@ describe("syncOfflineInvoices — capability version guard (plan C7)", () => {
 
 		expect(methodsCalled().some((m) => m.endsWith("submit_invoice"))).toBe(true);
 		expect(totals).toMatchObject({ synced: 1, drafted: 0 });
+	});
+
+	it("reconciles an ack-missed sale on a version mismatch instead of drafting a duplicate", async () => {
+		// The guard used to draft before ever asking whether the sale was
+		// already submitted, minting an orphan with the same request id.
+		setOpeningVersion(2);
+		claimRetryableQueueEntries.mockResolvedValueOnce([versionedEntry(1)]);
+		frappeCall.mockImplementation(async ({ method }: any) => {
+			if (method.endsWith("reconcile_invoice_outbox_entry"))
+				return { message: { acknowledged: true } };
+			return { message: {} };
+		});
+
+		const totals = await syncOfflineInvoices();
+
+		expect(methodsCalled().some((m) => m.endsWith("update_invoice"))).toBe(false);
+		expect(methodsCalled().some((m) => m.endsWith("submit_invoice"))).toBe(false);
+		expect(markWriteQueueEntrySynced).toHaveBeenCalledTimes(1);
+		expect(totals).toMatchObject({ synced: 1, drafted: 0 });
+	});
+});
+
+describe("saveOfflineInvoice — capability stamp (plan C7)", () => {
+	function cartEntry() {
+		return {
+			invoice: {
+				posa_client_request_id: "inv-9",
+				doctype: "Sales Invoice",
+				update_stock: 0,
+				company: "Doco",
+				items: [{ item_code: "ITEM-1", qty: 1 }],
+			},
+			data: {},
+		};
+	}
+
+	function queuedEntry() {
+		return enqueueWriteQueueEntry.mock.calls[0]?.[1] as any;
+	}
+
+	it("stamps the live capability version onto the queued entry", async () => {
+		(memory as any).pos_opening_storage = {
+			capability_profile: { name: "coffee-quickserve", version: 4 },
+		};
+
+		await saveOfflineInvoice(cartEntry());
+
+		expect(queuedEntry().data.posa_capability_version).toBe(4);
+	});
+
+	it("leaves the entry unstamped when the register runs no preset (retail)", async () => {
+		(memory as any).pos_opening_storage = {};
+
+		await saveOfflineInvoice(cartEntry());
+
+		expect(queuedEntry().data.posa_capability_version).toBeUndefined();
 	});
 });

@@ -398,11 +398,28 @@ export async function syncOfflineInvoices() {
 					`Offline invoice built under capability v${stampedVersion} ` +
 						`but register now runs v${currentCapabilityVersion} — drafting for review`,
 				);
+				// Ack-miss check FIRST, for the same reason as the submit-failure
+				// path below: this entry may already exist submitted server-side
+				// (the response was lost, not the write). Drafting it then would
+				// mint an orphan carrying the same posa_client_request_id — a
+				// double-bill the moment that draft is submitted from Desk.
+				if (await reconcileAlreadySubmitted(queuedInvoice.invoice)) {
+					synced += 1;
+					await markWriteQueueEntrySynced(
+						INVOICE_ENTITY,
+						Number(entry.queue_id),
+						entry.last_attempt_at,
+					);
+					continue;
+				}
 				try {
 					await frappe.call({
 						method: "posawesome.posawesome.api.invoices.update_invoice",
 						args: { data: queuedInvoice.invoice },
 					});
+					// Drafted entries are only counted here; surfacing the count
+					// as an operator prompt ("N sales need review") is deliberately
+					// deferred — the totals already carry it for a future UI.
 					drafted += 1;
 					await markWriteQueueEntrySynced(
 						INVOICE_ENTITY,
