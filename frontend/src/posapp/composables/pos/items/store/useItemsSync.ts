@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import type { Item, POSProfile } from "../../../../types/models";
 import itemService from "../../../../services/itemService";
+import { withRequestTimeout } from "../../../../utils/requestTimeout";
 // @ts-ignore
 import {
 	saveItemsBulk,
@@ -20,6 +21,12 @@ import {
 export interface BackgroundSyncState {
 	running: boolean;
 	token: number;
+	/**
+	 * Wall clock of the last observed progress (start of the pass, or the last
+	 * batch that landed). The resume coordinator uses it to tell a sync that is
+	 * genuinely working from one whose request died with the screen.
+	 */
+	lastProgressAt: number | null;
 }
 
 const hasStockQuantity = (item: Item) =>
@@ -31,6 +38,9 @@ const containsStockQuantities = (items: Item[]) =>
 const DELTA_SYNC_LIMIT = 1000;
 const BACKGROUND_SYNC_PAGE_SIZE = 1000;
 const BACKGROUND_PAGINATION_REFRESH_BATCHES = 5;
+/** A catalog page is big; give it room, but never forever. */
+export const BACKGROUND_SYNC_TIMEOUT_MS = 90_000;
+export const DELTA_SYNC_TIMEOUT_MS = 45_000;
 
 export function useItemsSync() {
 	const isLoading = ref(false);
@@ -42,6 +52,7 @@ export function useItemsSync() {
 	const backgroundSyncState = ref<BackgroundSyncState>({
 		running: false,
 		token: 0,
+		lastProgressAt: null,
 	});
 
 	const itemGroups = ref<string[]>(["ALL"]);
@@ -157,6 +168,7 @@ export function useItemsSync() {
 	const cancelBackgroundSync = () => {
 		backgroundSyncState.value.token += 1;
 		backgroundSyncState.value.running = false;
+		backgroundSyncState.value.lastProgressAt = null;
 		isBackgroundLoading.value = false;
 		loadProgress.value = 0;
 		syncedItemsCount.value = 0;
@@ -175,7 +187,7 @@ export function useItemsSync() {
 
 		try {
 			// @ts-ignore
-			const response = await frappe.call({
+			const deltaCall = frappe.call({
 				method: "posawesome.posawesome.api.items.get_delta_items",
 				args: {
 					pos_profile: JSON.stringify(posProfile),
@@ -186,6 +198,11 @@ export function useItemsSync() {
 				},
 				freeze: false,
 			});
+			const response = await withRequestTimeout<any>(
+				deltaCall,
+				"items.get_delta_items",
+				DELTA_SYNC_TIMEOUT_MS,
+			);
 
 			const fetchedItems = Array.isArray(response?.message)
 				? response.message
@@ -260,6 +277,7 @@ export function useItemsSync() {
 
 		const token = ++backgroundSyncState.value.token;
 		backgroundSyncState.value.running = true;
+		backgroundSyncState.value.lastProgressAt = Date.now();
 		isBackgroundLoading.value = true;
 		loadProgress.value = 0;
 		syncedItemsCount.value = 0;
@@ -313,7 +331,7 @@ export function useItemsSync() {
 				}
 
 				// @ts-ignore
-				const response = await frappe.call({
+				const pageCall = frappe.call({
 					method: "posawesome.posawesome.api.items.get_items",
 					args: {
 						pos_profile: JSON.stringify(requestProfile),
@@ -326,10 +344,19 @@ export function useItemsSync() {
 						limit,
 					},
 				});
+				// Bounded: an unbounded await here parked `running = true`
+				// forever when the request died with the screen, and
+				// `triggerBackgroundSync` then refused every later pass.
+				const response = await withRequestTimeout<any>(
+					pageCall,
+					"items.get_items",
+					BACKGROUND_SYNC_TIMEOUT_MS,
+				);
 
 				if (backgroundSyncState.value.token !== token) {
 					break;
 				}
+				backgroundSyncState.value.lastProgressAt = Date.now();
 
 				const batch = Array.isArray(response.message)
 					? response.message

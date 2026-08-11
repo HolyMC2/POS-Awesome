@@ -1249,6 +1249,77 @@ export const useItemsStore = defineStore("items", () => {
 		await loadItems({ forceServer: true });
 	};
 
+	/**
+	 * How long a background catalog sync may show no progress before a resume
+	 * treats it as dead. Comfortably above the per-page request deadline
+	 * (`BACKGROUND_SYNC_TIMEOUT_MS`) so a slow-but-alive pass is never cancelled.
+	 */
+	const STALE_BACKGROUND_SYNC_MS = 120_000;
+
+	/**
+	 * Releases the load guards a killed request left behind.
+	 *
+	 * `triggerBackgroundSync` refuses to start while `backgroundSyncState.running`
+	 * is set, so a pass whose fetch died with the screen locked the catalog out
+	 * of every later sync. Cancelling bumps the token, which also makes the
+	 * zombie pass (if it ever wakes) drop its results instead of appending them.
+	 *
+	 * @returns `true` when a wedged guard was released.
+	 */
+	const resetStaleLoadGuards = (maxAgeMs = STALE_BACKGROUND_SYNC_MS) => {
+		if (!backgroundSyncState.value.running) {
+			return false;
+		}
+		const lastProgressAt = backgroundSyncState.value.lastProgressAt;
+		if (lastProgressAt !== null && Date.now() - lastProgressAt < maxAgeMs) {
+			return false;
+		}
+		cancelBackgroundSync();
+		return true;
+	};
+
+	/**
+	 * Resume watchdog: the catalog is empty but this profile is supposed to have
+	 * one. Rehydrate from IndexedDB first (works offline, no server round trip),
+	 * and only reach for the server when local storage also comes back empty.
+	 *
+	 * Deliberately narrow — it must never fire for a profile that legitimately
+	 * shows nothing (server-side `posa_use_limit_search`, no profile yet).
+	 *
+	 * @returns what recovered the catalog, or `"skipped"` / `"failed"`.
+	 */
+	const ensureCatalogLoaded = async (options: { online?: boolean } = {}) => {
+		if (!posProfile.value?.name || limitSearchEnabled.value) {
+			return "skipped" as const;
+		}
+		if (items.value.length > 0) {
+			return "skipped" as const;
+		}
+
+		await loadCachedItems();
+		if (items.value.length > 0) {
+			return "cache" as const;
+		}
+
+		const online =
+			typeof options.online === "boolean"
+				? options.online
+				: typeof navigator !== "undefined"
+					? navigator.onLine
+					: false;
+		if (!online) {
+			return "failed" as const;
+		}
+
+		try {
+			await loadItems({ forceServer: true });
+		} catch (error) {
+			console.error("Catalog watchdog reload failed", error);
+			return "failed" as const;
+		}
+		return items.value.length > 0 ? ("server" as const) : ("failed" as const);
+	};
+
 	const addScannedItem = async (barcode: string) => {
 		let item = getItemByBarcode(barcode);
 		if (item) return item;
@@ -1451,6 +1522,9 @@ export const useItemsStore = defineStore("items", () => {
 		getItemByBarcode,
 		addScannedItem,
 		refreshModifiedItems,
+		cancelBackgroundSync,
+		resetStaleLoadGuards,
+		ensureCatalogLoaded,
 		clearLimitSearchResults,
 		clearAllCaches,
 		clearSearchCache,

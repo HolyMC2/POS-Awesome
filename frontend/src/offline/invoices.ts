@@ -37,6 +37,39 @@ const asBoolean = (value: any): boolean => {
 };
 
 let invoiceSyncInProgress = false;
+let invoiceSyncStartedAt: number | null = null;
+
+/**
+ * How long a drain may hold the single-flight guard before a resume is allowed
+ * to release it. Matched to the write queue's `SYNCING_LEASE_MS`: entries the
+ * wedged pass claimed only become re-claimable after that same window, so the
+ * release can never put two drains on the same invoice.
+ */
+export const INVOICE_SYNC_GUARD_STALE_MS = 5 * 60 * 1000;
+
+/**
+ * Releases the drain's in-flight guard when its `frappe.call` died with the
+ * screen and will never settle. Without this the queue stays undrained for the
+ * life of the document — the sale is safe on disk, but it stops leaving.
+ *
+ * @returns `true` when a wedged guard was actually released.
+ */
+export function releaseStaleInvoiceSyncGuard(
+	maxAgeMs = INVOICE_SYNC_GUARD_STALE_MS,
+) {
+	if (!invoiceSyncInProgress) {
+		return false;
+	}
+	if (
+		invoiceSyncStartedAt !== null &&
+		Date.now() - invoiceSyncStartedAt < maxAgeMs
+	) {
+		return false;
+	}
+	invoiceSyncInProgress = false;
+	invoiceSyncStartedAt = null;
+	return true;
+}
 
 // Ack-miss reconcile: ask the server whether this offline sale already exists
 // as a submitted invoice for its posa_client_request_id. Backed by the
@@ -353,6 +386,7 @@ export async function syncOfflineInvoices() {
 	}
 
 	invoiceSyncInProgress = true;
+	invoiceSyncStartedAt = Date.now();
 	try {
 		await syncOfflineCustomers();
 
@@ -521,5 +555,6 @@ export async function syncOfflineInvoices() {
 		return totals;
 	} finally {
 		invoiceSyncInProgress = false;
+		invoiceSyncStartedAt = null;
 	}
 }

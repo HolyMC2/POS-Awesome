@@ -112,7 +112,16 @@ export function createOfflineSyncRuntime(options: OfflineSyncRuntimeOptions) {
 	function scheduleNextTimer(delayMs = getNextTimerDelay(canRunTimerSync())) {
 		clearPendingTimer();
 		timerHandle = scheduleTimeout(async () => {
-			const didRun = await triggerTimerSync();
+			// The re-arm must survive a failed pass. A rejection here used to
+			// escape as an unhandled rejection and the chain simply stopped —
+			// background sync then never ran again for the life of the tab,
+			// with nothing on screen to say so.
+			let didRun = false;
+			try {
+				didRun = await triggerTimerSync();
+			} catch (error) {
+				console.warn("Offline sync timer pass failed", error);
+			}
 			scheduleNextTimer(getNextTimerDelay(didRun ? canRunTimerSync() : false));
 		}, delayMs);
 		return timerHandle;

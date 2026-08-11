@@ -122,6 +122,9 @@ import {
 	isOffline,
 	getLastSyncTotals,
 	isOfflineStorageDegraded,
+	ensureOfflineDbOpen,
+	ensurePersistWorkerHealthy,
+	releaseStaleInvoiceSyncGuard,
 	getSyncResourceDefinitions,
 	getSyncResourceState,
 	listSyncResourceStates,
@@ -141,6 +144,8 @@ import {
 	validateBootstrapSnapshot,
 } from "../../offline/bootstrapSnapshot";
 import { useRtl } from "../composables/core/useRtl";
+import { createAppResume } from "../composables/core/useAppResume";
+import { useSocketStore } from "../stores/socketStore";
 import { useBootSync } from "../composables/runtime/useBootSync";
 import { useNetworkLifecycle } from "../composables/runtime/useNetworkLifecycle";
 import { useUpdateChecks } from "../composables/runtime/useUpdateChecks";
@@ -149,6 +154,7 @@ import { useQueueMetrics } from "../composables/runtime/useQueueMetrics";
 import authService from "../services/authService.js";
 import { getValidCachedOpeningForCurrentUser } from "../utils/openingCache";
 import { formatBootstrapWarning, shouldShowBootstrapBanner } from "../utils/bootstrapWarnings";
+import { withRequestTimeout } from "../utils/requestTimeout";
 import { listenForBootstrapSnapshotUpdates } from "../utils/bootstrapRuntimeEvents";
 import {
 	resolveBootstrapWarningUiState,
@@ -188,6 +194,7 @@ const BUILD_VERSION = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION
 // resource into a full resync. Bumped for the pos_floor / pos_table field lists.
 const OFFLINE_SYNC_SCHEMA_VERSION = "2026-08-11";
 const OFFLINE_SYNC_TIMER_INTERVAL_MS = 60_000;
+const OFFLINE_SYNC_CALL_TIMEOUT_MS = 60_000;
 const PRODUCT_SYNC_SETTLE_TIMEOUT_MS = 120_000;
 const PRODUCT_SYNC_SETTLE_POLL_MS = 250;
 
@@ -363,6 +370,44 @@ const customerReadiness = useCustomerReadiness({
 			void refreshOfflinePricingRules();
 		}
 	},
+});
+
+// --- RESUME COORDINATOR (wake / bfcache / reconnect) ------------------------
+// Single registration for the whole `default` layout: App.vue keys the layout
+// by name, so this mounts once per document and covers every /posapp route.
+// Everything it needs already exists — this only decides the ORDER and makes
+// each step idempotent. See composables/core/useAppResume.ts.
+const socketStore = useSocketStore();
+const appResume = createAppResume({
+	ensureStorage: () => ensureOfflineDbOpen(),
+	ensureWorker: () => ensurePersistWorkerHealthy(),
+	releaseStaleGuards: () => {
+		const released = [];
+		if (itemsStore.resetStaleLoadGuards()) released.push("items_background_sync");
+		if (customersStore.resetStaleFetchGuard()) released.push("customer_fetch");
+		if (releaseStaleInvoiceSyncGuard()) released.push("invoice_drain");
+		return released;
+	},
+	refreshData: async () => {
+		// The socket has no replay, so the pull is the truth (spec §6.7).
+		// Independent of the drain — a failed pull must not cost us the queue.
+		const results = await Promise.allSettled([triggerOnlineResumeSync(), drainOfflineQueuesQuietly()]);
+		const failure = results.find((result) => result.status === "rejected");
+		if (failure) {
+			throw failure.reason;
+		}
+	},
+	ensureSocket: () => socketStore.ensureRealtimeConnected(),
+	ensureCatalog: () =>
+		itemsStore.ensureCatalogLoaded({
+			online: navigator.onLine && !getIsManualOffline(),
+		}),
+	track: (event, value, metadata) => {
+		import("../utils/telemetry")
+			.then(({ track }) => track(event, value, metadata))
+			.catch(() => {});
+	},
+	isOnline: () => navigator.onLine && !getIsManualOffline(),
 });
 
 function getCurrentBootstrapProfile() {
@@ -568,10 +613,16 @@ async function callOfflineSyncMethod(method, args = {}) {
 	if (typeof frappe === "undefined" || typeof frappe.call !== "function") {
 		throw new Error("Frappe call API is unavailable");
 	}
-	const response = await frappe.call({
+	// Bounded on purpose. `frappe.call` never times out, and a sync request the
+	// radio killed mid-sleep parks BOTH the coordinator's per-trigger promise
+	// and the runtime's timer chain forever — background sync then stops for
+	// the life of the tab. A timeout turns that into a normal retryable
+	// failure; the resource's own backoff handles the rest.
+	const response = await withRequestTimeout(
+		frappe.call({ method, args }),
 		method,
-		args,
-	});
+		OFFLINE_SYNC_CALL_TIMEOUT_MS,
+	);
 	return typeof response?.message === "undefined" ? response || {} : response.message;
 }
 
@@ -900,6 +951,7 @@ onMounted(() => {
 	bootSync.start();
 	networkLifecycle.start();
 	customerReadiness.start();
+	appResume.start();
 	setupEventListeners();
 	scheduleBackgroundTask(handleRefreshCacheUsage);
 	updateChecks.start();
@@ -914,6 +966,7 @@ onBeforeUnmount(() => {
 	bootSync.stop();
 	networkLifecycle.stop();
 	customerReadiness.stop();
+	appResume.stop();
 	if (eventBus) {
 		eventBus.off("data-loaded");
 		eventBus.off("data-load-progress");
@@ -1045,6 +1098,20 @@ const handleCloseShift = () => {
 
 const handleSyncInvoices = async () => {
 	await syncQueues();
+};
+
+// The resume path's drain. `syncQueues` is the OPERATOR's button: it narrates
+// what it found ("3 invoices pending for sync"). Resume is automatic and fires
+// on every unlock, so it drains the same queues without the commentary.
+// Concurrency-safe by construction: both drains claim their write-queue entries
+// under a lease, so a pass already running simply finds nothing to claim.
+const drainOfflineQueuesQuietly = async () => {
+	if (isOffline()) {
+		return;
+	}
+	await syncOfflineInvoices();
+	await syncOfflineCashMovements();
+	await syncStore.updatePendingCount();
 };
 
 const handleToggleOffline = () => {

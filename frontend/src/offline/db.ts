@@ -37,6 +37,11 @@
  */
 import Dexie from "dexie/dist/dexie.mjs";
 
+import {
+	initPersistWorker,
+	postPersist,
+} from "./persistWorkerBridge";
+
 type AnyRecord = Record<string, any>;
 
 // --- Dexie initialization ---------------------------------------------------
@@ -251,18 +256,10 @@ db.version(13).stores(BASE_SCHEMA);
 // v14 adds pos_floors / pos_tables / pos_table_orders (restaurant tables).
 db.version(14).stores(BASE_SCHEMA);
 
-let persistWorker: Worker | null = null;
-if (typeof Worker !== "undefined") {
-	try {
-		// Use the plain URL so the service worker cache matches when offline
-		const workerUrl =
-			"/assets/posawesome/dist/js/posapp/workers/itemWorker.js";
-		persistWorker = new Worker(workerUrl, { type: "classic" });
-	} catch (e) {
-		console.error("Failed to init persist worker", e);
-		persistWorker = null;
-	}
-}
+// The worker is supervised by `persistWorkerBridge`: it acknowledges every
+// write, and anything unacknowledged is re-written from here. See that module
+// for why an unsupervised `postMessage` loses data on a phone.
+initPersistWorker((key, value) => writePersistedValue(key, value));
 
 const MEMORY_DEFAULTS: AnyRecord = {
 	offline_invoices: [],
@@ -496,6 +493,74 @@ try {
 	});
 } catch (err) {
 	console.warn("[posa][offline] Could not attach Dexie blocked handler", err);
+}
+
+/**
+ * The browser closed our IndexedDB connection behind our back (memory pressure
+ * while the screen is off, storage eviction, a forced bfcache eviction).
+ *
+ * Dexie fires `close` and leaves `idbdb` in place, so `db.isOpen()` KEEPS
+ * RETURNING TRUE while every subsequent transaction rejects. Every
+ * `if (!db.isOpen()) await db.open()` guard in this layer is therefore blind to
+ * this state — which is the shape of the "POS came back from sleep with an
+ * empty catalog" failure. Latch it here; `ensureOfflineDbOpen()` is the cure.
+ */
+let connectionClosedUnexpectedly = false;
+
+try {
+	db.on("close", () => {
+		connectionClosedUnexpectedly = true;
+		console.warn(
+			"[posa][offline] IndexedDB connection was closed by the browser; it will be reopened on the next resume or storage access.",
+		);
+	});
+} catch (err) {
+	console.warn("[posa][offline] Could not attach Dexie close handler", err);
+}
+
+/** True when the browser closed the connection and nothing has reopened it yet. */
+export function isOfflineDbConnectionClosed() {
+	return connectionClosedUnexpectedly;
+}
+
+/** Test seam: clear the latch between cases. */
+export function setOfflineDbConnectionClosedForTests(state: boolean) {
+	connectionClosedUnexpectedly = !!state;
+}
+
+export type EnsureOfflineDbOpenResult = {
+	ok: boolean;
+	reopened: boolean;
+	error?: unknown;
+};
+
+/**
+ * Reopens the offline store when the browser closed it, and is a cheap no-op
+ * otherwise. Called first in the resume sequence — every later step (catalog
+ * reads, queue drains, watermark writes) needs a live connection.
+ */
+export async function ensureOfflineDbOpen(): Promise<EnsureOfflineDbOpenResult> {
+	if (!connectionClosedUnexpectedly && db.isOpen()) {
+		return { ok: true, reopened: false };
+	}
+
+	try {
+		// `close()` first: after an unexpected close Dexie still holds the dead
+		// handle, and `open()` on a connection it believes is open is a no-op.
+		try {
+			db.close();
+		} catch {
+			/* already closed */
+		}
+		await openWithTimeout(() => db.open(), OFFLINE_DB_OPEN_TIMEOUT_MS);
+		connectionClosedUnexpectedly = false;
+		offlineStorageDegraded = false;
+		return { ok: true, reopened: true };
+	} catch (error) {
+		console.error("[posa][offline] Failed to reopen IndexedDB", error);
+		offlineStorageDegraded = true;
+		return { ok: false, reopened: false, error };
+	}
 }
 
 export const initPromise = new Promise<void>((resolve) => {
@@ -752,6 +817,32 @@ function _schedulePersistFlush() {
 	}
 }
 
+/** Main-thread write path. Also the persist worker's fallback writer. */
+function writePersistedValue(key: string, value: unknown) {
+	if (shouldPersistToIndexedDb(key)) {
+		const table = tableForKey(key);
+		db.table(table)
+			.put({ key, value })
+			.catch((e) => console.error(`Failed to persist ${key}`, e));
+	}
+}
+
+/** The localStorage mirror for the small settings keys. */
+function mirrorPersistedValueToLocalStorage(key: string, value: unknown) {
+	if (typeof localStorage === "undefined") {
+		return;
+	}
+	if (shouldPersistToLocalStorage(key)) {
+		try {
+			localStorage.setItem(`posa_${key}`, JSON.stringify(value));
+		} catch (err) {
+			console.error("Failed to persist", key, "to localStorage", err);
+		}
+	} else {
+		localStorage.removeItem(`posa_${key}`);
+	}
+}
+
 function _persistImmediate(key: string, value: unknown) {
 	if (!shouldPersistToIndexedDb(key) && !shouldPersistToLocalStorage(key)) {
 		if (typeof localStorage !== "undefined") {
@@ -760,39 +851,27 @@ function _persistImmediate(key: string, value: unknown) {
 		return;
 	}
 
-	if (persistWorker) {
-		let clean = value;
-		try {
-			clean = JSON.parse(JSON.stringify(value));
-		} catch (e) {
-			console.error("Failed to serialize", key, e);
-		}
-		try {
-			persistWorker.postMessage({ type: "persist", key, value: clean });
-			return;
-		} catch (e) {
-			console.error("Failed to persist via worker", key, e);
-		}
+	// Workers have no `localStorage`, so this mirror can only happen here.
+	// Routing it through the worker silently dropped every `posa_*` key —
+	// exactly the values `hydrateMemoryFromLocalStorage()` needs when
+	// IndexedDB is unavailable.
+	mirrorPersistedValueToLocalStorage(key, value);
+
+	if (!shouldPersistToIndexedDb(key)) {
+		return;
 	}
 
-	if (shouldPersistToIndexedDb(key)) {
-		const table = tableForKey(key);
-		db.table(table)
-			.put({ key, value })
-			.catch((e) => console.error(`Failed to persist ${key}`, e));
+	let clean = value;
+	try {
+		clean = JSON.parse(JSON.stringify(value));
+	} catch (e) {
+		console.error("Failed to serialize", key, e);
+	}
+	if (postPersist(key, clean)) {
+		return;
 	}
 
-	if (typeof localStorage !== "undefined") {
-		if (shouldPersistToLocalStorage(key)) {
-			try {
-				localStorage.setItem(`posa_${key}`, JSON.stringify(value));
-			} catch (err) {
-				console.error("Failed to persist", key, "to localStorage", err);
-			}
-		} else {
-			localStorage.removeItem(`posa_${key}`);
-		}
-	}
+	writePersistedValue(key, value);
 }
 
 export function persist(key: string, value: unknown = memory[key]) {
@@ -983,6 +1062,14 @@ export async function clearDerivedOfflineCaches() {
 
 export async function quickDbHealthCheck() {
 	try {
+		// `db.isOpen()` lies after an unexpected close (see `db.on("close")`),
+		// so the latch has to be consulted before trusting it.
+		if (connectionClosedUnexpectedly) {
+			const reopen = await ensureOfflineDbOpen();
+			if (!reopen.ok) {
+				return false;
+			}
+		}
 		if (!db.isOpen()) {
 			await db.open();
 		}
@@ -1000,6 +1087,7 @@ export async function repairDbAfterFailedHealthCheck(error?: unknown) {
 			db.close();
 		}
 		await db.open();
+		connectionClosedUnexpectedly = false;
 		return true;
 	} catch (reopenError) {
 		console.error("DB reopen failed", reopenError);

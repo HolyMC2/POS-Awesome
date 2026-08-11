@@ -181,6 +181,45 @@ export const useSocketStore = defineStore("socket", () => {
     }
   }
 
+  /**
+   * Resume step: make sure the realtime transport is actually reconnecting.
+   *
+   * socket.io normally reconnects on its own, but a phone that slept through
+   * its backoff window can come back with the socket parked in a disconnected
+   * state — and because Frappe's rooms live on the SOCKET, a dead socket means
+   * no `pos_invoice_processed`, no stock broadcasts, and every
+   * `waitForInvoiceProcessed` silently taking the optimistic path.
+   *
+   * Nothing here re-fetches data: the socket carries no replay, so the
+   * authoritative pull is the resume coordinator's job (spec §6.7).
+   *
+   * @returns `"connected"` when the socket was already up, `"reconnecting"`
+   *   when a reconnect was requested, `"unavailable"` when there is no socket.
+   */
+  function ensureRealtimeConnected() {
+    let socket: any = null;
+    try {
+      socket = (frappe as any)?.realtime?.socket || null;
+    } catch {
+      socket = null;
+    }
+    if (!socket) {
+      return "unavailable" as const;
+    }
+    if (socket.connected) {
+      return "connected" as const;
+    }
+    try {
+      if (typeof socket.connect === "function") {
+        socket.connect();
+      }
+    } catch {
+      // A transport mid-teardown throws here; the next probe retries.
+      return "unavailable" as const;
+    }
+    return "reconnecting" as const;
+  }
+
   const waitForInvoiceProcessed = async (
     invoice: string,
     timeoutMs = 45000,
@@ -282,6 +321,17 @@ export const useSocketStore = defineStore("socket", () => {
       if (!invoice) return;
       const hasPostSubmitPaymentWork = Boolean(data.has_post_submit_payment_work);
 
+      // The backend publishes this lifecycle event to BOTH the user room and
+      // the doc room (`_posa_publish_dual`), and a client joined to both gets
+      // two copies of the same emit. Identical toasts merge by key in
+      // toastStore, which is what surfaced as "Invoice Submitted (2×)" in
+      // prod. The state write and the waiter resolution below are idempotent,
+      // so only the operator-visible toast needs the guard.
+      const alreadySeen =
+        processedInvoices.value[invoice]?.status === "processed" &&
+        processedInvoices.value[invoice]?.hasPostSubmitPaymentWork ===
+          hasPostSubmitPaymentWork;
+
       const state: InvoiceProcessingState = {
         status: "processed",
         doctype: data.doctype,
@@ -291,6 +341,10 @@ export const useSocketStore = defineStore("socket", () => {
       processedInvoices.value[invoice] = state;
       pruneOldest(processedInvoices);
       resolveWaiters(invoiceWaiters, invoice, state);
+
+      if (alreadySeen) {
+        return;
+      }
 
       if (hasPostSubmitPaymentWork) {
         toastStore.show({
@@ -315,12 +369,22 @@ export const useSocketStore = defineStore("socket", () => {
       const invoice = data.invoice || data.name;
       if (!invoice) return;
 
+      // `pos_invoice_processed` already raised this exact spinner when the
+      // submit reported post-submit work. Re-showing a byte-identical toast
+      // only bumps toastStore's merge counter ("Invoice Submitted (2×)").
+      const spinnerAlreadyShown =
+        processedInvoices.value[invoice]?.hasPostSubmitPaymentWork === true;
+
       postSubmitPayments.value[invoice] = {
         status: "started",
         doctype: data.doctype,
         updatedAt: Date.now(),
       };
       pruneOldest(postSubmitPayments);
+
+      if (spinnerAlreadyShown) {
+        return;
+      }
 
       toastStore.show({
         key: `invoice-processing::${invoice}`,
@@ -336,6 +400,10 @@ export const useSocketStore = defineStore("socket", () => {
       const invoice = data.invoice || data.name;
       if (!invoice) return;
 
+      // Same dual-room delivery as `pos_invoice_processed`.
+      const alreadyCompleted =
+        postSubmitPayments.value[invoice]?.status === "completed";
+
       const state: PostSubmitPaymentState = {
         status: "completed",
         doctype: data.doctype,
@@ -345,9 +413,17 @@ export const useSocketStore = defineStore("socket", () => {
       pruneOldest(postSubmitPayments);
       resolveWaiters(paymentWaiters, invoice, state);
 
+      if (alreadyCompleted) {
+        return;
+      }
+
       toastStore.show({
         key: `invoice-processing::${invoice}`,
-        title: __("Invoice Submitted"),
+        // A DIFFERENT title from the submit toast on purpose: same key, so it
+        // replaces the spinner in place, and toastStore reads the changed
+        // title as a state transition rather than a repeat (which is what the
+        // "(2×)" counter was reporting).
+        title: __("Payments Processed"),
         detail: __("Payment entries processed for Invoice {0}", [invoice]),
         color: "success",
         timeout: 4000,
@@ -371,7 +447,10 @@ export const useSocketStore = defineStore("socket", () => {
 
       toastStore.show({
         key: `invoice-processing::${invoice}`,
-        title: __("Invoice Submitted"),
+        // The invoice IS submitted; it is the payment entries that failed.
+        // Titling this "Invoice Submitted" in red told the cashier the
+        // opposite of what happened.
+        title: __("Payment Processing Failed"),
         detail: message,
         color: "error",
         timeout: 8000,
@@ -436,5 +515,6 @@ export const useSocketStore = defineStore("socket", () => {
     waitForInvoiceProcessed,
     waitForPostSubmitPayments,
     subscribeToInvoiceDoc,
+    ensureRealtimeConnected,
   };
 });

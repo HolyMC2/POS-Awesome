@@ -182,6 +182,7 @@ export const useCustomersStore = defineStore("customers", () => {
 	const isUpdateCustomerDialogOpen = ref(false);
 	const customerToUpdate = ref<StoredCustomer | null>(null);
 	let customerFetchPromise: Promise<void> | null = null;
+	let customerFetchStartedAt: number | null = null;
 	const customerLoadLogState = {
 		local: false,
 		server: false,
@@ -761,10 +762,38 @@ export const useCustomersStore = defineStore("customers", () => {
 		}
 
 		resetCustomerLoadLogState();
+		customerFetchStartedAt = Date.now();
 		customerFetchPromise = load_customer_names_internal().finally(() => {
 			customerFetchPromise = null;
+			customerFetchStartedAt = null;
 		});
 		return customerFetchPromise;
+	}
+
+	/**
+	 * Drops the in-flight dedupe promise when its request died with the screen.
+	 *
+	 * `get_customer_names` returns the stored promise to every later caller, so
+	 * a fetch that never settles makes the customer list unrefreshable for the
+	 * life of the document. Releasing it only lets a NEW fetch start; the
+	 * orphaned one can still resolve harmlessly into the same store.
+	 *
+	 * @returns `true` when a wedged guard was released.
+	 */
+	function resetStaleFetchGuard(maxAgeMs = 120_000) {
+		if (!customerFetchPromise) {
+			return false;
+		}
+		if (
+			customerFetchStartedAt !== null &&
+			Date.now() - customerFetchStartedAt < maxAgeMs
+		) {
+			return false;
+		}
+		customerFetchPromise = null;
+		customerFetchStartedAt = null;
+		loadingCustomers.value = false;
+		return true;
 	}
 
 	async function addOrUpdateCustomer(customer: StoredCustomer) {
@@ -855,6 +884,7 @@ export const useCustomersStore = defineStore("customers", () => {
 		loadMoreCustomers,
 		verifyServerCustomerCount,
 		get_customer_names,
+		resetStaleFetchGuard,
 		backgroundLoadCustomers,
 		addOrUpdateCustomer,
 		requestCustomerRefresh,

@@ -2,6 +2,8 @@
 /* global importScripts, Dexie */
 
 let db;
+/** Set by Dexie's `close` event — see `ensureDbOpen`. */
+let connectionClosed = false;
 const BASE_SCHEMA = {
 	keyval: "&key",
 	queue: "&key",
@@ -156,11 +158,39 @@ const SCHEMA_SIGNATURE = JSON.stringify(BASE_SCHEMA);
 	db.version(10).stores(BASE_SCHEMA);
 	db.version(11).stores(BASE_SCHEMA);
 	try {
+		db.on("close", () => {
+			// Same trap as the main thread: after an unexpected close Dexie
+			// keeps its handle, so `db.isOpen()` still answers true while every
+			// write rejects. Latch it so `ensureDbOpen()` forces a real reopen.
+			connectionClosed = true;
+		});
+	} catch (err) {
+		console.warn("Worker could not attach Dexie close handler", err);
+	}
+	try {
 		await db.open();
 	} catch (err) {
 		console.error("Failed to open IndexedDB in worker", err);
 	}
 })();
+
+async function ensureDbOpen() {
+	if (!db) {
+		return false;
+	}
+	if (connectionClosed) {
+		try {
+			db.close();
+		} catch {
+			/* already closed */
+		}
+		connectionClosed = false;
+	}
+	if (!db.isOpen()) {
+		await db.open();
+	}
+	return true;
+}
 
 const KEY_TABLE_MAP = {
 	offline_invoices: "queue",
@@ -222,14 +252,17 @@ function tableForKey(key) {
 }
 
 async function persist(key, value) {
+	let ok = true;
 	if (!MEMORY_ONLY_KEYS.has(key)) {
 		try {
-			if (!db.isOpen()) {
-				await db.open();
-			}
+			await ensureDbOpen();
 			const table = tableForKey(key);
 			await db.table(table).put({ key, value });
 		} catch (e) {
+			// Reported back to `offline/persistWorkerBridge`, which then writes
+			// from the main thread. Swallowing it here is how values used to
+			// disappear while the app believed they were durable.
+			ok = false;
 			console.error("Worker persist failed", e);
 		}
 	}
@@ -245,13 +278,13 @@ async function persist(key, value) {
 			localStorage.removeItem(`posa_${key}`);
 		}
 	}
+
+	return ok;
 }
 
 async function bulkPutItems(items, syncedAt = Date.now()) {
 	try {
-		if (!db.isOpen()) {
-			await db.open();
-		}
+		await ensureDbOpen();
 		const CHUNK_SIZE = 1000;
 		await db.transaction("rw", db.table("items"), async () => {
 			for (let i = 0; i < items.length; i += CHUNK_SIZE) {
@@ -272,9 +305,7 @@ async function bulkPutPrices(priceList, items, syncedAt = Date.now()) {
 		if (!priceList) {
 			return;
 		}
-		if (!db.isOpen()) {
-			await db.open();
-		}
+		await ensureDbOpen();
 		const records = items.map((it) => {
 			const price = it.price_list_rate ?? it.rate ?? 0;
 			return {
@@ -296,6 +327,13 @@ self.onmessage = async (event) => {
 	// when the worker is used for frequent persistence operations. Remove
 	// the noisy log to keep the console clean.
 	const data = event.data || {};
+	if (data.type === "ping") {
+		// Liveness probe from `offline/persistWorkerBridge`. A worker the OS
+		// reclaimed accepts postMessage and never answers, which is the only
+		// way the main thread can tell it is talking to a corpse.
+		self.postMessage({ type: "pong", id: data.id });
+		return;
+	}
 	if (data.type === "parse_and_cache") {
 		try {
 			let parsed = JSON.parse(data.json);
@@ -359,8 +397,8 @@ self.onmessage = async (event) => {
 			self.postMessage({ type: "error", error: err.message });
 		}
 	} else if (data.type === "persist") {
-		await persist(data.key, data.value);
-		self.postMessage({ type: "persisted", key: data.key });
+		const ok = await persist(data.key, data.value);
+		self.postMessage({ type: "persisted", key: data.key, ok });
 	} else if (data.type === "bulk_put_items") {
 		await bulkPutItems(data.items || [], data.syncedAt || Date.now());
 		self.postMessage({ type: "items_saved" });
