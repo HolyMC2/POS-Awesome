@@ -80,6 +80,9 @@ export interface DockTabDef {
 	label: () => string;
 	ariaLabel: () => string;
 	isActive: () => boolean;
+	/** Tab is waiting on a round-trip it already started — draw it busy and
+	 * refuse further taps. Absent means the tab is never busy. */
+	busy?: () => boolean;
 	onTap: () => void;
 }
 
@@ -91,6 +94,7 @@ export interface DockTabContext {
 	itemsCount: Ref<number>;
 	activeView: Ref<string>;
 	compactPanel: Ref<string>;
+	paymentPending: Ref<boolean>;
 	isSelectorViewActive: (view: string) => boolean;
 	setSelectorView: (view: string) => void;
 	showInvoicePanel: () => void;
@@ -155,8 +159,13 @@ export const buildDockTabDefs = (ctx: DockTabContext): Record<DockTabId, DockTab
 		iconSize: 20,
 		cls: "mobile-dock__tab--pay",
 		label: () => ctx.__("Pay"),
-		ariaLabel: () => ctx.__("Pay"),
+		// The Pay round-trip is the one dock action with no instant local
+		// effect, so it says out loud that it is working — otherwise the
+		// silence reads as a dead button and invites a second tap.
+		ariaLabel: () =>
+			ctx.paymentPending.value ? `${ctx.__("Pay")} — ${ctx.__("Processing")}` : ctx.__("Pay"),
 		isActive: () => ctx.activeView.value === "payment",
+		busy: () => ctx.paymentPending.value,
 		onTap: () => ctx.triggerInvoicePay(),
 	},
 });

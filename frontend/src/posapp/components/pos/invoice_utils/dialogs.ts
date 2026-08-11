@@ -13,6 +13,16 @@ const showCompactPanel = (context: any, panel: "selector" | "invoice") => {
 };
 
 export async function show_payment(context: any) {
+	// Every way into payments — the dock Pay tab, the invoice PAY button, the
+	// "d"/PageUp/"x"/"p" shortcuts — funnels through here, so this is the only
+	// place the in-flight latch has to live. It is set before the first `await`
+	// so a second tap during the ~1s update_invoice round-trip is dropped, and
+	// so the dock's busy state paints on the same tick as the tap.
+	if (context.uiStore?.paymentRequestPending) {
+		return;
+	}
+	context.uiStore?.beginPaymentRequest?.();
+
 	if (context._suppressClosePaymentsTimer) {
 		clearTimeout(context._suppressClosePaymentsTimer);
 		context._suppressClosePaymentsTimer = null;
@@ -169,6 +179,10 @@ export async function show_payment(context: any) {
 			message: error.message,
 		});
 	} finally {
+		// Cleared on every exit — the early returns above (no customer, no
+		// items, failed validation) and the catch included. A latch that
+		// survived a failure would wedge Pay for the rest of the shift.
+		context.uiStore?.endPaymentRequest?.();
 		context._suppressClosePaymentsTimer = setTimeout(() => {
 			context._suppressClosePayments = false;
 			context._suppressClosePaymentsTimer = null;
@@ -304,10 +318,21 @@ export function close_payments(context: any) {
 
 	if (context.uiStore?.paymentDialogOpen && context.uiStore?.closePaymentDialog) {
 		context.uiStore.closePaymentDialog();
-	} else if (context.uiStore?.setActiveView) {
+	}
+
+	// Ask the shell for the cart instead of setting the panel and the active
+	// view separately here. Only showInvoicePanel can move both in the one pass
+	// its activeView watcher will not undo; doing the two halves from here is
+	// what used to land Alt+1 and a customer change on Browse, with the item
+	// search focused and the Android keyboard up.
+	context.eventBus?.emit?.("show_invoice_panel");
+
+	// mitt dispatches inline, so a handled request has already moved the view.
+	// If it has not — nothing listening, or a desk width where showInvoicePanel
+	// leaves activeView alone — don't strand the operator on the payment view.
+	if (context.activeView === "payment" && context.uiStore?.setActiveView) {
 		context.uiStore.setActiveView("items");
 	}
-	showCompactPanel(context, "invoice");
 }
 
 export async function change_price_list_rate(

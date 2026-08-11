@@ -88,6 +88,13 @@ export type Events = {
 	focus_item_search: void;
 	focus_additional_discount: void;
 	set_compact_panel: "selector" | "invoice";
+	/**
+	 * "Put me on the cart." Coarser than set_compact_panel: the shell moves the
+	 * panel AND the active view together, which is the only way off the inline
+	 * payment view that its activeView watcher will not immediately undo.
+	 * Emitted by Payments.vue's cancel path; handled in Pos.vue.
+	 */
+	show_invoice_panel: void;
 
 	// ---- dialogs / shell ----------------------------------------------------
 	open_returns: string; // company

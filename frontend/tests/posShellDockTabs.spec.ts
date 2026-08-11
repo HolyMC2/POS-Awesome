@@ -2,6 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
+import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 
 // The shell statically imports the whole panel graph; stub the leaves so this
@@ -20,6 +21,12 @@ vi.mock("../src/posapp/components/pos/offers/PosOffers.vue", () => ({
 }));
 vi.mock("../src/posapp/components/pos/offers/PosCoupons.vue", () => ({
 	default: { name: "PosCoupons", render: () => null },
+}));
+// Lazily loaded by the shell the moment activeView becomes "payment", which the
+// Pay -> Cart tests below do. Stubbed for the same reason as the leaves above:
+// these assert shell state, not the payment screen.
+vi.mock("../src/posapp/components/pos/Payments.vue", () => ({
+	default: { name: "Payments", render: () => null },
 }));
 vi.mock("@saldo/SaldoReferenciaDialog.vue", () => ({
 	default: { name: "SaldoReferenciaDialog", render: () => null },
@@ -124,6 +131,193 @@ describe("POS shell dock tabs", () => {
 		const vm = mountShell().vm as any;
 		expect(vm.dockTabs).toEqual([]);
 		expect(vm.dockTabCount).toBe(1);
+	});
+});
+
+describe("POS shell dock Pay busy state", () => {
+	beforeEach(() => {
+		setActivePinia(createPinia());
+		vi.stubGlobal("__", (value: string) => value);
+		vi.stubGlobal("frappe", {
+			session: { user: "tester@example.com" },
+			call: vi.fn().mockResolvedValue({ message: null }),
+			db: { get_doc: vi.fn().mockResolvedValue({}) },
+			realtime: { emit: vi.fn(), on: vi.fn(), off: vi.fn() },
+			datetime: {
+				nowdate: () => "2026-08-10",
+				now_time: () => "10:00:00",
+				get_today: () => "2026-08-10",
+			},
+			boot: { user: { roles: [] }, sysdefaults: {} },
+		});
+	});
+
+	const payTab = (vm: any) => vm.dockTabs.find((t: any) => t.id === "pay");
+
+	it("marks Pay busy while the payment round-trip is open, and only Pay", () => {
+		const ui = useUIStore();
+		const vm = mountShell().vm as any;
+
+		expect(payTab(vm).busy()).toBe(false);
+
+		ui.beginPaymentRequest();
+
+		expect(payTab(vm).busy()).toBe(true);
+		// The other tabs are local view switches with no round-trip to wait on.
+		for (const tab of vm.dockTabs.filter((t: any) => t.id !== "pay")) {
+			expect(tab.busy).toBeUndefined();
+		}
+
+		ui.endPaymentRequest();
+		expect(payTab(vm).busy()).toBe(false);
+	});
+
+	it("gives Pay back if the request never settles, rather than wedging the till", () => {
+		vi.useFakeTimers();
+		try {
+			const ui = useUIStore();
+			const vm = mountShell().vm as any;
+
+			ui.beginPaymentRequest();
+			expect(payTab(vm).busy()).toBe(true);
+
+			// A normal round-trip is ~1s, so the watchdog must not fire under it.
+			vi.advanceTimersByTime(5000);
+			expect(payTab(vm).busy()).toBe(true);
+
+			vi.advanceTimersByTime(20000);
+			expect(payTab(vm).busy()).toBe(false);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("says it is working in the accessible name, not just the dimming", () => {
+		const ui = useUIStore();
+		const vm = mountShell().vm as any;
+
+		expect(payTab(vm).ariaLabel()).toBe("Pay");
+
+		ui.beginPaymentRequest();
+
+		expect(payTab(vm).ariaLabel()).toContain("Processing");
+	});
+});
+
+/**
+ * Pay → Cart used to land the cashier on Browse with the item search focused,
+ * which pops the Android keyboard — it read as being thrown out of the sale.
+ * showInvoicePanel set the panel and then changed activeView, and the activeView
+ * watcher answered that change by forcing the selector panel straight back.
+ * Needs a phone width: at >= 992 payment is a dialog and the path never runs.
+ */
+describe("POS shell Pay → Cart navigation", () => {
+	beforeEach(() => {
+		setActivePinia(createPinia());
+		vi.stubGlobal("__", (value: string) => value);
+		vi.stubGlobal("frappe", {
+			session: { user: "tester@example.com" },
+			call: vi.fn().mockResolvedValue({ message: null }),
+			db: { get_doc: vi.fn().mockResolvedValue({}) },
+			realtime: { emit: vi.fn(), on: vi.fn(), off: vi.fn() },
+			datetime: {
+				nowdate: () => "2026-08-10",
+				now_time: () => "10:00:00",
+				get_today: () => "2026-08-10",
+			},
+			boot: { user: { roles: [] }, sysdefaults: {} },
+		});
+		// useResponsive samples window.innerWidth once at setup, so this has to
+		// be set before the shell mounts.
+		Object.defineProperty(window, "innerWidth", {
+			value: 480,
+			writable: true,
+			configurable: true,
+		});
+	});
+
+	/** Puts the shell in the state a cashier is in with the payment screen open. */
+	const mountOnInlinePayment = async (bus = makeBus()) => {
+		const ui = useUIStore();
+		const vm = mountShell(bus).vm as any;
+		ui.setActiveView("payment");
+		await nextTick();
+		expect(vm.compactPanel).toBe("selector");
+		return { ui, vm, bus };
+	};
+
+	it("lands on the cart, not Browse, when Cart is tapped from the payment view", async () => {
+		const { ui, vm } = await mountOnInlinePayment();
+
+		vm.dockTabs.find((t: any) => t.id === "cart").onTap();
+		await nextTick();
+
+		expect(vm.compactPanel).toBe("invoice");
+		expect(ui.activeView).toBe("items");
+	});
+
+	it("takes the customer chip to the cart from the payment view too", async () => {
+		// jumpToCustomer routes through showInvoicePanel, so it inherits the fix
+		// rather than needing its own.
+		const { ui, vm } = await mountOnInlinePayment();
+
+		vm.jumpToCustomer();
+		await nextTick();
+
+		expect(vm.compactPanel).toBe("invoice");
+		expect(ui.activeView).toBe("items");
+	});
+
+	it("keeps honouring later selector reveals — the suppression is one-shot", async () => {
+		// The tempting fix (bail out of the watcher whenever the invoice panel is
+		// showing) would swallow these: type-to-search, the Alt shortcuts, and the
+		// offers/coupons panels all reveal the selector by changing activeView.
+		const { ui, vm } = await mountOnInlinePayment();
+
+		vm.dockTabs.find((t: any) => t.id === "cart").onTap();
+		await nextTick();
+		expect(vm.compactPanel).toBe("invoice");
+
+		ui.setActiveView("offers");
+		await nextTick();
+
+		expect(vm.compactPanel).toBe("selector");
+	});
+
+	it("answers show_invoice_panel from the payment view by landing on the cart", async () => {
+		// Payments.vue's Cancel emits this instead of moving the view itself.
+		const { ui, vm, bus } = await mountOnInlinePayment();
+
+		bus.emit("show_invoice_panel");
+		await nextTick();
+
+		expect(vm.compactPanel).toBe("invoice");
+		expect(ui.activeView).toBe("items");
+	});
+
+	it("answers show_invoice_panel synchronously, so the caller's fallback stands down", async () => {
+		// Payments.vue checks activeView immediately after emitting and falls
+		// back to the Browse exit if it is still "payment". That fallback is
+		// correct only while mitt dispatches inline — if the shell ever answered
+		// on a later tick, Cancel would silently go back to shipping the bug.
+		const { ui, bus } = await mountOnInlinePayment();
+
+		bus.emit("show_invoice_panel");
+
+		expect(ui.activeView).toBe("items");
+	});
+
+	it("leaves the plain Cart tap alone when payment was never open", async () => {
+		const ui = useUIStore();
+		const vm = mountShell().vm as any;
+		expect(ui.activeView).toBe("items");
+
+		vm.dockTabs.find((t: any) => t.id === "cart").onTap();
+		await nextTick();
+
+		// No activeView change, so nothing to suppress and nothing to clobber.
+		expect(vm.compactPanel).toBe("invoice");
+		expect(ui.activeView).toBe("items");
 	});
 });
 

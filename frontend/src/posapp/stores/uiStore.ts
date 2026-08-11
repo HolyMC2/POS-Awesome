@@ -88,6 +88,42 @@ export const useUIStore = defineStore("ui", () => {
     invoiceManagementDraftSource.value = "invoice";
   };
 
+  // Opening the payment screen is a server round-trip (update_invoice), ~1s on
+  // 4G. Nothing used to mark that time, so cashiers tapped Pay again and two
+  // update_invoice calls landed on the same draft — MariaDB answered the loser
+  // with 1020 and the POS showed a 500 (prod, 2026-08-10). This latch is the
+  // one piece of state every Pay entry point checks, and the dock reads it to
+  // show a busy tab the instant the finger lifts.
+  const paymentRequestPending = ref(false);
+
+  // frappe.call carries no timeout, so a request that never settles (4G dropped
+  // mid-flight) would leave the latch shut and Pay dead until someone reloads
+  // the POS — a worse day on the lane than the double-tap this guards. Well
+  // clear of the ~1s round-trip it is watching.
+  const PAYMENT_REQUEST_WATCHDOG_MS = 20000;
+  let paymentRequestWatchdog: ReturnType<typeof setTimeout> | null = null;
+
+  const clearPaymentRequestWatchdog = () => {
+    if (paymentRequestWatchdog) {
+      clearTimeout(paymentRequestWatchdog);
+      paymentRequestWatchdog = null;
+    }
+  };
+
+  const beginPaymentRequest = () => {
+    paymentRequestPending.value = true;
+    clearPaymentRequestWatchdog();
+    paymentRequestWatchdog = setTimeout(() => {
+      paymentRequestWatchdog = null;
+      paymentRequestPending.value = false;
+    }, PAYMENT_REQUEST_WATCHDOG_MS);
+  };
+
+  const endPaymentRequest = () => {
+    clearPaymentRequestWatchdog();
+    paymentRequestPending.value = false;
+  };
+
   const paymentRouteTarget = ref<any | null>(null);
 
   const setPaymentRouteTarget = (target: any | null) => {
@@ -345,6 +381,9 @@ export const useUIStore = defineStore("ui", () => {
     invoiceManagementTargetTab,
     invoiceManagementDraftSource,
     paymentRouteTarget,
+    paymentRequestPending,
+    beginPaymentRequest,
+    endPaymentRequest,
     setActiveView,
     openPaymentDialog,
     closePaymentDialog,

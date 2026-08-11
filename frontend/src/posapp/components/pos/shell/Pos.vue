@@ -209,8 +209,13 @@
 					:key="tab.id"
 					type="button"
 					class="mobile-dock__tab"
-					:class="[tab.cls, { 'mobile-dock__tab--active': tab.isActive() }]"
+					:class="[
+						tab.cls,
+						{ 'mobile-dock__tab--active': tab.isActive(), 'mobile-dock__tab--busy': tab.busy?.() },
+					]"
 					:aria-label="tab.ariaLabel()"
+					:aria-busy="tab.busy?.() ? 'true' : undefined"
+					:disabled="tab.busy?.() || false"
 					@click="tab.onTap()"
 				>
 					<span
@@ -539,9 +544,20 @@ export default {
 				focusItemSearchField();
 			}
 		};
+		// One-shot: swallows the very next activeView->compactPanel sync. Set
+		// only by showInvoicePanel below, and only on a transition that is
+		// guaranteed to fire that watcher, so it is always consumed and can
+		// never leak into a later view change. See the watcher for the why.
+		const suppressNextPanelSync = ref(false);
 		const showInvoicePanel = () => {
 			compactPanel.value = "invoice";
 			if (activeView.value === "payment" && !usePaymentDialog.value) {
+				// Leaving the inline payment view means changing activeView, and
+				// the activeView watcher answers every change by forcing the
+				// selector panel — which would undo the line above and land the
+				// cashier on Browse, item search autofocused, Android keyboard
+				// up. Asking for the cart has to mean the cart.
+				suppressNextPanelSync.value = true;
 				uiStore.setActiveView("items");
 			}
 		};
@@ -563,8 +579,11 @@ export default {
 		const triggerInvoicePay = () => {
 			// The invoice panel owns the pre-payment validation; it is
 			// always mounted (v-show, not v-if), so the event always lands.
+			// It also owns the in-flight latch (show_payment), so a repeat
+			// tap that beats the busy repaint is dropped there, not here.
 			eventBus.emit("request_invoice_payment");
 		};
+		const paymentPending = computed(() => uiStore.paymentRequestPending);
 		const isSelectorViewActive = (view) => compactPanel.value === "selector" && activeView.value === view;
 		// Dock tabs render from the capability profile's dock_tabs list —
 		// the shell owns HOW each id is drawn, the profile owns WHICH ids
@@ -579,6 +598,7 @@ export default {
 			itemsCount,
 			activeView,
 			compactPanel,
+			paymentPending,
 			isSelectorViewActive,
 			setSelectorView,
 			showInvoicePanel,
@@ -785,6 +805,12 @@ export default {
 				eventBus.on("open_shift_details", handleOpenShiftDetails);
 				eventBus.on("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.on("set_compact_panel", setCompactPanel);
+				// Payments.vue's Cancel asks for the cart here rather than
+				// setting the panel itself: only the shell can move the panel
+				// and the active view in the one pass that survives the
+				// activeView watcher. mitt dispatches inline, so the caller's
+				// synchronous fallback sees this as already handled.
+				eventBus.on("show_invoice_panel", showInvoicePanel);
 				eventBus.on("open_returns", handleOpenReturns);
 				eventBus.on("open_new_address", handleOpenNewAddress);
 				eventBus.on("open_mpesa_payments", handleOpenMpesaPayments);
@@ -813,6 +839,7 @@ export default {
 				eventBus.off("open_shift_details", handleOpenShiftDetails);
 				eventBus.off("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.off("set_compact_panel", setCompactPanel);
+				eventBus.off("show_invoice_panel", showInvoicePanel);
 				eventBus.off("open_returns", handleOpenReturns);
 				eventBus.off("open_new_address", handleOpenNewAddress);
 				eventBus.off("open_mpesa_payments", handleOpenMpesaPayments);
@@ -835,6 +862,16 @@ export default {
 
 		watch(activeView, (view) => {
 			if (!useCompactPosSwitcher.value) {
+				return;
+			}
+
+			// Deliberately narrow: a caller that has already chosen the panel
+			// opts out for this one change. Testing `compactPanel === "invoice"`
+			// instead would look equivalent and is not — it would also swallow
+			// the legitimate selector reveals that type-to-search, the Alt
+			// shortcuts, and the offers/coupons panels rely on.
+			if (suppressNextPanelSync.value) {
+				suppressNextPanelSync.value = false;
 				return;
 			}
 
@@ -1304,6 +1341,18 @@ export default {
 .mobile-dock__tab--pay.mobile-dock__tab--active {
 	background: rgba(var(--v-theme-success), 0.18);
 	color: rgb(var(--v-theme-success));
+}
+
+/* Round-trip in flight. Dimmed rather than greyed so the tab still reads
+   as itself, and the press-scale is dropped so a repeat tap gives no
+   feedback that would suggest it landed. */
+.mobile-dock__tab--busy {
+	opacity: 0.55;
+	cursor: progress;
+}
+
+.mobile-dock__tab--busy:active {
+	transform: none;
 }
 
 .mobile-dock__pill {

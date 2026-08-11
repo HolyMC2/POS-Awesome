@@ -85,6 +85,17 @@ def _install_framework_stubs():
     class TimestampMismatchError(Exception):
         pass
 
+    class ValidationError(Exception):
+        http_status_code = 417
+
+    # What frappe.db.sql raises for MariaDB 1020 / 1213 — creation.py subclasses
+    # ValidationError off the module at import time, so both must be present.
+    class QueryDeadlockError(Exception):
+        pass
+
+    frappe_module.ValidationError = ValidationError
+    frappe_module.QueryDeadlockError = QueryDeadlockError
+
     frappe_utils.cint = lambda value: int(value or 0)
     frappe_utils.flt = lambda value, precision=None: round(float(value or 0), precision or 2)
     frappe_utils.getdate = lambda value: value
@@ -93,7 +104,11 @@ def _install_framework_stubs():
 
     frappe_module._dict = _FrappeDict
     frappe_module._ = lambda text: text
-    frappe_module.throw = lambda message: (_ for _ in ()).throw(Exception(message))
+
+    def _throw(message, title=None, exc=None, **_kwargs):
+        raise (exc or ValidationError)(message)
+
+    frappe_module.throw = _throw
     frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
     frappe_module.log_error = lambda *args, **kwargs: None
 
@@ -118,11 +133,17 @@ def _install_framework_stubs():
     frappe_module.get_hooks = lambda *args, **kwargs: []
     frappe_module.flags = types.SimpleNamespace(ignore_account_permission=False)
     publish_realtime_calls = []
+    # Savepoint traffic is recorded so the draft-conflict tests can assert the
+    # failed save was actually rolled back before the retry re-read the row.
+    savepoint_calls = []
     frappe_module.db = types.SimpleNamespace(
         get_value=lambda *args, **kwargs: None,
         exists=lambda *args, **kwargs: False,
-        rollback=lambda: None,
+        rollback=lambda save_point=None: savepoint_calls.append(("rollback", save_point)),
+        savepoint=lambda save_point: savepoint_calls.append(("savepoint", save_point)),
+        release_savepoint=lambda save_point: savepoint_calls.append(("release", save_point)),
     )
+    frappe_module._savepoint_calls = savepoint_calls
     frappe_module.get_doc = lambda *args, **kwargs: None
     frappe_module.publish_realtime = lambda *args, **kwargs: publish_realtime_calls.append(
         {"args": args, "kwargs": kwargs}
@@ -1817,6 +1838,142 @@ class TestInvoiceIdempotency(unittest.TestCase):
         self.assertEqual(invoice_doc.docstatus, 1)
         self.assertEqual(ledger_doc.state, "FAILED")
         self.assertIn("post submit failed", ledger_doc.error_message)
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class TestUpdateInvoiceDraftSaveConflicts(unittest.TestCase):
+    """Two Pay taps racing one draft (prod incident 2026-08-10).
+
+    MariaDB 1020 "Record has changed since last read" and a tabSeries deadlock
+    both reach the app as frappe.QueryDeadlockError; untouched it leaves the
+    request as an HTTP 500 toast on the sales lane.
+
+    Name sorts after TestInvoiceIdempotency on purpose. unittest loads classes
+    alphabetically and every setUpClass here re-stubs `frappe`, but the real
+    `idempotency` module is imported once and stays bound to whichever stub got
+    there first — so the idempotency class has to run before any other.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.frappe, cls.enqueue_calls = _install_framework_stubs()
+        _install_dependency_stubs()
+        _install_package_stubs()
+        cls.creation = _load_module()
+
+    def setUp(self):
+        self.frappe._savepoint_calls.clear()
+        self._original_save = self.creation._save_draft_with_latest_timestamp
+        self._original_get_doc = self.frappe.get_doc
+
+    def tearDown(self):
+        self.creation._save_draft_with_latest_timestamp = self._original_save
+        self.frappe.get_doc = self._original_get_doc
+
+    def _draft(self, name="ACC-SINV-2026-00042"):
+        return FakeDoc(
+            doctype="Sales Invoice",
+            name=name,
+            is_new=lambda: name is None,
+            flags=types.SimpleNamespace(ignore_permissions=True),
+            grand_total=250,
+        )
+
+    def test_row_conflict_retries_once_against_a_freshly_read_row(self):
+        draft = self._draft()
+        reread = self._draft()
+        reread.customer = "re-read"
+        self.frappe.get_doc = lambda *args, **kwargs: reread
+
+        saved_with = []
+
+        def flaky_save(doc):
+            saved_with.append(doc)
+            if len(saved_with) == 1:
+                raise self.frappe.QueryDeadlockError(1020, "Record has changed since last read")
+            return doc
+
+        self.creation._save_draft_with_latest_timestamp = flaky_save
+
+        result = self.creation._save_draft_retrying_row_conflicts(draft)
+
+        self.assertEqual(len(saved_with), 2)
+        # The retry must not re-submit the doc whose save half-applied — it
+        # replays the payload onto the row as it now stands.
+        self.assertIs(saved_with[0], draft)
+        self.assertIs(saved_with[1], reread)
+        self.assertIs(result, reread)
+        self.assertIn(("rollback", "posa_draft_save_0"), self.frappe._savepoint_calls)
+        self.assertIn(("release", "posa_draft_save_1"), self.frappe._savepoint_calls)
+
+    def test_clean_save_releases_its_savepoint_and_does_not_retry(self):
+        draft = self._draft()
+        saved_with = []
+
+        def clean_save(doc):
+            saved_with.append(doc)
+            return doc
+
+        self.creation._save_draft_with_latest_timestamp = clean_save
+
+        result = self.creation._save_draft_retrying_row_conflicts(draft)
+
+        self.assertIs(result, draft)
+        self.assertEqual(len(saved_with), 1)
+        self.assertEqual(
+            self.frappe._savepoint_calls,
+            [("savepoint", "posa_draft_save_0"), ("release", "posa_draft_save_0")],
+        )
+
+    def test_second_conflict_surfaces_a_retryable_409_not_a_500(self):
+        draft = self._draft()
+        self.frappe.get_doc = lambda *args, **kwargs: self._draft()
+
+        def always_conflicts(_doc):
+            raise self.frappe.QueryDeadlockError(1020, "Record has changed since last read")
+
+        self.creation._save_draft_with_latest_timestamp = always_conflicts
+
+        with self.assertRaises(self.creation.InvoiceSaveConflictError) as caught:
+            self.creation._save_draft_retrying_row_conflicts(draft)
+
+        self.assertEqual(caught.exception.http_status_code, 409)
+        self.assertIn("try again", str(caught.exception))
+
+    def test_conflict_while_creating_the_invoice_is_not_retried(self):
+        # A doc that died mid-insert already burned a naming-series number and
+        # has no committed row to re-read, so it goes straight to the friendly
+        # error rather than a second insert.
+        draft = self._draft(name=None)
+        reread_calls = []
+        self.frappe.get_doc = lambda *args, **kwargs: reread_calls.append(args)
+
+        def always_conflicts(_doc):
+            raise self.frappe.QueryDeadlockError(1213, "Deadlock found on tabSeries")
+
+        self.creation._save_draft_with_latest_timestamp = always_conflicts
+
+        with self.assertRaises(self.creation.InvoiceSaveConflictError):
+            self.creation._save_draft_retrying_row_conflicts(draft)
+
+        self.assertEqual(reread_calls, [])
+        self.assertEqual(
+            self.frappe._savepoint_calls,
+            [("savepoint", "posa_draft_save_0"), ("rollback", "posa_draft_save_0")],
+        )
+
+    def test_timestamp_mismatch_still_raises_untouched(self):
+        # The 1020 wrapper must not swallow the existing TimestampMismatchError
+        # contract that _save_draft_with_latest_timestamp already owns.
+        draft = self._draft()
+
+        def stale_save(_doc):
+            raise self.creation.TimestampMismatchError("stale")
+
+        self.creation._save_draft_with_latest_timestamp = stale_save
+
+        with self.assertRaises(self.creation.TimestampMismatchError):
+            self.creation._save_draft_retrying_row_conflicts(draft)
 
 
 if __name__ == "__main__":

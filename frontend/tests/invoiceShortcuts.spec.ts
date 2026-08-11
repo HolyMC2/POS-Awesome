@@ -21,6 +21,7 @@ const createVm = () => ({
 		triggerItemSearchFocus: vi.fn(),
 		selectTopItem: vi.fn(),
 		toggleItemSettings: vi.fn(),
+		paymentRequestPending: false,
 	},
 	$refs: {
 		itemsTable: { focusItemField: vi.fn() },
@@ -160,6 +161,29 @@ describe("invoiceShortcuts", () => {
 				(_: number, index: number) =>
 					vm.eventBus.emit.mock.calls[index]?.[0] === "queue_submit_payment_shortcut",
 			) ?? Number.MAX_SAFE_INTEGER,
+		);
+		expect(event.defaultPrevented).toBe(true);
+	});
+
+	it("stands down when a Pay tap is already fetching the payment screen", async () => {
+		// show_payment's in-flight latch would swallow the call below, and this
+		// branch would queue a submit against a screen that never opened.
+		const vm = {
+			...createVm(),
+			show_payment: vi.fn(async () => {}),
+			flushBackgroundUpdates: vi.fn(async () => {}),
+			triggerBackgroundFlush: { flush: vi.fn() },
+			schedulePricingRuleApplication: { flush: vi.fn() },
+		};
+		vm.uiStore.paymentRequestPending = true;
+		const event = createAltEvent("x", "KeyX");
+
+		await (invoiceShortcuts as any).handleInvoiceShortcut.call(vm, event);
+
+		expect(vm.show_payment).not.toHaveBeenCalled();
+		expect(vm.eventBus.emit).not.toHaveBeenCalledWith(
+			"queue_submit_payment_shortcut",
+			expect.anything(),
 		);
 		expect(event.defaultPrevented).toBe(true);
 	});

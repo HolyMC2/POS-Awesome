@@ -42,6 +42,8 @@ interface InvoiceShortcutsVm {
 		triggerItemSearchFocus: () => void;
 		selectTopItem: () => void;
 		toggleItemSettings: () => void;
+		/** A Pay round-trip is already open — see show_payment's in-flight latch. */
+		paymentRequestPending?: boolean;
 	};
 	$refs: {
 		actionToolbar?: {
@@ -140,8 +142,11 @@ const invoiceShortcuts: Record<string, unknown> & ThisType<InvoiceShortcutsVm> =
 				if (typeof this.close_payments === "function") {
 					this.close_payments();
 				} else {
-					showCompactPanel(this.eventBus, "invoice");
-					this.uiStore.setActiveView("items");
+					// Same hand-off close_payments makes. The listener lives on
+					// the shell, not on this vm, so the request lands whether or
+					// not the invoice panel implements close_payments — and the
+					// shell moves the panel and the active view together.
+					this.eventBus?.emit?.("show_invoice_panel");
 				}
 				return;
 			}
@@ -311,7 +316,10 @@ const invoiceShortcuts: Record<string, unknown> & ThisType<InvoiceShortcutsVm> =
 				if (this.paymentVisible) {
 					return;
 				}
-				if (event.repeat || this.shortcutSubmitInFlight) {
+				// paymentRequestPending too: a Pay tap already opening the payment
+				// screen would make the show_payment below a no-op, and this branch
+				// would still queue a submit against a screen that never opened.
+				if (event.repeat || this.shortcutSubmitInFlight || this.uiStore?.paymentRequestPending) {
 					consumeEvent(event);
 					return;
 				}

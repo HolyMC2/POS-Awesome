@@ -829,6 +829,30 @@ def _get_mutable_invoice_doc(data, doctype):
     return invoice_doc
 
 
+def _reapply_onto_latest_draft(invoice_doc):
+    """Re-read the row and replay this request's payload onto the fresh doc.
+
+    The volatile columns below belong to whoever wrote last; carrying our
+    stale copies over would just re-create the conflict we are recovering
+    from.
+    """
+    latest_doc = frappe.get_doc(invoice_doc.doctype, invoice_doc.name)
+    current_state = invoice_doc.as_dict()
+    for volatile_field in (
+        "modified",
+        "modified_by",
+        "creation",
+        "owner",
+        "_liked_by",
+        "__last_sync_on",
+        "doctype",
+    ):
+        current_state.pop(volatile_field, None)
+    latest_doc.update(current_state)
+    latest_doc.flags.ignore_permissions = getattr(invoice_doc.flags, "ignore_permissions", False)
+    return latest_doc
+
+
 def _save_draft_with_latest_timestamp(invoice_doc, retries=2):
     attempts = 0
 
@@ -845,18 +869,71 @@ def _save_draft_with_latest_timestamp(invoice_doc, retries=2):
             if attempts >= retries or not invoice_doc.name:
                 raise
             attempts += 1
-            latest_doc = frappe.get_doc(invoice_doc.doctype, invoice_doc.name)
-            current_state = invoice_doc.as_dict()
-            current_state.pop("modified", None)
-            current_state.pop("modified_by", None)
-            current_state.pop("creation", None)
-            current_state.pop("owner", None)
-            current_state.pop("_liked_by", None)
-            current_state.pop("__last_sync_on", None)
-            current_state.pop("doctype", None)
-            latest_doc.update(current_state)
-            latest_doc.flags.ignore_permissions = getattr(invoice_doc.flags, "ignore_permissions", False)
-            invoice_doc = latest_doc
+            invoice_doc = _reapply_onto_latest_draft(invoice_doc)
+
+
+class InvoiceSaveConflictError(frappe.ValidationError):
+    """Another writer holds the same draft; the caller may safely retry.
+
+    409 rather than ValidationError's 417 so the POS can tell "come back in a
+    moment" apart from "your payload is wrong".
+    """
+
+    http_status_code = 409
+
+
+def _throw_save_conflict():
+    frappe.throw(
+        _("This sale is being saved from another tab or device. Please try again."),
+        title=_("Sale busy"),
+        exc=InvoiceSaveConflictError,
+    )
+
+
+def _save_draft_retrying_row_conflicts(invoice_doc):
+    """Draft save that survives one concurrent writer on the same row.
+
+    Two Pay taps on one draft (mobile, ~1s round-trip) put two update_invoice
+    saves on the same Sales Invoice row, and MariaDB answers the loser with
+    1020 "Record has changed since last read" — or with a deadlock on tabSeries
+    when both calls are creating the invoice and race the naming counter. Both
+    reach us as frappe.QueryDeadlockError: frappe maps ER.CHECKREAD (1020)
+    alongside ER.LOCK_DEADLOCK (1213) in db.is_deadlocked, and QueryDeadlockError
+    is a plain Exception, so untouched it leaves as an HTTP 500 toast on the
+    lane (prod, 2026-08-10).
+
+    Only update_invoice's draft save routes through here. The submit paths keep
+    calling _save_draft_with_latest_timestamp directly — a retry there would
+    have to reason about the submission ledger, which this fix does not.
+    """
+    for attempt in (0, 1):
+        # A savepoint, not frappe.db.rollback(): this request may already have
+        # inserted a walk-in Customer that the invoice now links to, and a full
+        # rollback would drop it and leave the retry saving a broken link. The
+        # rollback is still required — a failed save() can leave child-row
+        # writes from the same statement batch sitting in the transaction.
+        save_point = f"posa_draft_save_{attempt}"
+        frappe.db.savepoint(save_point)
+        try:
+            saved_doc = _save_draft_with_latest_timestamp(invoice_doc)
+        except frappe.QueryDeadlockError:
+            try:
+                frappe.db.rollback(save_point=save_point)
+            except Exception:
+                # A true InnoDB deadlock rolls the whole transaction back
+                # server-side, taking the savepoint with it — there is nothing
+                # left to retry onto.
+                _throw_save_conflict()
+            # A doc that died mid-insert has already burned a naming-series
+            # number and carries half-applied insert state, so there is no
+            # fresh row to re-read and re-saving it is not safe here.
+            if attempt or not invoice_doc.name or invoice_doc.is_new():
+                _throw_save_conflict()
+            invoice_doc = _reapply_onto_latest_draft(invoice_doc)
+            continue
+
+        frappe.db.release_savepoint(save_point)
+        return saved_doc
 
 
 def _resolve_payment_amounts(payment, conversion_rate=1):
@@ -1230,7 +1307,7 @@ def update_invoice(data):
     with account_perm_bypass():
         invoice_doc = _run_without_return_outstanding_prompts(
             invoice_doc,
-            lambda: _save_draft_with_latest_timestamp(invoice_doc),
+            lambda: _save_draft_retrying_row_conflicts(invoice_doc),
         )
 
     # Return both the invoice doc and the updated data
