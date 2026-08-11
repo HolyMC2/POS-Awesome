@@ -87,6 +87,26 @@ describe("tab_identity input gating (InvoiceSummary)", () => {
 		expect(wrapper.find('[data-test="guest-count-field"]').exists()).toBe(true);
 	});
 
+	it("normalizes the guest count at the input edge (non_negative server field)", () => {
+		useUIStore().setCapabilityPayload({
+			name: "coffee-quickserve",
+			capabilities: ["tab_identity"],
+		});
+		const wrapper = mountSummary();
+		const setupState = (wrapper.vm as any).$?.setupState || {};
+		const store = setupState.invoiceStore;
+
+		setupState.handleGuestCountUpdate("4");
+		expect(store.posaGuestCount).toBe(4);
+
+		// A negative would only fail at hold/pay time with the cart already built.
+		setupState.handleGuestCountUpdate("-3");
+		expect(store.posaGuestCount).toBeNull();
+
+		setupState.handleGuestCountUpdate("");
+		expect(store.posaGuestCount).toBeNull();
+	});
+
 	it("gates the service-type select on the orthogonal service_types capability", () => {
 		useUIStore().setCapabilityPayload({ name: "taqueria", capabilities: ["service_types"] });
 		const wrapper = mountSummary();

@@ -24,7 +24,8 @@
 				class="summary-field sleek-field pos-themed-input flex-grow-1"
 			/>
 			<v-text-field
-				v-model.number="invoiceStore.posaGuestCount"
+				:model-value="invoiceStore.posaGuestCount"
+				@update:model-value="handleGuestCountUpdate"
 				:label="guestCountLabel"
 				type="number"
 				min="0"
@@ -345,6 +346,18 @@ const serviceTypeLabel = computed(() => verticalStore.t("Service Type"));
 const serviceTypeItems = computed(() =>
 	SERVICE_TYPES.map((value) => ({ value, title: verticalStore.t(value) })),
 );
+
+// posa_rt_guest_count is a non_negative server field: a negative typed into the
+// number input would only surface as a save error at hold/pay time, with the
+// cart already built. Normalise at the edge — blank/NaN/negative all mean "no
+// count" (null), which is also what the row-meta `v-if` treats as absent.
+function handleGuestCountUpdate(value) {
+	const parsed = Number(value);
+	invoiceStore.posaGuestCount =
+		value === "" || value === null || !Number.isFinite(parsed) || parsed < 0
+			? null
+			: parsed;
+}
 
 const additionalDiscountDisplay = ref(normalizeAdditionalDiscountDisplay(props.additional_discount));
 const additionalDiscountPercentageDisplay = ref(
@@ -673,7 +686,8 @@ defineExpose({
 	row-gap: 6px;
 }
 
-.summary-tab-name {
+.summary-tab-name,
+.summary-service-type {
 	margin-bottom: 8px;
 }
 

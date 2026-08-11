@@ -426,18 +426,24 @@ export function get_invoice_doc(context: any) {
 	doc.posa_delivery_charges = context.selected_delivery_charge?.name || null;
 	doc.posa_delivery_charges_rate = context.delivery_charges_rate || 0;
 	doc.posa_notes = sourceDoc.posa_notes ?? null;
-	// Cafetería identity rides the store (live from cart-start), falling back to
-	// a resumed doc's values. Read it off the passed context (the component owns
-	// the store) rather than useInvoiceStore() so this stays callable without an
-	// active pinia in unit tests. The store is source of truth once typed;
-	// sourceDoc covers a doc built before load_invoice syncs the store.
-	const identity = context.invoiceStore || {};
-	doc.posa_rt_tab_name =
-		identity.posaTabName ?? sourceDoc.posa_rt_tab_name ?? null;
-	doc.posa_rt_guest_count =
-		identity.posaGuestCount ?? sourceDoc.posa_rt_guest_count ?? null;
-	doc.posa_rt_service_type =
-		identity.posaServiceType ?? sourceDoc.posa_rt_service_type ?? null;
+	// Cafetería identity rides the store (live from cart-start). Read it off the
+	// passed context (the component owns the store) rather than useInvoiceStore()
+	// so this stays callable without an active pinia in unit tests. When a store
+	// is present it is the ONLY source: the inputs are clearable, so null there
+	// means the cashier cleared the field and must NOT be resurrected from the
+	// resumed doc — load_invoice re-seeds the store on every resume, so the store
+	// already carries whatever the ticket was held with. sourceDoc is the
+	// fallback only for a store-less context.
+	const identity = context.invoiceStore;
+	doc.posa_rt_tab_name = identity
+		? (identity.posaTabName ?? null)
+		: (sourceDoc.posa_rt_tab_name ?? null);
+	doc.posa_rt_guest_count = identity
+		? (identity.posaGuestCount ?? null)
+		: (sourceDoc.posa_rt_guest_count ?? null);
+	doc.posa_rt_service_type = identity
+		? (identity.posaServiceType ?? null)
+		: (sourceDoc.posa_rt_service_type ?? null);
 	doc.posa_authorization_code = sourceDoc.posa_authorization_code ?? null;
 	doc.posa_return_valid_upto = sourceDoc.posa_return_valid_upto ?? null;
 	doc.posting_date = normalizeBackendDate(
