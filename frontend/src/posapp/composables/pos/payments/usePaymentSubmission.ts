@@ -1,6 +1,8 @@
 import { unref, type Ref, type ComputedRef } from "vue";
 import invoiceService from "../../../services/invoiceService";
 import { isApiEnvelopeError, unwrapApiResult } from "../../../services/api";
+import { pinia } from "../../../stores";
+import { useFloorStore } from "../../../stores/floorStore";
 import {
 	saveOfflineInvoice,
 	isOffline,
@@ -977,14 +979,70 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		try {
 			await validateStockBeforeOnlineSubmission(doc, profile, type);
 			const submissionDoc = buildSubmissionInvoiceDoc(doc);
-			const message = unwrapApiResult(
-				await invoiceService.submitInvoice(
-					data,
-					submissionDoc,
-					type,
-					profile,
-				),
-			);
+			// Record-Only table service settles THROUGH the table order: the server
+			// merges the ticket's lines over this payload and routes the result into
+			// the SAME submission ledger. Inert for retail and for the counter
+			// cafetería (Sales Invoice mode), where `isRecordOnly` is false.
+			// Resolved lazily and guarded: unit specs exercise this composable
+			// without the app's pinia instance (module-cycle evaluation order
+			// leaves the `pinia` binding undefined there), and a register that
+			// cannot resolve the floor store is by definition not a Record-Only
+			// floor — degrade to the plain retail submit.
+			let floorStore: ReturnType<typeof useFloorStore> | null = null;
+			try {
+				floorStore = useFloorStore(pinia);
+			} catch {
+				floorStore = null;
+			}
+			let message;
+			if (floorStore?.isRecordOnly && floorStore.activeOrder) {
+				const queuedOrderUid = floorStore.activeOrder.order_uid;
+				const settled = await floorStore.settleActiveOrder({
+					...data,
+					invoice_doc: submissionDoc,
+				});
+				if (settled.queued) {
+					// Offline: the settle is QUEUED, not submitted. It replays on
+					// reconnect under the SAME client_request_id, so the submission
+					// ledger dedupes it — a lost ack cannot double-bill. Nothing
+					// exists server-side yet: no fiscal print, no last-invoice
+					// stamp. Mirror the TAECEL `held` path: free the register for
+					// the next customer; the floor tile keeps the ticket visible
+					// with its pending badge until the drain confirms.
+					void emitSaleCycle({
+						held: false,
+						background: true,
+						itemCount: (doc?.items || []).length,
+					});
+					stores?.toastStore?.show({
+						title: __("Sin conexión — cuenta en cola"),
+						detail: __(
+							"Se cobrará automáticamente al reconectar. No se imprime recibo todavía.",
+						),
+						color: "info",
+						timeout: 6000,
+					});
+					if (stores?.customersStore?.setSelectedCustomer) {
+						stores.customersStore.setSelectedCustomer(profile?.customer || null);
+					}
+					if (onFinishNavigation) onFinishNavigation(true);
+					return { queued: true, orderUid: queuedOrderUid };
+				}
+				// Contract: a fresh online settle returns the submit result under
+				// `invoice`; an idempotent REPLAY returns the name only
+				// (settle.py deliberately does not re-read the doc). Either way
+				// `idempotent: true` is success, never an error. The stub covers
+				// the replay path: `submittedDocument` spreads it over the local
+				// doc, so the receipt still carries the cart's lines — which on
+				// the common ack-loss replay never printed on attempt one.
+				message = settled.invoice
+					? settled.invoice
+					: { name: settled.salesInvoice, docstatus: 1, status: "Paid" };
+			} else {
+				message = unwrapApiResult(
+					await invoiceService.submitInvoice(data, submissionDoc, type, profile),
+				);
+			}
 
 			const r = { message };
 
