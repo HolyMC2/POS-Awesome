@@ -1,19 +1,19 @@
 <template>
-	<div class="floor-view">
+	<div ref="panelEl" class="floor-view">
 		<!-- Transfer is a modal gesture (spec §4): the banner is the mode, the
 		     whole floor is the target picker, Esc is the way out. -->
 		<div v-if="transferOrder" class="floor-view__banner" role="status">
 			<v-icon icon="mdi-swap-horizontal" size="18" />
 			<span class="floor-view__banner-text">{{ transferBannerText }}</span>
-			<v-btn size="small" variant="text" @click="floorStore.cancelTransfer()">
+			<button type="button" class="floor-view__banner-cancel" @click="floorStore.cancelTransfer()">
 				{{ __("Cancel") }}
-			</v-btn>
+			</button>
 		</div>
 
 		<header class="floor-view__bar">
 			<div class="floor-view__floors">
 				<button
-					v-for="floor in floors"
+					v-for="floor in floorTabs"
 					:key="floor.name"
 					type="button"
 					class="floor-view__floor"
@@ -21,7 +21,8 @@
 					:data-test="`floor-tab-${floor.name}`"
 					@click="floorStore.setActiveFloor(floor.name)"
 				>
-					{{ floor.floor_name }}
+					<span class="floor-view__floor-name">{{ floor.floor_name }}</span>
+					<span v-if="floor.total" class="floor-view__floor-count">{{ floor.busy }}/{{ floor.total }}</span>
 				</button>
 			</div>
 			<div class="floor-view__actions">
@@ -32,6 +33,18 @@
 					:aria-label="jumpLabel"
 					:title="jumpLabel"
 					@click="jumpOpen = true"
+				/>
+				<v-btn
+					v-if="viewMode === 'plan' && !editorMode"
+					size="small"
+					variant="text"
+					icon="mdi-fit-to-page-outline"
+					:color="fit ? 'primary' : undefined"
+					:aria-pressed="fit"
+					:aria-label="fitLabel"
+					:title="fitLabel"
+					data-test="floor-fit"
+					@click="fitOverride = !fit"
 				/>
 				<v-btn
 					size="small"
@@ -62,55 +75,67 @@
 			</div>
 		</header>
 
-		<!-- The open ticket's own actions. Transfer starts here rather than from a
-		     tile menu: the gesture is "this order, somewhere else", and the order
-		     the waiter means is the one they have open. -->
-		<div v-if="activeOrder && !transferOrder" class="floor-view__ticket">
-			<span class="floor-view__ticket-name">{{ activeOrderLabel }}</span>
-			<v-btn
-				size="small"
-				variant="text"
-				prepend-icon="mdi-silverware-variant"
-				:loading="firing"
-				:disabled="firing"
-				data-test="floor-fire"
-				@click="fire"
-			>
-				{{ fireLabel }}
-			</v-btn>
-			<v-btn
-				size="small"
-				variant="text"
-				prepend-icon="mdi-swap-horizontal"
-				data-test="floor-transfer"
-				@click="floorStore.beginTransfer(activeOrder)"
-			>
-				{{ transferLabel }}
-			</v-btn>
-		</div>
-
 		<TabsRail show-new @open="openTabOrder" @new-tab="jumpOpen = true" />
 
 		<p v-if="floorStore.error" class="floor-view__error" role="alert">{{ floorStore.error }}</p>
 
-		<template v-if="!floors.length">
-			<div class="floor-view__blank">
-				<v-icon icon="mdi-table-furniture" size="32" />
-				<p class="floor-view__blank-text">{{ noFloorsLabel }}</p>
-			</div>
-		</template>
-		<FloorEditor v-else-if="editorMode" @done="floorStore.setEditorMode(false)" />
-		<template v-else-if="!activeFloorTables.length">
-			<div class="floor-view__blank">
-				<v-icon icon="mdi-table-furniture" size="32" />
-				<p class="floor-view__blank-text">{{ emptyFloorLabel }}</p>
-				<v-btn color="primary" variant="flat" size="small" @click="floorStore.setEditorMode(true)">
-					{{ editFloorLabel }}
-				</v-btn>
-			</div>
-		</template>
-		<FloorPlan v-else-if="viewMode === 'plan'" @open="openTable" />
-		<FloorKanban v-else @open="openTable" />
+		<div class="floor-view__stage" :class="{ 'floor-view__stage--wide': wide }">
+			<template v-if="!floors.length">
+				<div class="floor-view__blank">
+					<v-icon icon="mdi-table-furniture" size="32" />
+					<p class="floor-view__blank-text">{{ noFloorsLabel }}</p>
+					<p class="floor-view__blank-hint">{{ noFloorsHint }}</p>
+				</div>
+			</template>
+			<FloorEditor
+				v-else-if="editorMode"
+				:available-width="panelWidth"
+				@done="floorStore.setEditorMode(false)"
+			/>
+			<template v-else-if="!activeFloorTables.length">
+				<div class="floor-view__blank">
+					<v-icon icon="mdi-table-furniture" size="32" />
+					<p class="floor-view__blank-text">{{ emptyFloorLabel }}</p>
+					<v-btn color="primary" variant="flat" size="small" @click="floorStore.setEditorMode(true)">
+						{{ editFloorLabel }}
+					</v-btn>
+				</div>
+			</template>
+			<FloorPlan
+				v-else-if="viewMode === 'plan'"
+				:available-width="planWidth"
+				:fit="fit"
+				@open="openTable"
+			/>
+			<FloorKanban v-else @open="openTable" />
+
+			<!-- The open ticket's own detail. Transfer starts here rather than from
+			     a tile menu: the gesture is "this order, somewhere else", and the
+			     order the waiter means is the one they have open. -->
+			<TableTicketPanel
+				v-if="activeOrder && !transferOrder && wide"
+				:order="activeOrder"
+				:table-label="activeOrderTableLabel"
+				variant="rail"
+				:firing="firing"
+				:releasing="releasing"
+				@fire="fire"
+				@transfer="floorStore.beginTransfer(activeOrder)"
+				@release="release"
+			/>
+		</div>
+
+		<TableTicketPanel
+			v-if="activeOrder && !transferOrder && !wide"
+			:order="activeOrder"
+			:table-label="activeOrderTableLabel"
+			variant="strip"
+			:firing="firing"
+			:releasing="releasing"
+			@fire="fire"
+			@transfer="floorStore.beginTransfer(activeOrder)"
+			@release="release"
+		/>
 
 		<JumpPad v-model="jumpOpen" @open-table="openTable" @open-tab="openNamedTab" />
 	</div>
@@ -119,16 +144,24 @@
 <script setup lang="ts">
 /**
  * The floor screen: floor switcher, plan/kanban toggle, editor toggle, jump
- * pad, tabs rail. It is a fifth `activeView` in the shell, not a route of its
- * own and not an items panel — see spec §1 for why the registry stays out of
- * this.
+ * pad, tabs rail, and the open ticket's detail. It is a fifth `activeView` in
+ * the shell, not a route of its own and not an items panel — see spec §1 for
+ * why the registry stays out of this.
+ *
+ * Layout branches on the panel's MEASURED width, not the window's. The floor
+ * lives inside the shell's selector column, which is 5/12 of the window at
+ * desk widths and 12/12 in the compact switcher — so window width is not a
+ * usable proxy for the room this component actually has, and a media query
+ * here would put a side rail on a 500px column.
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import FloorEditor from "./FloorEditor.vue";
 import FloorKanban from "./FloorKanban.vue";
 import FloorPlan from "./FloorPlan.vue";
 import JumpPad from "./JumpPad.vue";
+import TableTicketPanel from "./TableTicketPanel.vue";
 import TabsRail from "./TabsRail.vue";
+import { resolveCanvas } from "./floorGeometry";
 import { bus } from "../../bus";
 import { useFloorStore, type OrderRow, type TableRow } from "../../stores/floorStore";
 import { useVerticalStore } from "../../stores/verticalStore";
@@ -137,11 +170,25 @@ import { useVerticalStore } from "../../stores/verticalStore";
 // cannot see app.config.globalProperties, so bind it locally.
 const __ = window.__ || ((value: string) => value);
 
+/**
+ * Enough room for a 360px plan beside a 240px rail. Below it the ticket detail
+ * becomes a strip under the board instead — the same component, laid out for a
+ * thumb.
+ */
+const WIDE_PANEL = 640;
+/** The rail's own width, subtracted before the plan computes its fit scale. */
+const RAIL_WIDTH = 248;
+
 const floorStore = useFloorStore();
 const verticalStore = useVerticalStore();
 
+const panelEl = ref<HTMLElement | null>(null);
+const panelWidth = ref(0);
 const jumpOpen = ref(false);
 const firing = ref(false);
+const releasing = ref(false);
+/** null = follow the default (fit only when the room overflows the panel). */
+const fitOverride = ref<boolean | null>(null);
 
 const floors = computed(() => floorStore.floors);
 const activeOrder = computed(() => floorStore.activeOrder);
@@ -151,11 +198,51 @@ const viewMode = computed(() => floorStore.viewMode);
 const editorMode = computed(() => floorStore.editorMode);
 const transferOrder = computed(() => floorStore.transferOrder);
 
+const wide = computed(() => panelWidth.value >= WIDE_PANEL);
+const planWidth = computed(() =>
+	Math.max(0, panelWidth.value - (wide.value && activeOrder.value ? RAIL_WIDTH : 0)),
+);
+
+const canvasWidth = computed(() => {
+	const canvas = resolveCanvas(floorStore.activeFloorRow);
+	return canvas.cols * canvas.cell;
+});
+
+/**
+ * Fit is the default whenever the authored room is wider than the space it has
+ * to land in — which on a phone is always. A waiter who opens the floor should
+ * see the whole floor, not its top-left corner.
+ */
+const fit = computed(() =>
+	fitOverride.value === null ? canvasWidth.value > planWidth.value : fitOverride.value,
+);
+
+/** Occupancy per floor, so the switcher reports the room instead of naming it. */
+const floorTabs = computed(() =>
+	floors.value.map((floor) => {
+		const tables = floorStore.tables.filter(
+			(table) => table.floor === floor.name && table.is_active !== 0,
+		);
+		return {
+			name: floor.name,
+			floor_name: floor.floor_name,
+			total: tables.length,
+			busy: tables.filter((table) => floorStore.isOccupied(table.name)).length,
+		};
+	}),
+);
+
 const jumpLabel = computed(() => `${verticalStore.t("Go to")} ${verticalStore.t("Table")}`);
 const editLabel = computed(() => verticalStore.t("Edit floor plan"));
 const editFloorLabel = computed(() => verticalStore.t("Edit floor plan"));
-const emptyFloorLabel = computed(() => verticalStore.t("No tables yet — edit your floor plan to add some"));
+const fitLabel = computed(() => verticalStore.t("Fit the whole floor"));
+const emptyFloorLabel = computed(() =>
+	verticalStore.t("No tables yet — edit your floor plan to add some"),
+);
 const noFloorsLabel = computed(() => verticalStore.t("No floors configured for this register"));
+const noFloorsHint = computed(() =>
+	verticalStore.t("Add a floor in the register's setup, then lay out its tables here."),
+);
 const toggleLabel = computed(() =>
 	viewMode.value === "plan" ? verticalStore.t("List view") : verticalStore.t("Plan view"),
 );
@@ -165,14 +252,11 @@ const transferBannerText = computed(() => {
 	return `${verticalStore.t("Pick a free table for")} ${who}`;
 });
 
-const fireLabel = computed(() => verticalStore.t("Send"));
-const transferLabel = computed(() => verticalStore.t("Transfer"));
-const activeOrderLabel = computed(() => {
+const activeOrderTableLabel = computed(() => {
 	const order = activeOrder.value;
-	if (!order) return "";
-	if (order.tab_name) return order.tab_name;
+	if (!order?.table) return "";
 	const table = floorStore.tables.find((row) => row.name === order.table);
-	return table ? table.table_label : order.order_uid.slice(0, 6);
+	return table ? table.table_label : "";
 });
 
 /**
@@ -187,6 +271,27 @@ async function fire() {
 		if (projection) bus.emit("floor_course_fired", projection);
 	} finally {
 		firing.value = false;
+	}
+}
+
+/**
+ * Spec §3: "release table" is cancelling the table's EMPTY order.
+ *
+ * The emptiness has to be re-checked AFTER flushing, not just read off the row
+ * the button was rendered from. `items_count` only catches up when the cart
+ * sync debounce fires, so a waiter who types a line and immediately taps
+ * Release would otherwise cancel a ticket that already has food on it.
+ */
+async function release() {
+	if (!activeOrder.value) return;
+	releasing.value = true;
+	try {
+		await floorStore.flushCartSync();
+		const order = floorStore.activeOrder;
+		if (!order || order.items_count) return;
+		await floorStore.cancelOrder(order);
+	} finally {
+		releasing.value = false;
 	}
 }
 
@@ -225,145 +330,28 @@ function onKeydown(event: KeyboardEvent) {
 	}
 }
 
+let observer: ResizeObserver | null = null;
+
 onMounted(() => {
 	void floorStore.activate();
 	window.addEventListener("keydown", onKeydown);
+	const element = panelEl.value;
+	if (!element) return;
+	panelWidth.value = element.clientWidth;
+	if (typeof ResizeObserver === "undefined") return;
+	observer = new ResizeObserver((entries) => {
+		const entry = entries[0];
+		if (entry) panelWidth.value = entry.contentRect.width;
+	});
+	observer.observe(element);
 });
 
 onBeforeUnmount(() => {
 	window.removeEventListener("keydown", onKeydown);
+	observer?.disconnect();
+	observer = null;
 	floorStore.deactivate();
 });
 </script>
 
-<style scoped>
-/* The whole screen is one bounded flex column: the plan/kanban child owns the
-   only scrollport. An auto-height ancestor here is the height-chain bug that
-   hides the bottom of the floor behind the mobile dock. */
-.floor-view {
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-	height: calc(100dvh - var(--bottom-safe-space, 24px) - 92px);
-	max-height: calc(100dvh - var(--bottom-safe-space, 24px) - 92px);
-	overflow: hidden;
-	margin-top: 12px;
-	border: 1px solid var(--pos-border);
-	border-radius: 10px;
-	background: var(--pos-surface);
-	color: var(--pos-text-primary);
-}
-
-.floor-view__banner {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	flex: 0 0 auto;
-	padding: 6px 10px;
-	background: var(--pos-info-container);
-	color: var(--pos-text-primary);
-}
-
-.floor-view__banner-text {
-	flex: 1 1 auto;
-	font-size: 13px;
-	font-weight: 600;
-	color: var(--pos-text-primary);
-}
-
-.floor-view__ticket {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	flex: 0 0 auto;
-	padding: 4px 8px;
-	border-bottom: 1px solid var(--pos-border);
-	background: var(--pos-primary-container);
-	color: var(--pos-text-primary);
-}
-
-.floor-view__ticket-name {
-	flex: 1 1 auto;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: 13px;
-	font-weight: 700;
-	color: var(--pos-text-primary);
-}
-
-.floor-view__bar {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	flex: 0 0 auto;
-	padding: 6px 8px;
-	border-bottom: 1px solid var(--pos-border);
-	background: var(--pos-surface);
-}
-
-.floor-view__floors {
-	display: flex;
-	gap: 4px;
-	flex: 1 1 auto;
-	min-width: 0;
-	overflow-x: auto;
-}
-
-.floor-view__floor {
-	flex: 0 0 auto;
-	min-height: 36px;
-	padding: 4px 12px;
-	border: 1px solid var(--pos-border);
-	border-radius: 999px;
-	background: var(--pos-surface-container);
-	color: var(--pos-text-secondary);
-	font-size: 13px;
-	font-weight: 600;
-}
-
-.floor-view__floor--active {
-	border-color: var(--pos-primary);
-	background: var(--pos-primary-container);
-	color: var(--pos-text-primary);
-}
-
-.floor-view__actions {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-	flex: 0 0 auto;
-}
-
-.floor-view__error {
-	flex: 0 0 auto;
-	margin: 0;
-	padding: 6px 10px;
-	background: var(--pos-error-container);
-	color: var(--pos-text-primary);
-	font-size: 12px;
-}
-
-.floor-view__blank {
-	display: flex;
-	flex: 1 1 auto;
-	min-height: 0;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: 10px;
-	padding: 24px;
-	text-align: center;
-	background: var(--pos-bg-secondary);
-	color: var(--pos-text-secondary);
-}
-
-.floor-view__blank-text {
-	margin: 0;
-	max-width: 280px;
-	background: transparent;
-	color: var(--pos-text-secondary);
-	font-size: 14px;
-}
-</style>
+<style scoped src="./floor-view.css"></style>

@@ -327,6 +327,25 @@ export const useFloorStore = defineStore("floor", () => {
 		await refresh({ silent: true });
 	};
 
+	/** Clear the bussing latch on a table (settle sets it; bussing clears it). */
+	const markClean = async (table: string) => {
+		markSyncing(table, true);
+		try {
+			await restaurantApi.markTableClean({
+				posProfile: posProfileName.value,
+				company: companyName.value,
+				table,
+			});
+			tables.value = tables.value.map((row) =>
+				row.name === table ? { ...row, needs_cleaning: 0, bill_printed_at: null } : row,
+			);
+		} catch (err: any) {
+			error.value = err?.message || String(err);
+		} finally {
+			markSyncing(table, false);
+		}
+	};
+
 	return {
 		// state
 		floors,
@@ -366,5 +385,6 @@ export const useFloorStore = defineStore("floor", () => {
 		loadOrderIntoCart,
 		flushCartSync,
 		saveLayout,
+		markClean,
 	};
 });

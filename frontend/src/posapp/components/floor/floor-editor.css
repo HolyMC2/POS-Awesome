@@ -1,0 +1,163 @@
+/* Styles for FloorEditor.vue. Scoped by the SFC that imports them via
+   `<style scoped src>` — the component kept growing past the 500-line
+   ceiling, and the markup is the part worth reading in one screen. */
+.floor-editor {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+	background: var(--pos-surface);
+}
+
+.floor-editor__toolbar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--pos-border);
+	background: var(--pos-surface);
+}
+
+.floor-editor__dirty {
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--pos-warning-container);
+	color: var(--pos-button-warning-text);
+	font-size: 11px;
+	font-weight: 700;
+}
+
+/* Stacked below the rail's breakpoint; the canvas owns the scroll either way. */
+.floor-editor__body {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.floor-editor__body--wide {
+	flex-direction: row;
+}
+
+.floor-editor__scroller {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	padding: 8px;
+	background: var(--pos-bg-secondary);
+}
+
+.floor-editor__stage {
+	position: relative;
+}
+
+.floor-editor__canvas {
+	position: absolute;
+	inset-inline-start: 0;
+	top: 0;
+	transform-origin: top left;
+	background-color: var(--pos-surface);
+	background-image:
+		linear-gradient(to right, var(--pos-border-light) 1px, transparent 1px),
+		linear-gradient(to bottom, var(--pos-border-light) 1px, transparent 1px);
+	border: 1px solid var(--pos-border);
+	border-radius: 8px;
+}
+
+.floor-editor__ghost {
+	position: absolute;
+	top: 0;
+	left: 0;
+	transform-origin: top left;
+	border: 2px dashed var(--pos-primary);
+	border-radius: 10px;
+	background: var(--pos-primary-container);
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+.floor-editor__tile {
+	position: absolute;
+	top: 0;
+	left: 0;
+	transform-origin: top left;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 2px solid var(--floor-tile-color, #94a3b8);
+	border-radius: 10px;
+	background: var(--pos-surface-container);
+	color: var(--pos-text-primary);
+	cursor: grab;
+	/* Only the TILE claims the gesture. The v1 put this on the scroller, which
+	   meant a phone could not pan the canvas at all and every table past the
+	   first screen-width was unreachable. */
+	touch-action: none;
+}
+
+.floor-editor__tile--round {
+	border-radius: 50%;
+}
+
+.floor-editor__tile--selected {
+	outline: 2px solid var(--pos-primary);
+	outline-offset: 2px;
+	z-index: 2;
+}
+
+.floor-editor__tile--dragging {
+	cursor: grabbing;
+	box-shadow: 0 6px 16px var(--pos-shadow-dark);
+	z-index: 3;
+}
+
+.floor-editor__tile-label {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--pos-text-primary);
+	pointer-events: none;
+}
+
+/* Held at 22px on screen: a grip that scales with a fitted canvas is a grip
+   nobody can hit. */
+.floor-editor__handle {
+	position: absolute;
+	inset-inline-end: -9px;
+	bottom: -9px;
+	transform: scale(var(--floor-inv, 1));
+	transform-origin: bottom right;
+	width: 22px;
+	height: 22px;
+	border: 2px solid var(--pos-surface);
+	border-radius: 50%;
+	background: var(--pos-primary);
+	cursor: nwse-resize;
+	touch-action: none;
+}
+
+.floor-editor__empty {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0;
+	background: transparent;
+	color: var(--pos-text-secondary);
+	font-size: 14px;
+}
+
+.floor-editor__conflict-title {
+	font-size: 16px;
+	font-weight: 700;
+	color: var(--pos-text-primary);
+	background: var(--pos-surface);
+}
+
+.floor-editor__conflict-body {
+	color: var(--pos-text-secondary);
+	background: var(--pos-surface);
+}

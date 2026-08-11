@@ -1,0 +1,166 @@
+/* Styles for FloorView.vue. Scoped by the SFC that imports them via
+   `<style scoped src>` — the component kept growing past the 500-line
+   ceiling, and the markup is the part worth reading in one screen. */
+/* The whole screen is one bounded flex column: the plan/kanban child owns the
+   only scrollport. An auto-height ancestor here is the height-chain bug that
+   hides the bottom of the floor behind the mobile dock. */
+.floor-view {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	height: calc(100dvh - var(--bottom-safe-space, 24px) - 92px);
+	max-height: calc(100dvh - var(--bottom-safe-space, 24px) - 92px);
+	overflow: hidden;
+	margin-top: 12px;
+	border: 1px solid var(--pos-border);
+	border-radius: 10px;
+	background: var(--pos-surface);
+	color: var(--pos-text-primary);
+}
+
+/* The board and its detail rail. A row at wide panels, a single column
+   otherwise — either way the scrollport stays inside the child. */
+.floor-view__stage {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.floor-view__stage--wide {
+	flex-direction: row;
+}
+
+.floor-view__banner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: 0 0 auto;
+	padding: 6px 10px;
+	background: var(--pos-info-container);
+	color: var(--pos-text-primary);
+}
+
+.floor-view__banner-text {
+	flex: 1 1 auto;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--pos-text-primary);
+}
+
+.floor-view__banner-cancel {
+	flex: 0 0 auto;
+	min-height: 40px;
+	padding: 0 14px;
+	border: 1px solid var(--pos-border);
+	border-radius: 999px;
+	background: var(--pos-surface);
+	color: var(--pos-text-primary);
+	font-size: 13px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.floor-view__bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: 0 0 auto;
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--pos-border);
+	background: var(--pos-surface);
+}
+
+.floor-view__floors {
+	display: flex;
+	gap: 4px;
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-x: auto;
+}
+
+.floor-view__floor {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+	min-height: 40px;
+	padding: 4px 12px;
+	border: 1px solid var(--pos-border);
+	border-radius: 999px;
+	background: var(--pos-surface-container);
+	color: var(--pos-text-secondary);
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.floor-view__floor--active {
+	border-color: var(--pos-primary);
+	background: var(--pos-primary-container);
+	color: var(--pos-text-primary);
+}
+
+.floor-view__floor-name {
+	white-space: nowrap;
+}
+
+.floor-view__floor-count {
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	color: var(--pos-text-secondary);
+}
+
+.floor-view__floor--active .floor-view__floor-count {
+	color: var(--pos-text-primary);
+}
+
+.floor-view__actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	flex: 0 0 auto;
+}
+
+.floor-view__error {
+	flex: 0 0 auto;
+	margin: 0;
+	padding: 6px 10px;
+	background: var(--pos-error-container);
+	color: var(--pos-text-primary);
+	font-size: 12px;
+}
+
+.floor-view__blank {
+	display: flex;
+	flex: 1 1 auto;
+	min-height: 0;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 24px;
+	text-align: center;
+	background: var(--pos-bg-secondary);
+	color: var(--pos-text-secondary);
+}
+
+.floor-view__blank-text {
+	margin: 0;
+	max-width: 280px;
+	background: transparent;
+	color: var(--pos-text-primary);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.floor-view__blank-hint {
+	margin: 0;
+	max-width: 300px;
+	background: transparent;
+	color: var(--pos-text-secondary);
+	font-size: 12px;
+	line-height: 1.4;
+}

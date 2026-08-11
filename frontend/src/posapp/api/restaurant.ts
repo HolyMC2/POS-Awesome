@@ -102,6 +102,7 @@ const METHODS = {
 	settlementState:
 		"posawesome.posawesome.api.restaurant.settle.get_settlement_state",
 	fireCourse: "posawesome.posawesome.api.restaurant.kot.fire_course",
+	markTableClean: "posawesome.posawesome.api.restaurant.floors.mark_table_clean",
 } as const;
 
 /** Thrown when an operation genuinely requires the server. */
@@ -449,4 +450,37 @@ export async function saveFloorLayout(p: SaveFloorParams): Promise<void> {
 export async function getFloorModifiedToken(floor: string) {
 	const floors = await listStoredFloors();
 	return floors.find((row) => row.name === floor)?.modified ?? null;
+}
+
+/**
+ * Clear the bussing latch settle set (needs_cleaning → 0).
+ *
+ * Online-only: the latch is shared state every device's board renders, and a
+ * queued "clean" replaying after the table was re-seated and re-settled would
+ * wipe a NEWER dirty state. Offline the broom just stays until reconnect.
+ */
+export async function markTableClean(p: {
+	posProfile: string;
+	company: string;
+	table: string;
+}): Promise<void> {
+	if (!isServerReachable()) {
+		throw new RestaurantOfflineError(
+			"markTableClean",
+			"Marking a table clean needs a connection. The broom stays until you reconnect.",
+		);
+	}
+
+	await callRestaurant(METHODS.markTableClean, {
+		pos_profile: p.posProfile,
+		company: p.company,
+		table: p.table,
+		source_device: getDeviceIdentifier(),
+	});
+
+	const stored = await listStoredTables(null);
+	const row = stored.find((entry) => entry.name === p.table);
+	if (row) {
+		await putStoredTables([{ ...row, needs_cleaning: 0, bill_printed_at: null }]);
+	}
 }

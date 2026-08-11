@@ -1,0 +1,289 @@
+/* Styles for FloorPlan.vue. Scoped by the SFC that imports them via
+   `<style scoped src>` — the component kept growing past the 500-line
+   ceiling, and the markup is the part worth reading in one screen. */
+/* The canvas is a fixed-pixel plane, so it MUST live inside a bounded
+   scrollport. The chain is flex all the way up (FloorView caps the height):
+   an auto-height ancestor here would let the plane grow past the fold and
+   hide the bottom row behind the mobile dock. */
+.floor-plan {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.floor-plan__scroller {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	padding: 8px;
+	background: var(--pos-bg-secondary);
+}
+
+/* The stage carries the SCALED footprint. The canvas keeps its authored pixel
+   size and is shrunk by a transform, which does not affect layout — without a
+   sized wrapper the scrollport would still scroll the unscaled distance and
+   leave a dead margin past the last table. */
+.floor-plan__stage {
+	position: relative;
+}
+
+.floor-plan__canvas {
+	position: absolute;
+	inset-inline-start: 0;
+	top: 0;
+	transform-origin: top left;
+	background-color: var(--pos-surface);
+	background-image:
+		linear-gradient(to right, var(--pos-border-light) 1px, transparent 1px),
+		linear-gradient(to bottom, var(--pos-border-light) 1px, transparent 1px);
+	border: 1px solid var(--pos-border);
+	border-radius: 8px;
+}
+
+.floor-tile {
+	position: absolute;
+	top: 0;
+	left: 0;
+	transform-origin: top left;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2px;
+	border: 2px solid var(--floor-tile-color, #94a3b8);
+	border-radius: 10px;
+	background: var(--pos-surface);
+	color: var(--pos-text-primary);
+	opacity: 0.3;
+	transition:
+		opacity 120ms ease-out,
+		box-shadow 120ms ease-out;
+	cursor: pointer;
+}
+
+/* A free table still has to look reachable. Lifting it most of the way to
+   opaque on hover reads as "you may tap this" without borrowing the occupied
+   state's full opacity. */
+.floor-tile:hover:not(:disabled) {
+	opacity: 0.62;
+	box-shadow: 0 0 0 3px var(--pos-shadow-light);
+}
+
+.floor-tile:focus-visible {
+	outline: 2px solid var(--pos-primary);
+	outline-offset: 2px;
+	opacity: 1;
+}
+
+.floor-tile--round {
+	border-radius: 50%;
+}
+
+.floor-tile--occupied {
+	opacity: 1;
+	background: var(--pos-surface-variant);
+	color: var(--pos-text-primary);
+}
+
+.floor-tile--occupied:hover {
+	opacity: 1;
+}
+
+.floor-tile--dirty {
+	border-style: dashed;
+}
+
+.floor-tile--syncing {
+	animation: floor-tile-pulse 900ms ease-in-out infinite;
+}
+
+/* Transfer mode: every legal destination breathes, so the eligible set reads
+   as a set rather than as "the tiles that happen to be pale". */
+.floor-tile--target {
+	opacity: 1;
+	border-style: dashed;
+	border-color: var(--pos-success);
+	background: var(--pos-success-container);
+	color: var(--pos-text-primary);
+	animation: floor-tile-beckon 1600ms ease-in-out infinite;
+}
+
+.floor-tile--pending .floor-tile__label {
+	font-style: italic;
+}
+
+.floor-tile__pending-dot {
+	position: absolute;
+	top: -4px;
+	inset-inline-start: -4px;
+	transform: scale(var(--floor-inv, 1));
+	transform-origin: top left;
+	width: 10px;
+	height: 10px;
+	border: 2px solid var(--pos-surface);
+	border-radius: 50%;
+	background: var(--pos-warning);
+}
+
+.floor-tile--blocked {
+	cursor: not-allowed;
+	opacity: 0.25;
+	animation: none;
+}
+
+.floor-tile--blocked:hover {
+	opacity: 0.25;
+	box-shadow: none;
+}
+
+/* An annulus drawn as a masked conic gradient: it hugs a rounded rectangle and
+   a circle alike, which a stroked SVG ring would not without per-shape maths. */
+.floor-tile__ring {
+	position: absolute;
+	inset: -5px;
+	border-radius: inherit;
+	padding: 2px;
+	background: conic-gradient(
+		from -90deg,
+		var(--floor-ring-color, var(--pos-warning)) calc(var(--floor-ring-turn, 0) * 1turn),
+		transparent 0
+	);
+	-webkit-mask:
+		linear-gradient(#000 0 0) content-box,
+		linear-gradient(#000 0 0);
+	-webkit-mask-composite: xor;
+	mask:
+		linear-gradient(#000 0 0) content-box,
+		linear-gradient(#000 0 0);
+	mask-composite: exclude;
+	pointer-events: none;
+}
+
+.floor-tile__ring--warm {
+	--floor-ring-color: var(--pos-warning);
+}
+
+.floor-tile__ring--late {
+	--floor-ring-color: var(--pos-error);
+}
+
+/* Counter-scaled by `labelStyle` so the number stays the same size on screen
+   however far the room has been fitted down. */
+.floor-tile__face {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1px;
+	line-height: 1.1;
+	pointer-events: none;
+}
+
+.floor-tile__label {
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	color: var(--pos-text-primary);
+}
+
+.floor-tile__total {
+	font-size: 10px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--pos-primary);
+}
+
+.floor-tile__seats {
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+	color: var(--pos-text-secondary);
+}
+
+/* Badge, dot and glyph are chrome, not geometry: they hold their screen size
+   while the plan scales, or the kitchen count on a fitted phone plan becomes a
+   red speck with no readable number in it. */
+.floor-tile__badge {
+	position: absolute;
+	top: -6px;
+	inset-inline-end: -6px;
+	transform: scale(var(--floor-inv, 1));
+	transform-origin: top right;
+	min-width: 18px;
+	padding: 0 4px;
+	border-radius: 9px;
+	background: var(--pos-error);
+	color: #ffffff;
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 18px;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.floor-tile__glyph {
+	position: absolute;
+	bottom: 2px;
+	inset-inline-start: 4px;
+	transform: scale(var(--floor-inv, 1));
+	transform-origin: bottom left;
+	color: var(--pos-warning);
+}
+
+/* The broom as a tappable control: reset button chrome, keep the glyph
+   placement, and give a thumb a real target without growing the visual. */
+.floor-tile__glyph--action {
+	border: 0;
+	background: transparent;
+	padding: 6px;
+	margin: -6px;
+	cursor: pointer;
+	line-height: 0;
+	touch-action: manipulation;
+}
+
+.floor-tile__glyph--action:hover {
+	color: var(--pos-success, #059669);
+}
+
+.floor-plan__empty {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 16px;
+	text-align: center;
+	background: transparent;
+	color: var(--pos-text-secondary);
+	font-size: 14px;
+}
+
+@keyframes floor-tile-pulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 var(--pos-shadow);
+	}
+	50% {
+		box-shadow: 0 0 0 4px var(--pos-shadow-light);
+	}
+}
+
+@keyframes floor-tile-beckon {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 var(--pos-shadow-light);
+	}
+	50% {
+		box-shadow: 0 0 0 5px var(--pos-shadow-light);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.floor-tile--syncing,
+	.floor-tile--target {
+		animation: none;
+	}
+	.floor-tile--target {
+		box-shadow: 0 0 0 3px var(--pos-success);
+	}
+}

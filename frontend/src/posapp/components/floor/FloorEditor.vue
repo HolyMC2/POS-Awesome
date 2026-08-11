@@ -1,9 +1,10 @@
 <template>
 	<div class="floor-editor" @pointermove="onMove" @pointerup="onUp" @pointercancel="onUp">
 		<div class="floor-editor__toolbar">
-			<v-btn size="small" variant="tonal" prepend-icon="mdi-plus" @click="addTable">
+			<v-btn size="small" variant="tonal" prepend-icon="mdi-plus" data-test="editor-add" @click="addTable">
 				{{ addLabel }}
 			</v-btn>
+			<span v-if="dirty" class="floor-editor__dirty">{{ unsavedLabel }}</span>
 			<v-spacer />
 			<v-btn size="small" variant="text" @click="emit('done')">{{ __("Close") }}</v-btn>
 			<v-btn
@@ -12,85 +13,71 @@
 				variant="flat"
 				:loading="saving"
 				:disabled="!dirty || saving"
+				data-test="editor-save"
 				@click="save"
 			>
 				{{ __("Save") }}
 			</v-btn>
 		</div>
 
-		<div class="floor-editor__body">
+		<div class="floor-editor__body" :class="{ 'floor-editor__body--wide': wide }">
 			<div class="floor-editor__scroller">
-				<div class="floor-editor__canvas" :style="canvasStyleValue" @pointerdown.self="selectedUid = null">
+				<div class="floor-editor__stage" :style="stageStyleValue">
 					<div
-						v-for="entry in placed"
-						:key="entry.table_uid"
-						class="floor-editor__tile"
-						:class="{ 'floor-editor__tile--selected': entry.table_uid === selectedUid }"
-						:style="[tileStyleFor(entry.layout), { '--floor-tile-color': colorHex(entry.layout.color) }]"
-						@pointerdown="onDown($event, entry)"
+						class="floor-editor__canvas"
+						:style="[canvasStyleValue, scaleStyle]"
+						@pointerdown.self="selectedUid = null"
 					>
-						<span class="floor-editor__tile-label">{{ entry.table_label }}</span>
+						<!-- Where the dragged tile will land once released. The grid
+						     lines alone do not answer "which cell am I on" while a
+						     tile is under the thumb hiding them. -->
+						<div v-if="ghost" class="floor-editor__ghost" :style="ghostStyle" aria-hidden="true" />
+						<div
+							v-for="entry in placed"
+							:key="entry.table_uid"
+							class="floor-editor__tile"
+							:class="[
+								`floor-editor__tile--${entry.layout.shape || 'rect'}`,
+								{
+									'floor-editor__tile--selected': entry.table_uid === selectedUid,
+									'floor-editor__tile--dragging': drag?.uid === entry.table_uid,
+								},
+							]"
+							:style="[tileStyleFor(entry.layout), { '--floor-tile-color': colorHex(entry.layout.color) }]"
+							:data-test="`editor-tile-${entry.table_label}`"
+							@pointerdown="onDown($event, entry, 'move')"
+						>
+							<span class="floor-editor__tile-label" :style="labelStyleFor(entry.layout)">
+								{{ entry.table_label }}
+							</span>
+							<!-- The handle is only offered when the rendered tile is big
+							     enough to host one without covering the table it resizes;
+							     the rail's steppers are the path everywhere else. -->
+							<span
+								v-if="entry.table_uid === selectedUid && handleFits(entry.layout)"
+								class="floor-editor__handle"
+								:title="resizeLabel"
+								@pointerdown.stop="onDown($event, entry, 'resize')"
+							/>
+						</div>
+						<p v-if="!placed.length" class="floor-editor__empty">{{ emptyLabel }}</p>
 					</div>
-					<p v-if="!placed.length" class="floor-editor__empty">{{ emptyLabel }}</p>
 				</div>
 			</div>
 
-			<aside class="floor-editor__rail">
-				<p v-if="!selected" class="floor-editor__hint">{{ hintLabel }}</p>
-				<template v-else>
-					<v-text-field
-						v-model="selected.table_label"
-						:label="labelFieldLabel"
-						variant="solo"
-						density="compact"
-						hide-details
-						maxlength="40"
-						class="mb-2"
-						@update:model-value="dirty = true"
-					/>
-					<v-text-field
-						:model-value="selected.seats"
-						:label="seatsFieldLabel"
-						type="number"
-						min="0"
-						variant="solo"
-						density="compact"
-						hide-details
-						class="mb-2"
-						@update:model-value="setSeats"
-					/>
-					<div class="floor-editor__swatches">
-						<button
-							v-for="swatch in TABLE_COLORS"
-							:key="swatch.value || 'default'"
-							type="button"
-							class="floor-editor__swatch"
-							:class="{ 'floor-editor__swatch--on': (selected.layout.color || undefined) === swatch.value }"
-							:style="{ background: swatch.hex }"
-							:aria-label="swatch.value || __('Default')"
-							@click="setColor(swatch.value)"
-						/>
-					</div>
-					<div class="floor-editor__steppers">
-						<span>{{ sizeLabel }}</span>
-						<span class="floor-editor__stepper">
-							<v-btn size="x-small" variant="tonal" @click="resize(-1, 0)">−</v-btn>
-							<span class="floor-editor__size">{{ selected.layout.w }}×{{ selected.layout.h }}</span>
-							<v-btn size="x-small" variant="tonal" @click="resize(1, 0)">+</v-btn>
-						</span>
-					</div>
-					<v-btn
-						size="small"
-						variant="text"
-						color="error"
-						class="mt-2"
-						prepend-icon="mdi-eye-off-outline"
-						@click="deactivate"
-					>
-						{{ deactivateLabel }}
-					</v-btn>
-				</template>
-			</aside>
+			<FloorEditorRail
+				:selected="selected"
+				:variant="wide ? 'rail' : 'sheet'"
+				@label="setLabel"
+				@seats="setSeats"
+				@color="setColor"
+				@resize="applyResize"
+				@nudge="applyNudge"
+				@rotate="applyRotate"
+				@shape="applyShape"
+				@duplicate="duplicateSelected"
+				@deactivate="deactivate"
+			/>
 		</div>
 
 		<v-dialog v-model="conflictOpen" max-width="380">
@@ -109,9 +96,14 @@
 
 <script setup lang="ts">
 /**
- * Floor editor — v1 scope is add / rename / deactivate plus drag-to-move on the
- * grid (spec §4 skip-list: no rotate/decor/undo). Geometry snaps to the floor's
- * own `{cols, rows, cell}` frame, following taller's BinsConstructor.
+ * Floor editor — the canvas, the drag, and the save. The per-table controls
+ * live in `FloorEditorRail.vue` and the working-copy shape in
+ * `floorEditorDraft.ts`.
+ *
+ * Geometry snaps to the floor's own `{cols, rows, cell}` frame, following
+ * taller's BinsConstructor. The canvas is drawn at a fit scale, so pointer
+ * deltas are divided by that scale before they become cells — otherwise every
+ * drag on a phone moves two or three times as far as the finger did.
  *
  * Saves carry the floor's `modified` token (§6.3): a whole-floor write that
  * deactivates everything missing from the payload is exactly the shape where
@@ -119,6 +111,7 @@
  * comes back as TimestampMismatch and the operator is asked, not overwritten.
  */
 import { computed, ref, watch } from "vue";
+import FloorEditorRail from "./FloorEditorRail.vue";
 import { useFloorStore } from "../../stores/floorStore";
 import { useVerticalStore } from "../../stores/verticalStore";
 
@@ -126,29 +119,34 @@ import { useVerticalStore } from "../../stores/verticalStore";
 // cannot see app.config.globalProperties, so bind it locally.
 const __ = window.__ || ((value: string) => value);
 import {
-	TABLE_COLORS,
 	canvasStyle,
 	clampToCanvas,
 	colorHex,
+	cycleShape,
+	duplicateLayout,
+	fitScale,
+	labelStyle,
+	nudgeLayout,
+	resizeLayout,
 	resolveCanvas,
-	resolveTableLayout,
+	rotateLayout,
+	scaledCanvasStyle,
 	tileStyle,
 	type PlacedLayout,
 } from "./floorGeometry";
+import {
+	draftFromTable,
+	duplicateDraft,
+	newTableUid,
+	nextTableLabel,
+	type DraftTable,
+} from "./floorEditorDraft";
 
+const props = defineProps<{ availableWidth: number }>();
 const emit = defineEmits<{ (event: "done"): void }>();
 
 const floorStore = useFloorStore();
 const verticalStore = useVerticalStore();
-
-interface DraftTable {
-	name?: string;
-	table_uid: string;
-	table_label: string;
-	seats: number;
-	is_active: number;
-	layout: PlacedLayout;
-}
 
 const draft = ref<DraftTable[]>([]);
 const selectedUid = ref<string | null>(null);
@@ -159,15 +157,28 @@ const conflictOpen = ref(false);
 const canvas = computed(() => resolveCanvas(floorStore.activeFloorRow));
 const canvasStyleValue = computed(() => canvasStyle(canvas.value));
 const placed = computed(() => draft.value.filter((entry) => entry.is_active !== 0));
-const selected = computed(() => draft.value.find((entry) => entry.table_uid === selectedUid.value) || null);
+const selected = computed(
+	() => draft.value.find((entry) => entry.table_uid === selectedUid.value) || null,
+);
+
+/** Beside the canvas once the panel can spare the width, under it otherwise. */
+const wide = computed(() => props.availableWidth >= 760);
+
+const scale = computed(() =>
+	fitScale(canvas.value, wide.value ? props.availableWidth - 264 : props.availableWidth),
+);
+/** `--floor-inv` undoes the canvas scale for chrome that must stay grabbable. */
+const scaleStyle = computed(() =>
+	scale.value === 1
+		? { "--floor-inv": "1" }
+		: { transform: `scale(${scale.value})`, "--floor-inv": String(1 / scale.value) },
+);
+const stageStyleValue = computed(() => scaledCanvasStyle(canvas.value, scale.value));
 
 const addLabel = computed(() => `${verticalStore.t("Add")} ${verticalStore.t("Table")}`);
 const emptyLabel = computed(() => verticalStore.t("No tables yet — add one to start"));
-const hintLabel = computed(() => verticalStore.t("Tap a table to rename or recolour it. Drag to move."));
-const labelFieldLabel = computed(() => verticalStore.t("Label"));
-const seatsFieldLabel = computed(() => verticalStore.t("Seats"));
-const sizeLabel = computed(() => verticalStore.t("Size"));
-const deactivateLabel = computed(() => verticalStore.t("Hide from floor"));
+const resizeLabel = computed(() => verticalStore.t("Drag to resize"));
+const unsavedLabel = computed(() => verticalStore.t("Unsaved changes"));
 const conflictTitle = computed(() => verticalStore.t("Floor changed elsewhere"));
 const conflictBody = computed(() =>
 	verticalStore.t(
@@ -176,25 +187,14 @@ const conflictBody = computed(() =>
 );
 
 const loadDraft = () => {
-	draft.value = floorStore.activeFloorTables.map((table, index) => ({
-		name: table.name,
-		table_uid: table.table_uid || table.name,
-		table_label: table.table_label,
-		seats: Number(table.seats) || 0,
-		is_active: table.is_active === 0 ? 0 : 1,
-		layout: resolveTableLayout(table, index, canvas.value),
-	}));
+	draft.value = floorStore.activeFloorTables.map((table, index) =>
+		draftFromTable(table, index, canvas.value),
+	);
 	dirty.value = false;
 	selectedUid.value = null;
 };
 
 watch(() => floorStore.activeFloor, loadDraft, { immediate: true });
-
-function newUid(): string {
-	return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-		? crypto.randomUUID()
-		: `tbl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 function addTable() {
 	const index = draft.value.length;
@@ -203,14 +203,22 @@ function addTable() {
 		canvas.value,
 	);
 	const entry: DraftTable = {
-		table_uid: newUid(),
-		table_label: String(index + 1),
+		table_uid: newTableUid(),
+		table_label: nextTableLabel(draft.value),
 		seats: 2,
 		is_active: 1,
 		layout,
 	};
 	draft.value.push(entry);
 	selectedUid.value = entry.table_uid;
+	dirty.value = true;
+}
+
+// ---- per-table edits ------------------------------------------------------
+
+function setLabel(value: string) {
+	if (!selected.value) return;
+	selected.value.table_label = value;
 	dirty.value = true;
 }
 
@@ -227,17 +235,43 @@ function setColor(color: string | undefined) {
 	dirty.value = true;
 }
 
-function resize(deltaW: number, deltaH: number) {
+function applyResize(deltaW: number, deltaH: number) {
 	if (!selected.value) return;
-	const next = {
-		...selected.value.layout,
-		w: Math.max(1, selected.value.layout.w + deltaW),
-		h: Math.max(1, selected.value.layout.h + (deltaH || deltaW)),
-	};
-	selected.value.layout = clampToCanvas(next, canvas.value);
+	selected.value.layout = resizeLayout(selected.value.layout, deltaW, deltaH, canvas.value);
 	dirty.value = true;
 }
 
+function applyNudge(deltaX: number, deltaY: number) {
+	if (!selected.value) return;
+	selected.value.layout = nudgeLayout(selected.value.layout, deltaX, deltaY, canvas.value);
+	dirty.value = true;
+}
+
+function applyRotate() {
+	if (!selected.value) return;
+	selected.value.layout = rotateLayout(selected.value.layout);
+	dirty.value = true;
+}
+
+function applyShape() {
+	if (!selected.value) return;
+	selected.value.layout = cycleShape(selected.value.layout);
+	dirty.value = true;
+}
+
+function duplicateSelected() {
+	const source = selected.value;
+	if (!source) return;
+	const copy = duplicateDraft(source, draft.value, duplicateLayout(source.layout, canvas.value));
+	draft.value.push(copy);
+	selectedUid.value = copy.table_uid;
+	dirty.value = true;
+}
+
+/**
+ * Hiding, never deleting (§6.4): a table with settled invoices against it is
+ * still referenced by them, so it leaves the floor and stays in the ledger.
+ */
 function deactivate() {
 	if (!selected.value) return;
 	selected.value.is_active = 0;
@@ -247,35 +281,88 @@ function deactivate() {
 
 // ---- drag (snap to grid, taller BinsConstructor pattern) -------------------
 
-let drag: { uid: string; sx: number; sy: number; ox: number; oy: number } | null = null;
+interface DragState {
+	uid: string;
+	mode: "move" | "resize";
+	sx: number;
+	sy: number;
+	ox: number;
+	oy: number;
+	ow: number;
+	oh: number;
+}
 
-function onDown(event: PointerEvent, entry: DraftTable) {
+const drag = ref<DragState | null>(null);
+/** The snapped footprint under the pointer, drawn behind the dragged tile. */
+const ghost = ref<PlacedLayout | null>(null);
+
+const ghostStyle = computed(() =>
+	ghost.value ? tileStyle(ghost.value, canvas.value) : {},
+);
+
+/** A 22px grip must not swallow the table it resizes. */
+function handleFits(layout: PlacedLayout): boolean {
+	const cell = canvas.value.cell * scale.value;
+	return layout.w * cell >= 64 && layout.h * cell >= 64;
+}
+
+function onDown(event: PointerEvent, entry: DraftTable, mode: "move" | "resize") {
 	selectedUid.value = entry.table_uid;
 	if (event.pointerType === "mouse" && event.button !== 0) return;
-	drag = { uid: entry.table_uid, sx: event.clientX, sy: event.clientY, ox: entry.layout.x, oy: entry.layout.y };
-	(event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+	drag.value = {
+		uid: entry.table_uid,
+		mode,
+		sx: event.clientX,
+		sy: event.clientY,
+		ox: entry.layout.x,
+		oy: entry.layout.y,
+		ow: entry.layout.w,
+		oh: entry.layout.h,
+	};
+	ghost.value = entry.layout;
+	// Capture on the element the listener is bound to, not on whatever child was
+	// under the finger: releasing over the label of a neighbouring tile would
+	// otherwise strand the drag with no pointerup.
+	(event.currentTarget as HTMLElement)?.setPointerCapture?.(event.pointerId);
 	event.preventDefault();
 	event.stopPropagation();
 }
 
 function onMove(event: PointerEvent) {
-	if (!drag) return;
-	const entry = draft.value.find((row) => row.table_uid === drag?.uid);
+	const state = drag.value;
+	if (!state) return;
+	const entry = draft.value.find((row) => row.table_uid === state.uid);
 	if (!entry) return;
-	const cell = canvas.value.cell;
-	const dx = Math.round((event.clientX - drag.sx) / cell);
-	const dy = Math.round((event.clientY - drag.sy) / cell);
-	entry.layout = clampToCanvas({ ...entry.layout, x: drag.ox + dx, y: drag.oy + dy }, canvas.value);
+	// Pointer pixels are screen pixels; cells are canvas pixels. The canvas is
+	// drawn scaled, so the two only agree at 1:1.
+	const cell = canvas.value.cell * scale.value;
+	const dx = Math.round((event.clientX - state.sx) / cell);
+	const dy = Math.round((event.clientY - state.sy) / cell);
+	entry.layout =
+		state.mode === "resize"
+			? resizeLayout(
+					{ ...entry.layout, w: state.ow, h: state.oh },
+					dx,
+					dy,
+					canvas.value,
+				)
+			: clampToCanvas({ ...entry.layout, x: state.ox + dx, y: state.oy + dy }, canvas.value);
+	ghost.value = entry.layout;
 }
 
 function onUp() {
-	if (!drag) return;
-	drag = null;
+	if (!drag.value) return;
+	drag.value = null;
+	ghost.value = null;
 	dirty.value = true;
 }
 
 function tileStyleFor(layout: PlacedLayout) {
 	return tileStyle(layout, canvas.value);
+}
+
+function labelStyleFor(layout: PlacedLayout) {
+	return labelStyle(layout, 1 / scale.value);
 }
 
 // ---- save -----------------------------------------------------------------
@@ -326,171 +413,10 @@ async function reloadAndRetry() {
 	floorStore.activeFloorTables.forEach((table, index) => {
 		const uid = table.table_uid || table.name;
 		if (known.has(uid)) return;
-		draft.value.push({
-			name: table.name,
-			table_uid: uid,
-			table_label: table.table_label,
-			seats: Number(table.seats) || 0,
-			is_active: table.is_active === 0 ? 0 : 1,
-			layout: resolveTableLayout(table, index, canvas.value),
-		});
+		draft.value.push(draftFromTable(table, index, canvas.value));
 	});
 	dirty.value = true;
 }
 </script>
 
-<style scoped>
-.floor-editor {
-	display: flex;
-	flex-direction: column;
-	flex: 1 1 auto;
-	min-height: 0;
-	overflow: hidden;
-	background: var(--pos-surface);
-}
-
-.floor-editor__toolbar {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	flex: 0 0 auto;
-	padding: 6px 8px;
-	border-bottom: 1px solid var(--pos-border);
-	background: var(--pos-surface);
-}
-
-/* Stacked below the rail's breakpoint; the plan owns the scroll either way. */
-.floor-editor__body {
-	display: flex;
-	flex-direction: column;
-	flex: 1 1 auto;
-	min-height: 0;
-	overflow: hidden;
-}
-
-.floor-editor__scroller {
-	flex: 1 1 auto;
-	min-height: 0;
-	overflow: auto;
-	padding: 8px;
-	background: var(--pos-bg-secondary);
-	touch-action: none;
-}
-
-.floor-editor__canvas {
-	position: relative;
-	background-color: var(--pos-surface);
-	background-image:
-		linear-gradient(to right, var(--pos-border-light) 1px, transparent 1px),
-		linear-gradient(to bottom, var(--pos-border-light) 1px, transparent 1px);
-	border: 1px solid var(--pos-border);
-	border-radius: 8px;
-}
-
-.floor-editor__tile {
-	position: absolute;
-	top: 0;
-	left: 0;
-	transform-origin: top left;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	border: 2px solid var(--floor-tile-color, #94a3b8);
-	border-radius: 10px;
-	background: var(--pos-surface-container);
-	color: var(--pos-text-primary);
-	cursor: grab;
-}
-
-.floor-editor__tile--selected {
-	outline: 2px solid var(--pos-primary);
-	outline-offset: -1px;
-}
-
-.floor-editor__tile-label {
-	font-size: 13px;
-	font-weight: 700;
-	color: var(--pos-text-primary);
-	pointer-events: none;
-}
-
-.floor-editor__empty {
-	position: absolute;
-	inset: 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	margin: 0;
-	background: transparent;
-	color: var(--pos-text-secondary);
-	font-size: 14px;
-}
-
-.floor-editor__rail {
-	flex: 0 0 auto;
-	max-height: 45%;
-	overflow-y: auto;
-	padding: 8px;
-	border-top: 1px solid var(--pos-border);
-	background: var(--pos-surface);
-	color: var(--pos-text-primary);
-}
-
-.floor-editor__hint {
-	margin: 0;
-	color: var(--pos-text-secondary);
-	font-size: 12px;
-	background: transparent;
-}
-
-.floor-editor__swatches {
-	display: flex;
-	gap: 6px;
-	margin-bottom: 8px;
-}
-
-.floor-editor__swatch {
-	width: 26px;
-	height: 26px;
-	border: 2px solid transparent;
-	border-radius: 50%;
-}
-
-.floor-editor__swatch--on {
-	border-color: var(--pos-text-primary);
-}
-
-.floor-editor__steppers {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	color: var(--pos-text-secondary);
-	font-size: 12px;
-}
-
-.floor-editor__stepper {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.floor-editor__size {
-	min-width: 40px;
-	text-align: center;
-	color: var(--pos-text-primary);
-	font-variant-numeric: tabular-nums;
-}
-
-.floor-editor__conflict-title {
-	font-size: 16px;
-	font-weight: 700;
-	color: var(--pos-text-primary);
-	background: var(--pos-surface);
-}
-
-.floor-editor__conflict-body {
-	color: var(--pos-text-secondary);
-	background: var(--pos-surface);
-}
-</style>
+<style scoped src="./floor-editor.css"></style>

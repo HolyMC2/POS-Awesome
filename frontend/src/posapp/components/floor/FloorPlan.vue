@@ -1,45 +1,69 @@
 <template>
 	<div class="floor-plan">
 		<div class="floor-plan__scroller">
-			<div class="floor-plan__canvas" :style="canvasStyleValue">
-				<button
-					v-for="tile in tiles"
-					:key="tile.table.name"
-					type="button"
-					class="floor-tile"
-					:class="[
-						`floor-tile--${tile.layout.shape || 'rect'}`,
-						{
-							'floor-tile--occupied': tile.occupied,
-							'floor-tile--syncing': tile.syncing,
-							'floor-tile--pending': tile.pending,
-							'floor-tile--target': transferActive && !tile.occupied,
-							'floor-tile--blocked': transferActive && tile.occupied,
-						},
-					]"
-					:style="[tileStyleFor(tile.layout), { '--floor-tile-color': tile.color }]"
-					:disabled="transferActive && tile.occupied"
-					:title="tile.hint"
-					:aria-label="tile.hint"
-					@click="onTap(tile)"
-				>
-					<span class="floor-tile__face" :style="labelStyleFor(tile.layout)">
-						<span class="floor-tile__label">{{ tile.table.table_label }}</span>
-						<span v-if="tile.total" class="floor-tile__total">{{ tile.total }}</span>
-						<span v-else-if="tile.seats" class="floor-tile__seats">{{ tile.seats }}</span>
-					</span>
-					<span v-if="tile.unsent" class="floor-tile__badge">{{ tile.unsent }}</span>
-					<span v-if="tile.pending" class="floor-tile__pending-dot" :title="pendingHint" />
-					<v-icon
-						v-if="tile.needsCleaning"
-						class="floor-tile__glyph"
-						icon="mdi-broom"
-						size="14"
-					/>
-				</button>
-				<p v-if="!tiles.length" class="floor-plan__empty">
-					{{ emptyMessage }}
-				</p>
+			<div class="floor-plan__stage" :style="stageStyleValue">
+				<div class="floor-plan__canvas" :style="[canvasStyleValue, scaleStyle]">
+					<button
+						v-for="tile in tiles"
+						:key="tile.table.name"
+						type="button"
+						class="floor-tile"
+						:class="[
+							`floor-tile--${tile.layout.shape || 'rect'}`,
+							{
+								'floor-tile--occupied': tile.occupied,
+								'floor-tile--syncing': tile.syncing,
+								'floor-tile--pending': tile.pending,
+								'floor-tile--dirty': tile.needsCleaning,
+								'floor-tile--target': transferActive && !tile.occupied,
+								'floor-tile--blocked': transferActive && tile.occupied,
+							},
+						]"
+						:style="[
+							tileStyleFor(tile.layout),
+							{ '--floor-tile-color': tile.color, '--floor-ring-turn': tile.ringTurn },
+						]"
+						:disabled="transferActive && tile.occupied"
+						:title="tile.hint"
+						:aria-label="tile.hint"
+						:data-test="`floor-tile-${tile.table.table_label}`"
+						@click="onTap(tile)"
+					>
+						<!-- The age ring: a fourth channel, deliberately not a fourth
+						     colour on the tile itself. Opacity still says free/occupied
+						     and the border still says the operator's own section. -->
+						<span
+							v-if="tile.occupied && tile.age !== 'fresh'"
+							class="floor-tile__ring"
+							:class="`floor-tile__ring--${tile.age}`"
+							aria-hidden="true"
+						/>
+						<span class="floor-tile__face" :style="labelStyleFor(tile.layout)">
+							<span class="floor-tile__label">{{ tile.table.table_label }}</span>
+							<span v-if="tile.total" class="floor-tile__total">{{ tile.total }}</span>
+							<span v-else-if="tile.seats" class="floor-tile__seats">{{ tile.seats }}</span>
+						</span>
+						<span v-if="tile.unsent" class="floor-tile__badge">{{ tile.unsent }}</span>
+						<span v-if="tile.pending" class="floor-tile__pending-dot" :title="pendingHint" />
+						<!-- The broom is itself the "mark clean" control: tapping the
+						     glyph clears the latch without opening the table, so a
+						     busser never seats a phantom party. stop keeps the tile's
+						     own tap-is-the-transition intact. -->
+						<button
+							v-if="tile.needsCleaning"
+							type="button"
+							class="floor-tile__glyph floor-tile__glyph--action"
+							:aria-label="verticalStore.t('Mark clean')"
+							:title="verticalStore.t('Mark clean')"
+							@click.stop="floorStore.markClean(tile.table.name)"
+						>
+							<v-icon icon="mdi-broom" size="14" />
+						</button>
+					</button>
+					<p v-if="!tiles.length" class="floor-plan__empty">
+						{{ emptyMessage }}
+					</p>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -51,27 +75,46 @@
  *
  * Opacity carries free (0.3) vs occupied (1.0); colour carries the operator's
  * OWN semantic (section / station), never status — one visual variable per
- * meaning, so the plan needs no legend. Volatile numbers ride badges.
+ * meaning, so the plan needs no legend. Volatile numbers ride badges. The age
+ * ring is the one addition, and it is a separate channel outside the tile's
+ * own paint (see `floorClock.ts` for why idle time earns a channel at all).
+ *
+ * The whole canvas scales as ONE transform rather than re-laying-out, because
+ * geometry is stored in grid units (§2.2): a plan authored at a desk lands on a
+ * phone by multiplication.
  */
 import { computed } from "vue";
 import { useFloorStore, type TableRow } from "../../stores/floorStore";
 import { useVerticalStore } from "../../stores/verticalStore";
 import { useFormat } from "../../format";
+import { ageStep, ageTurn, formatIdleShort, idleMinutes, useFloorClock } from "./floorClock";
 import {
 	canvasStyle,
 	colorHex,
+	fitScale,
 	labelStyle,
 	resolveCanvas,
 	resolveTableLayout,
+	scaledCanvasStyle,
 	tileStyle,
 	type PlacedLayout,
 } from "./floorGeometry";
+
+const props = defineProps<{
+	/** Pixels the plan may use across. Measured by the parent, not the window:
+	 *  the floor sits in the shell's selector column, so window width says
+	 *  nothing about how wide this panel actually is. */
+	availableWidth: number;
+	/** Fit the whole room across `availableWidth` instead of drawing it 1:1. */
+	fit: boolean;
+}>();
 
 const emit = defineEmits<{ (event: "open", table: TableRow): void }>();
 
 const floorStore = useFloorStore();
 const verticalStore = useVerticalStore();
 const { formatCurrency } = useFormat();
+const { now } = useFloorClock();
 
 const canvas = computed(() => resolveCanvas(floorStore.activeFloorRow));
 const canvasStyleValue = computed(() => canvasStyle(canvas.value));
@@ -83,12 +126,59 @@ const emptyMessage = computed(() =>
 	verticalStore.t("No tables yet — edit your floor plan to add some"),
 );
 
+/** The smallest side any placed tile has, in pixels at 1:1. */
+const smallestTilePx = computed(() => {
+	const cell = canvas.value.cell;
+	const sides = floorStore.activeFloorTables.map((table, index) => {
+		const layout = resolveTableLayout(table, index, canvas.value);
+		return Math.min(layout.w, layout.h) * cell;
+	});
+	return sides.length ? Math.min(...sides) : cell;
+});
+
+/**
+ * Fit-to-width, floored so the smallest table stays tappable.
+ *
+ * A 24×16 default frame is 1056px wide; fitting it across a 390px phone would
+ * shrink a 2-cell table to 33px — under the 40px touch floor, i.e. a board you
+ * can see but cannot use. When those two demands collide the touch floor wins
+ * and the waiter pans, because a mis-tap during service costs more than a
+ * swipe does.
+ */
+const scale = computed(() => {
+	if (!props.fit) return 1;
+	const fitted = fitScale(canvas.value, props.availableWidth);
+	const tappable = Math.min(1, 40 / Math.max(1, smallestTilePx.value));
+	return Math.max(fitted, tappable);
+});
+
+/**
+ * The scale is applied to the canvas, and `--floor-inv` undoes it for the
+ * chrome that must keep a constant screen size: labels, badges, glyphs. Only
+ * the GEOMETRY should shrink when the room is fitted.
+ */
+const scaleStyle = computed(() =>
+	scale.value === 1
+		? { "--floor-inv": "1" }
+		: { transform: `scale(${scale.value})`, "--floor-inv": String(1 / scale.value) },
+);
+
+/** The scaled footprint, so the scrollport scrolls the right distance. */
+const stageStyleValue = computed(() => scaledCanvasStyle(canvas.value, scale.value));
+
 const tiles = computed(() =>
 	floorStore.activeFloorTables.map((table, index) => {
 		const layout = resolveTableLayout(table, index, canvas.value);
 		const tableOrders = floorStore.ordersForTable(table.name);
 		const occupied = tableOrders.length > 0;
 		const total = tableOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
+		// The oldest untouched ticket on the table is the one that needs a waiter;
+		// a split bill where one half was just topped up must not reset the other.
+		const idle = tableOrders.reduce<number | null>((oldest, order) => {
+			const minutes = idleMinutes(order.modified, now.value);
+			if (minutes === null) return oldest;
+			return oldest === null || minutes > oldest ? minutes : oldest;
+		}, null);
 		return {
 			table,
 			layout,
@@ -103,18 +193,40 @@ const tiles = computed(() =>
 			// to tell "the kitchen has this" from "only this tablet has this".
 			pending: tableOrders.some((order) => order.pending_sync),
 			color: colorHex(layout.color),
-			hint: hintFor(table, occupied),
+			age: occupied ? ageStep(idle) : "fresh",
+			ringTurn: occupied ? ageTurn(idle) : 0,
+			hint: hintFor(table, occupied, total, idle),
 		};
 	}),
 );
 
-function hintFor(table: TableRow, occupied: boolean): string {
+/**
+ * The hover/long-press tooltip. On a desk terminal this is the detail view for
+ * every table that is not the open ticket, so it carries the numbers rather
+ * than repeating the label that is already printed on the tile.
+ */
+function hintFor(
+	table: TableRow,
+	occupied: boolean,
+	total: number,
+	idle: number | null,
+): string {
 	if (transferActive.value) {
 		return occupied
 			? `${table.table_label} — ${verticalStore.t("Occupied")}`
 			: `${verticalStore.t("Move here")}: ${table.table_label}`;
 	}
-	return `${table.table_label}${occupied ? ` — ${verticalStore.t("Occupied")}` : ""}`;
+	const parts: string[] = [table.table_label];
+	if (occupied) {
+		parts.push(verticalStore.t("Occupied"));
+		if (total) parts.push(formatCurrency(total));
+		if (idle !== null) parts.push(`${verticalStore.t("Idle")} ${formatIdleShort(idle)}`);
+	} else if (table.needs_cleaning) {
+		parts.push(verticalStore.t("Needs cleaning"));
+	} else if (table.seats) {
+		parts.push(`${table.seats} ${verticalStore.t("seats")}`);
+	}
+	return parts.join(" — ");
 }
 
 function tileStyleFor(layout: PlacedLayout) {
@@ -122,7 +234,7 @@ function tileStyleFor(layout: PlacedLayout) {
 }
 
 function labelStyleFor(layout: PlacedLayout) {
-	return labelStyle(layout);
+	return labelStyle(layout, 1 / scale.value);
 }
 
 function onTap(tile: { table: TableRow; occupied: boolean }) {
@@ -135,165 +247,4 @@ function onTap(tile: { table: TableRow; occupied: boolean }) {
 }
 </script>
 
-<style scoped>
-/* The canvas is a fixed-pixel plane, so it MUST live inside a bounded
-   scrollport. The chain is flex all the way up (FloorView caps the height):
-   an auto-height ancestor here would let the plane grow past the fold and
-   hide the bottom row behind the mobile dock. */
-.floor-plan {
-	display: flex;
-	flex-direction: column;
-	flex: 1 1 auto;
-	min-height: 0;
-	overflow: hidden;
-}
-
-.floor-plan__scroller {
-	flex: 1 1 auto;
-	min-height: 0;
-	overflow: auto;
-	padding: 8px;
-	background: var(--pos-bg-secondary);
-}
-
-.floor-plan__canvas {
-	position: relative;
-	background-color: var(--pos-surface);
-	background-image:
-		linear-gradient(to right, var(--pos-border-light) 1px, transparent 1px),
-		linear-gradient(to bottom, var(--pos-border-light) 1px, transparent 1px);
-	border: 1px solid var(--pos-border);
-	border-radius: 8px;
-}
-
-.floor-tile {
-	position: absolute;
-	top: 0;
-	left: 0;
-	transform-origin: top left;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: 2px;
-	border: 2px solid var(--floor-tile-color, #94a3b8);
-	border-radius: 10px;
-	background: var(--pos-surface);
-	color: var(--pos-text-primary);
-	opacity: 0.3;
-	transition: opacity 120ms ease-out;
-	cursor: pointer;
-}
-
-.floor-tile--round {
-	border-radius: 50%;
-}
-
-.floor-tile--occupied {
-	opacity: 1;
-	background: var(--pos-surface-variant);
-	color: var(--pos-text-primary);
-}
-
-.floor-tile--syncing {
-	animation: floor-tile-pulse 900ms ease-in-out infinite;
-}
-
-.floor-tile--target {
-	opacity: 1;
-	border-style: dashed;
-	border-color: var(--pos-success);
-	background: var(--pos-success-container);
-	color: var(--pos-text-primary);
-}
-
-.floor-tile--pending .floor-tile__label {
-	font-style: italic;
-}
-
-.floor-tile__pending-dot {
-	position: absolute;
-	top: -4px;
-	inset-inline-start: -4px;
-	width: 10px;
-	height: 10px;
-	border: 2px solid var(--pos-surface);
-	border-radius: 50%;
-	background: var(--pos-warning);
-}
-
-.floor-tile--blocked {
-	cursor: not-allowed;
-	opacity: 0.25;
-}
-
-.floor-tile__face {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 1px;
-	line-height: 1.1;
-	pointer-events: none;
-}
-
-.floor-tile__label {
-	font-size: 13px;
-	font-weight: 700;
-	color: var(--pos-text-primary);
-}
-
-.floor-tile__total {
-	font-size: 10px;
-	font-weight: 600;
-	color: var(--pos-primary);
-}
-
-.floor-tile__seats {
-	font-size: 10px;
-	color: var(--pos-text-secondary);
-}
-
-.floor-tile__badge {
-	position: absolute;
-	top: -6px;
-	inset-inline-end: -6px;
-	min-width: 18px;
-	padding: 0 4px;
-	border-radius: 9px;
-	background: var(--pos-error);
-	color: #ffffff;
-	font-size: 11px;
-	font-weight: 700;
-	line-height: 18px;
-	text-align: center;
-}
-
-.floor-tile__glyph {
-	position: absolute;
-	bottom: 2px;
-	inset-inline-start: 4px;
-	color: var(--pos-warning);
-}
-
-.floor-plan__empty {
-	position: absolute;
-	inset: 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: 16px;
-	text-align: center;
-	background: transparent;
-	color: var(--pos-text-secondary);
-	font-size: 14px;
-}
-
-@keyframes floor-tile-pulse {
-	0%,
-	100% {
-		box-shadow: 0 0 0 0 var(--pos-shadow);
-	}
-	50% {
-		box-shadow: 0 0 0 4px var(--pos-shadow-light);
-	}
-}
-</style>
+<style scoped src="./floor-plan.css"></style>

@@ -39,7 +39,7 @@
  * that matches no table is not an error — it opens a named tab under that
  * label, which is how the same gesture serves a coffee counter with no floor.
  */
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useFloorStore, type TableRow } from "../../stores/floorStore";
 import { useVerticalStore } from "../../stores/verticalStore";
 
@@ -82,12 +82,42 @@ const hint = computed(() => {
 	return match.value ? match.value.table_label : verticalStore.t("No match — opens a tab");
 });
 
+/**
+ * A desk terminal has a keyboard and usually a real numpad, and a cashier who
+ * has just typed "14" should not have to reach for the mouse to confirm it.
+ * The on-screen keys stay the touch path; this is the same pad for the hands
+ * already on the keys.
+ */
+function onKeydown(event: KeyboardEvent) {
+	if (event.key >= "0" && event.key <= "9") {
+		press(event.key);
+		event.preventDefault();
+		return;
+	}
+	if (event.key === "Backspace") {
+		backspace();
+		event.preventDefault();
+		return;
+	}
+	if (event.key === "Enter" && entry.value) {
+		confirm();
+		event.preventDefault();
+	}
+}
+
 watch(
 	() => props.modelValue,
 	(open) => {
-		if (open) entry.value = "";
+		if (open) {
+			entry.value = "";
+			window.addEventListener("keydown", onKeydown);
+		} else {
+			window.removeEventListener("keydown", onKeydown);
+		}
 	},
 );
+
+onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 
 function press(key: string) {
 	if (entry.value.length >= 8) return;
