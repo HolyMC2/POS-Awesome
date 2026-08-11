@@ -1,12 +1,12 @@
 <template>
 	<div>
-		<v-card class="selection mx-auto mt-3 pos-themed-card" style="max-height: 80vh; height: 80vh">
+		<v-card class="selection mx-auto mt-3 pos-themed-card" style="max-height: 80dvh; height: 80dvh">
 			<v-card-title>
 				<span class="text-h6 text-primary">{{ __("Offers") }}</span>
 			</v-card-title>
 			<div
 				class="my-0 py-0 overflow-y-auto"
-				style="max-height: 75vh"
+				style="max-height: 75dvh"
 				@mouseover="style = 'cursor: pointer'"
 			>
 				<v-data-table
@@ -81,7 +81,7 @@
 			</div>
 		</v-card>
 
-		<v-card flat style="max-height: 11vh; height: 11vh" class="cards mb-0 mt-3 py-0">
+		<v-card flat style="max-height: 11dvh; height: 11dvh" class="cards mb-0 mt-3 py-0">
 			<v-row align="start" no-gutters>
 				<v-col cols="12">
 					<v-btn

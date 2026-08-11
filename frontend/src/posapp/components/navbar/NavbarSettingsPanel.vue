@@ -322,6 +322,16 @@ function handleEmbeddedActionSaved() {
 <style scoped>
 .navbar-settings-panel {
 	width: min(1040px, calc(100vw - 24px));
+	/* Cap to the viewport and become a flex column so the header/rail stay put
+	   and the detail scrolls inside — otherwise header + rail + a tall detail
+	   exceed a phone (and, centered, clip at BOTH ends: in landscape the close
+	   button sits above the top edge, un-tappable) with no scroll. The
+	   backdrop below adds overflow-y:auto as a fallback for a card still taller
+	   than the cap. */
+	max-height: calc(100dvh - 24px);
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
 	border-radius: 28px;
 	border: 1px solid var(--pos-border);
 	overflow: hidden;
@@ -337,6 +347,7 @@ function handleEmbeddedActionSaved() {
 	display: grid;
 	place-items: center;
 	padding: 12px;
+	overflow-y: auto;
 }
 
 .navbar-settings-panel__header {
@@ -401,7 +412,12 @@ function handleEmbeddedActionSaved() {
 
 .navbar-settings-panel__workspace {
 	grid-template-columns: 280px minmax(0, 1fr);
-	min-height: min(72vh, 760px);
+	/* Fill the card's remaining height and let the detail (its own
+	   overflow-y:auto) scroll, instead of a fixed 72vh floor that made
+	   header + workspace overflow a phone. Desktop is unaffected — the card
+	   is shorter than its max-height there, so this resolves to content. */
+	flex: 1 1 auto;
+	min-height: 0;
 }
 
 .navbar-settings-panel__rail {

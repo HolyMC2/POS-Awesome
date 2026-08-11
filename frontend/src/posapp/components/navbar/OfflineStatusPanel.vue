@@ -214,6 +214,14 @@ const cacheUsageLabel = computed(() => `${summary.value.cacheUsage || 0}%`);
 	top: calc(100% + 10px);
 	right: 0;
 	width: min(360px, calc(100vw - 24px));
+	/* The panel opens precisely when sync is failing — lists populated + a
+	   snapshot warning — which is its tallest state. Without a cap it grows
+	   past the viewport and the recovery row (Go Online / Refresh / Rebuild /
+	   Clear Cache / Diagnostics) falls off the bottom with nothing to scroll.
+	   Bound the whole panel to the viewport and let it own the scroll. */
+	max-height: calc(100dvh - 80px);
+	overflow-y: auto;
+	overscroll-behavior: contain;
 	padding: 16px;
 	display: grid;
 	gap: 14px;
