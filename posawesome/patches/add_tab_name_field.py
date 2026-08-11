@@ -13,7 +13,10 @@ def execute():
                 "insert_after": "customer",
                 "no_copy": 1,
                 "hidden": 1,
-                "translatable": 1,
+                # A customer's name on a cup is data, not vocabulary: a
+                # translatable Data field routes through _() at print time and
+                # a name colliding with a translation key prints wrong.
+                "translatable": 0,
                 "print_hide": 0,
             },
         )
@@ -28,7 +31,7 @@ def execute():
                 "insert_after": "customer",
                 "no_copy": 1,
                 "hidden": 1,
-                "translatable": 1,
+                "translatable": 0,
                 "print_hide": 0,
             },
         )
