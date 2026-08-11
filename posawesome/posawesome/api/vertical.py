@@ -8,7 +8,11 @@ import frappe
 # Bumped whenever the resolved payload's SHAPE changes in a way a queued
 # offline invoice would need to detect on replay (plan C7). Not the preset's
 # content version — the schema of what resolve_capability_json returns.
-CAPABILITY_PAYLOAD_VERSION = 1
+#
+# 2 (2026-08-11): added the top-level `invoice_mode` key and the `floor` dock
+# tab. A sale queued under v1 was built with no notion of Record Only, so a
+# version mismatch must route it to draft-for-review rather than blind submit.
+CAPABILITY_PAYLOAD_VERSION = 2
 
 
 def _profile_capability_link(pos_profile_name):

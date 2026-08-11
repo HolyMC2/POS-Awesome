@@ -16,6 +16,7 @@
   "cart_style",
   "column_break_layout",
   "dock_tabs",
+  "invoice_mode",
   "section_capabilities",
   "capabilities",
   "section_vocabulary",
@@ -86,10 +87,17 @@
   },
   {
    "default": "browse, offers, cart, coupons, pay",
-   "description": "Comma-separated bottom-dock tab ids, in render order. Valid: browse, offers, cart, coupons, pay.",
+   "description": "Comma-separated bottom-dock tab ids, in render order. Valid: browse, offers, cart, coupons, pay, floor.",
    "fieldname": "dock_tabs",
    "fieldtype": "Small Text",
    "label": "Dock Tabs"
+  },
+  {
+   "description": "How an open ticket is backed. Blank keeps the shipped retail behaviour. Sales Invoice / POS Invoice submit the accounting document at pay (the cafeteria-counter default). Record Only backs the ticket with a POS Table Order and materialises the invoice only at settle — the mode full table service needs, because a draft invoice is force-deleted when its shift closes.",
+   "fieldname": "invoice_mode",
+   "fieldtype": "Select",
+   "label": "Invoice Mode",
+   "options": "\nSales Invoice\nPOS Invoice\nRecord Only"
   },
   {
    "fieldname": "section_capabilities",

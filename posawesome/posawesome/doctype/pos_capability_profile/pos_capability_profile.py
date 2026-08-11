@@ -12,7 +12,13 @@ from frappe.model.document import Document
 # that names an unknown id (fail at edit time, not the counter); the payload
 # builder and the frontend registry additionally filter unknowns as a drift
 # defense for presets saved before a shipped id list catches up.
-VALID_DOCK_TABS = ("browse", "offers", "cart", "coupons", "pay")
+VALID_DOCK_TABS = ("browse", "offers", "cart", "coupons", "pay", "floor")
+
+# What a preset that names NO dock tabs falls back to. Deliberately not
+# VALID_DOCK_TABS: adding a vertical's tab to the valid list must not hand it
+# to every preset that left the field blank — a retail register would grow a
+# floor tab onto a floor it has no tables for.
+DEFAULT_DOCK_TABS = ("browse", "offers", "cart", "coupons", "pay")
 
 # Layout keys the frontend view registry has entries for. Kept in sync with
 # vertical/viewRegistry.ts by tests on both sides.
@@ -24,7 +30,14 @@ VALID_ITEMS_VIEWS = ("list", "card")
 # typo ("tab_identiy") is a silent no-op at the counter otherwise — same
 # reasoning as the dock tabs: reject it while an admin is still looking at it.
 # An entry may carry a `:Role` suffix; only the base name is checked here.
-KNOWN_CAPABILITIES = ("tab_identity", "service_types", "external_document_checkout")
+KNOWN_CAPABILITIES = ("tab_identity", "service_types", "external_document_checkout", "tables")
+
+# How the open ticket is backed. Blank = the shipped retail behaviour (a draft
+# invoice per ticket). "Record Only" is the one mode that needs POS Table Order:
+# a draft Sales Invoice is force-deleted when its shift closes, and shifts are
+# per-user, so a draft cannot back a table that outlives one waiter's turn
+# (spec §0.1 / F1).
+VALID_INVOICE_MODES = ("", "Sales Invoice", "POS Invoice", "Record Only")
 
 
 def _split_csv(value):
@@ -41,6 +54,8 @@ class POSCapabilityProfile(Document):
             frappe.throw(f"Unknown cart style «{self.cart_style}»")
         if self.items_view_default and self.items_view_default not in VALID_ITEMS_VIEWS:
             frappe.throw(f"Unknown items view «{self.items_view_default}»")
+        if self.invoice_mode and self.invoice_mode not in VALID_INVOICE_MODES:
+            frappe.throw(f"Unknown invoice mode «{self.invoice_mode}»")
 
         tabs = _split_csv(self.dock_tabs)
         unknown = [t for t in tabs if t not in VALID_DOCK_TABS]
@@ -97,10 +112,14 @@ class POSCapabilityProfile(Document):
                 "items_view": {"default": items_view_default, "allow": allow},
                 "items_panel": self.items_panel or "standard",
                 "cart_style": self.cart_style or "table",
-                "dock_tabs": dock_tabs or list(VALID_DOCK_TABS),
+                "dock_tabs": dock_tabs or list(DEFAULT_DOCK_TABS),
                 "lean_vertical": bool(self.lean_vertical),
             },
             "capabilities": _split_csv(self.capabilities),
             "labels": labels,
             "print_format": self.print_format or None,
+            # Top level, not under `layout`: how the ticket is backed is a
+            # data-model choice the offline write queue branches on, not a
+            # rendering one.
+            "invoice_mode": self.invoice_mode or None,
         }

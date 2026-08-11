@@ -113,6 +113,72 @@ class TestCapabilityResolution(IntegrationTestCase):
                 }
             ).insert()
 
+    def test_floor_is_an_accepted_dock_tab(self):
+        doc = frappe.get_doc(
+            {
+                "doctype": "POS Capability Profile",
+                "profile_name": self.PRESET,
+                "dock_tabs": "browse, cart, pay, floor",
+                "capabilities": "tables",
+            }
+        ).insert()
+
+        self.assertEqual(
+            doc.as_frontend_payload()["layout"]["dock_tabs"],
+            ["browse", "cart", "pay", "floor"],
+        )
+        self.assertIn("tables", doc.as_frontend_payload()["capabilities"])
+
+    def test_a_blank_dock_tab_list_does_not_grow_a_floor_tab(self):
+        # Adding "floor" to VALID_DOCK_TABS must not hand it to every preset
+        # that named no tabs — a retail register has no tables to render.
+        doc = frappe.get_doc(
+            {"doctype": "POS Capability Profile", "profile_name": self.PRESET}
+        ).insert()
+
+        self.assertEqual(
+            doc.as_frontend_payload()["layout"]["dock_tabs"],
+            list(pos_capability_profile.DEFAULT_DOCK_TABS),
+        )
+        self.assertNotIn("floor", doc.as_frontend_payload()["layout"]["dock_tabs"])
+
+    def test_invoice_mode_rides_the_payload_at_top_level(self):
+        doc = frappe.get_doc(
+            {
+                "doctype": "POS Capability Profile",
+                "profile_name": self.PRESET,
+                "invoice_mode": "Record Only",
+            }
+        ).insert()
+
+        payload = doc.as_frontend_payload()
+        self.assertEqual(
+            payload["invoice_mode"], "Record Only",
+            "the offline write queue branches on this, so it is not a layout key",
+        )
+
+    def test_a_blank_invoice_mode_resolves_to_none(self):
+        doc = frappe.get_doc(
+            {"doctype": "POS Capability Profile", "profile_name": self.PRESET}
+        ).insert()
+
+        self.assertIsNone(doc.as_frontend_payload()["invoice_mode"])
+
+    def test_unknown_invoice_mode_rejected_at_validate(self):
+        with self.assertRaises(frappe.ValidationError):
+            frappe.get_doc(
+                {
+                    "doctype": "POS Capability Profile",
+                    "profile_name": self.PRESET,
+                    "invoice_mode": "Vale de papel",
+                }
+            ).insert()
+
+    def test_payload_version_moved_with_the_shape(self):
+        # invoice_mode is a NEW top-level key: a sale queued under the old
+        # shape must be routed to draft-for-review, not blind-submitted.
+        self.assertGreaterEqual(vertical.CAPABILITY_PAYLOAD_VERSION, 2)
+
     def test_role_gated_capability_accepted_at_validate(self):
         # `capability:Role` is the documented syntax — only the base name is
         # vocabulary, the suffix is a role the frontend resolves.
