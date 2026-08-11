@@ -203,7 +203,7 @@
 					/>
 				</div>
 			</v-expand-transition>
-			<div class="mobile-dock__tabs" :style="{ '--dock-tab-count': dockTabs.length }">
+			<div class="mobile-dock__tabs" :style="{ '--dock-tab-count': dockTabCount }">
 				<button
 					v-for="tab in dockTabs"
 					:key="tab.id"
@@ -240,6 +240,7 @@ import {
 	nextTick,
 } from "vue";
 import { resolveCartView, resolveItemsView } from "../../../vertical/viewRegistry";
+import { buildDockTabDefs } from "../../../vertical/viewContracts";
 import OpeningDialog from "../shift/OpeningDialog.vue";
 import PosOffers from "../offers/PosOffers.vue";
 import PosCoupons from "../offers/PosCoupons.vue";
@@ -258,11 +259,11 @@ import { clearExpiredCustomerBalances } from "../../../../offline/index";
 import { useResponsive } from "../../../composables/core/useResponsive";
 import { connectQzTray } from "../../../services/qzTray";
 import { useRtl } from "../../../composables/core/useRtl";
-import { useUIStore } from "../../../stores/uiStore.js";
-import { useInvoiceStore } from "../../../stores/invoiceStore.js";
+import { useUIStore } from "../../../stores/uiStore";
+import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { useVerticalStore } from "../../../stores/verticalStore";
-import { useItemsStore } from "../../../stores/itemsStore.js";
-import { useCustomersStore } from "../../../stores/customersStore.js";
+import { useItemsStore } from "../../../stores/itemsStore";
+import { useCustomersStore } from "../../../stores/customersStore";
 import { storeToRefs } from "pinia";
 import { parseBooleanSetting } from "../../../utils/stock";
 import { useCustomerDisplayPublisher } from "../../../composables/pos/shared/useCustomerDisplayPublisher";
@@ -568,57 +569,21 @@ export default {
 		// Dock tabs render from the capability profile's dock_tabs list —
 		// the shell owns HOW each id is drawn, the profile owns WHICH ids
 		// appear and in what order (plan M2). Unknown ids are dropped.
-		const DOCK_TAB_DEFS = {
-			browse: {
-				icon: "mdi-magnify",
-				iconSize: 20,
-				label: () => __("Browse"),
-				ariaLabel: () => __("Browse"),
-				isActive: () => isSelectorViewActive("items"),
-				onTap: () => setSelectorView("items"),
-			},
-			offers: {
-				icon: "mdi-tag-outline",
-				iconSize: 20,
-				badgeSm: true,
-				badge: () => offersCount.value,
-				label: () => __("Offers"),
-				ariaLabel: () => (offersCount.value ? `${__("Offers")} — ${offersCount.value}` : __("Offers")),
-				isActive: () => activeView.value === "offers",
-				onTap: () => setSelectorView("offers"),
-			},
-			cart: {
-				icon: "mdi-cart-outline",
-				iconSize: 22,
-				cls: "mobile-dock__tab--cart",
-				badge: () => itemsCount.value,
-				label: () => __("Cart"),
-				ariaLabel: () =>
-					itemsCount.value ? `${__("Cart")} — ${itemsCount.value} ${__("items")}` : __("Cart"),
-				isActive: () => compactPanel.value === "invoice",
-				onTap: () => showInvoicePanel(),
-			},
-			coupons: {
-				icon: "mdi-ticket-percent-outline",
-				iconSize: 20,
-				badgeSm: true,
-				badge: () => couponsCount.value,
-				label: () => __("Coupons"),
-				ariaLabel: () =>
-					couponsCount.value ? `${__("Coupons")} — ${couponsCount.value}` : __("Coupons"),
-				isActive: () => activeView.value === "coupons",
-				onTap: () => setSelectorView("coupons"),
-			},
-			pay: {
-				icon: "mdi-credit-card-outline",
-				iconSize: 20,
-				cls: "mobile-dock__tab--pay",
-				label: () => __("Pay"),
-				ariaLabel: () => __("Pay"),
-				isActive: () => activeView.value === "payment",
-				onTap: () => triggerInvoicePay(),
-			},
-		};
+		// The defs themselves live in viewContracts.ts so the map is bound to
+		// DockTabId at compile time; this script block is plain JS and cannot
+		// carry that annotation itself.
+		const DOCK_TAB_DEFS = buildDockTabDefs({
+			__,
+			offersCount,
+			couponsCount,
+			itemsCount,
+			activeView,
+			compactPanel,
+			isSelectorViewActive,
+			setSelectorView,
+			showInvoicePanel,
+			triggerInvoicePay,
+		});
 		const dockTabs = computed(() =>
 			vertical.layout.dock_tabs
 				.map((id) => {
@@ -632,6 +597,11 @@ export default {
 				})
 				.filter((tab) => tab.icon),
 		);
+		// The grid is `repeat(var(--dock-tab-count), …)`, and repeat(0, …) is
+		// invalid at computed-value time — it would collapse the whole track
+		// list rather than render nothing. A preset that drops every tab
+		// should leave the dock empty, not broken.
+		const dockTabCount = computed(() => Math.max(1, dockTabs.value.length));
 		const getFallbackBottomSpace = () => {
 			const rawValue = responsive.responsiveStyles.value["--bottom-safe-space"];
 			const parsed = Number.parseFloat(String(rawValue || "0"));
@@ -716,7 +686,13 @@ export default {
 			}
 		};
 		const focusAdditionalDiscountField = () => {
-			// Bus consumers (keyboard shortcut) expect the field visible.
+			// Bus consumers (keyboard shortcut) expect the field visible — but
+			// the collapse control is v-if'd on this same condition, so opening
+			// the row without it strands a disabled field the operator has no
+			// way to close.
+			if (!showDockDiscountToggle.value) {
+				return;
+			}
 			dockDiscountOpen.value = true;
 			nextTick(() => {
 				const field = additionalDiscountField.value;
@@ -929,6 +905,7 @@ export default {
 			ItemsView,
 			CartView,
 			dockTabs,
+			dockTabCount,
 			activeView,
 			paymentDialogOpen,
 			isPhone,

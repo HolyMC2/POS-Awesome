@@ -65,3 +65,53 @@ describe("uiStore parked orders", () => {
 		expect(store.invoiceManagementDraftSource).toBe("quote");
 	});
 });
+
+// setRegisterData is the only production write path for the capability
+// payload (the opening data carries it as a sibling — plan C7), so its
+// presence-check semantics decide whether a preset can ever be cleared.
+describe("uiStore capability payload", () => {
+	beforeEach(() => {
+		setActivePinia(createPinia());
+	});
+
+	const opening = { pos_profile: { name: "P1" } as any, pos_opening_shift: { name: "S1" } };
+
+	it("stores a payload the opening carries", () => {
+		const store = useUIStore();
+
+		store.setRegisterData({ ...opening, capability_profile: { name: "cafe" } });
+
+		expect(store.capabilityPayload).toEqual({ name: "cafe" });
+	});
+
+	it("CLEARS a prior preset when the opening carries an explicit null", () => {
+		const store = useUIStore();
+		store.setRegisterData({ ...opening, capability_profile: { name: "cafe" } });
+
+		// Register moved off the preset — leaving the old one in place would
+		// keep the counter in a vertical the profile no longer names.
+		store.setRegisterData({ ...opening, capability_profile: null });
+
+		expect(store.capabilityPayload).toBe(null);
+	});
+
+	it("KEEPS the prior preset when the key is absent entirely", () => {
+		const store = useUIStore();
+		store.setRegisterData({ ...opening, capability_profile: { name: "cafe" } });
+
+		// A partial register update (older server, or a payload-free path)
+		// must not blank a resolved preset.
+		store.setRegisterData(opening);
+
+		expect(store.capabilityPayload).toEqual({ name: "cafe" });
+	});
+
+	it("replaces the prior preset when a new one arrives", () => {
+		const store = useUIStore();
+		store.setRegisterData({ ...opening, capability_profile: { name: "cafe" } });
+
+		store.setRegisterData({ ...opening, capability_profile: { name: "taller-repair" } });
+
+		expect(store.capabilityPayload).toEqual({ name: "taller-repair" });
+	});
+});
