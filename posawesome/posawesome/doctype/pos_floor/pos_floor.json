@@ -1,0 +1,134 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:floor_uid",
+ "creation": "2026-08-11 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "floor_uid",
+  "floor_name",
+  "company",
+  "column_break_scope",
+  "pos_profile",
+  "sequence",
+  "is_active",
+  "section_layout",
+  "layout"
+ ],
+ "fields": [
+  {
+   "description": "Client-generated UUID. Deterministic naming keeps a re-applied vertical template idempotent (spec F3).",
+   "fieldname": "floor_uid",
+   "fieldtype": "Data",
+   "label": "Floor UID",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "floor_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Floor Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_scope",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Register this floor belongs to. Blank = every register of the company sees it.",
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "label": "POS Profile",
+   "options": "POS Profile",
+   "search_index": 1
+  },
+  {
+   "default": "1",
+   "description": "Tab order on the floor switcher.",
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "label": "Sequence"
+  },
+  {
+   "default": "1",
+   "description": "Soft delete. Floors are never hard-deleted while an order or a table references them.",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Is Active"
+  },
+  {
+   "fieldname": "section_layout",
+   "fieldtype": "Section Break",
+   "label": "Canvas"
+  },
+  {
+   "description": "Canvas reference frame: {\"cols\": n, \"rows\": n, \"cell\": px, \"background\": \"...\"}. Table geometry is stored in grid units against this frame so a plan authored on a desk screen renders on a tablet.",
+   "fieldname": "layout",
+   "fieldtype": "JSON",
+   "label": "Layout"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "POSAwesome",
+ "name": "POS Floor",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "POS Manager"
+  },
+  {
+   "read": 1,
+   "role": "POS User"
+  },
+  {
+   "read": 1,
+   "role": "POS Awesome Supervisor"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

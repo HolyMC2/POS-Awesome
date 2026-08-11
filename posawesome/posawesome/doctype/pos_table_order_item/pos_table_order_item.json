@@ -1,0 +1,106 @@
+{
+ "actions": [],
+ "creation": "2026-08-11 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "line_uid",
+  "item_code",
+  "item_name",
+  "qty",
+  "uom",
+  "rate",
+  "amount",
+  "course_idx",
+  "fired",
+  "fired_at",
+  "notes"
+ ],
+ "fields": [
+  {
+   "description": "Client-generated per-line id. THE key the offline per-line union merge upserts on — two waiters on one table must never overwrite each other's lines.",
+   "fieldname": "line_uid",
+   "fieldtype": "Data",
+   "label": "Line UID",
+   "reqd": 1
+  },
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Name"
+  },
+  {
+   "default": "1",
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty"
+  },
+  {
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "label": "UOM",
+   "options": "UOM"
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rate"
+  },
+  {
+   "description": "Always recomputed server-side as qty x rate — never trusted from the client.",
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "description": "Integer course index, not a Link to a child row (spec §2.5).",
+   "fieldname": "course_idx",
+   "fieldtype": "Int",
+   "label": "Course"
+  },
+  {
+   "default": "0",
+   "description": "Dispatched to the kitchen. A fired line cannot be silently removed by an offline update.",
+   "fieldname": "fired",
+   "fieldtype": "Check",
+   "label": "Fired"
+  },
+  {
+   "fieldname": "fired_at",
+   "fieldtype": "Datetime",
+   "label": "Fired At"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "POSAwesome",
+ "name": "POS Table Order Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

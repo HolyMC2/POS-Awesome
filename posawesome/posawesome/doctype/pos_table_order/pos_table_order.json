@@ -1,0 +1,244 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:order_uid",
+ "creation": "2026-08-11 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "order_uid",
+  "table",
+  "status",
+  "column_break_scope",
+  "pos_profile",
+  "company",
+  "pos_opening_shift",
+  "section_identity",
+  "tab_name",
+  "guest_count",
+  "service_type",
+  "column_break_identity",
+  "customer",
+  "opened_by",
+  "waiter",
+  "section_items",
+  "items",
+  "section_sync",
+  "posa_client_request_id",
+  "settled_doctype",
+  "settled_invoice",
+  "column_break_sync",
+  "last_fired"
+ ],
+ "fields": [
+  {
+   "description": "Client-generated UUID. Deterministic naming makes the open call idempotent offline and re-apply-safe (spec F3).",
+   "fieldname": "order_uid",
+   "fieldtype": "Data",
+   "label": "Order UID",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "description": "Nullable — a null table is a counter/takeaway/named-tab order. Deliberately NOT unique: one table with many open orders is what makes split bills work.",
+   "fieldname": "table",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Table",
+   "options": "POS Table",
+   "search_index": 1
+  },
+  {
+   "default": "Open",
+   "description": "The order's own lifecycle. The table's board colour stays derived from the open-order count; only Settling is stored, and only to make settle idempotent under a lost ack.",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Open\nSettling\nSettled\nCancelled",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_scope",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "label": "POS Profile",
+   "options": "POS Profile",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Binds the order to a shift WITHOUT inheriting draft-invoice-delete-at-close. Shifts are per-user, so the floor is scoped by the REGISTER's set of open shifts, never the caller's own (spec F5).",
+   "fieldname": "pos_opening_shift",
+   "fieldtype": "Link",
+   "label": "POS Opening Shift",
+   "options": "POS Opening Shift",
+   "search_index": 1
+  },
+  {
+   "fieldname": "section_identity",
+   "fieldtype": "Section Break",
+   "label": "Identity"
+  },
+  {
+   "description": "The cafeteria \"name on the cup\" — a first-class peer of the table, not a fallback.",
+   "fieldname": "tab_name",
+   "fieldtype": "Data",
+   "label": "Tab Name"
+  },
+  {
+   "fieldname": "guest_count",
+   "fieldtype": "Int",
+   "label": "Guests",
+   "non_negative": 1
+  },
+  {
+   "description": "Recorded only — this value does NOT drive tax in v1 (spec §2.9). Mirrors the shipped posa_rt_service_type values.",
+   "fieldname": "service_type",
+   "fieldtype": "Data",
+   "label": "Service Type"
+  },
+  {
+   "fieldname": "column_break_identity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "description": "Who opened the ticket. `owner` means \"who inserted the row\" and is not the same thing after a handover.",
+   "fieldname": "opened_by",
+   "fieldtype": "Link",
+   "label": "Opened By",
+   "options": "User"
+  },
+  {
+   "description": "Current server. Transfers at handover; stamped onto the settled invoice as posa_rt_waiter.",
+   "fieldname": "waiter",
+   "fieldtype": "Link",
+   "label": "Waiter",
+   "options": "User"
+  },
+  {
+   "fieldname": "section_items",
+   "fieldtype": "Section Break",
+   "label": "Lines"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "POS Table Order Item"
+  },
+  {
+   "fieldname": "section_sync",
+   "fieldtype": "Section Break",
+   "label": "Sync & Settlement"
+  },
+  {
+   "description": "Idempotency key. Carries the id of the LAST applied write (open or update), so a network retry of the same request is a no-op.",
+   "fieldname": "posa_client_request_id",
+   "fieldtype": "Data",
+   "label": "Client Request ID",
+   "search_index": 1
+  },
+  {
+   "description": "Which accounting doctype this order settled into. A register running create_pos_invoice_instead_of_sales_invoice produces a POS Invoice, so a plain Link to Sales Invoice would be a dangling reference on those tenants.",
+   "fieldname": "settled_doctype",
+   "fieldtype": "Link",
+   "label": "Settled Doctype",
+   "link_filters": "[[\"DocType\",\"name\",\"in\",[\"Sales Invoice\",\"POS Invoice\"]]]",
+   "options": "DocType",
+   "read_only": 1
+  },
+  {
+   "description": "The accounting document, materialised only at settle. Indexed: this is the reverse of posa_rt_table_order's hot path — finding the order behind an invoice.",
+   "fieldname": "settled_invoice",
+   "fieldtype": "Dynamic Link",
+   "label": "Settled Invoice",
+   "options": "settled_doctype",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_sync",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Last kitchen-ticket snapshot, keyed by line_uid. The KOT is a print projection diffed against this, so a cancellation ticket comes for free and the diff survives offline (spec §5).",
+   "fieldname": "last_fired",
+   "fieldtype": "JSON",
+   "label": "Last Fired Snapshot"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "POSAwesome",
+ "name": "POS Table Order",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "POS Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "print": 1,
+   "read": 1,
+   "role": "POS User",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

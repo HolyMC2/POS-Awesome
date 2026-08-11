@@ -1,0 +1,162 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:table_uid",
+ "creation": "2026-08-11 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "table_uid",
+  "table_label",
+  "floor",
+  "column_break_scope",
+  "seats",
+  "is_active",
+  "section_board",
+  "occupied",
+  "needs_cleaning",
+  "column_break_board",
+  "bill_printed_at",
+  "section_layout",
+  "layout"
+ ],
+ "fields": [
+  {
+   "description": "Client-generated UUID. Deterministic naming keeps a re-applied vertical template idempotent (spec F3) and doubles as the offline upsert key.",
+   "fieldname": "table_uid",
+   "fieldtype": "Data",
+   "label": "Table UID",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "description": "Text, not a number — \"Barra 3\" and \"Terraza A\" are real table names.",
+   "fieldname": "table_label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Table Label",
+   "reqd": 1
+  },
+  {
+   "fieldname": "floor",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Floor",
+   "options": "POS Floor",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_scope",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "2",
+   "description": "Default cover count. There is no seat-level model.",
+   "fieldname": "seats",
+   "fieldtype": "Int",
+   "label": "Seats"
+  },
+  {
+   "default": "1",
+   "description": "Soft delete. A table stamped on a settled invoice is reporting history — never hard-delete it.",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Is Active"
+  },
+  {
+   "fieldname": "section_board",
+   "fieldtype": "Section Break",
+   "label": "Board State"
+  },
+  {
+   "default": "0",
+   "description": "Fast-repaint hint reconciled from the open-order count — NEVER the source of truth. Written only by reconcile_table_occupancy (api/restaurant/_tickets.py).",
+   "fieldname": "occupied",
+   "fieldtype": "Check",
+   "label": "Occupied",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "default": "0",
+   "description": "Awaiting bussing. The one derived-looking state nothing in the ledger implies, so it is stored.",
+   "fieldname": "needs_cleaning",
+   "fieldtype": "Check",
+   "label": "Needs Cleaning"
+  },
+  {
+   "fieldname": "column_break_board",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Proforma handed to the table. Tracked here, never by overloading posa_is_printed — that flag is load-bearing for shift close (spec F2).",
+   "fieldname": "bill_printed_at",
+   "fieldtype": "Datetime",
+   "label": "Bill Printed At"
+  },
+  {
+   "fieldname": "section_layout",
+   "fieldtype": "Section Break",
+   "label": "Geometry"
+  },
+  {
+   "description": "{\"x\": n, \"y\": n, \"w\": n, \"h\": n, \"rotation\": deg, \"shape\": \"square|round\", \"color\": \"#rrggbb\"} in GRID units against the floor's canvas frame — not bare pixels.",
+   "fieldname": "layout",
+   "fieldtype": "JSON",
+   "label": "Layout"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "POSAwesome",
+ "name": "POS Table",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "POS Manager"
+  },
+  {
+   "read": 1,
+   "role": "POS User"
+  },
+  {
+   "read": 1,
+   "role": "POS Awesome Supervisor"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
