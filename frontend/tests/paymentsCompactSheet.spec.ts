@@ -84,6 +84,12 @@ describe("payment action bar anchoring", () => {
 		expect(card).toContain("flex: 1 1 auto");
 		expect(card).toContain("min-height: 0");
 		expect(card).toContain("overflow: hidden");
+		// v-card is display:block by default; the scrollport's flex/min-height
+		// only exist inside a flex parent. Without these two lines the sheet
+		// clipped instead of scrolling and every method below the fold was
+		// unreachable (prod, 2026-08-10).
+		expect(card).toContain("display: flex");
+		expect(card).toContain("flex-direction: column");
 	});
 
 	it("anchors the bar as a flex sibling below the scrollport, not sticky", () => {

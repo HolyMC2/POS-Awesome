@@ -2893,6 +2893,14 @@ defineExpose({
 	}
 
 	.payment-shell--anchored .payment-card {
+		/* v-card is display:block by default — without this the scroll child's
+		   flex/min-height mean nothing, it grows to full content height and the
+		   card's overflow just CLIPS it: no scrolling, every method below the
+		   fold unreachable (prod report 2026-08-10, "can't scroll, no card or
+		   mercadopago"). The card must be a flex column for the scrollport's
+		   constraint to exist at all. */
+		display: flex;
+		flex-direction: column;
 		flex: 1 1 auto;
 		min-height: 0;
 		height: auto;
