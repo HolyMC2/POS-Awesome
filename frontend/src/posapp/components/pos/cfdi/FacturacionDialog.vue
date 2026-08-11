@@ -1,9 +1,8 @@
 <template>
 	<v-dialog
 		v-model="dialogModel"
-		:fullscreen="isMobile"
-		:max-width="isMobile ? undefined : 760"
-		:transition="isMobile ? 'dialog-bottom-transition' : 'dialog-transition'"
+		v-bind="dialogProps"
+		:transition="isFullscreenDialog ? 'dialog-bottom-transition' : 'dialog-transition'"
 		scrollable
 	>
 		<v-card class="cfdi-dialog-card">
@@ -140,11 +139,22 @@
  * fiscal data and stamp them (timbrar) — the POS-side face of emc.
  *
  * Two panes inside one dialog: the list (search + status chips) and the
- * stamp form for the opened invoice. Fullscreen on phones; the card text
- * is the single scrollport (fixed header, no nested height:100% chains).
+ * stamp form for the opened invoice. Fullscreen via useDialogFullscreen
+ * (geometry props DROPPED on phones — VOverlay inline styles outrank the
+ * fullscreen stylesheet rule); the card text is the single scrollport.
+ *
+ * Resume-tolerant (docs/SPA_CONVENTIONS.md, prod wake-wedge evidence): the
+ * dialog holds server state, so returning from a long sleep refetches it.
+ * Short tab switches don't — a blind refetch on every visibilitychange
+ * would clobber a half-typed fiscal form — and an in-flight stamp is never
+ * interrupted: its verdict must land in this UI.
  */
+import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import { useCfdiStore } from "../../../stores/cfdiStore";
 import CfdiStampForm from "./CfdiStampForm.vue";
+
+// Hidden longer than this = treat the SPA as possibly wedged/stale on wake.
+export const CFDI_STALE_RESUME_MS = 60_000;
 
 export default {
 	name: "FacturacionDialog",
@@ -156,11 +166,15 @@ export default {
 	emits: ["update:modelValue"],
 	setup() {
 		const cfdiStore = useCfdiStore();
-		return { cfdiStore };
+		const { isFullscreenDialog, dialogProps } = useDialogFullscreen({
+			width: "min(760px, 96vw)",
+			maxWidth: "760px",
+		});
+		return { cfdiStore, isFullscreenDialog, dialogProps };
 	},
 	data() {
 		return {
-			windowWidth: typeof window !== "undefined" ? window.innerWidth : 1024,
+			hiddenAt: 0,
 		};
 	},
 	computed: {
@@ -171,9 +185,6 @@ export default {
 			set(value) {
 				this.$emit("update:modelValue", value);
 			},
-		},
-		isMobile() {
-			return this.windowWidth < 768;
 		},
 		showList() {
 			return !this.cfdiStore.detail && !this.cfdiStore.detailLoading && !this.cfdiStore.detailError;
@@ -203,14 +214,28 @@ export default {
 		},
 	},
 	mounted() {
-		window.addEventListener("resize", this.onResize);
+		document.addEventListener("visibilitychange", this.onVisibilityChange);
 	},
 	beforeUnmount() {
-		window.removeEventListener("resize", this.onResize);
+		document.removeEventListener("visibilitychange", this.onVisibilityChange);
 	},
 	methods: {
-		onResize() {
-			this.windowWidth = window.innerWidth;
+		onVisibilityChange() {
+			if (document.visibilityState === "hidden") {
+				this.hiddenAt = Date.now();
+				return;
+			}
+			const hiddenFor = this.hiddenAt ? Date.now() - this.hiddenAt : 0;
+			this.hiddenAt = 0;
+			if (!this.modelValue || hiddenFor < CFDI_STALE_RESUME_MS) return;
+			// Never interrupt an in-flight stamp; the server-side dedupe makes
+			// its eventual verdict the truth this dialog must display.
+			if (this.cfdiStore.stampPhase === "stamping") return;
+			if (this.cfdiStore.detail) {
+				void this.cfdiStore.openInvoice(this.cfdiStore.detail.invoice.name);
+			} else {
+				void this.cfdiStore.search();
+			}
 		},
 		clearSearch() {
 			this.cfdiStore.searchTerm = "";

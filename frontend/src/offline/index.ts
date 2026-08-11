@@ -26,6 +26,7 @@
  * @module offline
  */
 export * from "./db";
+export * from "./persistWorkerBridge";
 export * from "./writeQueue";
 export * from "./stock";
 export * from "./invoices";
