@@ -40,7 +40,14 @@ export interface VerticalLayout {
 
 export interface VerticalProfile {
 	name: string;
-	layout: Omit<VerticalLayout, "lean_vertical">;
+	/**
+	 * `lean_vertical` is OPTIONAL on a preset: the POS Capability Profile
+	 * doctype grew the field after the first presets shipped, and an ABSENT
+	 * key must leave the per-register `posa_lean_vertical_layout` flag in
+	 * charge rather than read as an explicit `false`. A preset that names it
+	 * wins over the flag (see `layout` below).
+	 */
+	layout: Omit<VerticalLayout, "lean_vertical"> & { lean_vertical?: boolean };
 	capabilities: readonly string[];
 	/** Per-vertical label overrides resolved by t(); empty for retail. */
 	labels: Record<string, string>;
@@ -98,6 +105,11 @@ const mergeProfilePayload = (raw: unknown): VerticalProfile => {
 				Array.isArray(layout.dock_tabs) && layout.dock_tabs.length
 					? layout.dock_tabs
 					: RETAIL_PHONES.layout.dock_tabs,
+			// Carried through ONLY when the payload names it — see the
+			// VerticalProfile.layout comment on absent-key semantics.
+			...(layout.lean_vertical === undefined || layout.lean_vertical === null
+				? {}
+				: { lean_vertical: Boolean(layout.lean_vertical) }),
 		},
 		capabilities: Array.isArray(parsed.capabilities)
 			? parsed.capabilities
@@ -171,25 +183,38 @@ export const useVerticalStore = defineStore("vertical", () => {
 
 	/**
 	 * Layout resolution: preset defaults + per-register POS Profile
-	 * overrides. `posa_lean_vertical_layout` is the first profile-driven
-	 * layout flag with a real renderer (it shipped in a patch with no
-	 * consumer — the plan's rehearsal slice). Before the profile loads,
-	 * the persisted last-resolved layout answers (boot-flash guard).
+	 * overrides. A preset that names `lean_vertical` is authoritative — the
+	 * whole point of shipping the field on POS Capability Profile is that a
+	 * vertical can stack the counter without asking every register to tick
+	 * `posa_lean_vertical_layout`. A preset that stays silent leaves that
+	 * flag in charge (it shipped first, and older presets predate the
+	 * field). Before either lands, the persisted last-resolved layout
+	 * answers (boot-flash guard).
 	 */
+	const resolveLean = (): boolean => {
+		const preset = profile.value.layout.lean_vertical;
+		if (preset !== undefined) {
+			return preset;
+		}
+		return uiStore.posProfile
+			? Boolean(uiStore.posProfile.posa_lean_vertical_layout)
+			: Boolean(cachedLayout.value.lean_vertical);
+	};
+
 	const layout = computed<VerticalLayout>(() => ({
 		...profile.value.layout,
-		lean_vertical: uiStore.posProfile
-			? Boolean(uiStore.posProfile.posa_lean_vertical_layout)
-			: Boolean(cachedLayout.value.lean_vertical),
+		lean_vertical: resolveLean(),
 	}));
 
 	watch(
-		() => uiStore.posProfile?.posa_lean_vertical_layout,
-		(flag) => {
-			if (!uiStore.posProfile) {
+		[() => uiStore.posProfile, () => profile.value.layout.lean_vertical],
+		() => {
+			// Neither source has landed — `layout` is still answering from
+			// this cache, so writing it back would only echo the old value.
+			if (!uiStore.posProfile && profile.value.layout.lean_vertical === undefined) {
 				return;
 			}
-			const resolved = { lean_vertical: Boolean(flag) };
+			const resolved = { lean_vertical: resolveLean() };
 			cachedLayout.value = resolved;
 			writeLayoutCache(resolved);
 		},

@@ -55,6 +55,49 @@ describe("verticalStore", () => {
 		expect(vertical.layout.lean_vertical).toBe(true);
 	});
 
+	it("takes lean layout from a preset that names it, over the register flag", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.posProfile = profileWith({ posa_lean_vertical_layout: 0 });
+		ui.setCapabilityPayload({
+			name: "coffee-quickserve",
+			layout: { lean_vertical: true },
+		});
+		expect(vertical.leanVerticalLayout).toBe(true);
+		expect(vertical.layout.lean_vertical).toBe(true);
+	});
+
+	it("lets a preset turn lean layout OFF against a register flag that is on", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.posProfile = profileWith({ posa_lean_vertical_layout: 1 });
+		ui.setCapabilityPayload({ name: "wide-counter", layout: { lean_vertical: false } });
+		expect(vertical.leanVerticalLayout).toBe(false);
+	});
+
+	it("leaves the register flag in charge when a preset omits lean_vertical", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		// Presets minted before POS Capability Profile grew the field carry
+		// no key — that must NOT read as an explicit `false`.
+		ui.setCapabilityPayload({
+			name: "legacy-preset",
+			layout: { items_panel: "standard", cart_style: "table" },
+		});
+		ui.posProfile = profileWith({ posa_lean_vertical_layout: 1 });
+		expect(vertical.leanVerticalLayout).toBe(true);
+
+		ui.posProfile = profileWith({ posa_lean_vertical_layout: 0 });
+		expect(vertical.leanVerticalLayout).toBe(false);
+	});
+
+	it("leaves the register flag in charge when there is no payload at all", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.posProfile = profileWith({ posa_lean_vertical_layout: 1 });
+		expect(vertical.leanVerticalLayout).toBe(true);
+	});
+
 	it("stays on retail-phones when no capability payload is present", () => {
 		const vertical = useVerticalStore();
 		expect(vertical.profile.name).toBe("retail-phones");
