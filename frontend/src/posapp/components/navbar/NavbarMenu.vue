@@ -891,12 +891,8 @@ export default {
 		async changeLanguage() {
 			if (this.selectedLanguage === this.currentLanguage) {
 				this.originalWesternNumerals = this.useWesternNumerals;
-				this.showNotification("Settings updated. Reloading...", "success");
+				this.showNotification("Settings updated.", "success");
 				this.closeLanguageDialog();
-				this.$emit("clear-cache");
-				setTimeout(() => {
-					window.location.reload();
-				}, 200);
 				return;
 			}
 

@@ -7,6 +7,10 @@ import { shallowMount } from "@vue/test-utils";
 import NavbarMenu from "../src/posapp/components/navbar/NavbarMenu.vue";
 import { useEmployeeStore } from "../src/posapp/stores/employeeStore";
 
+const navbarMenuOptions = NavbarMenu as unknown as {
+	methods: Record<string, (this: Record<string, any>) => Promise<void>>;
+};
+
 const flushPromises = async () => {
 	await Promise.resolve();
 	await Promise.resolve();
@@ -119,5 +123,47 @@ describe("NavbarMenu action surfaces", () => {
 		expect(actionIds).not.toContain("clear-cache");
 		expect(actionIds).not.toContain("toggle-offline");
 		expect(actionIds).not.toContain("system-status");
+	});
+
+	it("does not clear cache when language is unchanged", async () => {
+		const wrapper = mountMenu();
+		await flushPromises();
+
+		(wrapper.vm as any).selectedLanguage = "en";
+		(wrapper.vm as any).currentLanguage = "en";
+		await (wrapper.vm as any).changeLanguage();
+
+		expect(wrapper.emitted("clear-cache")).toBeUndefined();
+	});
+
+	it("still requests the guarded cache clear after a real language change", async () => {
+		vi.useFakeTimers();
+		const call = vi.fn(async () => ({ message: { success: true } }));
+		vi.stubGlobal("frappe", {
+			session: {
+				user: "cashier@example.com",
+				user_fullname: "Main Cashier",
+			},
+			boot: { pos_profile: {} },
+			call,
+		});
+		const context = {
+			selectedLanguage: "es",
+			currentLanguage: "en",
+			changing: false,
+			showNotification: vi.fn(),
+			closeLanguageDialog: vi.fn(),
+			$emit: vi.fn(),
+		};
+
+		await navbarMenuOptions.methods.changeLanguage.call(context);
+
+		expect(context.$emit).toHaveBeenCalledWith("clear-cache");
+		expect(call).toHaveBeenCalledWith({
+			method: "posawesome.posawesome.api.utilities.set_current_user_language",
+			args: { lang_code: "es" },
+		});
+		vi.clearAllTimers();
+		vi.useRealTimers();
 	});
 });

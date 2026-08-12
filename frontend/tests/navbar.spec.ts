@@ -14,7 +14,12 @@ vi.mock("../src/posapp/composables/core/useRtl", () => ({
 }));
 
 vi.mock("../src/offline/index", () => ({
-	forceClearAllCache: vi.fn(async () => undefined),
+	clearDerivedOfflineCaches: vi.fn(async () => undefined),
+	getPendingTransactionalWorkCounts: vi.fn(async () => ({
+		writeQueue: 0,
+		invoiceOutbox: 0,
+		total: 0,
+	})),
 	isOffline: vi.fn(() => false),
 }));
 
@@ -24,10 +29,39 @@ vi.mock("../src/utils/clearAllCaches", () => ({
 
 import Navbar from "../src/posapp/components/Navbar.vue";
 import { useEmployeeStore } from "../src/posapp/stores/employeeStore";
+import {
+	clearDerivedOfflineCaches,
+	getPendingTransactionalWorkCounts,
+} from "../src/offline/index";
 import { clearAllCaches } from "../src/utils/clearAllCaches";
+
+const navbarOptions = Navbar as unknown as {
+	methods: Record<string, (this: Record<string, any>) => Promise<void>>;
+};
+
+function cacheContext() {
+	const notifications: Array<Record<string, unknown>> = [];
+	return {
+		notifications,
+		context: {
+			clearingCache: false,
+			__: (text: string) => text,
+			toastStore: { show: (entry: Record<string, unknown>) => notifications.push(entry) },
+		},
+	};
+}
 
 describe("Navbar supervisor access", () => {
 	beforeEach(() => {
+		vi.useRealTimers();
+		vi.clearAllMocks();
+		vi.mocked(getPendingTransactionalWorkCounts).mockResolvedValue({
+			writeQueue: 0,
+			invoiceOutbox: 0,
+			total: 0,
+		});
+		vi.mocked(clearDerivedOfflineCaches).mockResolvedValue(undefined);
+		vi.mocked(clearAllCaches).mockResolvedValue(undefined);
 		setActivePinia(createPinia());
 		vi.stubGlobal("__", (value: string) => value);
 		vi.stubGlobal("frappe", {
@@ -50,6 +84,42 @@ describe("Navbar supervisor access", () => {
 				],
 			})),
 		});
+	});
+
+	it("blocks cache clearing while transactional work is pending", async () => {
+		vi.mocked(getPendingTransactionalWorkCounts).mockResolvedValueOnce({
+			writeQueue: 1,
+			invoiceOutbox: 1,
+			total: 2,
+		});
+
+		const { context, notifications } = cacheContext();
+
+		await navbarOptions.methods.clearCache.call(context);
+
+		expect(clearDerivedOfflineCaches).not.toHaveBeenCalled();
+		expect(clearAllCaches).not.toHaveBeenCalled();
+		expect(notifications).toContainEqual({
+			title: "Cannot clear cache while sales are pending",
+			color: "warning",
+			detail: "Sync or resolve {0} queued operation(s) and {1} invoice(s) first.",
+		});
+	});
+
+	it("clears only derived/browser caches and reloads when queues are empty", async () => {
+		vi.useFakeTimers();
+		const { context } = cacheContext();
+
+		await navbarOptions.methods.clearCache.call(context);
+
+		expect(clearDerivedOfflineCaches).toHaveBeenCalledTimes(1);
+		expect(clearAllCaches).toHaveBeenCalledWith({
+			confirmBeforeClear: false,
+			skipStorage: ["localStorage", "sessionStorage", "indexedDB"],
+		});
+		expect(vi.getTimerCount()).toBe(1);
+		vi.clearAllTimers();
+		vi.useRealTimers();
 	});
 
 	it("shows the dashboard drawer item only for POS supervisors", async () => {

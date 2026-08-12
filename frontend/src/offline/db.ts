@@ -224,17 +224,19 @@ function shouldPersistToLocalStorage(key: string) {
 export function isCorruptionError(err: unknown) {
 	if (!err || typeof err !== "object") return false;
 	const maybe = err as { name?: string; message?: string };
-	const name = maybe.name || "";
 	const message = (maybe.message || "").toLowerCase();
-	// Only a genuine version-downgrade (VersionError) or an explicitly
-	// corrupt store warrants the destructive Dexie.delete in
-	// repairDbAfterFailedHealthCheck. `InvalidStateError` (the connection is
-	// closing because another tab is mid-upgrade) and `NotFoundError` (a
-	// table access during that upgrade window) are TRANSIENT multi-tab
-	// conditions — treating them as corruption used to wipe the whole store,
-	// destroying unsynced offline sales in write_queue / invoice_outbox.
-	// Those recover on the next open/retry; they must never trigger a wipe.
-	return name === "VersionError" || message.includes("corrupt");
+	// VersionError is a normal multi-tab / frontend-rollback signal, not
+	// corruption. Deleting the DB here would destroy the newer tab's unsynced
+	// sales. Only an explicitly corrupt store warrants destructive repair.
+	return message.includes("corrupt");
+}
+
+function isVersionError(err: unknown) {
+	return Boolean(
+		err &&
+			typeof err === "object" &&
+			(err as { name?: string }).name === "VersionError",
+	);
 }
 
 // Start with version 1 using the full schema immediately
@@ -414,6 +416,7 @@ export class OfflineDbOpenTimeoutError extends Error {
 }
 
 let offlineStorageDegraded = false;
+let offlineDbVersionIncompatible = false;
 
 /**
  * True when the offline store could not be opened and the POS is running from
@@ -507,6 +510,30 @@ try {
  */
 let connectionClosedUnexpectedly = false;
 
+function enterOfflineDbVersionLimitedMode(error: unknown) {
+	try {
+		db.close();
+	} catch {
+		/* already closed */
+	}
+	connectionClosedUnexpectedly = false;
+	offlineDbVersionIncompatible = true;
+	offlineStorageDegraded = true;
+	memory.bootstrap_limited_mode = true;
+	try {
+		localStorage.setItem(
+			"posa_bootstrap_limited_mode",
+			JSON.stringify(true),
+		);
+	} catch {
+		/* localStorage unavailable */
+	}
+	console.warn(
+		"[posa][offline] IndexedDB belongs to a newer app version. Reload this tab; continuing in Limited mode without changing offline data.",
+		error,
+	);
+}
+
 try {
 	db.on("close", () => {
 		connectionClosedUnexpectedly = true;
@@ -540,6 +567,15 @@ export type EnsureOfflineDbOpenResult = {
  * reads, queue drains, watermark writes) needs a live connection.
  */
 export async function ensureOfflineDbOpen(): Promise<EnsureOfflineDbOpenResult> {
+	if (offlineDbVersionIncompatible) {
+		return {
+			ok: false,
+			reopened: false,
+			error: new Error(
+				"IndexedDB version is newer than this app; reload required",
+			),
+		};
+	}
 	if (!connectionClosedUnexpectedly && db.isOpen()) {
 		return { ok: true, reopened: false };
 	}
@@ -557,6 +593,10 @@ export async function ensureOfflineDbOpen(): Promise<EnsureOfflineDbOpenResult> 
 		offlineStorageDegraded = false;
 		return { ok: true, reopened: true };
 	} catch (error) {
+		if (isVersionError(error)) {
+			enterOfflineDbVersionLimitedMode(error);
+			return { ok: false, reopened: false, error };
+		}
 		console.error("[posa][offline] Failed to reopen IndexedDB", error);
 		offlineStorageDegraded = true;
 		return { ok: false, reopened: false, error };
@@ -582,6 +622,11 @@ export const initPromise = new Promise<void>((resolve) => {
 					memory.bootstrap_limited_mode = true;
 					return;
 				}
+				if (isVersionError(openError)) {
+					hydrateMemoryFromLocalStorage();
+					enterOfflineDbVersionLimitedMode(openError);
+					return;
+				}
 				throw openError;
 			}
 
@@ -601,6 +646,11 @@ export const initPromise = new Promise<void>((resolve) => {
 				hydrateMemoryKeyFromLocalStorage(key);
 			}
 		} catch (e) {
+			if (isVersionError(e)) {
+				hydrateMemoryFromLocalStorage();
+				enterOfflineDbVersionLimitedMode(e);
+				return;
+			}
 			console.error("Failed to initialize offline DB", e);
 			offlineStorageDegraded = true;
 			memory.bootstrap_limited_mode = true;
@@ -1021,9 +1071,11 @@ export async function forceClearAllCache() {
 
 export async function clearDerivedOfflineCaches() {
 	try {
-		await checkDbHealth();
-		if (!db.isOpen()) {
-			await db.open();
+		const opened = await ensureOfflineDbOpen();
+		if (!opened.ok) {
+			throw new Error(
+				"Offline database is unavailable; cached data was not cleared",
+			);
 		}
 
 		await Promise.all(
@@ -1060,8 +1112,42 @@ export async function clearDerivedOfflineCaches() {
 	}
 }
 
+export async function getPendingTransactionalWorkCounts() {
+	await initPromise;
+	const opened = await ensureOfflineDbOpen();
+	if (!opened.ok) {
+		throw opened.error || new Error("Offline database is unavailable");
+	}
+
+	const [writeQueue, invoiceOutbox] = await Promise.all([
+		db
+			.table("write_queue")
+			.filter(
+				(row: AnyRecord) =>
+					!["synced", "resolved"].includes(row.status),
+			)
+			.count(),
+		db
+			.table("invoice_outbox")
+			.filter(
+				(row: AnyRecord) =>
+					!["acknowledged", "resolved"].includes(row.status),
+			)
+			.count(),
+	]);
+
+	return {
+		writeQueue,
+		invoiceOutbox,
+		total: writeQueue + invoiceOutbox,
+	};
+}
+
 export async function quickDbHealthCheck() {
 	try {
+		if (offlineDbVersionIncompatible) {
+			return false;
+		}
 		// `db.isOpen()` lies after an unexpected close (see `db.on("close")`),
 		// so the latch has to be consulted before trusting it.
 		if (connectionClosedUnexpectedly) {
@@ -1082,6 +1168,13 @@ export async function quickDbHealthCheck() {
 }
 
 export async function repairDbAfterFailedHealthCheck(error?: unknown) {
+	if (offlineDbVersionIncompatible) {
+		return false;
+	}
+	if (isVersionError(error)) {
+		enterOfflineDbVersionLimitedMode(error);
+		return false;
+	}
 	try {
 		if (db.isOpen()) {
 			db.close();
@@ -1091,6 +1184,10 @@ export async function repairDbAfterFailedHealthCheck(error?: unknown) {
 		return true;
 	} catch (reopenError) {
 		console.error("DB reopen failed", reopenError);
+		if (isVersionError(reopenError)) {
+			enterOfflineDbVersionLimitedMode(reopenError);
+			return false;
+		}
 		if (isCorruptionError(reopenError) || isCorruptionError(error)) {
 			try {
 				await Dexie.delete("posawesome_offline");

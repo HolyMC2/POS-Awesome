@@ -2,14 +2,18 @@
 
 import "fake-indexeddb/auto";
 
+import Dexie from "dexie/dist/dexie.mjs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	clearAllCache,
+	clearDerivedOfflineCaches,
 	db,
 	checkDbHealth,
+	getPendingTransactionalWorkCounts,
 	initPromise,
 	isCorruptionError,
+	isOfflineStorageDegraded,
 	memory,
 	pruneOfflineStorage,
 	quickDbHealthCheck,
@@ -55,11 +59,61 @@ describe("offline IndexedDB maintenance", () => {
 		expect(isCorruptionError({ name: "AbortError" })).toBe(false);
 		expect(isCorruptionError(null)).toBe(false);
 		expect(isCorruptionError("boom")).toBe(false);
-		// Genuine — version downgrade or an explicitly corrupt store.
-		expect(isCorruptionError({ name: "VersionError" })).toBe(true);
+		// Version skew is non-destructive; only explicit corruption is fatal.
+		expect(isCorruptionError({ name: "VersionError" })).toBe(false);
 		expect(
 			isCorruptionError({ name: "UnknownError", message: "database is corrupt" }),
 		).toBe(true);
+	});
+
+	it("counts active and dead-letter transactional work but ignores resolved rows", async () => {
+		await db.table("write_queue").bulkPut([
+			{
+				entity_type: "invoice",
+				status: "pending",
+				idempotency_key: "pending-write",
+			},
+			{
+				entity_type: "invoice",
+				status: "dead_letter",
+				idempotency_key: "dead-write",
+			},
+			{
+				entity_type: "invoice",
+				status: "synced",
+				idempotency_key: "synced-write",
+			},
+		]);
+		await db.table("invoice_outbox").bulkPut([
+			{ client_request_id: "retry-outbox", status: "retrying" },
+			{ client_request_id: "dead-outbox", status: "dead_letter" },
+			{ client_request_id: "acked-outbox", status: "acknowledged" },
+		]);
+
+		await expect(getPendingTransactionalWorkCounts()).resolves.toEqual({
+			writeQueue: 2,
+			invoiceOutbox: 2,
+			total: 4,
+		});
+	});
+
+	it("clears derived catalog rows without touching transactional queues", async () => {
+		await db.table("items").put({ item_code: "ITEM-1", item_name: "Cached item" });
+		await db.table("write_queue").put({
+			entity_type: "invoice",
+			status: "pending",
+			idempotency_key: "keep-write",
+		});
+		await db.table("invoice_outbox").put({
+			client_request_id: "keep-outbox",
+			status: "pending",
+		});
+
+		await clearDerivedOfflineCaches();
+
+		expect(await db.table("items").count()).toBe(0);
+		expect(await db.table("write_queue").count()).toBe(1);
+		expect(await db.table("invoice_outbox").count()).toBe(1);
 	});
 
 	it("clearAllCache resets PII/financial memory caches so they can't re-persist", async () => {
@@ -200,5 +254,22 @@ describe("offline IndexedDB maintenance", () => {
 		expect(openSpy).toHaveBeenCalledTimes(1);
 		isOpenSpy.mockRestore();
 		openSpy.mockRestore();
+	});
+
+	it("enters Limited mode without deleting IndexedDB on VersionError", async () => {
+		const deleteSpy = vi
+			.spyOn(Dexie, "delete")
+			.mockResolvedValue(undefined);
+		const versionError = Object.assign(new Error("newer schema"), {
+			name: "VersionError",
+		});
+
+		await expect(
+			repairDbAfterFailedHealthCheck(versionError),
+		).resolves.toBe(false);
+
+		expect(deleteSpy).not.toHaveBeenCalled();
+		expect(isOfflineStorageDegraded()).toBe(true);
+		expect(memory.bootstrap_limited_mode).toBe(true);
 	});
 });

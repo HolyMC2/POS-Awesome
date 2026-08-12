@@ -176,9 +176,8 @@ import OfflineInvoices from "./OfflineInvoices.vue";
 import { getDashboardAccessCached } from "../services/dashboardService";
 import EmployeeSwitchDialog from "./pos/employee/EmployeeSwitchDialog.vue";
 import posLogo from "./pos/pos.png";
-import { forceClearAllCache } from "../../offline/index";
+import { clearDerivedOfflineCaches, getPendingTransactionalWorkCounts, isOffline } from "../../offline/index";
 import { clearAllCaches } from "../../utils/clearAllCaches";
-import { isOffline } from "../../offline/index";
 import { useRtl } from "../composables/core/useRtl";
 import { useResponsive } from "../composables/core/useResponsive";
 
@@ -889,22 +888,27 @@ export default {
 			let shouldReload = false;
 			try {
 				this.clearingCache = true;
+				const pending = await getPendingTransactionalWorkCounts();
+				if (pending.total > 0) {
+					this.toastStore.show({
+						color: "warning",
+						title: this.__("Cannot clear cache while sales are pending"),
+						detail: this.__("Sync or resolve {0} queued operation(s) and {1} invoice(s) first.", [
+							pending.writeQueue,
+							pending.invoiceOutbox,
+						]),
+					});
+					return;
+				}
 				this.toastStore.show({
 					color: "info",
 					title: this.__("Clearing local cache..."),
 				});
-				let westernPref = null;
-				if (typeof localStorage !== "undefined") {
-					westernPref = localStorage.getItem("use_western_numerals");
-				}
-				try {
-					await forceClearAllCache();
-					await clearAllCaches({ confirmBeforeClear: false });
-				} finally {
-					if (westernPref !== null && typeof localStorage !== "undefined") {
-						localStorage.setItem("use_western_numerals", westernPref);
-					}
-				}
+				await clearDerivedOfflineCaches();
+				await clearAllCaches({
+					confirmBeforeClear: false,
+					skipStorage: ["localStorage", "sessionStorage", "indexedDB"],
+				});
 				this.toastStore.show({
 					color: "success",
 					title: this.__("Cache cleared successfully"),
