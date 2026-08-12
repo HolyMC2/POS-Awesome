@@ -127,6 +127,7 @@ def _install_stubs():
         "cards": {},
         "new_docs": [],
         "journal_entries": [],
+        "balance_locks": [],
         "mode_of_payments": {},
         "terminal_users": {"Main POS": ["supervisor@example.com", "cashier@example.com"]},
         "user_docs": {
@@ -230,6 +231,14 @@ def _install_stubs():
         else getattr(state["companies"][name], fieldname, None)
     )
     frappe_module.flags = types.SimpleNamespace(ignore_account_permission=False)
+
+    def _db_get_value(doctype, name, fieldname, for_update=False):
+        if doctype != "POS Gift Card" or fieldname != "current_balance":
+            raise AssertionError(f"Unexpected db.get_value: {doctype} {name} {fieldname}")
+        if for_update:
+            state["balance_locks"].append(name)
+        return getattr(state["cards"][name], fieldname)
+
     frappe_module.db = types.SimpleNamespace(
         exists=lambda doctype, name=None: bool(
             (
@@ -240,7 +249,8 @@ def _install_stubs():
                 )
             )
             or (doctype == "Mode of Payment" and isinstance(name, str) and name in state["mode_of_payments"])
-        )
+        ),
+        get_value=_db_get_value,
     )
 
     employees_module._resolve_profile_name = lambda pos_profile=None: str(pos_profile or "").strip()
@@ -299,7 +309,9 @@ class TestGiftCardApi(unittest.TestCase):
         self.state["cards"].clear()
         self.state["new_docs"].clear()
         self.state["journal_entries"].clear()
+        self.state["balance_locks"].clear()
         self.state["mode_of_payments"].clear()
+        self.module.frappe.session.user = "supervisor@example.com"
         profile_doc = self.state["pos_profiles"]["Main POS"]
         profile_doc.posa_use_gift_cards = 1
         profile_doc.posa_default_source_account = "1110 - Cash - TC"
@@ -308,14 +320,49 @@ class TestGiftCardApi(unittest.TestCase):
             invoice_doc.gift_card_redemptions = []
             invoice_doc.payments = []
 
-    def test_issue_gift_card_requires_supervisor(self):
+    def test_issue_gift_card_rejects_supervisor_impersonation(self):
+        self.module.frappe.session.user = "cashier@example.com"
+
+        with self.assertRaises(Exception) as ctx:
+            self.module.issue_gift_card(
+                pos_profile="Main POS",
+                cashier="supervisor@example.com",
+                company="Test Company",
+                initial_amount=500,
+                gift_card_code="GC-NEW-01",
+            )
+
+        self.assertIn("session user", str(ctx.exception))
+        self.assertEqual(self.state["new_docs"], [])
+        self.assertEqual(self.state["journal_entries"], [])
+
+    def test_top_up_gift_card_rejects_supervisor_impersonation(self):
+        existing = FakeGiftCard(code="GC-IMPERSONATE", balance=500, status="Active")
+        self.state["cards"][existing.gift_card_code] = existing
+        self.module.frappe.session.user = "cashier@example.com"
+
+        with self.assertRaises(Exception) as ctx:
+            self.module.top_up_gift_card(
+                pos_profile="Main POS",
+                cashier="supervisor@example.com",
+                gift_card_code="GC-IMPERSONATE",
+                amount=250,
+            )
+
+        self.assertIn("session user", str(ctx.exception))
+        self.assertEqual(existing.current_balance, 500)
+        self.assertEqual(self.state["journal_entries"], [])
+
+    def test_issue_gift_card_requires_session_user_to_be_supervisor(self):
+        self.module.frappe.session.user = "cashier@example.com"
+
         with self.assertRaises(Exception) as ctx:
             self.module.issue_gift_card(
                 pos_profile="Main POS",
                 cashier="cashier@example.com",
                 company="Test Company",
                 initial_amount=500,
-                gift_card_code="GC-NEW-01",
+                gift_card_code="GC-NEW-02",
             )
 
         self.assertIn("POS supervisor", str(ctx.exception))
@@ -337,6 +384,7 @@ class TestGiftCardApi(unittest.TestCase):
         self.assertEqual(existing.transactions[0]["transaction_type"], "Top Up")
         self.assertEqual(existing.transactions[0]["amount"], 250)
         self.assertEqual(existing.transactions[0]["balance_after"], 750)
+        self.assertEqual(self.state["balance_locks"], ["GC-0001"])
         self.assertEqual(len(self.state["journal_entries"]), 1)
         self.assertTrue(self.state["journal_entries"][0].submitted)
         self.assertEqual(
@@ -436,6 +484,32 @@ class TestGiftCardApi(unittest.TestCase):
         self.assertEqual(restored, 300)
         self.assertEqual(existing.current_balance, 800)
         self.assertEqual(invoice_doc.gift_card_redemptions[0]["status"], "Cancelled")
+
+    def test_restore_uses_compensating_delta_after_later_redemption(self):
+        existing = FakeGiftCard(code="GC-RESTORE", balance=100, status="Active")
+        self.state["cards"][existing.gift_card_code] = existing
+        invoice_a = self.state["invoices"]["ACC-SINV-0001"]
+        invoice_b = FakeInvoice(name="ACC-SINV-0002")
+
+        self.module.apply_invoice_gift_card_redemptions(
+            invoice_a,
+            [{"gift_card_code": "GC-RESTORE", "amount": 30, "cashier": "cashier@example.com"}],
+        )
+        self.module.apply_invoice_gift_card_redemptions(
+            invoice_b,
+            [{"gift_card_code": "GC-RESTORE", "amount": 20, "cashier": "cashier@example.com"}],
+        )
+        self.assertEqual(existing.current_balance, 50)
+
+        restored = self.module.restore_invoice_gift_card_redemptions(invoice_a)
+
+        self.assertEqual(restored, 30)
+        self.assertEqual(existing.current_balance, 80)
+        self.assertNotEqual(existing.current_balance, 100)
+        self.assertEqual(
+            self.state["balance_locks"],
+            ["GC-RESTORE", "GC-RESTORE", "GC-RESTORE"],
+        )
 
     def test_apply_invoice_gift_card_redemptions_blocks_inactive_card(self):
         existing = FakeGiftCard(code="GC-0003", balance=800, status="Inactive")

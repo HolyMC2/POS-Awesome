@@ -52,15 +52,16 @@ def _require_supervisor(pos_profile=None, cashier=None):
         frappe.throw(frappe._("POS profile is required."))
 
     cashier = str(cashier or "").strip()
-    if not cashier:
-        frappe.throw(frappe._("Cashier is required."))
+    acting_user = str(getattr(frappe.session, "user", "") or "").strip()
+    if cashier and cashier != acting_user:
+        frappe.throw(frappe._("Cashier must match the authenticated session user."))
 
-    _ensure_terminal_user(profile_name, cashier)
-    user_doc = _get_user_doc(cashier)
+    _ensure_terminal_user(profile_name, acting_user)
+    user_doc = _get_user_doc(acting_user)
     if not _is_pos_supervisor(user_doc):
         frappe.throw(frappe._("A POS supervisor is required for this action."))
 
-    return profile_name, cashier, user_doc
+    return profile_name, acting_user, user_doc
 
 
 def _get_profile_doc(pos_profile=None):
@@ -137,11 +138,19 @@ def _create_gift_card_journal_entry(company, posting_date, remark, accounts):
     return je_doc
 
 
-def _get_gift_card(gift_card_code=None):
+def _get_gift_card(gift_card_code=None, for_update=False):
     code = _normalize_code(gift_card_code)
     if not frappe.db.exists("POS Gift Card", {"gift_card_code": code}):
         frappe.throw(frappe._("Gift card {0} does not exist.").format(code))
-    return frappe.get_doc("POS Gift Card", code)
+    locked_balance = None
+    if for_update:
+        locked_balance = frappe.db.get_value(
+            "POS Gift Card", code, "current_balance", for_update=True
+        )
+    gift_card_doc = frappe.get_doc("POS Gift Card", code)
+    if for_update:
+        gift_card_doc.current_balance = _to_float(locked_balance)
+    return gift_card_doc
 
 
 def _append_transaction(
@@ -290,7 +299,7 @@ def apply_invoice_gift_card_redemptions(invoice_doc, rows=None):
     for row, redeem_amount in valid_rows:
         gift_card_code = row.get("gift_card_code")
         cashier = row.get("cashier") or cashier
-        gift_card_doc = _get_gift_card(gift_card_code)
+        gift_card_doc = _get_gift_card(gift_card_code, for_update=True)
         if company and _doc_value(gift_card_doc, "company") != company:
             frappe.throw(frappe._("Gift card does not belong to company {0}.").format(company))
         status = _doc_value(gift_card_doc, "status", "Active")
@@ -344,10 +353,8 @@ def restore_invoice_gift_card_redemptions(invoice_doc):
         if redeemed_amount <= 0:
             continue
 
-        gift_card_doc = _get_gift_card(_doc_value(row, "gift_card_code"))
-        restore_balance = _to_float(_doc_value(row, "balance_before"))
-        if restore_balance <= 0:
-            restore_balance = _to_float(_doc_value(gift_card_doc, "current_balance") + redeemed_amount)
+        gift_card_doc = _get_gift_card(_doc_value(row, "gift_card_code"), for_update=True)
+        restore_balance = _to_float(_doc_value(gift_card_doc, "current_balance") + redeemed_amount)
 
         gift_card_doc.current_balance = restore_balance
         gift_card_doc.flags.ignore_permissions = True
@@ -521,7 +528,7 @@ def top_up_gift_card(pos_profile=None, cashier=None, gift_card_code=None, amount
     if top_up_amount <= 0:
         frappe.throw(frappe._("Top up amount must be greater than zero."))
 
-    gift_card_doc = _get_gift_card(gift_card_code)
+    gift_card_doc = _get_gift_card(gift_card_code, for_update=True)
     if getattr(gift_card_doc, "status", "Active") != "Active":
         frappe.throw(frappe._("Only active gift cards can be topped up."))
 
