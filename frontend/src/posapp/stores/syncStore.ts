@@ -23,8 +23,11 @@ import {
 	getPendingInvoiceOutboxCount,
 	getPendingOfflineInvoiceCount,
 	getWriteQueueDeadLetterCount,
+	getWriteQueueDraftReviewCount,
 	requeueDeadLetterEntry,
 	requeueWriteQueueDeadLetter,
+	requeueWriteQueueDraftReview,
+	resolveWriteQueueDraftReview,
 	syncOfflineInvoices,
 	isOffline,
 } from "../../offline/index";
@@ -38,6 +41,7 @@ export const useSyncStore = defineStore("sync", {
 		// drawer, invoice not created. Surfaced separately from the plain
 		// pending count so they can never hide inside it.
 		deadLetterCount: 0,
+		draftReviewCount: 0,
 	}),
 	actions: {
 		async updatePendingCount() {
@@ -56,6 +60,7 @@ export const useSyncStore = defineStore("sync", {
 		async updateDeadLetterCount() {
 			try {
 				const previous = this.deadLetterCount;
+				const previousDraftReview = this.draftReviewCount;
 				// Count BOTH surfaces: the invoice outbox (coordinator mode) and
 				// the write_queue (payments / cash / legacy invoices — prod
 				// default). write_queue dead-letters were previously invisible.
@@ -64,6 +69,8 @@ export const useSyncStore = defineStore("sync", {
 				const writeQueueCount = await getWriteQueueDeadLetterCount();
 				const count = outboxCount + writeQueueCount;
 				this.deadLetterCount = count;
+				const draftReviewCount = await getWriteQueueDraftReviewCount();
+				this.draftReviewCount = draftReviewCount;
 				if (count > previous) {
 					// durable trace + loud persistent alert: a dead-lettered
 					// sale means cash in the drawer with NO invoice.
@@ -84,6 +91,17 @@ export const useSyncStore = defineStore("sync", {
 						timeout: 0,
 					});
 				}
+				if (draftReviewCount > previousDraftReview) {
+					const toastStore = useToastStore();
+					toastStore.show({
+						key: "draft-review",
+						title: `${draftReviewCount} venta(s) guardadas como borrador — revisar`,
+						detail:
+							"La venta existe como borrador sin timbrar/submit. Abrir Facturas Offline → Borradores por revisar.",
+						color: "warning",
+						timeout: 0,
+					});
+				}
 			} catch (error) {
 				console.error("Failed to update dead-letter count", error);
 			}
@@ -101,6 +119,19 @@ export const useSyncStore = defineStore("sync", {
 			if (row) {
 				await this.syncPendingInvoices();
 			}
+			await this.updatePendingCount();
+			return row;
+		},
+		async requeueDraftReview(queueId: number) {
+			const row = await requeueWriteQueueDraftReview(queueId);
+			if (row) {
+				await this.syncPendingInvoices();
+			}
+			await this.updatePendingCount();
+			return row;
+		},
+		async resolveDraftReview(queueId: number) {
+			const row = await resolveWriteQueueDraftReview(queueId);
 			await this.updatePendingCount();
 			return row;
 		},
@@ -144,7 +175,7 @@ export const useSyncStore = defineStore("sync", {
 					}
 					if (result.drafted) {
 						toastStore.show({
-							title: `${result.drafted} offline invoice${result.drafted > 1 ? "s" : ""} saved as draft`,
+							title: `${result.drafted} venta(s) guardadas como borrador — revisar en Facturas Offline`,
 							color: "warning",
 						});
 					}

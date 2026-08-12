@@ -119,6 +119,66 @@
 							</div>
 						</v-alert>
 
+						<v-alert
+							v-if="draftReviewRows.length"
+							type="warning"
+							variant="tonal"
+							class="mb-6"
+							density="comfortable"
+						>
+							<div class="text-subtitle-1 font-weight-bold mb-2">
+								{{ __("Borradores por revisar") }} ({{ draftReviewRows.length }})
+							</div>
+							<div class="text-body-2 mb-3">
+								{{ __("Estas ventas quedaron como BORRADOR en el servidor — no están timbradas ni contabilizadas. Reintentar vuelve a enviarlas (seguro: adopta el mismo borrador); Resuelto solo las marca atendidas después de arreglarlas en el escritorio.") }}
+							</div>
+							<div
+								v-for="row in draftReviewRows"
+								:key="row.queue_id"
+								class="d-flex align-center flex-wrap mb-2"
+								style="gap: 8px"
+							>
+								<span class="font-weight-medium">
+									{{ row.invoice?.customer_name || row.invoice?.customer || __("Cliente") }}
+								</span>
+								<span>
+									{{ currencySymbol(row.invoice?.currency) }}
+									{{ formatCurrency(row.invoice?.grand_total || row.invoice?.rounded_total) }}
+								</span>
+								<span v-if="row.draft_invoice_name" class="text-caption font-weight-medium">
+									{{ row.draft_invoice_name }}
+								</span>
+								<span class="text-caption text-medium-emphasis">
+									{{ row.created_at }}
+								</span>
+								<span v-if="row.draft_reason" class="text-caption text-warning" style="max-width: 420px">
+									{{ String(row.draft_reason).slice(0, 160) }}
+								</span>
+								<v-spacer />
+								<v-btn
+									size="small"
+									color="primary"
+									variant="tonal"
+									:loading="draftReviewBusy === row.queue_id"
+									@click="retryDraftReview(row)"
+								>
+									{{ __("Reintentar") }}
+								</v-btn>
+								<v-btn
+									size="small"
+									color="warning"
+									variant="tonal"
+									:loading="draftReviewBusy === row.queue_id"
+									@click="resolveDraftReview(row)"
+								>
+									{{ __("Resuelto") }}
+								</v-btn>
+								<v-btn size="small" variant="tonal" @click="exportDraftReview(row)">
+									{{ __("Exportar JSON") }}
+								</v-btn>
+							</div>
+						</v-alert>
+
 						<!-- Enhanced Empty State -->
 						<div v-if="!invoices.length" class="empty-state text-center py-12">
 							<div class="empty-icon-wrapper mb-4">
@@ -256,6 +316,7 @@ import {
 	getPendingOfflineInvoiceCount,
 	getDeadLetterRows,
 	exportDeadLetterEntry,
+	getWriteQueueDraftReviewRows,
 } from "../../offline/index";
 import { useSyncStore } from "../stores/syncStore";
 
@@ -280,6 +341,8 @@ const dialog = ref(props.modelValue);
 const invoices = ref([]);
 const deadLetterRows = ref([]);
 const deadLetterBusy = ref("");
+const draftReviewRows = ref([]);
+const draftReviewBusy = ref(null);
 const syncStore = useSyncStore();
 const headers = [
 	{
@@ -351,7 +414,11 @@ function currencySymbol(currency) {
 
 function loadInvoices() {
 	invoices.value = getOfflineInvoices();
-	void loadDeadLetters();
+	void loadOperatorReviewRows();
+}
+
+async function loadOperatorReviewRows() {
+	await Promise.all([loadDeadLetters(), loadDraftReviews()]);
 }
 
 async function loadDeadLetters() {
@@ -362,26 +429,72 @@ async function loadDeadLetters() {
 	}
 }
 
+async function loadDraftReviews() {
+	try {
+		draftReviewRows.value = await getWriteQueueDraftReviewRows("invoice");
+	} catch (e) {
+		console.error("draft-review load failed", e);
+	}
+}
+
 async function retryDeadLetter(row) {
 	deadLetterBusy.value = row.client_request_id;
 	try {
 		await syncStore.requeueDeadLetter(row.client_request_id);
 	} finally {
 		deadLetterBusy.value = "";
-		await loadDeadLetters();
+		await loadOperatorReviewRows();
 	}
+}
+
+async function retryDraftReview(row) {
+	draftReviewBusy.value = row.queue_id;
+	try {
+		await syncStore.requeueDraftReview(row.queue_id);
+	} finally {
+		draftReviewBusy.value = null;
+		await loadOperatorReviewRows();
+	}
+}
+
+async function resolveDraftReview(row) {
+	draftReviewBusy.value = row.queue_id;
+	try {
+		await syncStore.resolveDraftReview(row.queue_id);
+	} finally {
+		draftReviewBusy.value = null;
+		await loadOperatorReviewRows();
+	}
+}
+
+function downloadJson(payload, filename) {
+	const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+	const url = URL.createObjectURL(blob);
+	const a = document.createElement("a");
+	a.href = url;
+	a.download = filename;
+	a.click();
+	URL.revokeObjectURL(url);
 }
 
 async function exportDeadLetter(row) {
 	const payload = await exportDeadLetterEntry(row.client_request_id);
 	if (!payload) return;
-	const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-	const url = URL.createObjectURL(blob);
-	const a = document.createElement("a");
-	a.href = url;
-	a.download = `venta-sin-sincronizar-${row.client_request_id}.json`;
-	a.click();
-	URL.revokeObjectURL(url);
+	downloadJson(payload, `venta-sin-sincronizar-${row.client_request_id}.json`);
+}
+
+function exportDraftReview(row) {
+	downloadJson(
+		{
+			client_request_id: row.idempotency_key,
+			invoice: row.invoice,
+			data: row.data,
+			draft_invoice_name: row.draft_invoice_name,
+			draft_reason: row.draft_reason,
+			created_at: row.created_at,
+		},
+		`venta-borrador-${row.queue_id}.json`,
+	);
 }
 
 async function removeInvoice(index) {

@@ -18,6 +18,8 @@ export type OfflineQueueStatus =
 	| "syncing"
 	| "failed"
 	| "dead_letter"
+	| "draft_review"
+	| "resolved"
 	| "synced";
 
 export interface OfflineQueueEntry {
@@ -32,6 +34,10 @@ export interface OfflineQueueEntry {
 	status: OfflineQueueStatus;
 	idempotency_key: string;
 	last_error: string | null;
+	draft_invoice_name?: string | null;
+	draft_reason?: string | null;
+	drafted_at?: string | null;
+	resolved_at?: string | null;
 }
 
 const WRITE_QUEUE_TABLE = "write_queue";
@@ -91,6 +97,7 @@ const ACTIVE_STATUSES = new Set<OfflineQueueStatus>([
 	"syncing",
 	"failed",
 	"dead_letter",
+	"draft_review",
 ]);
 
 const RETRYABLE_STATUSES = new Set<OfflineQueueStatus>([
@@ -339,6 +346,9 @@ function toPublicSnapshot(entry: OfflineQueueEntry) {
 		status: entry.status,
 		idempotency_key: entry.idempotency_key,
 		last_error: entry.last_error,
+		draft_invoice_name: entry.draft_invoice_name,
+		draft_reason: entry.draft_reason,
+		drafted_at: entry.drafted_at,
 	};
 }
 
@@ -616,6 +626,30 @@ export async function markWriteQueueEntrySynced(
 	);
 }
 
+export async function markWriteQueueEntryDrafted(
+	entityType: OfflineEntityType,
+	queueId: number,
+	expectedLastAttemptAt: string | null | undefined,
+	info: { invoiceName: string | null; reason: string },
+) {
+	await ensureOfflineQueueReady();
+
+	return updateClaimedQueueEntry(
+		entityType,
+		queueId,
+		expectedLastAttemptAt,
+		(current) => ({
+			...current,
+			status: "draft_review",
+			drafted_at: nowIso(),
+			draft_invoice_name: info.invoiceName,
+			draft_reason: info.reason,
+			last_error: info.reason,
+			next_attempt_at: null,
+		}),
+	);
+}
+
 export async function markWriteQueueEntryFailed(
 	entityType: OfflineEntityType,
 	queueId: number,
@@ -781,6 +815,79 @@ export async function requeueWriteQueueDeadLetter(queueId: number) {
 		}
 		// Replay-safe: every money path dedupes server-side by
 		// client_request_id, so re-draining a dead-letter can't double-bill.
+		const next: OfflineQueueEntry = {
+			...current,
+			status: "pending",
+			retry_count: 0,
+			last_attempt_at: null,
+			next_attempt_at: null,
+			last_error: null,
+		};
+		await table.put(next);
+		return next;
+	});
+	if (requeued) {
+		await refreshQueueMemory(requeued.entity_type);
+	}
+	return requeued;
+}
+
+// ---- write-queue draft-review surface ------------------------------------
+// A fallback draft is real offline money that is not yet submitted. Keep it
+// visible and operator-driven: automatic retrying could submit a sale before
+// the operator has reviewed why it was drafted.
+
+export async function getWriteQueueDraftReviewRows(
+	entityType?: OfflineEntityType,
+) {
+	const types = entityType ? [entityType] : ALL_QUEUE_ENTITY_TYPES;
+	const rows: ReturnType<typeof toPublicSnapshot>[] = [];
+	for (const type of types) {
+		const entries = await getQueueEntries(type, {
+			statuses: ["draft_review"],
+		});
+		rows.push(...entries.map((entry) => toPublicSnapshot(entry)));
+	}
+	return rows;
+}
+
+export async function getWriteQueueDraftReviewCount() {
+	const rows = await getWriteQueueDraftReviewRows();
+	return rows.length;
+}
+
+export async function resolveWriteQueueDraftReview(queueId: number) {
+	await ensureOfflineQueueReady();
+	const table = db.table(WRITE_QUEUE_TABLE);
+	const resolved = await db.transaction("rw", table, async () => {
+		const current = (await table.get(queueId)) as OfflineQueueEntry | undefined;
+		if (!current || current.status !== "draft_review") {
+			return null;
+		}
+		const next: OfflineQueueEntry = {
+			...current,
+			status: "resolved",
+			resolved_at: nowIso(),
+		};
+		await table.put(next);
+		return next;
+	});
+	if (resolved) {
+		await refreshQueueMemory(resolved.entity_type);
+	}
+	return resolved;
+}
+
+export async function requeueWriteQueueDraftReview(queueId: number) {
+	await ensureOfflineQueueReady();
+	const table = db.table(WRITE_QUEUE_TABLE);
+	const requeued = await db.transaction("rw", table, async () => {
+		const current = (await table.get(queueId)) as OfflineQueueEntry | undefined;
+		if (!current || current.status !== "draft_review") {
+			return null;
+		}
+		// submit_invoice adopts the fallback draft by posa_client_request_id,
+		// so replay submits that same document instead of creating a duplicate.
 		const next: OfflineQueueEntry = {
 			...current,
 			status: "pending",

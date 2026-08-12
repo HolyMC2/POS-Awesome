@@ -73,14 +73,14 @@
 							'offline-invoices-btn mobile-btn pos-themed-button',
 							isRtl ? 'rtl-offline-btn' : 'ltr-offline-btn',
 							{ 'has-pending': pendingInvoices > 0 },
-							{ 'has-dead-letter': deadLetterCount > 0 },
+							{ 'has-dead-letter': attentionCount > 0 },
 						]"
-						:aria-label="__('View offline invoices') + ` (${pendingInvoices})` + (deadLetterCount > 0 ? ` — ${deadLetterCount} ` + __('failed, need attention') : '')"
+						:aria-label="__('View offline invoices') + ` (${pendingInvoices})` + (attentionCount > 0 ? ` — ${attentionCount} ` + __('need attention') : '')"
 						@click="$emit('show-offline-invoices')"
 					>
 						<v-badge
-							v-if="pendingInvoices > 0 || deadLetterCount > 0"
-							:content="deadLetterCount > 0 ? deadLetterCount : pendingInvoices"
+							v-if="pendingInvoices > 0 || attentionCount > 0"
+							:content="attentionCount > 0 ? attentionCount : pendingInvoices"
 							color="error"
 							floating
 						>
@@ -89,8 +89,8 @@
 						<v-icon v-else class="pos-text-primary">mdi-file-document-multiple-outline</v-icon>
 						<v-tooltip activator="parent" location="bottom">
 							{{ __("Offline Invoices") }} ({{ pendingInvoices }})
-							<template v-if="deadLetterCount > 0">
-								— {{ deadLetterCount }} {{ __("failed, need attention") }}
+							<template v-if="attentionCount > 0">
+								— {{ attentionCount }} {{ __("need attention") }}
 							</template>
 						</v-tooltip>
 					</v-btn>
@@ -182,17 +182,17 @@
 							'offline-invoices-btn pos-themed-button',
 							isRtl ? 'rtl-offline-btn' : 'ltr-offline-btn',
 							{ 'has-pending': pendingInvoices > 0 },
-							{ 'has-dead-letter': deadLetterCount > 0 },
+							{ 'has-dead-letter': attentionCount > 0 },
 						]"
-						:aria-label="__('View offline invoices') + ` (${pendingInvoices})` + (deadLetterCount > 0 ? ` — ${deadLetterCount} ` + __('failed, need attention') : '')"
+						:aria-label="__('View offline invoices') + ` (${pendingInvoices})` + (attentionCount > 0 ? ` — ${attentionCount} ` + __('need attention') : '')"
 						:aria-describedby="'offline-invoices-tooltip'"
 						@click="$emit('show-offline-invoices')"
 						@keydown.enter="$emit('show-offline-invoices')"
 						tabindex="0"
 					>
 						<v-badge
-							v-if="pendingInvoices > 0 || deadLetterCount > 0"
-							:content="deadLetterCount > 0 ? deadLetterCount : pendingInvoices"
+							v-if="pendingInvoices > 0 || attentionCount > 0"
+							:content="attentionCount > 0 ? attentionCount : pendingInvoices"
 							color="error"
 							floating
 						>
@@ -207,8 +207,8 @@
 							:close-delay="200"
 						>
 							{{ __("Offline Invoices") }} ({{ pendingInvoices }})
-							<template v-if="deadLetterCount > 0">
-								— {{ deadLetterCount }} {{ __("failed, need attention") }}
+							<template v-if="attentionCount > 0">
+								— {{ attentionCount }} {{ __("need attention") }}
 							</template>
 						</v-tooltip>
 					</v-btn>
@@ -261,8 +261,8 @@ export default {
 	},
 	setup() {
 		const { isRtl, rtlStyles, rtlClasses } = useRtl();
-		// SPEC A: dead-lettered offline sales must be impossible to miss —
-		// read the count straight from the store (no prop threading).
+		// Offline sales needing operator attention must be impossible to miss —
+		// read both counts straight from the store (no prop threading).
 		// try/catch: unit tests mount this component without a pinia.
 		let syncStore = null;
 		try {
@@ -270,13 +270,17 @@ export default {
 		} catch {
 			syncStore = null;
 		}
-		const deadLetterCount = computed(() => syncStore?.deadLetterCount || 0);
+		const attentionCount = computed(
+			() =>
+				(syncStore?.deadLetterCount || 0) +
+				(syncStore?.draftReviewCount || 0),
+		);
 		return {
 			isRtl,
 			rtlStyles,
 			rtlClasses,
 			posLogo,
-			deadLetterCount,
+			attentionCount,
 		};
 	},
 	data() {

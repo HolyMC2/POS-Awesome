@@ -779,8 +779,13 @@ export async function pruneOfflineStorage(
 			const writeQueueIds = writeQueueRows
 				.filter(
 					(row) =>
-						row.status === "synced" &&
-						isOlderThan(row.last_attempt_at || row.created_at, cutoff),
+						// draft_review is an UNRESOLVED sale payload and the last copy
+						// of offline money — never age-prune it before operator review.
+						["synced", "resolved"].includes(row.status) &&
+						isOlderThan(
+							row.resolved_at || row.last_attempt_at || row.created_at,
+							cutoff,
+						),
 				)
 				.map((row) => row.queue_id)
 				.filter((key): key is number => Number.isFinite(Number(key)));

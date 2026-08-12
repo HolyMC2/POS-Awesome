@@ -16,6 +16,7 @@ import {
 	enqueueWriteQueueEntry,
 	getQueuedPayloadCount,
 	getQueuedPayloadSnapshots,
+	markWriteQueueEntryDrafted,
 	markWriteQueueEntryFailed,
 	markWriteQueueEntrySynced,
 	type OfflineEntityType,
@@ -24,6 +25,41 @@ import {
 type AnyRecord = Record<string, any>;
 
 const INVOICE_ENTITY: OfflineEntityType = "invoice";
+
+function draftReasonFromError(error: unknown) {
+	let message: string;
+	if (error instanceof Error) {
+		message = error.message;
+	} else if (typeof error === "string") {
+		message = error;
+	} else if (
+		error &&
+		typeof error === "object" &&
+		typeof (error as AnyRecord).message === "string"
+	) {
+		message = (error as AnyRecord).message;
+	} else {
+		try {
+			message = JSON.stringify(error);
+		} catch {
+			message = String(error);
+		}
+	}
+	return String(message || "submit_invoice failed").slice(0, 300);
+}
+
+// A re-drafted retry must UPDATE the draft the previous pass minted, not mint
+// a sibling: update_invoice looks up by data.name only, and two drafts with
+// the same posa_client_request_id are BOTH submittable from Desk (core submit
+// skips the request-id idempotency) — a double-bill. The name survives the
+// operator requeue precisely so this adoption works.
+function buildDraftFallbackPayload(
+	invoice: AnyRecord,
+	priorDraftName: unknown,
+): AnyRecord {
+	const name = String(priorDraftName || "").trim();
+	return name ? { ...invoice, name } : invoice;
+}
 
 const asBoolean = (value: any): boolean => {
 	return (
@@ -447,18 +483,26 @@ export async function syncOfflineInvoices() {
 					continue;
 				}
 				try {
-					await frappe.call({
+					const draftResponse = await frappe.call({
 						method: "posawesome.posawesome.api.invoices.update_invoice",
-						args: { data: queuedInvoice.invoice },
+						args: {
+							data: buildDraftFallbackPayload(
+								queuedInvoice.invoice,
+								entry.draft_invoice_name,
+							),
+						},
 					});
-					// Drafted entries are only counted here; surfacing the count
-					// as an operator prompt ("N sales need review") is deliberately
-					// deferred — the totals already carry it for a future UI.
+					const invoiceName =
+						draftResponse?.message?.name || draftResponse?.name || null;
 					drafted += 1;
-					await markWriteQueueEntrySynced(
+					await markWriteQueueEntryDrafted(
 						INVOICE_ENTITY,
 						Number(entry.queue_id),
 						entry.last_attempt_at,
+						{
+							invoiceName,
+							reason: `capability_version_mismatch: v${stampedVersion} → v${currentCapabilityVersion}`,
+						},
 					);
 				} catch (draftError) {
 					await markWriteQueueEntryFailed(
@@ -507,15 +551,26 @@ export async function syncOfflineInvoices() {
 					error,
 				);
 				try {
-					await frappe.call({
+					const draftResponse = await frappe.call({
 						method: "posawesome.posawesome.api.invoices.update_invoice",
-						args: { data: queuedInvoice.invoice },
+						args: {
+							data: buildDraftFallbackPayload(
+								queuedInvoice.invoice,
+								entry.draft_invoice_name,
+							),
+						},
 					});
+					const invoiceName =
+						draftResponse?.message?.name || draftResponse?.name || null;
 					drafted += 1;
-					await markWriteQueueEntrySynced(
+					await markWriteQueueEntryDrafted(
 						INVOICE_ENTITY,
 						Number(entry.queue_id),
 						entry.last_attempt_at,
+						{
+							invoiceName,
+							reason: draftReasonFromError(error),
+						},
 					);
 				} catch (draftError) {
 					console.error(

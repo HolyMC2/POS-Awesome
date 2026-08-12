@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // vi.hoisted so the spies exist before the hoisted vi.mock factories run.
 const {
 	claimRetryableQueueEntries,
+	markWriteQueueEntryDrafted,
 	markWriteQueueEntrySynced,
 	markWriteQueueEntryFailed,
 	getQueuedPayloadCount,
@@ -11,6 +12,7 @@ const {
 	enqueueWriteQueueEntry,
 } = vi.hoisted(() => ({
 	claimRetryableQueueEntries: vi.fn(),
+	markWriteQueueEntryDrafted: vi.fn(async () => true),
 	markWriteQueueEntrySynced: vi.fn(async () => true),
 	markWriteQueueEntryFailed: vi.fn(async () => true),
 	getQueuedPayloadCount: vi.fn(() => 0),
@@ -20,6 +22,7 @@ const {
 
 vi.mock("../src/offline/writeQueue", () => ({
 	claimRetryableQueueEntries,
+	markWriteQueueEntryDrafted,
 	markWriteQueueEntrySynced,
 	markWriteQueueEntryFailed,
 	getQueuedPayloadCount,
@@ -147,6 +150,12 @@ describe("syncOfflineInvoices — ack-miss does not orphan a duplicate", () => {
 		const totals = await syncOfflineInvoices();
 
 		expect(methodsCalled().some((m) => m.endsWith("update_invoice"))).toBe(true);
+		expect(markWriteQueueEntryDrafted).toHaveBeenCalledWith(
+			"invoice",
+			1,
+			"2026-07-11T10:00:00Z",
+			{ invoiceName: null, reason: "validation failed" },
+		);
 		expect(totals).toMatchObject({ synced: 0, drafted: 1 });
 	});
 });
@@ -184,6 +193,15 @@ describe("syncOfflineInvoices — capability version guard (plan C7)", () => {
 
 		expect(methodsCalled().some((m) => m.endsWith("submit_invoice"))).toBe(false);
 		expect(methodsCalled().some((m) => m.endsWith("update_invoice"))).toBe(true);
+		expect(markWriteQueueEntryDrafted).toHaveBeenCalledWith(
+			"invoice",
+			1,
+			"2026-07-11T10:00:00Z",
+			{
+				invoiceName: null,
+				reason: "capability_version_mismatch: v1 → v2",
+			},
+		);
 		expect(totals).toMatchObject({ synced: 0, drafted: 1 });
 	});
 
