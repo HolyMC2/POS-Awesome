@@ -297,6 +297,69 @@ class TestWaveASecurity(IntegrationTestCase):
         with self.assertRaises(frappe.PermissionError):
             shifts.assert_shift_not_stale(shift)
 
+    # ---------- profile-less draft resume (prod incident 2026-08-12) ----------
+
+    def _make_own_shift(self):
+        from posawesome.posawesome.api.test_restaurant_support import make_shift
+
+        shift = make_shift(PROFILE, self.company, frappe.session.user)
+
+        def _cleanup():
+            try:
+                doc = frappe.get_doc("POS Opening Shift", shift)
+                if doc.docstatus == 1:
+                    doc.flags.ignore_permissions = True
+                    doc.cancel()
+                frappe.delete_doc(
+                    "POS Opening Shift", shift, force=True, ignore_permissions=True
+                )
+            except Exception:
+                pass
+
+        self.addCleanup(_cleanup)
+        return shift
+
+    def test_profileless_draft_resume_derives_profile_and_submits(self):
+        """ACC-SINV-2026-02847: a draft persisted with an empty pos_profile
+        (is_pos=0 save) made every resume attempt die at the scope gate with
+        "POS Profile is required for this action". The gate must instead derive
+        the profile from the draft row / its opening shift — server rows, not
+        client claims — and the sale must submit."""
+        shift = self._make_own_shift()
+        crid = self._crid("draft-heal")
+        payload = self._payload(crid)
+        created = creation.update_invoice(json.dumps(payload))
+        self._created.append(("Sales Invoice", created.get("name")))
+        # simulate the incident row: profile gone, non-POS draft
+        frappe.db.set_value(
+            "Sales Invoice",
+            created.get("name"),
+            {"pos_profile": None, "is_pos": 0, "posa_pos_opening_shift": shift},
+        )
+
+        resume = dict(payload)
+        resume["name"] = created.get("name")
+        resume.pop("pos_profile", None)
+        resume["posa_pos_opening_shift"] = shift
+
+        response = creation.submit_invoice(
+            json.dumps(resume), json.dumps(self._data()), submit_in_background=0
+        )
+        invoice_name = response.get("name") or created.get("name")
+        row = frappe.db.get_value(
+            "Sales Invoice", invoice_name, ["docstatus", "pos_profile"], as_dict=True
+        )
+        self.assertEqual(row.docstatus, 1)
+        self.assertEqual(row.pos_profile, PROFILE)
+
+    def test_profileless_payload_without_server_source_still_refused(self):
+        """No profile in the payload AND nothing server-side to derive it from
+        (no existing row, no shift) must still refuse — the Wave A posture."""
+        payload = self._payload(self._crid("no-profile"))
+        payload.pop("pos_profile", None)
+        with self.assertRaises(frappe.PermissionError):
+            creation.update_invoice(json.dumps(payload))
+
     # ---------- W4 giftcard impersonation ----------
 
     def test_w4_supervisor_impersonation_via_cashier_param_rejected(self):

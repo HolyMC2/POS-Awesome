@@ -1114,6 +1114,43 @@ def _guard_return_cash_refund(invoice_doc):
         )
 
 
+def _resolve_payload_pos_profile(payload):
+    """Derive a missing ``pos_profile`` from server-side rows the payload names.
+
+    A draft saved with ``is_pos=0`` can persist with an empty ``pos_profile``;
+    resuming it in POS then rebuilds a payload whose profile is empty and the
+    scope gate refuses the sale outright ("POS Profile is required..."), even
+    though the draft's own row / opening shift know the profile. Derive it from
+    (1) the named existing invoice, then (2) the payload's opening shift — both
+    server rows, never a client claim — and let the ordinary assert_profile
+    membership check run on the derived value. Returns the payload value
+    untouched when present; may return None (caller's gate then refuses as
+    before). Prod incident 2026-08-12 (ACC-SINV-2026-02847).
+    """
+
+    payload = payload or {}
+    pos_profile = payload.get("pos_profile")
+    if pos_profile:
+        return pos_profile
+
+    invoice_name = payload.get("name")
+    if invoice_name:
+        for doctype in ("Sales Invoice", "POS Invoice"):
+            if frappe.db.exists(doctype, invoice_name):
+                stored = frappe.db.get_value(doctype, invoice_name, "pos_profile")
+                if stored:
+                    return stored
+                break
+
+    shift = payload.get("posa_pos_opening_shift")
+    if shift:
+        stored = frappe.db.get_value("POS Opening Shift", shift, "pos_profile")
+        if stored:
+            return stored
+
+    return pos_profile
+
+
 @frappe.whitelist(methods=["POST"])
 def update_invoice(data):
     currency_cache = {}
@@ -1125,7 +1162,10 @@ def update_invoice(data):
     _apply_manual_posting_controls(data)
     _strip_client_freebies_from_payload(data)
     # Determine doctype based on POS Profile setting
-    pos_profile = data.get("pos_profile")
+    pos_profile = _resolve_payload_pos_profile(data)
+    if pos_profile and not data.get("pos_profile"):
+        # heal the payload so the saved row carries the profile again
+        data["pos_profile"] = pos_profile
     # Scope: payload's pos_profile + company + customer must all be in
     # the caller's POS Profile membership (REVIEW2/03 §2.3 §10 PR-1).
     # This is the central trust gate — without it, a cashier could send
@@ -1387,7 +1427,9 @@ def submit_invoice(invoice, data, submit_in_background=False):
     _apply_manual_posting_controls(invoice)
     submit_in_background = cint(submit_in_background)
     _strip_client_freebies_from_payload(invoice)
-    pos_profile = invoice.get("pos_profile")
+    pos_profile = _resolve_payload_pos_profile(invoice)
+    if pos_profile and not invoice.get("pos_profile"):
+        invoice["pos_profile"] = pos_profile
     # Scope — must match update_invoice. submit re-validates because
     # the request is independent (a caller can submit without an
     # intervening update; e.g. retry-on-failure) and we don't want
