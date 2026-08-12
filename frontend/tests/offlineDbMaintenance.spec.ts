@@ -177,6 +177,21 @@ describe("offline IndexedDB maintenance", () => {
 				invoice_name: "ACC-SINV-2",
 				acknowledged_at: freshIso,
 			},
+			{
+				// An UNRESOLVED dead-letter sale, old enough to be pruned by age —
+				// but it must be retained (its payload is the last copy of the sale).
+				client_request_id: "old-dead",
+				status: "dead_letter",
+				invoice: {},
+				data: {},
+				created_at: oldIso,
+				updated_at: oldIso,
+				next_retry_at: null,
+				retry_count: 5,
+				last_error: "boom",
+				invoice_name: null,
+				acknowledged_at: null,
+			},
 		]);
 		await db.table("sync_state").bulkPut([
 			{
@@ -210,6 +225,8 @@ describe("offline IndexedDB maintenance", () => {
 			expect.arrayContaining([
 				expect.objectContaining({ client_request_id: "pending" }),
 				expect.objectContaining({ client_request_id: "fresh-ack" }),
+				// old dead-letter retained despite its age
+				expect.objectContaining({ client_request_id: "old-dead" }),
 			]),
 		);
 		expect(await db.table("sync_state").toArray()).toEqual([

@@ -761,7 +761,11 @@ export async function pruneOfflineStorage(
 			const outboxIds = outboxRows
 				.filter(
 					(row) =>
-						["acknowledged", "dead_letter"].includes(row.status) &&
+						// Only age-prune ACKNOWLEDGED (successfully synced) rows. A
+						// dead_letter is an UNRESOLVED sale whose payload is the last
+						// copy of real money collected offline — never delete it on a
+						// timer; it must survive until an operator resolves it.
+						row.status === "acknowledged" &&
 						isOlderThan(row.acknowledged_at || row.updated_at || row.created_at, cutoff),
 				)
 				.map((row) => row.outbox_id)
