@@ -7,6 +7,7 @@ import {
 } from "../../../plugins/print";
 import { isOffline } from "../../../../offline/index";
 import { resolvePaymentPrintDoctype } from "../../../utils/paymentPrintDoctype";
+import { resolvePosPrintPreference } from "../../../services/printPreference";
 
 declare const frappe: any;
 
@@ -122,10 +123,20 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 	};
 
 	const loadPrintPage = async (input: { doc?: any; doctype?: string; name?: string } = {}) => {
-		const { doc, profile, doctype, print_format, letter_head } = resolvePrintContext(input);
+		const context = resolvePrintContext(input);
+		const { doc, profile, doctype } = context;
 		const debugPrint = isDebugPrintEnabled();
 		const offline = isOffline();
 		const docname = resolveDocumentName(input.name || doc?.name);
+		const preference = await resolvePosPrintPreference(doctype, {
+			print_format: context.print_format || "Standard",
+			backend: profile.posa_silent_print ? "browser_qz" : "system_dialog",
+			printer_name: profile.posa_qz_printer_name || "",
+			letterhead: context.letter_head || "",
+			no_letterhead: context.letter_head ? 0 : 1,
+		});
+		const print_format = preference.print_format || "Standard";
+		const letter_head = preference.no_letterhead ? 1 : (preference.letterhead ? 0 : context.letter_head);
 
 		if (!docname && !offline) {
 			throw new Error("Cannot print document without a submitted document name");
@@ -198,16 +209,16 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 			return;
 		}
 
-		if (profile.posa_silent_print) {
+		if (preference.backend === "browser_qz" || (!preference.backend && profile.posa_silent_print)) {
 			if (!offline) {
 				try {
 					await printViaQz({
 						doctype,
 						name: docname,
 						printFormat: print_format || "Standard",
-						letterhead: profile.letter_head || null,
+						letterhead: preference.letterhead || profile.letter_head || null,
 						noLetterhead: letter_head,
-						printerName: profile.posa_qz_printer_name || undefined,
+						printerName: preference.printer_name || undefined,
 					});
 					return;
 				} catch (error) {

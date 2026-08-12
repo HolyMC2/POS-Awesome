@@ -10,6 +10,8 @@ as hard as the projection.
 from __future__ import annotations
 
 import json
+import queue
+import threading
 import unittest
 from unittest import mock
 
@@ -129,15 +131,118 @@ class TestFireDiff(RestaurantTestCase):
         self.assertEqual(_all_lines(result["stations"]), [])
         self.assertEqual(_all_lines(result["cancellations"]), [])
 
-    def test_a_replayed_fire_prints_nothing_and_says_so(self):
+    def test_a_replayed_fire_returns_the_original_durable_projection(self):
         request_id = uid("tbl-req")
         order = self._order_with(self.line())
-        kot.fire_course(order, client_request_id=request_id)
+        first = kot.fire_course(order, client_request_id=request_id)
 
         replay = kot.fire_course(order, client_request_id=request_id)
 
         self.assertTrue(replay["replayed"])
-        self.assertEqual(replay["stations"], [])
+        self.assertEqual(replay["stations"], first["stations"])
+        self.assertEqual(replay["batch"]["name"], first["batch"]["name"])
+        self.assertEqual(len(replay["batch"]["jobs"]), len(first["batch"]["jobs"]))
+
+    def test_fire_persists_one_job_per_station_projection(self):
+        order = self._order_with(self.line())
+
+        result = kot.fire_course(order, client_request_id=uid("tbl-req"))
+
+        self.assertIsNotNone(result["batch"])
+        self.assertEqual(len(result["batch"]["jobs"]), len(result["stations"]))
+        self.assertTrue(all(job["status"] == "queued" for job in result["batch"]["jobs"]))
+
+    def test_two_transactions_cannot_print_the_same_delta(self):
+        """The second request waits on the order row, then sees the new snapshot."""
+        site = frappe.local.site
+        order_name = uid("concurrent-kot")
+        request_ids = [uid("fire-a"), uid("fire-b")]
+
+        def in_connection(fn):
+            frappe.init(site=site)
+            frappe.connect()
+            frappe.set_user("Administrator")
+            try:
+                return fn()
+            finally:
+                frappe.destroy()
+
+        def isolated_call(fn):
+            output = queue.Queue()
+
+            def target():
+                try:
+                    output.put(("ok", in_connection(fn)))
+                except Exception as exc:
+                    output.put(("error", exc))
+
+            thread = threading.Thread(target=target)
+            thread.start()
+            thread.join(timeout=15)
+            self.assertFalse(thread.is_alive(), "isolated database call timed out")
+            kind, value = output.get_nowait()
+            if kind == "error":
+                raise value
+            return value
+
+        def create_committed_order():
+            item = frappe.db.get_value("Item", {"disabled": 0, "is_sales_item": 1}, "name")
+            doc = frappe.get_doc({
+                "doctype": "POS Table Order",
+                "order_uid": order_name,
+                "pos_profile": self.profile,
+                "company": self.company,
+                "status": "Open",
+                "opened_by": "Administrator",
+                "waiter": "Administrator",
+                "items": [{"line_uid": uid("ln"), "item_code": item, "qty": 1, "rate": 10}],
+            }).insert(ignore_permissions=True)
+            frappe.db.commit()
+            return doc.name
+
+        isolated_call(create_committed_order)
+        barrier = threading.Barrier(2)
+        results = queue.Queue()
+
+        def fire(request_id):
+            def run():
+                barrier.wait(timeout=5)
+                result = kot.fire_course(order_name, client_request_id=request_id)
+                frappe.db.commit()
+                return result
+
+            try:
+                results.put(("ok", in_connection(run)))
+            except Exception as exc:  # asserted in the parent thread
+                results.put(("error", repr(exc)))
+
+        threads = [threading.Thread(target=fire, args=(request_id,)) for request_id in request_ids]
+        try:
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=15)
+            self.assertTrue(all(not thread.is_alive() for thread in threads), "concurrent fire deadlocked")
+            outcomes = [results.get_nowait() for _ in threads]
+            self.assertEqual([kind for kind, _ in outcomes], ["ok", "ok"])
+            fired_counts = [len(_all_lines(result["stations"])) for _, result in outcomes]
+            self.assertEqual(sorted(fired_counts), [0, 1], "the same delta printed twice")
+        finally:
+            def cleanup():
+                batches = frappe.get_all(
+                    "Doco Print Batch",
+                    filters={"source_doctype": "POS Table Order", "source_name": order_name},
+                    pluck="name",
+                )
+                for batch in batches:
+                    frappe.db.delete("Doco Print Job", {"batch": batch})
+                    frappe.db.delete("Doco Print Batch", {"name": batch})
+                if frappe.db.exists("POS Table Order", order_name):
+                    frappe.db.set_value("POS Table Order", order_name, "status", "Cancelled")
+                    frappe.delete_doc("POS Table Order", order_name, force=True, ignore_permissions=True)
+                frappe.db.commit()
+
+            isolated_call(cleanup)
 
     def test_firing_a_settled_order_throws(self):
         order = self._order_with(self.line())
@@ -207,6 +312,39 @@ class TestFiredSnapshot(RestaurantTestCase):
         result = kot.fire_course(order)
 
         self.assertEqual(len(_all_lines(result["stations"])), 1)
+
+
+class TestProjectionRendering(RestaurantTestCase):
+    def _format(self, doc_type="POS Table Order", disabled=0):
+        name = uid("KOT Format")
+        doc = frappe.get_doc({
+            "doctype": "Print Format",
+            "name": name,
+            "doc_type": doc_type,
+            "custom_format": 1,
+            "disabled": disabled,
+            "html": "<h1>{{ ticket.station }}</h1>{% for line in doc.lines %}<b>{{ line.qty }} {{ line.item_name }}</b>{% endfor %}",
+            "css": ".kot{font-weight:bold}",
+        }).insert(ignore_permissions=True)
+        return self.track("Print Format", doc.name)
+
+    def test_projection_renderer_uses_frozen_ticket_not_live_order(self):
+        print_format = self._format()
+
+        html = kot.render_kot_projection(print_format, {
+            "station": "Cocina",
+            "lines": [{"qty": 2, "item_name": "Tacos"}],
+        })
+
+        self.assertIn("<h1>Cocina</h1>", html)
+        self.assertIn("<b>2 Tacos</b>", html)
+        self.assertIn(".kot{font-weight:bold}", html)
+
+    def test_projection_renderer_rejects_wrong_doctype_format(self):
+        print_format = self._format(doc_type="Sales Invoice")
+
+        with self.assertRaises(frappe.ValidationError):
+            kot.render_kot_projection(print_format, {"station": "Cocina", "lines": []})
 
 
 class TestCoursing(RestaurantTestCase):
@@ -304,6 +442,51 @@ class TestStationRouting(RestaurantTestCase):
         result = kot.fire_course(order)
 
         self.assertEqual([s["station"] for s in result["stations"]], [kot.GENERAL_STATION])
+
+    def test_full_order_void_uses_each_lines_original_station(self):
+        kitchen = self._station("Cocina", [self.kitchen_group], printer="KITCHEN-01")
+        bar = self._station("Barra", [self.bar_group], printer="BAR-01")
+        food_line = self.line(item=self.food, qty=2)
+        drink_line = self.line(item=self.drink, qty=1)
+        order = self.make_order(table=self.table_a, lines=[food_line, drink_line])
+        kot.fire_course(order, client_request_id=uid("fire"))
+
+        # Configuration changes after firing must not redirect a void to a
+        # station that never saw the original ticket.
+        frappe.db.set_value("POS Kitchen Station", kitchen, "printer", "KITCHEN-NEW")
+        frappe.db.set_value("POS Kitchen Station", bar, "printer", "BAR-NEW")
+
+        result = orders.cancel_table_order(order, client_request_id=uid("void"))
+
+        void = result["kitchen_void"]
+        by_printer = {station["printer"]: station for station in void["cancellations"]}
+        self.assertEqual(set(by_printer), {"KITCHEN-01", "BAR-01"})
+        self.assertEqual(by_printer["KITCHEN-01"]["lines"][0]["line_uid"], food_line["line_uid"])
+        self.assertEqual(by_printer["BAR-01"]["lines"][0]["line_uid"], drink_line["line_uid"])
+        self.assertTrue(all(line["kind"] == "void" for line in _all_lines(void["cancellations"])))
+        self.assertEqual(len(void["batch"]["jobs"]), 2)
+
+    def test_full_order_void_replay_returns_the_same_batch(self):
+        self._station("Cocina", [self.kitchen_group], printer="KITCHEN-01")
+        order = self.make_order(table=self.table_a, lines=[self.line(item=self.food)])
+        kot.fire_course(order, client_request_id=uid("fire"))
+
+        first = orders.cancel_table_order(order, client_request_id=uid("void"))["kitchen_void"]
+        replay = orders.cancel_table_order(order, client_request_id=uid("void-retry"))["kitchen_void"]
+
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(replay["batch"]["name"], first["batch"]["name"])
+        self.assertEqual(replay["cancellations"], first["cancellations"])
+
+    def test_fired_snapshot_freezes_station_routing(self):
+        self._station("Cocina", [self.kitchen_group], printer="KITCHEN-01")
+        line = self.line(item=self.food)
+        order = self.make_order(table=self.table_a, lines=[line])
+
+        kot.fire_course(order, client_request_id=uid("fire"))
+
+        snapshot = json.loads(frappe.db.get_value("POS Table Order", order, "last_fired"))
+        self.assertEqual(snapshot[line["line_uid"]]["routing"]["printer"], "KITCHEN-01")
 
     def test_a_station_rejects_the_same_item_group_twice(self):
         with self.assertRaises(frappe.ValidationError):

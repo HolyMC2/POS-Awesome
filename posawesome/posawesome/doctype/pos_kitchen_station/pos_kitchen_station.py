@@ -36,6 +36,22 @@ class POSKitchenStation(Document):
                     )
                 )
 
+        if self.print_format:
+            print_format = frappe.db.get_value(
+                "Print Format", self.print_format, ["disabled", "doc_type"], as_dict=True
+            )
+            if not print_format or print_format.disabled:
+                frappe.throw(_("Kitchen Print Format {0} is disabled or missing.").format(self.print_format))
+            if print_format.doc_type != "POS Table Order":
+                frappe.throw(
+                    _("Kitchen Print Format {0} must be for POS Table Order.").format(
+                        self.print_format
+                    )
+                )
+
+        if not 20 <= (self.paper_width_mm or 0) <= 320:
+            frappe.throw(_("Paper Width must be between 20 and 320 mm."))
+
         # One Item Group routed to two rows of the SAME station is harmless
         # noise; routed twice within a station it doubles the printed line.
         seen: set[str] = set()

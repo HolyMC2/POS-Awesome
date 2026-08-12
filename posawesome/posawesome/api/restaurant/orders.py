@@ -379,17 +379,29 @@ def cancel_table_order(name_or_uid, client_request_id=None, source_device=None):
     doc = get_scoped_order(name_or_uid)
 
     if doc.status == "Cancelled":
-        return order_payload(doc, existing=True)
+        from posawesome.posawesome.api.restaurant.kot import void_order
+
+        result = order_payload(doc, existing=True)
+        result["kitchen_void"] = void_order(doc)
+        return result
     if doc.status == "Settled":
         frappe.throw(_("Order {0} already settled into {1}.").format(doc.name, doc.settled_invoice))
 
+    # Persist the frozen per-station void batch in the same transaction as
+    # the terminal order transition.  If the save rolls back, the batch rolls
+    # back too; a lost response replays the deterministic batch event key.
+    from posawesome.posawesome.api.restaurant.kot import void_order
+
+    kitchen_void = void_order(doc)
     doc.status = "Cancelled"
     if client_request_id:
         doc.posa_client_request_id = client_request_id
     doc.save(ignore_permissions=True)
 
     publish_order_change(doc, source_device=source_device)
-    return order_payload(doc)
+    result = order_payload(doc)
+    result["kitchen_void"] = kitchen_void
+    return result
 
 
 @frappe.whitelist(methods=["GET", "POST"])

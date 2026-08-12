@@ -14,6 +14,7 @@ import {
 import { notifyQzPrintFallback, printDocumentViaQz } from "../services/qzTray";
 import { reportPrintPopupBlocked } from "./printPopupBlocked";
 import { isOffline } from "../../offline/index";
+import { resolvePosPrintPreference } from "../services/printPreference";
 
 declare const frappe: any;
 
@@ -23,11 +24,18 @@ export async function printInvoiceByName(
 	name: string,
 ): Promise<void> {
 	if (!name || !profile) return;
-	const printFormat =
-		profile.print_format_for_online || profile.print_format || "Standard";
-	const letterHead = profile.letter_head || 0;
+	const preference = await resolvePosPrintPreference(doctype, {
+		print_format: profile.print_format_for_online || profile.print_format || "Standard",
+		backend: profile.posa_silent_print ? "browser_qz" : "system_dialog",
+		printer_name: profile.posa_qz_printer_name || "",
+		letterhead: profile.letter_head || "",
+		no_letterhead: profile.letter_head ? 0 : 1,
+	});
+	const printFormat = preference.print_format || "Standard";
+	const letterHead = preference.letterhead || 0;
 	const debugPrint = isDebugPrintEnabled();
-	const useSilentPrint = !!profile.posa_silent_print;
+	const useSilentPrint = preference.backend === "browser_qz" ||
+		(!preference.backend && !!profile.posa_silent_print);
 	let url =
 		frappe.urllib.get_base_url() +
 		"/printview?doctype=" +
@@ -53,7 +61,8 @@ export async function printInvoiceByName(
 				printFormat,
 				letterhead: letterHead || null,
 				noLetterhead: letterHead ? "0" : "1",
-				printerName: profile.posa_qz_printer_name || undefined,
+				printerName: preference.printer_name || undefined,
+				widthMm: Number(preference.paper_width_mm || 80),
 			});
 			return;
 		} catch (error) {

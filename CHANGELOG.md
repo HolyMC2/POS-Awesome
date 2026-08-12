@@ -4,6 +4,14 @@ All notable changes.
 
 ## Unreleased
 
+- **Durable restaurant print fan-out.** `fire_course` now freezes its delta,
+  advances `last_fired`, and inserts one idempotent Doco print job per kitchen
+  station in the same transaction. A replay with the same request ID returns
+  the original batch/projection instead of an empty ticket, closing the lost-
+  response gap. Kitchen stations can target an administrator-managed terminal
+  group and carry their own Print Format and paper width. The jobs remain inert
+  until the shared terminal listener is enabled.
+
 - **Print health, guided install, and a first-terminal setup wizard — printing
   works out of the box.** Six terminal-side checks (installer bundle published,
   QZ connection, tray version vs the site's bundle, live cert+sign round-trip,

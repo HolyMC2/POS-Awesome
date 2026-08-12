@@ -1,4 +1,8 @@
 import { createApp } from "vue";
+
+const printRuntime = document.createElement("script");
+printRuntime.src = "/assets/doco/js/printing_runtime.js?v=20260812a";
+document.head.appendChild(printRuntime);
 // @ts-ignore
 import vuetify from "./plugins/vuetify";
 // Roboto 100 is deliberately absent — nothing in the app or in the Vuetify

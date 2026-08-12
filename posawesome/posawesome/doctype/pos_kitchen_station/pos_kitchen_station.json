@@ -13,6 +13,9 @@
   "column_break_scope",
   "pos_profile",
   "printer",
+  "terminal_group",
+  "print_format",
+  "paper_width_mm",
   "is_active",
   "section_routing",
   "item_groups"
@@ -59,6 +62,25 @@
    "fieldname": "printer",
    "fieldtype": "Data",
    "label": "Printer"
+  },
+  {
+   "description": "Administrator-managed Doco terminal group eligible to claim this station's tickets.",
+   "fieldname": "terminal_group",
+   "fieldtype": "Link",
+   "label": "Terminal Group",
+   "options": "Doco Print Terminal Group"
+  },
+  {
+   "fieldname": "print_format",
+   "fieldtype": "Link",
+   "label": "Kitchen Print Format",
+   "options": "Print Format"
+  },
+  {
+   "default": "80",
+   "fieldname": "paper_width_mm",
+   "fieldtype": "Int",
+   "label": "Paper Width (mm)"
   },
   {
    "default": "1",
