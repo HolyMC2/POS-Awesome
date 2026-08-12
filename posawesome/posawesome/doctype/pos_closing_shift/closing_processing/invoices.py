@@ -1,8 +1,58 @@
+import hashlib
+import json
+
 import frappe
 from frappe import _, DoesNotExistError
 from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import (
     consolidate_pos_invoices,
 )
+
+
+ALLOWED_INVOICE_DOCTYPES = frozenset({"Sales Invoice", "POS Invoice"})
+_CLOSING_SUPERVISOR_ROLES = frozenset(
+    {
+        "POS Awesome Supervisor",
+        "POS Manager",
+        "Sales Manager",
+        "Accounts Manager",
+        "System Manager",
+    }
+)
+
+
+def get_scoped_opening_shift(pos_opening_shift, doctype=None):
+    """Return the DB-owned shift and invoice type after enforcing access."""
+    if doctype is not None and doctype not in ALLOWED_INVOICE_DOCTYPES:
+        frappe.throw(_("Invalid invoice type."), frappe.ValidationError)
+
+    opening_shift = frappe.db.get_value(
+        "POS Opening Shift",
+        pos_opening_shift,
+        ["name", "pos_profile", "company", "user"],
+        as_dict=True,
+    )
+    if not opening_shift:
+        frappe.throw(_("POS Opening Shift not found."), DoesNotExistError)
+
+    from posawesome.posawesome.api._scope import assert_company, assert_profile
+
+    session_user = frappe.session.user
+    assert_profile(session_user, opening_shift.get("pos_profile"))
+    assert_company(session_user, opening_shift.get("company"))
+
+    roles = set(frappe.get_roles(session_user) or [])
+    if opening_shift.get("user") != session_user and not roles.intersection(
+        _CLOSING_SUPERVISOR_ROLES
+    ):
+        frappe.throw(_("You are not allowed to access this POS Opening Shift."), frappe.PermissionError)
+
+    use_pos_invoice = frappe.db.get_value(
+        "POS Profile",
+        opening_shift.get("pos_profile"),
+        "create_pos_invoice_instead_of_sales_invoice",
+    )
+    resolved_doctype = "POS Invoice" if use_pos_invoice else "Sales Invoice"
+    return opening_shift, resolved_doctype
 
 
 def _set_closing_entry_invoices(closing_shift_doc):
@@ -165,7 +215,41 @@ def _held_unconfirmed_saldo(invoice_doc, doctype):
     return False
 
 
+def _get_submission_data(invoice_doc, doctype):
+    rows = frappe.get_all(
+        "POS Invoice Submission Ledger",
+        filters={"invoice_name": invoice_doc.name, "document_type": doctype},
+        fields=["request_data"],
+        order_by="modified desc",
+        limit=1,
+        ignore_permissions=True,
+    )
+    if not rows or not rows[0].get("request_data"):
+        return {}
+    try:
+        return json.loads(rows[0].get("request_data"))
+    except (TypeError, ValueError):
+        return {}
+
+
+def _submit_printed_invoice(invoice_doc, doctype):
+    """Replay a printed draft through the same hardened sale submit path."""
+    from posawesome.posawesome.api.invoice_processing.creation import submit_invoice
+
+    payload = invoice_doc.as_dict()
+    if not payload.get("posa_client_request_id"):
+        stable_key = f"{doctype}:{invoice_doc.name}".encode("utf-8")
+        payload["posa_client_request_id"] = "closing-shift:" + hashlib.sha256(stable_key).hexdigest()
+
+    return submit_invoice(
+        json.dumps(payload, default=str),
+        json.dumps(_get_submission_data(invoice_doc, doctype), default=str),
+        submit_in_background=False,
+    )
+
+
 def submit_printed_invoices(pos_opening_shift, doctype):
+    _, doctype = get_scoped_opening_shift(pos_opening_shift, doctype)
     skipped_invoices = []
     invoices_list = frappe.get_all(
         doctype,
@@ -215,7 +299,17 @@ def submit_printed_invoices(pos_opening_shift, doctype):
                 ).format(invoice_doc.name),
             )
             continue
-        invoice_doc.submit()
+        result = _submit_printed_invoice(invoice_doc, doctype)
+        if result.get("docstatus") == 0:
+            skipped_invoices.append(
+                frappe._dict(
+                    {
+                        "invoice": invoice_doc.name,
+                        "doctype": doctype,
+                        "reason": result.get("hold_reason") or "submission_held",
+                    }
+                )
+            )
     return skipped_invoices
 
 
