@@ -24,6 +24,7 @@ from frappe.utils import add_days, cint, flt, now_datetime, nowdate
 from posawesome.posawesome.api.restaurant._tickets import (
     OPEN_STATUS,
     _publish_floor_update,
+    assert_tables_capability,
     register_open_shifts,
 )
 
@@ -168,6 +169,7 @@ def get_floor_snapshot(pos_profile, company=None, floor=None, max_age_days=3):
     free/seated/ordered from.
     """
     _assert_read_scope(pos_profile, company)
+    assert_tables_capability(pos_profile)
     if not company:
         company = frappe.db.get_value("POS Profile", pos_profile, "company")
 
@@ -282,6 +284,7 @@ def save_floor_layout(
 
     assert_profile(frappe.session.user, pos_profile)
     assert_company(frappe.session.user, company)
+    assert_tables_capability(pos_profile)
     frappe.has_permission("POS Floor", "write", throw=True)
     frappe.has_permission("POS Table", "write", throw=True)
 
@@ -340,6 +343,7 @@ def mark_table_clean(pos_profile, company, table, source_device=None):
 
     assert_profile(frappe.session.user, pos_profile)
     assert_company(frappe.session.user, company)
+    assert_tables_capability(pos_profile)
 
     table_doc = frappe.get_doc("POS Table", table)
     floor_company = frappe.db.get_value("POS Floor", table_doc.floor, "company")

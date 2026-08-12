@@ -223,6 +223,25 @@ class TestWaveASecurity(IntegrationTestCase):
             pes_before, pes_after, "repair replay minted a duplicate Payment Entry"
         )
 
+    # ---------- B3 tables capability gate ----------
+
+    def test_b3_restaurant_endpoint_rejected_without_tables_capability(self):
+        """A register whose capability preset lacks `tables` must be refused by
+        the restaurant endpoints server-side, not merely hidden in the UI."""
+        from posawesome.posawesome.api.restaurant import floors
+
+        prev = frappe.db.get_value("POS Profile", PROFILE, "posa_capability_profile")
+        frappe.db.set_value("POS Profile", PROFILE, "posa_capability_profile", None)
+        frappe.clear_cache(doctype="POS Profile")
+        self.addCleanup(
+            lambda: (
+                frappe.db.set_value("POS Profile", PROFILE, "posa_capability_profile", prev),
+                frappe.clear_cache(doctype="POS Profile"),
+            )
+        )
+        with self.assertRaises(frappe.PermissionError):
+            floors.get_floor_snapshot(PROFILE)
+
     # ---------- W4 giftcard impersonation ----------
 
     def test_w4_supervisor_impersonation_via_cashier_param_rejected(self):

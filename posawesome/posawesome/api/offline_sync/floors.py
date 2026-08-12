@@ -9,6 +9,7 @@ that forces a full resync when the field list changes (spec §6.8).
 
 import frappe
 
+from posawesome.posawesome.api.restaurant._tickets import assert_tables_capability
 from posawesome.posawesome.api.offline_sync.common import (
     _build_response,
     _max_timestamp,
@@ -58,6 +59,7 @@ def sync_floors(pos_profile=None, watermark=None, start_after=None, limit=200, s
         frappe.throw("pos_profile is required")
 
     profile_name = profile.get("name")
+    assert_tables_capability(profile_name)
     company = profile.get("company")
     resolved_limit = _coerce_limit(limit)
     fetch_limit = resolved_limit + 1

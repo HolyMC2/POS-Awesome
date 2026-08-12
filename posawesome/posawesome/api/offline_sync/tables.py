@@ -8,6 +8,7 @@ floor snapshot the moment it is back online (spec §0.2, §6.8).
 
 import frappe
 
+from posawesome.posawesome.api.restaurant._tickets import assert_tables_capability
 from posawesome.posawesome.api.offline_sync.common import (
     _build_response,
     _max_timestamp,
@@ -67,6 +68,7 @@ def sync_tables(pos_profile=None, watermark=None, start_after=None, limit=200, s
     if not profile:
         frappe.throw("pos_profile is required")
 
+    assert_tables_capability(profile.get("name"))
     floors = _scoped_floors(profile)
     if not floors:
         return _build_response(next_watermark=watermark)

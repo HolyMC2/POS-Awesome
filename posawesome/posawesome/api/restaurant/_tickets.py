@@ -34,6 +34,40 @@ DEFAULT_SHIFT_MAX_AGE_DAYS = 3
 FLOOR_UPDATE_EVENT = "posa_floor_update"
 TABS_UPDATE_EVENT = "posa_tabs_update"
 
+TABLES_CAPABILITY = "tables"
+
+
+# ---------------------------------------------------------------------------
+# capability gate
+# ---------------------------------------------------------------------------
+
+
+def assert_tables_capability(pos_profile):
+    """Server-side enforcement of the ``tables`` capability token.
+
+    Floor / table / KOT / settle are table-service features. The SPA hides them
+    on a register whose capability preset lacks ``tables``, but hiding is a UI
+    convenience, not an authorization boundary — a crafted or stale client can
+    call these whitelisted endpoints directly and drive another giro's register
+    into table state, fire KOTs, or settle accounting documents it should never
+    reach. Enforce the token here, mirroring the tips money-gate precedent
+    (Marco 2026-08-12: enforce ``tables`` server-side, not UI-only).
+
+    An entry may carry a ``:Role`` suffix; only the base token is checked, the
+    same way ``POS Capability Profile`` validates the CSV.
+    """
+    from posawesome.posawesome.api.vertical import resolve_capability_json
+
+    if not pos_profile:
+        frappe.throw(_("POS profile is required."), frappe.PermissionError)
+    payload = resolve_capability_json(pos_profile) or {}
+    capabilities = payload.get("capabilities") or []
+    if not any(str(entry).split(":")[0].strip() == TABLES_CAPABILITY for entry in capabilities):
+        frappe.throw(
+            _("This register is not configured for table service."),
+            frappe.PermissionError,
+        )
+
 
 # ---------------------------------------------------------------------------
 # the predicate

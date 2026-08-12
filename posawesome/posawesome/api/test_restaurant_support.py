@@ -54,6 +54,34 @@ def ensure_item(item_code, item_group=None):
     return doc.name
 
 
+TABLES_CAPABILITY_PROFILE = "POSA-TEST-TABLES-CAP"
+
+
+def ensure_tables_capability(pos_profile):
+    """Link a capability preset carrying the `tables` token to the profile so
+    the table-service endpoints (now server-gated on that token) accept the
+    fixtures. Returns the profile's PREVIOUS capability link for restoration.
+    A properly-provisioned restaurant profile always carries this token; the
+    shared Doco Ventas test profile does not, so we grant it per test."""
+    if not frappe.db.exists("POS Capability Profile", TABLES_CAPABILITY_PROFILE):
+        frappe.get_doc(
+            {
+                "doctype": "POS Capability Profile",
+                "profile_name": TABLES_CAPABILITY_PROFILE,
+                "capabilities": "tables",
+                "dock_tabs": "browse, cart, pay, floor",
+                "invoice_mode": "Record Only",
+            }
+        ).insert(ignore_permissions=True)
+    previous = frappe.db.get_value("POS Profile", pos_profile, "posa_capability_profile")
+    frappe.db.set_value(
+        "POS Profile", pos_profile, "posa_capability_profile", TABLES_CAPABILITY_PROFILE
+    )
+    frappe.clear_cache(doctype="POS Profile")
+    frappe.clear_cache(doctype="POS Capability Profile")
+    return previous
+
+
 def ensure_item_group(group_name):
     if frappe.db.exists("Item Group", group_name):
         return group_name
@@ -105,6 +133,12 @@ class RestaurantTestCase(IntegrationTestCase):
             self.skipTest("restaurant doctypes not migrated yet")
 
         self.profile = PROFILE
+        # Table-service endpoints are server-gated on the `tables` capability;
+        # a provisioned restaurant profile carries it. Grant it UNCOMMITTED for
+        # this test — same-connection reads see it and the per-test rollback
+        # undoes it, so nothing leaks. (The one cross-connection concurrency
+        # test mocks the gate instead.)
+        ensure_tables_capability(PROFILE)
         self.company = frappe.db.get_value("POS Profile", PROFILE, "company")
         self.customer = frappe.db.get_value("POS Profile", PROFILE, "customer") or frappe.db.get_value(
             "Customer", {"disabled": 0}, "name"

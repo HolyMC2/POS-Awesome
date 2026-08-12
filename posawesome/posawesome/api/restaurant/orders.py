@@ -25,6 +25,7 @@ from frappe.utils import cint, flt
 
 from posawesome.posawesome.api.restaurant._tickets import (
     OPEN_STATUS,
+    assert_tables_capability,
     get_scoped_order,
     open_order_filters,
     publish_order_change,
@@ -183,6 +184,7 @@ def open_table_order(
     assert_profile(frappe.session.user, pos_profile)
     assert_company(frappe.session.user, company)
     assert_customer_in_profile(frappe.session.user, customer, pos_profile)
+    assert_tables_capability(pos_profile)
 
     if table and not frappe.db.exists("POS Table", table):
         frappe.throw(_("Table {0} not found.").format(table), frappe.DoesNotExistError)
@@ -286,6 +288,7 @@ def update_table_order(
     caller asked to drop that were already fired.
     """
     doc = get_scoped_order(name_or_uid)
+    assert_tables_capability(doc.pos_profile)
 
     # A retried request must not append its lines a second time. The id of
     # the last applied write lives on the order, so a replay is a read.
@@ -336,6 +339,7 @@ def transfer_table_order(name_or_uid, to_table, client_request_id=None, source_d
     a second invisible order for the same party, so it throws.
     """
     doc = get_scoped_order(name_or_uid)
+    assert_tables_capability(doc.pos_profile)
 
     if doc.status != OPEN_STATUS:
         frappe.throw(_("Only an open order can be transferred (this one is {0}).").format(doc.status))
@@ -377,6 +381,7 @@ def transfer_table_order(name_or_uid, to_table, client_request_id=None, source_d
 def cancel_table_order(name_or_uid, client_request_id=None, source_device=None):
     """Release the table. Cancelled orders keep their FK for reporting."""
     doc = get_scoped_order(name_or_uid)
+    assert_tables_capability(doc.pos_profile)
 
     if doc.status == "Cancelled":
         from posawesome.posawesome.api.restaurant.kot import void_order
@@ -409,4 +414,5 @@ def get_table_order(name_or_uid):
     """Read one ticket — the client's authoritative pull after a socket hint."""
     frappe.has_permission("POS Table Order", "read", throw=True)
     doc = get_scoped_order(resolve_order_name(name_or_uid))
+    assert_tables_capability(doc.pos_profile)
     return order_payload(doc)

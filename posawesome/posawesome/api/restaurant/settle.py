@@ -25,6 +25,7 @@ from frappe.utils import cint, flt
 from posawesome.posawesome.api.restaurant._tickets import (
     OPEN_STATUS,
     SETTLING_STATUS,
+    assert_tables_capability,
     get_scoped_order,
     publish_order_change,
 )
@@ -202,6 +203,7 @@ def settle_table_order(
 ):
     """Materialise + submit the accounting document for an open ticket."""
     order = get_scoped_order(name_or_uid)
+    assert_tables_capability(order.pos_profile)
 
     if order.status == "Settled":
         return _settled_response(order, order.settled_invoice, idempotent=True)
@@ -261,6 +263,7 @@ def settle_table_order(
 def get_settlement_state(name_or_uid):
     """Where a settle got to — the client's recovery read after a lost ack."""
     order = get_scoped_order(name_or_uid)
+    assert_tables_capability(order.pos_profile)
     return {
         "order": order.name,
         "status": order.status,

@@ -428,6 +428,16 @@ class TestFireConcurrency(RestaurantTestCase):
 
     def test_two_transactions_cannot_print_the_same_delta(self):
         """The second request waits on the order row, then sees the new snapshot."""
+        # This test fires from SEPARATE DB connections; the per-test capability
+        # grant is uncommitted and invisible there. The `tables` gate is
+        # orthogonal to the FOR-UPDATE locking under test — no-op it so the
+        # concurrency behaviour is what's exercised. (Patching the module attr
+        # applies across threads in-process.)
+        cap_patcher = mock.patch(
+            "posawesome.posawesome.api.restaurant.kot.assert_tables_capability"
+        )
+        cap_patcher.start()
+        self.addCleanup(cap_patcher.stop)
         site = frappe.local.site
         order_name = uid("concurrent-kot")
         request_ids = [uid("fire-a"), uid("fire-b")]

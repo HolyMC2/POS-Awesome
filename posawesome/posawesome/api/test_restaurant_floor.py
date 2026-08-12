@@ -424,13 +424,16 @@ class TestMarkTableClean(RestaurantTestCase):
 
     def test_refuses_a_table_from_another_company(self):
         self._dirty(self.table_a)
+        # Capture the ORIGINAL before patching — grabbing it inside the `with`
+        # would alias the mock itself, and a cold roles cache (cleared by the
+        # capability fixture) would then recurse through get_roles→get_value.
+        real = frappe.db.get_value
         with mock.patch(
             "posawesome.posawesome.api.restaurant.floors.frappe.db.get_value",
             wraps=frappe.db.get_value,
         ) as get_value:
             # Redirect only the floor-company lookup so the guard sees a
             # foreign company while everything else stays real.
-            real = frappe.db.get_value
 
             def fake(doctype, *args, **kwargs):
                 if doctype == "POS Floor" and args[1:2] == ("company",):

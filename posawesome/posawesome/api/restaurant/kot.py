@@ -24,6 +24,7 @@ from frappe.utils import cint, flt, now_datetime
 
 from posawesome.posawesome.api.restaurant._tickets import (
     OPEN_STATUS,
+    assert_tables_capability,
     get_scoped_order,
     publish_order_change,
     resolve_order_name,
@@ -314,6 +315,7 @@ def fire_course(name_or_uid, course_idx=None, client_request_id=None, source_dev
     projection the print path renders. Nothing is persisted as a KOT.
     """
     order = _lock_and_get_scoped_order(name_or_uid)
+    assert_tables_capability(order.pos_profile)
 
     event_key = f"posa-kot:{order.name}:{client_request_id}" if client_request_id else None
 
@@ -434,6 +436,7 @@ def get_fire_preview(name_or_uid, course_idx=None):
     """What WOULD print, without firing. Read-only, no snapshot write."""
     frappe.has_permission("POS Table Order", "read", throw=True)
     order = get_scoped_order(name_or_uid)
+    assert_tables_capability(order.pos_profile)
 
     course = cint(course_idx) if course_idx not in (None, "") else None
     fires, cancellations = _diff(order, _load_snapshot(order), course)
