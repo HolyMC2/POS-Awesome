@@ -1331,8 +1331,25 @@ class TestInvoiceIdempotency(unittest.TestCase):
             pos_profile="Main POS",
             company="Test Company",
         )
+        ledger_doc = FakeDoc(
+            doctype="POS Invoice Submission Ledger",
+            name="ledger-idemp-001",
+            ledger_key="ledger-idemp-001",
+            client_request_id="inv-fixed-001",
+            state="RECEIVED",
+            company="Test Company",
+            pos_profile="Main POS",
+            document_type="Sales Invoice",
+            invoice_name=None,
+            request_data=json.dumps({}),
+            payment_context=json.dumps({}),
+        )
+        ledger_doc.save = lambda ignore_permissions=False: ledger_doc
+        ledger_doc.insert = lambda ignore_permissions=False: ledger_doc
 
         def fake_get_value(doctype, filters=None, fieldname=None, **kwargs):
+            if doctype == "POS Invoice Submission Ledger":
+                return ledger_doc.name
             if (
                 doctype == "Sales Invoice"
                 and isinstance(filters, dict)
@@ -1342,8 +1359,14 @@ class TestInvoiceIdempotency(unittest.TestCase):
             return 0
 
         self.creation.frappe.db.get_value = fake_get_value
-        self.creation.frappe.db.exists = lambda *args, **kwargs: False
-        self.creation.frappe.get_doc = lambda *args: existing_doc
+        self.creation.frappe.db.exists = lambda doctype, name: doctype == "Sales Invoice"
+
+        def fake_get_doc(*args, **kwargs):
+            if args[0] == "POS Invoice Submission Ledger":
+                return ledger_doc
+            return existing_doc
+
+        self.creation.frappe.get_doc = fake_get_doc
         self.creation.update_invoice = lambda *_args, **_kwargs: (_ for _ in ()).throw(
             AssertionError("duplicate replay should not build a new invoice")
         )
@@ -1648,7 +1671,7 @@ class TestInvoiceIdempotency(unittest.TestCase):
             "missing-ledger-name",
         )
 
-    def test_repair_incomplete_submission_ledger_reconciles_submitted_invoice(self):
+    def test_repair_submission_runs_post_submit_money_once_then_replays(self):
         ledger_doc = FakeDoc(
             doctype="POS Invoice Submission Ledger",
             name="ledger-repair-001",
@@ -1659,8 +1682,15 @@ class TestInvoiceIdempotency(unittest.TestCase):
             document_type="Sales Invoice",
             invoice_name="ACC-SINV-REPAIR-0001",
             state="SUBMITTED",
-            request_data=json.dumps({}),
-            payment_context=json.dumps({}),
+            request_data=json.dumps({"credit_change": 25}),
+            payment_context=json.dumps(
+                {
+                    "is_payment_entry": 0,
+                    "total_cash": 0,
+                    "cash_account": {"account": "Cash - TC"},
+                    "payments": [],
+                }
+            ),
         )
         ledger_doc.save = lambda ignore_permissions=False: ledger_doc
         invoice_doc = FakeDoc(
@@ -1669,15 +1699,20 @@ class TestInvoiceIdempotency(unittest.TestCase):
             docstatus=1,
             pos_profile="Main POS",
             company="Test Company",
+            customer="CUST-0001",
         )
+        lock_calls = []
+        payment_runs = []
 
         def fake_get_value(doctype, filters=None, fieldname=None, **kwargs):
             if doctype == "POS Invoice Submission Ledger":
                 return ledger_doc.name
             return None
 
-        def fake_get_doc(doctype, name):
+        def fake_get_doc(doctype, name, **kwargs):
             if doctype == "POS Invoice Submission Ledger":
+                if kwargs.get("for_update"):
+                    lock_calls.append(name)
                 return ledger_doc
             if doctype == "Sales Invoice":
                 return invoice_doc
@@ -1688,18 +1723,35 @@ class TestInvoiceIdempotency(unittest.TestCase):
             lambda doctype, name: doctype == "Sales Invoice" and name == "ACC-SINV-REPAIR-0001"
         )
         self.creation.frappe.get_doc = fake_get_doc
-        self.creation._process_post_submit_payments = lambda *args, **kwargs: None
-
-        result = self.creation.repair_invoice_submission(
-            client_request_id="ledger-repair-001",
-            company="Test Company",
-            pos_profile="Main POS",
-            document_type="Sales Invoice",
+        original_run = self.creation._run_post_submit_payments
+        self.creation._run_post_submit_payments = (
+            lambda *args, **kwargs: payment_runs.append(args[0].name)
         )
 
-        self.assertEqual(result["name"], "ACC-SINV-REPAIR-0001")
-        self.assertEqual(result["ledger_state"], "POST_SUBMIT_DONE")
-        self.assertTrue(result["repaired"])
+        try:
+            first = self.creation.repair_invoice_submission(
+                client_request_id="ledger-repair-001",
+                company="Test Company",
+                pos_profile="Main POS",
+                document_type="Sales Invoice",
+            )
+            second = self.creation.repair_invoice_submission(
+                client_request_id="ledger-repair-001",
+                company="Test Company",
+                pos_profile="Main POS",
+                document_type="Sales Invoice",
+            )
+        finally:
+            self.creation._run_post_submit_payments = original_run
+
+        self.assertEqual(first["name"], "ACC-SINV-REPAIR-0001")
+        self.assertEqual(first["ledger_state"], "POST_SUBMIT_DONE")
+        self.assertTrue(first["repaired"])
+        self.assertEqual(second["ledger_state"], "POST_SUBMIT_DONE")
+        self.assertFalse(second["repaired"])
+        self.assertTrue(second["replayed"])
+        self.assertEqual(payment_runs, ["ACC-SINV-REPAIR-0001"])
+        self.assertEqual(lock_calls, ["ledger-repair-001"])
 
     def test_background_submit_updates_existing_submission_ledger(self):
         ledger_doc = FakeDoc(

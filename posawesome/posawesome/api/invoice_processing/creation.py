@@ -47,7 +47,7 @@ STATE_DRAFT_CREATED = "DRAFT_CREATED"
 STATE_SUBMITTED = "SUBMITTED"
 STATE_POST_SUBMIT_DONE = "POST_SUBMIT_DONE"
 STATE_FAILED = "FAILED"
-FINAL_LEDGER_STATES = {STATE_SUBMITTED, STATE_POST_SUBMIT_DONE}
+FINAL_LEDGER_STATES = {STATE_POST_SUBMIT_DONE}
 
 RETURN_OUTSTANDING_MESSAGE_MARKERS = (
     "Updating the outstanding to this invoice.",
@@ -334,6 +334,17 @@ def _run_post_submit_payments(invoice_doc, data, is_payment_entry, total_cash, c
     )
 
 
+def _claim_post_submit_ledger(ledger_name):
+    """Lock the durable post-submit operation for this invoice transaction."""
+    if not ledger_name:
+        return None
+
+    ledger_doc = frappe.get_doc(LEDGER_DOCTYPE, ledger_name, for_update=True)
+    if ledger_doc.get("state") == STATE_POST_SUBMIT_DONE:
+        return None
+    return ledger_doc
+
+
 def _process_post_submit_payments(
     invoice_doc,
     data,
@@ -344,13 +355,10 @@ def _process_post_submit_payments(
     run_async=False,
     user=None,
     ledger_name=None,
+    claimed_ledger=None,
 ):
-    if not _has_post_submit_payment_work(data):
-        if ledger_name:
-            _update_submission_ledger_by_name(ledger_name, STATE_POST_SUBMIT_DONE)
-        return
-
-    if run_async:
+    has_payment_work = _has_post_submit_payment_work(data)
+    if run_async and has_payment_work:
         user = user or getattr(getattr(frappe, "session", None), "user", None)
         if user and hasattr(frappe, "publish_realtime"):
             _posa_publish_dual(
@@ -381,11 +389,23 @@ def _process_post_submit_payments(
                 "ledger_name": ledger_name,
             },
         )
-        return
+        return True
+
+    if not has_payment_work:
+        if claimed_ledger:
+            _update_submission_ledger(claimed_ledger, STATE_POST_SUBMIT_DONE)
+        elif ledger_name:
+            _update_submission_ledger_by_name(ledger_name, STATE_POST_SUBMIT_DONE)
+        return True
+
+    ledger_doc = claimed_ledger or (_claim_post_submit_ledger(ledger_name) if ledger_name else None)
+    if ledger_name and not ledger_doc:
+        return False
 
     _run_post_submit_payments(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
-    if ledger_name:
-        _update_submission_ledger_by_name(ledger_name, STATE_POST_SUBMIT_DONE)
+    if ledger_doc:
+        _update_submission_ledger(ledger_doc, STATE_POST_SUBMIT_DONE)
+    return True
 
 
 def process_post_submit_payments_job(kwargs):
@@ -406,9 +426,19 @@ def process_post_submit_payments_job(kwargs):
         invoice_doc.flags.ignore_permissions = True
         from posawesome.posawesome.api._perms import account_perm_bypass
         with account_perm_bypass():
-            _run_post_submit_payments(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
-        if ledger_name:
-            _update_submission_ledger_by_name(ledger_name, STATE_POST_SUBMIT_DONE)
+            processed = _process_post_submit_payments(
+                invoice_doc,
+                data,
+                is_payment_entry,
+                total_cash,
+                cash_account,
+                payments,
+                False,
+                kwargs.get("user"),
+                ledger_name,
+            )
+        if not processed:
+            return
         user = kwargs.get("user")
         if user and hasattr(frappe, "publish_realtime"):
             _posa_publish_dual(
@@ -1359,6 +1389,8 @@ def submit_invoice(invoice, data, submit_in_background=False):
     replay_response = _ledger_final_replay_response(ledger_doc)
     if replay_response:
         return replay_response
+    if ledger_doc and ledger_doc.get("state") == STATE_SUBMITTED:
+        return repair_invoice_submission(client_request_id, invoice.get("company"), pos_profile, doctype)
 
     existing_by_request = find_invoice_by_client_request_id(client_request_id, preferred_doctype=doctype)
     if existing_by_request:
@@ -1366,8 +1398,14 @@ def submit_invoice(invoice, data, submit_in_background=False):
             if ledger_doc:
                 _update_submission_ledger(
                     ledger_doc,
-                    STATE_POST_SUBMIT_DONE,
+                    STATE_SUBMITTED,
                     invoice_name=existing_by_request.name,
+                )
+                return repair_invoice_submission(
+                    client_request_id,
+                    invoice.get("company"),
+                    pos_profile,
+                    existing_by_request.doctype,
                 )
             return {
                 "name": existing_by_request.name,
@@ -1376,7 +1414,7 @@ def submit_invoice(invoice, data, submit_in_background=False):
                 "doctype": existing_by_request.doctype,
                 "replayed": True,
                 "idempotent": True,
-                "ledger_state": ledger_doc.get("state") if ledger_doc else STATE_POST_SUBMIT_DONE,
+                "ledger_state": STATE_POST_SUBMIT_DONE,
                 "client_request_id": client_request_id,
             }
         invoice["name"] = existing_by_request.name
@@ -1388,12 +1426,15 @@ def submit_invoice(invoice, data, submit_in_background=False):
             if cint(ledger_invoice.docstatus) == 1:
                 _update_submission_ledger(
                     ledger_doc,
-                    STATE_POST_SUBMIT_DONE,
+                    STATE_SUBMITTED,
                     invoice_name=ledger_invoice.name,
                 )
-                replay_response = _ledger_response(ledger_doc, replayed=True)
-                if replay_response:
-                    return replay_response
+                return repair_invoice_submission(
+                    client_request_id,
+                    invoice.get("company"),
+                    pos_profile,
+                    ledger_invoice.doctype,
+                )
             invoice["name"] = ledger_invoice.name
 
     invoice_name = invoice.get("name")
@@ -1701,19 +1742,19 @@ def prune_submission_ledger(days: int = 45):
     """Scheduler helper — the ledger writes one row per sale carrying 2-3
     full invoice JSON copies and had NO retention (audit finding: unbounded
     growth dragging backups). Deletes final-state rows older than ``days``.
-    Non-final rows (RECEIVED / DRAFT_CREATED / FAILED) are kept forever —
+    Non-final rows (RECEIVED / DRAFT_CREATED / SUBMITTED / FAILED) are kept forever —
     they are the repair/forensics trail for stuck or held submissions.
     """
     cutoff = frappe.utils.add_days(frappe.utils.getdate(), -abs(cint(days) or 45))
     count = frappe.db.sql(
         """SELECT COUNT(*) FROM `tabPOS Invoice Submission Ledger`
-           WHERE state IN ('SUBMITTED', 'POST_SUBMIT_DONE')
+           WHERE state = 'POST_SUBMIT_DONE'
              AND modified < %s""",
         (cutoff,),
     )[0][0]
     frappe.db.sql(
         """DELETE FROM `tabPOS Invoice Submission Ledger`
-           WHERE state IN ('SUBMITTED', 'POST_SUBMIT_DONE')
+           WHERE state = 'POST_SUBMIT_DONE'
              AND modified < %s""",
         (cutoff,),
     )
@@ -1825,12 +1866,7 @@ def submit_in_background_job(kwargs):
         invoice_doc = frappe.get_doc(doctype, invoice)
 
         if invoice_doc.docstatus == 1:
-            if ledger_doc:
-                _update_submission_ledger(
-                    ledger_doc,
-                    STATE_SUBMITTED,
-                    invoice_name=invoice_doc.name,
-                )
+            process_post_submit_payments_job(kwargs)
             return
 
         invoice_doc.flags.ignore_permissions = True
@@ -1978,6 +2014,15 @@ def repair_invoice_submission(client_request_id, company, pos_profile, document_
     if not client_request_id:
         frappe.throw(_("client_request_id is required"))
 
+    from posawesome.posawesome.api._scope import (
+        assert_company,
+        assert_customer_in_profile,
+        assert_profile,
+    )
+    user = getattr(getattr(frappe, "session", None), "user", None)
+    assert_profile(user, pos_profile)
+    assert_company(user, company)
+
     ledger_doc = _get_submission_ledger(
         client_request_id,
         company,
@@ -1986,6 +2031,18 @@ def repair_invoice_submission(client_request_id, company, pos_profile, document_
     )
     if not ledger_doc:
         frappe.throw(_("No invoice submission ledger found for this request"))
+
+    assert_profile(user, ledger_doc.get("pos_profile"))
+    assert_company(user, ledger_doc.get("company"))
+
+    # A submitted invoice plus its post-submit money work is one durable
+    # operation. Hold this row lock through every Payment Entry write and the
+    # POST_SUBMIT_DONE transition; a concurrent repair waits, then observes
+    # DONE and becomes an idempotent no-op.
+    if ledger_doc.get("state") != STATE_POST_SUBMIT_DONE:
+        ledger_doc = frappe.get_doc(LEDGER_DOCTYPE, ledger_doc.name, for_update=True)
+        assert_profile(user, ledger_doc.get("pos_profile"))
+        assert_company(user, ledger_doc.get("company"))
 
     invoice_name = ledger_doc.get("invoice_name")
     if not invoice_name:
@@ -2006,6 +2063,24 @@ def repair_invoice_submission(client_request_id, company, pos_profile, document_
         }
 
     invoice_doc = frappe.get_doc(document_type, invoice_name)
+    invoice_profile = invoice_doc.get("pos_profile")
+    assert_profile(user, invoice_profile)
+    assert_company(user, invoice_doc.get("company"))
+    assert_customer_in_profile(user, invoice_doc.get("customer"), invoice_profile)
+
+    if ledger_doc.get("state") == STATE_POST_SUBMIT_DONE:
+        return {
+            "name": invoice_doc.name,
+            "status": invoice_doc.docstatus,
+            "docstatus": invoice_doc.docstatus,
+            "doctype": invoice_doc.doctype,
+            "ledger_state": STATE_POST_SUBMIT_DONE,
+            "client_request_id": client_request_id,
+            "repaired": False,
+            "replayed": True,
+            "idempotent": True,
+        }
+
     if cint(invoice_doc.get("docstatus")) == 1:
         context = _json_loads(ledger_doc.get("payment_context"))
         data = _json_loads(ledger_doc.get("request_data"))
@@ -2018,10 +2093,10 @@ def repair_invoice_submission(client_request_id, company, pos_profile, document_
             context.get("cash_account"),
             context.get("payments") or [],
             False,
-            getattr(getattr(frappe, "session", None), "user", None),
+            user,
             ledger_doc.name,
+            ledger_doc,
         )
-        _update_submission_ledger(ledger_doc, STATE_POST_SUBMIT_DONE, invoice_name=invoice_doc.name)
         return {
             "name": invoice_doc.name,
             "status": invoice_doc.docstatus,
@@ -2030,6 +2105,7 @@ def repair_invoice_submission(client_request_id, company, pos_profile, document_
             "ledger_state": ledger_doc.get("state"),
             "client_request_id": client_request_id,
             "repaired": True,
+            "replayed": True,
             "idempotent": True,
         }
 
