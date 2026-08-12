@@ -152,98 +152,6 @@ class TestFireDiff(RestaurantTestCase):
         self.assertEqual(len(result["batch"]["jobs"]), len(result["stations"]))
         self.assertTrue(all(job["status"] == "queued" for job in result["batch"]["jobs"]))
 
-    def test_two_transactions_cannot_print_the_same_delta(self):
-        """The second request waits on the order row, then sees the new snapshot."""
-        site = frappe.local.site
-        order_name = uid("concurrent-kot")
-        request_ids = [uid("fire-a"), uid("fire-b")]
-
-        def in_connection(fn):
-            frappe.init(site=site)
-            frappe.connect()
-            frappe.set_user("Administrator")
-            try:
-                return fn()
-            finally:
-                frappe.destroy()
-
-        def isolated_call(fn):
-            output = queue.Queue()
-
-            def target():
-                try:
-                    output.put(("ok", in_connection(fn)))
-                except Exception as exc:
-                    output.put(("error", exc))
-
-            thread = threading.Thread(target=target)
-            thread.start()
-            thread.join(timeout=15)
-            self.assertFalse(thread.is_alive(), "isolated database call timed out")
-            kind, value = output.get_nowait()
-            if kind == "error":
-                raise value
-            return value
-
-        def create_committed_order():
-            item = frappe.db.get_value("Item", {"disabled": 0, "is_sales_item": 1}, "name")
-            doc = frappe.get_doc({
-                "doctype": "POS Table Order",
-                "order_uid": order_name,
-                "pos_profile": self.profile,
-                "company": self.company,
-                "status": "Open",
-                "opened_by": "Administrator",
-                "waiter": "Administrator",
-                "items": [{"line_uid": uid("ln"), "item_code": item, "qty": 1, "rate": 10}],
-            }).insert(ignore_permissions=True)
-            frappe.db.commit()
-            return doc.name
-
-        isolated_call(create_committed_order)
-        barrier = threading.Barrier(2)
-        results = queue.Queue()
-
-        def fire(request_id):
-            def run():
-                barrier.wait(timeout=5)
-                result = kot.fire_course(order_name, client_request_id=request_id)
-                frappe.db.commit()
-                return result
-
-            try:
-                results.put(("ok", in_connection(run)))
-            except Exception as exc:  # asserted in the parent thread
-                results.put(("error", repr(exc)))
-
-        threads = [threading.Thread(target=fire, args=(request_id,)) for request_id in request_ids]
-        try:
-            for thread in threads:
-                thread.start()
-            for thread in threads:
-                thread.join(timeout=15)
-            self.assertTrue(all(not thread.is_alive() for thread in threads), "concurrent fire deadlocked")
-            outcomes = [results.get_nowait() for _ in threads]
-            self.assertEqual([kind for kind, _ in outcomes], ["ok", "ok"])
-            fired_counts = [len(_all_lines(result["stations"])) for _, result in outcomes]
-            self.assertEqual(sorted(fired_counts), [0, 1], "the same delta printed twice")
-        finally:
-            def cleanup():
-                batches = frappe.get_all(
-                    "Doco Print Batch",
-                    filters={"source_doctype": "POS Table Order", "source_name": order_name},
-                    pluck="name",
-                )
-                for batch in batches:
-                    frappe.db.delete("Doco Print Job", {"batch": batch})
-                    frappe.db.delete("Doco Print Batch", {"name": batch})
-                if frappe.db.exists("POS Table Order", order_name):
-                    frappe.db.set_value("POS Table Order", order_name, "status", "Cancelled")
-                    frappe.delete_doc("POS Table Order", order_name, force=True, ignore_permissions=True)
-                frappe.db.commit()
-
-            isolated_call(cleanup)
-
     def test_firing_a_settled_order_throws(self):
         order = self._order_with(self.line())
         frappe.db.set_value("POS Table Order", order, "status", "Settled")
@@ -502,6 +410,113 @@ class TestStationRouting(RestaurantTestCase):
                     ],
                 }
             ).insert(ignore_permissions=True)
+
+
+class TestFireConcurrency(RestaurantTestCase):
+    """Real cross-connection concurrency, isolated in its own test class.
+
+    This test spawns worker threads that open their own DB connections and
+    COMMIT, while the parent thread parks in ``thread.join``. Under Frappe's
+    IntegrationTestCase every method in a class shares one outer transaction;
+    running this alongside the sibling tests in ``TestFireDiff`` lets their
+    still-held row locks block the worker's committed setup insert, so the join
+    times out. A dedicated class gives it a clean per-class transaction. The
+    underlying ``SELECT ... FOR UPDATE`` serialization in
+    ``_lock_and_get_scoped_order`` is independently correct (verified live: two
+    concurrent fires produce fired counts [0, 1], never a double print).
+    """
+
+    def test_two_transactions_cannot_print_the_same_delta(self):
+        """The second request waits on the order row, then sees the new snapshot."""
+        site = frappe.local.site
+        order_name = uid("concurrent-kot")
+        request_ids = [uid("fire-a"), uid("fire-b")]
+
+        def in_connection(fn):
+            frappe.init(site=site)
+            frappe.connect()
+            frappe.set_user("Administrator")
+            try:
+                return fn()
+            finally:
+                frappe.destroy()
+
+        def isolated_call(fn):
+            output = queue.Queue()
+
+            def target():
+                try:
+                    output.put(("ok", in_connection(fn)))
+                except Exception as exc:
+                    output.put(("error", exc))
+
+            thread = threading.Thread(target=target)
+            thread.start()
+            thread.join(timeout=15)
+            self.assertFalse(thread.is_alive(), "isolated database call timed out")
+            kind, value = output.get_nowait()
+            if kind == "error":
+                raise value
+            return value
+
+        def create_committed_order():
+            item = frappe.db.get_value("Item", {"disabled": 0, "is_sales_item": 1}, "name")
+            doc = frappe.get_doc({
+                "doctype": "POS Table Order",
+                "order_uid": order_name,
+                "pos_profile": self.profile,
+                "company": self.company,
+                "status": "Open",
+                "opened_by": "Administrator",
+                "waiter": "Administrator",
+                "items": [{"line_uid": uid("ln"), "item_code": item, "qty": 1, "rate": 10}],
+            }).insert(ignore_permissions=True)
+            frappe.db.commit()
+            return doc.name
+
+        isolated_call(create_committed_order)
+        barrier = threading.Barrier(2)
+        results = queue.Queue()
+
+        def fire(request_id):
+            def run():
+                barrier.wait(timeout=5)
+                result = kot.fire_course(order_name, client_request_id=request_id)
+                frappe.db.commit()
+                return result
+
+            try:
+                results.put(("ok", in_connection(run)))
+            except Exception as exc:  # asserted in the parent thread
+                results.put(("error", repr(exc)))
+
+        threads = [threading.Thread(target=fire, args=(request_id,)) for request_id in request_ids]
+        try:
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=15)
+            self.assertTrue(all(not thread.is_alive() for thread in threads), "concurrent fire deadlocked")
+            outcomes = [results.get_nowait() for _ in threads]
+            self.assertEqual([kind for kind, _ in outcomes], ["ok", "ok"])
+            fired_counts = [len(_all_lines(result["stations"])) for _, result in outcomes]
+            self.assertEqual(sorted(fired_counts), [0, 1], "the same delta printed twice")
+        finally:
+            def cleanup():
+                batches = frappe.get_all(
+                    "Doco Print Batch",
+                    filters={"source_doctype": "POS Table Order", "source_name": order_name},
+                    pluck="name",
+                )
+                for batch in batches:
+                    frappe.db.delete("Doco Print Job", {"batch": batch})
+                    frappe.db.delete("Doco Print Batch", {"name": batch})
+                if frappe.db.exists("POS Table Order", order_name):
+                    frappe.db.set_value("POS Table Order", order_name, "status", "Cancelled")
+                    frappe.delete_doc("POS Table Order", order_name, force=True, ignore_permissions=True)
+                frappe.db.commit()
+
+            isolated_call(cleanup)
 
 
 if __name__ == "__main__":
