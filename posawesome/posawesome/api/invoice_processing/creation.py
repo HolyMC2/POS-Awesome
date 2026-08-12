@@ -619,12 +619,12 @@ def _validate_customer_credit_allowed(invoice_doc, data):
 
 
 def _validate_return_allowed(invoice_doc):
-    """Server backstop for `posa_allow_return` (POS-PROFILE-SPEC P0-2).
+    """Server backstop for the POS Profile return-policy flags.
 
     The flag only hid the Sales Return button client-side — return invoices
     (negative totals → cash refunds) were submittable on profiles with
-    returns disabled. `posa_allow_return_without_invoice` stays a separate,
-    already-server-enforced policy (stock.py)."""
+    returns disabled. Unlinked returns need the separate
+    `posa_allow_return_without_invoice` opt-in."""
     if not invoice_doc.get("is_return"):
         return
     profile = invoice_doc.get("pos_profile")
@@ -634,6 +634,14 @@ def _validate_return_allowed(invoice_doc):
         frappe.get_cached_value("POS Profile", profile, "posa_allow_return")
     ):
         frappe.throw(_("Sales returns are not enabled in POS Profile"))
+    if not invoice_doc.get("return_against") and not cint(
+        frappe.get_cached_value(
+            "POS Profile",
+            profile,
+            "posa_allow_return_without_invoice",
+        )
+    ):
+        frappe.throw(_("Returns without an original invoice are not enabled in POS Profile"))
 
 
 def _validate_credit_sale_allowed(invoice_doc, data):
@@ -825,6 +833,28 @@ def _get_mutable_invoice_doc(data, doctype):
         return frappe.get_doc(_build_fresh_invoice_payload(data, doctype))
 
     invoice_doc = frappe.get_doc(doctype, invoice_name)
+    if cint(invoice_doc.docstatus) == 0:
+        from posawesome.posawesome.api._scope import assert_company, assert_profile
+
+        session_user = frappe.session.user
+        fetched_profile = invoice_doc.get("pos_profile")
+        assert_profile(session_user, fetched_profile)
+        assert_company(session_user, invoice_doc.get("company"))
+
+        if invoice_doc.get("owner") != session_user:
+            from posawesome.posawesome.api.employees import (
+                _get_user_doc,
+                _is_pos_supervisor,
+            )
+
+            # assert_profile above binds this global supervisor role/flag to
+            # a profile the acting session user is actually assigned to.
+            if not _is_pos_supervisor(_get_user_doc(session_user)):
+                frappe.throw(
+                    _("Not permitted to update draft invoice {0}.").format(invoice_name),
+                    exc=frappe.PermissionError,
+                )
+
     previous_customer = invoice_doc.get("customer")
     previous_values = {
         fieldname: invoice_doc.get(fieldname)

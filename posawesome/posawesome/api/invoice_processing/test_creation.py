@@ -88,12 +88,16 @@ def _install_framework_stubs():
     class ValidationError(Exception):
         http_status_code = 417
 
+    class PermissionError(ValidationError):
+        http_status_code = 403
+
     # What frappe.db.sql raises for MariaDB 1020 / 1213 — creation.py subclasses
     # ValidationError off the module at import time, so both must be present.
     class QueryDeadlockError(Exception):
         pass
 
     frappe_module.ValidationError = ValidationError
+    frappe_module.PermissionError = PermissionError
     frappe_module.QueryDeadlockError = QueryDeadlockError
 
     frappe_utils.cint = lambda value: int(value or 0)
@@ -471,6 +475,213 @@ class TestUpdateInvoiceReturnPayments(unittest.TestCase):
 
 
 @unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class TestUpdateInvoiceDraftAuthorization(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frappe, cls.enqueue_calls = _install_framework_stubs()
+        _install_dependency_stubs()
+        _install_package_stubs()
+        cls.creation = _load_module()
+
+    def setUp(self):
+        self.frappe.session.user = "cashier-y@example.com"
+        self.scope_calls = []
+        self.is_supervisor = False
+        self.original_exists = self.frappe.db.exists
+        self.original_get_doc = self.frappe.get_doc
+
+        self.scope_module_name = "posawesome.posawesome.api._scope"
+        self.employees_module_name = "posawesome.posawesome.api.employees"
+        self.original_scope_module = sys.modules.get(self.scope_module_name)
+        self.original_employees_module = sys.modules.get(self.employees_module_name)
+
+        def assert_profile(user, profile):
+            self.scope_calls.append(("profile", user, profile))
+            if user != "cashier-y@example.com" or profile != "Y POS":
+                raise self.frappe.PermissionError("profile outside cashier scope")
+
+        def assert_company(user, company):
+            self.scope_calls.append(("company", user, company))
+            if user != "cashier-y@example.com" or company != "Y Company":
+                raise self.frappe.PermissionError("company outside cashier scope")
+
+        scope_module = types.ModuleType(self.scope_module_name)
+        scope_module.assert_profile = assert_profile
+        scope_module.assert_company = assert_company
+        sys.modules[self.scope_module_name] = scope_module
+
+        employees_module = types.ModuleType(self.employees_module_name)
+        employees_module._get_user_doc = lambda user: FakeDoc(name=user, enabled=1)
+        employees_module._is_pos_supervisor = lambda _user_doc: self.is_supervisor
+        sys.modules[self.employees_module_name] = employees_module
+
+    def tearDown(self):
+        self.frappe.db.exists = self.original_exists
+        self.frappe.get_doc = self.original_get_doc
+        if self.original_scope_module is None:
+            sys.modules.pop(self.scope_module_name, None)
+        else:
+            sys.modules[self.scope_module_name] = self.original_scope_module
+        if self.original_employees_module is None:
+            sys.modules.pop(self.employees_module_name, None)
+        else:
+            sys.modules[self.employees_module_name] = self.original_employees_module
+
+    def _fetch_draft(self, owner, pos_profile="Y POS", company="Y Company"):
+        draft = FakeDoc(
+            doctype="Sales Invoice",
+            name="SINV-Y-DRAFT",
+            docstatus=0,
+            owner=owner,
+            pos_profile=pos_profile,
+            company=company,
+            customer="CUST-X",
+        )
+        self.frappe.db.exists = lambda doctype, name: (
+            doctype == "Sales Invoice" and name == "SINV-Y-DRAFT"
+        )
+        self.frappe.get_doc = lambda doctype, name: draft
+        return draft
+
+    def _incoming_payload(self):
+        return {
+            "doctype": "Sales Invoice",
+            "name": "SINV-Y-DRAFT",
+            "pos_profile": "Y POS",
+            "company": "Y Company",
+            "customer": "CUST-Y",
+        }
+
+    def test_non_owner_cashier_cannot_mutate_existing_draft_in_own_scope(self):
+        draft = self._fetch_draft("cashier-x@example.com")
+
+        with self.assertRaises(self.frappe.PermissionError):
+            self.creation._get_mutable_invoice_doc(
+                self._incoming_payload(),
+                "Sales Invoice",
+            )
+
+        self.assertEqual(draft.customer, "CUST-X")
+        self.assertEqual(
+            self.scope_calls,
+            [
+                ("profile", "cashier-y@example.com", "Y POS"),
+                ("company", "cashier-y@example.com", "Y Company"),
+            ],
+        )
+
+    def test_incoming_scope_cannot_replace_fetched_draft_scope(self):
+        draft = self._fetch_draft(
+            "cashier-y@example.com",
+            pos_profile="X POS",
+            company="X Company",
+        )
+
+        with self.assertRaises(self.frappe.PermissionError):
+            self.creation._get_mutable_invoice_doc(
+                self._incoming_payload(),
+                "Sales Invoice",
+            )
+
+        self.assertEqual(draft.customer, "CUST-X")
+        self.assertEqual(
+            self.scope_calls,
+            [("profile", "cashier-y@example.com", "X POS")],
+        )
+
+    def test_draft_owner_can_mutate_existing_draft(self):
+        draft = self._fetch_draft("cashier-y@example.com")
+
+        result = self.creation._get_mutable_invoice_doc(
+            self._incoming_payload(),
+            "Sales Invoice",
+        )
+
+        self.assertIs(result, draft)
+        self.assertEqual(result.customer, "CUST-Y")
+        self.assertEqual(
+            self.scope_calls,
+            [
+                ("profile", "cashier-y@example.com", "Y POS"),
+                ("company", "cashier-y@example.com", "Y Company"),
+            ],
+        )
+
+    def test_assigned_pos_supervisor_can_mutate_another_owners_draft(self):
+        draft = self._fetch_draft("cashier-x@example.com")
+        self.is_supervisor = True
+
+        result = self.creation._get_mutable_invoice_doc(
+            self._incoming_payload(),
+            "Sales Invoice",
+        )
+
+        self.assertIs(result, draft)
+        self.assertEqual(result.customer, "CUST-Y")
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class TestReturnPolicy(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frappe, cls.enqueue_calls = _install_framework_stubs()
+        _install_dependency_stubs()
+        _install_package_stubs()
+        cls.creation = _load_module()
+
+    def setUp(self):
+        self.original_get_cached_value = self.frappe.get_cached_value
+
+    def tearDown(self):
+        self.frappe.get_cached_value = self.original_get_cached_value
+
+    def _set_profile_flags(self, **flags):
+        self.frappe.get_cached_value = (
+            lambda doctype, profile, fieldname: flags.get(fieldname, 0)
+        )
+
+    def test_unlinked_return_is_rejected_when_profile_policy_is_off(self):
+        self._set_profile_flags(
+            posa_allow_return=1,
+            posa_allow_return_without_invoice=0,
+        )
+        invoice_doc = FakeDoc(
+            is_return=1,
+            return_against=None,
+            pos_profile="Main POS",
+        )
+
+        with self.assertRaises(self.frappe.ValidationError):
+            self.creation._validate_return_allowed(invoice_doc)
+
+    def test_unlinked_return_is_allowed_when_profile_policy_is_on(self):
+        self._set_profile_flags(
+            posa_allow_return=1,
+            posa_allow_return_without_invoice=1,
+        )
+        invoice_doc = FakeDoc(
+            is_return=1,
+            return_against=None,
+            pos_profile="Main POS",
+        )
+
+        self.creation._validate_return_allowed(invoice_doc)
+
+    def test_linked_return_is_unaffected_when_unlinked_policy_is_off(self):
+        self._set_profile_flags(
+            posa_allow_return=1,
+            posa_allow_return_without_invoice=0,
+        )
+        invoice_doc = FakeDoc(
+            is_return=1,
+            return_against="SINV-ORIGINAL",
+            pos_profile="Main POS",
+        )
+
+        self.creation._validate_return_allowed(invoice_doc)
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class TestStaleNamedInvoiceHandling(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -487,6 +698,7 @@ class TestStaleNamedInvoiceHandling(unittest.TestCase):
         base = {
             "doctype": "Sales Invoice",
             "name": None,
+            "owner": "test@example.com",
             "pos_profile": "Main POS",
             "company": "Test Company",
             "currency": "USD",
