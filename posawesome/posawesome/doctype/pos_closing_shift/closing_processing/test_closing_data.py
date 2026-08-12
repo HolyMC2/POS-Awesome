@@ -16,6 +16,12 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[5]
 
+# Standalone stub test: it swaps a fake `frappe` into sys.modules from inside its
+# scenarios, which would pollute the real module under `bench run-tests`. Skip in
+# that context (same guard as test_reprice.py / test_scope.py); run directly with
+# `python3 test_closing_data.py`.
+_UNDER_BENCH = callable(getattr(sys.modules.get("frappe"), "init", None))
+
 
 class _PermissionError(Exception):
     pass
@@ -224,6 +230,7 @@ def _import_modules(scenario):
     return frappe_module, invoices, data
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class ClosingShiftSecurityTests(unittest.TestCase):
     def test_malicious_doctype_is_rejected_before_database_access(self):
         scenario = {}
