@@ -12,8 +12,9 @@ This module provides three invariants called from ``update_invoice`` /
 ``submit_invoice`` AFTER the scope assertions in ``_scope.py``:
 
   * ``enforce_discount_limit(invoice_doc, profile_doc)``
-      Cap per-item discount percentage against ``Item.max_discount`` and
-      the POS Profile's ``posa_max_discount_allowed`` (if present).
+      Cap per-item percentage or fixed-amount discount against
+      ``Item.max_discount`` and the POS Profile's
+      ``posa_max_discount_allowed`` (if present).
 
   * ``assert_payments_match_grand_total(invoice_doc)``
       Sum of ``payments[].amount`` must equal ``grand_total`` within a
@@ -93,7 +94,7 @@ def _line_value(line: Any, key: str, default: Any = None) -> Any:
 
 
 def enforce_discount_limit(invoice_doc: Any, profile_doc: Any | None = None) -> None:
-    """Cap per-line discount_percentage against Item.max_discount + profile cap.
+    """Cap per-line discount against Item.max_discount + profile cap.
 
     Frappe enforces ``Item.max_discount`` only when the standard pricing
     rules run (which we explicitly disable via ``ignore_pricing_rule = 1``
@@ -104,10 +105,14 @@ def enforce_discount_limit(invoice_doc: Any, profile_doc: Any | None = None) -> 
     """
 
     profile_cap = flt(_profile_value(profile_doc, "posa_max_discount_allowed") or 0)
+    price_list = _profile_value(profile_doc, "selling_price_list") or _line_value(
+        invoice_doc, "selling_price_list"
+    )
 
     for line in _iter_lines(invoice_doc):
         discount_pct = flt(_line_value(line, "discount_percentage") or 0)
-        if discount_pct <= 0:
+        discount_amount = flt(_line_value(line, "discount_amount") or 0)
+        if discount_pct <= 0 and discount_amount <= 0:
             continue
 
         item_code = _line_value(line, "item_code")
@@ -119,6 +124,35 @@ def enforce_discount_limit(invoice_doc: Any, profile_doc: Any | None = None) -> 
         # either side means "no opinion", not "100% discount allowed".
         caps = [c for c in (item_cap, profile_cap) if c > 0]
         if not caps:
+            continue
+
+        base_rate = flt(_line_value(line, "price_list_rate") or 0)
+        if discount_amount > 0 and base_rate <= 0 and item_code and price_list:
+            base_rate = flt(
+                frappe.db.get_value(
+                    "Item Price",
+                    {"item_code": item_code, "price_list": price_list},
+                    "price_list_rate",
+                    order_by="valid_from desc",
+                ) or 0
+            )
+        if discount_amount > 0 and base_rate > 0:
+            discount_pct = max(discount_pct, discount_amount / base_rate * 100.0)
+
+        # Product giveaways and fully-discounted offer/pricing-rule lines
+        # are authorized freebies, not operator-entered discounts.
+        client_rate = flt(_line_value(line, "rate") or 0)
+        is_free = bool(
+            flt(_line_value(line, "is_free_item") or 0)
+            or flt(_line_value(line, "posa_is_offer") or 0)
+        )
+        has_rule = bool(
+            flt(_line_value(line, "posa_offer_applied") or 0)
+            or _line_value(line, "pricing_rules")
+            or _line_value(line, "pricing_rule")
+            or _line_value(line, "source_rule")
+        )
+        if client_rate <= 0 and (is_free or (has_rule and discount_pct >= 100.0)):
             continue
 
         max_allowed = min(caps)
@@ -275,10 +309,6 @@ def assert_rates_within_band(
         # Cart line rates are commonly stored as `rate` (per-unit, post
         # discount). `price_list_rate` is the pre-discount price.
         client_rate = flt(_line_value(line, "rate") or 0)
-        if client_rate <= 0:
-            # Zero-rate is an explicit operator action and should be
-            # caught by the discount-cap path; skip here.
-            continue
 
         master_rate = frappe.db.get_value(
             "Item Price",
@@ -290,6 +320,54 @@ def assert_rates_within_band(
             continue
         master_rate = flt(master_rate)
         if master_rate <= 0:
+            continue
+
+        if client_rate <= 0 and not allow_edit:
+            # Only guard zero/negative rates on profiles that FORBID rate
+            # edits. When posa_allow_user_to_edit_rate=1 a zero rate is the
+            # operator's prerogative (comp, warranty, promo) — the same
+            # "operator judgment rules" bypass applied to positive rates
+            # below. Gating here prevents this guard from 403'ing legitimate
+            # zero lines on rate-edit-enabled registers.
+            is_free = bool(
+                flt(_line_value(line, "is_free_item") or 0)
+                or flt(_line_value(line, "posa_is_offer") or 0)
+            )
+            declared_plr = flt(_line_value(line, "price_list_rate") or 0)
+            base_rate = declared_plr if declared_plr > 0 else master_rate
+            disc_pct = flt(_line_value(line, "discount_percentage") or 0)
+            disc_amt = flt(_line_value(line, "discount_amount") or 0)
+            expected_rate = (
+                base_rate * (1 - disc_pct / 100.0)
+                if disc_pct
+                else base_rate - disc_amt if disc_amt else base_rate
+            )
+            has_rule = bool(
+                flt(_line_value(line, "posa_offer_applied") or 0)
+                or _line_value(line, "pricing_rules")
+                or _line_value(line, "pricing_rule")
+                or _line_value(line, "source_rule")
+            )
+            declared_matches_master = (
+                declared_plr <= 0 or abs(declared_plr - master_rate) <= 0.01
+            )
+            if not is_free and not (
+                has_rule
+                and declared_matches_master
+                and abs(expected_rate) <= 0.01
+            ):
+                frappe.throw(
+                    _(
+                        "Rate edit is not permitted for this POS Profile. "
+                        "Line {0} ({1}): {2} vs price-list rate {3}."
+                    ).format(
+                        _line_value(line, "idx") or "?",
+                        item_code,
+                        client_rate,
+                        master_rate,
+                    ),
+                    frappe.PermissionError,
+                )
             continue
 
         if not allow_edit:

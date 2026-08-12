@@ -141,6 +141,32 @@ class DiscountCapTests(unittest.TestCase):
         invoice = {"items": [{"idx": 1, "item_code": "IT-1", "discount_percentage": 0}]}
         rp.enforce_discount_limit(invoice, profile_doc={"posa_max_discount_allowed": 5})
 
+    def test_fixed_discount_within_cap_passes(self):
+        rp = _import_reprice(_basic_scenario())
+        invoice = {"items": [{
+            "idx": 1, "item_code": "IT-1", "price_list_rate": 100.00,
+            "discount_amount": 5.00,
+        }]}
+        rp.enforce_discount_limit(invoice, profile_doc=None)
+
+    def test_fixed_discount_over_cap_raises(self):
+        rp = _import_reprice(_basic_scenario())
+        invoice = {"items": [{
+            "idx": 1, "item_code": "IT-1", "price_list_rate": 100.00,
+            "discount_amount": 15.00,
+        }]}
+        with self.assertRaises(_PermissionError):
+            rp.enforce_discount_limit(invoice, profile_doc=None)
+
+    def test_fixed_discount_uses_item_price_when_line_base_missing(self):
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "selling_price_list": "Doco",
+            "items": [{"idx": 1, "item_code": "IT-1", "discount_amount": 15.00}],
+        }
+        with self.assertRaises(_PermissionError):
+            rp.enforce_discount_limit(invoice, profile_doc=None)
+
 
 # ---------------------------------------------------------------------------
 # payment-vs-total
@@ -270,6 +296,57 @@ class RateBandTests(unittest.TestCase):
         with self.assertRaises(_PermissionError):
             rp.assert_rates_within_band(invoice, profile)
 
+    def test_no_edit_bare_zero_rate_raises(self):
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "items": [{"idx": 1, "item_code": "IT-1", "rate": 0}],
+        }
+        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(invoice, profile)
+
+    def test_edit_allowed_bare_zero_rate_passes(self):
+        # Regression: on a rate-edit-ENABLED profile a zero/comp rate is the
+        # operator's prerogative and must NOT be blocked by the zero-rate
+        # guard (which exists only to stop free-invoice fraud on rate-edit-OFF
+        # registers). Was thrown when the guard ran before the allow_edit gate.
+        rp = _import_reprice(_basic_scenario())
+        invoice = {"items": [{"idx": 1, "item_code": "IT-1", "rate": 0}]}
+        profile = {"posa_allow_user_to_edit_rate": 1, "selling_price_list": "Doco"}
+        rp.assert_rates_within_band(invoice, profile)
+
+    def test_no_edit_genuine_free_item_zero_rate_passes(self):
+        rp = _import_reprice(_basic_scenario())
+        invoice = {"items": [{
+            "idx": 1, "item_code": "IT-1", "rate": 0, "is_free_item": 1,
+            "price_list_rate": 100.00, "discount_percentage": 100,
+        }]}
+        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        rp.enforce_discount_limit(invoice, profile)
+        rp.assert_rates_within_band(invoice, profile)
+
+    def test_no_edit_pricing_rule_zero_rate_passes(self):
+        rp = _import_reprice(_basic_scenario())
+        invoice = {"items": [{
+            "idx": 1, "item_code": "IT-2", "rate": 0,
+            "price_list_rate": 50.00, "discount_percentage": 100,
+            "pricing_rules": "FREE-RULE",
+        }]}
+        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        rp.enforce_discount_limit(invoice, profile)
+        rp.assert_rates_within_band(invoice, profile)
+
+    def test_no_edit_pricing_rule_zero_with_tampered_base_raises(self):
+        rp = _import_reprice(_basic_scenario())
+        invoice = {"items": [{
+            "idx": 1, "item_code": "IT-2", "rate": 0,
+            "price_list_rate": 100.00, "discount_percentage": 100,
+            "pricing_rules": "FREE-RULE",
+        }]}
+        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(invoice, profile)
+
     def test_no_edit_offer_discount_passes(self):
         # Offer/pricing-rule discount is not a rate edit: declared
         # pre-discount price matches master, rate = price minus discount.
@@ -279,15 +356,17 @@ class RateBandTests(unittest.TestCase):
             "price_list_rate": 100.00, "discount_percentage": 10,
         }]}
         profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        rp.enforce_discount_limit(invoice, profile)
         rp.assert_rates_within_band(invoice, profile)
 
-    def test_no_edit_discount_amount_passes(self):
+    def test_no_edit_discount_amount_within_cap_passes(self):
         rp = _import_reprice(_basic_scenario())
         invoice = {"items": [{
-            "idx": 1, "item_code": "IT-1", "rate": 85.00,
-            "price_list_rate": 100.00, "discount_amount": 15.00,
+            "idx": 1, "item_code": "IT-1", "rate": 95.00,
+            "price_list_rate": 100.00, "discount_amount": 5.00,
         }]}
         profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        rp.enforce_discount_limit(invoice, profile)
         rp.assert_rates_within_band(invoice, profile)
 
     def test_no_edit_declared_price_tamper_raises(self):
