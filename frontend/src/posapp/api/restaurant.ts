@@ -348,7 +348,11 @@ export async function settleTableOrder(p: SettleParams): Promise<SettleResult> {
 		kind: "restaurant:order:settle",
 		method: METHODS.settleOrder,
 		orderUid: p.orderUid,
-		args: { name_or_uid: p.orderUid, invoice_payload: p.invoicePayload },
+		args: {
+			name_or_uid: p.orderUid,
+			invoice_payload: p.invoicePayload,
+			tip_amount: p.tipAmount || 0,
+		},
 	});
 
 	if (!queued) {

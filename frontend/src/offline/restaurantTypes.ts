@@ -148,6 +148,7 @@ export interface UpdateOrderParams {
 export interface SettleParams {
 	orderUid: string;
 	invoicePayload: Record<string, unknown>;
+	tipAmount?: number;
 }
 
 export interface FloorEditorTable {

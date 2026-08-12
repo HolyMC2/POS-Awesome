@@ -15,7 +15,7 @@ from posawesome.posawesome.api.offline_sync.common import (
     _watermark_floor,
 )
 
-SYNC_SCHEMA_VERSION = "2026-08-11"
+SYNC_SCHEMA_VERSION = "2026-08-12"
 
 TABLE_FIELDS = [
     "name",

@@ -192,7 +192,7 @@ const BUILD_VERSION = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION
 // Must equal SYNC_SCHEMA_VERSION in
 // posawesome/posawesome/api/offline_sync/common.py — a mismatch forces every
 // resource into a full resync. Bumped for the pos_floor / pos_table field lists.
-const OFFLINE_SYNC_SCHEMA_VERSION = "2026-08-11";
+const OFFLINE_SYNC_SCHEMA_VERSION = "2026-08-12";
 const OFFLINE_SYNC_TIMER_INTERVAL_MS = 60_000;
 const OFFLINE_SYNC_CALL_TIMEOUT_MS = 60_000;
 const PRODUCT_SYNC_SETTLE_TIMEOUT_MS = 120_000;

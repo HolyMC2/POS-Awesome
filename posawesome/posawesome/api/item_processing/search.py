@@ -109,7 +109,13 @@ def _build_search_plan(
     limit = _to_positive_int(limit)
     offset = _to_positive_int(offset)
 
-    filters: Dict[str, Any] = {"disabled": 0, "is_sales_item": 1, "is_fixed_asset": 0}
+    filters: Dict[str, Any] = {
+        "disabled": 0,
+        "is_sales_item": 1,
+        "is_fixed_asset": 0,
+        # Accounting-only settle line; guests choose it after seeing the bill.
+        "item_code": ["!=", "PROPINA"],
+    }
     if start_after:
         filters["item_name"] = [">", start_after]
     if modified_after:

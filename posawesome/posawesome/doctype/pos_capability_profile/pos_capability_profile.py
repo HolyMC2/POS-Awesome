@@ -30,7 +30,13 @@ VALID_ITEMS_VIEWS = ("list", "card")
 # typo ("tab_identiy") is a silent no-op at the counter otherwise — same
 # reasoning as the dock tabs: reject it while an admin is still looking at it.
 # An entry may carry a `:Role` suffix; only the base name is checked here.
-KNOWN_CAPABILITIES = ("tab_identity", "service_types", "external_document_checkout", "tables")
+KNOWN_CAPABILITIES = (
+    "tab_identity",
+    "service_types",
+    "external_document_checkout",
+    "tables",
+    "tips",
+)
 
 # How the open ticket is backed. Blank = the shipped retail behaviour (a draft
 # invoice per ticket). "Record Only" is the one mode that needs POS Table Order:

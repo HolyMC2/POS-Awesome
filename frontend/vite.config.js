@@ -60,7 +60,9 @@ export default defineConfig({
 	base: "/assets/posawesome/dist/js/",
 	plugins: [
 		posawesomeBuildVersionPlugin(buildVersion),
-		frappeVueStyle(),
+		// The extractor writes beside imported .vue files. Connector apps may be
+		// mounted read-only under Vitest, which does not consume those CSS files.
+		process.env.VITEST ? null : frappeVueStyle(),
 		vue(),
 		viteStaticCopy({
 			targets: [

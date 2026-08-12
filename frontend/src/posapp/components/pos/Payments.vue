@@ -57,6 +57,15 @@
 						/>
 					</section>
 
+					<RestaurantTipSelector
+						v-if="showRestaurantTips"
+						v-model="restaurantTipAmount"
+						:order-total="restaurantOrderTotal"
+						:label="verticalStore.t('Tip')"
+						:format-currency="(value) => formatCurrency(value, invoice_doc.currency)"
+						:currency-symbol="currencySymbol(invoice_doc.currency)"
+					/>
+
 					<section
 						v-if="is_cashback && invoice_doc"
 						class="payment-section payment-section--methods"
@@ -360,6 +369,8 @@ import { useToastStore } from "../../stores/toastStore";
 import { useSyncStore } from "../../stores/syncStore";
 import { useSocketStore } from "../../stores/socketStore";
 import { useEmployeeStore } from "../../stores/employeeStore";
+import { useFloorStore } from "../../stores/floorStore";
+import { useVerticalStore } from "../../stores/verticalStore";
 
 // Composables
 import { usePaymentCalculations } from "../../composables/pos/payments/usePaymentCalculations";
@@ -386,6 +397,7 @@ import { resolvePaymentPrintFormat } from "../../utils/paymentPrintFormat";
 import { parseBooleanSetting } from "../../utils/stock";
 import { focusFirstKeyboardTarget } from "../../utils/keyboardNavigation";
 import { track } from "../../utils/telemetry";
+import { shouldShowRestaurantTips } from "../../utils/restaurantTips";
 
 // Components
 import PaymentSummary from "./payments/PaymentSummary.vue";
@@ -400,6 +412,7 @@ import PaymentCustomerCreditDetails from "./payments/PaymentCustomerCreditDetail
 import PaymentOptions from "./payments/PaymentOptions.vue";
 import PaymentSelectionFields from "./payments/PaymentSelectionFields.vue";
 import PaymentDialogs from "./payments/PaymentDialogs.vue";
+import RestaurantTipSelector from "./payments/RestaurantTipSelector.vue";
 // MP-INTEGRATION-POINT (sale checkout): hard gate — isolated, no-op when off.
 import MpPointSaleGateDialog from "../pos_pay/MpPointSaleGateDialog.vue";
 import { useMpPointSaleGate } from "../../composables/pos/payments/useMpPointSaleGate";
@@ -422,6 +435,8 @@ const uiStore = useUIStore();
 const toastStore = useToastStore();
 const syncStore = useSyncStore();
 const socketStore = useSocketStore();
+const floorStore = useFloorStore();
+const verticalStore = useVerticalStore();
 
 // Destructure format utilities
 const {
@@ -497,6 +512,11 @@ const giftCardLoading = ref(false);
 const giftCardMode = ref("redeem");
 const giftCardError = ref("");
 const giftCardRedemptions = ref([]);
+const restaurantTipAmount = ref(0);
+let restaurantTipBaseTotals = null;
+// Tip already folded into the doc totals — lets applyRestaurantTipTotal know
+// what "the total before this change" was when deciding to follow the tip.
+let lastAppliedRestaurantTip = 0;
 
 // ── Compact ("payment sheet") layout ─────────────────────────────────────
 // Pos.vue renders this component inline below 992px and inside the payment
@@ -565,6 +585,74 @@ const invoice_doc = computed({
 	get: () => invoiceStore.invoiceDoc || {},
 	set: (value) => invoiceStore.setInvoiceDoc(value),
 });
+
+const restaurantOrderTotal = computed(() =>
+	(floorStore.activeOrder?.lines || []).reduce(
+		(sum, line) => sum + (Number(line.qty) || 0) * (Number(line.rate) || 0),
+		0,
+	),
+);
+const showRestaurantTips = computed(
+	() => shouldShowRestaurantTips(
+		verticalStore.has("tips"),
+		floorStore.isRecordOnly,
+		Boolean(floorStore.activeOrder),
+	),
+);
+const TIP_TOTAL_FIELDS = [
+	"grand_total",
+	"rounded_total",
+	"base_grand_total",
+	"base_rounded_total",
+];
+
+const captureRestaurantTipBaseTotals = () => {
+	const doc = invoice_doc.value;
+	restaurantTipBaseTotals = Object.fromEntries(
+		TIP_TOTAL_FIELDS.map((field) => [field, Number(doc?.[field]) || 0]),
+	);
+};
+const applyRestaurantTipTotal = () => {
+	const doc = invoice_doc.value;
+	if (!doc || !restaurantTipBaseTotals) return;
+	for (const field of TIP_TOTAL_FIELDS) {
+		const baseValue = restaurantTipBaseTotals[field];
+		if (field.includes("rounded") && !baseValue) continue;
+		if (doc[field] !== undefined && doc[field] !== null) {
+			const tip = field.startsWith("base_")
+				? restaurantTipAmount.value * (Number(doc.conversion_rate) || 1)
+				: restaurantTipAmount.value;
+			doc[field] = flt(
+				baseValue + tip,
+				currency_precision.value,
+			);
+		}
+	}
+	if (!paymentsTouched.value) {
+		syncPreferredPaymentToCurrentTotal(doc);
+	} else {
+		// Tip chosen AFTER the cashier typed/tapped an amount — the routine
+		// counter gesture. If their entry exactly covered the pre-change
+		// total it meant "exact", so follow the tip; a deliberate over/under
+		// tender (real cash in hand) is never rewritten and the shortfall
+		// stays visible for the cashier to collect.
+		const priorTotal = flt(
+			(restaurantTipBaseTotals.rounded_total || restaurantTipBaseTotals.grand_total || 0) +
+				lastAppliedRestaurantTip,
+			currency_precision.value,
+		);
+		const paid = flt(
+			(doc.payments || []).reduce((sum, p) => sum + (Number(p?.amount) || 0), 0),
+			currency_precision.value,
+		);
+		if (paid === priorTotal) {
+			paymentsTouched.value = false;
+			syncPreferredPaymentToCurrentTotal(doc);
+			paymentsTouched.value = true;
+		}
+	}
+	lastAppliedRestaurantTip = restaurantTipAmount.value;
+};
 
 const paymentItemDiscountTotal = computed(() => {
 	const items = Array.isArray(invoice_doc.value?.items) ? invoice_doc.value.items : [];
@@ -841,6 +929,7 @@ const { ensureReturnPaymentsAreNegative, restoreReturnPayments, validateSubmissi
 			invoiceStore,
 		},
 		currencyPrecision: currency_precision,
+		restaurantTipAmount,
 	});
 
 const isGiftCardPayment = (payment) => {
@@ -2345,11 +2434,18 @@ watch(
 
 watch(isPaymentOpen, (isOpen) => {
 	if (isOpen) {
+		restaurantTipAmount.value = 0;
+		lastAppliedRestaurantTip = 0;
+		captureRestaurantTipBaseTotals();
 		ensurePaymentLinesInitialized();
 		handleShowPayment();
 		// The panel only has a box to measure once it is on screen.
 		nextTick(scheduleShellMeasure);
 	} else {
+		restaurantTipAmount.value = 0;
+		applyRestaurantTipTotal();
+		restaurantTipBaseTotals = null;
+		lastAppliedRestaurantTip = 0;
 		releaseActiveFocus();
 		paymentVisible.value = false;
 		highlightSubmit.value = false;
@@ -2360,6 +2456,8 @@ watch(isPaymentOpen, (isOpen) => {
 		breakdownOpen.value = false;
 	}
 });
+
+watch(restaurantTipAmount, applyRestaurantTipTotal);
 
 watch(
 	() => invoice_doc.value.posa_delivery_date,

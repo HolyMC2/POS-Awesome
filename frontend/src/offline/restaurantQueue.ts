@@ -286,7 +286,7 @@ export function getPendingRestaurantMutationCount() {
 
 // ---- drain -----------------------------------------------------------------
 
-function buildEndpointArgs(payload: RestaurantQueuePayload): AnyRecord {
+export function buildEndpointArgs(payload: RestaurantQueuePayload): AnyRecord {
 	const args: AnyRecord = { ...(payload.args || {}) };
 	// cancel_table_order takes only name_or_uid — passing an unexpected kwarg
 	// raises TypeError server-side before any guard runs.

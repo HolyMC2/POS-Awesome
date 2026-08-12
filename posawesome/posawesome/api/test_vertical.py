@@ -129,6 +129,17 @@ class TestCapabilityResolution(IntegrationTestCase):
         )
         self.assertIn("tables", doc.as_frontend_payload()["capabilities"])
 
+    def test_tips_is_an_accepted_capability(self):
+        doc = frappe.get_doc(
+            {
+                "doctype": "POS Capability Profile",
+                "profile_name": self.PRESET,
+                "capabilities": "tables, tips",
+            }
+        ).insert()
+
+        self.assertEqual(doc.as_frontend_payload()["capabilities"], ["tables", "tips"])
+
     def test_a_blank_dock_tab_list_does_not_grow_a_floor_tab(self):
         # Adding "floor" to VALID_DOCK_TABS must not hand it to every preset
         # that named no tabs — a retail register has no tables to render.

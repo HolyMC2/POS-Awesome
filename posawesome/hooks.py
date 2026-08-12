@@ -269,6 +269,8 @@ fixtures = [
                     "POS Invoice-posa_rt_table_order",
                     "Sales Invoice-posa_rt_waiter",
                     "POS Invoice-posa_rt_waiter",
+                    "Sales Invoice-posa_rt_tip_amount",
+                    "POS Invoice-posa_rt_tip_amount",
                     "POS Profile-posa_pos_awesome_settings",
                     "POS Profile-posa_section_pricing_controls",
                     "POS Profile-posa_section_sales_returns",

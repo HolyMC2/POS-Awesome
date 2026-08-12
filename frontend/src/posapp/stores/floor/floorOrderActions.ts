@@ -164,7 +164,10 @@ export const createOrderActions = (deps: OrderActionDeps) => {
 	 * unchanged so the caller's post-submit handling stays as it is. Throws on
 	 * failure — the payment view already has the catch that tells the cashier.
 	 */
-	const settleActiveOrder = async (invoicePayload: Record<string, unknown>) => {
+	const settleActiveOrder = async (
+		invoicePayload: Record<string, unknown>,
+		tipAmount = 0,
+	) => {
 		const order = deps.activeOrder.value;
 		if (!order) throw new Error("No table order is open");
 		await deps.flushCartSync();
@@ -173,6 +176,7 @@ export const createOrderActions = (deps: OrderActionDeps) => {
 			const result = await restaurantApi.settleTableOrder({
 				orderUid: order.order_uid,
 				invoicePayload,
+				tipAmount,
 			});
 			if (result.queued) {
 				// Offline: the write is queued and NOTHING is submitted yet.

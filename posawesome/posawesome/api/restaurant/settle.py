@@ -29,6 +29,7 @@ from posawesome.posawesome.api.restaurant._tickets import (
     publish_order_change,
 )
 from posawesome.posawesome.api.restaurant.orders import _current_user_shift, order_payload
+from posawesome.posawesome.api.restaurant.tips import tip_invoice_line, validate_tip_amount
 
 
 def _parse_payload(invoice_payload):
@@ -55,7 +56,7 @@ def _target_doctype(pos_profile):
     return "Sales Invoice"
 
 
-def _invoice_items(order):
+def _invoice_items(order, tip_amount=0):
     """Invoice lines from the ORDER's lines — the payload does not get a vote.
 
     `rate` is pinned as `price_list_rate` too so the price list cannot
@@ -75,10 +76,12 @@ def _invoice_items(order):
         if row.uom:
             line["uom"] = row.uom
         items.append(line)
+    if tip_amount:
+        items.append(tip_invoice_line(order.company, tip_amount))
     return items
 
 
-def _build_invoice(order, payload, client_request_id):
+def _build_invoice(order, payload, client_request_id, tip_amount=0):
     """Order lines + provenance stamps merged OVER the client's payload.
 
     The payload supplies what only the till knows — payments, taxes,
@@ -93,7 +96,7 @@ def _build_invoice(order, payload, client_request_id):
     invoice["pos_profile"] = order.pos_profile
     invoice["company"] = order.company
     invoice["is_pos"] = 1
-    invoice["items"] = _invoice_items(order)
+    invoice["items"] = _invoice_items(order, tip_amount)
 
     customer = payload.get("customer") or order.customer
     if not customer:
@@ -123,6 +126,10 @@ def _build_invoice(order, payload, client_request_id):
     invoice["posa_rt_tab_name"] = order.tab_name
     invoice["posa_rt_guest_count"] = cint(order.guest_count)
     invoice["posa_rt_service_type"] = order.service_type
+    # Unconditional like the six stamps above — a conditional assign would let
+    # a crafted payload smuggle its own posa_rt_tip_amount through a tip-free
+    # settle (the stamp is authoritative for propina payout reports).
+    invoice["posa_rt_tip_amount"] = tip_amount
 
     return invoice
 
@@ -191,6 +198,7 @@ def settle_table_order(
     client_request_id=None,
     invoice_payload=None,
     source_device=None,
+    tip_amount=0,
 ):
     """Materialise + submit the accounting document for an open ticket."""
     order = get_scoped_order(name_or_uid)
@@ -205,8 +213,9 @@ def settle_table_order(
     if not order.items:
         frappe.throw(_("Order {0} has no lines to settle.").format(order.name))
 
+    tip_amount = validate_tip_amount(order, tip_amount)
     payload = _parse_payload(invoice_payload)
-    invoice = _build_invoice(order, payload, client_request_id)
+    invoice = _build_invoice(order, payload, client_request_id, tip_amount)
     submit_data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
 
     frappe.db.set_value("POS Table Order", order.name, "status", SETTLING_STATUS)

@@ -10,7 +10,7 @@ from posawesome.posawesome.api.utils import get_active_pos_profile
 # The per-module copies below must stay equal to this — the response carries
 # THIS value while each module's request gate compares against its own, so a
 # split pair pins a client in permanent full-resync.
-SYNC_SCHEMA_VERSION = "2026-08-11"
+SYNC_SCHEMA_VERSION = "2026-08-12"
 
 
 def _normalize_timestamp(value):

@@ -98,6 +98,7 @@ export interface PaymentSubmissionOptions {
 	formatFloat: (_val: any, _prec?: number) => number;
 	formatCurrency?: (_val: any, _currency?: string) => string;
 	currencyPrecision?: Ref<number>;
+	restaurantTipAmount?: Ref<number>;
 	isCashback?: Ref<boolean>;
 	paidChange?: Ref<number>;
 	creditChange?: Ref<number>;
@@ -997,10 +998,13 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			let message;
 			if (floorStore?.isRecordOnly && floorStore.activeOrder) {
 				const queuedOrderUid = floorStore.activeOrder.order_uid;
-				const settled = await floorStore.settleActiveOrder({
-					...data,
-					invoice_doc: submissionDoc,
-				});
+				const settled = await floorStore.settleActiveOrder(
+					{
+						...data,
+						invoice_doc: submissionDoc,
+					},
+					unref(options.restaurantTipAmount) || 0,
+				);
 				if (settled.queued) {
 					// Offline: the settle is QUEUED, not submitted. It replays on
 					// reconnect under the SAME client_request_id, so the submission
