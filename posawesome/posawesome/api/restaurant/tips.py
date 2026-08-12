@@ -27,14 +27,28 @@ def order_line_total(order) -> float:
     return sum(flt(row.qty) * flt(row.rate) for row in (order.items or []))
 
 
+def _tips_capability_enabled(pos_profile: str) -> bool:
+    from posawesome.posawesome.api.vertical import resolve_capability_json
+
+    payload = resolve_capability_json(pos_profile) or {}
+    return "tips" in (payload.get("capabilities") or [])
+
+
 def validate_tip_amount(order, tip_amount) -> float:
     amount = flt(tip_amount)
     if amount < 0:
         frappe.throw(_("Tip amount cannot be negative."))
     if not amount:
-        # Zero-tip settles never consult the cap — a return-heavy order with a
-        # negative line total must still settle tip-free.
+        # Zero-tip settles never consult the cap or the capability — a
+        # return-heavy order with a negative line total must still settle
+        # tip-free, on any register.
         return 0.0
+    if not _tips_capability_enabled(order.pos_profile):
+        # Capability tokens gate the UI everywhere else (tables precedent);
+        # tips are money, so the endpoint refuses independently — a crafted
+        # client must not book propinas on a register whose preset lacks the
+        # token (Marco ruling 2026-08-12, spec §6.6 M8).
+        frappe.throw(_("This register does not accept tips."))
     maximum = 2 * order_line_total(order)
     if amount > maximum:
         frappe.throw(_("Tip amount cannot exceed twice the order total."))

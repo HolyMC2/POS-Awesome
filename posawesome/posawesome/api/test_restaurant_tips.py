@@ -12,7 +12,10 @@ except ImportError:
 
 from posawesome.posawesome.api.restaurant import settle
 from posawesome.posawesome.api.restaurant.tips import _tip_item_docname
-from posawesome.posawesome.api.test_restaurant_support import RestaurantTestCase, uid
+from posawesome.posawesome.api.test_restaurant_support import PROFILE, RestaurantTestCase, uid
+
+TIPS_PRESET = "restaurante-mesas"
+NO_TIPS_PRESET = "cafeteria-counter"
 
 
 class TestRestaurantTips(RestaurantTestCase):
@@ -20,6 +23,12 @@ class TestRestaurantTips(RestaurantTestCase):
         super().setUp()
         if not frappe.db.has_column("Sales Invoice", "posa_rt_tip_amount"):
             self.skipTest("posa_rt_tip_amount custom field not migrated yet")
+        if not frappe.db.exists("POS Capability Profile", TIPS_PRESET):
+            self.skipTest(f"{TIPS_PRESET} preset absent on this site")
+        # The settle endpoint refuses tips unless the register's preset
+        # carries the `tips` token — link the test profile to the
+        # table-service preset (per-test rollback restores the NULL link).
+        frappe.db.set_value("POS Profile", PROFILE, "posa_capability_profile", TIPS_PRESET)
         self.mode_of_payment = (
             frappe.db.get_value("Mode of Payment", {"enabled": 1, "type": "Cash"}, "name")
             or frappe.db.get_value("Mode of Payment", {"enabled": 1}, "name")
@@ -85,6 +94,28 @@ class TestRestaurantTips(RestaurantTestCase):
                 frappe.db.get_value("Sales Invoice", invoice, "posa_rt_tip_amount")
             )
         )
+
+    def test_tip_refused_without_tips_capability(self):
+        if not frappe.db.exists("POS Capability Profile", NO_TIPS_PRESET):
+            self.skipTest(f"{NO_TIPS_PRESET} preset absent on this site")
+        frappe.db.set_value("POS Profile", PROFILE, "posa_capability_profile", NO_TIPS_PRESET)
+        order = self._order()
+
+        with self.assertRaises(frappe.ValidationError):
+            self._settle(order, tip_amount=10, payment=60)
+        self.assertEqual(frappe.db.get_value("POS Table Order", order, "status"), "Open")
+
+        # Tip-free settles stay legal on an ungated register.
+        result = self._settle(order)
+        self.assertTrue(result.get("sales_invoice"))
+
+    def test_tip_refused_with_no_preset_linked(self):
+        frappe.db.set_value("POS Profile", PROFILE, "posa_capability_profile", None)
+        order = self._order()
+
+        with self.assertRaises(frappe.ValidationError):
+            self._settle(order, tip_amount=10, payment=60)
+        self.assertEqual(frappe.db.get_value("POS Table Order", order, "status"), "Open")
 
     def test_tip_cap_violation_leaves_order_open(self):
         order = self._order()

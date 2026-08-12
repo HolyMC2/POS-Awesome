@@ -169,9 +169,11 @@ reference_fresh_install_skips_patches.)
 - CORRECTION to §1: ONE global PROPINA item with per-company item_defaults
   rows (not one item per company). The build is right; earlier text was not.
 - CORRECTION to §6: zero/absent tip → no line, stamp = 0.0 (not NULL).
-- M8 — OPEN MARCO RULING: the settle endpoint does not refuse tips when the
-  profile lacks the `tips` token (matches the `tables` precedent: capability
-  tokens gate UI, not the API). Confirm or order a backend gate.
+- M8 — RESOLVED (Marco 2026-08-12: backend gate): `validate_tip_amount`
+  refuses a positive tip unless the register's resolved capability payload
+  carries `tips`. No preset linked = no tips. Zero-tip settles bypass the
+  gate (any register settles tip-free). Tips diverge from the `tables`
+  UI-only precedent deliberately — tips are money.
 - Accepted v1 (documented, no code): M3 stale tip base when a gift
   card/coupon lands while the sheet is open (fails loudly at the invariant);
   M7 tip % base can lag the cart by the 800ms cart-sync debounce (server cap
