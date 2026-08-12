@@ -23,6 +23,35 @@ def validate(doc, method):
     auto_set_delivery_charges(doc)
     calc_delivery_charges(doc)
     apply_tax_inclusive(doc)
+    set_line_discount_accounts(doc)
+
+
+def set_line_discount_accounts(doc):
+    """Fill each discounted line's ``discount_account`` from the company default.
+
+    A Property Setter makes ``Sales Invoice Item.discount_account`` mandatory
+    when a line carries a discount (``mandatory_depends_on: eval:
+    doc.discount_amount``). The POS sends absolute peso discounts, so a
+    discounted line submitted without the account trips "Discount Account is
+    required in every row" and blocks the sale — while a percentage-only line
+    slips through because ERPNext computes ``discount_amount`` after validation.
+    The account is a bookkeeping default, not a per-sale choice, so populate it
+    from ``Company.default_discount_account``. Runs in ``validate`` (before the
+    mandatory check) and covers POS, desk, and API alike.
+    """
+    items = doc.get("items")
+    if not items:
+        return
+    company = doc.get("company")
+    if not company:
+        return
+    default_account = frappe.get_cached_value("Company", company, "default_discount_account")
+    if not default_account:
+        return
+    for item in items:
+        has_discount = flt(item.get("discount_amount")) or flt(item.get("discount_percentage"))
+        if has_discount and not item.get("discount_account"):
+            item.discount_account = default_account
 
 
 def before_submit(doc, method):

@@ -196,6 +196,29 @@ class TestWaveASecurity(IntegrationTestCase):
         r = self._submit(self._payload(self._crid("ok"), rate=10, price_list_rate=10, pay=10))
         self.assertEqual(r["docstatus"], 1)
 
+    # ---------- discount_account mandatory (prod incident 08-12) ----------
+
+    def test_discounted_line_autofills_discount_account_and_submits(self):
+        """A POS line with an absolute discount must not trip the mandatory
+        `discount_account` Property Setter — validate fills it from the company
+        default so the sale submits."""
+        if not frappe.db.exists(
+            "Property Setter", "Sales Invoice Item-discount_account-mandatory_depends_on"
+        ):
+            self.skipTest("no discount_account mandatory Property Setter on this site")
+        if not frappe.get_cached_value("Company", self.company, "default_discount_account"):
+            self.skipTest("no company default_discount_account")
+        # list 100, 30 off, net 70, pay 70 — a genuinely discounted sale
+        payload = self._payload(
+            self._crid("disc-acct"), rate=70, price_list_rate=100, pay=70, discount_amount=30
+        )
+        r = self._submit(payload)
+        self.assertEqual(r["docstatus"], 1)
+        acct = frappe.db.get_value(
+            "Sales Invoice Item", {"parent": r["name"]}, "discount_account"
+        )
+        self.assertTrue(acct, "discount_account should be auto-filled on the discounted line")
+
     # ---------- W2 closing SQLi ----------
 
     def test_w2_malicious_doctype_never_reaches_sql(self):
