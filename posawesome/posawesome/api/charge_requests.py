@@ -35,17 +35,26 @@ def _capability_enabled(pos_profile: str) -> bool:
     Mirrors verticalStore's additive gate: a preset that declares the
     capability shows the Pending Charges UI, so the endpoints behind it must
     agree or every click throws "not enabled". A role-gated entry
-    (``capability:Some Role``) counts here — the role scopes the UI, while
-    these endpoints scope by the caller's own company and shift. Never raises:
-    an unresolvable preset just means "not enabled".
+    (``capability:Some Role``) counts only when the authenticated session user
+    holds that role, matching the frontend gate. Never raises: an unresolvable
+    preset or role lookup just means "not enabled".
     """
     try:
         payload = resolve_capability_json(pos_profile) or {}
         capabilities = payload.get("capabilities") or []
-        return any(
-            str(entry).split(":")[0].strip() == CHARGE_REQUEST_CAPABILITY
-            for entry in capabilities
-        )
+        user_roles = None
+        for entry in capabilities:
+            capability, separator, required_role = str(entry).partition(":")
+            if capability.strip() != CHARGE_REQUEST_CAPABILITY:
+                continue
+            required_role = required_role.strip() if separator else ""
+            if not required_role:
+                return True
+            if user_roles is None:
+                user_roles = set(frappe.get_roles(frappe.session.user) or [])
+            if required_role in user_roles:
+                return True
+        return False
     except Exception:
         return False
 
@@ -62,6 +71,18 @@ def _assert_feature(pos_profile: str):
     assert_profile(frappe.session.user, pos_profile)
     if not _feature_enabled(pos_profile):
         frappe.throw(_("Charge requests are not enabled for this POS Profile."))
+
+
+def _assert_request_profile(request, pos_profile: str):
+    """Reject a fetched request pinned to a different POS Profile."""
+    pinned_profile = str(getattr(request, "pos_profile", None) or "").strip()
+    if pinned_profile and pinned_profile != str(pos_profile or "").strip():
+        frappe.throw(
+            _("Charge request {0} is assigned to POS Profile {1}.").format(
+                request.name, pinned_profile
+            ),
+            frappe.PermissionError,
+        )
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -105,6 +126,7 @@ def load_charge_request(name, pos_profile):
     _assert_feature(pos_profile)
     request = frappe.get_doc(CHARGE_REQUEST_DOCTYPE, name)
     assert_company(frappe.session.user, request.company)
+    _assert_request_profile(request, pos_profile)
     if request.status != "Open":
         frappe.throw(
             _("Charge request {0} is {1} — someone already handled it.").format(
@@ -139,6 +161,7 @@ def prepare_charge_request_invoice(name, pos_profile, pos_opening_shift):
     _assert_feature(pos_profile)
     request = frappe.get_doc(CHARGE_REQUEST_DOCTYPE, name)
     assert_company(frappe.session.user, request.company)
+    _assert_request_profile(request, pos_profile)
     if request.status != "Open":
         frappe.throw(
             _("Charge request {0} is {1} — someone already handled it.").format(
@@ -228,6 +251,7 @@ def mark_charge_request_charged(name, pos_profile, invoice_doctype, invoice_name
     _assert_feature(pos_profile)
     request = frappe.get_doc(CHARGE_REQUEST_DOCTYPE, name)
     assert_company(frappe.session.user, request.company)
+    _assert_request_profile(request, pos_profile)
 
     if invoice_doctype not in ("Sales Invoice", "POS Invoice"):
         frappe.throw(_("Unsupported invoice doctype {0}.").format(invoice_doctype))
