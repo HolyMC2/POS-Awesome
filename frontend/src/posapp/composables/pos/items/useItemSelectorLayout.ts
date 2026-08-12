@@ -1,7 +1,8 @@
-import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from "vue";
 import _ from "lodash";
 import {
 	getCardColumns,
+	getCardColumnsForContainer,
 	getCardGap,
 	getCardPadding,
 } from "../../../utils/itemSelectorLayout.js";
@@ -27,8 +28,43 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 	const itemsContainerRef = ref<any>(null);
 	const scrollThrottle = ref<number | null>(null);
 
-	// Computed Metrics
-	const cardColumns = computed(() => getCardColumns(windowWidth.value));
+	// MEASURED container width via ResizeObserver. clientWidth read inside a
+	// computed is not reactive, and the old windowWidth*0.4 estimate is only
+	// right for the classic two-column desk — in the lean vertical layout the
+	// panel is the full window and the estimate left 60% of it empty.
+	const measuredContainerWidth = ref(0);
+	let containerObserver: ResizeObserver | null = null;
+
+	const observeContainer = (el: HTMLElement | null) => {
+		if (containerObserver) {
+			containerObserver.disconnect();
+			containerObserver = null;
+		}
+		if (!el || typeof ResizeObserver === "undefined") {
+			measuredContainerWidth.value = el ? el.clientWidth : 0;
+			return;
+		}
+		containerObserver = new ResizeObserver((entries) => {
+			const width = entries[0]?.contentRect?.width;
+			if (typeof width === "number") {
+				measuredContainerWidth.value = width;
+			}
+		});
+		containerObserver.observe(el);
+		measuredContainerWidth.value = el.clientWidth;
+	};
+
+	watch(itemsContainerRef, (component) => {
+		const el = (component?.$el || component) as HTMLElement | null;
+		observeContainer(el instanceof HTMLElement ? el : null);
+	});
+
+	// Computed Metrics — container-measured when available, window fallback
+	// until the panel mounts.
+	const cardColumns = computed(() => {
+		const containerColumns = getCardColumnsForContainer(measuredContainerWidth.value);
+		return containerColumns > 0 ? containerColumns : getCardColumns(windowWidth.value);
+	});
 	const cardGap = computed(() => getCardGap(windowWidth.value));
 	const cardPadding = computed(() => getCardPadding(windowWidth.value));
 
@@ -46,14 +82,11 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 	const cardSlotWidth = computed(() => cardColumnWidth.value + cardGap.value);
 
 	const cardContainerWidth = computed(() => {
-		// If we have a reference to the container, try to get its width
-		// Otherwise fallback to an estimated width based on window
-		if (itemsContainerRef.value && itemsContainerRef.value.$el) {
-			return itemsContainerRef.value.$el.clientWidth;
+		if (measuredContainerWidth.value > 0) {
+			return measuredContainerWidth.value;
 		}
-		// Fallback estimation (e.g. 5 columns of regular grid)
-		// This is just a safe default until mounted
-		return windowWidth.value * 0.4; // Approx 40% of screen for items selector usually
+		// Pre-mount estimate only (classic desk panel ≈ 40% of the window).
+		return windowWidth.value * 0.4;
 	});
 
 	const cardColumnWidth = computed(() => {
@@ -161,6 +194,10 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 			cancelAnimationFrame(scrollThrottle.value);
 		}
 		scheduleCardMetricsUpdate.cancel();
+		if (containerObserver) {
+			containerObserver.disconnect();
+			containerObserver = null;
+		}
 	});
 
 	return {

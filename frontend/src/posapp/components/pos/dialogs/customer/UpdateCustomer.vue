@@ -197,8 +197,8 @@
 				</v-card-text>
 				<v-card-actions>
 					<v-spacer></v-spacer>
-					<v-btn color="error" theme="dark" @click="confirm_close">{{ __("Close") }}</v-btn>
-					<v-btn color="success" theme="dark" @click="submit_dialog">{{ __("Submit") }}</v-btn>
+					<v-btn color="error" variant="flat" @click="confirm_close">{{ __("Close") }}</v-btn>
+					<v-btn color="success" variant="flat" @click="submit_dialog">{{ __("Submit") }}</v-btn>
 				</v-card-actions>
 			</v-card>
 		</v-dialog>

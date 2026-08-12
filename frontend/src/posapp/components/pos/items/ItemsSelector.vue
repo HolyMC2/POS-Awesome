@@ -91,7 +91,7 @@
 						<v-col cols="12" class="pt-0 mt-0" data-perf-tag="items-grid">
 							<ItemsSelectorCards
 								v-if="items_view === 'card'"
-								ref="itemsContainer"
+								ref="itemsContainerRef"
 								:displayed-items="displayedItems"
 								:is-loading="isLoadingOrSyncing"
 								:search-input="search_input"
@@ -678,6 +678,7 @@ const {
 	cardSlotHeight,
 	cardSlotWidth,
 	cardColumnWidth,
+	itemsContainerRef,
 	checkItemContainerOverflow,
 	scheduleCardMetricsUpdate,
 	onListScroll: handleListScroll,
