@@ -1560,6 +1560,20 @@ def submit_invoice(invoice, data, submit_in_background=False):
         )
     _normalize_return_payment_rows(invoice_doc, invoice_doc.get("conversion_rate") or 1)
 
+    # Re-assert AFTER the save. The pre-save assert above compares totals the
+    # update-the-existing-doc branch took from the CLIENT payload; save() →
+    # validate() → calculate_taxes_and_totals() just restored the
+    # authoritative grand_total, so a payload declaring doctored totals to
+    # slip the first check dies here instead of submitting with a silent
+    # outstanding. Mirrors the background path's re-assert (see
+    # submit_in_background_job). Returns exempt for the same reason as there.
+    if not invoice_doc.get("is_return"):
+        assert_payments_match_grand_total(
+            invoice_doc,
+            is_credit_sale=cint(data.get("is_credit_sale")),
+            declared_change=flt(data.get("paid_change")) + flt(data.get("credit_change")),
+        )
+
     if data.get("due_date"):
         frappe.db.set_value(
             invoice_doc.doctype,
