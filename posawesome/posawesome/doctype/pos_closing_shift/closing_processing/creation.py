@@ -1,6 +1,8 @@
 import frappe
 from frappe import _
 from frappe.utils import flt, json
+from posawesome.posawesome.api._scope import assert_company, assert_profile
+from posawesome.posawesome.api.employees import _is_pos_supervisor
 from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.utils import get_base_value
 from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.data import (
     get_pos_invoices,
@@ -293,6 +295,21 @@ def make_closing_shift_from_opening(opening_shift):
 @frappe.whitelist()
 def submit_closing_shift(closing_shift):
     closing_shift = json.loads(closing_shift)
+    opening_shift = frappe.get_doc(
+        "POS Opening Shift", closing_shift.get("pos_opening_shift")
+    )
+    session_user = frappe.session.user
+    assert_profile(session_user, opening_shift.pos_profile)
+    assert_company(session_user, opening_shift.company)
+
+    if opening_shift.user != session_user:
+        user_doc = frappe.get_doc("User", session_user)
+        if not _is_pos_supervisor(user_doc):
+            frappe.throw(
+                _("Only the shift owner or a POS supervisor can close this shift."),
+                frappe.PermissionError,
+            )
+
     closing_shift_doc = frappe.get_doc(closing_shift)
     closing_shift_doc.flags.ignore_permissions = True
     normalize_pos_payment_references(closing_shift_doc)
