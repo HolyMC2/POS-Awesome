@@ -193,22 +193,34 @@ def assert_shift_not_stale(pos_opening_shift):
     anything that bypasses the UI (stale cached tab, direct API call) from
     selling into yesterday's shift when the profile enforces closure.
 
-    Demo tenants skip the whole gate — including the closed-shift reject: on a
-    demo a dead-lettered sale is strictly worse than a corte mismatch the
-    nightly golden restore wipes anyway (see is_demo_pos_site).
+    A non-demo shift is bound to the authenticated cashier: a sale may only
+    post into the seller's own opening shift, so cash lands in that cashier's
+    corte, not another's. Demo tenants skip the whole gate (ownership +
+    stale/closed-state): there a dead-lettered sale is worse than a corte
+    mismatch the nightly golden restore wipes anyway (see is_demo_pos_site).
     """
 
     if not pos_opening_shift:
         return
-    if is_demo_pos_site():
-        return
     row = frappe.db.get_value(
         "POS Opening Shift",
         pos_opening_shift,
-        ["period_start_date", "pos_profile", "status", "docstatus"],
+        ["period_start_date", "pos_profile", "status", "docstatus", "user"],
         as_dict=True,
     )
-    if not row or cint(row.docstatus) != 1:
+    if not row:
+        return
+    # Demos never hard-block a sale (shared login + nightly golden restore make
+    # a corte mismatch harmless), so they skip the ownership bind too — a seeded
+    # demo shift owned by a different user must not reject the shared seller.
+    if is_demo_pos_site():
+        return
+    if row.user != frappe.session.user:
+        frappe.throw(
+            _("POS Opening Shift {0} belongs to another user.").format(pos_opening_shift),
+            frappe.PermissionError,
+        )
+    if cint(row.docstatus) != 1:
         return
     if row.status == "Closed":
         # A late-arriving offline sale trying to post into an already-closed
