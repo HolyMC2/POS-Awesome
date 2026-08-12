@@ -242,6 +242,38 @@ class TestWaveASecurity(IntegrationTestCase):
         with self.assertRaises(frappe.PermissionError):
             floors.get_floor_snapshot(PROFILE)
 
+    # ---------- B5 shift-owner binding ----------
+
+    def test_b5_shift_owned_by_another_user_is_refused(self):
+        """A sale may only post into the seller's own opening shift; the shift
+        validation hook must refuse a shift owned by a different user."""
+        from posawesome.posawesome.api import shifts
+        from posawesome.posawesome.api.test_restaurant_support import make_shift
+
+        other = frappe.db.get_value(
+            "User",
+            {"name": ["not in", [frappe.session.user, "Guest"]], "enabled": 1,
+             "user_type": "System User"},
+            "name",
+        )
+        if not other:
+            self.skipTest("no second system user on site")
+        shift = make_shift(PROFILE, self.company, other)
+
+        def _cleanup():
+            try:
+                doc = frappe.get_doc("POS Opening Shift", shift)
+                if doc.docstatus == 1:
+                    doc.flags.ignore_permissions = True
+                    doc.cancel()
+                frappe.delete_doc("POS Opening Shift", shift, force=True, ignore_permissions=True)
+            except Exception:
+                pass
+
+        self.addCleanup(_cleanup)
+        with self.assertRaises(frappe.PermissionError):
+            shifts.assert_shift_not_stale(shift)
+
     # ---------- W4 giftcard impersonation ----------
 
     def test_w4_supervisor_impersonation_via_cashier_param_rejected(self):
