@@ -78,7 +78,7 @@ def get_unallocated_payments(*args, **kwargs):
     return _impl(*args, **kwargs)
 
 
-@frappe.whitelist(methods=["GET", "POST"])
+@frappe.whitelist(methods=["POST"])
 def process_pos_payment(*args, **kwargs):
     """Backward-compat alias → posawesome.posawesome.api.payment_processing.processor.process_pos_payment.
     Filters kwargs against the impl's signature so Frappe's `cmd` /

@@ -12,6 +12,11 @@ from posawesome.posawesome.api.idempotency import (
     find_payment_entries_by_client_request_id,
     normalize_client_request_id,
 )
+from posawesome.posawesome.api._scope import (
+    assert_company,
+    assert_customer_in_profile,
+    assert_profile,
+)
 
 
 def _amounts_match(left, right):
@@ -45,6 +50,91 @@ def _expected_lookup_errors():
             errors.append(error_type)
 
     return tuple(errors)
+
+
+def _assert_accounting_document_access(
+    doctype,
+    name,
+    company,
+    party,
+    party_type,
+    pos_profile,
+):
+    """Validate a client-selected accounting document before using it."""
+    if not name:
+        frappe.throw(_("Accounting document name is required"))
+
+    frappe.has_permission(doctype, "read", name, throw=True)
+    document = frappe.get_cached_doc(doctype, name)
+
+    if _get_value(document, "company") != company:
+        frappe.throw(
+            _("Not permitted to use {0} {1} for company {2}.").format(
+                doctype,
+                name,
+                company,
+            ),
+            frappe.PermissionError,
+        )
+
+    document_party_type = None
+    document_party = None
+    if doctype == "Sales Invoice":
+        document_party_type = "Customer"
+        document_party = _get_value(document, "customer")
+    elif doctype == "Purchase Invoice":
+        document_party_type = "Supplier"
+        document_party = _get_value(document, "supplier")
+    elif doctype == "Payment Entry":
+        document_party_type = _get_value(document, "party_type")
+        document_party = _get_value(document, "party")
+
+    if document_party_type != party_type or document_party != party:
+        frappe.throw(
+            _("Not permitted to use {0} {1} for party {2}.").format(
+                doctype,
+                name,
+                party,
+            ),
+            frappe.PermissionError,
+        )
+
+    if document_party_type == "Customer":
+        assert_customer_in_profile(frappe.session.user, document_party, pos_profile)
+
+    return document
+
+
+def _assert_selected_accounting_documents(data, company, party, party_type, pos_profile):
+    expected_invoice_doctype = "Purchase Invoice" if party_type == "Supplier" else "Sales Invoice"
+
+    for invoice in data.get("selected_invoices") or []:
+        doctype = invoice.get("voucher_type") or "Sales Invoice"
+        if doctype != expected_invoice_doctype:
+            frappe.throw(
+                _("Not permitted to use {0} for party type {1}.").format(doctype, party_type),
+                frappe.PermissionError,
+            )
+        _assert_accounting_document_access(
+            doctype,
+            invoice.get("voucher_no") or invoice.get("name"),
+            company,
+            party,
+            party_type,
+            pos_profile,
+        )
+
+    for payment in data.get("selected_payments") or []:
+        is_credit_note = cint(payment.get("is_credit_note")) or payment.get("voucher_type") == "Sales Invoice"
+        doctype = "Sales Invoice" if is_credit_note else "Payment Entry"
+        _assert_accounting_document_access(
+            doctype,
+            payment.get("name"),
+            company,
+            party,
+            party_type,
+            pos_profile,
+        )
 
 
 def _to_public_entry(entry):
@@ -240,9 +330,6 @@ def process_pos_payment(payload):
     data = frappe._dict(data)
     client_request_id = normalize_client_request_id(data.get("client_request_id"))
 
-    if not data.pos_profile.get("posa_use_pos_awesome_payments"):
-        frappe.throw(_("POS Awesome Payments is not enabled for this POS Profile"))
-
     party = data.get("party") or data.get("customer")
     party_type = data.get("party_type") or "Customer"
     payment_type = data.get("payment_type") or "Receive"
@@ -250,8 +337,6 @@ def process_pos_payment(payload):
     # validate data
     if not party:
         frappe.throw(_("Party is required"))
-    if not data.company:
-        frappe.throw(_("Company is required"))
     if not data.currency:
         frappe.throw(_("Currency is required"))
     if not data.pos_profile_name:
@@ -259,18 +344,61 @@ def process_pos_payment(payload):
     if not data.pos_opening_shift_name:
         frappe.throw(_("POS Opening Shift is required"))
 
-    company = data.company
+    profile = frappe.get_cached_doc("POS Profile", data.pos_profile_name)
+    if not profile:
+        frappe.throw(_("POS Profile {0} was not found").format(data.pos_profile_name))
+
+    assert_profile(frappe.session.user, profile.name)
+    assert_company(frappe.session.user, profile.company)
+    if party_type == "Customer":
+        assert_customer_in_profile(frappe.session.user, party, profile.name)
+
+    if not cint(profile.get("posa_use_pos_awesome_payments")):
+        frappe.throw(_("POS Awesome Payments is not enabled for this POS Profile"))
+
+    company = profile.company
+    if not company:
+        frappe.throw(_("Company is required"))
     currency = data.currency
     customer = party
     pos_opening_shift_name = data.pos_opening_shift_name
-    allow_make_new_payments = data.pos_profile.get("posa_allow_make_new_payments")
-    allow_reconcile_payments = data.pos_profile.get("posa_allow_reconcile_payments")
-    allow_mpesa_reconcile_payments = data.pos_profile.get("posa_allow_mpesa_reconcile_payments")
+    allow_make_new_payments = cint(profile.get("posa_allow_make_new_payments"))
+    allow_reconcile_payments = cint(profile.get("posa_allow_reconcile_payments"))
+    allow_mpesa_reconcile_payments = cint(profile.get("posa_allow_mpesa_reconcile_payments"))
     posting_date = data.get("posting_date") or nowdate()
     selected_mpesa_payments = list(data.selected_mpesa_payments or [])
     selected_payments = list(data.selected_payments or [])
     payment_methods = list(data.payment_methods or [])
+
+    if payment_methods and flt(data.total_payment_methods) > 0 and not allow_make_new_payments:
+        frappe.throw(_("Creating new payments is not enabled for this POS Profile"), frappe.PermissionError)
+    if selected_payments and flt(data.total_selected_payments) > 0 and not allow_reconcile_payments:
+        frappe.throw(_("Reconciling payments is not enabled for this POS Profile"), frappe.PermissionError)
+    if (
+        selected_mpesa_payments
+        and flt(data.total_selected_mpesa_payments) > 0
+        and not allow_mpesa_reconcile_payments
+    ):
+        frappe.throw(_("Reconciling M-Pesa payments is not enabled for this POS Profile"), frappe.PermissionError)
+
+    _assert_selected_accounting_documents(
+        data,
+        company,
+        party,
+        party_type,
+        profile.name,
+    )
+
     existing_entries = find_payment_entries_by_client_request_id(client_request_id)
+    for existing_entry in existing_entries:
+        _assert_accounting_document_access(
+            "Payment Entry",
+            existing_entry.get("name"),
+            company,
+            party,
+            party_type,
+            profile.name,
+        )
     matched_existing_entries, pending_payment_methods, unmatched_existing_entries = (
         _partition_payment_methods(
             existing_entries,
@@ -626,7 +754,7 @@ def process_pos_payment(payload):
                     posting_date=posting_date,
                     reference_no=data.get("reference_no") or pos_opening_shift_name,
                     reference_date=data.get("reference_date") or posting_date,
-                    cost_center=data.pos_profile.get("cost_center"),
+                    cost_center=profile.get("cost_center"),
                     submit=0,
                     client_request_id=client_request_id,
                     bank_account=payment_method.get("bank_account"),
@@ -878,4 +1006,3 @@ def process_pos_payment(payload):
         "exchange_gain_loss_summary": exchange_gain_loss_summary,
         "net_gain_loss": net_gain_loss,
     }
-
