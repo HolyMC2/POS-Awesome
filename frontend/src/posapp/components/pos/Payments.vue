@@ -2920,11 +2920,6 @@ defineExpose({
 	font-size: 0.82rem;
 }
 
-.submit-highlight {
-	box-shadow: 0 0 0 4px rgb(var(--v-theme-primary));
-	transition: box-shadow 0.3s ease-in-out;
-}
-
 .pos-themed-card {
 	background-color: rgb(var(--v-theme-surface));
 	color: rgb(var(--v-theme-on-surface));

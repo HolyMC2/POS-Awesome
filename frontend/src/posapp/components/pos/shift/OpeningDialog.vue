@@ -459,34 +459,8 @@ onMounted(() => {
 	background: rgba(25, 118, 210, 0.04);
 }
 
-.currency-symbol {
-	font-weight: 600;
-	color: #1976d2;
-	font-size: 0.9rem;
-}
-
-.amount-value {
-	font-weight: 500;
-	color: #333;
-	font-size: 0.9rem;
-}
-
 .amount-input {
 	margin-top: 4px;
-}
-
-.action-btn-revamped {
-	padding: 16px 24px !important;
-	border-radius: 12px !important;
-	font-weight: 700 !important;
-	text-transform: uppercase !important;
-	letter-spacing: 1px !important;
-	font-size: 1.3rem !important;
-	transition: all 0.3s ease !important;
-	position: relative;
-	overflow: hidden;
-	min-width: 180px !important;
-	border: none !important;
 }
 
 .action-btn-revamped .v-icon {

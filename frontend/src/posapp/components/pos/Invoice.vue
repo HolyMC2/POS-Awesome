@@ -1586,10 +1586,6 @@ export default {
 		max-width: 100%;
 		min-height: 280px;
 	}
-
-	.item-search-field {
-		max-width: 100%;
-	}
 }
 
 @media (max-width: 480px) {
@@ -1626,12 +1622,6 @@ export default {
 		min-height: 240px;
 	}
 
-	.item-search-field {
-		flex-basis: 100%;
-		max-width: 100%;
-		margin-right: 0;
-	}
-
 	/* Card mode (phone) has no columns to configure — the dialog's
 	   switches were silently discarded by the <450px column filter
 	   anyway, and the button cost the search field its full row.
@@ -1653,17 +1643,6 @@ export default {
 	border-radius: 8px 8px 0 0;
 	box-sizing: border-box;
 	margin-bottom: 8px;
-}
-
-.item-search-field {
-	width: 100%;
-	max-width: 320px;
-	flex: 1 1 240px;
-	margin-right: auto;
-}
-
-.column-selector-btn {
-	font-size: 0.875rem;
 }
 
 .items-table-wrapper {

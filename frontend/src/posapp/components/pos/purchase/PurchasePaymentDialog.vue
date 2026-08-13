@@ -487,10 +487,6 @@ async function fetchPrintFormats() {
 	background-color: transparent;
 }
 
-.cards {
-	background-color: var(--surface-secondary) !important;
-}
-
 .pos-themed-card {
 	border-radius: 12px;
 }
@@ -544,11 +540,6 @@ async function fetchPrintFormats() {
 .submit-btn:focus-visible::before,
 .submit-btn:active::before {
 	opacity: 0 !important;
-}
-
-.submit-highlight {
-	box-shadow: 0 0 0 4px rgb(var(--v-theme-primary));
-	transition: box-shadow 0.3s ease-in-out;
 }
 
 /* Sleek field styling for right-aligned text */

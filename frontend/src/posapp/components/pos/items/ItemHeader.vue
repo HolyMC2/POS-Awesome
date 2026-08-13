@@ -467,10 +467,6 @@ defineExpose({
 	font-size: 0.75rem;
 }
 
-.dynamic-margin-xs {
-	margin-top: 4px;
-}
-
 :deep(.sticky-header .v-field) {
 	border-radius: 16px;
 }

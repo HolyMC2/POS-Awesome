@@ -1462,6 +1462,15 @@ defineExpose({
 	padding: 0;
 }
 
+/* ⚠ INERT — kept for its declarations, not because it works. The element is
+   built in JS (`useItemSelection.ts`: `placeholder.className =
+   "item-fly-placeholder"`), so it never carries a scope attribute and no
+   scoped rule can reach it; `:deep()` cannot help either. The fly-to-cart
+   placeholder therefore renders unstyled today. The fix is a NON-scoped
+   stylesheet, which is a visual change rather than a CSS repair — left for a
+   deliberate call. Same story below for `.item-selection-option` /
+   `.item-selection-image`, whose markup is an HTML string in
+   `utils/itemSelectionDialog.ts`. */
 .item-fly-placeholder {
 	background-color: rgba(var(--v-theme-on-surface), 0.2);
 }
@@ -1517,13 +1526,6 @@ defineExpose({
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 	letter-spacing: 0.01em;
-}
-
-/* Dark theme row styling */
-.truncate {
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .selection {

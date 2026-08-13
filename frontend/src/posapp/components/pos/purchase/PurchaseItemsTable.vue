@@ -456,20 +456,6 @@ export default {
 	display: none;
 }
 
-.currency-display {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 100%;
-	height: 100%;
-	padding: 0;
-	margin: 0;
-}
-
-.currency-display.right-aligned {
-	justify-content: center;
-}
-
 .amount-value {
 	font-weight: 500;
 }
