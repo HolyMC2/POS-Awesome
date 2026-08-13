@@ -68,6 +68,21 @@ class TestFloorSnapshot(RestaurantTestCase):
         self.assertEqual(row["items_count"], 2)
         self.assertEqual(row["unsent_count"], 1)
 
+    def test_an_empty_order_has_nothing_unsent(self):
+        """A table nobody has ordered from owes the kitchen nothing.
+
+        The LEFT JOIN hands an order with no lines one all-NULL row, and
+        `IFNULL(i.fired, 0) = 0` is true of it — so every freshly opened table
+        reported one unsent line and wore a red "1" on the plan and on Send.
+        """
+        order = self.make_order(table=self.table_a, lines=[])
+
+        row = next(r for r in floors.get_floor_snapshot(self.profile, self.company)["orders"] if r["name"] == order)
+
+        self.assertEqual(row["items_count"], 0)
+        self.assertEqual(row["unsent_count"], 0, "an empty table owes the kitchen nothing")
+        self.assertEqual(row["total"], 0)
+
     def test_snapshot_excludes_settled_and_cancelled_orders(self):
         settled = self.make_order(table=self.table_a, lines=[self.line()])
         frappe.db.set_value("POS Table Order", settled, "status", "Settled")

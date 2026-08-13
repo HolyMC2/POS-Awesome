@@ -124,7 +124,13 @@ def _open_orders_for(pos_profile, shifts, max_age_days):
                o.pos_opening_shift   AS pos_opening_shift,
                o.modified            AS modified,
                COUNT(i.name)                                          AS items_count,
-               SUM(CASE WHEN IFNULL(i.fired, 0) = 0 THEN 1 ELSE 0 END) AS unsent_count,
+               -- `i.name IS NOT NULL` is load-bearing: the LEFT JOIN gives an
+               -- order with no lines one all-NULL row, and `IFNULL(i.fired, 0) = 0`
+               -- is TRUE of it. Without the guard every EMPTY table reported one
+               -- unsent line — a red "1" on the tile and on Send, for a table
+               -- nobody had ordered from yet. COUNT(i.name) already skips it.
+               SUM(CASE WHEN i.name IS NOT NULL AND IFNULL(i.fired, 0) = 0 THEN 1 ELSE 0 END)
+                                                                      AS unsent_count,
                COALESCE(SUM(i.amount), 0)                             AS total
         FROM `tabPOS Table Order` o
         LEFT JOIN `tabPOS Table Order Item` i
