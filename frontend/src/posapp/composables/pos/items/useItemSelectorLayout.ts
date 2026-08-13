@@ -126,6 +126,21 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 			itemsContainerRef.value) as HTMLElement | null;
 	};
 
+	// CSS owns the height chain here — selector card (`height:
+	// var(--container-height)`) → `.dynamic-padding` → `.selector-results-card`
+	// (flex:1, min-height:0) → `.items-card-container` (height:100%) →
+	// `.virtual-scroller` (flex:1, min-height:0, overflow-y:auto). This used to
+	// ALSO write an inline max-height derived from `--container-height`, which
+	// was wrong twice over:
+	//   1. An unregistered custom property computes to its SPECIFIED token, so
+	//      getPropertyValue returned "70vh" and parseFloat read it as 70
+	//      PIXELS. Minus the sticky header (~56px) the grid was capped at 14px
+	//      and every card was clipped to a sliver — the cafetería demo's card
+	//      view, 2026-08-13. Latent since the JS/CSS split, but only reachable
+	//      once `itemsContainerRef` was actually bound (f70693499).
+	//   2. Even with the unit fixed it double-subtracts: `--container-height`
+	//      sizes the OUTER card, which already CONTAINS the sticky header.
+	// So: measure, never write. Height stays a CSS concern.
 	const checkItemContainerOverflow = () => {
 		const el = getItemsContainerElement();
 		if (!el) {
@@ -133,28 +148,11 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 			return;
 		}
 
-		const containerHeight = parseFloat(
-			getComputedStyle(el).getPropertyValue("--container-height"),
-		);
-		if (isNaN(containerHeight)) {
-			isOverflowing.value = false;
-			return;
-		}
-
-		const stickyHeader = el
-			.closest(".dynamic-padding")
-			?.querySelector(".sticky-header") as HTMLElement | null;
-		const headerHeight = stickyHeader ? stickyHeader.offsetHeight : 0;
-		const availableHeight = containerHeight - headerHeight;
-
-		// Only apply if calculated height is valid
-		if (availableHeight > 0) {
-			el.style.maxHeight = `${availableHeight}px`;
-			isOverflowing.value = el.scrollHeight > availableHeight;
-		}
-
-		// Also schedule metrics update as this might affect layout
-		// But be careful of infinite loops; separate updateWindowWidth logic if needed
+		const scroller = el.matches(".virtual-scroller")
+			? el
+			: (el.querySelector(".virtual-scroller") as HTMLElement | null);
+		const target = scroller || el;
+		isOverflowing.value = target.scrollHeight > target.clientHeight + 1;
 	};
 
 	const onListScroll = (event: Event) => {
