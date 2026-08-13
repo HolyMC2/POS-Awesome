@@ -221,6 +221,18 @@ describe("posawesome service worker — Phase 1.G precache", () => {
 		).toBe(false);
 	});
 
+	it("does not intercept mutable Frappe file images", () => {
+		const request = {
+			url: "https://x.test/files/item-photo.jpg",
+			method: "GET",
+			mode: "cors",
+			destination: "image",
+		};
+
+		expect(fireFetch(harness, request)).toBeNull();
+		expect(harness.fetchMock).not.toHaveBeenCalled();
+	});
+
 	it("refreshes the cached /posapp HTML shell after a successful navigation fetch", async () => {
 		const liveShell = makeResponse("<html>live shell</html>");
 		harness.fetchMock.mockImplementationOnce(async () => liveShell);

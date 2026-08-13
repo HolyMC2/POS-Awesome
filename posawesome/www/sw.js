@@ -306,6 +306,13 @@ self.addEventListener("fetch", (event) => {
 	const isFontByPath = /\.(woff2?|ttf|eot|otf)(\?|$)/i.test(url.pathname);
 	if (isFontByPath) return;
 
+	// Item photos and other uploaded files are mutable URLs owned by Frappe,
+	// not versioned POS assets. Intercepting `/files/*` caused a stale worker to
+	// return broken item pictures on /posapp. Leave them to the network/browser
+	// cache while preserving the service worker that makes the POS shell and
+	// content-hashed application assets available during backend restarts.
+	if (url.pathname.startsWith("/files/")) return;
+
 	const assetDestinations = ["style", "script", "worker", "image"];
 	const isAssetRequest = assetDestinations.includes(event.request.destination);
 	const isPosawesomeAsset = url.pathname.startsWith("/assets/posawesome/");

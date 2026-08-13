@@ -4,6 +4,15 @@ All notable changes.
 
 ## Unreleased
 
+- **Restore `/posapp` offline reloads during backend restarts.** The web-route
+  entry deleted the active POS service worker and every `posawesome-cache-*`
+  cache on each boot, even though the mounted SPA immediately registered that
+  same worker again. A refresh during an outage therefore erased the cached
+  shell before it could be used. The web entry now preserves the worker/cache;
+  `/files/*` uploads bypass the worker instead, retaining the original broken
+  item-image fix without sacrificing offline boot. Covered by the service
+  worker navigation/cache suite and a mutable-file interception regression.
+
 - **Durable restaurant print fan-out.** `fire_course` now freezes its delta,
   advances `last_fired`, and inserts one idempotent Doco print job per kitchen
   station in the same transaction. A replay with the same request ID returns
