@@ -2,7 +2,6 @@ import { nextTick, watch, type Ref } from "vue";
 
 type UseItemsSelectorLayoutLifecycleArgs = {
 	displayedItems: Ref<unknown[]>;
-	checkItemContainerOverflow: () => void;
 	scheduleCardMetricsUpdate: () => void;
 	scheduleLastInvoiceRateRefresh: () => void;
 	scheduleLastBuyingRateRefresh: () => void;
@@ -11,17 +10,13 @@ type UseItemsSelectorLayoutLifecycleArgs = {
 
 export function useItemsSelectorLayoutLifecycle({
 	displayedItems,
-	checkItemContainerOverflow,
 	scheduleCardMetricsUpdate,
 	scheduleLastInvoiceRateRefresh,
 	scheduleLastBuyingRateRefresh,
 	syncHighlightedItem,
 }: UseItemsSelectorLayoutLifecycleArgs) {
 	const refreshCardMetrics = () => {
-		nextTick(() => {
-			checkItemContainerOverflow();
-			scheduleCardMetricsUpdate();
-		});
+		nextTick(scheduleCardMetricsUpdate);
 	};
 
 	const stopDisplayedItemsWatcher = watch(displayedItems, () => {
@@ -31,18 +26,14 @@ export function useItemsSelectorLayoutLifecycle({
 		syncHighlightedItem();
 	});
 
+	// No resize listener here: useItemSelectorLayout already owns one for
+	// window width, and the panel's own width comes from its ResizeObserver.
 	const mount = () => {
-		if (typeof window !== "undefined") {
-			window.addEventListener("resize", checkItemContainerOverflow);
-		}
 		refreshCardMetrics();
 	};
 
 	const cleanup = () => {
 		stopDisplayedItemsWatcher();
-		if (typeof window !== "undefined") {
-			window.removeEventListener("resize", checkItemContainerOverflow);
-		}
 	};
 
 	return {

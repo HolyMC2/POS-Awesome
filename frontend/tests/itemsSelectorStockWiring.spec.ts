@@ -167,13 +167,15 @@ vi.mock("../src/posapp/composables/pos/items/useItemSelection", () => ({
 
 vi.mock("../src/posapp/composables/pos/items/useItemSelectorLayout", () => ({
 	useItemSelectorLayout: () => ({
-		isOverflowing: ref(false),
+		windowWidth: ref(1440),
+		itemsContainerRef: ref(null),
 		cardColumns: ref(1),
+		cardGap: ref(16),
+		cardPadding: ref(16),
 		cardRowHeight: ref(220),
 		cardSlotHeight: ref(220),
 		cardSlotWidth: ref(280),
 		cardColumnWidth: ref(280),
-		checkItemContainerOverflow: vi.fn(),
 		scheduleCardMetricsUpdate: vi.fn(),
 		onListScroll: vi.fn(),
 	}),

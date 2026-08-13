@@ -96,7 +96,6 @@
 								:is-loading="isLoadingOrSyncing"
 								:search-input="search_input"
 								:item-group="item_group"
-								:is-overflowing="isOverflowing"
 								:card-slot-height="cardSlotHeight"
 								:card-columns="cardColumns"
 								:card-slot-width="cardSlotWidth"
@@ -672,14 +671,12 @@ const { getItemRateInfo } = useItemRateInfo({
 });
 
 const {
-	isOverflowing,
 	cardColumns,
 	cardRowHeight,
 	cardSlotHeight,
 	cardSlotWidth,
 	cardColumnWidth,
 	itemsContainerRef,
-	checkItemContainerOverflow,
 	scheduleCardMetricsUpdate,
 	onListScroll: handleListScroll,
 } = useItemSelectorLayout({
@@ -689,7 +686,6 @@ const {
 
 const itemSelectorLayoutLifecycle = useItemsSelectorLayoutLifecycle({
 	displayedItems,
-	checkItemContainerOverflow,
 	scheduleCardMetricsUpdate,
 	scheduleLastInvoiceRateRefresh,
 	scheduleLastBuyingRateRefresh,
@@ -1482,11 +1478,6 @@ defineExpose({
 	padding: 0;
 }
 
-.dynamic-scroll {
-	transition: max-height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-	padding-bottom: var(--dynamic-sm);
-	contain: layout style;
-}
 
 .item-fly-placeholder {
 	background-color: rgba(var(--v-theme-on-surface), 0.2);
@@ -1576,15 +1567,11 @@ defineExpose({
 	background-color: rgb(var(--v-theme-surface-variant));
 }
 
-/* Responsive breakpoints */
-@media (max-width: 1200px) {
-	.items-card-grid {
-		grid-template-columns: repeat(2, 1fr);
-		gap: 12px;
-		padding: 12px;
-	}
-}
-
+/* Responsive breakpoints.
+   NOTE: card-grid/scroller rules do NOT belong in this file. `.items-card-grid`
+   and `.item-container` live in ItemsSelectorCards' template, so they carry
+   THAT component's scope attribute — five rules here targeted them and every
+   one was dead. See the scoping note at the top of ItemsSelectorCards' style. */
 @media (max-width: 768px) {
 	.dynamic-padding {
 		/* Reduce spacing uniformly on smaller screens */
@@ -1609,12 +1596,6 @@ defineExpose({
 		/* Cancel the .dynamic-padding inset → edge-to-edge bar. */
 		margin-inline: calc(var(--dynamic-xs) * -1);
 	}
-
-	.items-card-grid {
-		grid-template-columns: 1fr;
-		gap: 10px;
-		padding: 10px;
-	}
 }
 
 @media (max-width: 480px) {
@@ -1623,43 +1604,10 @@ defineExpose({
 	}
 }
 
-/* ===============================================================
-   PERFORMANCE OPTIMIZATIONS FOR THEME SWITCHING
-   =============================================================== */
-
-/* Reduce paint and layout operations during theme transitions */
+/* Fewer repaints while the theme transitions. */
 * {
-	/* Optimize font rendering to reduce repaints */
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 }
 
-/* Enable hardware acceleration for better performance */
-.items-card-grid {
-	/* Force hardware acceleration */
-	transform: translate3d(0, 0, 0);
-	-webkit-transform: translate3d(0, 0, 0);
-	/* Improve compositing performance */
-	backface-visibility: hidden;
-	-webkit-backface-visibility: hidden;
-}
-
-/* Optimize scrolling performance */
-.items-card-grid,
-.item-container {
-	/* Improve scroll performance */
-	overscroll-behavior: contain;
-	scroll-behavior: smooth;
-	/* Enable scroll anchoring */
-	overflow-anchor: auto;
-}
-
-/* Disable animations on reduced motion preference */
-@media (prefers-reduced-motion: reduce) {
-	.items-card-grid {
-		transition: none !important;
-		animation: none !important;
-		transform: none !important;
-	}
-}
 </style>

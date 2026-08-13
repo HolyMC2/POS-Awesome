@@ -29,7 +29,7 @@
 			v-else
 			ref="scrollerRef"
 			class="virtual-scroller"
-			:list-class="['items-virtual-list', { 'item-container': isOverflowing }]"
+			list-class="items-virtual-list"
 			:items="displayedItems"
 			key-field="item_code"
 			:item-size="cardSlotHeight"
@@ -81,7 +81,6 @@ const props = defineProps({
 	isLoading: { type: Boolean, default: false },
 	searchInput: { type: String, default: "" },
 	itemGroup: { type: String, default: "ALL" },
-	isOverflowing: { type: Boolean, default: false },
 	cardSlotHeight: { type: Number, default: 0 },
 	cardColumns: { type: Number, default: 1 },
 	cardSlotWidth: { type: Number, default: 0 },
@@ -146,6 +145,21 @@ defineExpose({ scrollToItem, getScrollerElement, scrollerRef });
 </script>
 
 <style scoped>
+/* SCOPED CSS CANNOT REACH INTO THE SCROLLER. Vue stamps this component's
+   scope attribute onto its OWN template nodes and onto child-component ROOT
+   nodes — nothing deeper. `.virtual-scroller` is RecycleScroller's root so it
+   carries the attribute, but every node the library renders inside it
+   (`.vue-recycle-scroller__item-wrapper`, the item views) does not: a rule
+   like `.virtual-scroller .vue-recycle-scroller__item-wrapper { … }` compiles
+   to `…[data-v-xxxxxxxx]` and matches nothing, forever, silently. Two such
+   rules sat here dead until 2026-08-13 — and both would have BROKEN the grid
+   had a later `:deep()` woken them (`display:contents` erases the wrapper box
+   that carries the scroller's total height; a second `overflow-y:auto` nests a
+   scrollport inside the scrollport). Style the root, or go through `:deep()`
+   deliberately. Same rule bit ItemsSelector.vue, which styled `.items-card-grid`
+   and `.item-container` — classes that live in THIS template, so its copies
+   were dead too. Card-view styling belongs here and only here. */
+
 /* The card root must bound its own height for the scroller's `height:100%`
    to resolve — the height chain above (dynamic-padding → results card →
    row/col) is definite. Without this the container is auto-height, the
@@ -163,53 +177,49 @@ defineExpose({ scrollToItem, getScrollerElement, scrollerRef });
 	overflow: hidden;
 }
 
-.item-container {
-	overflow-y: auto;
-	scrollbar-gutter: stable;
-}
-
-.items-card-grid {
-	display: grid;
-	grid-template-columns: repeat(3, 1fr);
-	gap: 16px;
-	padding: 16px;
-	height: calc(100% - 80px);
-	overflow-y: auto;
-	scrollbar-width: thin;
-	scrollbar-color: rgba(var(--v-theme-on-surface), 0.2) transparent;
-	contain: layout style;
-	will-change: scroll-position;
-	transform: translate3d(0, 0, 0);
-}
-
+/* THE scrollport for the card grid — the only one. `scrollbar-gutter` is
+   unconditional by design: reserving the gutter is precisely what stops the
+   grid reflowing the instant a scrollbar appears, so gating it behind a
+   JS-measured "is it overflowing?" flag defeated its own purpose. */
 .virtual-scroller {
 	flex: 1 1 auto;
 	min-height: 0;
 	height: 100%;
 	overflow-y: auto;
 	position: relative;
+	scrollbar-gutter: stable;
+	overscroll-behavior: contain;
+	overflow-anchor: auto;
+	scrollbar-width: thin;
+	scrollbar-color: rgba(var(--v-theme-on-surface), 0.2) transparent;
 }
 
-.virtual-scroller .items-card-grid {
-	height: auto;
-	overflow: visible;
-}
-
-.virtual-scroller .vue-recycle-scroller__item-wrapper {
-	display: contents;
-}
-
-.items-card-grid::-webkit-scrollbar {
+.virtual-scroller::-webkit-scrollbar {
 	width: 8px;
 }
 
-.items-card-grid::-webkit-scrollbar-track {
+.virtual-scroller::-webkit-scrollbar-track {
 	background: transparent;
 }
 
-.items-card-grid::-webkit-scrollbar-thumb {
+.virtual-scroller::-webkit-scrollbar-thumb {
 	background-color: rgba(var(--v-theme-on-surface), 0.2);
 	border-radius: 4px;
+}
+
+/* Loading skeletons — a SIBLING of the scroller (v-if/v-else), never inside
+   it. auto-fill on the same 216px track `getCardColumnsForContainer` uses
+   keeps the placeholder in step with the real grid at every panel width, with
+   no media queries to drift out of sync. */
+.items-card-grid {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+	gap: 16px;
+	padding: 16px;
+	overflow-y: auto;
+	contain: layout style;
 }
 
 .virtual-scroller :deep(.items-virtual-list) {

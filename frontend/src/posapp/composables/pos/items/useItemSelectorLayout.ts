@@ -13,8 +13,15 @@ type SelectorLayoutOptions = {
 };
 
 /**
- * Manages the layout metrics and resize behavior for the ItemsSelector component.
- * Handles calculation of grid columns, card dimensions, and overflow detection.
+ * Grid metrics for the ItemsSelector card view: column count, card dimensions,
+ * and the scroll handler that drives pagination.
+ *
+ * It MEASURES and never writes geometry. Height belongs to the CSS chain
+ * (selector card → dynamic-padding → results card → `.items-card-container` →
+ * `.virtual-scroller`); width comes from the panel's ResizeObserver. A previous
+ * version wrote an inline max-height parsed out of `--container-height` and
+ * clipped every card to 14px — see the guard in
+ * `tests/itemSelectorLayoutOwnership.spec.ts`.
  */
 export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 	const {
@@ -24,7 +31,6 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 
 	// State
 	const windowWidth = ref(window.innerWidth);
-	const isOverflowing = ref(false);
 	const itemsContainerRef = ref<any>(null);
 	const scrollThrottle = ref<number | null>(null);
 
@@ -110,50 +116,10 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 		windowWidth.value = window.innerWidth;
 	};
 
-	const scheduleCardMetricsUpdate = _.debounce(() => {
-		updateWindowWidth();
-		// Force re-evaluation of container width if needed by accessing ref
-		if (itemsContainerRef.value) {
-			// Trigger reactivity if needed, though windowWidth usually drives computed props
-		}
-		checkItemContainerOverflow();
-	}, resizeDebounce);
-
-	const getItemsContainerElement = (): HTMLElement | null => {
-		if (!itemsContainerRef.value) return null;
-		// Handle both Vue component ref and raw element
-		return (itemsContainerRef.value.$el ||
-			itemsContainerRef.value) as HTMLElement | null;
-	};
-
-	// CSS owns the height chain here — selector card (`height:
-	// var(--container-height)`) → `.dynamic-padding` → `.selector-results-card`
-	// (flex:1, min-height:0) → `.items-card-container` (height:100%) →
-	// `.virtual-scroller` (flex:1, min-height:0, overflow-y:auto). This used to
-	// ALSO write an inline max-height derived from `--container-height`, which
-	// was wrong twice over:
-	//   1. An unregistered custom property computes to its SPECIFIED token, so
-	//      getPropertyValue returned "70vh" and parseFloat read it as 70
-	//      PIXELS. Minus the sticky header (~56px) the grid was capped at 14px
-	//      and every card was clipped to a sliver — the cafetería demo's card
-	//      view, 2026-08-13. Latent since the JS/CSS split, but only reachable
-	//      once `itemsContainerRef` was actually bound (f70693499).
-	//   2. Even with the unit fixed it double-subtracts: `--container-height`
-	//      sizes the OUTER card, which already CONTAINS the sticky header.
-	// So: measure, never write. Height stays a CSS concern.
-	const checkItemContainerOverflow = () => {
-		const el = getItemsContainerElement();
-		if (!el) {
-			isOverflowing.value = false;
-			return;
-		}
-
-		const scroller = el.matches(".virtual-scroller")
-			? el
-			: (el.querySelector(".virtual-scroller") as HTMLElement | null);
-		const target = scroller || el;
-		isOverflowing.value = target.scrollHeight > target.clientHeight + 1;
-	};
+	// Window width still drives gap, padding, row height and the pre-mount
+	// column fallback. Container WIDTH is the ResizeObserver's job, and
+	// container HEIGHT is CSS's — this composable never writes geometry.
+	const scheduleCardMetricsUpdate = _.debounce(updateWindowWidth, resizeDebounce);
 
 	const onListScroll = (event: Event) => {
 		if (scrollThrottle.value) return;
@@ -180,10 +146,7 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 	// Lifecycle
 	onMounted(() => {
 		window.addEventListener("resize", scheduleCardMetricsUpdate);
-		nextTick(() => {
-			updateWindowWidth();
-			checkItemContainerOverflow();
-		});
+		nextTick(updateWindowWidth);
 	});
 
 	onUnmounted(() => {
@@ -201,7 +164,6 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 	return {
 		// Refs
 		windowWidth,
-		isOverflowing,
 		itemsContainerRef, // Bind this to the container in template
 
 		// Computed
@@ -214,7 +176,6 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 		cardColumnWidth,
 
 		// Methods
-		checkItemContainerOverflow,
 		scheduleCardMetricsUpdate,
 		onListScroll,
 	};
