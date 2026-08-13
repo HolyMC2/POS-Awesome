@@ -122,3 +122,65 @@ describe("card-view CSS ownership", () => {
 		expect(cards).toContain("scrollbar-gutter: stable");
 	});
 });
+
+describe("scoped CSS across the POS app", () => {
+	const sfcs = import.meta.glob("../src/posapp/**/*.vue", {
+		query: "?raw",
+		import: "default",
+		eager: true,
+	}) as Record<string, string>;
+
+	/** Markup + script; styles removed, so a class never self-matches its rule. */
+	const authored = Object.values(sfcs)
+		.map((src) => src.replace(/<style[\s\S]*?<\/style>/g, " "))
+		.join("\n");
+
+	/** The rightmost compound is the one Vue stamps the scope attribute onto. */
+	const rightmostClasses = (sel: string) => {
+		if (/:deep\(|::v-deep|>>>|\/deep\/|:global\(/.test(sel)) return [];
+		const parts = sel.split(/\s*[>+~]\s*|\s+/).filter(Boolean);
+		const last = (parts[parts.length - 1] ?? "").replace(/::?[a-zA-Z-]+(\([^)]*\))?/g, "");
+		return [...last.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)].map((m) => m[1]);
+	};
+
+	/**
+	 * A class composed at runtime (`class="foo-card"` +
+	 * `:class="\`foo-card--${tone}\`"`) still counts as authored, so accept a
+	 * separator-aligned prefix — as a whole token, never a bare substring.
+	 */
+	const isAuthored = (cls: string) => {
+		if (authored.includes(cls)) return true;
+		for (const sep of [...cls.matchAll(/[-_]/g)]) {
+			const prefix = cls.slice(0, sep.index);
+			if (prefix.length < 3) continue;
+			if (new RegExp(`[\\s"'\`]${prefix}[-_\\w]*[\\s"'\`]`).test(authored)) return true;
+		}
+		return false;
+	};
+
+	/**
+	 * 62 rules across five components styled classes that no element anywhere
+	 * carried — an abandoned "compact menu" design in NavbarMenu, a "revamped"
+	 * button family in OpeningDialog, and so on. Dead CSS is not inert: the two
+	 * in the card view would have broken the grid the moment someone "fixed"
+	 * them with :deep(). Vuetify-generated classes are exempt — they appear at
+	 * runtime, and some land on component roots, which DO carry the attribute.
+	 */
+	it("has no rule targeting a class that exists nowhere in the app", () => {
+		const dead: string[] = [];
+		for (const [path, src] of Object.entries(sfcs)) {
+			const scoped = [...src.matchAll(/<style([^>]*)>([\s\S]*?)<\/style>/g)]
+				.filter((m) => /\bscoped\b/.test(m[1]))
+				.map((m) => m[2])
+				.join("\n");
+			if (!scoped) continue;
+			for (const sel of selectorsOf(scoped)) {
+				for (const cls of new Set(rightmostClasses(sel))) {
+					if (cls.startsWith("v-") || isAuthored(cls)) continue;
+					dead.push(`${path.replace("../src/posapp/", "")}  →  ${sel}`);
+				}
+			}
+		}
+		expect(dead).toEqual([]);
+	});
+});

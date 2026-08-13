@@ -1424,22 +1424,6 @@ defineExpose({
 	box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
 }
 
-.section-card-heading {
-	padding: 14px 16px 0;
-}
-
-.section-card-heading--with-padding {
-	padding-bottom: 8px;
-}
-
-.section-card-heading__title {
-	margin: 0;
-	font-size: 1rem;
-	font-weight: 700;
-	line-height: 1.25;
-	color: var(--pos-text-primary);
-}
-
 /* The search header intentionally does NOT take .selector-section-card:
    on phone it must read as the top edge of the list (a bar), not a
    floating card over it. Desktop keeps the card look via this rule. */
@@ -1477,7 +1461,6 @@ defineExpose({
 	margin: 0;
 	padding: 0;
 }
-
 
 .item-fly-placeholder {
 	background-color: rgba(var(--v-theme-on-surface), 0.2);

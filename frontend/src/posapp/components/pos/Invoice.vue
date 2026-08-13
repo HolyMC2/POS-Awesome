@@ -1351,22 +1351,6 @@ export default {
 	min-width: 0;
 }
 
-/* Style for selected checkbox button */
-.v-checkbox-btn.v-selected {
-	background-color: var(--submit-start) !important;
-	color: white;
-}
-
-/* Bottom border for elements */
-.border_line_bottom {
-	border-bottom: 1px solid var(--field-border);
-}
-
-/* Disable pointer events for elements */
-.disable-events {
-	pointer-events: none;
-}
-
 /* Style for customer balance field */
 :deep(.balance-field) {
 	display: flex;

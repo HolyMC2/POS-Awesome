@@ -322,12 +322,6 @@ const peakPercent = computed(() => Math.round(Math.min(peakLag.value, 100)));
 	direction: ltr;
 	text-align: left;
 }
-
-.cpu-sparkline-wrapper {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
 .cpu-sparkline {
 	display: block;
 	background: none;
@@ -348,27 +342,6 @@ const peakPercent = computed(() => Math.round(Math.min(peakLag.value, 100)));
 .cpu-sparkline-large {
 	display: block;
 	background: none;
-}
-
-.cpu-tooltip-legend {
-	font-size: 12px;
-	margin-bottom: 4px;
-	display: flex;
-	align-items: center;
-	gap: 12px;
-}
-.legend-dot {
-	display: inline-block;
-	width: 10px;
-	height: 10px;
-	border-radius: 50%;
-	margin-right: 4px;
-}
-.legend-dot.client {
-	background: #4caf50;
-}
-.legend-dot.server {
-	background: #1976d2;
 }
 
 .cpu-tooltip-section-title {

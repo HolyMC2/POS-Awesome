@@ -459,30 +459,6 @@ onMounted(() => {
 	background: rgba(25, 118, 210, 0.04);
 }
 
-/* Amount Editor - Compact */
-.amount-editor {
-	width: 100%;
-}
-
-.amount-display-compact {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	/* Add this to center the content horizontally */
-	gap: 4px;
-	padding: 4px 8px;
-	background: rgba(25, 118, 210, 0.05);
-	border-radius: 6px;
-	transition: all 0.3s ease;
-	cursor: pointer;
-	min-height: 32px;
-}
-
-.amount-display-compact:hover {
-	background: rgba(25, 118, 210, 0.1);
-	transform: scale(1.01);
-}
-
 .currency-symbol {
 	font-weight: 600;
 	color: #1976d2;
@@ -497,13 +473,6 @@ onMounted(() => {
 
 .amount-input {
 	margin-top: 4px;
-}
-
-/* Actions Section - Compact */
-.opening-dialog-actions-compact {
-	padding: 24px;
-	display: flex;
-	gap: 24px;
 }
 
 .action-btn-revamped {
@@ -524,52 +493,6 @@ onMounted(() => {
 	font-size: 1.8rem !important;
 }
 
-.button-text {
-	position: relative;
-	z-index: 2;
-}
-
-.cancel-btn-revamped {
-	background: linear-gradient(135deg, #ff5252 0%, #d32f2f 100%) !important;
-	box-shadow: 0 4px 20px rgba(211, 47, 47, 0.4) !important;
-}
-
-.cancel-btn-revamped:hover {
-	box-shadow: 0 6px 25px rgba(211, 47, 47, 0.6) !important;
-	transform: translateY(-3px);
-}
-
-.cancel-btn-revamped:active {
-	transform: translateY(1px);
-	box-shadow: 0 2px 10px rgba(211, 47, 47, 0.4) !important;
-}
-
-.submit-btn-revamped {
-	background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%) !important;
-	box-shadow: 0 4px 20px rgba(46, 125, 50, 0.4) !important;
-}
-
-.submit-btn-revamped:hover {
-	box-shadow: 0 6px 25px rgba(46, 125, 50, 0.6) !important;
-	transform: translateY(-3px);
-}
-
-.submit-btn-revamped:hover:before {
-	opacity: 1;
-}
-
-.submit-btn-revamped:active {
-	transform: translateY(1px);
-	box-shadow: 0 2px 10px rgba(46, 125, 50, 0.4) !important;
-}
-
-.submit-btn-revamped:disabled {
-	background: linear-gradient(135deg, #9e9e9e 0%, #757575 100%) !important;
-	box-shadow: none !important;
-	transform: none !important;
-	opacity: 0.7;
-}
-
 /* Responsive Design */
 @media (max-width: 768px) {
 	.opening-dialog-header {
@@ -587,15 +510,6 @@ onMounted(() => {
 	.opening-dialog-content {
 		padding: 16px;
 	}
-
-	.opening-dialog-actions-compact {
-		padding: 12px 16px;
-	}
-
-	.action-btn-compact {
-		padding: 6px 12px;
-		min-width: 70px;
-	}
 }
 
 @media (max-width: 480px) {
@@ -607,12 +521,6 @@ onMounted(() => {
 
 	.opening-dialog-content {
 		padding: 12px;
-	}
-
-	.action-btn-compact {
-		margin-left: 4px;
-		padding: 6px 10px;
-		min-width: 60px;
 	}
 }
 

@@ -1038,15 +1038,6 @@ export default {
 	border-radius: 50%;
 	border: 1px solid rgb(var(--v-theme-surface));
 }
-.print-health-dot--ok {
-	background-color: #43a047;
-}
-.print-health-dot--warn {
-	background-color: #fb8c00;
-}
-.print-health-dot--fail {
-	background-color: #e53935;
-}
 
 /* Elite Menu Button - Refined Navbar Integration */
 .menu-btn-compact {
@@ -1092,12 +1083,6 @@ export default {
 	/* Inherits from .menu-btn-compact */
 }
 
-/* Elite menu button text and icon colors */
-.menu-btn-compact .v-btn__content {
-	color: var(--pos-primary) !important;
-	font-weight: 500;
-}
-
 .menu-btn-compact .pos-text-primary,
 .menu-btn-compact .v-icon {
 	color: var(--pos-primary) !important;
@@ -1111,7 +1096,9 @@ export default {
 	border-color: var(--pos-primary);
 }
 
-.menu-btn-compact:hover .v-btn__content,
+/* `.v-btn__content` is NOT in this list: it is Vuetify's inner wrapper, so a
+   scoped rule compiles to `…[data-v-…]` against a node that never carries the
+   attribute. The label inherits `color` from the button anyway. */
 .menu-btn-compact:hover .pos-text-primary,
 .menu-btn-compact:hover .v-icon {
 	color: var(--pos-primary-variant) !important;
@@ -1400,179 +1387,6 @@ export default {
 	border: 1px solid rgba(255, 193, 7, 0.28);
 }
 
-/* Compact Menu List */
-.menu-list-compact {
-	padding: 8px 6px 12px;
-	background: var(--pos-card-bg);
-}
-
-/* Compact Menu Items */
-.menu-item-compact {
-	border-radius: 12px;
-	margin: 3px 0;
-	padding: 12px 16px;
-	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-	cursor: pointer;
-	position: relative;
-	overflow: hidden;
-	min-height: 56px;
-	display: flex;
-	align-items: center;
-	gap: 12px;
-}
-
-.menu-item-compact::before {
-	content: "";
-	position: absolute;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	background: transparent;
-	transition: all 0.3s ease;
-	z-index: 0;
-	border-radius: 12px;
-}
-
-.menu-item-compact:hover::before {
-	background: linear-gradient(135deg, rgba(25, 118, 210, 0.05) 0%, rgba(66, 165, 245, 0.08) 100%);
-}
-
-.menu-item-compact:hover {
-	transform: translateX(3px) scale(1.01);
-	box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
-}
-
-.profile-info-mobile--static {
-	cursor: default;
-}
-
-.profile-info-mobile--static::before {
-	background: linear-gradient(135deg, rgba(25, 118, 210, 0.03) 0%, rgba(66, 165, 245, 0.05) 100%);
-}
-
-.profile-info-mobile--static:hover {
-	transform: none;
-	box-shadow: none;
-}
-
-/* Compact Icon Wrapper */
-.menu-icon-wrapper-compact {
-	width: 32px;
-	height: 32px;
-	border-radius: 10px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	transition: all 0.3s ease;
-	position: relative;
-	z-index: 1;
-	flex-shrink: 0;
-}
-
-/* Compact Content Wrapper */
-.menu-content-compact {
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	position: relative;
-	z-index: 1;
-}
-
-/* Compact Icon Colors */
-.primary-icon {
-	background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
-	box-shadow: 0 2px 6px rgba(25, 118, 210, 0.2);
-}
-
-.secondary-icon {
-	background: linear-gradient(135deg, #7b1fa2 0%, #ba68c8 100%);
-	box-shadow: 0 2px 6px rgba(123, 31, 162, 0.2);
-}
-
-.info-icon {
-	background: linear-gradient(135deg, #0288d1 0%, #4fc3f7 100%);
-	box-shadow: 0 2px 6px rgba(2, 136, 209, 0.2);
-}
-
-.neutral-icon {
-	background: linear-gradient(135deg, #616161 0%, #9e9e9e 100%);
-	box-shadow: 0 2px 6px rgba(97, 97, 97, 0.2);
-}
-
-.danger-icon {
-	background: linear-gradient(135deg, #d32f2f 0%, #f44336 100%);
-	box-shadow: 0 2px 6px rgba(211, 47, 47, 0.2);
-}
-
-.warning-icon {
-	background: linear-gradient(135deg, #ff9800 0%, #ffc107 100%);
-	box-shadow: 0 2px 6px rgba(255, 152, 0, 0.2);
-}
-
-/* Compact Text Styling */
-.menu-item-title-compact {
-	font-weight: 600;
-	font-size: 14px;
-	color: var(--pos-text-primary);
-	line-height: 1.2;
-	margin-bottom: 1px;
-}
-
-.menu-item-subtitle-compact {
-	font-size: 11px;
-	color: var(--pos-text-secondary, #666666);
-	line-height: 1.3;
-	font-weight: 400;
-}
-
-/* Compact Section Divider */
-.menu-section-divider-compact {
-	margin: 8px 10px;
-	opacity: 0.12;
-	border-color: var(--pos-border);
-}
-
-/* Compact Hover Effects */
-.primary-action:hover .primary-icon {
-	transform: scale(1.1) rotate(5deg);
-	box-shadow: 0 3px 8px rgba(25, 118, 210, 0.25);
-}
-
-.secondary-action:hover .secondary-icon {
-	transform: scale(1.1) rotate(-5deg);
-	box-shadow: 0 3px 8px rgba(123, 31, 162, 0.25);
-}
-
-.info-action:hover .info-icon {
-	transform: scale(1.1) rotate(360deg);
-	box-shadow: 0 3px 8px rgba(2, 136, 209, 0.25);
-}
-
-.neutral-action:hover .neutral-icon {
-	transform: scale(1.1);
-	box-shadow: 0 3px 8px rgba(97, 97, 97, 0.25);
-}
-
-.danger-action:hover .danger-icon {
-	transform: scale(1.1) rotate(-5deg);
-	box-shadow: 0 3px 8px rgba(211, 47, 47, 0.25);
-}
-
-.danger-action:hover::before {
-	background: linear-gradient(135deg, rgba(211, 47, 47, 0.05) 0%, rgba(244, 67, 54, 0.08) 100%) !important;
-}
-
-.warning-action:hover .warning-icon {
-	transform: scale(1.1) rotate(-5deg);
-	box-shadow: 0 3px 8px rgba(255, 152, 0, 0.25);
-}
-
-.warning-action:hover::before {
-	background: linear-gradient(135deg, rgba(255, 152, 0, 0.05) 0%, rgba(255, 193, 7, 0.08) 100%) !important;
-}
-
 /* Compact Responsive Design */
 @media (max-width: 768px) {
 	.menu-card-compact {
@@ -1582,19 +1396,8 @@ export default {
 		min-height: 300px;
 	}
 
-	.menu-item-compact {
-		padding: 10px 14px;
-		min-height: 52px;
-		gap: 10px;
-	}
-
 	.quick-actions-row {
 		grid-template-columns: 1fr;
-	}
-
-	.menu-icon-wrapper-compact {
-		width: 30px;
-		height: 30px;
 	}
 
 	.menu-header-compact {
@@ -1616,12 +1419,6 @@ export default {
 		max-width: min(300px, calc(100vw - 16px));
 	}
 
-	.menu-item-compact {
-		padding: 9px 12px;
-		min-height: 48px;
-		gap: 9px;
-	}
-
 	.menu-header-compact {
 		padding: 9px 12px 7px;
 	}
@@ -1633,27 +1430,12 @@ export default {
 }
 
 /* Compact Animation for Menu Appearance */
-.v-overlay__content {
-	animation: menuSlideInCompact 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes menuSlideInCompact {
-	from {
-		opacity: 0;
-		transform: translateY(-8px) scale(0.95);
-	}
-
-	to {
-		opacity: 1;
-		transform: translateY(0) scale(1);
-	}
-}
-
-/* Compact Focus States */
-.menu-item-compact:focus-visible {
-	outline: 1px solid #1976d2;
-	outline-offset: 1px;
-}
+/* The menu's open animation used to live here as `.v-overlay__content`, which
+   never ran: v-menu TELEPORTS its content to <body>, so it has no scoped
+   ancestor and not even `:deep()` reaches it. Reinstating it needs
+   `content-class` on the v-menu plus a non-scoped rule for that class — a
+   deliberate visual change, not a CSS repair, so the dead rule and its
+   orphaned keyframes are simply gone. */
 
 .menu-btn-compact:focus-visible {
 	outline: 1px solid #1976d2;
@@ -1687,22 +1469,6 @@ export default {
 
 .menu-header-text-compact {
 	color: var(--pos-primary) !important;
-}
-
-.menu-list-compact {
-	background: var(--pos-card-bg) !important;
-}
-
-.menu-item-title-compact {
-	color: var(--pos-text-primary) !important;
-}
-
-.menu-item-subtitle-compact {
-	color: var(--pos-text-secondary) !important;
-}
-
-.menu-section-divider-compact {
-	border-color: var(--pos-border) !important;
 }
 
 :deep([data-theme="dark"]) .menu-item-compact:hover::before,
