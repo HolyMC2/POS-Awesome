@@ -1926,7 +1926,7 @@ Charge loaded,Cobro cargado
 charge it like any sale; the request completes automatically on payment.,cóbralo como cualquier venta; la solicitud se completa automáticamente al pagar.
 Charge request completed,Solicitud de cobro completada
 Charge request not marked as charged,Solicitud de cobro no marcada como cobrada
-The sale went through, but request,La venta se realizó pero la solicitud
+"The sale went through, but request","La venta se realizó pero la solicitud"
 is still Open. A supervisor must mark it charged with invoice,sigue Abierta. Un supervisor debe marcarla como cobrada con la factura
 Charge requests are not enabled for this POS Profile.,Las solicitudes de cobro no están habilitadas para este POS Profile.
 Charge request {0} is {1} — someone already handled it.,La solicitud de cobro {0} está {1} — alguien ya la atendió.
@@ -2084,3 +2084,41 @@ More payment methods,Más métodos de pago
 Full breakdown,Ver desglose
 Change due,Cambio
 Change given,Entregado
+Free table,Libre
+Occupied,Ocupada
+Needs cleaning,Requiere limpieza
+Mark clean,Marcar limpia
+Open table,Abrir mesa
+View order,Ver cuenta
+Add items,Agregar productos
+Charge,Cobrar
+Add items before charging,Agrega productos antes de cobrar
+Send to kitchen,Enviar a cocina
+Move,Mover
+Move here,Mover aquí
+Release,Liberar mesa
+More options,Más opciones
+Done editing,Listo
+Go to,Ir a
+Table,Mesa
+Tabs,Cuentas abiertas
+New tab,Nueva cuenta
+Edit floor plan,Editar plano
+Fit the whole floor,Ver todo el piso
+List view,Ver lista
+Plan view,Ver plano
+Idle,Espera
+Guests,Personas
+Opened by,Abrió
+Lines,Partidas
+seats,lugares
+Not sent to the server yet,Aún no se envía al servidor
+Every table is busy,Todas las mesas están ocupadas
+Nothing waiting to be bussed,Nada por limpiar
+Tap a table to open it · outline = free · filled = occupied · red number = waiting for the kitchen,Toca una mesa para abrirla · contorno = libre · rellena = ocupada · número rojo = pendiente de cocina
+No open tabs — start one with a name on the cup,Sin cuentas abiertas — abre una con el nombre del cliente
+No tables yet — edit your floor plan to add some,Aún no hay mesas — edita el plano para agregarlas
+No floors configured for this register,Esta caja no tiene pisos configurados
+"Add a floor in the register's setup, then lay out its tables here.","Agrega un piso en la configuración de la caja y acomoda aquí sus mesas."
+Nobody seated yet — tap a free table to start a ticket,Sin mesas ocupadas — toca una mesa libre para abrir cuenta
+Pick a free table for,Elige una mesa libre para
