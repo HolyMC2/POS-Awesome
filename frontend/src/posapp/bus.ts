@@ -96,6 +96,13 @@ export type Events = {
 	 * Emitted by Payments.vue's cancel path; handled in Pos.vue.
 	 */
 	show_invoice_panel: void;
+	/**
+	 * "Put me on this selector view." The floor's ticket panel needs it: after
+	 * opening a table the next thing a waiter does is add food, and only the
+	 * shell can move the panel and the active view in the one pass that
+	 * survives the activeView watcher. Handled in Pos.vue.
+	 */
+	set_selector_view: string;
 
 	// ---- dialogs / shell ----------------------------------------------------
 	open_returns: string; // company

@@ -884,6 +884,10 @@ export default {
 				// activeView watcher. mitt dispatches inline, so the caller's
 				// synchronous fallback sees this as already handled.
 				eventBus.on("show_invoice_panel", showInvoicePanel);
+				// The floor's ticket panel asks for Browse by name: "Agregar
+				// productos" has to land on the item list with the panel moved,
+				// which set_compact_panel alone cannot do from the floor view.
+				eventBus.on("set_selector_view", setSelectorView);
 				eventBus.on("open_returns", handleOpenReturns);
 				eventBus.on("open_new_address", handleOpenNewAddress);
 				eventBus.on("open_mpesa_payments", handleOpenMpesaPayments);
@@ -921,6 +925,7 @@ export default {
 				eventBus.off("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.off("set_compact_panel", setCompactPanel);
 				eventBus.off("show_invoice_panel", showInvoicePanel);
+				eventBus.off("set_selector_view", setSelectorView);
 				eventBus.off("open_returns", handleOpenReturns);
 				eventBus.off("open_new_address", handleOpenNewAddress);
 				eventBus.off("open_mpesa_payments", handleOpenMpesaPayments);
