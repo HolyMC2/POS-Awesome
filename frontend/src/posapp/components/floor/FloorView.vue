@@ -25,6 +25,10 @@
 					<span v-if="floor.total" class="floor-view__floor-count">{{ floor.busy }}/{{ floor.total }}</span>
 				</button>
 			</div>
+			<!-- Two verbs stay on the bar; the rest move behind a labelled menu.
+			     Five icon-only buttons taught nobody what they did and left the
+			     floor switcher so little width that "Salón Principal" rendered
+			     as "Salón Pri…" — the one label on the bar that has to be read. -->
 			<div class="floor-view__actions">
 				<v-btn
 					size="small"
@@ -32,36 +36,8 @@
 					icon="mdi-dialpad"
 					:aria-label="jumpLabel"
 					:title="jumpLabel"
+					data-test="floor-jump"
 					@click="jumpOpen = true"
-				/>
-				<v-btn
-					v-if="viewMode === 'plan' && !editorMode"
-					size="small"
-					variant="text"
-					icon="mdi-fit-to-page-outline"
-					:color="fit ? 'primary' : undefined"
-					:aria-pressed="fit"
-					:aria-label="fitLabel"
-					:title="fitLabel"
-					data-test="floor-fit"
-					@click="fitOverride = !fit"
-				/>
-				<v-btn
-					size="small"
-					variant="text"
-					:icon="viewMode === 'plan' ? 'mdi-view-list-outline' : 'mdi-floor-plan'"
-					:aria-label="toggleLabel"
-					:title="toggleLabel"
-					@click="toggleViewMode"
-				/>
-				<v-btn
-					size="small"
-					variant="text"
-					:icon="editorMode ? 'mdi-check' : 'mdi-pencil-outline'"
-					:aria-label="editLabel"
-					:title="editLabel"
-					:disabled="!floors.length"
-					@click="floorStore.setEditorMode(!editorMode)"
 				/>
 				<v-btn
 					size="small"
@@ -70,14 +46,59 @@
 					:loading="floorStore.loading"
 					:aria-label="__('Refresh')"
 					:title="__('Refresh')"
+					data-test="floor-refresh"
 					@click="floorStore.refresh()"
 				/>
+				<v-menu location="bottom end">
+					<template #activator="{ props: menuProps }">
+						<v-btn
+							v-bind="menuProps"
+							size="small"
+							variant="text"
+							icon="mdi-dots-vertical"
+							:aria-label="moreLabel"
+							:title="moreLabel"
+							data-test="floor-more"
+						/>
+					</template>
+					<v-list density="compact" class="floor-view__menu">
+						<v-list-item
+							:prepend-icon="viewMode === 'plan' ? 'mdi-view-list-outline' : 'mdi-floor-plan'"
+							:title="toggleLabel"
+							data-test="floor-toggle-view"
+							@click="toggleViewMode"
+						/>
+						<v-list-item
+							v-if="viewMode === 'plan' && !editorMode"
+							prepend-icon="mdi-fit-to-page-outline"
+							:title="fitLabel"
+							:active="fit"
+							data-test="floor-fit"
+							@click="fitOverride = !fit"
+						/>
+						<v-list-item
+							:prepend-icon="editorMode ? 'mdi-check' : 'mdi-pencil-outline'"
+							:title="editorMode ? doneEditingLabel : editLabel"
+							:disabled="!floors.length"
+							data-test="floor-edit"
+							@click="floorStore.setEditorMode(!editorMode)"
+						/>
+					</v-list>
+				</v-menu>
 			</div>
 		</header>
 
 		<TabsRail show-new @open="openTabOrder" @new-tab="jumpOpen = true" />
 
 		<p v-if="floorStore.error" class="floor-view__error" role="alert">{{ floorStore.error }}</p>
+
+		<!-- The plan carries five encodings (fill, colour, ring, badge, broom)
+		     and shipped with none of them written down, on the theory that one
+		     visual variable per meaning needs no legend. It needs one line. The
+		     line is cheap and it is the first thing a new waiter reads. It sits
+		     OUTSIDE the stage: the stage turns into a row on a wide panel, and a
+		     legend that became a column beside the plan would be worse than none. -->
+		<p v-if="showLegend" class="floor-view__legend">{{ legendLabel }}</p>
 
 		<div class="floor-view__stage" :class="{ 'floor-view__stage--wide': wide }">
 			<template v-if="!floors.length">
@@ -105,9 +126,9 @@
 				v-else-if="viewMode === 'plan'"
 				:available-width="planWidth"
 				:fit="fit"
-				@open="openTable"
+				@open="askTable"
 			/>
-			<FloorKanban v-else @open="openTable" />
+			<FloorKanban v-else @open="askTable" />
 
 			<!-- The open ticket's own detail. Transfer starts here rather than from
 			     a tile menu: the gesture is "this order, somewhere else", and the
@@ -119,6 +140,8 @@
 				variant="rail"
 				:firing="firing"
 				:releasing="releasing"
+				@add-items="goToItems"
+				@charge="chargeActiveOrder"
 				@fire="fire"
 				@transfer="floorStore.beginTransfer(activeOrder)"
 				@release="release"
@@ -132,12 +155,15 @@
 			variant="strip"
 			:firing="firing"
 			:releasing="releasing"
+			@add-items="goToItems"
+			@charge="chargeActiveOrder"
 			@fire="fire"
 			@transfer="floorStore.beginTransfer(activeOrder)"
 			@release="release"
 		/>
 
 		<JumpPad v-model="jumpOpen" @open-table="openTable" @open-tab="openNamedTab" />
+		<TableActionSheet v-model="sheetOpen" :table="sheetTable" @action="onSheetAction" />
 	</div>
 </template>
 
@@ -154,15 +180,16 @@
  * usable proxy for the room this component actually has, and a media query
  * here would put a side rail on a 500px column.
  */
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, ref } from "vue";
 import FloorEditor from "./FloorEditor.vue";
 import FloorKanban from "./FloorKanban.vue";
 import FloorPlan from "./FloorPlan.vue";
 import JumpPad from "./JumpPad.vue";
+import TableActionSheet, { type TableSheetAction } from "./TableActionSheet.vue";
 import TableTicketPanel from "./TableTicketPanel.vue";
 import TabsRail from "./TabsRail.vue";
 import { resolveCanvas } from "./floorGeometry";
-import { bus } from "../../bus";
+import { bus as importedBus } from "../../bus";
 import { useFloorStore, type OrderRow, type TableRow } from "../../stores/floorStore";
 import { useVerticalStore } from "../../stores/verticalStore";
 
@@ -179,12 +206,27 @@ const WIDE_PANEL = 640;
 /** The rail's own width, subtracted before the plan computes its fit scale. */
 const RAIL_WIDTH = 248;
 
+/**
+ * The bus the SHELL is listening on, taken by injection like every other
+ * component in this app — not the module import.
+ *
+ * The floor was the one screen that emitted on the imported `bus` singleton,
+ * and its events never arrived: `floor_order_opened` has been landing nowhere,
+ * which is why opening a table left the waiter staring at the plan instead of
+ * the cart the handler was written to show. Injection binds to the instance the
+ * plugin installed, so an emit here reaches Pos.vue by construction. The import
+ * stays as the fallback for tests that mount this component with no app.
+ */
+const bus = inject<typeof importedBus>("eventBus", importedBus);
+
 const floorStore = useFloorStore();
 const verticalStore = useVerticalStore();
 
 const panelEl = ref<HTMLElement | null>(null);
 const panelWidth = ref(0);
 const jumpOpen = ref(false);
+const sheetOpen = ref(false);
+const sheetTable = ref<TableRow | null>(null);
 const firing = ref(false);
 const releasing = ref(false);
 /** null = follow the default (fit only when the room overflows the panel). */
@@ -233,6 +275,17 @@ const floorTabs = computed(() =>
 );
 
 const jumpLabel = computed(() => `${verticalStore.t("Go to")} ${verticalStore.t("Table")}`);
+const moreLabel = computed(() => verticalStore.t("More options"));
+const doneEditingLabel = computed(() => verticalStore.t("Done editing"));
+/** Only where the encodings it explains are on screen. */
+const showLegend = computed(
+	() =>
+		viewMode.value === "plan" &&
+		!editorMode.value &&
+		floors.value.length > 0 &&
+		activeFloorTables.value.length > 0,
+);
+const legendLabel = computed(() => verticalStore.t("Tap a table to open it · outline = free · filled = occupied · red number = waiting for the kitchen"));
 const editLabel = computed(() => verticalStore.t("Edit floor plan"));
 const editFloorLabel = computed(() => verticalStore.t("Edit floor plan"));
 const fitLabel = computed(() => verticalStore.t("Fit the whole floor"));
@@ -300,13 +353,59 @@ function toggleViewMode() {
 }
 
 /**
- * Tap IS the transition (spec §3) — no "seat party" dialog. Once the order is
- * open the shell moves to the cart, because the next thing a waiter does is
- * add food.
+ * A tap on a tile ASKS instead of acting (see TableActionSheet for why the
+ * v1's silent one-tap open had to go). JumpPad still opens directly: typing a
+ * table number is already the explicit choice the sheet exists to collect.
  */
-async function openTable(table: TableRow) {
+function askTable(table: TableRow) {
+	sheetTable.value = table;
+	sheetOpen.value = true;
+}
+
+/**
+ * Every verb resumes the same order; they differ only in where the operator is
+ * left standing. Seating a party and adding a round both end at the item list,
+ * because food is the next thing typed; asking for the bill ends at the cart.
+ */
+async function onSheetAction(action: TableSheetAction, table: TableRow) {
+	if (action === "clean") {
+		await floorStore.markClean(table.name);
+		return;
+	}
+	const opened = await openTable(table, action === "view" ? "cart" : "items");
+	if (!opened) return;
+	if (action === "charge") chargeActiveOrder();
+}
+
+/**
+ * Open (or resume) the table's order, then put the operator where that verb
+ * meant to leave them.
+ *
+ * `floor_order_opened` is the shell's "show me the cart" — it stays the default
+ * so the jump pad and the tabs rail keep their behaviour. Opening a table to
+ * take an order goes to the item list instead: landing a waiter on an EMPTY
+ * cart, one more tap from the catalog, was the detour that made this screen
+ * feel like it did nothing.
+ */
+async function openTable(table: TableRow, land: "cart" | "items" = "cart"): Promise<boolean> {
 	const order = await floorStore.openOrCreate(table);
-	if (order) bus.emit("floor_order_opened", { order_uid: order.order_uid });
+	if (!order) return false;
+	if (land === "items") goToItems();
+	else bus.emit("floor_order_opened", { order_uid: order.order_uid });
+	return true;
+}
+
+/** "Agregar productos": the shell moves the panel AND the view, in one pass. */
+function goToItems() {
+	bus.emit("set_selector_view", "items");
+}
+
+/**
+ * "Cobrar": the same round trip the dock's Pay makes, so the settle path stays
+ * the one the invoice panel validates — the floor never submits money itself.
+ */
+function chargeActiveOrder() {
+	bus.emit("request_invoice_payment");
 }
 
 async function openNamedTab(tabName: string) {

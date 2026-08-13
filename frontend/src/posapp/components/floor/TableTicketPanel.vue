@@ -20,6 +20,33 @@
 			</div>
 		</dl>
 
+		<!-- The two verbs the v1 had no route to from the floor: a waiter who had
+		     just seated a table could not get to the item list, and a cashier
+		     standing at the table could not get to payment, without knowing that
+		     the answer was a dock tab at the other end of the screen. -->
+		<div class="ticket-panel__actions ticket-panel__actions--primary">
+			<button
+				type="button"
+				class="ticket-panel__action ticket-panel__action--primary"
+				data-test="floor-add-items"
+				@click="emit('add-items')"
+			>
+				<v-icon icon="mdi-plus-circle-outline" size="18" />
+				<span class="ticket-panel__action-text">{{ addItemsLabel }}</span>
+			</button>
+			<button
+				type="button"
+				class="ticket-panel__action ticket-panel__action--charge"
+				:disabled="!order.items_count"
+				:title="order.items_count ? chargeLabel : emptyChargeHint"
+				data-test="floor-charge"
+				@click="emit('charge')"
+			>
+				<v-icon icon="mdi-cash-register" size="18" />
+				<span class="ticket-panel__action-text">{{ chargeLabel }}</span>
+			</button>
+		</div>
+
 		<div class="ticket-panel__actions">
 			<!-- Enabled even at zero unsent: lines typed in the last second are
 			     still in the cart-sync debounce, and `fireActiveCourse` flushes
@@ -94,6 +121,8 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+	(event: "add-items"): void;
+	(event: "charge"): void;
 	(event: "fire"): void;
 	(event: "transfer"): void;
 	(event: "release"): void;
@@ -103,9 +132,12 @@ const verticalStore = useVerticalStore();
 const { formatCurrency } = useFormat();
 const { now } = useFloorClock();
 
-const fireLabel = computed(() => verticalStore.t("Send"));
-const transferLabel = computed(() => verticalStore.t("Transfer"));
+const fireLabel = computed(() => verticalStore.t("Send to kitchen"));
+const transferLabel = computed(() => verticalStore.t("Move"));
 const releaseLabel = computed(() => verticalStore.t("Release"));
+const addItemsLabel = computed(() => verticalStore.t("Add items"));
+const chargeLabel = computed(() => verticalStore.t("Charge"));
+const emptyChargeHint = computed(() => verticalStore.t("Add items before charging"));
 
 const title = computed(
 	() => props.order.tab_name || props.tableLabel || props.order.order_uid.slice(0, 6),
@@ -141,7 +173,11 @@ const facts = computed(() => {
 			key: "opened_by",
 			icon: "mdi-account-circle-outline",
 			term: verticalStore.t("Opened by"),
-			value: props.order.opened_by,
+			// The row carries the user's EMAIL. Printed whole it ate the strip's
+			// one line on a phone ("playwright-bot@lab.xoloitzcuintles.com") and
+			// told the waiter nothing they did not already know; the local part
+			// is the name they answer to.
+			value: props.order.opened_by.split("@")[0] || props.order.opened_by,
 		});
 	}
 	if (idle.value !== null) {
@@ -259,10 +295,11 @@ const facts = computed(() => {
 	color: var(--pos-text-secondary);
 }
 
-.ticket-panel--strip .ticket-panel__fact-term span {
-	/* On a phone the icon carries the meaning; the word is the first thing to
-	   go when the row has to fit beside three others. */
-	display: none;
+/* The words stay on the phone too. Dropping them left four unlabelled icons
+   with numbers beside them — an operator who has not memorised the icon set
+   cannot tell "4 guests" from "4 lines", and the facts wrap perfectly well. */
+.ticket-panel--strip .ticket-panel__fact-term {
+	font-size: 10px;
 }
 
 .ticket-panel__fact-value {
@@ -287,6 +324,19 @@ const facts = computed(() => {
 .ticket-panel__actions {
 	display: flex;
 	gap: 6px;
+}
+
+/* The two verbs that move the service forward keep a full row of their own —
+   the kitchen/move/release row below is where the ticket is MANAGED, and
+   putting all five together made the two that matter unfindable. */
+.ticket-panel__actions--primary .ticket-panel__action {
+	min-height: 48px;
+	font-size: 14px;
+}
+
+.ticket-panel__action--charge:not(:disabled) {
+	border-color: var(--pos-success, #059669);
+	color: var(--pos-success, #059669);
 }
 
 .ticket-panel--rail .ticket-panel__actions {

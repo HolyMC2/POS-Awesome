@@ -137,18 +137,26 @@ const smallestTilePx = computed(() => {
 });
 
 /**
+ * The smallest a table may be drawn. 44px is the platform touch floor (iOS HIG
+ * / WCAG 2.5.5); the 40px this used to allow measured as a real 40×40 tile on a
+ * 390px phone, which is a mis-tap during service — and a mis-tap here opens the
+ * wrong table's order.
+ */
+const MIN_TILE_PX = 44;
+
+/**
  * Fit-to-width, floored so the smallest table stays tappable.
  *
  * A 24×16 default frame is 1056px wide; fitting it across a 390px phone would
- * shrink a 2-cell table to 33px — under the 40px touch floor, i.e. a board you
- * can see but cannot use. When those two demands collide the touch floor wins
- * and the waiter pans, because a mis-tap during service costs more than a
- * swipe does.
+ * shrink a 2-cell table to 33px — under the touch floor, i.e. a board you can
+ * see but cannot use. When those two demands collide the touch floor wins and
+ * the waiter pans, because a mis-tap during service costs more than a swipe
+ * does.
  */
 const scale = computed(() => {
 	if (!props.fit) return 1;
 	const fitted = fitScale(canvas.value, props.availableWidth);
-	const tappable = Math.min(1, 40 / Math.max(1, smallestTilePx.value));
+	const tappable = Math.min(1, MIN_TILE_PX / Math.max(1, smallestTilePx.value));
 	return Math.max(fitted, tappable);
 });
 

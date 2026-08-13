@@ -184,7 +184,9 @@ const columns = computed(() => [
 	},
 	{
 		key: "free",
-		title: verticalStore.t("Free"),
+		// NOT "Free": es.csv already binds that key to "Gratis" (no charge),
+		// which on a dining-room board reads as "these tables cost nothing".
+		title: verticalStore.t("Free table"),
 		empty: verticalStore.t("Every table is busy"),
 		rows: rows.value.filter((row) => !row.occupied && !row.table.needs_cleaning),
 	},

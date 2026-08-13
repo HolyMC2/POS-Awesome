@@ -42,6 +42,11 @@
 	border-radius: 8px;
 }
 
+/* Free vs occupied is OUTLINE vs FILL, not 30% vs 100% opacity.
+   The opacity encoding was internally consistent and read wrong to everyone
+   who had not been told: at 0.3 a free table looks like a disabled control,
+   so the tiles a waiter is supposed to tap were the faintest things on the
+   screen. Fill keeps one visual variable per meaning and costs no legend. */
 .floor-tile {
 	position: absolute;
 	top: 0;
@@ -54,26 +59,21 @@
 	border: 2px solid var(--floor-tile-color, #94a3b8);
 	border-radius: 10px;
 	background: var(--pos-surface);
-	color: var(--pos-text-primary);
-	opacity: 0.3;
+	color: var(--pos-text-secondary);
 	transition:
-		opacity 120ms ease-out,
+		background-color 120ms ease-out,
 		box-shadow 120ms ease-out;
 	cursor: pointer;
 }
 
-/* A free table still has to look reachable. Lifting it most of the way to
-   opaque on hover reads as "you may tap this" without borrowing the occupied
-   state's full opacity. */
 .floor-tile:hover:not(:disabled) {
-	opacity: 0.62;
+	background: var(--pos-hover-bg);
 	box-shadow: 0 0 0 3px var(--pos-shadow-light);
 }
 
 .floor-tile:focus-visible {
 	outline: 2px solid var(--pos-primary);
 	outline-offset: 2px;
-	opacity: 1;
 }
 
 .floor-tile--round {
@@ -81,13 +81,13 @@
 }
 
 .floor-tile--occupied {
-	opacity: 1;
-	background: var(--pos-surface-variant);
+	background: var(--pos-primary-container);
 	color: var(--pos-text-primary);
+	box-shadow: inset 0 0 0 1px var(--floor-tile-color, #94a3b8);
 }
 
-.floor-tile--occupied:hover {
-	opacity: 1;
+.floor-tile--occupied .floor-tile__label {
+	color: var(--pos-text-primary);
 }
 
 .floor-tile--dirty {
@@ -183,7 +183,10 @@
 	font-size: 13px;
 	font-weight: 700;
 	letter-spacing: -0.01em;
-	color: var(--pos-text-primary);
+	/* Inherits the tile's own colour: secondary while free, primary once the
+	   fill arrives. A hard-coded primary here would undo the outline/fill
+	   contrast the tile is built on. */
+	color: inherit;
 }
 
 .floor-tile__total {
@@ -230,12 +233,17 @@
 }
 
 /* The broom as a tappable control: reset button chrome, keep the glyph
-   placement, and give a thumb a real target without growing the visual. */
+   placement, and give a thumb a real target without growing the visual.
+   The padding IS the hit area, and it is deliberately NOT grown to the 44px
+   platform floor: the broom lives INSIDE a tile that may itself be only 44px,
+   and a 44px broom would swallow every tap meant for the table. It stays a
+   30px shortcut; "Marcar limpia" also sits in the tap sheet, at full size,
+   for anyone who misses it. */
 .floor-tile__glyph--action {
 	border: 0;
 	background: transparent;
-	padding: 6px;
-	margin: -6px;
+	padding: 8px;
+	margin: -8px;
 	cursor: pointer;
 	line-height: 0;
 	touch-action: manipulation;

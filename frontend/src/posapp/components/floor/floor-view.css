@@ -52,7 +52,7 @@
 
 .floor-view__banner-cancel {
 	flex: 0 0 auto;
-	min-height: 40px;
+	min-height: 44px;
 	padding: 0 14px;
 	border: 1px solid var(--pos-border);
 	border-radius: 999px;
@@ -81,12 +81,24 @@
 	overflow-x: auto;
 }
 
+/* One line, above the board, in the same voice as the empty states. */
+.floor-view__legend {
+	flex: 0 0 auto;
+	margin: 0;
+	padding: 4px 10px;
+	background: var(--pos-surface);
+	color: var(--pos-text-secondary);
+	font-size: 11px;
+	line-height: 1.35;
+}
+
 .floor-view__floor {
 	display: flex;
 	align-items: center;
 	gap: 6px;
 	flex: 0 0 auto;
-	min-height: 40px;
+	/* 44px: the platform touch floor. These sit under a thumb mid-service. */
+	min-height: 44px;
 	padding: 4px 12px;
 	border: 1px solid var(--pos-border);
 	border-radius: 999px;
