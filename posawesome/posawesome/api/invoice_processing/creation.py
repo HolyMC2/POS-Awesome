@@ -1419,7 +1419,7 @@ def update_invoice(data):
 
 
 @frappe.whitelist(methods=["POST"])
-def submit_invoice(invoice, data, submit_in_background=False):
+def submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
     data = json.loads(data)
     invoice = json.loads(invoice)
     client_request_id = extract_invoice_client_request_id(invoice, data)
@@ -1427,7 +1427,13 @@ def submit_invoice(invoice, data, submit_in_background=False):
     _apply_manual_posting_controls(invoice)
     submit_in_background = cint(submit_in_background)
     _strip_client_freebies_from_payload(invoice)
-    pos_profile = _resolve_payload_pos_profile(invoice)
+    # The public POS client has always sent the active profile as a separate
+    # submit argument.  Keep that explicit request context as the final
+    # fallback when an old/stale SPA built a draft payload without stamping
+    # ``pos_profile`` (the draft row may be empty too).  This is still a client
+    # claim, so the ordinary membership/company/customer gates below validate
+    # it before any submission ledger or accounting mutation is created.
+    pos_profile = _resolve_payload_pos_profile(invoice) or pos_profile
     if pos_profile and not invoice.get("pos_profile"):
         invoice["pos_profile"] = pos_profile
     # Scope — must match update_invoice. submit re-validates because

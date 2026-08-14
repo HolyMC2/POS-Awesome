@@ -360,6 +360,41 @@ class TestWaveASecurity(IntegrationTestCase):
         with self.assertRaises(frappe.PermissionError):
             creation.update_invoice(json.dumps(payload))
 
+    def test_profileless_draft_submit_uses_explicit_profile_context(self):
+        """A stale POS bundle can omit the profile inside the serialized
+        invoice while still sending the active profile as the submit argument.
+        Preserve that explicit intent and let the normal scope gates validate
+        it, rather than stranding the already-saved draft before the durable
+        submission ledger is created.
+        """
+        crid = self._crid("explicit-profile")
+        payload = self._payload(crid)
+        created = creation.update_invoice(json.dumps(payload))
+        self._created.append(("Sales Invoice", created.get("name")))
+        frappe.db.set_value(
+            "Sales Invoice",
+            created.get("name"),
+            {"pos_profile": None, "is_pos": 0, "posa_pos_opening_shift": None},
+        )
+
+        resume = dict(payload)
+        resume["name"] = created.get("name")
+        resume.pop("pos_profile", None)
+        resume.pop("posa_pos_opening_shift", None)
+
+        response = creation.submit_invoice(
+            json.dumps(resume),
+            json.dumps(self._data()),
+            submit_in_background=0,
+            pos_profile=PROFILE,
+        )
+        invoice_name = response.get("name") or created.get("name")
+        row = frappe.db.get_value(
+            "Sales Invoice", invoice_name, ["docstatus", "pos_profile"], as_dict=True
+        )
+        self.assertEqual(row.docstatus, 1)
+        self.assertEqual(row.pos_profile, PROFILE)
+
     # ---------- W4 giftcard impersonation ----------
 
     def test_w4_supervisor_impersonation_via_cashier_param_rejected(self):
