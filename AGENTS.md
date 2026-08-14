@@ -484,9 +484,9 @@ ssh contavm 'cd /home/contavm/muelle && \
   docker compose exec -T backend bench --site ventas.docomexico.com migrate && \
   docker compose exec -T backend bench --site ventas.mumulenceria.com migrate'
 
-# 4. restart workers
+# 4. restart workers through the coordinator
 ssh contavm 'cd /home/contavm/muelle && \
-  docker compose restart backend queue-short queue-long'
+  bash scripts/muelle-restart.sh backend queue-short queue-long scheduler websocket --reason "posawesome deploy"'
 ```
 
 For SPA-only changes: skip the migrate. For pure Python: skip the
