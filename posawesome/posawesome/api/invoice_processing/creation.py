@@ -1137,9 +1137,24 @@ def _resolve_payload_pos_profile(payload):
     if invoice_name:
         for doctype in ("Sales Invoice", "POS Invoice"):
             if frappe.db.exists(doctype, invoice_name):
-                stored = frappe.db.get_value(doctype, invoice_name, "pos_profile")
-                if stored:
-                    return stored
+                stored = frappe.db.get_value(
+                    doctype,
+                    invoice_name,
+                    ["pos_profile", "posa_pos_opening_shift"],
+                    as_dict=True,
+                )
+                if stored and stored.get("pos_profile"):
+                    return stored.get("pos_profile")
+                # A browser reload can clear the active-profile store before
+                # it rebuilds the request. Follow the draft's persisted shift
+                # so recovery does not depend on the client resending it.
+                stored_shift = stored and stored.get("posa_pos_opening_shift")
+                if stored_shift:
+                    shift_profile = frappe.db.get_value(
+                        "POS Opening Shift", stored_shift, "pos_profile"
+                    )
+                    if shift_profile:
+                        return shift_profile
                 break
 
     shift = payload.get("posa_pos_opening_shift")

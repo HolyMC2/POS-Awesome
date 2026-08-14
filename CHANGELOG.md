@@ -4,6 +4,13 @@ All notable changes.
 
 ## Unreleased
 
+- **POS drafts recover their register after a browser/runtime reset.** A named
+  POS draft whose transient request lost both `pos_profile` and opening-shift
+  fields now follows its own persisted opening shift back to the profile before
+  the normal membership/company/customer scope checks run. This fixes Pay being
+  blocked with "POS Profile is required for this action" after state loss while
+  ordinary Desk drafts without a persisted POS shift remain refused.
+
 - **Capability resolution now fails closed without breaking legacy tills.** An
   unlinked POS Profile remains an explicit `unconfigured` compatibility state,
   but a dangling/invalid linked profile receives no optional capabilities, no

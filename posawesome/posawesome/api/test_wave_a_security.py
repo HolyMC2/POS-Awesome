@@ -340,7 +340,9 @@ class TestWaveASecurity(IntegrationTestCase):
         resume = dict(payload)
         resume["name"] = created.get("name")
         resume.pop("pos_profile", None)
-        resume["posa_pos_opening_shift"] = shift
+        # Simulate the post-restart browser state: the named draft remains,
+        # but the transient active-profile and opening-shift fields are gone.
+        resume.pop("posa_pos_opening_shift", None)
 
         response = creation.submit_invoice(
             json.dumps(resume), json.dumps(self._data()), submit_in_background=0
@@ -351,6 +353,26 @@ class TestWaveASecurity(IntegrationTestCase):
         )
         self.assertEqual(row.docstatus, 1)
         self.assertEqual(row.pos_profile, PROFILE)
+
+    def test_profileless_named_draft_without_stored_shift_still_refused(self):
+        """A normal Desk draft must not become recoverable merely by name."""
+        crid = self._crid("draft-no-shift")
+        payload = self._payload(crid)
+        created = creation.update_invoice(json.dumps(payload))
+        self._created.append(("Sales Invoice", created.get("name")))
+        frappe.db.set_value(
+            "Sales Invoice",
+            created.get("name"),
+            {"pos_profile": None, "is_pos": 0, "posa_pos_opening_shift": None},
+        )
+
+        resume = dict(payload)
+        resume["name"] = created.get("name")
+        resume.pop("pos_profile", None)
+        resume.pop("posa_pos_opening_shift", None)
+
+        with self.assertRaises(frappe.PermissionError):
+            creation.update_invoice(json.dumps(resume))
 
     def test_profileless_payload_without_server_source_still_refused(self):
         """No profile in the payload AND nothing server-side to derive it from
