@@ -381,16 +381,10 @@ bench build --app posawesome
 # OR (this host) — full lab refresh
 ~/muelle-host/muelle/scripts/dev-refresh.sh posawesome
 
-# Deploy on prod (contavm)
-ssh contavm@<prod-ip>
-fm shell ventas.docomexico.com
-cd apps/posawesome
-git pull --ff-only fork perf/upstream-develop-tweaks
-cd frontend && yarn install
-bench build --app posawesome
-bench --site ventas.docomexico.com migrate
-bench --site ventas.docomexico.com clear-cache
-bench restart
+# Deploy on prod (explicitly authorized only)
+# Run from the local muelle checkout. This builds locally, transfers the
+# gitignored SPA bundle, refreshes mounted source, and verifies hashes.
+~/muelle-host/muelle/scripts/posawesome-push-prod.sh --build --yes
 
 # Heap-snapshot triage
 python3 scripts/heap_topnames.py path/to/heap.heapsnapshot
