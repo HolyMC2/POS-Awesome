@@ -41,7 +41,7 @@
 
 - Phase 7 architecture: `/home/holymc2/muelle-host/mercado/docs/scanner/ARCHITECTURE.md`
 - POSAwesome scanner research (pre-fix): `/home/holymc2/muelle-host/mercado/docs/scanner/POSAWESOME_SCANNER_RESEARCH.md`
-- Bug report: scan IPN0003151 on Android froze the POS on `ventas.lab.xoloitzcuintles.com` (item didn't exist in `tabItem` — pure not-found edge case).
+- Historical bug report: scanning a nonexistent item on Android froze the POS on the then-current retail lab site.
 
 ## Suggested order for the next focused session
 

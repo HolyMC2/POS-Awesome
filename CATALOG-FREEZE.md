@@ -7,7 +7,7 @@ don't reinvent the diagnosis.
 
 After switching customer (or price list) and then typing in the items
 search box, the POS hangs for tens of seconds. Operators have reported
-this as "POS crashes". Captured on lab `ventas.lab.xoloitzcuintles.com`
+this as "POS crashes". Captured on the then-current retail lab site
 2026-05-13 at 18:53 UTC.
 
 ## Measured evidence

@@ -31,7 +31,7 @@ If credentials are not set, test assumes an already authenticated session.
 Create `frontend/.env.local` with:
 
 ```
-POSA_SMOKE_BASE_URL=https://ventas.lab.xoloitzcuintles.com
+POSA_SMOKE_BASE_URL=https://doco-mirror.lab.xoloitzcuintles.com
 POSA_SMOKE_PATH=/posapp
 POSA_SMOKE_USER=Administrator
 POSA_SMOKE_PASSWORD=<your lab admin password>

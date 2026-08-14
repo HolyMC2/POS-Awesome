@@ -438,8 +438,7 @@ See [`hooks.py`](posawesome/hooks.py) for the full list. Key ones:
   invoices fire taller's auto-deliver hook
 - [`crm/`](../crm/AGENTS.md) — Lead/Deal modal; intake flow lives there
 - [`erpnext_mexico_compliance/`](../erpnext_mexico_compliance/) —
-  CFDI; emits Sales Invoice variant for fiscal compliance (not
-  installed on either prod tenant yet)
+  CFDI; tenant-specific installation. Verify with `bench --site <site> list-apps`.
 
 ## Memory (read-only, persists across sessions)
 
@@ -465,7 +464,7 @@ See [`hooks.py`](posawesome/hooks.py) for the full list. Key ones:
 cd ~/muelle-host
 ./muelle/scripts/dev-refresh.sh posawesome   # build + sync + proxy restart
 docker compose -f muelle/compose.yaml exec -T backend \
-  bench --site ventas.lab.xoloitzcuintles.com migrate   # if patches landed
+  bench --site doco-mirror.lab.xoloitzcuintles.com migrate   # full retail integration mirror
 ```
 
 ### Prod (gated; explicit confirm per [`feedback_prod_readonly.md`](../../.claude/projects/-home-holymc2/memory/feedback_prod_readonly.md))

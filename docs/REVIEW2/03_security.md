@@ -384,7 +384,7 @@ Fork ships exactly one custom role: `POS Awesome Supervisor` (`hooks.py:374`). T
 
 - **CSRF**: Frappe's standard pattern. SPA gets a token from `frappe.sessions.get_csrf_token()` (server) and sends it back in `X-Frappe-CSRF-Token` (frontend at `frappe-shim.ts:113,288,390`). Token is the same per session — **rotates only on login**. Per-request rotation not implemented.
 - **CORS**: not configured in this repo. Frappe defaults to "no CORS" — same-origin only. As long as the SPA is served from the same host as the API (which it is at `/posapp` and `/app/posapp`), CORS doesn't apply. If a future deployment exposes the API on a separate domain (e.g. `api.docomexico.com`), CORS will need explicit allowlist.
-- **Security headers**: nothing in `posawesome/www/posapp.py` or `posawesome/www/posapp.html` sets any. Frappe's reverse proxy (`muelle/proxy/`) is where these would land. Sample `curl -I https://ventas.lab.xoloitzcuintles.com/posapp` would tell us; I can't run that from here. Assume **none of CSP / HSTS / X-Frame-Options / Referrer-Policy / X-Content-Type-Options / Permissions-Policy / COOP / COEP are set** unless ops added them at the proxy.
+- **Security headers (historical review):** the proxy owns these headers. Recheck the current full retail integration mirror and proxy template; do not inherit this old unverified assumption.
 
 ### 7.2 Helmet-equivalent header set required
 
