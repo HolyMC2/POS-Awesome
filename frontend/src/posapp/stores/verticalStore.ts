@@ -55,6 +55,12 @@ export interface VerticalProfile {
 	print_format: string | null;
 }
 
+export type CapabilityResolutionStatus =
+	| "unconfigured"
+	| "resolved"
+	| "invalid"
+	| "temporarily_unavailable";
+
 /**
  * The only preset in M1. The capability list names behaviour the retail
  * app already has — it exists so consumers can start asking `has()`
@@ -145,6 +151,14 @@ export const useVerticalStore = defineStore("vertical", () => {
 	const profile = computed<VerticalProfile>(() =>
 		mergeProfilePayload(uiStore.capabilityPayload),
 	);
+	const resolutionStatus = computed<CapabilityResolutionStatus>(() => {
+		if (!uiStore.capabilityPayload) return "unconfigured";
+		const status = (uiStore.capabilityPayload as any)?.resolution?.status;
+		return ["resolved", "invalid", "temporarily_unavailable"].includes(status)
+			? status
+			: "invalid";
+	});
+	const canSell = computed(() => resolutionStatus.value !== "invalid");
 
 	// Capability resolution is f(profile, roles) (plan C10). A capability
 	// entry may be role-gated with `capability:role` syntax — e.g.
@@ -259,6 +273,8 @@ export const useVerticalStore = defineStore("vertical", () => {
 
 	return {
 		profile,
+		resolutionStatus,
+		canSell,
 		has,
 		layout,
 		leanVerticalLayout,

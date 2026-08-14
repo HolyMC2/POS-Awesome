@@ -3,7 +3,10 @@
 
 from __future__ import unicode_literals
 
+import copy
+
 import frappe
+from frappe import _
 
 # Bumped whenever the resolved payload's SHAPE changes in a way a queued
 # offline invoice would need to detect on replay (plan C7). Not the preset's
@@ -12,7 +15,62 @@ import frappe
 # 2 (2026-08-11): added the top-level `invoice_mode` key and the `floor` dock
 # tab. A sale queued under v1 was built with no notion of Record Only, so a
 # version mismatch must route it to draft-for-review rather than blind submit.
-CAPABILITY_PAYLOAD_VERSION = 2
+CAPABILITY_PAYLOAD_VERSION = 3
+RESOLUTION_RESOLVED = "resolved"
+RESOLUTION_INVALID = "invalid"
+RESOLUTION_TEMPORARILY_UNAVAILABLE = "temporarily_unavailable"
+LAST_GOOD_TTL_SECONDS = 7 * 24 * 60 * 60
+
+
+def _last_good_key(pos_profile_name):
+    return f"posawesome:vertical:last_good:{pos_profile_name}"
+
+
+def _stamp(payload, status, **details):
+    stamped = copy.deepcopy(payload)
+    stamped["version"] = CAPABILITY_PAYLOAD_VERSION
+    stamped["resolution"] = {"status": status, **details}
+    return stamped
+
+
+def _invalid_payload(link=None, code="resolution_failed"):
+    """A renderable but non-selling contract; never inherit retail powers."""
+    return {
+        "name": "invalid-configuration",
+        "version": CAPABILITY_PAYLOAD_VERSION,
+        "layout": {
+            "items_view": {"default": "list", "allow": ["list"]},
+            "items_panel": "standard",
+            "cart_style": "table",
+            "dock_tabs": ["browse", "cart"],
+        },
+        "capabilities": [],
+        "labels": {},
+        "print_format": None,
+        "invoice_mode": None,
+        "resolution": {
+            "status": RESOLUTION_INVALID,
+            "code": code,
+            **({"linked_profile": link} if link else {}),
+        },
+    }
+
+
+def _remember_last_good(pos_profile_name, payload):
+    frappe.cache().set_value(
+        _last_good_key(pos_profile_name), payload, expires_in_sec=LAST_GOOD_TTL_SECONDS
+    )
+
+
+def _last_good_payload(pos_profile_name):
+    cached = frappe.cache().get_value(_last_good_key(pos_profile_name))
+    if not isinstance(cached, dict):
+        return None
+    return _stamp(
+        cached,
+        RESOLUTION_TEMPORARILY_UNAVAILABLE,
+        source="last_known_good",
+    )
 
 
 def _profile_capability_link(pos_profile_name):
@@ -60,12 +118,13 @@ def resolve_capability_json(pos_profile_name):
     if not link:
         return None
     if not frappe.db.exists("POS Capability Profile", link):
-        # A dangling link (preset deleted) must not break the counter.
+        # A dangling link is configuration corruption, not an unconfigured
+        # legacy register. Returning None here used to grant retail defaults.
         _log_dangling_link(pos_profile_name, link)
-        return None
+        return _invalid_payload(link, "missing_linked_profile")
     doc = frappe.get_cached_doc("POS Capability Profile", link)
-    payload = doc.as_frontend_payload()
-    payload["version"] = CAPABILITY_PAYLOAD_VERSION
+    payload = _stamp(doc.as_frontend_payload(), RESOLUTION_RESOLVED, source="current")
+    _remember_last_good(pos_profile_name, payload)
     return payload
 
 
@@ -82,7 +141,20 @@ def opening_capability_payload(pos_profile_name):
         return resolve_capability_json(pos_profile_name)
     except Exception:
         frappe.log_error(frappe.get_traceback(), "posawesome.vertical.opening_payload")
-        return None
+        return _last_good_payload(pos_profile_name) or _invalid_payload(code="resolution_failed")
+
+
+def assert_capability_configuration(pos_profile_name):
+    """Block the money moment for linked configuration that cannot resolve."""
+    if not pos_profile_name:
+        return
+    payload = opening_capability_payload(pos_profile_name)
+    status = (payload or {}).get("resolution", {}).get("status")
+    if status == RESOLUTION_INVALID:
+        frappe.throw(
+            _("This register configuration is invalid. Ask a manager to repair its capability profile."),
+            frappe.ValidationError,
+        )
 
 
 @frappe.whitelist()
@@ -91,4 +163,4 @@ def get_capability_json(pos_profile):
     flow (profile switch mid-session). Read-only, permission-checked by the
     POS Profile read the caller already holds."""
     frappe.has_permission("POS Profile", "read", pos_profile, throw=True)
-    return resolve_capability_json(pos_profile)
+    return opening_capability_payload(pos_profile)

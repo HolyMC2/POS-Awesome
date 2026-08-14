@@ -1443,6 +1443,12 @@ def submit_invoice(invoice, data, submit_in_background=False):
     assert_profile(frappe.session.user, pos_profile)
     assert_company(frappe.session.user, invoice.get("company"))
     assert_customer_in_profile(frappe.session.user, invoice.get("customer"), pos_profile)
+    # A broken linked capability profile must never degrade into the powerful
+    # retail compatibility preset at the money moment. Legacy unconfigured
+    # profiles remain valid; transient failures may use a stamped LKG contract.
+    from posawesome.posawesome.api.vertical import assert_capability_configuration
+
+    assert_capability_configuration(pos_profile)
     # Stale-shift gate: the SPA routes stale shifts into the closing flow at
     # boot, but a tab left open from yesterday still holds the old shift —
     # block the money moment server-side (posa_force_close_stale_shift).

@@ -809,6 +809,15 @@ relevant all-skipped suite; baseline is reproducible.
 
 ### Foundation 1 — Effective configuration contract
 
+Execution status (2026-08-14): **first safety slice implemented**. Capability
+payload v3 distinguishes `unconfigured`, `invalid`, `resolved` and
+`temporarily_unavailable`. Invalid linked profiles render without optional
+capabilities or Pay and are blocked again at server submission; transient
+resolution can use only a seven-day stamped last-known-good contract. Remaining
+Foundation 1 scope includes the typed override allowlist, full legacy-field
+classification, immutable shift stamping, provenance inspection, next-shift
+activation, emergency removal, Boat artifact ownership and thin seed manifest.
+
 - Publish a small typed capability schema, explicit override allowlist and
   `unconfigured`/`invalid`/`temporarily_unavailable` resolver states.
 - Inventory and classify all legacy POS Profile reads before migrating any flag.

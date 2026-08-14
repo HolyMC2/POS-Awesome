@@ -648,6 +648,12 @@ export default {
 			uiStore.setActiveView("payment");
 		};
 		const triggerInvoicePay = () => {
+			if (!vertical.canSell) {
+				window.frappe?.msgprint?.(
+					__("This register configuration is invalid. Ask a manager to repair its capability profile."),
+				);
+				return;
+			}
 			// The invoice panel owns the pre-payment validation; it is
 			// always mounted (v-show, not v-if), so the event always lands.
 			// It also owns the in-flight latch (show_payment), so a repeat

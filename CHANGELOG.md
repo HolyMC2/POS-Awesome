@@ -4,6 +4,16 @@ All notable changes.
 
 ## Unreleased
 
+- **Capability resolution now fails closed without breaking legacy tills.** An
+  unlinked POS Profile remains an explicit `unconfigured` compatibility state,
+  but a dangling/invalid linked profile receives no optional capabilities, no
+  Pay dock action, and is rejected again by `submit_invoice`. Successfully
+  resolved contracts are cached for seven days; a transient resolver failure
+  may use only that stamped last-known-good contract and reports
+  `temporarily_unavailable`. Payload schema is now v3. This removes the prior
+  path where any backend resolution exception silently enabled the full
+  retail-phone capability set.
+
 - **Restaurant Wave 0 is interaction-safe and browser-certified.** Dirty free
   tables now offer only “Mark clean”; an empty open account cannot be charged;
   and a table with multiple accounts presents an explicit account chooser

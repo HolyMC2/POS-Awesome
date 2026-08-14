@@ -100,8 +100,42 @@ describe("verticalStore", () => {
 
 	it("stays on retail-phones when no capability payload is present", () => {
 		const vertical = useVerticalStore();
+		expect(vertical.resolutionStatus).toBe("unconfigured");
+		expect(vertical.canSell).toBe(true);
 		expect(vertical.profile.name).toBe("retail-phones");
 		expect(vertical.layout.dock_tabs).toEqual(["browse", "offers", "cart", "coupons", "pay"]);
+	});
+
+	it("fails closed when a linked capability contract is invalid", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.setCapabilityPayload({
+			name: "invalid-configuration",
+			capabilities: [],
+			layout: { dock_tabs: ["browse", "cart"] },
+			resolution: { status: "invalid", code: "missing_linked_profile" },
+		});
+
+		expect(vertical.resolutionStatus).toBe("invalid");
+		expect(vertical.canSell).toBe(false);
+		expect(vertical.has("saldo")).toBe(false);
+		expect(vertical.has("offers")).toBe(false);
+		expect(vertical.layout.dock_tabs).toEqual(["browse", "cart"]);
+	});
+
+	it("keeps a stamped last-known-good contract usable during a transient outage", () => {
+		const ui = useUIStore();
+		const vertical = useVerticalStore();
+		ui.setCapabilityPayload({
+			name: "restaurant",
+			capabilities: ["tables"],
+			layout: { dock_tabs: ["browse", "cart", "pay", "floor"] },
+			resolution: { status: "temporarily_unavailable", source: "last_known_good" },
+		});
+
+		expect(vertical.resolutionStatus).toBe("temporarily_unavailable");
+		expect(vertical.canSell).toBe(true);
+		expect(vertical.has("tables")).toBe(true);
 	});
 
 	it("resolves a linked preset from the capability payload", () => {

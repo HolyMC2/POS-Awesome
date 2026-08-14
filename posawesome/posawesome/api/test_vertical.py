@@ -71,12 +71,23 @@ class TestCapabilityResolution(IntegrationTestCase):
         self.assertEqual(payload["layout"]["dock_tabs"], ["browse", "cart", "pay"])
         self.assertIn("tab_identity", payload["capabilities"])
 
-    def test_dangling_link_degrades_to_none(self):
+    def test_dangling_link_fails_closed(self):
         frappe.db.set_value(
             "POS Profile", PROFILE, "posa_capability_profile", "does-not-exist"
         )
-        # exists() is False for a deleted preset → None, no raise.
-        self.assertIsNone(vertical.resolve_capability_json(PROFILE))
+        payload = vertical.resolve_capability_json(PROFILE)
+
+        self.assertEqual(payload["resolution"]["status"], vertical.RESOLUTION_INVALID)
+        self.assertEqual(payload["capabilities"], [])
+        self.assertNotIn("pay", payload["layout"]["dock_tabs"])
+
+    def test_dangling_link_blocks_submission_contract(self):
+        frappe.db.set_value(
+            "POS Profile", PROFILE, "posa_capability_profile", "does-not-exist"
+        )
+
+        with self.assertRaises(frappe.ValidationError):
+            vertical.assert_capability_configuration(PROFILE)
 
     def test_opening_payload_returns_resolved_dict(self):
         self._make_preset()
@@ -90,6 +101,28 @@ class TestCapabilityResolution(IntegrationTestCase):
     def test_opening_payload_none_without_link(self):
         frappe.db.set_value("POS Profile", PROFILE, "posa_capability_profile", None)
         self.assertIsNone(vertical.opening_capability_payload(PROFILE))
+
+    def test_transient_failure_uses_stamped_last_known_good(self):
+        self._make_preset()
+        frappe.db.set_value("POS Profile", PROFILE, "posa_capability_profile", self.PRESET)
+        resolved = vertical.resolve_capability_json(PROFILE)
+        self.assertEqual(resolved["resolution"]["status"], vertical.RESOLUTION_RESOLVED)
+
+        original = vertical.resolve_capability_json
+        try:
+            vertical.resolve_capability_json = lambda _profile: (_ for _ in ()).throw(
+                RuntimeError("temporary resolver outage")
+            )
+            fallback = vertical.opening_capability_payload(PROFILE)
+        finally:
+            vertical.resolve_capability_json = original
+
+        self.assertEqual(
+            fallback["resolution"]["status"],
+            vertical.RESOLUTION_TEMPORARILY_UNAVAILABLE,
+        )
+        self.assertEqual(fallback["resolution"]["source"], "last_known_good")
+        self.assertIn("tab_identity", fallback["capabilities"])
 
     def test_unknown_dock_tab_rejected_at_validate(self):
         with self.assertRaises(frappe.ValidationError):
