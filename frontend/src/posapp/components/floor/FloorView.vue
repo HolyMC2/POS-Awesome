@@ -163,7 +163,12 @@
 		/>
 
 		<JumpPad v-model="jumpOpen" @open-table="openTable" @open-tab="openNamedTab" />
-		<TableActionSheet v-model="sheetOpen" :table="sheetTable" @action="onSheetAction" />
+		<TableActionSheet
+			v-model="sheetOpen"
+			:table="sheetTable"
+			@action="onSheetAction"
+			@order="openSelectedOrder"
+		/>
 	</div>
 </template>
 
@@ -375,6 +380,14 @@ async function onSheetAction(action: TableSheetAction, table: TableRow) {
 	const opened = await openTable(table, action === "view" ? "cart" : "items");
 	if (!opened) return;
 	if (action === "charge") chargeActiveOrder();
+}
+
+/** A table with split accounts never routes through openOrCreate: that server
+ * helper deliberately chooses the oldest order, while the operator has just
+ * named the exact account they mean. Hydrate and open that row directly. */
+async function openSelectedOrder(row: OrderRow) {
+	const order = await floorStore.resumeOrder(row);
+	if (order) bus.emit("floor_order_opened", { order_uid: order.order_uid });
 }
 
 /**

@@ -4,6 +4,21 @@ All notable changes.
 
 ## Unreleased
 
+- **Restaurant Wave 0 is interaction-safe and browser-certified.** Dirty free
+  tables now offer only “Mark clean”; an empty open account cannot be charged;
+  and a table with multiple accounts presents an explicit account chooser
+  instead of a misleading combined action. Choosing an account resumes that
+  exact order. The complete restaurant shell/action/exception contract is
+  mapped in `docs/RESTAURANT_UX_MAP.md`. Component coverage includes the five
+  FloorView routes and six table-sheet states, while live Playwright acceptance
+  covers the deployed lab register at desktop and 390×844 phone viewports.
+
+- **World-class POS roadmap v2.** Added the independently audited ideal-future
+  roadmap and its audit record. Delivery is dependency-ordered around bounded
+  effective configuration, artifact ownership, thin seeds, measurable
+  performance, and complete Scan Retail plus Repair Retail slices before
+  promoting restaurant from contracted beta.
+
 - **Restore `/posapp` offline reloads during backend restarts.** The web-route
   entry deleted the active POS service worker and every `posawesome-cache-*`
   cache on each boot, even though the mounted SPA immediately registered that

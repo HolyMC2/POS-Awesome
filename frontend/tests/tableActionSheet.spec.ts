@@ -73,7 +73,7 @@ const mountSheet = (tableRow: any) =>
 
 const actionIds = (wrapper: any) =>
 	wrapper
-		.findAll("[data-test^='table-sheet-']")
+		.findAll("button[data-test^='table-sheet-']")
 		.map((node: any) => node.attributes("data-test"))
 		.filter((id: string) => id !== "table-sheet-cancel");
 
@@ -108,7 +108,46 @@ describe("TableActionSheet", () => {
 	it("offers Mark clean only on a table latched dirty", () => {
 		orders.value = [];
 		expect(actionIds(mountSheet(table()))).not.toContain("table-sheet-clean");
-		expect(actionIds(mountSheet(table({ needs_cleaning: 1 })))).toContain("table-sheet-clean");
+		expect(actionIds(mountSheet(table({ needs_cleaning: 1 })))).toEqual(["table-sheet-clean"]);
+	});
+
+	it("does not offer Charge until an occupied account has a line", () => {
+		orders.value = [
+			{ order_uid: "ord-empty", total: 0, items_count: 0, unsent_count: 0, modified: "2026-08-13 11:45:00" },
+		];
+
+		expect(actionIds(mountSheet(table()))).toEqual([
+			"table-sheet-add-items",
+			"table-sheet-view",
+		]);
+	});
+
+	it("makes the operator choose a specific account when a table has split bills", async () => {
+		orders.value = [
+			{ order_uid: "ord-a", tab_name: "Familia A", total: 120, items_count: 2, unsent_count: 1, modified: "2026-08-13 11:45:00" },
+			{ order_uid: "ord-b", tab_name: "Familia B", total: 80, items_count: 1, unsent_count: 0, modified: "2026-08-13 11:50:00" },
+		];
+		const selected: any[] = [];
+		const row = table();
+		const Harness = defineComponent({
+			components: { TableActionSheet },
+			setup: () => ({ row, selected }),
+			template: `<TableActionSheet :model-value="true" :table="row"
+				@order="(order) => selected.push(order)" />`,
+		});
+		const wrapper = mount(Harness, {
+			global: { components: { VDialog: PassThrough, VCard: PassThrough, VIcon: IconStub } },
+		});
+
+		expect(actionIds(wrapper)).toEqual([
+			"table-sheet-order-ord-a",
+			"table-sheet-order-ord-b",
+		]);
+		expect(wrapper.text()).toContain("2 open accounts");
+		expect(wrapper.text()).not.toContain("$200.00");
+
+		await wrapper.find("[data-test='table-sheet-order-ord-b']").trigger("click");
+		expect(selected).toEqual([orders.value[1]]);
 	});
 
 	it("reports the picked verb with its table, then closes itself", async () => {

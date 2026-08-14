@@ -13,7 +13,26 @@
 
 			<p v-if="metaLine" class="table-sheet__meta">{{ metaLine }}</p>
 
-			<div class="table-sheet__actions">
+			<div v-if="multipleOrders" class="table-sheet__actions" data-test="table-sheet-accounts">
+				<p class="table-sheet__prompt">{{ chooseAccountLabel }}</p>
+				<button
+					v-for="order in orders"
+					:key="order.order_uid"
+					type="button"
+					class="table-sheet__action table-sheet__account"
+					:data-test="`table-sheet-order-${order.order_uid}`"
+					@click="pickOrder(order)"
+				>
+					<v-icon icon="mdi-receipt-text-outline" size="20" />
+					<span class="table-sheet__action-text">
+						<strong>{{ order.tab_name || order.order_uid.slice(0, 6) }}</strong>
+						<small>{{ orderSummary(order) }}</small>
+					</span>
+					<span v-if="order.unsent_count" class="table-sheet__action-badge">{{ order.unsent_count }}</span>
+				</button>
+			</div>
+
+			<div v-else class="table-sheet__actions">
 				<button
 					v-for="action in actions"
 					:key="action.id"
@@ -61,7 +80,7 @@ export type TableSheetAction = "open" | "view" | "add-items" | "charge" | "clean
  * picker and a tap means "move it here", so FloorPlan completes it directly.
  */
 import { computed } from "vue";
-import { useFloorStore, type TableRow } from "../../stores/floorStore";
+import { useFloorStore, type OrderRow, type TableRow } from "../../stores/floorStore";
 import { useVerticalStore } from "../../stores/verticalStore";
 import { useFormat } from "../../format";
 import { formatIdleShort, idleMinutes, useFloorClock } from "./floorClock";
@@ -74,6 +93,7 @@ const props = defineProps<{
 const emit = defineEmits<{
 	(event: "update:modelValue", value: boolean): void;
 	(event: "action", action: TableSheetAction, table: TableRow): void;
+	(event: "order", order: OrderRow): void;
 }>();
 
 const __ = window.__ || ((value: string) => value);
@@ -85,6 +105,7 @@ const { now } = useFloorClock();
 
 const orders = computed(() => (props.table ? floorStore.ordersForTable(props.table.name) : []));
 const occupied = computed(() => orders.value.length > 0);
+const multipleOrders = computed(() => orders.value.length > 1);
 const total = computed(() =>
 	orders.value.reduce((sum, order) => sum + (Number(order.total) || 0), 0),
 );
@@ -95,6 +116,7 @@ const unsent = computed(() =>
 	orders.value.reduce((sum, order) => sum + (Number(order.unsent_count) || 0), 0),
 );
 const needsCleaning = computed(() => Boolean(props.table?.needs_cleaning));
+const chooseAccountLabel = computed(() => verticalStore.t("Choose the account to open"));
 
 const stateLabel = computed(() => {
 	if (occupied.value) return verticalStore.t("Occupied");
@@ -112,6 +134,10 @@ const stateTone = computed(() => {
 /** The numbers that decide which action the operator wants, on one line. */
 const metaLine = computed(() => {
 	const parts: string[] = [];
+	if (multipleOrders.value) {
+		parts.push(`${orders.value.length} ${verticalStore.t("open accounts")}`);
+		return parts.join(" · ");
+	}
 	if (occupied.value) {
 		parts.push(formatCurrency(total.value));
 		parts.push(`${lines.value} ${verticalStore.t("Lines").toLowerCase()}`);
@@ -132,14 +158,21 @@ const metaLine = computed(() => {
  * a list whose entries are all live is faster to read than one you have to
  * scan for what is enabled.
  */
-const actions = computed(() => {
-	const rows: Array<{
-		id: TableSheetAction;
-		icon: string;
-		label: string;
-		primary?: boolean;
-		badge?: number;
-	}> = [];
+type ActionRow = {
+	id: TableSheetAction;
+	icon: string;
+	label: string;
+	primary?: boolean;
+	badge?: number;
+};
+
+const actions = computed<ActionRow[]>(() => {
+	const rows: ActionRow[] = [];
+	// A dirty free table is not seatable. Cleaning is the only honest next
+	// action; offering "Open table" as primary let staff seat it accidentally.
+	if (needsCleaning.value && !occupied.value) {
+		return [{ id: "clean", icon: "mdi-broom", label: verticalStore.t("Mark clean"), primary: true }];
+	}
 	if (occupied.value) {
 		rows.push({
 			id: "add-items",
@@ -156,7 +189,9 @@ const actions = computed(() => {
 			label: verticalStore.t("View order"),
 			badge: unsent.value || undefined,
 		});
-		rows.push({ id: "charge", icon: "mdi-cash-register", label: verticalStore.t("Charge") });
+		if (lines.value > 0) {
+			rows.push({ id: "charge", icon: "mdi-cash-register", label: verticalStore.t("Charge") });
+		}
 	} else {
 		rows.push({
 			id: "open",
@@ -165,7 +200,7 @@ const actions = computed(() => {
 			primary: true,
 		});
 	}
-	if (needsCleaning.value) {
+	if (needsCleaning.value && occupied.value) {
 		rows.push({ id: "clean", icon: "mdi-broom", label: verticalStore.t("Mark clean") });
 	}
 	return rows;
@@ -178,6 +213,16 @@ function close() {
 function pick(action: TableSheetAction) {
 	if (props.table) emit("action", action, props.table);
 	close();
+}
+
+function pickOrder(order: OrderRow) {
+	emit("order", order);
+	close();
+}
+
+function orderSummary(order: OrderRow) {
+	const count = Number(order.items_count) || 0;
+	return `${formatCurrency(Number(order.total) || 0)} · ${count} ${verticalStore.t("Lines").toLowerCase()}`;
 }
 </script>
 
@@ -251,6 +296,24 @@ function pick(action: TableSheetAction) {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
+}
+
+.table-sheet__prompt {
+	margin: 0 0 2px;
+	color: var(--pos-text-secondary);
+	font-size: 12px;
+}
+
+.table-sheet__account .table-sheet__action-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.table-sheet__account small {
+	color: var(--pos-text-secondary);
+	font-size: 11px;
+	font-weight: 500;
 }
 
 .table-sheet__action {
