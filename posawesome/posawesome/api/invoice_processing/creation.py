@@ -1862,14 +1862,15 @@ def _run_submit_hold_gates(invoice_doc, data):
     return None
 
 
-def resume_held_submission(invoice_name, doctype="Sales Invoice"):
+def resume_held_submission(invoice_name, doctype="Sales Invoice", queue_name="default"):
     """Submit a draft parked by a `posawesome_submit_hold_gates` gate.
 
     Server-side callers only (NOT whitelisted) — e.g. saldo after TAECEL
     confirms the recarga. Re-enqueues `submit_in_background_job` with the
     payment context persisted on the submission ledger at DRAFT_CREATED, so
     the resumed submit is byte-for-byte the same job the normal background
-    path would have run.
+    path would have run. Gate owners may supply their staffed, dedicated queue;
+    the default preserves compatibility for existing integrations.
     """
     docstatus = frappe.db.get_value(doctype, invoice_name, "docstatus")
     if docstatus is None:
@@ -1895,7 +1896,7 @@ def resume_held_submission(invoice_name, doctype="Sales Invoice"):
     data = _json_loads(ledger.request_data)
     enqueue(
         method=submit_in_background_job,
-        queue="default",
+        queue=queue_name or "default",
         timeout=3000,
         is_async=True,
         enqueue_after_commit=True,
