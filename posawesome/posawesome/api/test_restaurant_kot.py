@@ -396,6 +396,64 @@ class TestStationRouting(RestaurantTestCase):
         snapshot = json.loads(frappe.db.get_value("POS Table Order", order, "last_fired"))
         self.assertEqual(snapshot[line["line_uid"]]["routing"]["printer"], "KITCHEN-01")
 
+    def test_a_qty_increase_keeps_the_fired_lines_frozen_station(self):
+        # Audit r2: increase/reduce entries were built from the LIVE row,
+        # which carries no routing, so a station edit between fires re-routed
+        # the delta to a station that never saw the original ticket.
+        station = self._station("Cocina", [self.kitchen_group], printer="KITCHEN-01")
+        line = self.line(item=self.food, qty=2)
+        order = self.make_order(table=self.table_a, lines=[line])
+        kot.fire_course(order, client_request_id=uid("fire"))
+
+        frappe.db.set_value("POS Kitchen Station", station, "printer", "KITCHEN-NEW")
+        orders.update_table_order(
+            order, client_request_id=uid("tbl-req"), lines=[dict(line, qty=5)]
+        )
+
+        result = kot.fire_course(order, client_request_id=uid("fire2"))
+
+        self.assertEqual([s["printer"] for s in result["stations"]], ["KITCHEN-01"])
+        self.assertEqual(_all_lines(result["stations"])[0]["kind"], "increase")
+
+    def test_a_qty_cut_cancels_at_the_fired_lines_frozen_station(self):
+        station = self._station("Cocina", [self.kitchen_group], printer="KITCHEN-01")
+        line = self.line(item=self.food, qty=5)
+        order = self.make_order(table=self.table_a, lines=[line])
+        kot.fire_course(order, client_request_id=uid("fire"))
+
+        frappe.db.set_value("POS Kitchen Station", station, "printer", "KITCHEN-NEW")
+        orders.update_table_order(
+            order, client_request_id=uid("tbl-req"), lines=[dict(line, qty=2)]
+        )
+
+        result = kot.fire_course(order, client_request_id=uid("fire2"))
+
+        self.assertEqual([s["printer"] for s in result["cancellations"]], ["KITCHEN-01"])
+        self.assertEqual(_all_lines(result["cancellations"])[0]["kind"], "reduce")
+
+    def test_fire_batch_status_reports_the_durable_verdict(self):
+        # Audit r2 A6: "Send" must expose a delivery verdict the POS can poll.
+        self._station("Cocina", [self.kitchen_group], printer="KITCHEN-01")
+        order = self.make_order(table=self.table_a, lines=[self.line(item=self.food)])
+        result = kot.fire_course(order, client_request_id=uid("fire"))
+
+        batch_name = result["batch"]["name"]
+        verdict = kot.get_fire_batch_status(order, batch_name)
+
+        self.assertEqual(verdict["batch"], batch_name)
+        self.assertEqual(verdict["status"], "queued")
+        self.assertEqual(len(verdict["jobs"]), 1)
+        self.assertEqual(verdict["jobs"][0]["status"], "queued")
+
+    def test_fire_batch_status_refuses_another_orders_batch(self):
+        self._station("Cocina", [self.kitchen_group], printer="KITCHEN-01")
+        order_a = self.make_order(table=self.table_a, lines=[self.line(item=self.food)])
+        result = kot.fire_course(order_a, client_request_id=uid("fire"))
+        order_b = self.make_order(table=self.table_b, lines=[self.line(item=self.food)])
+
+        with self.assertRaises(frappe.PermissionError):
+            kot.get_fire_batch_status(order_b, result["batch"]["name"])
+
     def test_a_station_rejects_the_same_item_group_twice(self):
         with self.assertRaises(frappe.ValidationError):
             frappe.get_doc(

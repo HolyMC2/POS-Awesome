@@ -195,8 +195,10 @@ import TableTicketPanel from "./TableTicketPanel.vue";
 import TabsRail from "./TabsRail.vue";
 import { resolveCanvas } from "./floorGeometry";
 import { bus as importedBus } from "../../bus";
+import * as restaurantApi from "../../api/restaurant";
 import { useFloorStore, type OrderRow, type TableRow } from "../../stores/floorStore";
 import { useVerticalStore } from "../../stores/verticalStore";
+import type { KotProjection } from "../../../offline/restaurantTypes";
 
 // `__` is a global provided by the Frappe boot; `<script setup>` templates
 // cannot see app.config.globalProperties, so bind it locally.
@@ -326,10 +328,67 @@ async function fire() {
 	firing.value = true;
 	try {
 		const projection = await floorStore.fireActiveCourse();
-		if (projection) bus.emit("floor_course_fired", projection);
+		if (projection) {
+			bus.emit("floor_course_fired", projection);
+			void watchKitchenBatchVerdict(projection);
+		}
 	} finally {
 		firing.value = false;
 	}
+}
+
+const KITCHEN_VERDICT_POLL_MS = 3000;
+const KITCHEN_VERDICT_TIMEOUT_MS = 30000;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Audit r2 A6: "Send" advanced `last_fired` with no in-app delivery verdict —
+ * the ticket could die in the print queue while the waiter walked away. Poll
+ * the durable batch until the kitchen verifiably got paper, and shout when it
+ * didn't. Fire-and-forget: never blocks the register.
+ */
+async function watchKitchenBatchVerdict(projection: KotProjection) {
+	const batchName = projection.batch?.name;
+	const orderUid = projection.orderUid;
+	const printedAnything =
+		(projection.stations?.length || 0) + (projection.cancellations?.length || 0) > 0;
+	if (!batchName || !orderUid || !printedAnything) return;
+
+	const startedAt = Date.now();
+	while (Date.now() - startedAt < KITCHEN_VERDICT_TIMEOUT_MS) {
+		await sleep(KITCHEN_VERDICT_POLL_MS);
+		let verdict;
+		try {
+			verdict = await restaurantApi.getFireBatchStatus(orderUid, batchName);
+		} catch {
+			continue; // transient — keep polling until the timeout speaks
+		}
+		if (verdict.status === "unavailable") return; // no printing spine
+		if (verdict.status === "sent" || verdict.status === "confirmed") {
+			bus.emit("show_message", {
+				title: __("Comanda impresa en cocina"),
+				color: "success",
+			});
+			return;
+		}
+		if (
+			verdict.status === "failed" ||
+			verdict.status === "partial" ||
+			verdict.status === "cancelled"
+		) {
+			bus.emit("show_message", {
+				title: __("El ticket de cocina NO se imprimió completo — avisa a cocina"),
+				color: "error",
+				timeout: -1,
+			});
+			return;
+		}
+	}
+	bus.emit("show_message", {
+		title: __("El ticket de cocina sigue sin imprimirse — revisa la impresora"),
+		color: "warning",
+		timeout: -1,
+	});
 }
 
 /**

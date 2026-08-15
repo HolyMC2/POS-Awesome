@@ -187,7 +187,16 @@ def _diff(order, snapshot, course_idx):
             "notes": row.notes,
             "course_idx": row.course_idx,
         }
-        previous = flt((snapshot.get(row.line_uid) or {}).get("qty"))
+        prior = snapshot.get(row.line_uid) or {}
+        # A fired line's station is kitchen history (see _route). The live row
+        # carries no routing, so increases and reductions built from it were
+        # re-routed by the CURRENT station index — a station edit between
+        # fires sent the delta (or its void) to a station that never received
+        # the original ticket. Carry the frozen routing forward explicitly;
+        # never-fired lines have none and route fresh.
+        if prior.get("routing"):
+            as_dict["routing"] = prior["routing"]
+        previous = flt(prior.get("qty"))
         delta = flt(row.qty) - previous
         if delta > 0:
             fires.append(_entry(as_dict, delta, "new" if not previous else "increase", row.line_uid))
@@ -429,6 +438,45 @@ def void_order(order):
         (("void", stations),),
     )
     return {**projection, "batch": batch}
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_fire_batch_status(name_or_uid, batch_name):
+    """Durable delivery verdict for one kitchen batch (audit r2 A6).
+
+    "Send" must not silently advance ``last_fired`` while the ticket dies in
+    the print queue — the POS polls this after firing and tells the operator
+    whether the kitchen actually got paper. Read-only; scoped exactly like
+    ``get_fire_preview`` and pinned to the batch's own source order so a
+    register cannot read another order's print traffic.
+    """
+    frappe.has_permission("POS Table Order", "read", throw=True)
+    order = get_scoped_order(name_or_uid)
+    assert_tables_capability(order.pos_profile)
+
+    if not batch_name or not frappe.db.exists("DocType", "Doco Print Batch"):
+        return {"batch": batch_name, "status": "unavailable", "jobs": []}
+
+    row = frappe.db.get_value(
+        "Doco Print Batch",
+        batch_name,
+        ["name", "status", "source_doctype", "source_name"],
+        as_dict=True,
+    )
+    if not row or row.source_doctype != "POS Table Order" or row.source_name != order.name:
+        frappe.throw(
+            _("Print batch {0} does not belong to order {1}.").format(batch_name, order.name),
+            frappe.PermissionError,
+        )
+
+    jobs = frappe.get_all(
+        "Doco Print Job",
+        filters={"batch": row.name},
+        fields=["destination_key", "status"],
+        order_by="creation asc",
+        ignore_permissions=True,
+    )
+    return {"batch": row.name, "status": row.status, "jobs": [dict(job) for job in jobs]}
 
 
 @frappe.whitelist(methods=["GET", "POST"])

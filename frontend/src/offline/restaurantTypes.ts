@@ -188,6 +188,13 @@ export interface KotStation {
 export interface KotProjection {
 	stations: KotStation[];
 	cancellations: KotLine[];
+	/**
+	 * Durable print batch handle for the delivery-verdict poll (audit r2 A6).
+	 * Null when the printing spine is absent (legacy sites) or nothing printed.
+	 */
+	batch?: { name: string } | null;
+	/** Order the fire belongs to — the verdict poll needs a scoped ref. */
+	orderUid?: string | null;
 }
 
 export type RestaurantQueueKind =

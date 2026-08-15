@@ -102,6 +102,8 @@ const METHODS = {
 	settlementState:
 		"posawesome.posawesome.api.restaurant.settle.get_settlement_state",
 	fireCourse: "posawesome.posawesome.api.restaurant.kot.fire_course",
+	fireBatchStatus:
+		"posawesome.posawesome.api.restaurant.kot.get_fire_batch_status",
 	markTableClean: "posawesome.posawesome.api.restaurant.floors.mark_table_clean",
 } as const;
 
@@ -403,6 +405,10 @@ export async function fireCourse(
 	const projection: KotProjection = {
 		stations: result?.stations || [],
 		cancellations: result?.cancellations || [],
+		// A6: keep the durable batch handle so the caller can poll the
+		// delivery verdict instead of trusting "Send" advanced the snapshot.
+		batch: result?.batch?.name ? { name: result.batch.name } : null,
+		orderUid,
 	};
 	// The projection carries the fired line uids but not the updated order, so
 	// clear the unsent badge here or it keeps counting lines the kitchen has.
@@ -413,6 +419,23 @@ export async function fireCourse(
 		),
 	);
 	return projection;
+}
+
+/**
+ * Durable delivery verdict for a fired kitchen batch (audit r2 A6). Read-only;
+ * the backend pins the batch to its own order, so this can only see print
+ * traffic for orders this register is scoped to.
+ */
+export async function getFireBatchStatus(orderUid: string, batchName: string) {
+	const result = await callRestaurant(METHODS.fireBatchStatus, {
+		name_or_uid: orderUid,
+		batch_name: batchName,
+	});
+	return {
+		batch: (result?.batch as string) || batchName,
+		status: (result?.status as string) || "unavailable",
+		jobs: (result?.jobs as { destination_key: string; status: string }[]) || [],
+	};
 }
 
 /** ONLINE ONLY — see the module header. */
