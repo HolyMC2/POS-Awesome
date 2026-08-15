@@ -354,6 +354,37 @@ class TestWaveASecurity(IntegrationTestCase):
         self.assertEqual(row.docstatus, 1)
         self.assertEqual(row.pos_profile, PROFILE)
 
+    def test_profileless_draft_update_heals_profile_from_stored_shift(self):
+        """Audit r2 P0: the incident-class draft must also survive the NORMAL
+        client flow — the SPA saves/updates the resumed cart through
+        update_invoice before submitting. _get_mutable_invoice_doc used to
+        re-read the unhealed row and assert_profile(None)."""
+        shift = self._make_own_shift()
+        crid = self._crid("draft-heal-update")
+        payload = self._payload(crid)
+        created = creation.update_invoice(json.dumps(payload))
+        self._created.append(("Sales Invoice", created.get("name")))
+        frappe.db.set_value(
+            "Sales Invoice",
+            created.get("name"),
+            {"pos_profile": None, "is_pos": 0, "posa_pos_opening_shift": shift},
+        )
+
+        resume = dict(payload)
+        resume["name"] = created.get("name")
+        resume.pop("pos_profile", None)
+        resume.pop("posa_pos_opening_shift", None)
+
+        updated = creation.update_invoice(json.dumps(resume))
+        row = frappe.db.get_value(
+            "Sales Invoice",
+            updated.get("name") or created.get("name"),
+            ["docstatus", "pos_profile"],
+            as_dict=True,
+        )
+        self.assertEqual(row.docstatus, 0)
+        self.assertEqual(row.pos_profile, PROFILE)
+
     def test_profileless_named_draft_without_stored_shift_still_refused(self):
         """A normal Desk draft must not become recoverable merely by name."""
         crid = self._crid("draft-no-shift")

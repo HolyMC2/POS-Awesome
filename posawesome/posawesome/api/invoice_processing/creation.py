@@ -838,6 +838,26 @@ def _get_mutable_invoice_doc(data, doctype):
 
         session_user = frappe.session.user
         fetched_profile = invoice_doc.get("pos_profile")
+        if not fetched_profile:
+            # A draft persisted without its profile (is_pos=0 save,
+            # ACC-SINV-2026-02847 class) must stay recoverable on the normal
+            # update path, not just direct submit. Follow the row's OWN
+            # opening shift — a server-owned link — before falling back to
+            # the request's already-derived profile, which is accepted only
+            # when its company matches the stored row.
+            stored_shift = invoice_doc.get("posa_pos_opening_shift")
+            if stored_shift:
+                fetched_profile = frappe.db.get_value(
+                    "POS Opening Shift", stored_shift, "pos_profile"
+                )
+            if not fetched_profile:
+                candidate = (data or {}).get("pos_profile")
+                if candidate and frappe.db.get_value(
+                    "POS Profile", candidate, "company"
+                ) == invoice_doc.get("company"):
+                    fetched_profile = candidate
+            if fetched_profile:
+                invoice_doc.pos_profile = fetched_profile
         assert_profile(session_user, fetched_profile)
         assert_company(session_user, invoice_doc.get("company"))
 
