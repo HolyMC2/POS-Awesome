@@ -1,4 +1,9 @@
 const DEFAULT_INDEXED_DB_NAMES = ["posawesome_offline"];
+// IndexedDB databases that hold unsynced financial work (the write queue /
+// offline sales). Never deleted unless the caller explicitly opts in via
+// allowTransactionalDeletion — otherwise a cache-clear would erase the last
+// local copy of collected money.
+const TRANSACTIONAL_INDEXED_DB_NAMES = ["posawesome_offline"];
 const POSAWESOME_CACHE_PREFIX = "posawesome-cache-";
 
 async function delay(ms: number) {
@@ -43,7 +48,10 @@ export async function clearSessionStorage(keys: string[] = []) {
 	}
 }
 
-export async function clearIndexedDB(databases: string[] = []) {
+export async function clearIndexedDB(
+	databases: string[] = [],
+	allowTransactionalDeletion = false,
+) {
 	if (typeof indexedDB === "undefined") return;
 	try {
 		let targets = Array.isArray(databases) ? [...databases] : [];
@@ -64,6 +72,22 @@ export async function clearIndexedDB(databases: string[] = []) {
 		}
 
 		targets = Array.from(new Set(targets.filter(Boolean)));
+
+		// Safety net: the transactional offline DB holds unsynced sales.
+		// Skip it unless the caller explicitly authorizes its deletion, so a
+		// stray cache-clear (e.g. the Ctrl+Shift+R shortcut) cannot erase
+		// collected-but-unsynced money.
+		if (!allowTransactionalDeletion) {
+			const protectedSet = new Set(TRANSACTIONAL_INDEXED_DB_NAMES);
+			const skipped = targets.filter((name) => protectedSet.has(name));
+			if (skipped.length) {
+				console.warn(
+					"[ClearAllCaches] Preserving transactional IndexedDB",
+					skipped,
+				);
+			}
+			targets = targets.filter((name) => !protectedSet.has(name));
+		}
 
 		await Promise.all(
 			targets.map(
@@ -244,6 +268,10 @@ type ClearAllCachesOptions = {
 	skipStorage?: string[];
 	skipServiceWorkers?: boolean;
 	serviceWorkerScopes?: string[];
+	// Opt-in to deleting the transactional offline DB (unsynced sales).
+	// Defaults to false; only a guarded flow that has confirmed there is no
+	// pending financial work should set it true.
+	allowTransactionalDeletion?: boolean;
 };
 
 export async function clearAllCaches(options: ClearAllCachesOptions = {}) {
@@ -258,6 +286,7 @@ export async function clearAllCaches(options: ClearAllCachesOptions = {}) {
 			skipStorage: [],
 			skipServiceWorkers: false,
 			serviceWorkerScopes: [],
+			allowTransactionalDeletion: false,
 		},
 		options || {},
 	);
@@ -283,7 +312,12 @@ export async function clearAllCaches(options: ClearAllCachesOptions = {}) {
 			tasks.push(clearSessionStorage(opts.specificKeys));
 		}
 		if (!opts.skipStorage.includes("indexedDB")) {
-			tasks.push(clearIndexedDB(opts.specificDatabases));
+			tasks.push(
+				clearIndexedDB(
+					opts.specificDatabases,
+					opts.allowTransactionalDeletion,
+				),
+			);
 		}
 		if (!opts.skipStorage.includes("caches")) {
 			tasks.push(clearCacheAPI(opts.specificCaches));
