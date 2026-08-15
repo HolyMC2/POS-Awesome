@@ -50,7 +50,11 @@ def _load_tickets(capabilities, user_roles):
     frappe_utils.nowdate = lambda: ""
 
     vertical = types.ModuleType("posawesome.posawesome.api.vertical")
-    vertical.resolve_capability_json = lambda profile: {"capabilities": list(capabilities)}
+    # _tickets consumes the shift-aware resolver (F1 next-shift activation);
+    # stubbing it flat keeps these tests about the role-suffix semantics.
+    vertical.shift_effective_capability_payload = lambda profile, user=None: {
+        "capabilities": list(capabilities)
+    }
 
     for pkg in ("posawesome", "posawesome.posawesome", "posawesome.posawesome.api",
                 "posawesome.posawesome.api.restaurant"):

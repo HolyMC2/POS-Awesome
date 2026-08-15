@@ -22,7 +22,7 @@ from frappe import _
 from frappe.utils import cint
 
 from posawesome.posawesome.api._scope import assert_company, assert_profile
-from posawesome.posawesome.api.vertical import resolve_capability_json
+from posawesome.posawesome.api.vertical import shift_effective_capability_payload
 
 CHARGE_REQUEST_DOCTYPE = "POS Charge Request"
 CHARGE_REQUEST_CAPABILITY = "external_document_checkout"
@@ -40,7 +40,9 @@ def _capability_enabled(pos_profile: str) -> bool:
     preset or role lookup just means "not enabled".
     """
     try:
-        payload = resolve_capability_json(pos_profile) or {}
+        # Shift-aware (roadmap F1): an open shift resolves from its stamped
+        # contract (next-shift activation); the kill switch subtracts live.
+        payload = shift_effective_capability_payload(pos_profile) or {}
         capabilities = payload.get("capabilities") or []
         user_roles = None
         for entry in capabilities:

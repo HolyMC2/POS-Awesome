@@ -277,9 +277,19 @@ def update_opening_shift_data(data, pos_profile):
     # payload (plan C7) — the whole payload is snapshotted offline, so this
     # survives cold boot with no field on the profile doc. None → the SPA
     # uses its retail-phones default.
-    from posawesome.posawesome.api.vertical import opening_capability_payload
+    #
+    # Shift-aware (roadmap F1): resuming an OPEN shift serves that shift's
+    # stamped contract, so the SPA and the server gates agree mid-shift even
+    # after a preset edit; a fresh open resolves live (== its own stamp).
+    from posawesome.posawesome.api.vertical import shift_effective_capability_payload
 
-    data["capability_profile"] = opening_capability_payload(pos_profile)
+    shift = data.get("pos_opening_shift")
+    shift_user = (
+        shift.get("user") if isinstance(shift, dict) else getattr(shift, "user", None)
+    ) or frappe.session.user
+    data["capability_profile"] = shift_effective_capability_payload(
+        pos_profile, user=shift_user
+    )
     if data["pos_profile"].get("posa_language"):
         frappe.local.lang = data["pos_profile"].posa_language
     data["company"] = frappe.get_doc("Company", data["pos_profile"].company)

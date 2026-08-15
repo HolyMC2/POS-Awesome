@@ -28,9 +28,12 @@ def order_line_total(order) -> float:
 
 
 def _tips_capability_enabled(pos_profile: str) -> bool:
-    from posawesome.posawesome.api.vertical import resolve_capability_json
+    # Shift-aware (roadmap F1): an open shift resolves from its stamped
+    # contract, so a mid-shift preset edit cannot flip tip acceptance; the
+    # emergency kill switch still removes it immediately.
+    from posawesome.posawesome.api.vertical import shift_effective_capability_payload
 
-    payload = resolve_capability_json(pos_profile) or {}
+    payload = shift_effective_capability_payload(pos_profile) or {}
     return "tips" in (payload.get("capabilities") or [])
 
 

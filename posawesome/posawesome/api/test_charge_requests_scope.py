@@ -125,7 +125,9 @@ def _import_charge_requests(scenario=None):
     sys.modules["posawesome.posawesome.api._scope"] = scope_module
 
     vertical_module = types.ModuleType("posawesome.posawesome.api.vertical")
-    vertical_module.resolve_capability_json = lambda _profile: {
+    # charge_requests consumes the shift-aware resolver (F1 next-shift
+    # activation); the stub stays flat — these tests are about role/scope.
+    vertical_module.shift_effective_capability_payload = lambda _profile, user=None: {
         "capabilities": scenario["capabilities"]
     }
     sys.modules["posawesome.posawesome.api.vertical"] = vertical_module

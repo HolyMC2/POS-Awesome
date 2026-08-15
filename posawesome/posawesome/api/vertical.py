@@ -160,6 +160,83 @@ def assert_capability_configuration(pos_profile_name):
         )
 
 
+def _disabled_capabilities():
+    """Tenant-level emergency kill switch (roadmap §3 / §9.3).
+
+    ``site_config posa_disabled_capabilities: "tables, tips"`` removes a
+    dangerous optional capability IMMEDIATELY — the one sanctioned exception
+    to next-shift activation. Base token names; a role-suffixed entry in a
+    preset is matched by its base name.
+    """
+    raw = frappe.conf.get("posa_disabled_capabilities") or ""
+    return {
+        part.strip().partition(":")[0].strip()
+        for part in str(raw).split(",")
+        if part.strip()
+    }
+
+
+def _subtract_disabled(payload):
+    disabled = _disabled_capabilities()
+    if not disabled or not isinstance(payload, dict):
+        return payload
+    capabilities = payload.get("capabilities") or []
+    kept = [
+        entry
+        for entry in capabilities
+        if str(entry).partition(":")[0].strip() not in disabled
+    ]
+    if len(kept) == len(capabilities):
+        return payload
+    trimmed = copy.deepcopy(payload)
+    trimmed["capabilities"] = kept
+    trimmed.setdefault("resolution", {})["disabled_capabilities"] = sorted(disabled)
+    return trimmed
+
+
+def shift_effective_capability_payload(pos_profile_name, user=None):
+    """The contract in force for the acting user's register.
+
+    Next-shift activation (roadmap F1 / §3): while a user has an OPEN shift on
+    the profile, capability checks and the SPA resume path resolve from that
+    shift's immutable stamp — a preset edit mid-shift changes nothing until
+    the next opening. Without an open shift (fresh open, supervisor acting
+    shiftless, pre-stamp rows) resolution is live. The emergency kill switch
+    subtracts in both cases. An unconfigured stamp resolves to None, matching
+    live resolution's legacy-fallback semantics.
+    """
+    if not pos_profile_name:
+        return None
+    user = user or frappe.session.user
+    stamped = None
+    if frappe.db.has_column("POS Opening Shift", "posa_effective_contract"):
+        raw = frappe.db.get_value(
+            "POS Opening Shift",
+            {
+                "user": user,
+                "pos_profile": pos_profile_name,
+                "docstatus": 1,
+                "status": "Open",
+                "pos_closing_shift": ["is", "not set"],
+            },
+            "posa_effective_contract",
+            order_by="period_start_date desc",
+        )
+        if raw:
+            try:
+                parsed = json.loads(raw)
+            except (TypeError, ValueError):
+                parsed = None
+            if isinstance(parsed, dict):
+                stamped = parsed
+    if stamped is not None:
+        status = (stamped.get("resolution") or {}).get("status")
+        if status == RESOLUTION_UNCONFIGURED:
+            return None
+        return _subtract_disabled(stamped)
+    return _subtract_disabled(opening_capability_payload(pos_profile_name))
+
+
 def effective_contract_stamp(pos_profile_name):
     """Immutable stamp of the contract a shift opens under (roadmap F1
     "version/stamp effective contract at shift open").
@@ -168,9 +245,10 @@ def effective_contract_stamp(pos_profile_name):
     register stamps an explicit marker rather than nothing, so "opened with no
     contract" and "predates stamping" stay distinguishable in the audit trail.
     Tolerant like ``opening_capability_payload`` — stamping must never take
-    down shift opening.
+    down shift opening. The emergency kill switch is applied before stamping,
+    so a shift opened while a capability is disabled records the truth.
     """
-    payload = opening_capability_payload(pos_profile_name)
+    payload = _subtract_disabled(opening_capability_payload(pos_profile_name))
     if payload is None:
         payload = {
             "name": None,
@@ -189,6 +267,8 @@ def effective_contract_stamp(pos_profile_name):
 def get_capability_json(pos_profile):
     """Direct fetch for the SPA when it needs the payload outside the opening
     flow (profile switch mid-session). Read-only, permission-checked by the
-    POS Profile read the caller already holds."""
+    POS Profile read the caller already holds. Shift-aware: a mid-session
+    refetch while the caller's shift is open returns the stamped contract the
+    server gates enforce, not a preset edited after opening."""
     frappe.has_permission("POS Profile", "read", pos_profile, throw=True)
-    return opening_capability_payload(pos_profile)
+    return shift_effective_capability_payload(pos_profile)

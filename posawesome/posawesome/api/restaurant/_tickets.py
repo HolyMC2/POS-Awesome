@@ -59,11 +59,16 @@ def assert_tables_capability(pos_profile):
     on a ``tables:Restaurant Manager`` register could open/settle tables and
     fire KOTs). Mirrors ``_capability_enabled`` in ``charge_requests.py``.
     """
-    from posawesome.posawesome.api.vertical import resolve_capability_json
+    # Shift-aware (roadmap F1 next-shift activation): while the acting user
+    # has an open shift, the token set comes from that shift's immutable
+    # stamp, so a preset edit mid-shift neither grants nor strips table
+    # service until the next opening; the emergency kill switch still
+    # subtracts immediately.
+    from posawesome.posawesome.api.vertical import shift_effective_capability_payload
 
     if not pos_profile:
         frappe.throw(_("POS profile is required."), frappe.PermissionError)
-    payload = resolve_capability_json(pos_profile) or {}
+    payload = shift_effective_capability_payload(pos_profile) or {}
     capabilities = payload.get("capabilities") or []
     user_roles = None
     for entry in capabilities:
