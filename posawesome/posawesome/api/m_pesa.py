@@ -4,6 +4,7 @@
 from __future__ import unicode_literals
 import frappe, requests
 from frappe import _
+from frappe.utils import cint
 from requests.auth import HTTPBasicAuth
 import json
 
@@ -76,6 +77,15 @@ def validation(**kwargs):
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_mpesa_mode_of_payment(company):
+    # Silent empty on sites that never opted into M-Pesa: the SPA calls
+    # this on every payment-screen load and swallows errors, so a throw
+    # would only produce server-side 403 spam — but the data must not
+    # leak either. Company scope binds the read on opted-in sites.
+    if not frappe.conf.get("posa_mpesa_enabled"):
+        return []
+    from posawesome.posawesome.api._scope import assert_company
+
+    assert_company(frappe.session.user, company)
     modes = frappe.get_all(
         "Mpesa C2B Register URL",
         filters={"company": company, "register_status": "Success"},
@@ -96,6 +106,16 @@ def get_mpesa_draft_payments(
     full_name=None,
     payment_methods_list=None,
 ):
+    # Audit r2 P0: `company` was passed straight to get_all — any
+    # authenticated user could enumerate another company's draft M-Pesa
+    # receipts (names, amounts, MSISDNs). Same silent-empty kill-switch
+    # as get_mpesa_mode_of_payment; company scope binds opted-in reads.
+    if not frappe.conf.get("posa_mpesa_enabled"):
+        return []
+    from posawesome.posawesome.api._scope import assert_company
+
+    assert_company(frappe.session.user, company)
+
     filters = {"company": company, "docstatus": 0}
     if mode_of_payment:
         filters["mode_of_payment"] = mode_of_payment
@@ -126,8 +146,38 @@ def get_mpesa_draft_payments(
 
 
 @frappe.whitelist(methods=["POST"])
-def submit_mpesa_payment(mpesa_payment, customer):
+def submit_mpesa_payment(mpesa_payment, customer, expected_company=None):
+    """Bind a draft M-Pesa receipt to a customer and mint its Payment Entry.
+
+    Audit r2 P0: this used to load ANY named register row, overwrite its
+    customer with a caller-chosen value and submit — cross-company deposit
+    capture. Mutations refuse loudly (no silent-empty here): the register
+    must be a draft in a company the session user is scoped to, and the
+    customer must exist. ``expected_company`` lets the POS payment
+    processor additionally pin the row to the active profile's company; a
+    client-supplied value can only narrow, never widen, the check.
+    ``doc.submit()`` still enforces the doctype's own write/submit
+    permissions — this guard runs before any mutation.
+    """
+    _assert_mpesa_enabled()
+    from posawesome.posawesome.api._scope import assert_company
+
     doc = frappe.get_doc("Mpesa Payment Register", mpesa_payment)
+    if cint(doc.docstatus) != 0:
+        frappe.throw(
+            _("M-Pesa payment {0} is not a draft.").format(mpesa_payment),
+            frappe.ValidationError,
+        )
+    assert_company(frappe.session.user, doc.company)
+    if expected_company and doc.company != expected_company:
+        frappe.throw(
+            _("M-Pesa payment {0} does not belong to company {1}.").format(
+                mpesa_payment, expected_company
+            ),
+            frappe.PermissionError,
+        )
+    if not customer or not frappe.db.exists("Customer", customer):
+        frappe.throw(_("Customer {0} not found.").format(customer))
     doc.customer = customer
     doc.submit_payment = 1
     doc.submit()

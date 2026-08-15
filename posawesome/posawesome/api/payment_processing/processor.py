@@ -532,7 +532,9 @@ def process_pos_payment(payload):
     ):
         for mpesa_payment in pending_mpesa_payments:
             try:
-                new_mpesa_payment = submit_mpesa_payment(mpesa_payment.get("name"), customer)
+                new_mpesa_payment = submit_mpesa_payment(
+                    mpesa_payment.get("name"), customer, expected_company=company
+                )
                 new_payments_entry.append(new_mpesa_payment)
                 all_payments_entry.append(new_mpesa_payment)
             except Exception as e:
