@@ -164,24 +164,31 @@ def resolve_target_account(payload, profile_doc, movement_type):
         return account, account
 
     if movement_type == "Deposit":
-        configured_default = profile_doc.get("posa_back_office_cash_account")
-        payload_account = payload.get("target_account") or payload.get("back_office_cash_account")
-
-        if configured_default:
-            if payload_account and payload_account != configured_default:
-                frappe.throw(_("Back Office Cash Account is fixed by POS Profile and cannot be overridden."))
-            account = configured_default
-        else:
-            account = payload_account
-
-        if not account:
-            frappe.throw(_("Back Office Cash Account is required for cash deposit."))
-        account_type = frappe.db.get_value("Account", account, "account_type")
-        if account_type != "Cash":
-            frappe.throw(_("Back Office Cash Account must be a Cash account."))
-        return account, None
+        return resolve_back_office_account(payload, profile_doc), None
 
     frappe.throw(_("Invalid movement type."))
+
+
+def resolve_back_office_account(payload, profile_doc):
+    """Back-office cash account rule shared by Deposit (target side) and
+    Cash In (source side): fixed by profile when configured, must be Cash."""
+    payload = payload or {}
+    configured_default = profile_doc.get("posa_back_office_cash_account")
+    payload_account = payload.get("target_account") or payload.get("back_office_cash_account")
+
+    if configured_default:
+        if payload_account and payload_account != configured_default:
+            frappe.throw(_("Back Office Cash Account is fixed by POS Profile and cannot be overridden."))
+        account = configured_default
+    else:
+        account = payload_account
+
+    if not account:
+        frappe.throw(_("Back Office Cash Account is required for this movement."))
+    account_type = frappe.db.get_value("Account", account, "account_type")
+    if account_type != "Cash":
+        frappe.throw(_("Back Office Cash Account must be a Cash account."))
+    return account
 
 
 def validate_account_company(account, company, label):

@@ -2,6 +2,7 @@ import frappe
 from frappe.utils import flt, json
 from collections import defaultdict
 from frappe import _
+from posawesome.posawesome.api.cash_movement.flow import drawer_delta
 from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.utils import get_base_value
 from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.data import (
     get_pos_invoices,
@@ -78,6 +79,7 @@ def get_closing_shift_overview(pos_opening_shift):
     total_change_totals_by_currency = {}
     cash_movement_count = 0
     cash_movement_company_currency_total = 0
+    cash_movement_drawer_delta = 0
     cash_movement_totals_by_type = {}
     cash_movement_totals_by_currency = {}
 
@@ -560,6 +562,7 @@ def get_closing_shift_overview(pos_opening_shift):
             continue
         cash_movement_count += 1
         cash_movement_company_currency_total += movement_amount
+        cash_movement_drawer_delta += drawer_delta(movement.get("movement_type"), movement_amount)
 
         movement_type = movement.get("movement_type") or "Unknown"
         type_row = cash_movement_totals_by_type.setdefault(
@@ -593,7 +596,7 @@ def get_closing_shift_overview(pos_opening_shift):
                 if base_overpayment_change:
                     row["company_currency_total"] -= flt(base_overpayment_change)
 
-        if cash_movement_company_currency_total:
+        if cash_movement_drawer_delta:
             cash_key = (cash_mode_of_payment, company_currency)
             cash_row = payments_by_mode.setdefault(
                 cash_key,
@@ -605,8 +608,9 @@ def get_closing_shift_overview(pos_opening_shift):
                     "exchange_rates": set(),
                 },
             )
-            cash_row["total"] -= flt(cash_movement_company_currency_total)
-            cash_row["company_currency_total"] -= flt(cash_movement_company_currency_total)
+            # Signed: Expense/Deposit remove drawer cash, Cash In adds.
+            cash_row["total"] += flt(cash_movement_drawer_delta)
+            cash_row["company_currency_total"] += flt(cash_movement_drawer_delta)
 
     cash_expected_totals = []
     cash_expected_company_currency_total = 0
@@ -743,6 +747,7 @@ def get_closing_shift_overview(pos_opening_shift):
         "cash_movements": {
             "count": cash_movement_count,
             "company_currency_total": flt(cash_movement_company_currency_total),
+            "drawer_delta_company_currency_total": flt(cash_movement_drawer_delta),
             "by_currency": prepare_currency_rows(cash_movement_totals_by_currency),
             "by_type": prepare_movement_type_rows(cash_movement_totals_by_type),
         },

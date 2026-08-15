@@ -81,7 +81,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Movement Type",
-   "options": "Expense\nDeposit",
+   "options": "Expense\nDeposit\nCash In",
    "reqd": 1
   },
   {

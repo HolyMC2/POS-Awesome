@@ -17,6 +17,7 @@ from .validation import (
     get_opening_shift,
     get_pos_profile,
     parse_payload,
+    resolve_back_office_account,
     resolve_source_cash_account,
     resolve_target_account,
     validate_account_company,
@@ -55,14 +56,23 @@ def _create_cash_movement(payload, movement_type):
     if existing:
         return existing.as_dict()
 
-    source_account = resolve_source_cash_account(data, profile_doc)
-    target_account, expense_account = resolve_target_account(data, profile_doc, movement_type)
+    if movement_type == "Cash In":
+        # Payload keys are role-based (source_account = drawer side,
+        # target_account = back-office side) so the UI form stays identical
+        # across types. The DOCUMENT stores flow direction: money moves
+        # source -> target, and for Cash In the drawer is the destination.
+        drawer_account = resolve_source_cash_account(data, profile_doc)
+        source_account = resolve_back_office_account(data, profile_doc)
+        target_account, expense_account = drawer_account, None
+    else:
+        source_account = resolve_source_cash_account(data, profile_doc)
+        target_account, expense_account = resolve_target_account(data, profile_doc, movement_type)
 
     validate_account_company(source_account, profile_doc.company, _("Source account"))
     validate_account_company(target_account, profile_doc.company, _("Target account"))
 
-    if movement_type == "Deposit" and source_account == target_account:
-        frappe.throw(_("Source and target accounts cannot be the same for cash deposit."))
+    if movement_type in {"Deposit", "Cash In"} and source_account == target_account:
+        frappe.throw(_("Source and target accounts cannot be the same for this movement."))
 
     movement_doc = frappe.get_doc(
         {
@@ -145,6 +155,11 @@ def create_cash_deposit(payload):
     return _create_cash_movement(payload, "Deposit")
 
 
+@frappe.whitelist(methods=["POST"])
+def create_cash_in(payload):
+    return _create_cash_movement(payload, "Cash In")
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def get_shift_cash_movements(
     pos_opening_shift,
@@ -224,6 +239,12 @@ def duplicate_cash_movement(name, posting_date=None):
 
     if movement_doc.movement_type == "Expense":
         payload["expense_account"] = movement_doc.expense_account
+    elif movement_doc.movement_type == "Cash In":
+        # Stored flow is back-office (source) -> drawer (target); the create
+        # payload is role-based, so map back: drawer -> source_account key,
+        # back-office -> target_account key.
+        payload["source_account"] = movement_doc.target_account
+        payload["target_account"] = movement_doc.source_account
     else:
         payload["target_account"] = movement_doc.target_account
 

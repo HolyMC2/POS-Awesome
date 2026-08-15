@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, json
 from posawesome.posawesome.api._scope import assert_company, assert_profile
+from posawesome.posawesome.api.cash_movement.flow import drawer_delta
 from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.utils import get_base_value
 from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.data import (
     get_pos_invoices,
@@ -219,20 +220,23 @@ def compute_closing_tables(opening_shift, doctype=None):
     cash_movements = frappe.get_all(
         "POS Cash Movement",
         filters={"pos_opening_shift": opening_shift.get("name"), "docstatus": 1},
-        fields=["amount"],
+        fields=["movement_type", "amount"],
     )
-    cash_movement_total = sum(flt(row.get("amount")) for row in cash_movements)
-    if cash_movement_total:
+    # Signed: Expense/Deposit remove drawer cash, Cash In (change fund) adds.
+    cash_movement_delta = sum(
+        drawer_delta(row.get("movement_type"), row.get("amount")) for row in cash_movements
+    )
+    if cash_movement_delta:
         existing_cash = [pay for pay in payments if pay.mode_of_payment == cash_mode_of_payment]
         if existing_cash:
-            existing_cash[0].expected_amount -= cash_movement_total
+            existing_cash[0].expected_amount += cash_movement_delta
         else:
             payments.append(
                 frappe._dict(
                     {
                         "mode_of_payment": cash_mode_of_payment,
                         "opening_amount": 0,
-                        "expected_amount": -cash_movement_total,
+                        "expected_amount": cash_movement_delta,
                     }
                 )
             )

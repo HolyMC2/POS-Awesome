@@ -19,7 +19,9 @@ def create_journal_entry(
 
     movement_type = (movement_type or "").strip()
     # "Transfer" = POS Safe Transfer (safe -> bank), same debit/credit shape.
-    if movement_type not in {"Expense", "Deposit", "Transfer"}:
+    # "Cash In" reuses the same shape with the drawer as TARGET
+    # (back-office cash -> drawer), so no direction special-case is needed.
+    if movement_type not in {"Expense", "Deposit", "Cash In", "Transfer"}:
         frappe.throw(_("Invalid movement type for journal entry."))
 
     company_cost_center = cost_center or frappe.get_cached_value("Company", company, "cost_center")

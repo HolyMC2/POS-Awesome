@@ -44,7 +44,11 @@ class TestClosingShiftCashMovementIntegration(unittest.TestCase):
         mock_get_payments_entries.return_value = []
         mock_frappe.get_cached_value.return_value = "USD"
         mock_frappe.get_value.return_value = "Cash"
-        mock_frappe.get_all.return_value = [{"amount": 20}]
+        # Expense removes drawer cash, Cash In (change fund) adds it back.
+        mock_frappe.get_all.return_value = [
+            {"movement_type": "Expense", "amount": 20},
+            {"movement_type": "Cash In", "amount": 5},
+        ]
         mock_frappe.utils.get_datetime.return_value = "2026-02-11 10:00:00"
         closing_doc = DummyClosingShift()
         mock_frappe.new_doc.return_value = closing_doc
@@ -68,7 +72,8 @@ class TestClosingShiftCashMovementIntegration(unittest.TestCase):
         row = payment_rows[0]
         self.assertEqual(row.mode_of_payment, "Cash")
         self.assertEqual(row.opening_amount, 50)
-        self.assertEqual(row.expected_amount, 30)
+        # 50 opening - 20 expense + 5 cash in
+        self.assertEqual(row.expected_amount, 35)
 
     @patch("posawesome.posawesome.doctype.pos_closing_shift.closing_processing.overview.get_payments_entries")
     @patch("posawesome.posawesome.doctype.pos_closing_shift.closing_processing.overview.get_pos_invoices")
@@ -94,16 +99,21 @@ class TestClosingShiftCashMovementIntegration(unittest.TestCase):
         mock_frappe.get_all.return_value = [
             {"movement_type": "Expense", "amount": 35},
             {"movement_type": "Deposit", "amount": 15},
+            {"movement_type": "Cash In", "amount": 20},
         ]
 
         result = overview.get_closing_shift_overview("POS-OPEN-1")
 
-        self.assertEqual(result["cash_movements"]["count"], 2)
-        self.assertEqual(result["cash_movements"]["company_currency_total"], 50)
-        self.assertEqual(result["cash_expected"]["company_currency_total"], -50)
+        self.assertEqual(result["cash_movements"]["count"], 3)
+        # Gross magnitude moved stays unsigned; the signed drawer effect is
+        # its own field and drives expected cash: -35 - 15 + 20 = -30.
+        self.assertEqual(result["cash_movements"]["company_currency_total"], 70)
+        self.assertEqual(result["cash_movements"]["drawer_delta_company_currency_total"], -30)
+        self.assertEqual(result["cash_expected"]["company_currency_total"], -30)
         by_type = {row["movement_type"]: row["total"] for row in result["cash_movements"]["by_type"]}
         self.assertEqual(by_type["Expense"], 35)
         self.assertEqual(by_type["Deposit"], 15)
+        self.assertEqual(by_type["Cash In"], 20)
 
 
 if __name__ == "__main__":

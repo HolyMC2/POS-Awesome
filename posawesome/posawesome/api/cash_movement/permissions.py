@@ -17,6 +17,12 @@ def ensure_movement_allowed(profile_doc, movement_type):
         frappe.throw(_("POS Expense is disabled for this POS Profile."))
     if movement_type == "Deposit" and not profile_doc.get("posa_allow_cash_deposit"):
         frappe.throw(_("Cash Deposit is disabled for this POS Profile."))
+    # Cash In (change fund) rides the deposit flag on purpose: both move
+    # money between the drawer and the back-office cash account, so they
+    # share one trust domain — and POS Profile already has 117 fields
+    # (docs/LEGACY-FIELD-INVENTORY.md), so no new flag.
+    if movement_type == "Cash In" and not profile_doc.get("posa_allow_cash_deposit"):
+        frappe.throw(_("Cash In is disabled for this POS Profile."))
 
 
 def ensure_cancel_allowed(profile_doc):

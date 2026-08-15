@@ -86,8 +86,8 @@ class POSCashMovement(Document):
 
     def _validate_movement_type_rules(self):
         movement_type = (self.movement_type or "").strip()
-        if movement_type not in {"Expense", "Deposit"}:
-            frappe.throw(_("Movement Type must be Expense or Deposit."))
+        if movement_type not in {"Expense", "Deposit", "Cash In"}:
+            frappe.throw(_("Movement Type must be Expense, Deposit or Cash In."))
 
         if movement_type == "Expense":
             if not self.expense_account:
@@ -95,5 +95,11 @@ class POSCashMovement(Document):
             if self.expense_account != self.target_account:
                 frappe.throw(_("Expense target account must match Expense Account."))
 
-        if movement_type == "Deposit" and self.source_account == self.target_account:
-            frappe.throw(_("Source and target accounts cannot be the same for cash deposit."))
+        if movement_type in {"Deposit", "Cash In"} and self.source_account == self.target_account:
+            frappe.throw(_("Source and target accounts cannot be the same for this movement."))
+
+        # Money always flows source -> target (JE debits target, credits
+        # source). For Cash In the drawer is the TARGET, so an expense
+        # account here would mean the movement was built wrong.
+        if movement_type == "Cash In" and self.expense_account:
+            frappe.throw(_("Expense Account must be empty for Cash In entries."))
