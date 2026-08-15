@@ -117,6 +117,56 @@ class TestStaleShiftDemoBypass(IntegrationTestCase):
         with _DemoConfPatch(1):
             shifts.assert_shift_not_stale(name)  # must not throw
 
+    def test_closed_shift_rejected_for_held_resume_acting_user(self):
+        """Audit r2 P0: a held/resumed background submit reaches the real
+        submit under a worker session, not the cashier. Binding ownership to
+        the parked sale's owner (acting_user) must still reject a shift that
+        closed while the sale sat parked — a corte the sale would corrupt."""
+        name = self._make_shift(status="Closed")
+        with _DemoConfPatch(0):
+            self.assertRaises(
+                frappe.ValidationError,
+                lambda: shifts.assert_shift_not_stale(
+                    name, acting_user=frappe.session.user
+                ),
+            )
+
+    def test_foreign_shift_rejected_for_worker_but_bound_to_acting_owner(self):
+        """The worker session differs from the cashier; the ownership bind
+        must compare against acting_user, not the session. A same-day open
+        shift owned by the acting user passes; a stub foreign owner fails."""
+        name = self._make_shift(days_old=0, status="Open")
+        with _DemoConfPatch(0):
+            # acting user IS the owner → passes even though a worker session
+            # would differ in production.
+            shifts.assert_shift_not_stale(name, acting_user=frappe.session.user)
+            self.assertRaises(
+                frappe.PermissionError,
+                lambda: shifts.assert_shift_not_stale(
+                    name, acting_user="not-the-owner@example.com"
+                ),
+            )
+
+    def test_closing_replay_flag_bypasses_gate_for_this_shift_only(self):
+        """The delegated-close printed-draft replay marks the shift being
+        closed so assert_shift_not_stale skips the owner/stale/closed gates
+        for that server-only flush — bound to the shift name, so an unrelated
+        stale shift is still gated."""
+        closing = self._make_shift(status="Closed")
+        other = self._make_shift(status="Closed")
+        prev = frappe.flags.get("posa_closing_replay_shift")
+        frappe.flags.posa_closing_replay_shift = closing
+        try:
+            with _DemoConfPatch(0):
+                shifts.assert_shift_not_stale(closing)  # flagged shift: skipped
+                self.assertRaises(
+                    frappe.ValidationError,
+                    shifts.assert_shift_not_stale,
+                    other,  # different shift: still gated
+                )
+        finally:
+            frappe.flags.posa_closing_replay_shift = prev
+
     def test_rate_band_gate_skipped_on_demo_site(self):
         # An offer-discounted line (rate < Item Price) on a no-rate-edit
         # profile: blocked for real tenants, allowed on a demo.

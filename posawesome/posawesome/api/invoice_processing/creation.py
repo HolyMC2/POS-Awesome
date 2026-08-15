@@ -2002,6 +2002,33 @@ def submit_in_background_job(kwargs):
         if hasattr(invoice_doc, "validate_credit_limit"):
             invoice_doc.validate_credit_limit()
 
+        # A held/resumed submit (Saldo hold-until-confirm) reaches its ACTUAL
+        # submit here without re-passing submit_invoice's foreground gates. The
+        # shift may have closed since the hold (posting into a reconciled corte)
+        # and a Desk edit to the parked draft could have moved rate/discount
+        # past the caps (update_invoice omits the rate guard by design). Mirror
+        # the foreground submit gates so the money moment is guarded regardless
+        # of how long the sale sat parked. The worker session is not the
+        # cashier, so bind shift ownership to the user who parked the sale
+        # (routed on the ledger).
+        from posawesome.posawesome.api.shifts import assert_shift_not_stale
+
+        assert_shift_not_stale(
+            invoice_doc.get("posa_pos_opening_shift"), acting_user=user
+        )
+        profile_for_caps = (
+            frappe.get_cached_doc("POS Profile", invoice_doc.get("pos_profile"))
+            if invoice_doc.get("pos_profile")
+            else None
+        )
+        from posawesome.posawesome.api._reprice import (
+            assert_rates_within_band,
+            enforce_discount_limit,
+        )
+
+        enforce_discount_limit(invoice_doc, profile_for_caps)
+        assert_rates_within_band(invoice_doc, profile_for_caps)
+
         invoice_doc.remarks = _build_invoice_remarks(invoice_doc)
 
         _apply_write_off_settings(invoice_doc, data)

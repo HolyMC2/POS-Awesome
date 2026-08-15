@@ -186,7 +186,7 @@ def _profile_force_close_stale_shift(pos_profile):
     )
 
 
-def assert_shift_not_stale(pos_opening_shift):
+def assert_shift_not_stale(pos_opening_shift, acting_user=None):
     """Backstop for the stale-shift gate at invoice-submit time.
 
     The SPA routes stale shifts into the closing flow at boot; this stops
@@ -198,10 +198,16 @@ def assert_shift_not_stale(pos_opening_shift):
     corte, not another's. Demo tenants skip the whole gate (ownership +
     stale/closed-state): there a dead-lettered sale is worse than a corte
     mismatch the nightly golden restore wipes anyway (see is_demo_pos_site).
+
+    ``acting_user`` names the cashier the sale belongs to when the caller is
+    not the seller — a background/held-resume worker session is not the
+    cashier, so the ownership bind must compare against the parked sale's
+    owner, not the worker. Defaults to the session user.
     """
 
     if not pos_opening_shift:
         return
+    acting_user = acting_user or frappe.session.user
     # Internal delegated-close replay (submit_printed_invoices): a shift's own
     # printed drafts are being flushed INTO the shift being closed. The caller
     # already passed get_scoped_opening_shift (owner or closing supervisor) and
@@ -223,7 +229,7 @@ def assert_shift_not_stale(pos_opening_shift):
     # demo shift owned by a different user must not reject the shared seller.
     if is_demo_pos_site():
         return
-    if row.user != frappe.session.user:
+    if row.user != acting_user:
         frappe.throw(
             _("POS Opening Shift {0} belongs to another user.").format(pos_opening_shift),
             frappe.PermissionError,
