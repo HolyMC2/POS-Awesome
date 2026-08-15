@@ -1039,6 +1039,20 @@ export default {
 	border: 1px solid rgb(var(--v-theme-surface));
 }
 
+/* The dot IS its background — without these modifier fills it renders as an
+   invisible 9px ring (audit r2 A8). Theme tokens keep both modes honest. */
+.print-health-dot--ok {
+	background-color: rgb(var(--v-theme-success));
+}
+
+.print-health-dot--warn {
+	background-color: rgb(var(--v-theme-warning));
+}
+
+.print-health-dot--fail {
+	background-color: rgb(var(--v-theme-error));
+}
+
 /* Elite Menu Button - Refined Navbar Integration */
 .menu-btn-compact {
 	margin-left: 8px;
