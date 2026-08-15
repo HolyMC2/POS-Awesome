@@ -33,6 +33,17 @@ export async function printInvoiceByName(
 	});
 	const printFormat = preference.print_format || "Standard";
 	const letterHead = preference.letterhead || 0;
+	// Audit r2 A9: an explicit no_letterhead in the resolved preference must
+	// win — it used to be re-derived from letterhead truthiness alone, so a
+	// preference of "letterhead configured but suppressed" was ignored.
+	const noLetterhead =
+		preference.no_letterhead != null
+			? preference.no_letterhead
+				? 1
+				: 0
+			: letterHead
+				? 0
+				: 1;
 	const debugPrint = isDebugPrintEnabled();
 	const useSilentPrint = preference.backend === "browser_qz" ||
 		(!preference.backend && !!profile.posa_silent_print);
@@ -45,8 +56,8 @@ export async function printInvoiceByName(
 		"&trigger_print=1&format=" +
 		encodeURIComponent(printFormat) +
 		"&no_letterhead=" +
-		(letterHead ? "0" : "1");
-	if (letterHead) url += "&letterhead=" + encodeURIComponent(letterHead);
+		(noLetterhead ? "1" : "0");
+	if (letterHead && !noLetterhead) url += "&letterhead=" + encodeURIComponent(letterHead);
 	url = appendDebugPrintParam(url, debugPrint);
 	const printOptions = {
 		allowOfflineFallback: isOffline(),
@@ -59,10 +70,11 @@ export async function printInvoiceByName(
 				doctype,
 				name,
 				printFormat,
-				letterhead: letterHead || null,
-				noLetterhead: letterHead ? "0" : "1",
+				letterhead: noLetterhead ? null : letterHead || null,
+				noLetterhead: noLetterhead ? "1" : "0",
 				printerName: preference.printer_name || undefined,
 				widthMm: Number(preference.paper_width_mm || 80),
+				copies: Number(preference.copies) || undefined,
 			});
 			return;
 		} catch (error) {

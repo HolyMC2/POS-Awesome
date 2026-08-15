@@ -117,6 +117,9 @@ export type QzCertStatus = "unknown" | "trusted" | "untrusted";
 export interface QzPrintHtmlOptions {
 	printerName?: string;
 	widthMm?: number;
+	// Copies from the resolved print preference (doco get_my_preference).
+	// QZ handles duplication at the spooler; undefined/1 prints once.
+	copies?: number;
 	orientation?: "portrait" | "landscape";
 	// Rasterizer interpolation. Default `nearest-neighbor` causes
 	// banding on 203 DPI thermal printers when HTML rasterizes at
@@ -859,6 +862,10 @@ export async function printHtmlViaQz(html: string, options: QzPrintHtmlOptions =
 		colorType: "grayscale",
 		interpolation: options.interpolation || "nearest-neighbor",
 	};
+	const copies = Math.floor(Number(options.copies) || 0);
+	if (copies > 1) {
+		configOptions.copies = copies;
+	}
 	if (options.density !== undefined && options.density !== null && options.density !== "") {
 		configOptions.density = options.density;
 	}

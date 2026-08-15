@@ -35,6 +35,8 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 		letterhead: any;
 		noLetterhead: any;
 		printerName?: string;
+		widthMm?: number;
+		copies?: number;
 	}) => {
 		const { printDocumentViaQz } = await import("../../../services/qzTray");
 		return printDocumentViaQz(printOptions);
@@ -136,7 +138,14 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 			no_letterhead: context.letter_head ? 0 : 1,
 		});
 		const print_format = preference.print_format || "Standard";
-		const letter_head = preference.no_letterhead ? 1 : (preference.letterhead ? 0 : context.letter_head);
+		// Audit r2 A9: honor the resolved preference's no_letterhead as the
+		// switch and its letterhead as the value — the old expression mixed
+		// the two (a letterhead NAME could end up as the no_letterhead url
+		// param, and the QZ path below printed a suppressed letterhead).
+		const no_letterhead = preference.no_letterhead ? 1 : 0;
+		const active_letterhead = no_letterhead
+			? ""
+			: preference.letterhead || context.letter_head || "";
 
 		if (!docname && !offline) {
 			throw new Error("Cannot print document without a submitted document name");
@@ -154,7 +163,10 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 			"&format=" +
 			encodeURIComponent(print_format || "Standard") +
 			"&no_letterhead=" +
-			letter_head;
+			no_letterhead;
+		if (active_letterhead) {
+			url += "&letterhead=" + encodeURIComponent(active_letterhead);
+		}
 
 		url = appendDebugPrintParam(url, debugPrint);
 
@@ -216,9 +228,11 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 						doctype,
 						name: docname,
 						printFormat: print_format || "Standard",
-						letterhead: preference.letterhead || profile.letter_head || null,
-						noLetterhead: letter_head,
+						letterhead: active_letterhead || null,
+						noLetterhead: no_letterhead ? "1" : "0",
 						printerName: preference.printer_name || undefined,
+						widthMm: Number(preference.paper_width_mm || 80),
+						copies: Number(preference.copies) || undefined,
 					});
 					return;
 				} catch (error) {
