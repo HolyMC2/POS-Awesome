@@ -203,6 +203,7 @@ class TelemetrySummaryOrderTests(unittest.TestCase):
                          limit_page_length=None, **kw):
             self._captured["order_by"] = order_by
             self._captured["limit"] = limit_page_length
+            self._captured["filters"] = filters
             return list(self._rows)
 
         telemetry.frappe.get_all = fake_get_all
@@ -236,6 +237,23 @@ class TelemetrySummaryOrderTests(unittest.TestCase):
         self.assertEqual(
             res2["events"]["rum:inp"]["last_seen"], "2026-06-20 12:00:00.000000"
         )
+
+    def test_events_filter_json_list_and_comma_string(self):
+        telemetry.get_pos_telemetry_summary(events='["rum:inp","rum:lcp"]')
+        self.assertEqual(
+            self._captured["filters"]["event_name"], ["in", ["rum:inp", "rum:lcp"]]
+        )
+        telemetry.get_pos_telemetry_summary(events="rum:inp, rum:lcp")
+        self.assertEqual(
+            self._captured["filters"]["event_name"], ["in", ["rum:inp", "rum:lcp"]]
+        )
+        telemetry.get_pos_telemetry_summary(events=["rum:inp"])
+        self.assertEqual(self._captured["filters"]["event_name"], ["in", ["rum:inp"]])
+
+    def test_events_filter_empty_or_blank_is_ignored(self):
+        for value in (None, "", [], ["", "  "]):
+            telemetry.get_pos_telemetry_summary(events=value)
+            self.assertNotIn("event_name", self._captured["filters"], repr(value))
 
     def test_aggregation_is_order_independent(self):
         asc = telemetry.get_pos_telemetry_summary()["events"]["rum:inp"]

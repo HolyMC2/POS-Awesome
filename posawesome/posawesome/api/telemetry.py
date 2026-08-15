@@ -321,6 +321,7 @@ def get_pos_telemetry_summary(
     terminal: Optional[str] = None,
     limit: int = 50000,
     newest: Any = False,
+    events: Any = None,
 ):
     """Aggregate telemetry rows for the dashboard.
 
@@ -355,6 +356,21 @@ def get_pos_telemetry_summary(
         filters["terminal"] = terminal
     if since:
         filters["event_timestamp"] = [">", since]
+
+    # Optional event-name filter (JSON list or comma-separated string).
+    # The benchmark baseline recorder uses this: a manifest's ~20 events
+    # over a 7-day window fit the row cap easily, while an unfiltered
+    # 7-day fetch on a busy tenant would blow straight through it.
+    if events:
+        if isinstance(events, str):
+            try:
+                parsed = json.loads(events)
+            except Exception:
+                parsed = [part.strip() for part in events.split(",")]
+            events = parsed
+        event_names = [str(name) for name in events if str(name).strip()]
+        if event_names:
+            filters["event_name"] = ["in", event_names]
 
     limit = max(1000, min(int(limit or 50000), 200000))
 

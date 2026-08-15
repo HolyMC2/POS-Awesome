@@ -1,0 +1,111 @@
+{
+  "manifest_id": "counter-standard",
+  "manifest_sha256": "bdaedbc46bf006d16a41dd3d07ca9e3d521aa5b6d047084e0c0ecaecde397422",
+  "evidence_class": "observation",
+  "captured_at": "2026-08-15T15:43:26-07:00",
+  "site": "ventas.docomexico.com",
+  "via": "prod",
+  "window": {
+    "since": "2026-08-08",
+    "profile": null,
+    "terminal": null,
+    "order": "desc",
+    "limit": 50000,
+    "row_count": 50000,
+    "truncated": true
+  },
+  "app": {
+    "local_git_sha": "7d1e0cce57a3da8d9af08bba5ea7de82b2344d12"
+  },
+  "dataset": {
+    "items": 7148,
+    "customers": 946
+  },
+  "bundle": {
+    "js_bytes": 15723225,
+    "css_bytes": 665170,
+    "dist": "posawesome/public/dist"
+  },
+  "events": {
+    "perf:api.invoices.submit_invoice.ok": {
+      "count": 17,
+      "p50": 1199.4,
+      "p95": 2958.7,
+      "p99": 3375.98,
+      "max": 3480.3,
+      "last_seen": "2026-08-15 20:10:24.530000"
+    },
+    "perf:api.invoices.update_invoice.ok": {
+      "count": 20,
+      "p50": 1094.0,
+      "p95": 1888.505,
+      "p99": 2107.461,
+      "max": 2162.2,
+      "last_seen": "2026-08-15 20:10:19.409000"
+    },
+    "perf:api.items.get_items.ok": {
+      "count": 79,
+      "p50": 443.2,
+      "p95": 1108.54,
+      "p99": 1446.534,
+      "max": 1773.9,
+      "last_seen": "2026-08-15 22:21:47.865000"
+    },
+    "perf:pos:add-item": {
+      "count": 26,
+      "p50": 27.05,
+      "p95": 163.175,
+      "p99": 234.45,
+      "max": 256.3,
+      "last_seen": "2026-08-15 20:10:17.336000"
+    },
+    "perf:qz_send_ms": {
+      "count": 22,
+      "p50": 1585.0,
+      "p95": 1855.9,
+      "p99": 2027.69,
+      "max": 2072.0,
+      "last_seen": "2026-08-15 22:14:45.356000"
+    },
+    "rum:fcp": {
+      "count": 14,
+      "p50": 756.0,
+      "p95": 1421.0,
+      "p99": 1577.0,
+      "max": 1616.0,
+      "last_seen": "2026-08-15 22:21:44.884000"
+    },
+    "rum:heap_used_mb": {
+      "count": 984,
+      "p50": 34.0,
+      "p95": 39.0,
+      "p99": 42.0,
+      "max": 78.0,
+      "last_seen": "2026-08-15 22:42:14.876000"
+    },
+    "rum:inp": {
+      "count": 45063,
+      "p50": 72.0,
+      "p95": 112.0,
+      "p99": 144.0,
+      "max": 664.0,
+      "last_seen": "2026-08-15 22:35:28.087000"
+    },
+    "rum:lcp": {
+      "count": 30,
+      "p50": 1610.0,
+      "p95": 3405.4,
+      "p99": 3903.92,
+      "max": 3948.0,
+      "last_seen": "2026-08-15 22:21:44.884000"
+    }
+  },
+  "gaps": [
+    "cold_launch_shell",
+    "scan_to_cart",
+    "local_search",
+    "cart_recalc",
+    "payment_screen_open",
+    "durable_queue_acceptance"
+  ]
+}

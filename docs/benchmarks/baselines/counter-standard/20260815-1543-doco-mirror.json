@@ -1,0 +1,104 @@
+{
+  "manifest_id": "counter-standard",
+  "manifest_sha256": "bdaedbc46bf006d16a41dd3d07ca9e3d521aa5b6d047084e0c0ecaecde397422",
+  "evidence_class": "observation",
+  "captured_at": "2026-08-15T15:43:38-07:00",
+  "site": "doco-mirror.lab.xoloitzcuintles.com",
+  "via": "lab",
+  "window": {
+    "since": "2026-08-08",
+    "profile": null,
+    "terminal": null,
+    "order": "desc",
+    "limit": 50000,
+    "row_count": 5205,
+    "truncated": false
+  },
+  "app": {
+    "local_git_sha": "7d1e0cce57a3da8d9af08bba5ea7de82b2344d12"
+  },
+  "dataset": {
+    "items": 16679,
+    "customers": 3174
+  },
+  "bundle": {
+    "js_bytes": 15723225,
+    "css_bytes": 665170,
+    "dist": "posawesome/public/dist"
+  },
+  "events": {
+    "perf:api.invoices.submit_invoice.ok": {
+      "count": 5,
+      "p50": 304.0,
+      "p95": 1209.12,
+      "p99": 1385.424,
+      "max": 1429.5,
+      "last_seen": "2026-08-11 12:01:15.278000"
+    },
+    "perf:api.invoices.update_invoice.ok": {
+      "count": 21,
+      "p50": 526.0,
+      "p95": 1983.8,
+      "p99": 1995.64,
+      "max": 1998.6,
+      "last_seen": "2026-08-11 12:01:01.322000"
+    },
+    "perf:api.items.get_items.ok": {
+      "count": 126,
+      "p50": 139.2,
+      "p95": 12410.25,
+      "p99": 17258.775,
+      "max": 18526.4,
+      "last_seen": "2026-08-14 03:19:09.271000"
+    },
+    "perf:pos:add-item": {
+      "count": 21,
+      "p50": 60.2,
+      "p95": 98.4,
+      "p99": 114.96,
+      "max": 119.1,
+      "last_seen": "2026-08-11 12:00:54.470000"
+    },
+    "rum:fcp": {
+      "count": 65,
+      "p50": 504.0,
+      "p95": 1283.2,
+      "p99": 1766.88,
+      "max": 2092.0,
+      "last_seen": "2026-08-14 03:18:58.222000"
+    },
+    "rum:heap_used_mb": {
+      "count": 3656,
+      "p50": 38.0,
+      "p95": 45.0,
+      "p99": 48.0,
+      "max": 75.0,
+      "last_seen": "2026-08-14 03:15:17.408000"
+    },
+    "rum:inp": {
+      "count": 1134,
+      "p50": 80.0,
+      "p95": 544.0,
+      "p99": 3840.0,
+      "max": 3840.0,
+      "last_seen": "2026-08-13 22:32:37.792000"
+    },
+    "rum:lcp": {
+      "count": 177,
+      "p50": 1624.0,
+      "p95": 12519.2,
+      "p99": 35368.8,
+      "max": 44068.0,
+      "last_seen": "2026-08-14 03:18:58.222000"
+    }
+  },
+  "gaps": [
+    "cold_launch_shell",
+    "scan_to_cart",
+    "local_search",
+    "cart_recalc",
+    "payment_screen_open",
+    "durable_queue_acceptance",
+    "receipt_to_qz"
+  ]
+}

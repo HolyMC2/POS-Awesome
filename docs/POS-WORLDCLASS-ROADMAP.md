@@ -871,6 +871,20 @@ the shift overview now fold movements with sign
 (`cash_movement.flow.drawer_delta`). Live-drilled on doco-mirror: JE
 direction, journal-entry link, cancel reversal and closing math verified.
 
+Update (2026-08-15): **named benchmark manifests established** — closes the
+Foundation 0 performance-baseline leftover. [`benchmarks/`](benchmarks/README.md)
+carries the three §6 profile manifests (§6 table rows mapped to live RUM/perf
+telemetry event names with targets and hard ceilings), a baseline recorder
+(lab/prod, dataset + app + bundle context, manifest-sha stamped) and a
+regression gate (fails on p95 regression vs blessed baseline; ceilings report,
+`--strict-ceilings` promotes). First prod observation recorded: warm launch
+p95 3.4 s vs 1.5 s target, get_items round-trip p95 1.1 s vs 250 ms target,
+INP healthy. Captures stay *observations* until reference hardware is pinned
+(Marco) and shaping applied. Six instrumentation gaps are named in the README
+(launch split, payment-screen mark, queue-acceptance latency, `__PROF__`-gated
+marks, floor action, add-item p99). The telemetry summary API gained an
+`events` filter so 7-day windows fit the row cap for low-traffic money paths.
+
 - Complete scan/search/cart/payment/print/next-sale task path.
 - Cover the universal lifecycle: suspend/recall, discounts/promotions, tender,
   submit, receipt, return/refund and drawer/shift reconciliation.
