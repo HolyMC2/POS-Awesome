@@ -99,7 +99,7 @@
 					:disabled="submitting || !enabled"
 				/>
 			</v-col>
-			<v-col cols="12" md="4" v-if="movementType === 'Deposit'">
+			<v-col cols="12" md="4" v-if="movementType === 'Deposit' || movementType === 'Cash In'">
 				<v-autocomplete
 					v-model="targetAccount"
 					:items="targetAccountOptions"
@@ -118,6 +118,8 @@
 							: __('Back Office Cash Account (Optional Override)')
 					"
 					:disabled="submitting || !enabled || targetAccountLocked"
+					:hint="movementType === 'Cash In' ? __('Cash In moves money from this account into the register drawer.') : ''"
+					:persistent-hint="movementType === 'Cash In'"
 				/>
 			</v-col>
 			<v-col cols="12">
@@ -148,6 +150,15 @@
 				>
 					{{ __("Submit Deposit") }}
 				</v-btn>
+				<v-btn
+					color="secondary"
+					variant="tonal"
+					:disabled="submitting || !enabled || !allowDeposit || movementType !== 'Cash In'"
+					:loading="submitting && movementType === 'Cash In'"
+					@click="onSubmit('Cash In')"
+				>
+					{{ __("Submit Cash In") }}
+				</v-btn>
 			</v-col>
 		</v-row>
 	</v-card>
@@ -156,7 +167,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
-type MovementType = "Expense" | "Deposit";
+type MovementType = "Expense" | "Deposit" | "Cash In";
 type AccountSearchType = "expense" | "cash";
 
 const __ = window.__ || ((text: string, _args?: any[]) => text);
@@ -214,6 +225,9 @@ const movementTypes = computed(() => {
 	}
 	if (allowDeposit.value) {
 		types.push({ title: __("Deposit"), value: "Deposit" });
+		// Cash In (change fund into the drawer) shares the deposit flag:
+		// same drawer <-> back-office trust domain, opposite direction.
+		types.push({ title: __("Cash In (Change Fund)"), value: "Cash In" });
 	}
 	return types;
 });

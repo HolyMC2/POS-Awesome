@@ -37,6 +37,44 @@ describe("cash movement validation", () => {
 		expect(result.errors).toContain("Remarks are required.");
 	});
 
+	it("accepts valid cash in payload and gates it on the deposit flag", () => {
+		const { validate } = useCashMovementValidation();
+		const context = {
+			enable_cash_movement: true,
+			allow_cash_deposit: true,
+			back_office_cash_account: "Back Office Cash - MC",
+		};
+
+		const ok = validate({
+			movementType: "Cash In",
+			amount: 900,
+			remarks: "cambio para ventas",
+			context,
+			targetAccount: "",
+		});
+		expect(ok.valid).toBe(true);
+
+		const gated = validate({
+			movementType: "Cash In",
+			amount: 900,
+			remarks: "cambio",
+			context: { ...context, allow_cash_deposit: false },
+			targetAccount: "",
+		});
+		expect(gated.valid).toBe(false);
+		expect(gated.errors).toContain("Cash Deposit is disabled for this POS Profile.");
+
+		const noAccount = validate({
+			movementType: "Cash In",
+			amount: 900,
+			remarks: "cambio",
+			context: { ...context, back_office_cash_account: "" },
+			targetAccount: "",
+		});
+		expect(noAccount.valid).toBe(false);
+		expect(noAccount.errors).toContain("Back office cash account is required.");
+	});
+
 	it("accepts valid deposit payload", () => {
 		const { validate } = useCashMovementValidation();
 		const result = validate({
@@ -64,9 +102,11 @@ describe("cash movement service methods", () => {
 		call.mockResolvedValueOnce({ ok: 1 });
 		call.mockResolvedValueOnce({ ok: 1 });
 		call.mockResolvedValueOnce({ ok: 1 });
+		call.mockResolvedValueOnce({ ok: 1 });
 
 		await cashMovementService.createExpense({ amount: 50 });
 		await cashMovementService.createDeposit({ amount: 75 });
+		await cashMovementService.createCashIn({ amount: 900 });
 		await cashMovementService.cancel("POS-CM-.26.-00001");
 		await cashMovementService.duplicate("POS-CM-.26.-00001", "2026-02-17");
 
@@ -82,11 +122,16 @@ describe("cash movement service methods", () => {
 		);
 		expect(call).toHaveBeenNthCalledWith(
 			3,
+			"posawesome.posawesome.api.cash_movement.service.create_cash_in",
+			{ payload: { amount: 900 } },
+		);
+		expect(call).toHaveBeenNthCalledWith(
+			4,
 			"posawesome.posawesome.api.cash_movement.service.cancel_cash_movement",
 			{ name: "POS-CM-.26.-00001" },
 		);
 		expect(call).toHaveBeenNthCalledWith(
-			4,
+			5,
 			"posawesome.posawesome.api.cash_movement.service.duplicate_cash_movement",
 			{ name: "POS-CM-.26.-00001", posting_date: "2026-02-17" },
 		);

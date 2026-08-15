@@ -170,6 +170,7 @@ const statusFilters = [
 const movementTypeFilters = [
 	{ title: __("Expense"), value: "Expense" },
 	{ title: __("Deposit"), value: "Deposit" },
+	{ title: __("Cash In (Change Fund)"), value: "Cash In" },
 	{ title: __("All"), value: "" },
 ];
 

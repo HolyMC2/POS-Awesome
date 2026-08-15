@@ -51,7 +51,7 @@ export function useCashMovement() {
 	}
 
 	async function submitMovement(args: {
-		movementType: "Expense" | "Deposit";
+		movementType: "Expense" | "Deposit" | "Cash In";
 		amount: number;
 		againstName?: string;
 		postingDate?: string;
@@ -93,6 +93,9 @@ export function useCashMovement() {
 
 			if (args.movementType === "Expense") {
 				return await cashMovementService.createExpense(payload);
+			}
+			if (args.movementType === "Cash In") {
+				return await cashMovementService.createCashIn(payload);
 			}
 			return await cashMovementService.createDeposit(payload);
 		} finally {

@@ -18,7 +18,7 @@ export function useCashMovementValidation() {
 			errors.push(__("Cash movement is disabled for this POS Profile."));
 		}
 
-		if (!movementType || !["Expense", "Deposit"].includes(movementType)) {
+		if (!movementType || !["Expense", "Deposit", "Cash In"].includes(movementType)) {
 			errors.push(__("Please select a valid movement type."));
 		}
 
@@ -26,7 +26,8 @@ export function useCashMovementValidation() {
 			errors.push(__("POS Expense is disabled for this POS Profile."));
 		}
 
-		if (movementType === "Deposit" && !args.context?.allow_cash_deposit) {
+		// Cash In shares the deposit flag: same drawer <-> back-office domain.
+		if (["Deposit", "Cash In"].includes(movementType) && !args.context?.allow_cash_deposit) {
 			errors.push(__("Cash Deposit is disabled for this POS Profile."));
 		}
 
@@ -47,7 +48,10 @@ export function useCashMovementValidation() {
 			errors.push(__("Expense account is required."));
 		}
 
-		if (movementType === "Deposit" && !(args.targetAccount || args.context?.back_office_cash_account)) {
+		if (
+			["Deposit", "Cash In"].includes(movementType) &&
+			!(args.targetAccount || args.context?.back_office_cash_account)
+		) {
 			errors.push(__("Back office cash account is required."));
 		}
 

@@ -59,6 +59,28 @@ describe("offline cash movements", () => {
 		expect(getPendingOfflineCashMovementCount()).toBe(0);
 	});
 
+	it("routes queued cash in movements to the create_cash_in method", async () => {
+		await saveOfflineCashMovement({
+			args: {
+				payload: {
+					movement_type: "Cash In",
+					amount: 900,
+					client_request_id: "cm-cashin-1",
+				},
+			},
+		});
+		(globalThis as any).frappe.call.mockResolvedValue({ message: { ok: 1 } });
+
+		const result = await syncOfflineCashMovements();
+
+		expect(result).toEqual({ pending: 0, synced: 1 });
+		expect((globalThis as any).frappe.call).toHaveBeenCalledWith(
+			expect.objectContaining({
+				method: "posawesome.posawesome.api.cash_movement.service.create_cash_in",
+			}),
+		);
+	});
+
 	it("does not sync while offline", async () => {
 		memory.manual_offline = true;
 		await saveOfflineCashMovement({

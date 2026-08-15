@@ -18,6 +18,10 @@ const cashMovementService = {
 		return api.call(`${baseMethod}.create_cash_deposit`, { payload });
 	},
 
+	createCashIn(payload: Record<string, any>) {
+		return api.call(`${baseMethod}.create_cash_in`, { payload });
+	},
+
 	getShiftMovements(args: {
 		pos_opening_shift: string;
 		movement_type?: string;

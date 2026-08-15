@@ -141,7 +141,8 @@ async function handleSubmit(payload: any) {
 	try {
 		if (
 			(payload.movementType === "Expense" && !context.value?.allow_pos_expense) ||
-			(payload.movementType === "Deposit" && !context.value?.allow_cash_deposit)
+			(["Deposit", "Cash In"].includes(payload.movementType) &&
+				!context.value?.allow_cash_deposit)
 		) {
 			throw new Error(__("Selected movement type is not allowed by POS Profile."));
 		}
@@ -164,7 +165,9 @@ async function handleSubmit(payload: any) {
 			const method =
 				payload.movementType === "Deposit"
 					? "posawesome.posawesome.api.cash_movement.service.create_cash_deposit"
-					: "posawesome.posawesome.api.cash_movement.service.create_pos_expense";
+					: payload.movementType === "Cash In"
+						? "posawesome.posawesome.api.cash_movement.service.create_cash_in"
+						: "posawesome.posawesome.api.cash_movement.service.create_pos_expense";
 			await saveOfflineCashMovement({
 				method,
 				args: {

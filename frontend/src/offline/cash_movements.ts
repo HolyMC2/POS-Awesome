@@ -19,6 +19,8 @@ const CREATE_EXPENSE_METHOD =
 	"posawesome.posawesome.api.cash_movement.service.create_pos_expense";
 const CREATE_DEPOSIT_METHOD =
 	"posawesome.posawesome.api.cash_movement.service.create_cash_deposit";
+const CREATE_CASH_IN_METHOD =
+	"posawesome.posawesome.api.cash_movement.service.create_cash_in";
 
 export async function saveOfflineCashMovement(entry: AnyRecord) {
 	let cleanEntry;
@@ -55,9 +57,13 @@ function resolveMethod(entry: AnyRecord) {
 	const movementType = String(
 		entry?.payload?.movement_type || entry?.args?.payload?.movement_type || "",
 	).toLowerCase();
-	return movementType === "deposit"
-		? CREATE_DEPOSIT_METHOD
-		: CREATE_EXPENSE_METHOD;
+	if (movementType === "deposit") {
+		return CREATE_DEPOSIT_METHOD;
+	}
+	if (movementType === "cash in") {
+		return CREATE_CASH_IN_METHOD;
+	}
+	return CREATE_EXPENSE_METHOD;
 }
 
 function resolveArgs(entry: AnyRecord) {
