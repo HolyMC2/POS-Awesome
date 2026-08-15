@@ -71,14 +71,14 @@
 						     cash was collected but NO invoice exists. Loudest
 						     section, first. -->
 						<v-alert
-							v-if="deadLetterRows.length"
+							v-if="deadLetterRows.length || writeQueueDeadLetterRows.length"
 							type="error"
 							variant="tonal"
 							class="mb-6"
 							density="comfortable"
 						>
 							<div class="text-subtitle-1 font-weight-bold mb-2">
-								{{ __("Sin sincronizar — atención") }} ({{ deadLetterRows.length }})
+								{{ __("Sin sincronizar — atención") }} ({{ deadLetterRows.length + writeQueueDeadLetterRows.length }})
 							</div>
 							<div class="text-body-2 mb-3">
 								{{ __("Estas ventas cobradas NO tienen factura registrada. Reintenta; si vuelve a fallar, exporta el JSON y llama al administrador.") }}
@@ -113,6 +113,49 @@
 									size="small"
 									variant="tonal"
 									@click="exportDeadLetter(row)"
+								>
+									{{ __("Exportar JSON") }}
+								</v-btn>
+							</div>
+							<!-- Live write_queue dead-letters (audit r2 A2): the
+							     badge counts these, so they must be listed and
+							     retryable here — before this block they had no
+							     surface at all. -->
+							<div
+								v-for="row in writeQueueDeadLetterRows"
+								:key="`wq-${row.queue_id}`"
+								class="d-flex align-center flex-wrap mb-2"
+								style="gap: 8px"
+							>
+								<span class="text-caption font-weight-bold text-uppercase">
+									{{ writeQueueEntityLabel(row) }}
+								</span>
+								<span class="font-weight-medium">
+									{{ writeQueueRowCustomer(row) || __("Cliente") }}
+								</span>
+								<span v-if="writeQueueRowAmount(row) !== null">
+									{{ currencySymbol(row.invoice?.currency) }} {{ formatCurrency(writeQueueRowAmount(row)) }}
+								</span>
+								<span class="text-caption text-medium-emphasis">
+									{{ row.created_at }} · {{ __("intentos") }}: {{ row.retry_count }}
+								</span>
+								<span v-if="row.last_error" class="text-caption text-error" style="max-width: 420px">
+									{{ String(row.last_error).slice(0, 160) }}
+								</span>
+								<v-spacer />
+								<v-btn
+									size="small"
+									color="primary"
+									variant="tonal"
+									:loading="writeQueueDeadLetterBusy === row.queue_id"
+									@click="retryWriteQueueDeadLetter(row)"
+								>
+									{{ __("Reintentar") }}
+								</v-btn>
+								<v-btn
+									size="small"
+									variant="tonal"
+									@click="exportWriteQueueDeadLetter(row)"
 								>
 									{{ __("Exportar JSON") }}
 								</v-btn>
@@ -252,7 +295,7 @@
 										color="error"
 										size="small"
 										variant="text"
-										@click="removeInvoice(index)"
+										@click="askRemoveInvoice(index)"
 										class="delete-btn"
 										:aria-label="__('Delete offline invoice')"
 									>
@@ -302,13 +345,50 @@
 						</v-btn>
 					</div>
 				</v-card-actions>
+
+				<v-dialog v-model="confirmDeleteDialog" max-width="480" persistent>
+					<v-card>
+						<v-card-title class="text-h6">
+							{{ __("¿Eliminar venta sin sincronizar?") }}
+						</v-card-title>
+						<v-card-text>
+							<div class="mb-2">
+								{{ __("Esta venta NO se ha enviado al servidor. Si la eliminas, se pierde para siempre — no quedará factura ni registro.") }}
+							</div>
+							<div v-if="pendingDeleteInvoice" class="font-weight-medium">
+								{{
+									pendingDeleteInvoice.invoice?.customer_name ||
+									pendingDeleteInvoice.invoice?.customer ||
+									__("Cliente")
+								}}
+								·
+								{{ currencySymbol(pendingDeleteInvoice.invoice?.currency) }}
+								{{
+									formatCurrency(
+										pendingDeleteInvoice.invoice?.grand_total ||
+											pendingDeleteInvoice.invoice?.rounded_total,
+									)
+								}}
+							</div>
+						</v-card-text>
+						<v-card-actions>
+							<v-spacer />
+							<v-btn variant="text" @click="cancelRemoveInvoice">
+								{{ __("Cancelar") }}
+							</v-btn>
+							<v-btn color="error" variant="elevated" @click="confirmRemoveInvoice">
+								{{ __("Eliminar definitivamente") }}
+							</v-btn>
+						</v-card-actions>
+					</v-card>
+				</v-dialog>
 			</v-card>
 		</v-dialog>
 	</v-row>
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { formatUtils } from "../format";
 import {
 	getOfflineInvoices,
@@ -316,6 +396,7 @@ import {
 	getPendingOfflineInvoiceCount,
 	getDeadLetterRows,
 	exportDeadLetterEntry,
+	getWriteQueueDeadLetterRows,
 	getWriteQueueDraftReviewRows,
 } from "../../offline/index";
 import { useSyncStore } from "../stores/syncStore";
@@ -341,8 +422,47 @@ const dialog = ref(props.modelValue);
 const invoices = ref([]);
 const deadLetterRows = ref([]);
 const deadLetterBusy = ref("");
+// Live write_queue dead-letters (invoice/payment/cash) — the badge counts
+// them, so the panel must list them or "Reintentar" is unreachable (audit r2
+// A2). Separate list from the OUTBOX dead-letters above: different id space
+// (queue_id vs client_request_id) and different requeue action.
+const writeQueueDeadLetterRows = ref([]);
+const writeQueueDeadLetterBusy = ref(null);
+const WRITE_QUEUE_ENTITY_LABELS = {
+	invoice: __("Venta"),
+	payment: __("Pago"),
+	cash_movement: __("Movimiento de caja"),
+	customer: __("Cliente"),
+	restaurant_order: __("Comanda"),
+};
+
+function writeQueueEntityLabel(row) {
+	return WRITE_QUEUE_ENTITY_LABELS[row.entity_type] || row.entity_type;
+}
+
+function writeQueueRowCustomer(row) {
+	return (
+		row.invoice?.customer_name ||
+		row.invoice?.customer ||
+		row.args?.payload?.customer_name ||
+		row.args?.payload?.customer ||
+		""
+	);
+}
+
+function writeQueueRowAmount(row) {
+	const amount = row.invoice?.grand_total ?? row.invoice?.rounded_total;
+	return amount === undefined || amount === null ? null : amount;
+}
 const draftReviewRows = ref([]);
 const draftReviewBusy = ref(null);
+const confirmDeleteDialog = ref(false);
+const pendingDeleteIndex = ref(null);
+const pendingDeleteInvoice = computed(() =>
+	pendingDeleteIndex.value === null || pendingDeleteIndex.value === undefined
+		? null
+		: invoices.value[pendingDeleteIndex.value] || null,
+);
 const syncStore = useSyncStore();
 const headers = [
 	{
@@ -427,6 +547,11 @@ async function loadDeadLetters() {
 	} catch (e) {
 		console.error("dead-letter load failed", e);
 	}
+	try {
+		writeQueueDeadLetterRows.value = await getWriteQueueDeadLetterRows();
+	} catch (e) {
+		console.error("write-queue dead-letter load failed", e);
+	}
 }
 
 async function loadDraftReviews() {
@@ -445,6 +570,20 @@ async function retryDeadLetter(row) {
 		deadLetterBusy.value = "";
 		await loadOperatorReviewRows();
 	}
+}
+
+async function retryWriteQueueDeadLetter(row) {
+	writeQueueDeadLetterBusy.value = row.queue_id;
+	try {
+		await syncStore.requeueWriteQueueDeadLetter(row.queue_id);
+	} finally {
+		writeQueueDeadLetterBusy.value = null;
+		await loadOperatorReviewRows();
+	}
+}
+
+function exportWriteQueueDeadLetter(row) {
+	downloadJson(row, `venta-sin-sincronizar-cola-${row.queue_id}.json`);
 }
 
 async function retryDraftReview(row) {
@@ -497,8 +636,27 @@ function exportDraftReview(row) {
 	);
 }
 
-async function removeInvoice(index) {
+// Deleting a pending offline invoice destroys the only copy of an unsynced
+// sale — never one tap (audit r2 A5). The button arms this dialog; the
+// destructive call runs only from its explicit confirm.
+function askRemoveInvoice(index) {
 	if (!props.posProfile.posa_allow_delete_offline_invoice) {
+		return;
+	}
+	pendingDeleteIndex.value = index;
+	confirmDeleteDialog.value = true;
+}
+
+function cancelRemoveInvoice() {
+	confirmDeleteDialog.value = false;
+	pendingDeleteIndex.value = null;
+}
+
+async function confirmRemoveInvoice() {
+	const index = pendingDeleteIndex.value;
+	confirmDeleteDialog.value = false;
+	pendingDeleteIndex.value = null;
+	if (index === null || index === undefined) {
 		return;
 	}
 	await deleteOfflineInvoice(index);
