@@ -798,8 +798,13 @@ desktop/phone Playwright acceptance are green on `doco-mirror`. Update
 [`LEGACY-FIELD-INVENTORY.md`](LEGACY-FIELD-INVENTORY.md) covers all 117 POS
 Profile fields (delta-classified against the 2026-07-11 wiring audit),
 capability payload v3 reads and enforcement loci, the four mode presets and the
-24-giro map. Remaining Foundation 0 work is the performance baseline and the
-certification dashboard/artifact vocabulary.
+24-giro map. The certification and artifact vocabulary is established —
+[`ARTIFACT-VOCABULARY.md`](ARTIFACT-VOCABULARY.md): the seven §8 states are
+machine-readable in doco `giros.py` (`CERTIFICATION_STATES` +
+`GIRO_CERTIFICATION` + a ratchet test refusing certified/marketed until the
+certification job exists), and each §9.1 artifact is mapped to its current
+representation or named gap. Remaining Foundation 0 work is the performance
+baseline (the dashboard rendering the vocabulary is Boat/Vigía §9.4 scope).
 
 - Resolve current restaurant audit findings: dirty-table action, empty-order
   charge, multiple-account ambiguity and FloorView navigation coverage.
