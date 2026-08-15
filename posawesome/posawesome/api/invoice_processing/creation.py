@@ -1802,11 +1802,7 @@ def submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
     if submit_in_background and allow_background_submit:
         enqueue(
             method=submit_in_background_job,
-            # POS submission is latency-sensitive and normally completes in a
-            # few seconds. The shared default queue also runs integrations
-            # such as Google Calendar sync, whose 300-second timeout stranded
-            # ACC-SINV-2026-02876 behind it for 67 seconds.
-            queue="short",
+            queue="default",
             timeout=3000,
             is_async=True,
             enqueue_after_commit=True,
