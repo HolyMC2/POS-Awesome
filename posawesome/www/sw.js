@@ -324,10 +324,51 @@ self.addEventListener("fetch", (event) => {
 
 	if (isNavigation) {
 		const isPosappWebRoute = isPosappWebRouteRequest(url);
+		// Fallback order: exact URL → /posapp shell (covers deep links) →
+		// /app/posapp Desk shell → /offline.html → null. Shared by the
+		// network-error path AND resolved 5xx responses: a proxy 502/503
+		// during a backend restart resolves the fetch, so catching
+		// rejections alone still painted the gateway error over a
+		// perfectly good cached shell.
+		const serveNavigationFallback = async () => {
+			const cached = await caches.match(event.request, { ignoreSearch: true });
+			if (cached) {
+				return cached;
+			}
+
+			if (isPosappWebRoute) {
+				const posappShell = await caches.match(POSAPP_WEB_ROUTE);
+				if (posappShell) {
+					return posappShell;
+				}
+			}
+
+			const appShell = await caches.match("/app/posapp");
+			if (appShell) {
+				return appShell;
+			}
+
+			const offlinePage = await caches.match("/offline.html");
+			if (offlinePage) {
+				return offlinePage;
+			}
+
+			return null;
+		};
 		event.respondWith(
 			(async () => {
 				try {
 					const response = await fetch(event.request);
+					// Resolved server errors are fallback-eligible; 4xx
+					// stays authoritative (auth/permission answers must
+					// not be masked by a stale shell).
+					if (response && response.status >= 500) {
+						const fallback = await serveNavigationFallback();
+						if (fallback) {
+							return fallback;
+						}
+						return response;
+					}
 					// Stale-while-revalidate the /posapp HTML shell.
 					// The boot payload is seeded server-side, so the
 					// shell MUST be re-fetched while online; we only
@@ -347,31 +388,10 @@ self.addEventListener("fetch", (event) => {
 					}
 					return response;
 				} catch (err) {
-					// Offline path. Order: exact URL → /posapp shell
-					// (covers deep links) → /app/posapp Desk shell →
-					// /offline.html → network error.
-					const cached = await caches.match(event.request, { ignoreSearch: true });
-					if (cached) {
-						return cached;
+					const fallback = await serveNavigationFallback();
+					if (fallback) {
+						return fallback;
 					}
-
-					if (isPosappWebRoute) {
-						const posappShell = await caches.match(POSAPP_WEB_ROUTE);
-						if (posappShell) {
-							return posappShell;
-						}
-					}
-
-					const appShell = await caches.match("/app/posapp");
-					if (appShell) {
-						return appShell;
-					}
-
-					const offlinePage = await caches.match("/offline.html");
-					if (offlinePage) {
-						return offlinePage;
-					}
-
 					return Response.error();
 				}
 			})(),

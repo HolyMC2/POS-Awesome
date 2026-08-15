@@ -273,6 +273,56 @@ describe("posawesome service worker — Phase 1.G precache", () => {
 		expect(await result.text()).toBe("<html>cached shell</html>");
 	});
 
+	it("serves the cached shell when the proxy answers a resolved 502/503", async () => {
+		// Audit r2 A4: a backend restart makes the proxy RESOLVE the fetch
+		// with 502/503 — catching rejections alone painted the gateway
+		// error over a good cached shell.
+		harness.cache.set("/posapp", makeResponse("<html>cached shell</html>"));
+		for (const status of [502, 503]) {
+			harness.fetchMock.mockImplementationOnce(async () =>
+				makeResponse("bad gateway", { status }),
+			);
+			const promise = fireFetch(harness, {
+				url: "https://x.test/posapp/pay",
+				method: "GET",
+				mode: "navigate",
+				destination: "document",
+			});
+			expect(promise).not.toBeNull();
+			const result = await promise!;
+			expect(await result.text()).toBe("<html>cached shell</html>");
+		}
+	});
+
+	it("returns the real 5xx when no cached shell exists", async () => {
+		const errorPage = makeResponse("bad gateway", { status: 502 });
+		harness.fetchMock.mockImplementationOnce(async () => errorPage);
+
+		const promise = fireFetch(harness, {
+			url: "https://x.test/posapp",
+			method: "GET",
+			mode: "navigate",
+			destination: "document",
+		});
+		const result = await promise!;
+		expect(result.status).toBe(502);
+	});
+
+	it("keeps 4xx answers authoritative even when a shell is cached", async () => {
+		harness.cache.set("/posapp", makeResponse("<html>cached shell</html>"));
+		const forbidden = makeResponse("forbidden", { status: 403 });
+		harness.fetchMock.mockImplementationOnce(async () => forbidden);
+
+		const promise = fireFetch(harness, {
+			url: "https://x.test/posapp",
+			method: "GET",
+			mode: "navigate",
+			destination: "document",
+		});
+		const result = await promise!;
+		expect(result.status).toBe(403);
+	});
+
 	it("does NOT poison /posapp cache with deep-link responses", async () => {
 		const deepResp = makeResponse("<html>pay route shell</html>");
 		harness.fetchMock.mockImplementationOnce(async () => deepResp);
