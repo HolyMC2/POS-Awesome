@@ -236,6 +236,111 @@ class TestCapabilityResolution(IntegrationTestCase):
         self.assertEqual(doc.name, self.PRESET)
 
 
+class TestOverrideAllowlistAndProvenance(IntegrationTestCase):
+    """Typed per-register override layer + provenance (roadmap F1)."""
+
+    PRESET = "test-override-allowlist"
+    FLAGS = ("posa_lean_vertical_layout", "posa_hide_items_until_search")
+
+    def setUp(self):
+        self._orig_link = frappe.db.get_value(
+            "POS Profile", PROFILE, "posa_capability_profile"
+        )
+        self._orig_flags = {
+            flag: frappe.db.get_value("POS Profile", PROFILE, flag)
+            for flag in self.FLAGS
+        }
+        for flag in self.FLAGS:
+            frappe.db.set_value("POS Profile", PROFILE, flag, 0)
+        frappe.clear_cache()
+
+    def tearDown(self):
+        frappe.db.set_value(
+            "POS Profile", PROFILE, "posa_capability_profile", self._orig_link
+        )
+        for flag, value in self._orig_flags.items():
+            frappe.db.set_value("POS Profile", PROFILE, flag, value or 0)
+        if frappe.db.exists("POS Capability Profile", self.PRESET):
+            frappe.delete_doc("POS Capability Profile", self.PRESET, force=True)
+        frappe.clear_cache()
+
+    def _link_preset(self, lean_vertical=0):
+        frappe.get_doc(
+            {
+                "doctype": "POS Capability Profile",
+                "profile_name": self.PRESET,
+                "lean_vertical": lean_vertical,
+                "capabilities": "tab_identity",
+            }
+        ).insert()
+        frappe.db.set_value(
+            "POS Profile", PROFILE, "posa_capability_profile", self.PRESET
+        )
+        frappe.clear_cache()
+
+    def test_register_flag_enables_what_the_mode_left_off(self):
+        self._link_preset(lean_vertical=0)
+        frappe.db.set_value("POS Profile", PROFILE, "posa_lean_vertical_layout", 1)
+
+        payload = vertical.resolve_capability_json(PROFILE)
+
+        self.assertTrue(payload["layout"]["lean_vertical"])
+
+    def test_register_flag_cannot_disable_a_mode_pin(self):
+        self._link_preset(lean_vertical=1)
+        frappe.db.set_value("POS Profile", PROFILE, "posa_lean_vertical_layout", 0)
+
+        payload = vertical.resolve_capability_json(PROFILE)
+
+        self.assertTrue(payload["layout"]["lean_vertical"])
+
+    def test_allowlist_key_absent_from_preset_rides_the_payload(self):
+        self._link_preset()
+        frappe.db.set_value("POS Profile", PROFILE, "posa_hide_items_until_search", 1)
+
+        payload = vertical.resolve_capability_json(PROFILE)
+
+        self.assertTrue(payload["layout"]["hide_items_until_search"])
+
+    def test_provenance_reports_value_default_override_and_lock(self):
+        self._link_preset(lean_vertical=1)
+        frappe.db.set_value("POS Profile", PROFILE, "posa_lean_vertical_layout", 0)
+
+        provenance = vertical.get_contract_provenance(PROFILE)
+
+        row = next(
+            r for r in provenance["overrides"] if r["key"] == "layout.lean_vertical"
+        )
+        self.assertTrue(row["value"])
+        self.assertTrue(row["mode_default"])
+        self.assertFalse(row["override"])
+        self.assertIsNotNone(row["why_locked"])
+        self.assertFalse(row["pending_next_shift"])
+        self.assertEqual(provenance["preset"], self.PRESET)
+        self.assertEqual(provenance["resolution"]["status"], "resolved")
+        locked_keys = {r["key"] for r in provenance["locked"]}
+        self.assertIn("capabilities", locked_keys)
+        self.assertIn("invoice_mode", locked_keys)
+
+    def test_provenance_for_an_unconfigured_register(self):
+        frappe.db.set_value("POS Profile", PROFILE, "posa_capability_profile", None)
+        frappe.db.set_value("POS Profile", PROFILE, "posa_hide_items_until_search", 1)
+        frappe.clear_cache()
+
+        provenance = vertical.get_contract_provenance(PROFILE)
+
+        self.assertIsNone(provenance["preset"])
+        self.assertEqual(provenance["resolution"]["status"], "unconfigured")
+        row = next(
+            r
+            for r in provenance["overrides"]
+            if r["key"] == "layout.hide_items_until_search"
+        )
+        self.assertTrue(row["value"])
+        self.assertTrue(row["override"])
+        self.assertIsNone(row["why_locked"])
+
+
 class TestChargeRequestCapabilityGate(IntegrationTestCase):
     """The SPA opens Pending Charges on EITHER the legacy
     posa_use_charge_requests flag or the external_document_checkout capability

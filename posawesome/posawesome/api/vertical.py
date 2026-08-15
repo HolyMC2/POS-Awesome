@@ -24,6 +24,66 @@ RESOLUTION_TEMPORARILY_UNAVAILABLE = "temporarily_unavailable"
 RESOLUTION_UNCONFIGURED = "unconfigured"
 LAST_GOOD_TTL_SECONDS = 7 * 24 * 60 * 60
 
+# ---- typed per-register override allowlist (roadmap F1) --------------------
+# The ONLY per-register knobs that may adjust a linked preset's contract.
+# Every entry is typed and carries an explicit merge rule; anything not listed
+# here is mode content and cannot be overridden from the profile. Candidates
+# and rationale: docs/LEGACY-FIELD-INVENTORY.md §5.1.
+#
+# merge "enable_only": effective = preset value OR register override — a
+# register may switch ON what its mode left off, never strip what the mode
+# pins on. Chosen because a Check field cannot distinguish "mode default off"
+# from "mode pins off", and because it restores the documented role of
+# posa_lean_vertical_layout, which the always-present payload key had silently
+# made dead on every linked register.
+OVERRIDE_ALLOWLIST = {
+    "layout.lean_vertical": {
+        "profile_field": "posa_lean_vertical_layout",
+        "kind": "bool",
+        "merge": "enable_only",
+        "mode_default": False,
+    },
+    "layout.hide_items_until_search": {
+        "profile_field": "posa_hide_items_until_search",
+        "kind": "bool",
+        "merge": "enable_only",
+        "mode_default": False,
+    },
+}
+
+
+def _profile_override_value(pos_profile_name, spec):
+    """The register's raw override for one allowlist entry, or None when the
+    schema does not carry the field (pre-migration site)."""
+    field = spec["profile_field"]
+    if not frappe.db.has_column("POS Profile", field):
+        return None
+    raw = frappe.db.get_value("POS Profile", pos_profile_name, field)
+    if spec["kind"] == "bool":
+        return bool(int(raw or 0))
+    return raw
+
+
+def _merge_override(spec, mode_value, override):
+    if spec["merge"] == "enable_only":
+        return bool(mode_value) or bool(override)
+    return override if override is not None else mode_value
+
+
+def _apply_register_overrides(payload, pos_profile_name):
+    """Merge the typed override layer into a resolved preset payload."""
+    if not isinstance(payload, dict):
+        return payload
+    for key, spec in OVERRIDE_ALLOWLIST.items():
+        group, _sep, leaf = key.partition(".")
+        container = payload.setdefault(group, {})
+        if not isinstance(container, dict):
+            continue
+        mode_value = container.get(leaf, spec["mode_default"])
+        override = _profile_override_value(pos_profile_name, spec)
+        container[leaf] = _merge_override(spec, mode_value, override)
+    return payload
+
 
 def _last_good_key(pos_profile_name):
     return f"posawesome:vertical:last_good:{pos_profile_name}"
@@ -126,7 +186,8 @@ def resolve_capability_json(pos_profile_name):
         _log_dangling_link(pos_profile_name, link)
         return _invalid_payload(link, "missing_linked_profile")
     doc = frappe.get_cached_doc("POS Capability Profile", link)
-    payload = _stamp(doc.as_frontend_payload(), RESOLUTION_RESOLVED, source="current")
+    payload = _apply_register_overrides(doc.as_frontend_payload(), pos_profile_name)
+    payload = _stamp(payload, RESOLUTION_RESOLVED, source="current")
     _remember_last_good(pos_profile_name, payload)
     return payload
 
@@ -261,6 +322,85 @@ def effective_contract_stamp(pos_profile_name):
     )
     fingerprint = hashlib.sha256(snapshot_json.encode("utf-8")).hexdigest()
     return snapshot_json, fingerprint, CAPABILITY_PAYLOAD_VERSION
+
+
+@frappe.whitelist()
+def get_contract_provenance(pos_profile):
+    """Provenance inspection for the register's effective contract (roadmap
+    F1: each effective override exposes value, mode default, override and why
+    locked).
+
+    ``value`` is what is IN FORCE right now (shift-aware — the open shift's
+    stamp); ``mode_default``/``override`` reflect current authoring, so
+    ``pending_next_shift`` marks a knob whose edit is waiting for the next
+    opening. Read-only.
+    """
+    frappe.has_permission("POS Profile", "read", pos_profile, throw=True)
+
+    in_force = shift_effective_capability_payload(pos_profile)
+    link = _profile_capability_link(pos_profile)
+    preset_payload = None
+    if link and frappe.db.exists("POS Capability Profile", link):
+        preset_payload = frappe.get_cached_doc(
+            "POS Capability Profile", link
+        ).as_frontend_payload()
+
+    overrides = []
+    for key, spec in OVERRIDE_ALLOWLIST.items():
+        group, _sep, leaf = key.partition(".")
+        mode_value = ((preset_payload or {}).get(group) or {}).get(
+            leaf, spec["mode_default"]
+        )
+        override = _profile_override_value(pos_profile, spec)
+        recomputed = _merge_override(spec, mode_value, override)
+        in_force_value = ((in_force or {}).get(group) or {}).get(leaf, recomputed)
+        why_locked = None
+        if spec["merge"] == "enable_only" and bool(mode_value):
+            why_locked = _(
+                "Enabled by the mode preset; the register override cannot disable it."
+            )
+        overrides.append(
+            {
+                "key": key,
+                "value": in_force_value,
+                "mode_default": mode_value,
+                "override": override,
+                "profile_field": spec["profile_field"],
+                "why_locked": why_locked,
+                "pending_next_shift": bool(in_force_value != recomputed),
+            }
+        )
+
+    disabled = sorted(_disabled_capabilities())
+    locked = [
+        {
+            "key": "capabilities",
+            "value": (in_force or {}).get("capabilities") or [],
+            "why_locked": _(
+                "Certified mode content; changed by editing the linked preset, "
+                "active from the next shift. The emergency kill switch "
+                "(posa_disabled_capabilities) subtracts immediately."
+            ),
+        },
+        {
+            "key": "invoice_mode",
+            "value": (in_force or {}).get("invoice_mode"),
+            "why_locked": _(
+                "Data-model choice owned by the certified mode; not overridable."
+            ),
+        },
+    ]
+
+    return {
+        "pos_profile": pos_profile,
+        "preset": link or None,
+        "version": CAPABILITY_PAYLOAD_VERSION,
+        "resolution": (in_force or {}).get("resolution")
+        or {"status": RESOLUTION_UNCONFIGURED},
+        "overrides": overrides,
+        "locked": locked,
+        "disabled_capabilities": disabled,
+    }
 
 
 @frappe.whitelist()

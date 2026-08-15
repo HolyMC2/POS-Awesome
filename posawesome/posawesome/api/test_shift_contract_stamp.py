@@ -238,6 +238,49 @@ class TestShiftContractStamp(IntegrationTestCase):
         self.assertIn("tab_identity", capabilities)
         self.assertNotIn("service_types", capabilities)
 
+    def test_provenance_marks_a_mid_shift_override_edit_as_pending(self):
+        # Flip an allowlisted register override while the shift is open: the
+        # stamped contract stays in force, provenance shows the edit waiting
+        # for the next opening.
+        flag_before = frappe.db.get_value(
+            "POS Profile", PROFILE, "posa_lean_vertical_layout"
+        )
+        frappe.db.set_value("POS Profile", PROFILE, "posa_lean_vertical_layout", 0)
+        try:
+            frappe.get_doc(
+                {
+                    "doctype": "POS Capability Profile",
+                    "name": PRESET,
+                    "profile_name": PRESET,
+                    "capabilities": "tab_identity",
+                }
+            ).insert(ignore_permissions=True)
+            frappe.db.set_value(
+                "POS Profile", PROFILE, "posa_capability_profile", PRESET
+            )
+            frappe.clear_cache()
+            self._open_shift()
+
+            frappe.db.set_value(
+                "POS Profile", PROFILE, "posa_lean_vertical_layout", 1
+            )
+            frappe.clear_cache()
+
+            from posawesome.posawesome.api.vertical import get_contract_provenance
+
+            row = next(
+                r
+                for r in get_contract_provenance(PROFILE)["overrides"]
+                if r["key"] == "layout.lean_vertical"
+            )
+            self.assertFalse(row["value"])  # stamped contract stays in force
+            self.assertTrue(row["override"])  # the edit is recorded
+            self.assertTrue(row["pending_next_shift"])
+        finally:
+            frappe.db.set_value(
+                "POS Profile", PROFILE, "posa_lean_vertical_layout", flag_before or 0
+            )
+
     def test_stamp_survives_a_mid_shift_preset_edit(self):
         # The stamp is what the shift OPENED under; a later preset edit must
         # not rewrite history (mid-shift changes wait for the next shift).
