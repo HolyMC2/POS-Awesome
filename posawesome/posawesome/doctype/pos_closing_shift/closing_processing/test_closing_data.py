@@ -42,6 +42,9 @@ class _AttrDict(dict):
         except KeyError as exc:
             raise AttributeError(key) from exc
 
+    def __setattr__(self, key, value):
+        self[key] = value
+
 
 class _InvoiceDoc:
     def __init__(self, name="SINV-0001"):
@@ -106,6 +109,7 @@ def _import_modules(scenario):
     frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
     frappe_module._dict = lambda value=None, **kwargs: _AttrDict(value or kwargs)
     frappe_module.get_roles = lambda user=None: scenario.get("roles", [])
+    frappe_module.flags = _AttrDict()
 
     def _throw(message, exc_type=Exception, **kwargs):
         raise exc_type(message)
@@ -154,7 +158,16 @@ def _import_modules(scenario):
         return []
 
     frappe_module.get_all = _get_all
-    frappe_module.get_doc = lambda doctype, name: scenario["invoice_docs"][name]
+
+    def _get_doc(doctype, name):
+        # is_closing_supervisor falls back to the employees supervisor-flag
+        # read (frappe.get_doc("User", ...)) when the session user holds no
+        # closing role; return a plain enabled user with no supervisor flag.
+        if doctype == "User":
+            return _AttrDict({"name": name, "enabled": 1})
+        return scenario["invoice_docs"][name]
+
+    frappe_module.get_doc = _get_doc
     sys.modules["frappe"] = frappe_module
 
     utils_module = types.ModuleType("frappe.utils")

@@ -135,6 +135,19 @@ def _import_creation(scenario):
     invoices_module = types.ModuleType(invoices_name)
     invoices_module.get_pending_draft_invoices = lambda *args, **kwargs: []
     invoices_module.submit_printed_invoices = lambda *args, **kwargs: []
+    _closing_roles = {
+        "POS Awesome Supervisor",
+        "POS Manager",
+        "Sales Manager",
+        "Accounts Manager",
+        "System Manager",
+    }
+
+    def _is_closing_supervisor(user=None):
+        user = user or frappe_module.session.user
+        return bool(set(scenario.get("roles", {}).get(user, [])) & _closing_roles)
+
+    invoices_module.is_closing_supervisor = _is_closing_supervisor
     sys.modules[invoices_name] = invoices_module
 
     module_name = (
@@ -209,6 +222,23 @@ class SubmitClosingShiftAuthorizationTests(unittest.TestCase):
         self.assertEqual(closing_doc.submit_calls, 1)
         self.assertEqual(scenario["profile_assertions"], [(supervisor, "Main POS")])
         self.assertEqual(scenario["company_assertions"], [(supervisor, "Doco")])
+
+    def test_sales_manager_can_finish_delegated_close(self):
+        """Audit r2 P0: the builder accepted these roles but submit rejected
+        everyone but POS Awesome Supervisor, wedging the shift open. Now one
+        predicate governs both."""
+        manager = "manager@doco"
+        scenario = _scenario(
+            manager,
+            "cashier@doco",
+            roles={manager: ["Sales Manager"]},
+        )
+        creation, closing_doc = _import_creation(scenario)
+
+        result = creation.submit_closing_shift(json.dumps({"pos_opening_shift": "OPEN-1"}))
+
+        self.assertEqual(result, "CLOSE-1")
+        self.assertEqual(closing_doc.submit_calls, 1)
 
 
 if __name__ == "__main__":

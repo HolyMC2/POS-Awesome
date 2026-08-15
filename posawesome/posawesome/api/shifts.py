@@ -202,6 +202,14 @@ def assert_shift_not_stale(pos_opening_shift):
 
     if not pos_opening_shift:
         return
+    # Internal delegated-close replay (submit_printed_invoices): a shift's own
+    # printed drafts are being flushed INTO the shift being closed. The caller
+    # already passed get_scoped_opening_shift (owner or closing supervisor) and
+    # the draft is bound to this exact shift, so the owner/stale/closed gates
+    # that guard LIVE selling do not apply. Bound to the shift name so an
+    # unrelated shift in a replayed payload is still gated.
+    if frappe.flags.get("posa_closing_replay_shift") == pos_opening_shift:
+        return
     row = frappe.db.get_value(
         "POS Opening Shift",
         pos_opening_shift,

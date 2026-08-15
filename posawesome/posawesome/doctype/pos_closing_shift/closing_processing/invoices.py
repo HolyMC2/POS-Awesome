@@ -20,6 +20,29 @@ _CLOSING_SUPERVISOR_ROLES = frozenset(
 )
 
 
+def is_closing_supervisor(user=None) -> bool:
+    """True when ``user`` may close another cashier's shift.
+
+    ONE predicate for the whole delegated-close flow — the builder scope
+    gate (`get_scoped_opening_shift`), the printed-draft replay override,
+    and `submit_closing_shift`. Audit r2 P0: the builder accepted any role
+    in `_CLOSING_SUPERVISOR_ROLES`, but `submit_closing_shift` accepted
+    only `POS Awesome Supervisor` (via `_is_pos_supervisor`) — so a POS /
+    Sales / Accounts Manager who could START a delegated close could never
+    FINISH it, wedging the previous shift open and blocking the next
+    selling session. Accept any closing role OR the legacy
+    `posa_is_pos_supervisor` user flag, so the same people can start and
+    finish.
+    """
+    from posawesome.posawesome.api.employees import _get_user_doc, _is_pos_supervisor
+
+    user = user or frappe.session.user
+    roles = set(frappe.get_roles(user) or [])
+    if roles.intersection(_CLOSING_SUPERVISOR_ROLES):
+        return True
+    return _is_pos_supervisor(_get_user_doc(user))
+
+
 def get_scoped_opening_shift(pos_opening_shift, doctype=None):
     """Return the DB-owned shift and invoice type after enforcing access."""
     if doctype is not None and doctype not in ALLOWED_INVOICE_DOCTYPES:
@@ -40,9 +63,8 @@ def get_scoped_opening_shift(pos_opening_shift, doctype=None):
     assert_profile(session_user, opening_shift.get("pos_profile"))
     assert_company(session_user, opening_shift.get("company"))
 
-    roles = set(frappe.get_roles(session_user) or [])
-    if opening_shift.get("user") != session_user and not roles.intersection(
-        _CLOSING_SUPERVISOR_ROLES
+    if opening_shift.get("user") != session_user and not is_closing_supervisor(
+        session_user
     ):
         frappe.throw(_("You are not allowed to access this POS Opening Shift."), frappe.PermissionError)
 
@@ -259,6 +281,20 @@ def submit_printed_invoices(pos_opening_shift, doctype):
             "posa_is_printed": 1,
         },
     )
+    # Flushing a shift's own printed drafts INTO the shift being closed is a
+    # server-only replay, already authorized above (owner or closing
+    # supervisor). Mark THIS shift so the live-selling shift-owner/stale
+    # guard in assert_shift_not_stale does not reject a supervisor closing
+    # someone else's shift, nor an owner closing their own stale shift.
+    prev_replay_shift = frappe.flags.get("posa_closing_replay_shift")
+    frappe.flags.posa_closing_replay_shift = pos_opening_shift
+    try:
+        return _submit_printed_invoices_inner(invoices_list, doctype, skipped_invoices)
+    finally:
+        frappe.flags.posa_closing_replay_shift = prev_replay_shift
+
+
+def _submit_printed_invoices_inner(invoices_list, doctype, skipped_invoices):
     for invoice in invoices_list:
         invoice_doc = frappe.get_doc(doctype, invoice.name)
         cancelled_return_against = _get_cancelled_return_against(invoice_doc, doctype)
