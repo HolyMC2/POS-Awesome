@@ -1419,7 +1419,11 @@ class TestManualPostingDatePreservation(unittest.TestCase):
 
         self.creation.frappe.db.exists = lambda doctype, name: name == "ACC-SINV-0001"
         self.creation.frappe.db.get_value = lambda *args, **kwargs: 0
-        self.creation.frappe.get_value = lambda *args, **kwargs: 0
+        self.creation.frappe.get_value = (
+            lambda doctype, name, fieldname, *args, **kwargs: 1
+            if fieldname == "posa_allow_submissions_in_background_job"
+            else 0
+        )
         self.creation.frappe.get_doc = lambda *args: invoice_doc
         self.creation._save_draft_with_latest_timestamp = lambda doc: doc
         self.creation._apply_invoice_gift_card_settlement = lambda *args, **kwargs: None
@@ -1446,6 +1450,55 @@ class TestManualPostingDatePreservation(unittest.TestCase):
         self.assertEqual(invoice_doc.posting_date, "2026-03-19")
         self.assertEqual(invoice_doc.set_posting_time, 1)
         self.assertEqual(result["status"], 1)
+
+    def test_background_submit_uses_latency_sensitive_short_queue(self):
+        invoice_doc = self._build_invoice_doc(name="ACC-SINV-BG-QUEUE-0001")
+
+        self.creation.frappe.db.exists = lambda doctype, name: True
+        self.creation.frappe.db.get_value = (
+            lambda doctype, name, fieldname, *args, **kwargs: 1
+            if fieldname == "posa_allow_submissions_in_background_job"
+            else 0
+        )
+        self.creation.frappe.get_value = (
+            lambda doctype, name, fieldname, *args, **kwargs: 1
+            if fieldname == "posa_allow_submissions_in_background_job"
+            else 0
+        )
+        self.creation.frappe.get_doc = lambda *args: invoice_doc
+        self.creation._save_draft_with_latest_timestamp = lambda doc: doc
+        self.creation._apply_invoice_gift_card_settlement = lambda *args, **kwargs: None
+
+        vertical_module_name = "posawesome.posawesome.api.vertical"
+        original_vertical = sys.modules.get(vertical_module_name)
+        vertical = types.ModuleType(vertical_module_name)
+        vertical.assert_capability_configuration = lambda _profile: None
+        sys.modules[vertical_module_name] = vertical
+        try:
+            self.creation.submit_invoice(
+                json.dumps(
+                    {
+                        "doctype": "Sales Invoice",
+                        "name": invoice_doc.name,
+                        "pos_profile": "Main POS",
+                        "company": "Test Company",
+                        "currency": "USD",
+                        "customer": "CUST-0001",
+                        "items": [],
+                        "payments": [],
+                    }
+                ),
+                json.dumps({}),
+                submit_in_background=1,
+            )
+        finally:
+            if original_vertical is None:
+                sys.modules.pop(vertical_module_name, None)
+            else:
+                sys.modules[vertical_module_name] = original_vertical
+
+        self.assertEqual(len(self.enqueue_calls), 1)
+        self.assertEqual(self.enqueue_calls[0]["kwargs"]["queue"], "short")
 
     def test_submit_invoice_normalizes_existing_return_draft_payments_before_save(self):
         invoice_doc = self._build_invoice_doc(
