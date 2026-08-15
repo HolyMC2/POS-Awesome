@@ -793,9 +793,13 @@ exception-state contract is recorded in
 [`RESTAURANT_UX_MAP.md`](RESTAURANT_UX_MAP.md); dirty/free, empty-order and
 multiple-account blockers are corrected; 11 focused component contracts,
 1,572 full frontend tests, 35 live Frappe restaurant tests, typecheck, lint and
-desktop/phone Playwright acceptance are green on `doco-mirror`. Remaining
-Foundation 0 work is the performance baseline, complete legacy-field inventory
-and certification dashboard/artifact vocabulary.
+desktop/phone Playwright acceptance are green on `doco-mirror`. Update
+(2026-08-15): the legacy-field inventory is complete —
+[`LEGACY-FIELD-INVENTORY.md`](LEGACY-FIELD-INVENTORY.md) covers all 117 POS
+Profile fields (delta-classified against the 2026-07-11 wiring audit),
+capability payload v3 reads and enforcement loci, the four mode presets and the
+24-giro map. Remaining Foundation 0 work is the performance baseline and the
+certification dashboard/artifact vocabulary.
 
 - Resolve current restaurant audit findings: dirty-table action, empty-order
   charge, multiple-account ambiguity and FloorView navigation coverage.
@@ -813,10 +817,14 @@ Execution status (2026-08-14): **first safety slice implemented**. Capability
 payload v3 distinguishes `unconfigured`, `invalid`, `resolved` and
 `temporarily_unavailable`. Invalid linked profiles render without optional
 capabilities or Pay and are blocked again at server submission; transient
-resolution can use only a seven-day stamped last-known-good contract. Remaining
-Foundation 1 scope includes the typed override allowlist, full legacy-field
-classification, immutable shift stamping, provenance inspection, next-shift
-activation, emergency removal, Boat artifact ownership and thin seed manifest.
+resolution can use only a seven-day stamped last-known-good contract. Update
+(2026-08-15): the legacy-read classification prerequisite is complete
+([`LEGACY-FIELD-INVENTORY.md`](LEGACY-FIELD-INVENTORY.md) §5 names the
+override-allowlist candidates, fold-into-token and hardware-profile
+extractions, and the never-overridable server-policy set). Remaining
+Foundation 1 scope: the typed override allowlist itself, immutable shift
+stamping, provenance inspection, next-shift activation, emergency removal,
+Boat artifact ownership and thin seed manifest.
 
 - Publish a small typed capability schema, explicit override allowlist and
   `unconfigured`/`invalid`/`temporarily_unavailable` resolver states.
