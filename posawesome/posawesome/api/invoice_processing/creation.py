@@ -1223,6 +1223,41 @@ def update_invoice(data):
     # Ensure the document type is set for new invoices to prevent validation errors
     data.setdefault("doctype", doctype)
 
+    # A lost update_invoice ACK leaves the client without draft_invoice_name,
+    # so its retry arrives name-less (or with a stale name) carrying the same
+    # posa_client_request_id. Adopt the row that request already created
+    # instead of inserting again — a second insert is either a sibling draft
+    # (both Desk-submittable = double-bill) or a unique-index failure
+    # orphaning the first draft. The server row found by request-id outranks
+    # any client-claimed name; adoption feeds that name through
+    # _get_mutable_invoice_doc, so the draft owner/supervisor gate still
+    # applies.
+    if client_request_id:
+        existing_by_request = find_invoice_by_client_request_id(
+            client_request_id, preferred_doctype=doctype
+        )
+        if existing_by_request:
+            if cint(existing_by_request.docstatus) == 1:
+                # The sale already went through — a fresh draft here IS the
+                # double-bill. Refuse loudly; the client's next drain retries
+                # submit_invoice, which replays idempotently by request-id.
+                frappe.throw(
+                    _(
+                        "Invoice {0} was already submitted for this request; not creating a duplicate draft."
+                    ).format(existing_by_request.name),
+                    exc=frappe.DuplicateEntryError,
+                )
+            if cint(existing_by_request.docstatus) == 2:
+                frappe.throw(
+                    _(
+                        "Invoice {0} for this request was cancelled; resolve it from the offline sales panel instead of re-drafting."
+                    ).format(existing_by_request.name),
+                    exc=frappe.DuplicateEntryError,
+                )
+            data["name"] = existing_by_request.name
+            data["doctype"] = existing_by_request.doctype
+            doctype = existing_by_request.doctype
+
     return_validity_enabled, default_validity_days = _get_return_validity_settings(pos_profile)
 
     invoice_doc = _get_mutable_invoice_doc(data, doctype)

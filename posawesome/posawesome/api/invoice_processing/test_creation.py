@@ -96,9 +96,13 @@ def _install_framework_stubs():
     class QueryDeadlockError(Exception):
         pass
 
+    class DuplicateEntryError(ValidationError):
+        pass
+
     frappe_module.ValidationError = ValidationError
     frappe_module.PermissionError = PermissionError
     frappe_module.QueryDeadlockError = QueryDeadlockError
+    frappe_module.DuplicateEntryError = DuplicateEntryError
 
     frappe_utils.cint = lambda value: int(value or 0)
     frappe_utils.flt = lambda value, precision=None: round(float(value or 0), precision or 2)
@@ -2238,6 +2242,152 @@ class TestUpdateInvoiceDraftSaveConflicts(unittest.TestCase):
 
         with self.assertRaises(self.creation.TimestampMismatchError):
             self.creation._save_draft_retrying_row_conflicts(draft)
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class TestUpdateInvoiceRequestIdAdoption(unittest.TestCase):
+    """A lost update_invoice ACK retries name-less with the same
+    posa_client_request_id; the server must adopt the row that request already
+    created instead of minting a sibling draft (audit r2 A3)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.frappe, cls.enqueue_calls = _install_framework_stubs()
+        _install_dependency_stubs()
+        _install_package_stubs()
+        cls.creation = _load_module()
+
+    def setUp(self):
+        self.enqueue_calls.clear()
+        self.frappe._publish_realtime_calls.clear()
+        self.created_payloads = []
+        self.creation._save_draft_with_latest_timestamp = lambda doc: doc
+        self.creation.frappe.get_cached_value = lambda *args, **kwargs: 0
+        self.creation.frappe.db.get_value = lambda *args, **kwargs: None
+        # The cached idempotency module keeps the FIRST class's frappe stub, so
+        # another class's has_column patch leaks in under a full-file run. Pin
+        # the helpers this class exercises to "custom field exists".
+        self.creation.doctype_supports_client_request_id = lambda doctype: True
+
+        def _set_request_id(doc, request_id):
+            if request_id:
+                doc.posa_client_request_id = request_id
+            return doc
+
+        self.creation.set_invoice_client_request_id = _set_request_id
+
+    def _build_invoice_doc(self, **overrides):
+        base = {
+            "doctype": "Sales Invoice",
+            "name": None,
+            "owner": "test@example.com",
+            "pos_profile": "Main POS",
+            "company": "Test Company",
+            "currency": "USD",
+            "posting_date": "2026-03-21",
+            "is_return": 0,
+            "return_against": None,
+            "items": [],
+            "payments": [],
+            "taxes": [],
+            "flags": types.SimpleNamespace(ignore_pricing_rule=False, ignore_permissions=False),
+            "paid_amount": 0,
+            "base_paid_amount": 0,
+            "conversion_rate": 1,
+            "plc_conversion_rate": 1,
+            "price_list_currency": "USD",
+            "total": 0,
+            "net_total": 0,
+            "grand_total": 0,
+            "rounded_total": 0,
+            "docstatus": 0,
+        }
+        base.update(overrides)
+        return FakeDoc(**base)
+
+    def _wire_existing(self, existing_doc):
+        lookups = []
+
+        def fake_find(client_request_id, preferred_doctype=None):
+            lookups.append(client_request_id)
+            return existing_doc
+
+        self.creation.find_invoice_by_client_request_id = fake_find
+        existing_name = existing_doc.get("name") if existing_doc else None
+        self.creation.frappe.db.exists = (
+            lambda doctype, name=None: name == existing_name if existing_name else False
+        )
+
+        def fake_get_doc(*args):
+            if len(args) == 2:
+                return existing_doc
+            payload = dict(args[0])
+            self.created_payloads.append(payload)
+            return self._build_invoice_doc(**{k: v for k, v in payload.items() if k != "flags"})
+
+        self.creation.frappe.get_doc = fake_get_doc
+        return lookups
+
+    def _payload(self, **overrides):
+        payload = {
+            "doctype": "Sales Invoice",
+            "pos_profile": "Main POS",
+            "company": "Test Company",
+            "currency": "USD",
+            "posting_date": "2026-03-21",
+            "posa_client_request_id": "req-123",
+            "items": [],
+            "payments": [],
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_nameless_retry_adopts_existing_draft_by_request_id(self):
+        existing_draft = self._build_invoice_doc(name="SINV-DRAFT-1")
+        lookups = self._wire_existing(existing_draft)
+
+        result = self.creation.update_invoice(json.dumps(self._payload()))
+
+        self.assertEqual(lookups, ["req-123"])
+        self.assertEqual(self.created_payloads, [])
+        self.assertEqual(result["name"], "SINV-DRAFT-1")
+        self.assertEqual(result["docstatus"], 0)
+
+    def test_stale_client_name_yields_to_server_row_for_request(self):
+        existing_draft = self._build_invoice_doc(name="SINV-DRAFT-1")
+        self._wire_existing(existing_draft)
+
+        result = self.creation.update_invoice(
+            json.dumps(self._payload(name="SINV-STALE"))
+        )
+
+        self.assertEqual(self.created_payloads, [])
+        self.assertEqual(result["name"], "SINV-DRAFT-1")
+
+    def test_retry_refuses_when_request_already_submitted(self):
+        submitted = self._build_invoice_doc(name="SINV-DONE", docstatus=1)
+        self._wire_existing(submitted)
+
+        with self.assertRaises(self.frappe.DuplicateEntryError):
+            self.creation.update_invoice(json.dumps(self._payload()))
+        self.assertEqual(self.created_payloads, [])
+
+    def test_retry_refuses_when_request_invoice_was_cancelled(self):
+        cancelled = self._build_invoice_doc(name="SINV-GONE", docstatus=2)
+        self._wire_existing(cancelled)
+
+        with self.assertRaises(self.frappe.DuplicateEntryError):
+            self.creation.update_invoice(json.dumps(self._payload()))
+        self.assertEqual(self.created_payloads, [])
+
+    def test_no_existing_row_inserts_fresh_draft_with_request_id(self):
+        self._wire_existing(None)
+
+        result = self.creation.update_invoice(json.dumps(self._payload()))
+
+        self.assertEqual(len(self.created_payloads), 1)
+        self.assertEqual(result["posa_client_request_id"], "req-123")
+        self.assertEqual(result["docstatus"], 0)
 
 
 if __name__ == "__main__":
