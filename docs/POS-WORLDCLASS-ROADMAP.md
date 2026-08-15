@@ -861,6 +861,16 @@ audited without overwriting tenant edits.
 
 ### Product 2 — Scan Retail complete slice (Now)
 
+Execution status (2026-08-15): **drawer reconciliation gap closed,
+incident-driven**. A production cashier recorded a 900 MXN change fund with
+the only available tool — a cash movement — but both existing types
+(Expense, Deposit) post cash OUT of the drawer, so closing showed negative
+expected cash. New "Cash In" movement type (back-office → drawer, JE debits
+the drawer) rides the deposit permission flag; closing reconciliation and
+the shift overview now fold movements with sign
+(`cash_movement.flow.drawer_delta`). Live-drilled on doco-mirror: JE
+direction, journal-entry link, cancel reversal and closing math verified.
+
 - Complete scan/search/cart/payment/print/next-sale task path.
 - Cover the universal lifecycle: suspend/recall, discounts/promotions, tender,
   submit, receipt, return/refund and drawer/shift reconciliation.
