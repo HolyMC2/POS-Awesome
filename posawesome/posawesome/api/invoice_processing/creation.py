@@ -1800,6 +1800,14 @@ def submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
         }
 
     if submit_in_background and allow_background_submit:
+        # Background submit is DISABLED in prod (posa_allow_submissions_in_
+        # background_job = 0 on every POS Profile, 2026-08-14) — synchronous
+        # submit measured ~0.85s and RQ pickup added 3-7s. This branch is dead
+        # while that flag is off. If it is ever revived, DO NOT just flip the
+        # flag: the shared `default` queue was starved by google_calendar.sync
+        # (300s timeouts) and `short` is only marginally better. Build a
+        # dedicated `pos` queue first — mirror saldo/saldo/api/queues.py + a
+        # queue-pos compose service + workers:{"pos":{...}} — then route here.
         enqueue(
             method=submit_in_background_job,
             queue="default",
