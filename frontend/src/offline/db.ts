@@ -1228,20 +1228,9 @@ export function queueHealthCheck() {
 	);
 }
 
-export function purgeOldQueueEntries() {
-	const threshold = 1000;
-	const purge = (list: any[]) => {
-		if (list.length > threshold) {
-			// Keep the newest items
-			list.splice(0, list.length - threshold);
-		}
-	};
-	purge(memory.offline_invoices);
-	purge(memory.offline_customers);
-	purge(memory.offline_payments);
-	purge(memory.offline_cash_movements);
-	persist("offline_invoices");
-	persist("offline_customers");
-	persist("offline_payments");
-	persist("offline_cash_movements");
-}
+// purgeOldQueueEntries was removed (audit r2 A10): it spliced the in-memory
+// MIRROR of the write queue, so the rows it claimed to purge survived in the
+// write_queue table and repopulated the mirror on the next refresh — while the
+// boot alert told the operator old entries "will be purged". Queued rows are
+// unsent money and must never be auto-deleted; terminal-row pruning lives in
+// offlineDbMaintenance.

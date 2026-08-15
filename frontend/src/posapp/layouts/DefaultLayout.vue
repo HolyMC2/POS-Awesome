@@ -109,7 +109,6 @@ import {
 	getCacheUsageEstimate,
 	checkDbHealth,
 	queueHealthCheck,
-	purgeOldQueueEntries,
 	initPromise,
 	memoryInitPromise,
 	ensureOfflineQueueReady,
@@ -1023,9 +1022,17 @@ const runStartupBackgroundMaintenance = async () => {
 	await hydrateOfflineSyncResourceStates();
 	await checkDbHealth().catch(() => {});
 
+	// Audit r2 A10: this used to claim "old entries will be purged" and call
+	// purgeOldQueueEntries(), which only spliced the in-memory MIRROR — the
+	// write_queue rows it claimed to purge survived and repopulated the mirror
+	// on the next refresh. Queued rows are unsent money; nothing may
+	// auto-delete them. Tell the operator the truth instead.
 	if (queueHealthCheck()) {
-		alert("Offline queue is too large. Old entries will be purged.");
-		purgeOldQueueEntries();
+		alert(
+			__(
+				"La cola sin sincronizar es muy grande. Conéctate y sincroniza — las ventas pendientes nunca se borran solas.",
+			),
+		);
 	}
 
 	await syncStore.updatePendingCount();
