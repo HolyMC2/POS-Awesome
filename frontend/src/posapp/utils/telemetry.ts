@@ -267,11 +267,25 @@ function trackEvent(entry: any /* PerformanceEventTiming */) {
 	});
 }
 
+// Whether a service worker controlled the page when this module loaded.
+// SW-controlled = the shell came from the SW cache → warm-launch proxy;
+// uncontrolled = first visit / cleared cache / hard reload → cold. Captured
+// once at module init because a SW can claim the page later in its life.
+const swControlledAtBoot =
+	typeof navigator !== "undefined" &&
+	Boolean((navigator as any).serviceWorker?.controller);
+
 function trackLcp(entry: any /* LargestContentfulPaint */) {
 	pushVital("rum:lcp", entry.startTime, {
 		size: entry.size || null,
 		url: entry.url || null,
 	});
+	// Benchmark rows warm/cold_launch_shell: the same LCP reading, split by
+	// boot source, so the two §6 launch budgets are separately measurable.
+	pushVital(
+		swControlledAtBoot ? "pos:launch_warm_ms" : "pos:launch_cold_ms",
+		entry.startTime,
+	);
 }
 
 function trackCls(entry: any /* LayoutShift */) {

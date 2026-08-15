@@ -57,7 +57,16 @@ DEFAULT_RETENTION_DAYS = 30
 # so a stale tab on an old build can't reflood after the client fix lands.
 # NOT applied to rum:cls (unitless score) or rum:heap_used_mb (megabytes),
 # nor to perf:* API timings (a real 15 s get_items is signal we want).
-WEBVITAL_MS_EVENTS = ("rum:lcp", "rum:fcp", "rum:inp", "rum:longtask")
+WEBVITAL_MS_EVENTS = (
+    "rum:lcp",
+    "rum:fcp",
+    "rum:inp",
+    "rum:longtask",
+    # LCP split by boot source (SW-controlled = warm) — same wall-clock
+    # background-throttle artifact class as rum:lcp, same cap.
+    "pos:launch_warm_ms",
+    "pos:launch_cold_ms",
+)
 MAX_WEBVITAL_MS = 60000.0
 
 # QZ Tray fleet summary (get_qz_fleet). Each POS page session emits one

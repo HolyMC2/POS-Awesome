@@ -1,6 +1,6 @@
 {
   "spec": "docs/POS-WORLDCLASS-ROADMAP.md section 6",
-  "manifest_version": 1,
+  "manifest_version": 2,
   "gate": {
     "min_samples": 30,
     "regression_tolerance_pct": 20
@@ -35,22 +35,35 @@
       "key": "warm_launch_shell",
       "roadmap_row": "Warm launch to usable shell",
       "events": [
-        "rum:lcp",
-        "rum:fcp"
+        "pos:launch_warm_ms"
       ],
       "unit": "ms",
       "target_p95": 1500,
       "ceiling_p99": 3000,
-      "caveat": "RUM paint proxy; warm vs cold launches not yet split in instrumentation"
+      "caveat": "LCP under a service-worker-controlled load - warm-launch proxy"
     },
     {
       "key": "cold_launch_shell",
       "roadmap_row": "Cold online launch to usable shell",
-      "events": [],
+      "events": [
+        "pos:launch_cold_ms"
+      ],
       "unit": "ms",
       "target_p95": 3000,
       "ceiling_p99": 5000,
-      "gap": "no warm/cold launch split - needs a boot-source mark"
+      "caveat": "LCP under an uncontrolled load (first visit / cleared cache / hard reload) - cold-launch proxy"
+    },
+    {
+      "key": "launch_shell_mixed",
+      "roadmap_row": "supplementary - ambient LCP/FCP, warm and cold mixed",
+      "events": [
+        "rum:lcp",
+        "rum:fcp"
+      ],
+      "unit": "ms",
+      "target_p95": null,
+      "ceiling_p99": null,
+      "caveat": "informative only - split rows above carry the budgets"
     },
     {
       "key": "scan_to_cart",
@@ -62,7 +75,7 @@
       "unit": "ms",
       "target_p95": 50,
       "ceiling_p99": 100,
-      "caveat": "marks are gated on window.__PROF__ - populated only during profiling sessions, not ambient RUM"
+      "caveat": "always-on at 10% ambient sample (perf.ts PAIR_TELEMETRY_SAMPLE) - summary counts under-count ~10x; full-rate marks still need window.__PROF__ profiling sessions"
     },
     {
       "key": "click_add_to_cart",
@@ -87,7 +100,7 @@
       "unit": "ms",
       "target_p95": 75,
       "ceiling_p99": 150,
-      "caveat": "marks are gated on window.__PROF__ - populated only during profiling sessions, not ambient RUM"
+      "caveat": "always-on at 10% ambient sample (perf.ts PAIR_TELEMETRY_SAMPLE) - summary counts under-count ~10x; full-rate marks still need window.__PROF__ profiling sessions"
     },
     {
       "key": "server_search",
@@ -113,25 +126,29 @@
       "unit": "ms",
       "target_p95": 50,
       "ceiling_p99": 100,
-      "caveat": "marks are gated on window.__PROF__ - populated only during profiling sessions, not ambient RUM"
+      "caveat": "always-on at 10% ambient sample (perf.ts PAIR_TELEMETRY_SAMPLE) - summary counts under-count ~10x; full-rate marks still need window.__PROF__ profiling sessions"
     },
     {
       "key": "payment_screen_open",
       "roadmap_row": "Payment screen open",
-      "events": [],
+      "events": [
+        "perf:pos:pay-open"
+      ],
       "unit": "ms",
       "target_p95": 150,
       "ceiling_p99": 300,
-      "gap": "no payment-screen-open mark exists"
+      "caveat": "tap to panel visible INCLUDING the process/update_invoice round-trip - what the operator actually waits through"
     },
     {
       "key": "durable_queue_acceptance",
       "roadmap_row": "Durable queue acceptance, where enabled",
-      "events": [],
+      "events": [
+        "perf:pos:offline_save_ms"
+      ],
       "unit": "ms",
       "target_p95": 400,
       "ceiling_p99": 1000,
-      "gap": "pos:offline_invoice_saved carries grand_total (money), not latency - needs an ms mark"
+      "caveat": "IndexedDB persist of an offline sale; pos:offline_invoice_saved carries money, not latency"
     },
     {
       "key": "erpnext_submission",

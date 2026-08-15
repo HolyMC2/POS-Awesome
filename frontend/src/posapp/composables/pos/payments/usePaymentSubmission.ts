@@ -938,12 +938,23 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 				);
 			}
 			try {
+				const offlineSaveStartedAt =
+					typeof performance !== "undefined" ? performance.now() : Date.now();
 				await saveOfflineInvoice({ data, invoice: doc });
 				try {
-					const { track } = await import("../../../utils/telemetry");
+					const { track, trackCustomMark } = await import("../../../utils/telemetry");
 					track("pos:offline_invoice_saved", Number(doc?.grand_total) || 0, {
 						items: (doc?.items || []).length,
 					});
+					// Benchmark row durable_queue_acceptance
+					// (perf:pos:offline_save_ms): time to durably persist the
+					// sale in IndexedDB. pos:offline_invoice_saved above
+					// carries MONEY (grand_total), not latency.
+					trackCustomMark(
+						"pos:offline_save_ms",
+						(typeof performance !== "undefined" ? performance.now() : Date.now()) -
+							offlineSaveStartedAt,
+					);
 				} catch {
 					/* never block the offline save */
 				}

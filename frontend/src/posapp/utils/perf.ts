@@ -21,26 +21,67 @@ function markName(label: string, suffix: string): string {
 	return `${label}-${suffix}`;
 }
 
+export type PerfMarkToken = {
+	label: string;
+	startedAt: number;
+	mark: string | null;
+};
+
+function nowMs(): number {
+	return hasPerformance ? performance.now() : Date.now();
+}
+
+// Ambient sampling for perfMarkStart/End pairs. These wrap hot operator
+// paths (scan pipeline, local search, cart totals), so full-rate telemetry
+// would flood the event table; 10% keeps percentiles honest while bounding
+// volume. Counts in the telemetry summary therefore under-count ~10x —
+// the benchmark manifests know this (see docs/benchmarks/README.md).
+const PAIR_TELEMETRY_SAMPLE = 0.1;
+
 /**
  * Marks the start of a performance measurement.
+ *
+ * Always returns a token carrying the start timestamp so the end call can
+ * emit duration telemetry even outside profiling sessions; the DevTools
+ * performance.mark entry is still created only under window.__PROF__.
  */
-export function perfMarkStart(label: string): string | null {
-	if (!isPerfEnabled() || !hasPerformance || !performance.mark) {
-		return null;
+export function perfMarkStart(label: string): PerfMarkToken {
+	const token: PerfMarkToken = { label, startedAt: nowMs(), mark: null };
+	if (isPerfEnabled() && hasPerformance && performance.mark) {
+		const start = markName(label, "start");
+		try {
+			performance.mark(start);
+			token.mark = start;
+		} catch (err) {
+			console.warn("PERF start mark failed", label, err);
+		}
 	}
-	const start = markName(label, "start");
-	try {
-		performance.mark(start);
-	} catch (err) {
-		console.warn("PERF start mark failed", label, err);
-	}
-	return start;
+	return token;
 }
 
 /**
  * Marks the end of a performance measurement.
+ *
+ * Duration telemetry (sampled) is emitted regardless of __PROF__ — ambient
+ * RUM was blind to every mark pair before this, which left the benchmark
+ * manifests' scan/search/totals rows permanently NO-DATA in production.
+ * Accepts the legacy string start-mark for old callers (profiling-only,
+ * no start timestamp, so no telemetry).
  */
-export function perfMarkEnd(label: string, startMark?: string | null): void {
+export function perfMarkEnd(
+	label: string,
+	token?: PerfMarkToken | string | null,
+): void {
+	if (token && typeof token === "object" && typeof token.startedAt === "number") {
+		const elapsed = nowMs() - token.startedAt;
+		if (elapsed >= TELEMETRY_SAMPLE_MIN_MS && Math.random() < PAIR_TELEMETRY_SAMPLE) {
+			try {
+				trackCustomMark(label, elapsed);
+			} catch {
+				// Telemetry must never raise from a measured path.
+			}
+		}
+	}
 	if (
 		!isPerfEnabled() ||
 		!hasPerformance ||
@@ -49,6 +90,7 @@ export function perfMarkEnd(label: string, startMark?: string | null): void {
 	) {
 		return;
 	}
+	const startMark = typeof token === "string" ? token : token?.mark || null;
 	const end = markName(label, "end");
 	try {
 		performance.mark(end);

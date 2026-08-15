@@ -143,6 +143,9 @@ export async function searchViaWorker(
 		},
 	);
 	if (!result) return null;
-	trackCustomMark("perf:search-worker", result.took_ms);
+	// trackCustomMark prefixes "perf:" itself — passing "perf:search-worker"
+	// here double-prefixed the event ("perf:perf:search-worker"), so it never
+	// matched any dashboard or benchmark manifest row.
+	trackCustomMark("search-worker", result.took_ms);
 	return result.codes;
 }

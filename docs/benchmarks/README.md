@@ -64,14 +64,26 @@ Exit 0 pass · 1 gate failed · 2 invalid/not comparable.
 - `rum:inp` p95 112 ms — comfortably inside budget
 - submit/QZ under min samples in a 1-day window (see honesty rules)
 
-## Instrumentation gaps (named work items)
+## Instrumentation status
 
-1. Warm/cold launch split — boot-source mark.
-2. `payment_screen_open` mark — none exists.
-3. Durable queue acceptance latency — `pos:offline_invoice_saved` carries
-   grand_total (money), not ms.
-4. Scan/local-search/totals marks are gated on `window.__PROF__` — ambient
-   RUM never sees them; profiling sessions (or ungating cheap marks) needed.
-5. Floor/table action mark (busy-service).
-6. `perf:pos:add-item` p99 polluted by offline enrichment — manifest gates
-   its p95 only.
+Closed with manifest v2 (events appear once the carrying build reaches a
+site — until then those rows read NO-DATA):
+
+1. Warm/cold launch split — `pos:launch_warm_ms` / `pos:launch_cold_ms`
+   (LCP split by whether a service worker controlled the load; capped like
+   the other web vitals).
+2. `payment_screen_open` — `perf:pos:pay-open`, tap → panel visible
+   including the invoice round-trip.
+3. Durable queue acceptance — `perf:pos:offline_save_ms`, the IndexedDB
+   persist of an offline sale.
+4. Scan/local-search/totals mark pairs now emit ambient telemetry at a 10%
+   sample with `__PROF__` off (summary counts under-count ~10x by design;
+   `__PROF__` still adds full DevTools marks/measures).
+5. `perf:search-worker` was double-prefixed (`perf:perf:…`) and therefore
+   invisible — fixed.
+
+Still open:
+
+- Floor/table action mark (busy-service).
+- `perf:pos:add-item` p99 polluted by offline enrichment — manifest gates
+  its p95 only.

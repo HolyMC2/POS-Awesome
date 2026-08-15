@@ -4,6 +4,7 @@ import {
 	getDefaultDocumentSource,
 	loadDocumentSourceRecord,
 } from "../../../utils/documentSources";
+import { trackCustomMark } from "../../../utils/telemetry";
 
 declare const __: (_text: string, _args?: any[]) => string;
 declare const frappe: any;
@@ -22,6 +23,13 @@ export async function show_payment(context: any) {
 		return;
 	}
 	context.uiStore?.beginPaymentRequest?.();
+
+	// Benchmark row payment_screen_open (perf:pos:pay-open): tap → panel
+	// visible, INCLUDING the process_invoice/update_invoice round-trip —
+	// that is what the operator waits through. Emitted only when the panel
+	// actually opens (early returns and errors don't count as an open).
+	const payOpenStartedAt =
+		typeof performance !== "undefined" ? performance.now() : Date.now();
 
 	if (context._suppressClosePaymentsTimer) {
 		clearTimeout(context._suppressClosePaymentsTimer);
@@ -163,6 +171,16 @@ export async function show_payment(context: any) {
 			await context.$nextTick();
 		}
 		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		try {
+			trackCustomMark(
+				"pos:pay-open",
+				(typeof performance !== "undefined" ? performance.now() : Date.now()) -
+					payOpenStartedAt,
+			);
+		} catch {
+			/* telemetry must never block payments */
+		}
 
 		// Re-attach the refundable cap stripped by the backend save/reload so the
 		// payment screen can default an unpaid-invoice return to a credit note.
