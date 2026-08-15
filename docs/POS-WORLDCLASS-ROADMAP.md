@@ -821,10 +821,13 @@ resolution can use only a seven-day stamped last-known-good contract. Update
 (2026-08-15): the legacy-read classification prerequisite is complete
 ([`LEGACY-FIELD-INVENTORY.md`](LEGACY-FIELD-INVENTORY.md) §5 names the
 override-allowlist candidates, fold-into-token and hardware-profile
-extractions, and the never-overridable server-policy set). Remaining
-Foundation 1 scope: the typed override allowlist itself, immutable shift
-stamping, provenance inspection, next-shift activation, emergency removal,
-Boat artifact ownership and thin seed manifest.
+extractions, and the never-overridable server-policy set). Immutable shift
+stamping is done: POS Opening Shift stores the resolved contract snapshot,
+sha256 fingerprint and payload version as read-only submitted fields
+(unconfigured registers stamp an explicit marker; mid-shift preset edits
+never rewrite the stamp). Remaining Foundation 1 scope: the typed override
+allowlist itself, provenance inspection, next-shift activation, emergency
+removal, Boat artifact ownership and thin seed manifest.
 
 - Publish a small typed capability schema, explicit override allowlist and
   `unconfigured`/`invalid`/`temporarily_unavailable` resolver states.
