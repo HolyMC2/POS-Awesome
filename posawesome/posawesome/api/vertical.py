@@ -4,6 +4,8 @@
 from __future__ import unicode_literals
 
 import copy
+import hashlib
+import json
 
 import frappe
 from frappe import _
@@ -19,6 +21,7 @@ CAPABILITY_PAYLOAD_VERSION = 3
 RESOLUTION_RESOLVED = "resolved"
 RESOLUTION_INVALID = "invalid"
 RESOLUTION_TEMPORARILY_UNAVAILABLE = "temporarily_unavailable"
+RESOLUTION_UNCONFIGURED = "unconfigured"
 LAST_GOOD_TTL_SECONDS = 7 * 24 * 60 * 60
 
 
@@ -155,6 +158,31 @@ def assert_capability_configuration(pos_profile_name):
             _("This register configuration is invalid. Ask a manager to repair its capability profile."),
             frappe.ValidationError,
         )
+
+
+def effective_contract_stamp(pos_profile_name):
+    """Immutable stamp of the contract a shift opens under (roadmap F1
+    "version/stamp effective contract at shift open").
+
+    Returns ``(snapshot_json, fingerprint, version)``. An unconfigured legacy
+    register stamps an explicit marker rather than nothing, so "opened with no
+    contract" and "predates stamping" stay distinguishable in the audit trail.
+    Tolerant like ``opening_capability_payload`` — stamping must never take
+    down shift opening.
+    """
+    payload = opening_capability_payload(pos_profile_name)
+    if payload is None:
+        payload = {
+            "name": None,
+            "version": CAPABILITY_PAYLOAD_VERSION,
+            "capabilities": [],
+            "resolution": {"status": RESOLUTION_UNCONFIGURED},
+        }
+    snapshot_json = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), default=str
+    )
+    fingerprint = hashlib.sha256(snapshot_json.encode("utf-8")).hexdigest()
+    return snapshot_json, fingerprint, CAPABILITY_PAYLOAD_VERSION
 
 
 @frappe.whitelist()

@@ -20,6 +20,10 @@
   "user",
   "opening_balance_details_section",
   "balance_details",
+  "effective_contract_section",
+  "posa_contract_version",
+  "posa_contract_fingerprint",
+  "posa_effective_contract",
   "section_break_9",
   "amended_from"
  ],
@@ -105,6 +109,34 @@
    "label": "Opening Balance Details",
    "options": "POS Opening Shift Detail",
    "reqd": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "effective_contract_section",
+   "fieldtype": "Section Break",
+   "label": "Effective Register Contract"
+  },
+  {
+   "fieldname": "posa_contract_version",
+   "fieldtype": "Int",
+   "label": "Contract Payload Version",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "posa_contract_fingerprint",
+   "fieldtype": "Data",
+   "label": "Contract Fingerprint",
+   "length": 64,
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "posa_effective_contract",
+   "fieldtype": "Long Text",
+   "label": "Effective Contract Snapshot",
+   "no_copy": 1,
+   "read_only": 1
   },
   {
    "fieldname": "section_break_9",

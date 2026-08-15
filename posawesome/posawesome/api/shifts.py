@@ -8,6 +8,7 @@ import frappe
 from frappe.utils import cint, nowdate
 from frappe import _
 from .utilities import get_version
+from .vertical import effective_contract_stamp
 from ._scope import assert_company, assert_profile
 
 
@@ -105,6 +106,15 @@ def create_opening_voucher(pos_profile, company, balance_details):
         }
     )
     new_pos_opening.set("balance_details", balance_details)
+    # Immutable contract stamp (roadmap F1): the shift row records exactly
+    # which resolved capability contract it opened under, so audit, replay
+    # checks and next-shift activation have a server-durable anchor — not
+    # just the client's copy of the opening response. Read-only submitted
+    # fields; a mid-shift preset edit changes nothing here by design.
+    snapshot_json, fingerprint, version = effective_contract_stamp(pos_profile)
+    new_pos_opening.posa_effective_contract = snapshot_json
+    new_pos_opening.posa_contract_fingerprint = fingerprint
+    new_pos_opening.posa_contract_version = version
     new_pos_opening.insert(ignore_permissions=True)
 
     data = {}
