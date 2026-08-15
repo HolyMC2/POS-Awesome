@@ -532,8 +532,17 @@ function currencySymbol(currency) {
 	return get_currency_symbol?.(currency);
 }
 
+// The queue mirror deliberately keeps dead_letter/draft_review rows (the
+// close-shift gate counts them as unresolved money), but the TABLE labels its
+// rows "Pending Sync" — listing operator-action rows there duplicated the
+// alert sections above and lied about what the drain will retry (audit r2
+// A7). The table shows drain-owned rows only.
+const OPERATOR_REVIEW_STATUSES = new Set(["dead_letter", "draft_review"]);
+
 function loadInvoices() {
-	invoices.value = getOfflineInvoices();
+	invoices.value = getOfflineInvoices().filter(
+		(row) => !OPERATOR_REVIEW_STATUSES.has(row.status),
+	);
 	void loadOperatorReviewRows();
 }
 
@@ -568,7 +577,9 @@ async function retryDeadLetter(row) {
 		await syncStore.requeueDeadLetter(row.client_request_id);
 	} finally {
 		deadLetterBusy.value = "";
-		await loadOperatorReviewRows();
+		// Reload the TABLE too: a requeued row is pending again and must move
+		// from the alert section into the drain-owned list (audit r2 A7).
+		loadInvoices();
 	}
 }
 
@@ -578,7 +589,7 @@ async function retryWriteQueueDeadLetter(row) {
 		await syncStore.requeueWriteQueueDeadLetter(row.queue_id);
 	} finally {
 		writeQueueDeadLetterBusy.value = null;
-		await loadOperatorReviewRows();
+		loadInvoices();
 	}
 }
 
@@ -592,7 +603,7 @@ async function retryDraftReview(row) {
 		await syncStore.requeueDraftReview(row.queue_id);
 	} finally {
 		draftReviewBusy.value = null;
-		await loadOperatorReviewRows();
+		loadInvoices();
 	}
 }
 
@@ -602,7 +613,7 @@ async function resolveDraftReview(row) {
 		await syncStore.resolveDraftReview(row.queue_id);
 	} finally {
 		draftReviewBusy.value = null;
-		await loadOperatorReviewRows();
+		loadInvoices();
 	}
 }
 
