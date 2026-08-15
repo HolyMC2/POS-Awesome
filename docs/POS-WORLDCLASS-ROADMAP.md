@@ -830,9 +830,14 @@ switch are done: server capability gates, the SPA resume path and
 get_capability_json resolve from the open shift's stamp
 (`shift_effective_capability_payload`), and site_config
 `posa_disabled_capabilities` removes a dangerous optional capability
-immediately from stamped and live resolution alike. Remaining Foundation 1
-scope: the typed override allowlist itself, provenance inspection, Boat
-artifact ownership and thin seed manifest.
+immediately from stamped and live resolution alike. The typed override
+allowlist and provenance inspection are done: `OVERRIDE_ALLOWLIST` (v1:
+`layout.lean_vertical`, `layout.hide_items_until_search`, merge rule
+enable_only) is merged server-side into the resolved payload, and
+`get_contract_provenance` exposes value / mode default / override / why
+locked per key, shift-aware, with `pending_next_shift` marking edits that
+wait for the next opening. Remaining Foundation 1 scope: Boat artifact
+ownership ledger and the thin seed manifest.
 
 - Publish a small typed capability schema, explicit override allowlist and
   `unconfigured`/`invalid`/`temporarily_unavailable` resolver states.
