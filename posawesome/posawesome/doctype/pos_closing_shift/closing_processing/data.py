@@ -44,6 +44,11 @@ def get_pos_invoices(pos_opening_shift, doctype=None, submit_printed=1):
 
 @frappe.whitelist()
 def get_payments_entries(pos_opening_shift):
+    # Audit r2 P1: this whitelisted read exposed cross-profile/company
+    # Payment Entry names, amounts, parties and dates for any shift name.
+    # Scope it exactly like the hardened get_pos_invoices sibling before
+    # touching the table.
+    get_scoped_opening_shift(pos_opening_shift)
     return frappe.get_all(
         "Payment Entry",
         filters={

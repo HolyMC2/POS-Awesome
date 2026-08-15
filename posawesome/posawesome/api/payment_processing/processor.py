@@ -389,6 +389,46 @@ def process_pos_payment(payload):
         profile.name,
     )
 
+    # Audit r2 P1: the opening shift was taken from the client and used as the
+    # Payment Entry reference_no, but never bound to this profile/company/
+    # cashier. A cashier could name another shift (or supply an arbitrary
+    # reference_no) so the PE lands in someone else's corte, which closing
+    # aggregates by reference_no == pos_opening_shift. Bind it to a submitted,
+    # open shift the acting cashier owns before any write.
+    _shift = frappe.db.get_value(
+        "POS Opening Shift",
+        pos_opening_shift_name,
+        ["pos_profile", "company", "status", "docstatus", "user"],
+        as_dict=True,
+    )
+    if not _shift:
+        frappe.throw(
+            _("POS Opening Shift {0} was not found").format(pos_opening_shift_name),
+            frappe.PermissionError,
+        )
+    if _shift.get("pos_profile") != profile.name or _shift.get("company") != company:
+        frappe.throw(
+            _("POS Opening Shift {0} does not belong to this register.").format(
+                pos_opening_shift_name
+            ),
+            frappe.PermissionError,
+        )
+    from posawesome.posawesome.api.shifts import is_demo_pos_site
+
+    if not is_demo_pos_site():
+        if cint(_shift.get("docstatus")) != 1 or _shift.get("status") != "Open":
+            frappe.throw(
+                _("POS Opening Shift {0} is not open.").format(pos_opening_shift_name),
+                frappe.PermissionError,
+            )
+        if _shift.get("user") != frappe.session.user:
+            frappe.throw(
+                _("POS Opening Shift {0} belongs to another user.").format(
+                    pos_opening_shift_name
+                ),
+                frappe.PermissionError,
+            )
+
     existing_entries = find_payment_entries_by_client_request_id(client_request_id)
     for existing_entry in existing_entries:
         _assert_accounting_document_access(
@@ -754,7 +794,10 @@ def process_pos_payment(payload):
                     payment_type=payment_type,
                     exchange_rate=data.get("exchange_rate"),
                     posting_date=posting_date,
-                    reference_no=data.get("reference_no") or pos_opening_shift_name,
+                    # Derive from the validated shift, never the client — a
+                    # POS payment's reference_no is how closing attributes it
+                    # to the corte (audit r2 P1).
+                    reference_no=pos_opening_shift_name,
                     reference_date=data.get("reference_date") or posting_date,
                     cost_center=profile.get("cost_center"),
                     submit=0,

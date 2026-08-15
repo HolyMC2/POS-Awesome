@@ -102,6 +102,16 @@ def _scenario():
         "assigned_profiles": {"Allowed POS", "Make Payments Off"},
         "documents": {},
         "denied_documents": set(),
+        # A submitted, open shift the cashier owns on the Allowed POS register.
+        # Tests that reach the new-payment write path bind against this.
+        "opening_shift": {
+            "name": "OPEN-001",
+            "pos_profile": "Allowed POS",
+            "company": "Tenant A",
+            "status": "Open",
+            "docstatus": 1,
+            "user": "cashier@example.com",
+        },
     }
 
 
@@ -187,7 +197,12 @@ def _install_frappe(scenario):
                 for name in scenario["assigned_profiles"]
             ]
 
-        def get_value(self, doctype, name, fieldname=None):
+        def get_value(self, doctype, name, fieldname=None, as_dict=False):
+            if doctype == "POS Opening Shift":
+                shift = scenario.get("opening_shift")
+                if not shift or shift.get("name") != name:
+                    return None
+                return _AttrDict(shift) if as_dict else shift.get(fieldname)
             return None
 
         def get_descendants(self, doctype, group):
@@ -256,6 +271,10 @@ def _install_dependencies():
     idempotency.normalize_client_request_id = lambda value: (value or "").strip() or None
     idempotency.find_payment_entries_by_client_request_id = lambda value: []
     _install_module("posawesome.posawesome.api.idempotency", idempotency)
+
+    shifts = types.ModuleType("posawesome.posawesome.api.shifts")
+    shifts.is_demo_pos_site = lambda: False
+    _install_module("posawesome.posawesome.api.shifts", shifts)
 
 
 def _load_processor(scenario):
@@ -341,6 +360,54 @@ class PaymentProcessorScopeTests(unittest.TestCase):
         self.assertTrue(payment_entry.saved)
         self.assertTrue(payment_entry.submitted)
         self.assertEqual(result["new_payments_entry"][0]["name"], payment_entry.name)
+        # reference_no is derived from the validated shift, never the client.
+        self.assertEqual(create.call_args.kwargs["reference_no"], "OPEN-001")
+
+    def test_new_payment_reference_no_ignores_client_override(self):
+        scenario = _scenario()
+        processor = _load_processor(scenario)
+        payload = _payload()
+        payload["payment_methods"] = [{"mode_of_payment": "Cash", "amount": 25}]
+        payload["total_payment_methods"] = 25
+        # A crafted reference_no naming another cashier's shift must not stick.
+        payload["reference_no"] = "OPEN-VICTIM"
+        payment_entry = _FakePaymentEntry(25)
+
+        with patch.object(processor, "create_payment_entry", return_value=payment_entry) as create:
+            processor.process_pos_payment(json.dumps(payload))
+
+        self.assertEqual(create.call_args.kwargs["reference_no"], "OPEN-001")
+
+    def test_foreign_or_missing_shift_is_rejected(self):
+        # Unknown shift.
+        scenario = _scenario()
+        scenario["opening_shift"] = None
+        processor = _load_processor(scenario)
+        payload = _payload()
+        payload["payment_methods"] = [{"mode_of_payment": "Cash", "amount": 25}]
+        payload["total_payment_methods"] = 25
+        with self.assertRaises(_PermissionError):
+            processor.process_pos_payment(json.dumps(payload))
+
+        # Shift owned by another cashier.
+        scenario = _scenario()
+        scenario["opening_shift"]["user"] = "other@example.com"
+        processor = _load_processor(scenario)
+        payload = _payload()
+        payload["payment_methods"] = [{"mode_of_payment": "Cash", "amount": 25}]
+        payload["total_payment_methods"] = 25
+        with self.assertRaises(_PermissionError):
+            processor.process_pos_payment(json.dumps(payload))
+
+        # Shift belonging to a different register.
+        scenario = _scenario()
+        scenario["opening_shift"]["pos_profile"] = "Foreign POS"
+        processor = _load_processor(scenario)
+        payload = _payload()
+        payload["payment_methods"] = [{"mode_of_payment": "Cash", "amount": 25}]
+        payload["total_payment_methods"] = 25
+        with self.assertRaises(_PermissionError):
+            processor.process_pos_payment(json.dumps(payload))
 
     def test_selected_accounting_documents_require_read_permission(self):
         cases = (

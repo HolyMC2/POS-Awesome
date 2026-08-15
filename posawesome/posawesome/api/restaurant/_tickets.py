@@ -53,8 +53,11 @@ def assert_tables_capability(pos_profile):
     reach. Enforce the token here, mirroring the tips money-gate precedent
     (Marco 2026-08-12: enforce ``tables`` server-side, not UI-only).
 
-    An entry may carry a ``:Role`` suffix; only the base token is checked, the
-    same way ``POS Capability Profile`` validates the CSV.
+    An entry may carry a ``:Role`` suffix. When present it is a real
+    restriction: only a session user holding that role passes (audit r2 —
+    the previous ``split(":")[0]`` check ignored the suffix, so any cashier
+    on a ``tables:Restaurant Manager`` register could open/settle tables and
+    fire KOTs). Mirrors ``_capability_enabled`` in ``charge_requests.py``.
     """
     from posawesome.posawesome.api.vertical import resolve_capability_json
 
@@ -62,11 +65,22 @@ def assert_tables_capability(pos_profile):
         frappe.throw(_("POS profile is required."), frappe.PermissionError)
     payload = resolve_capability_json(pos_profile) or {}
     capabilities = payload.get("capabilities") or []
-    if not any(str(entry).split(":")[0].strip() == TABLES_CAPABILITY for entry in capabilities):
-        frappe.throw(
-            _("This register is not configured for table service."),
-            frappe.PermissionError,
-        )
+    user_roles = None
+    for entry in capabilities:
+        capability, separator, required_role = str(entry).partition(":")
+        if capability.strip() != TABLES_CAPABILITY:
+            continue
+        required_role = required_role.strip() if separator else ""
+        if not required_role:
+            return
+        if user_roles is None:
+            user_roles = set(frappe.get_roles(frappe.session.user) or [])
+        if required_role in user_roles:
+            return
+    frappe.throw(
+        _("This register is not configured for table service."),
+        frappe.PermissionError,
+    )
 
 
 # ---------------------------------------------------------------------------
