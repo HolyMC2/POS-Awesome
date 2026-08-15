@@ -51,6 +51,15 @@ def _build_frappe_module(scenario: dict) -> types.ModuleType:
 
     frappe_module.db = _Db()
 
+    def _get_all(doctype, filters=None, fields=None, **kwargs):
+        if doctype == "Item":
+            return scenario.get("item_meta", [])
+        return []
+
+    frappe_module.get_all = _get_all
+    frappe_module.log_error = lambda *a, **k: None
+    frappe_module.get_traceback = lambda: ""
+
     utils_module = types.ModuleType("frappe.utils")
     utils_module.flt = lambda v, *a: float(v or 0)
     frappe_module.utils = utils_module
@@ -71,9 +80,23 @@ def _install_pkg_stubs():
     sys.modules.setdefault("posawesome.posawesome.api", api_pkg)
 
 
+def _install_offers_stub(scenario: dict):
+    """Stub posawesome.posawesome.api.offers.get_offers for the free-item
+    verification. `offers` in the scenario is the server-authoritative list;
+    absent → import raises → helper fails open (client-trust)."""
+    name = "posawesome.posawesome.api.offers"
+    if "offers" not in scenario:
+        sys.modules.pop(name, None)
+        return
+    module = types.ModuleType(name)
+    module.get_offers = lambda profile: list(scenario.get("offers", []))
+    sys.modules[name] = module
+
+
 def _import_reprice(scenario: dict):
     _install_pkg_stubs()
     sys.modules["frappe"] = _build_frappe_module(scenario)
+    _install_offers_stub(scenario)
     sys.modules.pop("posawesome.posawesome.api._reprice", None)
     spec = importlib.util.spec_from_file_location(
         "posawesome.posawesome.api._reprice",
@@ -346,6 +369,97 @@ class RateBandTests(unittest.TestCase):
         profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
         with self.assertRaises(_PermissionError):
             rp.assert_rates_within_band(invoice, profile)
+
+    # ---- audit r2: client free marker is verified against server offers ----
+
+    def test_forged_free_item_rejected_when_no_offer_grants_it(self):
+        """A crafted is_free_item on a normally-priced item, on a profile with
+        a KNOWN offer set that does not grant it, must be rejected — the
+        client marker no longer buys the exemption."""
+        scenario = _basic_scenario()
+        scenario["offers"] = [
+            {"offer": "Give Product", "give_item": "IT-OTHER"}
+        ]
+        rp = _import_reprice(scenario)
+        invoice = {
+            "pos_profile": "Doco POS",
+            "items": [{
+                "idx": 1, "item_code": "IT-1", "rate": 0, "is_free_item": 1,
+                "posa_is_offer": 1, "price_list_rate": 100.00,
+                "discount_percentage": 100,
+            }],
+        }
+        profile = {
+            "name": "Doco POS",
+            "posa_allow_user_to_edit_rate": 0,
+            "selling_price_list": "Doco",
+        }
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(invoice, profile)
+        with self.assertRaises(_PermissionError):
+            rp.enforce_discount_limit(invoice, profile)
+
+    def test_server_granted_free_item_still_passes(self):
+        """The same zero line passes once the server offer set actually grants
+        this item — the legitimate give-product flow is preserved."""
+        scenario = _basic_scenario()
+        scenario["offers"] = [
+            {"offer": "Give Product", "give_item": "IT-1"}
+        ]
+        rp = _import_reprice(scenario)
+        invoice = {
+            "pos_profile": "Doco POS",
+            "items": [{
+                "idx": 1, "item_code": "IT-1", "rate": 0, "is_free_item": 1,
+                "posa_is_offer": 1, "price_list_rate": 100.00,
+                "discount_percentage": 100,
+            }],
+        }
+        profile = {
+            "name": "Doco POS",
+            "posa_allow_user_to_edit_rate": 0,
+            "selling_price_list": "Doco",
+        }
+        rp.assert_rates_within_band(invoice, profile)
+        rp.enforce_discount_limit(invoice, profile)
+
+    def test_same_item_offer_grants_cart_item(self):
+        """A 'buy X get X free' (replace_item) offer grants the free line only
+        when the item is in the cart and matches the apply scope."""
+        scenario = _basic_scenario()
+        scenario["offers"] = [{
+            "offer": "Give Product",
+            "replace_item": 1,
+            "apply_type": "Item Code",
+            "apply_item_code": "IT-1",
+        }]
+        rp = _import_reprice(scenario)
+        invoice = {
+            "pos_profile": "Doco POS",
+            "items": [{
+                "idx": 1, "item_code": "IT-1", "rate": 0, "is_free_item": 1,
+                "posa_is_offer": 1, "price_list_rate": 100.00,
+                "discount_percentage": 100,
+            }],
+        }
+        profile = {
+            "name": "Doco POS",
+            "posa_allow_user_to_edit_rate": 0,
+            "selling_price_list": "Doco",
+        }
+        rp.assert_rates_within_band(invoice, profile)
+
+    def test_free_marker_fails_open_when_offer_set_unavailable(self):
+        """No server offer context (indeterminate) → preserve prior
+        client-trust so an offers-infra hiccup cannot block the counter."""
+        rp = _import_reprice(_basic_scenario())  # no "offers" key, no name
+        invoice = {"items": [{
+            "idx": 1, "item_code": "IT-1", "rate": 0, "is_free_item": 1,
+            "price_list_rate": 100.00, "discount_percentage": 100,
+        }]}
+        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        rp.assert_rates_within_band(invoice, profile)
+        rp.enforce_discount_limit(invoice, profile)
 
     def test_no_edit_offer_discount_passes(self):
         # Offer/pricing-rule discount is not a rate edit: declared

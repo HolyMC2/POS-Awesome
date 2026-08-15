@@ -88,6 +88,128 @@ def _line_value(line: Any, key: str, default: Any = None) -> Any:
     return getattr(line, key, default)
 
 
+_GRANTABLE_SENTINEL = object()
+_NON_ITEM_TOKENS = {"", "nothing", "null", "undefined", "none"}
+
+
+def _server_grantable_free_items(invoice_doc: Any, profile_doc: Any) -> set | None:
+    """Item codes a valid Give-Product offer can hand out for free.
+
+    Audit r2 P0: a client-set ``is_free_item`` / ``posa_is_offer`` marker
+    is untrusted — a crafted payload can flag a normally-priced item free
+    to zero-price it on a rate-edit-OFF profile. The exemption in the two
+    guards below must be verified against the SERVER's offer set, not the
+    client's claim.
+
+    Returns a set of grantable item codes, or ``None`` when the offer set
+    cannot be determined (offers infra error) — the caller then falls back
+    to the old client-trust behaviour rather than blocking the counter. A
+    successful lookup that omits the item is a forgery: the guards enforce.
+
+    Scope covers explicit give items plus same-item ("buy X get X free")
+    offers, intersected with the cart so an offer's apply group/brand only
+    grants items actually in this basket.
+    """
+    profile_name = _profile_value(profile_doc, "name") or _line_value(
+        invoice_doc, "pos_profile"
+    )
+    if not profile_name:
+        return None
+    try:
+        from posawesome.posawesome.api.offers import get_offers
+
+        offers = get_offers(profile_name) or []
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(), "POSAwesome free-item offer verification"
+        )
+        return None
+
+    give_offers = [o for o in offers if str(o.get("offer") or "").strip() == "Give Product"]
+
+    cart_codes = {
+        str(_line_value(line, "item_code")).strip()
+        for line in _iter_lines(invoice_doc)
+        if _line_value(line, "item_code")
+    }
+
+    # Item metadata for same-item scope resolution, fetched once for the cart.
+    meta = {}
+    if cart_codes:
+        try:
+            for row in frappe.get_all(
+                "Item",
+                filters={"item_code": ["in", list(cart_codes)]},
+                fields=["item_code", "item_group", "brand"],
+            ):
+                meta[row.get("item_code")] = row
+        except Exception:
+            meta = {}
+
+    def _clean(code):
+        code = str(code or "").strip()
+        return code if code.lower() not in _NON_ITEM_TOKENS else ""
+
+    grantable: set = set()
+    for offer in give_offers:
+        explicit = _clean(offer.get("give_item")) or _clean(offer.get("apply_item_code"))
+        if explicit and not (offer.get("replace_item") or offer.get("replace_cheapest_item")):
+            grantable.add(explicit)
+            continue
+
+        # Same-item / replace: the free item is a purchased line matching the
+        # offer's apply scope. Only cart items can qualify.
+        apply_type = str(offer.get("apply_type") or offer.get("apply_on") or "").strip()
+        target_code = _clean(offer.get("apply_item_code")) or _clean(offer.get("item"))
+        target_group = _clean(offer.get("apply_item_group")) or _clean(offer.get("item_group"))
+        target_brand = _clean(offer.get("brand"))
+        for code in cart_codes:
+            if apply_type == "Item Code" and code == target_code:
+                grantable.add(code)
+            elif apply_type == "Item Group" and target_group and (
+                meta.get(code, {}).get("item_group") == target_group
+            ):
+                grantable.add(code)
+            elif apply_type == "Brand" and target_brand and (
+                meta.get(code, {}).get("brand") == target_brand
+            ):
+                grantable.add(code)
+            elif explicit and code == explicit:
+                grantable.add(code)
+
+    return grantable
+
+
+def _line_free_exemption(line: Any, invoice_doc: Any, profile_doc: Any) -> bool:
+    """True when a zero-rate line is a legitimate, server-verified freebie.
+
+    A client free/offer marker only earns the exemption when the server's
+    own Give-Product offer set can actually grant this item (or when the
+    offer set is indeterminate — fail open to avoid blocking the counter).
+    Rate-edit-enabled profiles keep the operator prerogative separately;
+    this helper is consulted only for the marker-based exemption.
+    """
+    is_marker = bool(
+        flt(_line_value(line, "is_free_item") or 0)
+        or flt(_line_value(line, "posa_is_offer") or 0)
+    )
+    if not is_marker:
+        return False
+
+    cache = getattr(invoice_doc, "_posa_grantable_free", _GRANTABLE_SENTINEL)
+    if cache is _GRANTABLE_SENTINEL:
+        cache = _server_grantable_free_items(invoice_doc, profile_doc)
+        try:
+            invoice_doc._posa_grantable_free = cache
+        except Exception:
+            pass
+    if cache is None:
+        # Offer set indeterminate — preserve prior client-trust behaviour.
+        return True
+    item_code = str(_line_value(line, "item_code") or "").strip()
+    return bool(item_code) and item_code in cache
+
+
 # ---------------------------------------------------------------------------
 # discount cap
 # ---------------------------------------------------------------------------
@@ -140,12 +262,11 @@ def enforce_discount_limit(invoice_doc: Any, profile_doc: Any | None = None) -> 
             discount_pct = max(discount_pct, discount_amount / base_rate * 100.0)
 
         # Product giveaways and fully-discounted offer/pricing-rule lines
-        # are authorized freebies, not operator-entered discounts.
+        # are authorized freebies, not operator-entered discounts. The free
+        # marker is client-supplied, so verify it against the server's own
+        # Give-Product offer set before honouring the exemption (audit r2).
         client_rate = flt(_line_value(line, "rate") or 0)
-        is_free = bool(
-            flt(_line_value(line, "is_free_item") or 0)
-            or flt(_line_value(line, "posa_is_offer") or 0)
-        )
+        is_free = _line_free_exemption(line, invoice_doc, profile_doc)
         has_rule = bool(
             flt(_line_value(line, "posa_offer_applied") or 0)
             or _line_value(line, "pricing_rules")
@@ -329,10 +450,9 @@ def assert_rates_within_band(
             # "operator judgment rules" bypass applied to positive rates
             # below. Gating here prevents this guard from 403'ing legitimate
             # zero lines on rate-edit-enabled registers.
-            is_free = bool(
-                flt(_line_value(line, "is_free_item") or 0)
-                or flt(_line_value(line, "posa_is_offer") or 0)
-            )
+            # Client free/offer markers are untrusted — verify against the
+            # server's Give-Product offer set (audit r2 zero-price bypass).
+            is_free = _line_free_exemption(line, invoice_doc, profile_doc)
             declared_plr = flt(_line_value(line, "price_list_rate") or 0)
             base_rate = declared_plr if declared_plr > 0 else master_rate
             disc_pct = flt(_line_value(line, "discount_percentage") or 0)
