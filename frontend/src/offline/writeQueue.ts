@@ -81,16 +81,13 @@ const LEGACY_QUEUE_CONFIG: Array<{
 ];
 
 // Every entity the queue serves — drives memory refresh and the dead-letter
-// surface. Keep in sync with OfflineEntityType, NOT with LEGACY_QUEUE_CONFIG:
-// a type missing here never refreshes its memory snapshot and its dead-letters
-// stay invisible to the operator.
-const ALL_QUEUE_ENTITY_TYPES: OfflineEntityType[] = [
-	"invoice",
-	"customer",
-	"payment",
-	"cash_movement",
-	"restaurant_order",
-];
+// surface. Derived from ENTITY_MEMORY_KEYS, whose Record<OfflineEntityType, …>
+// type makes the compiler refuse a new entity type that has no memory key —
+// so a type can never exist without appearing here, which would leave its
+// dead-letters invisible to the operator.
+const ALL_QUEUE_ENTITY_TYPES = Object.keys(
+	ENTITY_MEMORY_KEYS,
+) as OfflineEntityType[];
 
 const ACTIVE_STATUSES = new Set<OfflineQueueStatus>([
 	"pending",

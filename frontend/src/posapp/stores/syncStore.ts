@@ -28,9 +28,14 @@ import {
 	requeueWriteQueueDeadLetter,
 	requeueWriteQueueDraftReview,
 	resolveWriteQueueDraftReview,
+	syncOfflineCashMovements,
+	syncOfflineCustomers,
 	syncOfflineInvoices,
+	syncOfflinePayments,
+	syncRestaurantOrders,
 	isOffline,
 } from "../../offline/index";
+import type { OfflineEntityType } from "../../offline/writeQueue";
 import { useSyncCoordinator } from "../../offline/sync/useSyncCoordinator";
 import { useToastStore } from "./toastStore.js";
 
@@ -114,10 +119,42 @@ export const useSyncStore = defineStore("sync", {
 			await this.updatePendingCount();
 			return row;
 		},
+		// "Reintentar" must act NOW for every money type. The drains are
+		// scattered by design (invoices+cash on resume, payments in the pay
+		// view, table orders on the coordinator), so a requeued non-invoice
+		// entry used to sit `pending` until whichever trigger next fired —
+		// which for a payment could be "never" if the operator stayed off the
+		// pay screen. Dispatch the drain that owns the requeued entity instead.
+		async drainEntityQueue(entityType: OfflineEntityType | undefined) {
+			try {
+				switch (entityType) {
+					case "payment":
+						await syncOfflinePayments();
+						return;
+					case "cash_movement":
+						await syncOfflineCashMovements();
+						return;
+					case "customer":
+						await syncOfflineCustomers();
+						return;
+					case "restaurant_order":
+						await syncRestaurantOrders();
+						return;
+					default:
+						// invoice — and any unknown type, where the invoice
+						// drain is the safest historical behaviour.
+						await this.syncPendingInvoices();
+				}
+			} catch (error) {
+				// The entry is already back in `pending`; the periodic drain
+				// picks it up even when the eager pass fails.
+				console.error("Post-requeue drain failed", error);
+			}
+		},
 		async requeueWriteQueueDeadLetter(queueId: number) {
 			const row = await requeueWriteQueueDeadLetter(queueId);
 			if (row) {
-				await this.syncPendingInvoices();
+				await this.drainEntityQueue(row.entity_type);
 			}
 			await this.updatePendingCount();
 			return row;
@@ -125,7 +162,7 @@ export const useSyncStore = defineStore("sync", {
 		async requeueDraftReview(queueId: number) {
 			const row = await requeueWriteQueueDraftReview(queueId);
 			if (row) {
-				await this.syncPendingInvoices();
+				await this.drainEntityQueue(row.entity_type);
 			}
 			await this.updatePendingCount();
 			return row;
