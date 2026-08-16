@@ -31,6 +31,23 @@ def get_opening_dialog_data():
 
     data["pos_profiles_data"] = pos_profiles_data
 
+    # An empty list renders as two dead dropdowns with zero explanation —
+    # the cashier cannot tell "no register assigned to me" from "the system
+    # is broken" (found live: a freshly provisioned register was invisible
+    # until the user was added to POS Profile User). Name the reason so the
+    # dialog can say it.
+    if not pos_profiles_data:
+        if frappe.db.count("POS Profile", {"disabled": 0}):
+            data["no_profile_reason"] = _(
+                "Tu usuario {0} no está asignado a ninguna caja. Pide al "
+                "administrador agregarte en POS Profile → Applicable for Users."
+            ).format(frappe.session.user)
+        else:
+            data["no_profile_reason"] = _(
+                "No hay ninguna caja (POS Profile) configurada todavía. "
+                "Crea una en Desk → POS Profile."
+            )
+
     # Derive companies from accessible POS Profiles
     company_names = []
     for profile in pos_profiles_data:

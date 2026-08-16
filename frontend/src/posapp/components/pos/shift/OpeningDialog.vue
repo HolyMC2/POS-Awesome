@@ -20,6 +20,15 @@
 				<!-- Content Section - Optimized for minimal scrolling -->
 				<v-card-text class="opening-dialog-content">
 					<v-container class="pa-0">
+						<!-- Two empty dropdowns explain nothing — when the server
+						     says WHY there is no register for this user, say it. -->
+						<v-row v-if="no_profile_reason && !pos_profiles_data.length">
+							<v-col cols="12">
+								<v-alert type="warning" variant="tonal" density="comfortable">
+									{{ no_profile_reason }}
+								</v-alert>
+							</v-col>
+						</v-row>
 						<v-row>
 							<!-- Company and POS Profile in same row for space efficiency -->
 							<v-col cols="12" md="6" class="form-field">
@@ -170,6 +179,7 @@ const { dialogProps } = useDialogFullscreen({ maxWidth: "800px", maxHeight: "90v
 const companies = ref([]);
 const company = ref("");
 const pos_profiles_data = ref([]);
+const no_profile_reason = ref("");
 const pos_profiles = ref([]);
 const pos_profile = ref("");
 const payments_method_data = ref([]);
@@ -252,6 +262,7 @@ async function get_opening_dialog_data() {
 				companies.value = r.message.companies.map((element) => element.name);
 				pos_profiles_data.value = r.message.pos_profiles_data;
 				payments_method_data.value = r.message.payments_method;
+				no_profile_reason.value = r.message.no_profile_reason || "";
 				company.value = companies.value[0] || "";
 				try {
 					setOpeningDialogStorage(r.message);
