@@ -910,9 +910,23 @@ certification job v1 exists (boat `certification.py` +
 agent `/sites/{site}/seed-verify`, allowlisted runner): it runs the
 manifest's assertion gates against a tenant, requires exact assertion-key
 coverage, and ledgers every run as a `seed-manifest` artifact row.
-Remaining for the P2 exit: golden-flow + provision-from-zero automation
-(manifest marks both `manual`), baseline re-record on ~1 day of post-roll
-traffic, and the printer/scanner/drawer certification bullet.
+
+Update (2026-08-15 night): **golden flow manually PROVEN end to end** on a
+lab abarrotes tenant converged from bare (migrate, emc+abordo install, SAT
+catalogs, fiscal defaults, dataset acceptance with clave/ITT self-heal,
+template apply through the real job — the artifact ledger recorded it —
+register creation, cashier assignment): browser drill ran open-shift →
+mixed-rate basket with duplicate-scan quantity → exact cash tender →
+submit → next basket. The drill caught a REAL contract gap — a 16% item
+sold with zero tax rows because only the item-level 0%/exento half was
+asserted — closed same-day as manifest v2 +
+`accounting.sales_taxes_template_default`; the re-drilled sale carries
+IVA 6.21 inclusive on a 127.00 gross and certification v2 passes 8/8.
+Remaining for the P2 exit: encode that drill as the automated golden-flow
+job (the manifest still says `manual`, honestly), baseline re-record on
+~1 day of post-roll traffic, and the printer/scanner/drawer certification
+bullet. Giro state promotion (seeded → workflow-ready for
+abarrotes/comercio) is now evidenced but stays a human call.
 
 - Complete scan/search/cart/payment/print/next-sale task path.
 - Cover the universal lifecycle: suspend/recall, discounts/promotions, tender,
