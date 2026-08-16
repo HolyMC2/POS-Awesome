@@ -22,7 +22,7 @@ import frappe
 try:
     import os
 
-    from prometheus_client import Counter
+    from prometheus_client import Counter, Gauge
 
     _mp = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
     if _mp:
@@ -48,9 +48,21 @@ try:
         "Final-state submission-ledger rows removed by the daily prune.",
         labelnames=("site",),
     )
+    # mostrecent: the daily sweep is the only writer, so "last value set by
+    # anyone" is the truth — livesum/max would resurrect stale per-pid values
+    # after the scheduler worker respawns.
+    LEDGER_STUCK = Gauge(
+        "posa_ledger_stuck_rows",
+        "Non-final submission-ledger rows older than their repair grace "
+        "window (SUBMITTED = invoice live but post-submit money work "
+        "missing). Set by the daily sweep.",
+        labelnames=("site", "state"),
+        multiprocess_mode="mostrecent",
+    )
 except ImportError:  # pragma: no cover
     _PROM = False
     SUBMIT_FAILURES = BACKGROUND_SUBMITS = LEDGER_PRUNED = None  # type: ignore
+    LEDGER_STUCK = None  # type: ignore
 
 
 def _site() -> str:
@@ -83,5 +95,15 @@ def ledger_pruned(count: int) -> None:
         return
     try:
         LEDGER_PRUNED.labels(site=_site()).inc(count)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def ledger_stuck(state: str, count: int) -> None:
+    """Set the stuck-row gauge for one ledger state (zero clears it)."""
+    if not _PROM:
+        return
+    try:
+        LEDGER_STUCK.labels(site=_site(), state=state).set(int(count or 0))
     except Exception:  # noqa: BLE001
         pass

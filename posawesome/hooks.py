@@ -203,6 +203,11 @@ scheduler_events = {
         # (2-3 invoice JSON copies per sale, was unbounded). Non-final
         # rows are the repair trail and are kept.
         "posawesome.posawesome.api.invoice_processing.creation.prune_submission_ledger",
+        # Surface the rows that prune deliberately keeps: non-final ledger
+        # rows past their repair grace window (SUBMITTED = invoice live,
+        # post-submit money work missing). Gauge + grouped Error Log;
+        # recovery stays operator-triggered via repair_invoice_submission.
+        "posawesome.posawesome.api.invoice_processing.ledger_sweep.sweep_stuck_submission_ledger",
     ],
     "cron": {
         # Keep the get_items page cache warm. The server cache TTL is
