@@ -81,9 +81,13 @@ site — until then those rows read NO-DATA):
    `__PROF__` still adds full DevTools marks/measures).
 5. `perf:search-worker` was double-prefixed (`perf:perf:…`) and therefore
    invisible — fixed.
+6. `floor_table_action` — `perf:pos:floor-action`, tap → the floor verb
+   completed (open/resume/tab/fire/release/clean) including its server
+   round-trip. Success-only and full-rate like `pos:pay-open` (floor verbs
+   happen per table visit, not per keystroke); deliberately NOT on the
+   web-vital ms cap, same as the other `perf:pos:*` marks.
 
 Still open:
 
-- Floor/table action mark (busy-service).
 - `perf:pos:add-item` p99 polluted by offline enrichment — manifest gates
   its p95 only.

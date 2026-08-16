@@ -197,11 +197,13 @@
     {
       "key": "floor_table_action",
       "roadmap_row": "Floor/table action response",
-      "events": [],
+      "events": [
+        "perf:pos:floor-action"
+      ],
       "unit": "ms",
       "target_p95": 500,
       "ceiling_p99": 1000,
-      "gap": "no dedicated floor-action mark; restaurant api round-trips are 10%-sampled"
+      "caveat": "tap to floor verb completed (open/resume/tab/fire/release/clean) INCLUDING its server round-trip; success-only, full-rate like pos:pay-open"
     }
   ]
 }

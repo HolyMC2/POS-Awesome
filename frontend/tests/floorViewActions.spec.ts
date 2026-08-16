@@ -72,6 +72,11 @@ vi.mock("../src/posapp/components/floor/floorGeometry", () => ({
 	resolveCanvas: () => ({ cols: 12, rows: 8, cell: 64 }),
 }));
 
+const trackCustomMark = vi.fn();
+vi.mock("../src/posapp/utils/telemetry", () => ({
+	trackCustomMark: (...args: unknown[]) => trackCustomMark(...args),
+}));
+
 vi.mock("../src/posapp/components/floor/FloorPlan.vue", async () => {
 	const { defineComponent, h } = await import("vue");
 	return {
@@ -203,5 +208,29 @@ describe("FloorView action routing", () => {
 		await flushPromises();
 
 		expect(eventBus.emit).toHaveBeenCalledWith("request_invoice_payment");
+	});
+
+	// Benchmark row floor_table_action (perf:pos:floor-action) — the busy-
+	// service manifest reads this event; without it the row is NO-DATA.
+	it("emits the floor-action mark when a table verb completes", async () => {
+		const { wrapper } = mountFloor();
+		await wrapper.find("[data-test='plan-table']").trigger("click");
+		await wrapper.find("[data-test='sheet-view']").trigger("click");
+		await flushPromises();
+
+		expect(trackCustomMark).toHaveBeenCalledWith(
+			"pos:floor-action",
+			expect.any(Number),
+		);
+	});
+
+	it("does not emit the mark when the verb fails to open an order", async () => {
+		floorStore.openOrCreate.mockResolvedValueOnce(null as any);
+		const { wrapper } = mountFloor();
+		await wrapper.find("[data-test='plan-table']").trigger("click");
+		await wrapper.find("[data-test='sheet-view']").trigger("click");
+		await flushPromises();
+
+		expect(trackCustomMark).not.toHaveBeenCalled();
 	});
 });

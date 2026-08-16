@@ -198,6 +198,7 @@ import { bus as importedBus } from "../../bus";
 import * as restaurantApi from "../../api/restaurant";
 import { useFloorStore, type OrderRow, type TableRow } from "../../stores/floorStore";
 import { useVerticalStore } from "../../stores/verticalStore";
+import { trackCustomMark } from "../../utils/telemetry";
 import type { KotProjection } from "../../../offline/restaurantTypes";
 
 // `__` is a global provided by the Frappe boot; `<script setup>` templates
@@ -326,9 +327,11 @@ const activeOrderTableLabel = computed(() => {
  */
 async function fire() {
 	firing.value = true;
+	const startedAt = floorActionStart();
 	try {
 		const projection = await floorStore.fireActiveCourse();
 		if (projection) {
+			floorActionEnd(startedAt);
 			bus.emit("floor_course_fired", projection);
 			void watchKitchenBatchVerdict(projection);
 		}
@@ -402,11 +405,13 @@ async function watchKitchenBatchVerdict(projection: KotProjection) {
 async function release() {
 	if (!activeOrder.value) return;
 	releasing.value = true;
+	const startedAt = floorActionStart();
 	try {
 		await floorStore.flushCartSync();
 		const order = floorStore.activeOrder;
 		if (!order || order.items_count) return;
 		await floorStore.cancelOrder(order);
+		floorActionEnd(startedAt);
 	} finally {
 		releasing.value = false;
 	}
@@ -421,6 +426,27 @@ function toggleViewMode() {
  * v1's silent one-tap open had to go). JumpPad still opens directly: typing a
  * table number is already the explicit choice the sheet exists to collect.
  */
+// Benchmark row floor_table_action (perf:pos:floor-action): tap → the floor
+// verb completed, INCLUDING its server round-trip — what the waiter stands
+// there waiting through. Success-only, like pos:pay-open: an early return or
+// a thrown call is not a response the manifest should score. Full-rate (no
+// ambient sampling): floor verbs happen per table visit, not per keystroke.
+function floorActionStart(): number {
+	return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+function floorActionEnd(startedAt: number) {
+	try {
+		trackCustomMark(
+			"pos:floor-action",
+			(typeof performance !== "undefined" ? performance.now() : Date.now()) -
+				startedAt,
+		);
+	} catch {
+		/* telemetry must never block the floor */
+	}
+}
+
 function askTable(table: TableRow) {
 	sheetTable.value = table;
 	sheetOpen.value = true;
@@ -433,9 +459,13 @@ function askTable(table: TableRow) {
  */
 async function onSheetAction(action: TableSheetAction, table: TableRow) {
 	if (action === "clean") {
+		const startedAt = floorActionStart();
 		await floorStore.markClean(table.name);
+		floorActionEnd(startedAt);
 		return;
 	}
+	// openTable carries its own mark — every other entry point (plan tile,
+	// jump pad, tabs rail) funnels through it too.
 	const opened = await openTable(table, action === "view" ? "cart" : "items");
 	if (!opened) return;
 	if (action === "charge") chargeActiveOrder();
@@ -445,8 +475,12 @@ async function onSheetAction(action: TableSheetAction, table: TableRow) {
  * helper deliberately chooses the oldest order, while the operator has just
  * named the exact account they mean. Hydrate and open that row directly. */
 async function openSelectedOrder(row: OrderRow) {
+	const startedAt = floorActionStart();
 	const order = await floorStore.resumeOrder(row);
-	if (order) bus.emit("floor_order_opened", { order_uid: order.order_uid });
+	if (order) {
+		floorActionEnd(startedAt);
+		bus.emit("floor_order_opened", { order_uid: order.order_uid });
+	}
 }
 
 /**
@@ -460,8 +494,10 @@ async function openSelectedOrder(row: OrderRow) {
  * feel like it did nothing.
  */
 async function openTable(table: TableRow, land: "cart" | "items" = "cart"): Promise<boolean> {
+	const startedAt = floorActionStart();
 	const order = await floorStore.openOrCreate(table);
 	if (!order) return false;
+	floorActionEnd(startedAt);
 	if (land === "items") goToItems();
 	else bus.emit("floor_order_opened", { order_uid: order.order_uid });
 	return true;
@@ -481,8 +517,12 @@ function chargeActiveOrder() {
 }
 
 async function openNamedTab(tabName: string) {
+	const startedAt = floorActionStart();
 	const order = await floorStore.openTab(tabName);
-	if (order) bus.emit("floor_order_opened", { order_uid: order.order_uid });
+	if (order) {
+		floorActionEnd(startedAt);
+		bus.emit("floor_order_opened", { order_uid: order.order_uid });
+	}
 }
 
 /**
@@ -491,8 +531,12 @@ async function openNamedTab(tabName: string) {
  * waiter resumes a ticket that looks empty.
  */
 async function openTabOrder(row: OrderRow) {
+	const startedAt = floorActionStart();
 	const order = await floorStore.resumeOrder(row);
-	if (order) bus.emit("floor_order_opened", { order_uid: order.order_uid });
+	if (order) {
+		floorActionEnd(startedAt);
+		bus.emit("floor_order_opened", { order_uid: order.order_uid });
+	}
 }
 
 function onKeydown(event: KeyboardEvent) {
