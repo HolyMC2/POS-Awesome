@@ -841,8 +841,16 @@ allowlist and provenance inspection are done: `OVERRIDE_ALLOWLIST` (v1:
 enable_only) is merged server-side into the resolved payload, and
 `get_contract_provenance` exposes value / mode default / override / why
 locked per key, shift-aware, with `pending_next_shift` marking edits that
-wait for the next opening. Remaining Foundation 1 scope: Boat artifact
-ownership ledger and the thin seed manifest.
+wait for the next opening. Update (2026-08-15): the Boat artifact ledger and
+the thin seed manifest are done — `Doco Applied Artifact` records every
+template apply (site, artifact/version, sha256 content hash, outcome, managed
+document names; `template_drift()` answers current/stale/never-applied per
+tenant), `Doco Vertical Template` carries a human-bumped `template_version`,
+and boat `seed_manifests.py` holds the first certification manifest
+(`abarrotes-comercio-thin`: catalog/accounting/profile version pins, seven
+expected assertions, golden-flow ID, provision-from-zero steps) with the
+tenant-side runner in doco `seed_verify.py`. Foundation 1 scope is complete;
+per-field override reconciliation stays §9.1 later work by design.
 
 - Publish a small typed capability schema, explicit override allowlist and
   `unconfigured`/`invalid`/`temporarily_unavailable` resolver states.
@@ -884,6 +892,23 @@ INP healthy. Captures stay *observations* until reference hardware is pinned
 (launch split, payment-screen mark, queue-acceptance latency, `__PROF__`-gated
 marks, floor action, add-item p99). The telemetry summary API gained an
 `events` filter so 7-day windows fit the row cap for low-traffic money paths.
+
+Update (2026-08-15 eve): **dead-letter recovery closed on both halves** —
+the frontend write_queue already surfaced every entity type (audit r2);
+server-side, `ledger_sweep.py` now sweeps stuck non-final submission-ledger
+rows daily (SUBMITTED = invoice live without its payment entries gets a
+1-hour fuse) into a Prometheus gauge, one grouped Error Log and a
+supervisor summary keyed for `repair_invoice_submission`; recovery stays
+operator-triggered. The floor-action mark closed the last busy-service
+instrumentation gap (`perf:pos:floor-action`). **Thin seed shipped**: boat
+template `abarrotes-comercio` (retail_general vertical row +
+`abarrotes-mostrador` Scan Retail preset), certification manifest
+`abarrotes-comercio-thin` (boat `seed_manifests.py`) and the doco
+assertion runner (`seed_verify.verify_thin_seed`: catalog/accounting/
+profile census, honest failures with actionable details). Remaining for
+the P2 exit: golden-flow + provision-from-zero automation (manifest marks
+both `manual`), baseline re-record on ~1 day of post-roll traffic, and the
+printer/scanner/drawer certification bullet.
 
 - Complete scan/search/cart/payment/print/next-sale task path.
 - Cover the universal lifecycle: suspend/recall, discounts/promotions, tender,
