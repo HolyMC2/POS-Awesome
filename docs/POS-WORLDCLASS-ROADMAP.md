@@ -905,10 +905,14 @@ template `abarrotes-comercio` (retail_general vertical row +
 `abarrotes-mostrador` Scan Retail preset), certification manifest
 `abarrotes-comercio-thin` (boat `seed_manifests.py`) and the doco
 assertion runner (`seed_verify.verify_thin_seed`: catalog/accounting/
-profile census, honest failures with actionable details). Remaining for
-the P2 exit: golden-flow + provision-from-zero automation (manifest marks
-both `manual`), baseline re-record on ~1 day of post-roll traffic, and the
-printer/scanner/drawer certification bullet.
+profile census, honest failures with actionable details). The
+certification job v1 exists (boat `certification.py` +
+agent `/sites/{site}/seed-verify`, allowlisted runner): it runs the
+manifest's assertion gates against a tenant, requires exact assertion-key
+coverage, and ledgers every run as a `seed-manifest` artifact row.
+Remaining for the P2 exit: golden-flow + provision-from-zero automation
+(manifest marks both `manual`), baseline re-record on ~1 day of post-roll
+traffic, and the printer/scanner/drawer certification bullet.
 
 - Complete scan/search/cart/payment/print/next-sale task path.
 - Cover the universal lifecycle: suspend/recall, discounts/promotions, tender,
