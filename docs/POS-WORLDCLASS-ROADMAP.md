@@ -928,6 +928,36 @@ job (the manifest still says `manual`, honestly), baseline re-record on
 bullet. Giro state promotion (seeded → workflow-ready for
 abarrotes/comercio) is now evidenced but stays a human call.
 
+Update (2026-08-17): **P2 waves are on production and the money paths are
+proving themselves.** The 08-16 four-app roll (image v76 on both hosts by
+08-17) carries the wave work; the first production ledger sweep repaired 16
+stuck submission rows with zero money missing. The recarga exception path
+closed its last silent states (saldo app, incident-driven): a TAECEL carrier
+outage left held drafts that neither notified anyone nor could be abandoned —
+the writeQueue submission-ledger row (dynamic link) made `delete_doc` throw,
+so the POS «Abandonar» button had been broken since the ledger shipped.
+Abandon now clears the ledger rows first; a janitor sweep auto-abandons
+held drafts whose recargas ALL terminally failed once the last attempt ages
+past `Saldo Settings.auto_abandon_failed_holds_minutes` (live on prod at 15,
+first organic auto-abandon + cashier notification verified same day); and the
+stuck-holds janitor's date-truncated cutoff (`as_string` formats DATE-only →
+same-day stuck holds were invisible until midnight) is fixed. Scorecard rows
+served: unreconciled-payment / dead-letter age and shift discrepancy.
+**Post-roll baseline re-recorded** (capture `20260817-1355-ventas`, first
+against manifest v2, observation class): `server_search` unchanged as THE
+hot spot — p95 1184 ms vs 250 target, p99 1812 > 600 ceiling; every other
+event below min-samples in the ~1.5-day window, and the six v2 marks read
+zero samples because the carrying bundle only reached prod with the 08-17
+roll (terminals may still hold the prior service-worker bundle). Re-record
+on a full week of v76 traffic before drawing any second conclusion. The
+one-shot re-record cron armed 08-15 died silently — recording is manual
+until it is wired into a scheduled job. Honest P2 exit list as of tonight:
+(1) golden-flow script→job promotion (spec exists:
+`frontend/tests/e2e/golden-flow-scan-retail.spec.ts`); (2) printer/scanner/
+drawer certification on reference hardware [Marco]; (3) the reference-
+hardware pin itself [Marco] — until pinned, every capture stays an
+observation and `server_search` shaping cannot be declared pass/fail.
+
 - Complete scan/search/cart/payment/print/next-sale task path.
 - Cover the universal lifecycle: suspend/recall, discounts/promotions, tender,
   submit, receipt, return/refund and drawer/shift reconciliation.

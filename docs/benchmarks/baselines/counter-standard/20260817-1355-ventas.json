@@ -1,0 +1,126 @@
+{
+  "manifest_id": "counter-standard",
+  "manifest_sha256": "37122f8556bab6e560b6e2c452a16e31c754d48aef467fb21c77d7b3d4c0fd8b",
+  "evidence_class": "observation",
+  "captured_at": "2026-08-17T13:55:11-07:00",
+  "site": "ventas.docomexico.com",
+  "via": "prod",
+  "window": {
+    "since": "2026-08-16",
+    "profile": null,
+    "terminal": null,
+    "order": "desc",
+    "limit": 50000,
+    "row_count": 37558,
+    "truncated": false
+  },
+  "app": {
+    "local_git_sha": "49a2e3657d874d7be753a31cc608ba9f94a932f3"
+  },
+  "dataset": {
+    "items": 7148,
+    "customers": 950
+  },
+  "bundle": {
+    "js_bytes": 15730274,
+    "css_bytes": 665424,
+    "dist": "posawesome/public/dist"
+  },
+  "events": {
+    "perf:api.invoices.submit_invoice.ok": {
+      "count": 25,
+      "p50": 1926.8,
+      "p95": 3792.16,
+      "p99": 3852.576,
+      "max": 3862.8,
+      "last_seen": "2026-08-17 20:06:46.521000"
+    },
+    "perf:api.invoices.update_invoice.ok": {
+      "count": 27,
+      "p50": 1209.0,
+      "p95": 2785.15,
+      "p99": 3058.17,
+      "max": 3122.0,
+      "last_seen": "2026-08-17 20:06:43.022000"
+    },
+    "perf:api.items.get_items.ok": {
+      "count": 80,
+      "p50": 429.5,
+      "p95": 1183.92,
+      "p99": 1811.733,
+      "max": 2007.1,
+      "last_seen": "2026-08-17 20:53:57.506000"
+    },
+    "perf:pos:add-item": {
+      "count": 27,
+      "p50": 43.4,
+      "p95": 213.59,
+      "p99": 266.65,
+      "max": 271.2,
+      "last_seen": "2026-08-17 20:06:39.719000"
+    },
+    "perf:pos:pay-open": {
+      "count": 24,
+      "p50": 1669.95,
+      "p95": 2794.82,
+      "p99": 3002.173,
+      "max": 3051.6,
+      "last_seen": "2026-08-17 20:06:43.702000"
+    },
+    "perf:qz_send_ms": {
+      "count": 22,
+      "p50": 1603.0,
+      "p95": 2573.45,
+      "p99": 3472.33,
+      "max": 3709.0,
+      "last_seen": "2026-08-17 19:12:48.393000"
+    },
+    "pos:launch_warm_ms": {
+      "count": 21,
+      "p50": 2540.0,
+      "p95": 4200.0,
+      "p99": 4200.0,
+      "max": 4200.0,
+      "last_seen": "2026-08-17 20:53:59.084000"
+    },
+    "rum:fcp": {
+      "count": 8,
+      "p50": 1018.0,
+      "p95": 1626.95,
+      "p99": 1722.99,
+      "max": 1747.0,
+      "last_seen": "2026-08-17 20:53:59.086000"
+    },
+    "rum:heap_used_mb": {
+      "count": 1458,
+      "p50": 32.0,
+      "p95": 41.0,
+      "p99": 42.0,
+      "max": 52.0,
+      "last_seen": "2026-08-17 20:53:22.415000"
+    },
+    "rum:inp": {
+      "count": 35845,
+      "p50": 64.0,
+      "p95": 112.0,
+      "p99": 144.0,
+      "max": 656.0,
+      "last_seen": "2026-08-17 20:54:04.611000"
+    },
+    "rum:lcp": {
+      "count": 21,
+      "p50": 2540.0,
+      "p95": 4200.0,
+      "p99": 4200.0,
+      "max": 4200.0,
+      "last_seen": "2026-08-17 20:53:59.084000"
+    }
+  },
+  "gaps": [
+    "cold_launch_shell",
+    "scan_to_cart",
+    "local_search",
+    "cart_recalc",
+    "durable_queue_acceptance"
+  ]
+}
