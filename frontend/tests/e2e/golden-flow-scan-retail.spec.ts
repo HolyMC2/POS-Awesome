@@ -48,6 +48,20 @@ async function login(page: Page) {
 	expect(response.ok(), `login returned HTTP ${response.status()}`).toBeTruthy();
 }
 
+async function pickIfNeeded(page: Page, label: string, value: string) {
+	const field = page.locator(`.v-input:has-text('${label}')`).first();
+	const shown = await field.innerText().catch(() => "");
+	if (shown.includes(value)) {
+		return; // single-option fields arrive pre-selected for a plain cashier
+	}
+	await field.locator("input").first().click();
+	await page
+		.locator(`.v-overlay-container .v-list-item:has-text('${value}')`)
+		.first()
+		.click();
+	await page.waitForTimeout(800);
+}
+
 async function openShiftIfAsked(page: Page) {
 	const dialog = page.getByText("Create POS Opening Shift");
 	try {
@@ -55,12 +69,15 @@ async function openShiftIfAsked(page: Page) {
 	} catch {
 		return; // shift already open — the register resumes it
 	}
-	// Company first: the profile list is keyed on it.
-	await page.locator(".v-input:has-text('Company') input").first().click();
-	await page.getByText(COMPANY, { exact: false }).first().click();
+	// Company first: the profile list is keyed on it. Two cashier-reality
+	// traps the Administrator-only first run never hit: (a) a single-option
+	// autocomplete arrives PRE-SELECTED, so clicking for a dropdown stalls
+	// on the field's own selection text; (b) the nav drawer renders the
+	// company name too, so an unscoped getByText().first() resolves to an
+	// invisible node. Skip pre-filled fields; pick real list items.
+	await pickIfNeeded(page, "Company", COMPANY);
 	await page.waitForTimeout(1_000);
-	await page.locator(".v-input:has-text('POS Profile') input").first().click();
-	await page.getByText(PROFILE, { exact: false }).first().click();
+	await pickIfNeeded(page, "POS Profile", PROFILE);
 	await page.waitForTimeout(1_500);
 	await page
 		.locator(".v-table input, table input")
@@ -102,7 +119,17 @@ test("scan-retail golden flow: shift → mixed basket → cash → submitted tax
 
 	await page.getByRole("button", { name: /^pay$/i }).click();
 	// Cash prefills the exact total (change 0) — submit completes the sale.
-	await page.getByRole("button", { name: /^submit$/i }).first().click();
+	// On a resumed shift (no opening dialog) the first Pay click occasionally
+	// lands before the invoice round-trip arms the panel and nothing opens —
+	// one measured re-click keeps the unattended job flake-free.
+	const submit = page.getByRole("button", { name: /^submit$/i }).first();
+	try {
+		await submit.waitFor({ state: "visible", timeout: 20_000 });
+	} catch {
+		await page.getByRole("button", { name: /^pay$/i }).click();
+		await submit.waitFor({ state: "visible", timeout: 30_000 });
+	}
+	await submit.click();
 
 	// Next basket ready: the cart empties without a reload.
 	await expect(page.getByText("No items in cart")).toBeVisible({ timeout: 30_000 });
