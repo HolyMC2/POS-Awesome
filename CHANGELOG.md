@@ -4,6 +4,19 @@ All notable changes.
 
 ## Unreleased
 
+- **Golden flow promoted script → job (roadmap P2).** New
+  `scripts/certification/golden_flow_job.py` runs the Scan Retail golden-flow
+  spec unattended as a dedicated cashier, writes a run record under
+  `docs/certification/golden-flow-runs/` and ledgers the outcome on the boat
+  controller; a lab systemd timer keeps the evidence fresh. The spec itself
+  was hardened for cashier reality: single-option Company/Profile arrive
+  pre-selected (skip, don't stall), the nav drawer's company label shadows
+  the dropdown option (scope to overlay list items), and a resumed-shift Pay
+  click can outrun the payment panel (one measured re-click). A skipped
+  Playwright run counts as FAILURE — an unattended job that ran nothing must
+  never ledger success. Pure logic in `golden_flow_lib.py` with standalone
+  tests.
+
 - **POS drafts recover their register after a browser/runtime reset.** A named
   POS draft whose transient request lost both `pos_profile` and opening-shift
   fields now follows its own persisted opening shift back to the profile before

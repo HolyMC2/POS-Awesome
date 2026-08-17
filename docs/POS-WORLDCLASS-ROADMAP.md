@@ -951,12 +951,25 @@ zero samples because the carrying bundle only reached prod with the 08-17
 roll (terminals may still hold the prior service-worker bundle). Re-record
 on a full week of v76 traffic before drawing any second conclusion. The
 one-shot re-record cron armed 08-15 died silently — recording is manual
-until it is wired into a scheduled job. Honest P2 exit list as of tonight:
-(1) golden-flow script→job promotion (spec exists:
-`frontend/tests/e2e/golden-flow-scan-retail.spec.ts`); (2) printer/scanner/
-drawer certification on reference hardware [Marco]; (3) the reference-
-hardware pin itself [Marco] — until pinned, every capture stays an
-observation and `server_search` shaping cannot be declared pass/fail.
+until it is wired into a scheduled job.
+
+Update (2026-08-17 night): **golden flow promoted script → job** (manifest
+v4). The unattended runner `scripts/certification/golden_flow_job.py` runs
+the spec headless as a dedicated `golden@` cashier (created for this — the
+run surfaced and fixed two admin-only DOM assumptions plus a Pay-panel race
+in the spec), writes a repo-versioned run record under
+`docs/certification/golden-flow-runs/`, and ledgers every run on the boat
+controller (`record_golden_flow_run`, new `golden-flow` artifact type).
+`run_seed_certification` now composes by READING that ledger: a manifest
+whose golden_flow says `automation: "job"` requires a fresh
+(≤ `max_age_days` = 7) successful row — boat never needs a browser. Proven
+end to end on lab: job PASS (37 s) → ledger row → certification `passed`
+with `golden_flow_gate: fresh success` and 8/8 assertion coverage. A
+systemd user timer on the lab host (`golden-flow.timer`, 05:45 daily) keeps
+the evidence inside the freshness window. Honest P2 exit list now: (1)
+printer/scanner/drawer certification on reference hardware [Marco]; (2) the
+reference-hardware pin itself [Marco] — until pinned, every capture stays
+an observation and `server_search` shaping cannot be declared pass/fail.
 
 - Complete scan/search/cart/payment/print/next-sale task path.
 - Cover the universal lifecycle: suspend/recall, discounts/promotions, tender,
