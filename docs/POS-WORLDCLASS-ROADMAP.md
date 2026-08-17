@@ -1176,6 +1176,16 @@ caching is the known trap (see SW-cache memory) — brand assets must be
 versioned like any other precached asset. Test selectors and DOM stay
 stable so the suites don't care what the brand says.
 
+Status (2026-08-17 late): **SHIPPED LAB.** `frontend/src/brand.ts` is the
+single token source; navbar wordmark, titles, PWA manifest, failure/loading/
+offline copy and the `/pos` → `/posapp` alias are live on the mirror;
+`tests/brandConsistency.spec.ts` pins frontend + www together and proves
+no leak into internal identity (PWA id/start_url, storage keys, telemetry).
+1603 frontend tests + golden flow green on the branded bundle. Remaining:
+the logo ART stays the posawesome mark until Marco supplies/blesses Muelle
+art (icon swap = versioned-asset + SW precache slice), and prod ships with
+the next posawesome-push-prod (gated).
+
 ### 17.5 Sequencing opinion (recorded, Marco decides)
 
 1. Brand layer — small, independent, sell-readiness benefits now.

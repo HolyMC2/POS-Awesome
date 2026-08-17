@@ -15,6 +15,7 @@
  */
 
 import { installFrappeShim } from "./posapp/utils/frappe-shim";
+import { BRAND } from "./brand";
 
 declare const __BUILD_VERSION__: string;
 
@@ -49,7 +50,7 @@ function showFailure(message: string, err?: unknown) {
 	if (!el) return;
 	el.innerHTML = `
 		<div style="max-width:560px;text-align:center;line-height:1.5">
-			<div style="font-size:18px;margin-bottom:8px">POS Awesome failed to start</div>
+			<div style="font-size:18px;margin-bottom:8px">${BRAND.name} failed to start</div>
 			<div style="color:#cbd5e1">${message}</div>
 			<button
 				style="margin-top:16px;padding:8px 16px;border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:6px;cursor:pointer"

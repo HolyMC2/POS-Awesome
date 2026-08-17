@@ -22,7 +22,7 @@
 
 			<v-img
 				:src="posLogo"
-				alt="POS Awesome"
+				:alt="brand.name"
 				:max-width="isMobile ? 24 : 32"
 				:class="['pos-navbar-logo', isRtl ? 'rtl-logo' : 'ltr-logo']"
 				loading="lazy"
@@ -41,11 +41,11 @@
 				role="button"
 			>
 				<template v-if="isMobile">
-					<span class="pos-navbar-title-compact">{{ __("POS") }}</span>
+					<span class="pos-navbar-title-compact">{{ brand.wordmarkCompact }}</span>
 				</template>
 				<template v-else>
-					<span class="font-weight-light pos-navbar-title-light">{{ __("POS") }}</span
-					><span class="pos-navbar-title-bold">{{ __("Awesome") }}</span>
+					<span class="font-weight-light pos-navbar-title-light">{{ brand.wordmarkLight }}</span
+					><span class="pos-navbar-title-bold">{{ brand.wordmarkBold }}</span>
 				</template>
 			</v-toolbar-title>
 		</div>
@@ -253,6 +253,7 @@ import { computed } from "vue";
 import { useSyncStore } from "../../stores/syncStore";
 import posLogo from "../pos/pos.png";
 import NavbarInfoGadgets from "./NavbarInfoGadgets.vue";
+import { BRAND } from "../../../brand";
 
 export default {
 	name: "NavbarAppBar",
@@ -281,6 +282,7 @@ export default {
 			rtlClasses,
 			posLogo,
 			attentionCount,
+			brand: BRAND,
 		};
 	},
 	data() {

@@ -176,6 +176,7 @@ import OfflineInvoices from "./OfflineInvoices.vue";
 import { getDashboardAccessCached } from "../services/dashboardService";
 import EmployeeSwitchDialog from "./pos/employee/EmployeeSwitchDialog.vue";
 import posLogo from "./pos/pos.png";
+import { BRAND } from "../../brand";
 import { clearDerivedOfflineCaches, getPendingTransactionalWorkCounts, isOffline } from "../../offline/index";
 import { clearAllCaches } from "../../utils/clearAllCaches";
 import { useRtl } from "../composables/core/useRtl";
@@ -325,7 +326,7 @@ export default {
 				{ text: "Barcode Printing", icon: "mdi-barcode", to: "/barcode" },
 			],
 			items: [],
-			company: "POS Awesome",
+			company: BRAND.name,
 			companyImg: posLogo,
 			showAboutDialog: false,
 			showOfflineInvoices: false,

@@ -78,7 +78,7 @@ def get_context(context: Dict[str, Any]) -> Dict[str, Any]:
     context.update(
         {
             "no_cache": True,
-            "title": _("POS Awesome"),
+            "title": "Muelle POS",  # brand (§17.4) — brand words never translate
             "boot_json": json.dumps(boot_payload),
             "csrf_token": frappe.sessions.get_csrf_token(),
             "site_name": frappe.local.site,

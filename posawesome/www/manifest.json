@@ -1,6 +1,6 @@
 {
-  "name": "POS Awesome",
-  "short_name": "POS",
+  "name": "Muelle POS",
+  "short_name": "Muelle POS",
   "id": "/posapp",
   "start_url": "/posapp",
   "scope": "/",
@@ -12,7 +12,7 @@
   "lang": "en",
   "dir": "ltr",
   "categories": ["business", "productivity"],
-  "description": "POS Awesome — fast, offline-capable point-of-sale for Frappe/ERPNext.",
+  "description": "Muelle POS — punto de venta rápido y con modo offline.",
   "icons": [
     {
       "src": "/assets/posawesome/icons/logo-144.png",

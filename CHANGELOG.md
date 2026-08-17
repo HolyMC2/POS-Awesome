@@ -4,6 +4,18 @@ All notable changes.
 
 ## Unreleased
 
+- **Muelle POS brand layer (roadmap §17.4).** The user-facing brand now
+  lives in ONE module (`frontend/src/brand.ts`): navbar wordmark
+  ("Muelle POS"), window/PWA titles, failure dialogs, loading and offline
+  copy, `www/manifest.json` name/short_name and a `/pos` → `/posapp`
+  redirect alias. The app remains `posawesome` internally — storage keys,
+  telemetry names, DOM test ids, PWA `id`/`start_url` and API paths are
+  untouched (upstream-merge hygiene), and `tests/brandConsistency.spec.ts`
+  pins the frontend module and the www shell together while proving the
+  brand never leaks into internal identity. Verified live on lab: branded
+  title/manifest/loading, `/pos` 301, golden flow green on the branded
+  bundle.
+
 - **Golden flow promoted script → job (roadmap P2).** New
   `scripts/certification/golden_flow_job.py` runs the Scan Retail golden-flow
   spec unattended as a dedicated cashier, writes a run record under
