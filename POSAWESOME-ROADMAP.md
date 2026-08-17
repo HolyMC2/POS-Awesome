@@ -1,5 +1,11 @@
 # POSAwesome Roadmap
 
+> **SUPERSEDED (2026-08-17).** Historical audit snapshot (2026-05-10).
+> The canonical program roadmap is
+> [`docs/POS-WORLDCLASS-ROADMAP.md`](docs/POS-WORLDCLASS-ROADMAP.md)
+> (§14 delivery program, §17 owner direction). Kept for `file:line`
+> references only — do not plan from this file.
+
 Snapshot 2026-05-10 · branch `track/upstream-develop` (defendicon `15.29.0` + 5 perf commits already shipped).
 
 Compiled from 4 parallel audits: **security**, **code review**, **performance**, **opportunities**. Each finding carries `file:line` so anyone can jump straight to the diff.

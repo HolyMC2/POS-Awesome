@@ -1,5 +1,9 @@
 # ROADMAP-SAAS — Posawesome multi-tenant readiness
 
+> **SUPERSEDED (2026-08-17).** 2026-05-18 synthesis; the SaaS program
+> now lives in boat (`docs/roadmap/SAAS_READINESS.md`) and the POS
+> program in [`../POS-WORLDCLASS-ROADMAP.md`](../POS-WORLDCLASS-ROADMAP.md).
+
 > Synthesis lead, 2026-05-18. Inputs: `REVIEW2/01..08`.
 > Companion docs: `PLAN-6SIGMA.md` (phases + workstreams),
 > `UPSTREAM-PRS.md` (PR sequence).

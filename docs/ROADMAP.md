@@ -1,5 +1,11 @@
 # POSAwesome fork — working roadmap
 
+> **HISTORICAL working backlog.** The canonical program roadmap is
+> [`POS-WORLDCLASS-ROADMAP.md`](POS-WORLDCLASS-ROADMAP.md) (§14 delivery
+> program, §17 owner direction 2026-08-17). Items here that are still
+> open live on in the session backlog and §14 slices — do not plan
+> from this file.
+
 Living backlog. Sources: 2026-07-11 full audit (`AUDIT-2026-07-11-full.md`),
 POS Profile wiring audit (`POS-PROFILE-SPEC.md`), upstream ledger
 (`UPSTREAM.md`). Update statuses here as items land.
