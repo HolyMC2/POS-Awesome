@@ -17,8 +17,10 @@ without that manifest are observations, not comparable evidence."*
 
 - **Evidence vs observation.** A capture is `evidence` only when the
   manifest's device is pinned AND network shaping applied. Reference
-  hardware is not yet named (Marco call) — until then every capture is an
-  `observation` and the file says so.
+  hardware was pinned 2026-08-17 (Marco): **Intel Core i5-6500, 8 GB RAM**
+  (manifests v3). Captures stay `observation` until network shaping is also
+  applied — defining and running the shaping harness on the reference box
+  is the remaining half.
 - **Thin data never gates.** An event below `gate.min_samples` (30) yields
   no percentile. Low-traffic money paths (submit ≈17/day) need multi-day
   windows — the summary API's `events` filter makes 7-day windows fit the

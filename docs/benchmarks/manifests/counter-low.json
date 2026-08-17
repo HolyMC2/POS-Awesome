@@ -1,198 +1,200 @@
 {
-  "spec": "docs/POS-WORLDCLASS-ROADMAP.md section 6",
-  "manifest_version": 2,
-  "gate": {
-    "min_samples": 30,
-    "regression_tolerance_pct": 20
+ "spec": "docs/POS-WORLDCLASS-ROADMAP.md section 6",
+ "manifest_version": 3,
+ "gate": {
+  "min_samples": 30,
+  "regression_tolerance_pct": 20
+ },
+ "server": {
+  "expected": "cell0 contavm compose (prod) / muelle-host lab compose (lab)",
+  "note": "actual topology recorded in each capture"
+ },
+ "cache_state": "mixed (RUM aggregates warm and cold sessions; per-state runs need the synthetic harness)",
+ "manifest_id": "counter-low",
+ "roadmap_profile": "Counter Low",
+ "device": {
+  "pinned": true,
+  "description": "Reference terminal (Marco, 2026-08-17): i5-6500, 8 GB RAM, USB scanner + QZ printer",
+  "browser": null,
+  "os": null,
+  "note": "pinned; captures become evidence once network shaping is ALSO applied (evidence_class requires both)",
+  "cpu": "Intel Core i5-6500 (4C/4T Skylake, 3.2-3.6 GHz)",
+  "ram_gb": 8
+ },
+ "network": {
+  "downlink_mbps": 10,
+  "rtt_ms": 100,
+  "shaped": false,
+  "note": "shaping not applied - captures measure real operator networks"
+ },
+ "dataset": {
+  "expected_items": 5000,
+  "expected_customers": 2000,
+  "note": "actual counts captured at record time"
+ },
+ "interactions": [
+  {
+   "key": "warm_launch_shell",
+   "roadmap_row": "Warm launch to usable shell",
+   "events": [
+    "pos:launch_warm_ms"
+   ],
+   "unit": "ms",
+   "target_p95": 1500,
+   "ceiling_p99": 3000,
+   "caveat": "LCP under a service-worker-controlled load - warm-launch proxy"
   },
-  "server": {
-    "expected": "cell0 contavm compose (prod) / muelle-host lab compose (lab)",
-    "note": "actual topology recorded in each capture"
+  {
+   "key": "cold_launch_shell",
+   "roadmap_row": "Cold online launch to usable shell",
+   "events": [
+    "pos:launch_cold_ms"
+   ],
+   "unit": "ms",
+   "target_p95": 3000,
+   "ceiling_p99": 5000,
+   "caveat": "LCP under an uncontrolled load (first visit / cleared cache / hard reload) - cold-launch proxy"
   },
-  "cache_state": "mixed (RUM aggregates warm and cold sessions; per-state runs need the synthetic harness)",
-  "manifest_id": "counter-low",
-  "roadmap_profile": "Counter Low",
-  "device": {
-    "pinned": false,
-    "description": "supported low-cost Android/Chrome, 4 GB RAM, touch + camera scan",
-    "browser": null,
-    "os": null,
-    "note": "reference hardware not yet named (Marco) - captures are observations until pinned"
+  {
+   "key": "launch_shell_mixed",
+   "roadmap_row": "supplementary - ambient LCP/FCP, warm and cold mixed",
+   "events": [
+    "rum:lcp",
+    "rum:fcp"
+   ],
+   "unit": "ms",
+   "target_p95": null,
+   "ceiling_p99": null,
+   "caveat": "informative only - split rows above carry the budgets"
   },
-  "network": {
-    "downlink_mbps": 10,
-    "rtt_ms": 100,
-    "shaped": false,
-    "note": "shaping not applied - captures measure real operator networks"
+  {
+   "key": "scan_to_cart",
+   "roadmap_row": "Scan/click to cart paint",
+   "events": [
+    "perf:pos:scan-process",
+    "perf:pos:scan-handler"
+   ],
+   "unit": "ms",
+   "target_p95": 50,
+   "ceiling_p99": 100,
+   "caveat": "always-on at 10% ambient sample (perf.ts PAIR_TELEMETRY_SAMPLE) - summary counts under-count ~10x; full-rate marks still need window.__PROF__ profiling sessions"
   },
-  "dataset": {
-    "expected_items": 5000,
-    "expected_customers": 2000,
-    "note": "actual counts captured at record time"
+  {
+   "key": "click_add_to_cart",
+   "roadmap_row": "Scan/click to cart paint",
+   "events": [
+    "perf:pos:add-item"
+   ],
+   "unit": "ms",
+   "target_p95": 50,
+   "ceiling_p99": 100,
+   "gate_p99": false,
+   "caveat": "p99 polluted by offline enrichment (useItemAddition) - gate p95 only"
   },
-  "interactions": [
-    {
-      "key": "warm_launch_shell",
-      "roadmap_row": "Warm launch to usable shell",
-      "events": [
-        "pos:launch_warm_ms"
-      ],
-      "unit": "ms",
-      "target_p95": 1500,
-      "ceiling_p99": 3000,
-      "caveat": "LCP under a service-worker-controlled load - warm-launch proxy"
-    },
-    {
-      "key": "cold_launch_shell",
-      "roadmap_row": "Cold online launch to usable shell",
-      "events": [
-        "pos:launch_cold_ms"
-      ],
-      "unit": "ms",
-      "target_p95": 3000,
-      "ceiling_p99": 5000,
-      "caveat": "LCP under an uncontrolled load (first visit / cleared cache / hard reload) - cold-launch proxy"
-    },
-    {
-      "key": "launch_shell_mixed",
-      "roadmap_row": "supplementary - ambient LCP/FCP, warm and cold mixed",
-      "events": [
-        "rum:lcp",
-        "rum:fcp"
-      ],
-      "unit": "ms",
-      "target_p95": null,
-      "ceiling_p99": null,
-      "caveat": "informative only - split rows above carry the budgets"
-    },
-    {
-      "key": "scan_to_cart",
-      "roadmap_row": "Scan/click to cart paint",
-      "events": [
-        "perf:pos:scan-process",
-        "perf:pos:scan-handler"
-      ],
-      "unit": "ms",
-      "target_p95": 50,
-      "ceiling_p99": 100,
-      "caveat": "always-on at 10% ambient sample (perf.ts PAIR_TELEMETRY_SAMPLE) - summary counts under-count ~10x; full-rate marks still need window.__PROF__ profiling sessions"
-    },
-    {
-      "key": "click_add_to_cart",
-      "roadmap_row": "Scan/click to cart paint",
-      "events": [
-        "perf:pos:add-item"
-      ],
-      "unit": "ms",
-      "target_p95": 50,
-      "ceiling_p99": 100,
-      "gate_p99": false,
-      "caveat": "p99 polluted by offline enrichment (useItemAddition) - gate p95 only"
-    },
-    {
-      "key": "local_search",
-      "roadmap_row": "Local search result update",
-      "events": [
-        "perf:pos:search-filter",
-        "perf:search-worker",
-        "perf:pos-search"
-      ],
-      "unit": "ms",
-      "target_p95": 75,
-      "ceiling_p99": 150,
-      "caveat": "always-on at 10% ambient sample (perf.ts PAIR_TELEMETRY_SAMPLE) - summary counts under-count ~10x; full-rate marks still need window.__PROF__ profiling sessions"
-    },
-    {
-      "key": "server_search",
-      "roadmap_row": "Server search response",
-      "events": [
-        "perf:api.items.get_items.ok",
-        "perf:api.items.search_items.ok"
-      ],
-      "unit": "ms",
-      "target_p95": 250,
-      "ceiling_p99": 600,
-      "caveat": "client round-trip (queue wait + network included), not server compute"
-    },
-    {
-      "key": "cart_recalc",
-      "roadmap_row": "Cart edit/recalculation",
-      "events": [
-        "perf:pos:totals-gross",
-        "perf:pos:totals-subtotal",
-        "perf:pos:totals-discount",
-        "perf:pos:totals-total_qty"
-      ],
-      "unit": "ms",
-      "target_p95": 50,
-      "ceiling_p99": 100,
-      "caveat": "always-on at 10% ambient sample (perf.ts PAIR_TELEMETRY_SAMPLE) - summary counts under-count ~10x; full-rate marks still need window.__PROF__ profiling sessions"
-    },
-    {
-      "key": "payment_screen_open",
-      "roadmap_row": "Payment screen open",
-      "events": [
-        "perf:pos:pay-open"
-      ],
-      "unit": "ms",
-      "target_p95": 150,
-      "ceiling_p99": 300,
-      "caveat": "tap to panel visible INCLUDING the process/update_invoice round-trip - what the operator actually waits through"
-    },
-    {
-      "key": "durable_queue_acceptance",
-      "roadmap_row": "Durable queue acceptance, where enabled",
-      "events": [
-        "perf:pos:offline_save_ms"
-      ],
-      "unit": "ms",
-      "target_p95": 400,
-      "ceiling_p99": 1000,
-      "caveat": "IndexedDB persist of an offline sale; pos:offline_invoice_saved carries money, not latency"
-    },
-    {
-      "key": "erpnext_submission",
-      "roadmap_row": "ERPNext submission completion, no processor",
-      "events": [
-        "perf:api.invoices.submit_invoice.ok",
-        "perf:api.invoices.update_invoice.ok"
-      ],
-      "unit": "ms",
-      "target_p95": null,
-      "ceiling_p99": 3000,
-      "caveat": "target is baseline-relative (-20% goal); ceiling is a p99 goal, not a hard release gate yet"
-    },
-    {
-      "key": "receipt_to_qz",
-      "roadmap_row": "Receipt queued to QZ after completion",
-      "events": [
-        "perf:qz_send_ms"
-      ],
-      "unit": "ms",
-      "target_p95": 300,
-      "ceiling_p99": 1000,
-      "caveat": "qz_send includes the QZ websocket marshal on the terminal"
-    },
-    {
-      "key": "interaction_responsiveness",
-      "roadmap_row": "supplementary - INP web vital",
-      "events": [
-        "rum:inp"
-      ],
-      "unit": "ms",
-      "target_p95": 200,
-      "ceiling_p99": 500
-    },
-    {
-      "key": "shift_memory",
-      "roadmap_row": "memory ceilings over an eight-hour shift",
-      "events": [
-        "rum:heap_used_mb"
-      ],
-      "unit": "mb",
-      "target_p95": null,
-      "ceiling_p99": null,
-      "caveat": "informative until a numeric ceiling is set"
-    }
-  ]
+  {
+   "key": "local_search",
+   "roadmap_row": "Local search result update",
+   "events": [
+    "perf:pos:search-filter",
+    "perf:search-worker",
+    "perf:pos-search"
+   ],
+   "unit": "ms",
+   "target_p95": 75,
+   "ceiling_p99": 150,
+   "caveat": "always-on at 10% ambient sample (perf.ts PAIR_TELEMETRY_SAMPLE) - summary counts under-count ~10x; full-rate marks still need window.__PROF__ profiling sessions"
+  },
+  {
+   "key": "server_search",
+   "roadmap_row": "Server search response",
+   "events": [
+    "perf:api.items.get_items.ok",
+    "perf:api.items.search_items.ok"
+   ],
+   "unit": "ms",
+   "target_p95": 250,
+   "ceiling_p99": 600,
+   "caveat": "client round-trip (queue wait + network included), not server compute"
+  },
+  {
+   "key": "cart_recalc",
+   "roadmap_row": "Cart edit/recalculation",
+   "events": [
+    "perf:pos:totals-gross",
+    "perf:pos:totals-subtotal",
+    "perf:pos:totals-discount",
+    "perf:pos:totals-total_qty"
+   ],
+   "unit": "ms",
+   "target_p95": 50,
+   "ceiling_p99": 100,
+   "caveat": "always-on at 10% ambient sample (perf.ts PAIR_TELEMETRY_SAMPLE) - summary counts under-count ~10x; full-rate marks still need window.__PROF__ profiling sessions"
+  },
+  {
+   "key": "payment_screen_open",
+   "roadmap_row": "Payment screen open",
+   "events": [
+    "perf:pos:pay-open"
+   ],
+   "unit": "ms",
+   "target_p95": 150,
+   "ceiling_p99": 300,
+   "caveat": "tap to panel visible INCLUDING the process/update_invoice round-trip - what the operator actually waits through"
+  },
+  {
+   "key": "durable_queue_acceptance",
+   "roadmap_row": "Durable queue acceptance, where enabled",
+   "events": [
+    "perf:pos:offline_save_ms"
+   ],
+   "unit": "ms",
+   "target_p95": 400,
+   "ceiling_p99": 1000,
+   "caveat": "IndexedDB persist of an offline sale; pos:offline_invoice_saved carries money, not latency"
+  },
+  {
+   "key": "erpnext_submission",
+   "roadmap_row": "ERPNext submission completion, no processor",
+   "events": [
+    "perf:api.invoices.submit_invoice.ok",
+    "perf:api.invoices.update_invoice.ok"
+   ],
+   "unit": "ms",
+   "target_p95": null,
+   "ceiling_p99": 3000,
+   "caveat": "target is baseline-relative (-20% goal); ceiling is a p99 goal, not a hard release gate yet"
+  },
+  {
+   "key": "receipt_to_qz",
+   "roadmap_row": "Receipt queued to QZ after completion",
+   "events": [
+    "perf:qz_send_ms"
+   ],
+   "unit": "ms",
+   "target_p95": 300,
+   "ceiling_p99": 1000,
+   "caveat": "qz_send includes the QZ websocket marshal on the terminal"
+  },
+  {
+   "key": "interaction_responsiveness",
+   "roadmap_row": "supplementary - INP web vital",
+   "events": [
+    "rum:inp"
+   ],
+   "unit": "ms",
+   "target_p95": 200,
+   "ceiling_p99": 500
+  },
+  {
+   "key": "shift_memory",
+   "roadmap_row": "memory ceilings over an eight-hour shift",
+   "events": [
+    "rum:heap_used_mb"
+   ],
+   "unit": "mb",
+   "target_p95": null,
+   "ceiling_p99": null,
+   "caveat": "informative until a numeric ceiling is set"
+  }
+ ]
 }

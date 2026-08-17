@@ -528,7 +528,9 @@ invite-only.
 5. farmacia — Controlled Retail batch/expiry seam;
 6. ropa — Controlled Retail variant seam;
 7. clínica — Service Counter/privacy seam;
-8. remaining giros by demand, reusing the certified mode substrate.
+8. remaining giros by demand, reusing the certified mode substrate — the
+   named demand list and its mode mapping live in §17.1 (owner direction
+   2026-08-17).
 
 ---
 
@@ -971,6 +973,13 @@ printer/scanner/drawer certification on reference hardware [Marco]; (2) the
 reference-hardware pin itself [Marco] — until pinned, every capture stays
 an observation and `server_search` shaping cannot be declared pass/fail.
 
+Update (2026-08-17, late): **reference hardware PINNED (Marco): Intel Core
+i5-6500, 8 GB RAM** — benchmark manifests v3 carry the pin. Captures remain
+observations until network shaping is also applied (`evidence_class`
+requires both); the remaining perf work is the shaping harness on the
+reference box plus the `server_search` shaping itself. P2 exit now waits on
+exactly one human gate: the physical printer/scanner/drawer canary.
+
 - Complete scan/search/cart/payment/print/next-sale task path.
 - Cover the universal lifecycle: suspend/recall, discounts/promotions, tender,
   submit, receipt, return/refund and drawer/shift reconciliation.
@@ -1083,3 +1092,95 @@ named benchmark profiles, hardened Charge Request requirements, repository
 ownership, operational/DR acceptance and explicit GA/beta states. The roadmap
 must be re-audited whenever a Later mode enters committed delivery or the
 configuration/rollout model expands beyond its bounded v1 contract.
+
+---
+
+## 17. Owner direction 2026-08-17 — giro breadth, POS parity, shortcuts engine, SaaS brand
+
+Marco's stated direction, mapped onto the existing architecture so it lands
+as seeds, slices and substrate — NOT as new register modes (the audit's
+small-team constraint stands; nothing here triggers a re-audit by itself).
+
+### 17.1 Giro breadth maps to the existing mode substrate
+
+Named demand: ferreterías, jugueterías, librerías, muebles, belleza, ropa y
+zapatos, abarrotes, cafetería, panadería, electrónica, clínicas dentales,
+clínicas médicas, restaurantes, tienda china. Every one resolves to a mode
+that already exists in §4 — the list changes certification ORDER pressure
+and seed-factory throughput, never the mode count:
+
+| Mode (§4) | Giros from the list |
+|---|---|
+| Scan Retail | abarrotes, tienda china, ferretería, juguetería, librería, panadería (mostrador) |
+| Controlled Retail | ropa y zapatos (variantes), electrónica (series/IMEI), belleza, muebles (big-ticket → cotización/entrega) |
+| Quick Service | cafetería, panadería (consumo) |
+| Table Service | restaurantes |
+| Service Counter | clínica dental, clínica médica (privacy seam) |
+| Repair + Retail | celulares (flagship, unchanged) |
+
+Giro = seed bundle + preset on a certified mode (§8). The scaling asset is
+the seed FACTORY (Platform 5 extracts it from three proven slices), not
+per-giro code. `mapped` is still never called `certified`.
+
+### 17.2 POS-parity feature backlog (the "cosas por añadir")
+
+Classified by which slice owns them; each item names its scorecard row
+before implementation, per §15.
+
+**Universal lifecycle affordances (Product 2 scope, giro-agnostic):**
+touch-first cart row actions — clearer DISCOUNT button, REMOVE button,
+QUANTITY button; drawer-kick button (QZ rail exists, needs the visible
+control + permission flag); price-list switch and price override
+(permission-gated, provenance-logged); full customer create (all fields,
+not just name/phone); quick-item FULL create (name, description, buy/sell
+price, margin, qty, IVA, barcode — the tienda-china/abarrotes onboarding
+path); price checker (checador de precios — read-only lookup surface,
+kiosk-able later).
+
+**Weight/fraction selling (new capability, Scan Retail seam):** venta
+fraccionada por importe (amount → qty = importe/rate) and por peso; báscula
+button (scale read). `posa_scale_barcode_start` is dead-on-arrival and
+slated for removal — the scale integration needs a real design (QZ/serial
+bridge vs weight-embedded barcodes), and sell-by-amount must round in the
+CUSTOMER's favor deterministically. Gates abarrotes/carnicería/ferretería
+granel.
+
+**Documents (Product 2/3 seam):** cotizaciones — ERPNext Quotation exists;
+the POS needs create/recall/convert-to-sale (muebles/ferretería depend on
+it); notas de crédito — the return/credit rail exists (saldo refunds mint
+credit notes today); needs a first-class POS surface: partial credit,
+apply-to-later-sale, print format.
+
+### 17.3 Shortcuts engine — substrate, build once
+
+Actions become a first-class REGISTRY (stable action IDs decoupled from key
+bindings); a keymap is a versioned §9.1 artifact bound per capability
+preset, override-allowlisted per tenant, with a user layer on top.
+Discoverability ships with it (cheat-sheet overlay, conflict detection).
+"Big POS defaults": keymap PACKS that emulate incumbent Mexican POS
+layouts so a migrating cashier's fingers still work — friction at the till
+is the real switching cost. HONESTY RULE: a pack is authored only from
+evidence (a real migrating operator or the incumbent's documented
+defaults), never invented from memory; ship `muelle-default` first and add
+packs as migrations actually happen. This is Foundation-flavored substrate:
+it must exist BEFORE the giro wave, because presets carry keymaps.
+
+### 17.4 SaaS brand: Muelle POS as a layer, not a rename
+
+The app stays `posawesome` (fork hygiene — UPSTREAM.md merge discipline
+survives). Branding becomes a thin layer: display name "Muelle POS", logo,
+PWA manifest, page title, login copy and receipt footer resolve from brand
+tokens; `/pos` route alias beside `/posapp`. Per-tenant brand override is a
+LATER §9.1 artifact once the token layer exists. Service-worker/PWA icon
+caching is the known trap (see SW-cache memory) — brand assets must be
+versioned like any other precached asset. Test selectors and DOM stay
+stable so the suites don't care what the brand says.
+
+### 17.5 Sequencing opinion (recorded, Marco decides)
+
+1. Brand layer — small, independent, sell-readiness benefits now.
+2. Shortcuts engine substrate — before the giro wave, presets ride it.
+3. Parity affordances — inside Product 2/3 slices they already belong to.
+4. Weight/fraction + cotizaciones/NC — the two real capability builds.
+5. Giro seed factory throughput — Platform 5, after three proven slices,
+   then the fourteen-giro list is seed work, not code work.
