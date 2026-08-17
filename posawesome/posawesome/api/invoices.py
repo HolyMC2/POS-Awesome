@@ -91,6 +91,10 @@ def get_draft_invoices(
     filters = {
         "docstatus": 0,
     }
+    # Profile of the caller's OWN opening shift, used to also surface drafts
+    # that carry no shift at all (see the second query below). Server-derived
+    # from the shift row, never a client claim.
+    unassigned_profile = None
     if supervisor_scope and company:
         # Confirm the supervisor's session can act on the requested
         # company + profile before broadening scope.
@@ -104,6 +108,25 @@ def get_draft_invoices(
             filters["owner"] = cashier
     else:
         filters["posa_pos_opening_shift"] = pos_opening_shift
+        # An external vertical (taller repairs, etc.) drafts an invoice long
+        # before anyone is at the till, so it can only pin the durable
+        # pos_profile — a shift is one cashier's drawer for one day, and
+        # guessing one strands the sale in somebody else's corte. Shift scope
+        # alone therefore hid those drafts from every cashier. Widen it to
+        # "my shift, or unclaimed on my register" — the register comes from
+        # the caller's own shift row and only widens on a membership match.
+        if pos_opening_shift and frappe.db.has_column(doctype, "pos_profile"):
+            unassigned_profile = frappe.db.get_value(
+                "POS Opening Shift", pos_opening_shift, "pos_profile"
+            )
+            if unassigned_profile:
+                try:
+                    assert_profile(frappe.session.user, unassigned_profile)
+                except frappe.PermissionError:
+                    # Not my register: drop the widening instead of raising.
+                    # This branch is purely additive — a caller that could
+                    # list its own shift before must not start getting a 403.
+                    unassigned_profile = None
     if frappe.db.has_column(doctype, "posa_is_printed"):
         filters["posa_is_printed"] = 0
 
@@ -118,6 +141,8 @@ def get_draft_invoices(
         "pos_profile",
         "owner",
         "modified_by",
+        # Needed to re-order the merged shift-scoped + unclaimed result sets.
+        "modified",
     ]
     # Held-ticket "name on the cup" label (cafetería vertical). Guarded so a
     # tenant that has not yet run the add_tab_name_field patch does not 500.
@@ -135,6 +160,29 @@ def get_draft_invoices(
         limit_page_length=limit_page_length,
         order_by="modified desc",
     )
+    if unassigned_profile:
+        # Separate query rather than or_filters: the second branch is a
+        # conjunction (no shift AND this profile) that or_filters cannot
+        # express, and folding it in would OR the profile against the
+        # shift-scoped rows too.
+        unassigned_filters = dict(filters)
+        unassigned_filters["posa_pos_opening_shift"] = ["is", "not set"]
+        unassigned_filters["pos_profile"] = unassigned_profile
+        seen = {row["name"] for row in invoices_list}
+        for row in frappe.get_list(
+            doctype,
+            filters=unassigned_filters,
+            fields=fields,
+            limit_page_length=limit_page_length,
+            order_by="modified desc",
+        ):
+            if row["name"] not in seen:
+                invoices_list.append(row)
+        # str() so a row missing `modified` sorts last instead of raising on a
+        # datetime-vs-str comparison; ISO datetimes order lexicographically.
+        invoices_list.sort(key=lambda row: str(row.get("modified") or ""), reverse=True)
+        if limit_page_length:
+            invoices_list = invoices_list[:limit_page_length]
     for invoice in invoices_list:
         invoice["doctype"] = doctype
     log_perf_event(

@@ -12,6 +12,7 @@ def _install_frappe_stub():
     frappe_module._ = lambda text: text
     frappe_module.throw = lambda message: (_ for _ in ()).throw(Exception(message))
     frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
+    frappe_module.PermissionError = PermissionError
     frappe_module.db = types.SimpleNamespace(has_column=lambda *args, **kwargs: False)
     frappe_module.get_list = lambda *args, **kwargs: []
     frappe_module.session = types.SimpleNamespace(user="supervisor@example.com")
@@ -124,6 +125,41 @@ class TestInvoicesApi(unittest.TestCase):
                 "docstatus": 0,
             },
         )
+
+    def test_get_draft_invoices_also_returns_unclaimed_drafts_on_my_profile(self):
+        """A draft with no shift but pinned to my register must reach me.
+
+        External verticals (taller repairs) draft hours before anyone is at
+        the till, so they can only bind the durable pos_profile. Shift scope
+        alone hid those from every cashier.
+        """
+        calls = []
+
+        def fake_get_list(doctype, **kwargs):
+            calls.append(kwargs["filters"])
+            if kwargs["filters"].get("pos_profile"):
+                return [{"name": "SINV-EXTERNAL", "modified": "2026-08-17 10:00:00"}]
+            return [{"name": "SINV-MINE", "modified": "2026-08-17 09:00:00"}]
+
+        self.invoices.frappe.get_list = fake_get_list
+        self.invoices.frappe.db.has_column = lambda doctype, fieldname: fieldname == "pos_profile"
+        self.invoices.frappe.db.get_value = lambda *args, **kwargs: "Doco Ventas"
+
+        rows = self.invoices.get_draft_invoices("POS-OPEN-0001", doctype="Sales Invoice")
+
+        self.assertEqual(
+            calls,
+            [
+                {"posa_pos_opening_shift": "POS-OPEN-0001", "docstatus": 0},
+                {
+                    "posa_pos_opening_shift": ["is", "not set"],
+                    "pos_profile": "Doco Ventas",
+                    "docstatus": 0,
+                },
+            ],
+        )
+        # Merged, most-recently-modified first.
+        self.assertEqual([row["name"] for row in rows], ["SINV-EXTERNAL", "SINV-MINE"])
 
     def test_get_draft_invoices_uses_company_scope_for_supervisors(self):
         captured = {}
