@@ -49,6 +49,18 @@ OVERRIDE_ALLOWLIST = {
         "merge": "enable_only",
         "mode_default": False,
     },
+    # Which keyboard pack this register teaches (roadmap §17.3). "replace",
+    # not "enable_only": a keymap is a choice, not a power — a shop migrating
+    # from another POS sets its own pack per terminal, and the mode's default
+    # must be replaceable rather than merged. Empty means "not set" (see
+    # _profile_override_value) so an untouched Data field never blanks the
+    # mode's pack.
+    "shortcuts.keymap_id": {
+        "profile_field": "posa_ux_keymap_id",
+        "kind": "data",
+        "merge": "replace",
+        "mode_default": None,
+    },
 }
 
 
@@ -61,6 +73,12 @@ def _profile_override_value(pos_profile_name, spec):
     raw = frappe.db.get_value("POS Profile", pos_profile_name, field)
     if spec["kind"] == "bool":
         return bool(int(raw or 0))
+    if spec["kind"] == "data":
+        # An untouched Data field reads as "" (or None). Both mean "the
+        # register did not choose" — returning "" would let an empty field
+        # blank the mode's value under the replace rule.
+        raw = (raw or "").strip() if isinstance(raw, str) else raw
+        return raw or None
     return raw
 
 

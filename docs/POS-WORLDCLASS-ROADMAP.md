@@ -1184,9 +1184,27 @@ Parity is pinned by a table of all 28 legacy chords in
 `tests/shortcutsEngine.spec.ts` (53 new tests; 1655 total green; verified in
 a real browser on lab: Alt+H renders the sheet, Alt+3 still lands on the
 item search input; golden flow green after the refactor).
-Remaining for this rung: server plumbing (preset field carrying `keymap_id`
-+ tenant override allowlist entry → `configureShortcuts`), and the first
-incumbent pack, which stays blocked on EVIDENCE from a real migration.
+Update (2026-08-18): **rung closed — server plumbing shipped.** POS
+Capability Profile gains `keymap_id` (validated against `VALID_KEYMAPS`, so
+an unknown pack fails at a manager's desk rather than on a cashier's
+keyboard); the resolved payload carries a `shortcuts` group; the register
+override lands as allowlist entry `shortcuts.keymap_id` → POS Profile
+`posa_ux_keymap_id` with a new `replace` merge rule (a keymap is a choice,
+not a power, so unlike the bool flags a register REPLACES rather than
+enables). `kind: "data"` normalizes ""/whitespace to None so an untouched
+field can never blank the mode's pack — pinned by its own test after the
+live drill proved the failure mode. `posa_ux_` is a new fixture prefix for
+cross-vertical operator-experience fields (the CI coverage check demands
+one; shortcuts belong to every giro, not to a vertical). uiStore watches
+the capability payload with `flush: "sync"` — the keyboard must not answer
+to the previous register for even one microtask. Payload version NOT
+bumped: a keymap cannot change how a queued offline sale replays.
+Verified: 1662 frontend + 31 server tests green, live drill on the mirror
+(preset pack reaches the payload, register override replaces it, blank and
+whitespace do not strip it), golden flow green.
+Still open for a future rung: the first incumbent pack, blocked on EVIDENCE
+from a real migration, and a per-action override map (the allowlist carries
+the pack id today, not individual rebindings).
 
 ### 17.4 SaaS brand: Muelle POS as a layer, not a rename
 

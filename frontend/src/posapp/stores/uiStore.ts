@@ -31,8 +31,9 @@
  * - `triggerTopItemSelection` (via `selectTopItem()`) — selects the first item in the list.
  */
 import { defineStore } from "pinia";
-import { ref, shallowRef, computed } from "vue";
+import { ref, shallowRef, computed, watch } from "vue";
 import type { POSProfile } from "../types/models";
+import { configureShortcuts } from "../shortcuts";
 
 /**
  * The selector-column panels the shell knows how to mount. Each member has a
@@ -235,6 +236,21 @@ export const useUIStore = defineStore("ui", () => {
   function setCapabilityPayload(payload: Record<string, any> | null) {
     capabilityPayload.value = payload || null;
   }
+
+  // The keymap rides the capability payload (roadmap §17.3). Watched
+  // rather than wired into each setter: every assignment path — opening
+  // data, a bare setCapabilityPayload, a future one — must land on the
+  // keyboard, and a missed path would strand a register on the previous
+  // register's layout. null resets to muelle-default by design.
+  watch(
+    capabilityPayload,
+    (payload) => {
+      configureShortcuts({ keymapId: payload?.shortcuts?.keymap_id ?? null });
+    },
+    // sync: the keyboard must not answer to the previous register for
+    // even one microtask after a new payload lands.
+    { immediate: true, flush: "sync" },
+  );
 
   function setRegisterData(data: {
     pos_profile?: POSProfile;

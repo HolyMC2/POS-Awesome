@@ -17,6 +17,13 @@ All notable changes.
   now documented by tests instead of hiding in control flow. This is the
   substrate incumbent-emulating packs ride on — and those stay blocked on
   evidence from a real migration, never authored from memory.
+  Server half (needs `bench migrate`): POS Capability Profile carries
+  `keymap_id` validated against `VALID_KEYMAPS`; the resolved capability
+  payload gains a `shortcuts` group; a register may replace the mode's pack
+  through the typed override allowlist (`shortcuts.keymap_id` → POS Profile
+  `posa_ux_keymap_id`, new `replace` merge rule). Blank and whitespace-only
+  register values mean "not set" and cannot strip the mode's pack. The SPA
+  reconfigures synchronously when the payload lands.
 
 - **Muelle POS brand layer (roadmap §17.4).** The user-facing brand now
   lives in ONE module (`frontend/src/brand.ts`): navbar wordmark

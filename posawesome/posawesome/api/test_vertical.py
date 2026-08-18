@@ -444,3 +444,90 @@ class TestDockTabCrossStackParity(unittest.TestCase):
             f"VALID_DOCK_TABS ({list(backend_ids)}) in pos_capability_profile.py "
             "(same ids, same order) — a mismatch renders a silent blank dock tab.",
         )
+
+
+class TestKeymapOverride(IntegrationTestCase):
+    """Keymap plumbing: preset names a pack, register may replace it (§17.3).
+
+    A keymap moves KEYS, never what an action does — so the risk being tested
+    here is not a wrong sale but a dead keyboard: an untouched Data field
+    blanking the mode's pack, or an unknown pack saved at a manager's desk
+    and discovered by a cashier mid-shift.
+    """
+
+    PRESET = "test-keymap-override"
+    FIELD = "posa_ux_keymap_id"
+
+    def setUp(self):
+        self._orig_link = frappe.db.get_value(
+            "POS Profile", PROFILE, "posa_capability_profile"
+        )
+        self._orig_keymap = frappe.db.get_value("POS Profile", PROFILE, self.FIELD)
+        frappe.db.set_value("POS Profile", PROFILE, self.FIELD, "")
+        frappe.clear_cache()
+
+    def tearDown(self):
+        frappe.db.set_value(
+            "POS Profile", PROFILE, "posa_capability_profile", self._orig_link
+        )
+        frappe.db.set_value("POS Profile", PROFILE, self.FIELD, self._orig_keymap or "")
+        if frappe.db.exists("POS Capability Profile", self.PRESET):
+            frappe.delete_doc("POS Capability Profile", self.PRESET, force=True)
+        frappe.clear_cache()
+
+    def _link_preset(self, keymap_id=""):
+        frappe.get_doc(
+            {
+                "doctype": "POS Capability Profile",
+                "profile_name": self.PRESET,
+                "keymap_id": keymap_id,
+                "capabilities": "tab_identity",
+            }
+        ).insert()
+        frappe.db.set_value(
+            "POS Profile", PROFILE, "posa_capability_profile", self.PRESET
+        )
+        frappe.clear_cache()
+
+    def test_preset_keymap_reaches_the_payload(self):
+        self._link_preset(keymap_id="muelle-default")
+        payload = vertical.resolve_capability_json(PROFILE)
+        self.assertEqual(payload["shortcuts"]["keymap_id"], "muelle-default")
+
+    def test_unset_everywhere_is_null_not_empty_string(self):
+        # null is "use the SPA default"; "" would be a pack id that does not
+        # exist, and the resolver would have to guess what was meant.
+        self._link_preset(keymap_id="")
+        payload = vertical.resolve_capability_json(PROFILE)
+        self.assertIsNone(payload["shortcuts"]["keymap_id"])
+
+    def test_register_override_replaces_the_mode_pack(self):
+        self._link_preset(keymap_id="")
+        frappe.db.set_value("POS Profile", PROFILE, self.FIELD, "muelle-default")
+        payload = vertical.resolve_capability_json(PROFILE)
+        self.assertEqual(payload["shortcuts"]["keymap_id"], "muelle-default")
+
+    def test_blank_register_field_does_not_blank_the_mode_pack(self):
+        # The whole point of kind="data" normalising "" and whitespace to
+        # None: every register that never touched the field would otherwise
+        # strip the pack its mode teaches.
+        self._link_preset(keymap_id="muelle-default")
+        for blank in ("", "   "):
+            frappe.db.set_value("POS Profile", PROFILE, self.FIELD, blank)
+            frappe.clear_cache()
+            payload = vertical.resolve_capability_json(PROFILE)
+            self.assertEqual(
+                payload["shortcuts"]["keymap_id"],
+                "muelle-default",
+                f"blank register value {blank!r} stripped the mode's pack",
+            )
+
+    def test_unknown_pack_is_refused_at_edit_time(self):
+        with self.assertRaises(frappe.ValidationError):
+            frappe.get_doc(
+                {
+                    "doctype": "POS Capability Profile",
+                    "profile_name": self.PRESET,
+                    "keymap_id": "sicar-classic",
+                }
+            ).insert()

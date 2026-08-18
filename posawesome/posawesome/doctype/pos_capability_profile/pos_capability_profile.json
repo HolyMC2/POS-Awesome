@@ -17,6 +17,7 @@
   "column_break_layout",
   "dock_tabs",
   "invoice_mode",
+  "keymap_id",
   "section_capabilities",
   "capabilities",
   "section_vocabulary",
@@ -100,6 +101,12 @@
    "options": "\nSales Invoice\nPOS Invoice\nRecord Only"
   },
   {
+   "fieldname": "keymap_id",
+   "fieldtype": "Data",
+   "label": "Keymap",
+   "description": "Keyboard layout pack this mode teaches (roadmap §17.3). Blank = muelle-default, the bindings POSAwesome has always shipped. A pack moves KEYS only — never what an action does — so a cashier migrating from another POS can keep their muscle memory. A register may override this via POS Profile → Keymap."
+  },
+  {
    "fieldname": "section_capabilities",
    "fieldtype": "Section Break",
    "label": "Capabilities"
@@ -135,7 +142,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-10 00:00:00.000000",
+ "modified": "2026-08-18 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "POS Capability Profile",

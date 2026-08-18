@@ -447,6 +447,7 @@ fixtures = [
                     # patch-created Custom Field listed here; CI enforces it
                     # (scripts/check_fixture_coverage.py).
                     "POS Profile-posa_hide_items_until_search",
+                    "POS Profile-posa_ux_keymap_id",
                     "POS Profile-posa_lean_vertical_layout",
                     "POS Profile-posa_section_customer_display",
                     "POS Profile-posa_enable_customer_display",

@@ -45,6 +45,14 @@ KNOWN_CAPABILITIES = (
 # (spec §0.1 / F1).
 VALID_INVOICE_MODES = ("", "Sales Invoice", "POS Invoice", "Record Only")
 
+# Keymap packs the SPA ships (roadmap §17.3). Mirrors the frontend
+# registry in frontend/src/posapp/shortcuts/keymap.ts — the two lists are
+# a contract pinned by tests on both sides. Blank = muelle-default.
+# Validated at edit time for the same reason every other vocabulary here
+# is: an unknown pack must fail at a manager's desk, never silently
+# degrade a cashier's keyboard mid-shift.
+VALID_KEYMAPS = ("", "muelle-default")
+
 
 def _split_csv(value):
     return [part.strip() for part in (value or "").split(",") if part.strip()]
@@ -62,6 +70,11 @@ class POSCapabilityProfile(Document):
             frappe.throw(f"Unknown items view «{self.items_view_default}»")
         if self.invoice_mode and self.invoice_mode not in VALID_INVOICE_MODES:
             frappe.throw(f"Unknown invoice mode «{self.invoice_mode}»")
+        if self.keymap_id and self.keymap_id not in VALID_KEYMAPS:
+            frappe.throw(
+                f"Unknown keymap «{self.keymap_id}». Valid: "
+                + ", ".join(k or "(blank = muelle-default)" for k in VALID_KEYMAPS)
+            )
 
         tabs = _split_csv(self.dock_tabs)
         unknown = [t for t in tabs if t not in VALID_DOCK_TABS]
@@ -128,4 +141,8 @@ class POSCapabilityProfile(Document):
             # data-model choice the offline write queue branches on, not a
             # rendering one.
             "invoice_mode": self.invoice_mode or None,
+            # Its own group so the register override allowlist can address
+            # `shortcuts.keymap_id`, and so later keymap knobs (a per-mode
+            # override map) have a home that is not `layout`.
+            "shortcuts": {"keymap_id": self.keymap_id or None},
         }
