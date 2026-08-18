@@ -112,6 +112,7 @@ export type Events = {
 	open_shift_details: void; // F7 → shift overview / closing dialog
 	lock_pos_screen: void;
 	show_shortcuts_cheatsheet: void; // Alt+H → keymap discoverability overlay
+	show_price_check: void; // Alt+C → read-only price lookup
 	open_mpesa_payments: { company: string; mode_of_payment: string; customer: string };
 	set_mpesa_payment: Record<string, any>;
 	open_ClosingDialog: Record<string, any>;

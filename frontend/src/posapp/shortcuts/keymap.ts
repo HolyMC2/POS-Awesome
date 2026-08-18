@@ -34,7 +34,8 @@ export interface Keymap {
  */
 export const MUELLE_DEFAULT: Keymap = {
 	id: "muelle-default",
-	version: 1,
+	// v2 (2026-08-18): + alt+c price checker, + alt+h cheat sheet.
+	version: 2,
 	label: "Muelle POS (default)",
 	bindings: {
 		// navigation
@@ -43,6 +44,7 @@ export const MUELLE_DEFAULT: Keymap = {
 		"items.selectTop": ["alt+4"],
 		"items.focusToolbarSearch": ["alt+f"],
 		"items.toggleSettings": ["alt+m"],
+		"items.priceCheck": ["alt+c"],
 		"app.goToDesk": ["alt+home"],
 		"app.lockScreen": ["f8"],
 		"app.showShortcuts": ["alt+h"],

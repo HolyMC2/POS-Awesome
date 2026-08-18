@@ -67,14 +67,22 @@ describe("legacy binding parity", () => {
 		expect(resolveShortcutAction(event, resolved)).toBe(actionId);
 	});
 
-	it("covers every chord the old if-chain implemented", () => {
-		// 29 rows = 28 distinct legacy chords + the numpad variant. If someone
-		// adds a binding to the default pack without a parity row, the count
-		// below and the pack disagree and this fails loudly.
-		const boundChords = new Set(resolved.bindings.map((b) => b.chord.id));
-		// alt+h (cheat sheet) is the one binding the engine ADDED.
-		expect(boundChords.has("alt+h")).toBe(true);
-		expect(boundChords.size).toBe(LEGACY_PARITY.length - 1 /* numpad dup */ + 1 /* alt+h */);
+	it("binds the legacy chords and nothing unaccounted for", () => {
+		// Every chord in the shipped pack must be declared as either inherited
+		// or deliberately added. A new binding that skips this list fails here
+		// rather than surprising a cashier who leans on the same key.
+		const LEGACY_CHORD_IDS = [
+			"alt+1", "alt+2", "alt+3", "alt+4", "alt+5", "alt+6", "alt+7", "alt+8",
+			"alt+9", "alt+backquote", "alt+pageup", "alt+home", "alt+q", "alt+a",
+			"alt+u", "alt+r", "alt+e", "alt+f", "alt+l", "alt+m", "alt+s", "alt+d",
+			"alt+x", "alt+p", "f4", "f6", "f7", "f8",
+		];
+		const ENGINE_ADDED_CHORDS = [
+			"alt+h", // cheat sheet — discoverability shipped with the engine
+			"alt+c", // price checker (§17.2)
+		];
+		const boundChords = [...new Set(resolved.bindings.map((b) => b.chord.id))].sort();
+		expect(boundChords).toEqual([...LEGACY_CHORD_IDS, ...ENGINE_ADDED_CHORDS].sort());
 	});
 
 	it("uses key OR code, so a layout that reports only one still works", () => {

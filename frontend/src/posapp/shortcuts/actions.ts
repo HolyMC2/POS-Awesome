@@ -42,6 +42,12 @@ export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
 	{ id: "items.focusToolbarSearch", label: "Focus toolbar search", category: "navigation" },
 	{ id: "items.selectTop", label: "Add top search result", category: "navigation" },
 	{ id: "items.toggleSettings", label: "Toggle item settings", category: "navigation" },
+	{
+		id: "items.priceCheck",
+		label: "Price checker",
+		category: "navigation",
+		hint: "Look up a price without touching the sale",
+	},
 	{ id: "app.goToDesk", label: "Go to Frappe Desk", category: "app" },
 	{ id: "app.lockScreen", label: "Lock POS screen", category: "app" },
 	{ id: "app.showShortcuts", label: "Show keyboard shortcuts", category: "app" },

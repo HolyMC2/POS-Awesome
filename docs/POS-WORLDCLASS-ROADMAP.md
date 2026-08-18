@@ -1137,6 +1137,28 @@ price, margin, qty, IVA, barcode — the tienda-china/abarrotes onboarding
 path); price checker (checador de precios — read-only lookup surface,
 kiosk-able later).
 
+Status (2026-08-18): **price checker SHIPPED LAB** — the first parity
+affordance, chosen first because it was wholly missing (the others largely
+exist: cart rows already carry quantity/remove/rate controls) and because it
+is READ-ONLY, so it earns its keep with no money-path risk.
+`PriceCheckDialog.vue` owns its own search field, calls only lookup
+endpoints (`get_items`, `get_items_from_barcode` — zero new server surface),
+and has no path to the cart at all; that negative property is source-scanned
+by a test rather than mounted, because the guarantee is "no such code path
+exists". Bound to the new `items.priceCheck` action on Alt+C — the first
+feature to ride the shortcuts engine, which is what the substrate was for.
+Behavior worth naming: a text miss on a ≥6-char token retries as a barcode
+(a scan that misses is the likeliest reason anyone is here); responses carry
+a sequence so a slow earlier query cannot overwrite a newer answer; opening
+clears the previous lookup so one customer's price is never quoted to the
+next; and the footer names the price list that answered, because with a
+price-list switch coming a bare number is a promise the till may not honour.
+Verified live on lab: Alt+C → "Tortilla de maíz (kg) · Kilogramo · Stock 80
+· MX$25.00" from Standard Selling, **cart still empty afterwards**.
+Remaining in this cluster: clearer discount button, drawer-kick button (no
+frontend path exists today — needs a QZ raw-command design), price-list
+switch + price override, full customer create, quick-item full create.
+
 **Weight/fraction selling (new capability, Scan Retail seam):** venta
 fraccionada por importe (amount → qty = importe/rate) and por peso; báscula
 button (scale read). `posa_scale_barcode_start` is dead-on-arrival and

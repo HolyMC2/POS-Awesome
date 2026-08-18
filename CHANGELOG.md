@@ -4,6 +4,17 @@ All notable changes.
 
 ## Unreleased
 
+- **Price checker — checador de precios (roadmap §17.2).** Alt+C opens a
+  read-only lookup: scan or type, see name, price, UOM and stock, with the
+  answering price list named in the footer. It never touches the sale — its
+  own search field, lookup endpoints only, no cart path at all (source-
+  scanned by test, because the guarantee is that no such path exists), so a
+  cashier can answer "how much is this?" mid-ticket instead of scanning an
+  item in and removing it. A text miss on a ≥6-character token retries as a
+  barcode; a slow earlier query can never overwrite a newer answer; opening
+  clears the previous lookup. Zero new server surface — reuses `get_items`
+  and `get_items_from_barcode`. First consumer of the shortcuts engine.
+
 - **Shortcuts engine (roadmap §17.3).** Keys and behaviors are now separate
   things: `posapp/shortcuts/` holds 28 stable action ids, versioned keymap
   packs (`muelle-default` v1 = exactly the bindings already shipped), and a

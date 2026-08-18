@@ -169,6 +169,13 @@ export const INVOICE_SHORTCUT_EFFECTS: Record<string, ShortcutEffect> = {
 		this.eventBus.emit("show_shortcuts_cheatsheet");
 	},
 
+	"items.priceCheck"(event) {
+		consumeEvent(event);
+		// Deliberately does NOT touch the compact panel or the cart: a price
+		// lookup must be answerable mid-sale without disturbing the ticket.
+		this.eventBus.emit("show_price_check");
+	},
+
 	"invoice.showInvoicePanel"(event) {
 		consumeEvent(event);
 		if (typeof this.close_payments === "function") {

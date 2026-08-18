@@ -22,6 +22,7 @@
 		></SaldoReferenciaDialog>
 		<SaldoStatusDialog></SaldoStatusDialog>
 		<ShortcutsCheatSheet></ShortcutsCheatSheet>
+		<PriceCheckDialog></PriceCheckDialog>
 		<SaldoCatalogPicker
 			v-model="saldoPickerOpen"
 			@picked="onSaldoPicked"
@@ -286,6 +287,7 @@ import ChangeDueDialog from "../payments/ChangeDueDialog.vue";
 import SaldoReferenciaDialog from "@saldo/SaldoReferenciaDialog.vue";
 import SaldoStatusDialog from "@saldo/SaldoStatusDialog.vue";
 import ShortcutsCheatSheet from "./ShortcutsCheatSheet.vue";
+import PriceCheckDialog from "./PriceCheckDialog.vue";
 import SaldoCatalogPicker from "@saldo/SaldoCatalogPicker.vue";
 import { saldoCaptureBus } from "@saldo/useSaldoCapture";
 import { printInvoiceByName } from "../../../utils/printInvoiceByName";
@@ -1095,6 +1097,7 @@ export default {
 	components: {
 		OpeningDialog,
 		ShortcutsCheatSheet,
+		PriceCheckDialog,
 		Payments,
 		FloorView,
 		ChangeDueDialog,
