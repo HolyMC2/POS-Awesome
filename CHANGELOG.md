@@ -4,6 +4,28 @@ All notable changes.
 
 ## Unreleased
 
+- **Quick item creation is a real intake form (roadmap §17.2).** The
+  six-field dialog now takes purchase price, selling price, **margin**,
+  opening quantity, description and IVA in one pass — the "alta rápida"
+  a ferretería or tienda china does all day, instead of a trip to Desk.
+  Margin is bidirectional (type a markup, get the price; type a price, get
+  the markup) and explicitly labelled markup-over-cost, with the profit in
+  currency beside it. The arithmetic is a separately unit-tested pure module
+  because a rounding slip here becomes a mispriced shelf. Opening stock
+  posts to the register's own warehouse and refuses, with a sentence, the
+  two cases ERPNext would throw on from deep inside its Item controller
+  (no purchase price, no warehouse). The item code auto-derives from the
+  name until the operator edits it.
+
+- **Discount is a button, not a small field (roadmap §17.2).** A clear
+  Discount button opens a dialog with percent/amount modes, four presets and
+  **the resulting total shown before committing** — money leaving the till
+  should be read back first. It owns no pricing logic: it hands the shell the
+  operator's intent through the same emits the inline field uses, so the two
+  surfaces can never disagree. Guards refuse negative, over-100% and
+  larger-than-the-sale discounts; a full 100% comp stays allowed because it
+  is a real decision. Permission-gated and offer-lock aware, like the field.
+
 - **Price checker — checador de precios (roadmap §17.2).** Alt+C opens a
   read-only lookup: scan or type, see name, price, UOM and stock, with the
   answering price list named in the footer. It never touches the sale — its

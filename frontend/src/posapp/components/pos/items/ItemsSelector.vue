@@ -178,6 +178,7 @@
 		<NewItemDialog
 			v-if="newItemDialog"
 			v-model="newItemDialog"
+			:pos-profile="pos_profile"
 			:items-group="items_group"
 			:camera-enabled="!!pos_profile.posa_enable_camera_scanning"
 			:scanned-barcode="newItemDialogScannedBarcode"

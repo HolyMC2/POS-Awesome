@@ -98,6 +98,22 @@ const itemService = {
 		return unwrapApiResult(await this.getItemBrand(itemCode));
 	},
 
+	/** Item Tax Templates for the quick-item IVA picker. Company-scoped so a
+	 * multi-company site cannot offer a template that would fail validation. */
+	getItemTaxTemplates(company?: string | null): Promise<ApiEnvelope<{ name: string }[]>> {
+		return api.callEnvelope("frappe.client.get_list", {
+			doctype: "Item Tax Template",
+			filters: company ? { company } : {},
+			fields: ["name"],
+			limit_page_length: 0,
+			order_by: "name asc",
+		});
+	},
+
+	async getItemTaxTemplatesData(company?: string | null): Promise<{ name: string }[]> {
+		return unwrapApiResult(await this.getItemTaxTemplates(company));
+	},
+
 	getUOMs(): Promise<ApiEnvelope<{ name: string }[]>> {
 		return api.callEnvelope("frappe.client.get_list", {
 			doctype: "UOM",

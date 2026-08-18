@@ -101,6 +101,29 @@
 						</div>
 					</div>
 
+					<!-- The field stays (muscle memory, Alt+A); the button is the
+					     clearer target a busy counter needs — §17.2. -->
+					<v-btn
+						v-if="pos_profile.posa_allow_user_to_edit_additional_discount && !discount_percentage_offer_name"
+						class="summary-discount-btn"
+						variant="tonal"
+						color="warning"
+						prepend-icon="mdi-tag-minus"
+						data-testid="open-discount-dialog"
+						@click="discountDialogOpen = true"
+					>{{ __("Discount") }}</v-btn>
+
+					<DiscountDialog
+						v-model="discountDialogOpen"
+						:base-total="Number(subtotal) || 0"
+						:currency-symbol="currencySymbol(pos_profile.currency)"
+						:initial-mode="pos_profile.posa_use_percentage_discount ? 'percentage' : 'amount'"
+						:initial-percentage="additional_discount_percentage"
+						:initial-amount="additional_discount"
+						@apply="applyDiscountFromDialog"
+						@clear="clearDiscountFromDialog"
+					/>
+
 					<div class="summary-hero__field-wrap">
 						<v-text-field
 							v-if="!pos_profile.posa_use_percentage_discount"
@@ -261,6 +284,7 @@ import { storeToRefs } from "pinia";
 import { loadItemSelectorSettings } from "../../../utils/itemSelectorSettings";
 import { useResponsive } from "../../../composables/core/useResponsive";
 import { useUIStore } from "../../../stores/uiStore";
+import DiscountDialog from "./DiscountDialog.vue";
 import { useVerticalStore } from "../../../stores/verticalStore";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
 import {
@@ -309,6 +333,28 @@ const emit = defineEmits([
 	"resume-parked-order",
 	"open-saldo-picker",
 ]);
+
+const discountDialogOpen = ref(false);
+
+/**
+ * The dialog owns no pricing: it hands back the operator's intent and we
+ * push it through the SAME emits the inline field uses, so the two surfaces
+ * can never disagree about what a discount means.
+ */
+const applyDiscountFromDialog = ({ mode, value }) => {
+	if (mode === "percentage") {
+		emit("update:additional_discount_percentage", value);
+	} else {
+		emit("update:additional_discount", value);
+	}
+};
+
+const clearDiscountFromDialog = () => {
+	// Both, deliberately: clearing only the active mode would leave the other
+	// one still applied and invisible.
+	emit("update:additional_discount_percentage", 0);
+	emit("update:additional_discount", 0);
+};
 
 const saveLoading = ref(false);
 const loadDraftsLoading = ref(false);
