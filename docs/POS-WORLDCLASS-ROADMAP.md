@@ -1155,9 +1155,44 @@ next; and the footer names the price list that answered, because with a
 price-list switch coming a bare number is a promise the till may not honour.
 Verified live on lab: Alt+C → "Tortilla de maíz (kg) · Kilogramo · Stock 80
 · MX$25.00" from Standard Selling, **cart still empty afterwards**.
-Remaining in this cluster: clearer discount button, drawer-kick button (no
-frontend path exists today — needs a QZ raw-command design), price-list
-switch + price override, full customer create, quick-item full create.
+Update (2026-08-18, later): **cluster closed except the hardware one.**
+Reality check first, which saved two rebuilds: cart rows already carried
+quantity/remove/rate controls, the price-list switch already exists
+(`ItemActionToolbar` + `ItemSettingsDialog`, gated by
+`posa_enable_price_list_dropdown`), per-line price override already exists,
+and full customer create already covers address + the CFDI fiscal block
+(tax_id, régimen, uso, CP). None were rebuilt.
+
+Built instead, both money-facing and therefore both with their arithmetic
+in separately unit-tested pure modules rather than inside a dialog:
+
+- **Quick item** (`itemPricing.ts` + rebuilt `NewItemDialog.vue`): purchase
+  price, selling price, margin, opening quantity, description and IVA in one
+  pass. Margin is bidirectional and labelled markup-over-cost — the Mexican
+  counter meaning — with profit in currency beside it; the field being typed
+  is never recomputed, because a typed 22 visibly jumps to 22.01 once the
+  price rounds to a cent (the round-trip test says so out loud). Opening
+  stock pins the register's warehouse in `item_defaults` and refuses, in a
+  sentence, the two cases ERPNext throws on from inside its Item controller.
+  Item code derives from the name until touched.
+- **Discount** (`discountIntent.ts` + `DiscountDialog.vue`): a clear button
+  opening percent/amount modes, four presets and the resulting total shown
+  BEFORE committing. It owns no pricing — it hands the shell the operator's
+  intent through the same emits the inline field uses, so the surfaces
+  cannot drift. Refuses negative, >100% and larger-than-the-sale; allows
+  exactly 100%, which is a real decision. Permission- and offer-lock aware.
+
+Still open, deliberately: the **drawer-kick button**. There is no QZ
+raw-command path in the frontend at all today (the drawer opens as a side
+effect of printing), so it needs a real design plus verification on the
+physical canary — the same gate P2 already waits on. Building it blind
+would ship hardware code nobody can prove.
+
+**Front page (2026-08-18):** muelle.mx now leads with the POS
+(`muelle-site` `2c0e257`) — hero headline plus a six-card "Muelle POS"
+section under it. ⚠ The site must not be published before the posawesome
+prod roll: four cards describe lab-only work, and the hero product shot
+still shows the pre-brand navbar and wants retaking on the same roll.
 
 **Weight/fraction selling (new capability, Scan Retail seam):** venta
 fraccionada por importe (amount → qty = importe/rate) and por peso; báscula
