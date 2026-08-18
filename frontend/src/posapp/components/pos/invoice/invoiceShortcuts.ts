@@ -1,25 +1,22 @@
+/**
+ * Invoice keyboard EFFECTS — the "what happens" half of the shortcuts engine.
+ *
+ * The "which key" half moved to `posapp/shortcuts/` (roadmap §17.3): this
+ * module no longer knows a single chord. It maps stable ACTION IDS to the
+ * behaviors they always had, so a keymap pack can rebind anything — or an
+ * incumbent-emulating pack can move every key at once — without touching a
+ * line of the logic below. Parity with the pre-engine if-chain is pinned by
+ * tests/shortcutsEngine.spec.ts; per-effect behavior by
+ * tests/invoiceShortcuts.spec.ts.
+ */
 import type { Emitter } from "mitt";
 import type { Events } from "../../../bus";
+import { actionForEvent } from "../../../shortcuts";
 
-const isAltOnly = (event: KeyboardEvent) =>
-	event.altKey && !event.ctrlKey && !event.metaKey;
 const consumeEvent = (event: KeyboardEvent) => {
 	event.preventDefault();
 	event.stopPropagation();
 	event.stopImmediatePropagation?.();
-};
-const isDigit = (event: KeyboardEvent, digit: number) =>
-	event.key === String(digit) ||
-	event.code === `Digit${digit}` ||
-	event.code === `Numpad${digit}`;
-const isBackquote = (event: KeyboardEvent) =>
-	event.key === "`" || event.code === "Backquote";
-const isLetter = (event: KeyboardEvent, letter: string) => {
-	const normalized = letter.toLowerCase();
-	const keyValue = event.key?.toLowerCase?.();
-	return (
-		keyValue === normalized || event.code === `Key${letter.toUpperCase()}`
-	);
 };
 const showCompactPanel = (
 	eventBus: { emit: (_event: string, _payload?: unknown) => void } | undefined,
@@ -99,6 +96,233 @@ interface InvoiceShortcutsVm {
 	focusItemTableField: (_field: ShortcutField) => void;
 }
 
+type ShortcutEffect = (
+	this: InvoiceShortcutsVm,
+	_event: KeyboardEvent,
+) => void | Promise<void>;
+
+/**
+ * Submit-the-sale path, shared by `payment.submit` (Alt+X) and
+ * `payment.submitAndPrint` (Alt+P). The guards are load-bearing: an already
+ * open payment screen must let the key through untouched, and a repeat or an
+ * in-flight round-trip must be swallowed so a leaned-on key cannot queue a
+ * second submit against a screen that has not opened yet.
+ */
+const submitSale = async function (
+	this: InvoiceShortcutsVm,
+	event: KeyboardEvent,
+	shouldPrint: boolean,
+) {
+	if (this.paymentVisible) {
+		return;
+	}
+	if (event.repeat || this.shortcutSubmitInFlight || this.uiStore?.paymentRequestPending) {
+		consumeEvent(event);
+		return;
+	}
+	consumeEvent(event);
+	this.shortcutSubmitInFlight = true;
+
+	try {
+		const shouldSubmit = await this.confirmPaymentSubmission();
+		if (!shouldSubmit) {
+			return;
+		}
+		await this.flushBackgroundUpdates?.();
+		this.triggerBackgroundFlush?.flush?.();
+		this.schedulePricingRuleApplication?.flush?.();
+		showCompactPanel(this.eventBus, "selector");
+		await this.show_payment?.();
+		this.eventBus.emit("queue_submit_payment_shortcut", {
+			print: shouldPrint,
+		});
+	} finally {
+		this.shortcutSubmitInFlight = false;
+	}
+};
+
+/** Action id → effect. Keys live in the keymap, never here. */
+export const INVOICE_SHORTCUT_EFFECTS: Record<string, ShortcutEffect> = {
+	"employee.switch"(event) {
+		consumeEvent(event);
+		this.eventBus.emit("open_employee_switch");
+	},
+
+	"customer.new"(event) {
+		consumeEvent(event);
+		this.$refs.customerSection?.openNewCustomer?.() ||
+			this.$refs.customerComponent?.openNewCustomer?.();
+	},
+
+	"shift.details"(event) {
+		consumeEvent(event);
+		this.eventBus.emit("open_shift_details");
+	},
+
+	"app.lockScreen"(event) {
+		consumeEvent(event);
+		this.eventBus.emit("lock_pos_screen");
+	},
+
+	"app.showShortcuts"(event) {
+		consumeEvent(event);
+		this.eventBus.emit("show_shortcuts_cheatsheet");
+	},
+
+	"invoice.showInvoicePanel"(event) {
+		consumeEvent(event);
+		if (typeof this.close_payments === "function") {
+			this.close_payments();
+		} else {
+			// Same hand-off close_payments makes. The listener lives on the
+			// shell, not on this vm, so the request lands whether or not the
+			// invoice panel implements close_payments — and the shell moves
+			// the panel and the active view together.
+			this.eventBus?.emit?.("show_invoice_panel");
+		}
+	},
+
+	"invoice.cancelDialog"(event) {
+		consumeEvent(event);
+		this.cancel_dialog = true;
+	},
+
+	"items.focusSearch"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "selector");
+		this.uiStore.setActiveView("items");
+		this.uiStore.triggerItemSearchFocus();
+		this.eventBus.emit("focus_item_search");
+	},
+
+	"items.selectTop"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "selector");
+		this.uiStore.setActiveView("items");
+		this.uiStore.selectTopItem();
+	},
+
+	"customer.focusSearch"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "invoice");
+		this.focusCustomerSearchField?.();
+	},
+
+	"customer.selectFirst"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "invoice");
+		this.$refs.customerSection?.selectFirstCustomer?.() ||
+			this.$refs.customerComponent?.selectFirstCustomer?.();
+	},
+
+	"orders.openDrafts"(event) {
+		consumeEvent(event);
+		this.get_draft_orders?.();
+	},
+
+	"returns.open"(event) {
+		consumeEvent(event);
+		this.open_returns?.();
+	},
+
+	"invoice.focusDeliveryCharges"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "invoice");
+		this.$refs.deliveryChargesComponent?.focusDeliveryCharges?.();
+	},
+
+	"invoice.focusPostingDate"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "invoice");
+		this.$refs.postingDateComponent?.focusPostingDate?.();
+	},
+
+	"payment.open"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "selector");
+		this.show_payment?.();
+	},
+
+	"app.goToDesk"(event) {
+		consumeEvent(event);
+		// Same deskless bug as OpeningDialog.go_desk: set_route("/") maps to
+		// nothing on /posapp and reload() re-entered the SPA.
+		window.location.href = "/desk";
+	},
+
+	"cart.focusQty"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "invoice");
+		this.focusItemTableField("qty");
+	},
+
+	"invoice.focusAdditionalDiscount"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "invoice");
+		this.focusAdditionalDiscountField?.();
+	},
+
+	"cart.focusUom"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "invoice");
+		this.focusItemTableField("uom");
+	},
+
+	"cart.focusRate"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "invoice");
+		this.focusItemTableField("rate");
+	},
+
+	"cart.removeFirstItem"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "invoice");
+		const firstItem = this.items?.[0];
+		if (firstItem) {
+			this.remove_item?.(firstItem);
+		}
+	},
+
+	"items.focusToolbarSearch"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "invoice");
+		if (this.$refs.actionToolbar?.focusSearch) {
+			this.$refs.actionToolbar.focusSearch();
+			return;
+		}
+		const input = this.$refs.itemSearchField;
+		if (input?.focus) {
+			input.focus();
+		} else {
+			input?.$el?.querySelector?.("input")?.focus?.();
+		}
+	},
+
+	"invoice.openDrafts"(event) {
+		consumeEvent(event);
+		this.get_draft_invoices?.();
+	},
+
+	"items.toggleSettings"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "selector");
+		this.uiStore.toggleItemSettings();
+	},
+
+	"invoice.saveAndClear"(event) {
+		consumeEvent(event);
+		this.save_and_clear_invoice?.();
+	},
+
+	async "payment.submit"(event) {
+		await submitSale.call(this, event, false);
+	},
+
+	async "payment.submitAndPrint"(event) {
+		await submitSale.call(this, event, true);
+	},
+};
+
 const invoiceShortcuts: Record<string, unknown> & ThisType<InvoiceShortcutsVm> =
 	{
 		async handleInvoiceShortcut(event: KeyboardEvent) {
@@ -106,244 +330,20 @@ const invoiceShortcuts: Record<string, unknown> & ThisType<InvoiceShortcutsVm> =
 				return;
 			}
 
-			const key = event.key;
-
-			if (key === "F4") {
-				consumeEvent(event);
-				this.eventBus.emit("open_employee_switch");
+			const actionId = actionForEvent(event);
+			if (!actionId) {
 				return;
 			}
 
-			if (key === "F6") {
-				consumeEvent(event);
-				this.$refs.customerSection?.openNewCustomer?.() ||
-					this.$refs.customerComponent?.openNewCustomer?.();
+			const effect = INVOICE_SHORTCUT_EFFECTS[actionId];
+			if (!effect) {
+				// Bound to an action this surface does not implement (a keymap
+				// may name actions owned by other screens) — leave the event
+				// alone so the browser/other handlers still see it.
 				return;
 			}
 
-			if (key === "F7") {
-				consumeEvent(event);
-				this.eventBus.emit("open_shift_details");
-				return;
-			}
-
-			if (key === "F8") {
-				consumeEvent(event);
-				this.eventBus.emit("lock_pos_screen");
-				return;
-			}
-
-			if (!isAltOnly(event)) {
-				return;
-			}
-
-			if (isDigit(event, 1)) {
-				consumeEvent(event);
-				if (typeof this.close_payments === "function") {
-					this.close_payments();
-				} else {
-					// Same hand-off close_payments makes. The listener lives on
-					// the shell, not on this vm, so the request lands whether or
-					// not the invoice panel implements close_payments — and the
-					// shell moves the panel and the active view together.
-					this.eventBus?.emit?.("show_invoice_panel");
-				}
-				return;
-			}
-
-			if (isDigit(event, 2)) {
-				consumeEvent(event);
-				this.cancel_dialog = true;
-				return;
-			}
-
-			if (isDigit(event, 3)) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "selector");
-				this.uiStore.setActiveView("items");
-				this.uiStore.triggerItemSearchFocus();
-				this.eventBus.emit("focus_item_search");
-				return;
-			}
-
-			if (isDigit(event, 4)) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "selector");
-				this.uiStore.setActiveView("items");
-				this.uiStore.selectTopItem();
-				return;
-			}
-
-			if (isDigit(event, 5)) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "invoice");
-				this.focusCustomerSearchField?.();
-				return;
-			}
-
-			if (isDigit(event, 6)) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "invoice");
-				this.$refs.customerSection?.selectFirstCustomer?.() ||
-					this.$refs.customerComponent?.selectFirstCustomer?.();
-				return;
-			}
-
-			if (isDigit(event, 7)) {
-				consumeEvent(event);
-				this.get_draft_orders?.();
-				return;
-			}
-
-			if (isDigit(event, 8)) {
-				consumeEvent(event);
-				this.open_returns?.();
-				return;
-			}
-
-			if (isDigit(event, 9)) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "invoice");
-				this.$refs.deliveryChargesComponent?.focusDeliveryCharges?.();
-				return;
-			}
-
-			if (isBackquote(event)) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "invoice");
-				this.$refs.postingDateComponent?.focusPostingDate?.();
-				return;
-			}
-
-			if (key === "PageUp") {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "selector");
-				this.show_payment?.();
-				return;
-			}
-
-			if (key === "Home") {
-				consumeEvent(event);
-				// Same deskless bug as OpeningDialog.go_desk: set_route("/")
-				// maps to nothing on /posapp and reload() re-entered the SPA.
-				window.location.href = "/desk";
-				return;
-			}
-
-			if (isLetter(event, "q")) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "invoice");
-				this.focusItemTableField("qty");
-				return;
-			}
-
-			if (isLetter(event, "a")) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "invoice");
-				this.focusAdditionalDiscountField?.();
-				return;
-			}
-
-			if (isLetter(event, "u")) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "invoice");
-				this.focusItemTableField("uom");
-				return;
-			}
-
-			if (isLetter(event, "r")) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "invoice");
-				this.focusItemTableField("rate");
-				return;
-			}
-
-			if (isLetter(event, "e")) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "invoice");
-				const firstItem = this.items?.[0];
-				if (firstItem) {
-					this.remove_item?.(firstItem);
-				}
-				return;
-			}
-
-			if (isLetter(event, "f")) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "invoice");
-				if (this.$refs.actionToolbar?.focusSearch) {
-					this.$refs.actionToolbar.focusSearch();
-					return;
-				}
-				const input = this.$refs.itemSearchField;
-				if (input?.focus) {
-					input.focus();
-				} else {
-					input?.$el?.querySelector?.("input")?.focus?.();
-				}
-				return;
-			}
-
-			if (isLetter(event, "l")) {
-				consumeEvent(event);
-				this.get_draft_invoices?.();
-				return;
-			}
-
-			if (isLetter(event, "m")) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "selector");
-				this.uiStore.toggleItemSettings();
-				return;
-			}
-
-			if (isLetter(event, "s")) {
-				consumeEvent(event);
-				this.save_and_clear_invoice?.();
-				return;
-			}
-
-			if (isLetter(event, "d")) {
-				consumeEvent(event);
-				showCompactPanel(this.eventBus, "selector");
-				this.show_payment?.();
-				return;
-			}
-
-			const isPaymentShortcut = isLetter(event, "x");
-			const isPrintShortcut = isLetter(event, "p");
-			if (isPaymentShortcut || isPrintShortcut) {
-				if (this.paymentVisible) {
-					return;
-				}
-				// paymentRequestPending too: a Pay tap already opening the payment
-				// screen would make the show_payment below a no-op, and this branch
-				// would still queue a submit against a screen that never opened.
-				if (event.repeat || this.shortcutSubmitInFlight || this.uiStore?.paymentRequestPending) {
-					consumeEvent(event);
-					return;
-				}
-				consumeEvent(event);
-				this.shortcutSubmitInFlight = true;
-
-				try {
-					const shouldPrint = isPrintShortcut;
-					const shouldSubmit = await this.confirmPaymentSubmission();
-					if (!shouldSubmit) {
-						return;
-					}
-					await this.flushBackgroundUpdates?.();
-					this.triggerBackgroundFlush?.flush?.();
-					this.schedulePricingRuleApplication?.flush?.();
-					showCompactPanel(this.eventBus, "selector");
-					await this.show_payment?.();
-					this.eventBus.emit("queue_submit_payment_shortcut", {
-						print: shouldPrint,
-					});
-				} finally {
-					this.shortcutSubmitInFlight = false;
-				}
-			}
+			await effect.call(this, event);
 		},
 
 		focusItemTableField(field: ShortcutField) {

@@ -21,6 +21,7 @@
 			@cancelled="onSaldoCancelled"
 		></SaldoReferenciaDialog>
 		<SaldoStatusDialog></SaldoStatusDialog>
+		<ShortcutsCheatSheet></ShortcutsCheatSheet>
 		<SaldoCatalogPicker
 			v-model="saldoPickerOpen"
 			@picked="onSaldoPicked"
@@ -284,6 +285,7 @@ import ChangeDueDialog from "../payments/ChangeDueDialog.vue";
 // declared in vite.config.js. Upstream rebase: keep these lines.
 import SaldoReferenciaDialog from "@saldo/SaldoReferenciaDialog.vue";
 import SaldoStatusDialog from "@saldo/SaldoStatusDialog.vue";
+import ShortcutsCheatSheet from "./ShortcutsCheatSheet.vue";
 import SaldoCatalogPicker from "@saldo/SaldoCatalogPicker.vue";
 import { saldoCaptureBus } from "@saldo/useSaldoCapture";
 import { printInvoiceByName } from "../../../utils/printInvoiceByName";
@@ -1092,6 +1094,7 @@ export default {
 	},
 	components: {
 		OpeningDialog,
+		ShortcutsCheatSheet,
 		Payments,
 		FloorView,
 		ChangeDueDialog,

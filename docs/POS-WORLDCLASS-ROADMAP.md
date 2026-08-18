@@ -1165,6 +1165,29 @@ defaults), never invented from memory; ship `muelle-default` first and add
 packs as migrations actually happen. This is Foundation-flavored substrate:
 it must exist BEFORE the giro wave, because presets carry keymaps.
 
+Status (2026-08-18): **ENGINE SHIPPED LAB.** `posapp/shortcuts/` is the
+substrate: `actions.ts` (28 stable action ids + category/label/hint for the
+cheat sheet), `keymap.ts` (versioned packs; `muelle-default` v1 carries the
+bindings POSAwesome already shipped, verbatim), `engine.ts` (chord parse →
+event match → resolution with conflict detection, override layer and
+cheat-sheet projection), `index.ts` (memoized active keymap +
+`configureShortcuts`, the seam the capability payload plugs into).
+`invoiceShortcuts.ts` kept every effect and lost every key: its 24-branch
+if-chain is now a dispatch table keyed by action id.
+Discoverability shipped with it: `ShortcutsCheatSheet.vue` (Alt+H, bus-driven
+so the shell god-file gains no state) prints the live keymap grouped by
+category and names the pack revision, so "my keys are wrong" is a reportable
+fact. Inherited quirks (Alt+Shift fires Alt bindings; F-keys ignore
+modifiers) are preserved deliberately and are now DATA with tests naming
+them, so fixing them later is a keymap decision instead of archaeology.
+Parity is pinned by a table of all 28 legacy chords in
+`tests/shortcutsEngine.spec.ts` (53 new tests; 1655 total green; verified in
+a real browser on lab: Alt+H renders the sheet, Alt+3 still lands on the
+item search input; golden flow green after the refactor).
+Remaining for this rung: server plumbing (preset field carrying `keymap_id`
++ tenant override allowlist entry → `configureShortcuts`), and the first
+incumbent pack, which stays blocked on EVIDENCE from a real migration.
+
 ### 17.4 SaaS brand: Muelle POS as a layer, not a rename
 
 The app stays `posawesome` (fork hygiene — UPSTREAM.md merge discipline

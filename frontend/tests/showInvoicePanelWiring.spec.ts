@@ -49,11 +49,14 @@ const CART_EXITS = [
 	{
 		what: "Alt+1 on a panel without close_payments",
 		file: "posapp/components/pos/invoice/invoiceShortcuts.ts",
-		from: "if (isDigit(event, 1))",
-		// The neighbouring Alt+N branches reveal the invoice panel too, and are
-		// right to do it with set_compact_panel: they only move the panel, never
+		// Anchors follow the shortcuts-engine refactor (roadmap §17.3): the
+		// Alt+1 branch is now the `invoice.showInvoicePanel` EFFECT, reached by
+		// action id rather than by key matching. Same body, same rule.
+		from: '"invoice.showInvoicePanel"(event) {',
+		// The neighbouring effects reveal the invoice panel too, and are right
+		// to do it with set_compact_panel: they only move the panel, never
 		// activeView, so there is no watcher to race.
-		until: "if (isDigit(event, 2))",
+		until: '"invoice.cancelDialog"(event) {',
 	},
 ] as const;
 

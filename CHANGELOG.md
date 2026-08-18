@@ -4,6 +4,20 @@ All notable changes.
 
 ## Unreleased
 
+- **Shortcuts engine (roadmap §17.3).** Keys and behaviors are now separate
+  things: `posapp/shortcuts/` holds 28 stable action ids, versioned keymap
+  packs (`muelle-default` v1 = exactly the bindings already shipped), and a
+  resolver with conflict detection, an override layer and cheat-sheet
+  projection. `invoiceShortcuts.ts` keeps every effect verbatim and no
+  longer knows a single chord — its if-chain became a dispatch table. New
+  Alt+H cheat sheet (bus-driven, names the keymap revision) makes the
+  bindings discoverable and reportable. A 28-chord parity table pins that
+  nothing moved under a cashier's fingers; two inherited quirks (Alt+Shift
+  fires Alt bindings, F-keys ignore modifiers) are preserved on purpose and
+  now documented by tests instead of hiding in control flow. This is the
+  substrate incumbent-emulating packs ride on — and those stay blocked on
+  evidence from a real migration, never authored from memory.
+
 - **Muelle POS brand layer (roadmap §17.4).** The user-facing brand now
   lives in ONE module (`frontend/src/brand.ts`): navbar wordmark
   ("Muelle POS"), window/PWA titles, failure dialogs, loading and offline
