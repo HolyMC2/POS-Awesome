@@ -67,6 +67,13 @@ const declaration = (block: string, fragment: string, property: string) => {
 };
 
 /** First pixel length in a value — the floor of `max(96px, 12%)` is 96. */
+/** Percentage out of a width declaration — the unit table columns honour. */
+const pctOf = (value: string | undefined) => {
+	const found = /(\d+(?:\.\d+)?)%/.exec(value ?? "");
+	if (!found) throw new Error(`no percentage in ${String(value)}`);
+	return Number(found[1]);
+};
+
 const pxOf = (value: string | undefined) => {
 	const found = /(\d+(?:\.\d+)?)px/.exec(value ?? "");
 	if (!found) throw new Error(`no px length in ${String(value)}`);
@@ -138,17 +145,21 @@ describe("cart UOM stepper on touch", () => {
 	});
 
 	it("widens the UOM column enough to hold two arrows and a unit", () => {
-		const column = pxOf(declaration(cartTouch, 'data-column-key="uom"', "width"));
-		const gutter = pxOf(
-			declaration(cartTouch, 'data-column-key="uom"', "padding-left"),
-		);
-		const arrow = pxOf(declaration(cartTouch, ".uom-arrow", "width"));
-		const gap = pxOf(declaration(cartTouch, ".uom-editor", "gap"));
-		const READABLE_UNIT = 20;
+		// This used to assert a px floor out of `width: max(100px, 7%)`. That
+		// floor never applied: measured 2026-08-18, a `max()` width on a
+		// `table-layout: fixed` column resolves to NEITHER operand — the
+		// column falls back to the equal-share pool (802px cart: `6%` -> 48px,
+		// `max(44px, 6%)` -> 133.5px). So the test was reading a number the
+		// browser threw away, and passed while the cart shipped mis-sized
+		// columns. What is actually load-bearing is that touch gets a BIGGER
+		// share than the base rule, since the arrows only appear there.
+		const touch = pctOf(declaration(cartTouch, 'data-column-key="uom"', "width"));
+		const base = pctOf(declaration(cartCss, 'data-column-key="uom"', "width"));
 
-		expect(column - 2 * gutter).toBeGreaterThanOrEqual(
-			2 * arrow + 2 * gap + READABLE_UNIT,
-		);
+		expect(touch).toBeGreaterThan(base);
+		// Two 32px arrows, their gaps and a readable unit need ~100px; on the
+		// ~800px cart this share is what pays for them.
+		expect(touch).toBeGreaterThanOrEqual(12);
 	});
 
 	it("never charges the narrow phone for that width — UOM is dropped there", () => {

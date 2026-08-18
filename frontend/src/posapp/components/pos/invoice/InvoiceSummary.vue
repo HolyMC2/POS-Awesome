@@ -746,6 +746,10 @@ defineExpose({
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	/* Wrap rather than crush: this row gained a third child (the Discount
+	   button) beside a fixed 260px field, so on a narrow panel something has
+	   to give. It must never be the total. */
+	flex-wrap: wrap;
 	gap: 14px;
 	padding: 14px 16px;
 	border-radius: 20px;
@@ -774,6 +778,16 @@ defineExpose({
 	font-size: clamp(1.2rem, 2vw, 1.8rem);
 	line-height: 1.1;
 	color: var(--pos-text-primary);
+	/* The number a cashier reads out loud is ONE thing. Without this the
+	   flex row split "MX$102.00" into "MX$10 / 2.00" — not a smaller total,
+	   a different and wrong number at a glance. */
+	white-space: nowrap;
+}
+
+/* The Discount button keeps its own size and never squeezes the total;
+   when the row runs out of width it wraps to the next line instead. */
+.summary-discount-btn {
+	flex: 0 0 auto;
 }
 
 .summary-hero__meta {

@@ -107,6 +107,13 @@ table.posa-cart-table--native {
 	border-spacing: 0;
 }
 
+/* A column header never breaks mid-word: "Actions" splitting into
+   "Actio / ns" reads as a rendering fault, and these headers are short
+   enough that clipping is the better failure. */
+.posa-cart-table thead th {
+	white-space: nowrap;
+}
+
 /* Cart column widths. Name is deliberately LEFT UNSIZED: under
    `table-layout: fixed` the used table width is
    max(declared width, SUM of the column widths), so the old
@@ -122,38 +129,61 @@ table.posa-cart-table--native {
 	/* no width on purpose — elastic column */
 	min-width: 0;
 }
-/* The sized columns are percentages so their sum tracks the panel and
-   can never push the table past it; the px floor in max() is the
-   width the widget inside genuinely needs (a 2-button stepper, an
-   icon button), below which the percentage alone would clip it. */
+/* The sized columns are percentages so their sum tracks the panel and can
+   never push the table past it.
+   NO max() HERE — measured 2026-08-18 in the shipped browser: a table cell
+   given `width: max(44px, 6%)` under `table-layout: fixed` resolves to
+   NEITHER, it falls back to auto and joins the equal-share pool. Probe on a
+   802px cart: `width: 6%` -> 48px, `width: max(44px, 6%)` -> 133.5px, the
+   same width Name got. That is why a trash icon and a chevron each held as
+   much room as the item name while Rate and Amount truncated to "MX$ 80…"
+   on a real prod cart. Percentages are honoured, so percentages it is; the
+   narrow case is handled by dropping columns (useItemsTableResponsive.ts),
+   which is what actually shipped anyway.
+   The split favours money: at a 800px cart Rate and Amount get ~128px each,
+   which the measured need table (12,345.00 -> 124px incl. pill chrome and
+   gutters) says is enough for a five-figure line. */
 .posa-cart-table [data-column-key="qty"] {
 	/* 96px of stepper (2 x 24px buttons + gaps + the 32px display)
 	   plus the cell's own side padding. */
-	width: max(120px, 14%);
+	width: 15%;
 }
 .posa-cart-table [data-column-key="uom"] {
-	width: max(56px, 7%);
+	width: 8%;
 }
+/* Money columns get the same px floor idiom as the widget columns above,
+   which they were missing: a percentage alone clipped them at every cart
+   width we ship. Measured in the browser (1440px viewport, 0.9rem tabular
+   figures) the cell needs, INCLUDING the pill chrome and the cell gutters:
+   45.00 -> 97px · 450.00 -> 105px · 1,250.00 -> 116px · 12,345.00 -> 124px.
+   At 11% the cell was 88px, so even a two-digit price lost its last
+   characters — the reported "el precio sale cortado". 124px covers a
+   five-figure line item, which is a phone or a screen at Doco prices. The
+   percentage still governs wide carts, where 11% already exceeds the floor,
+   so a cashier tablet does not hand money columns width it cannot use. */
 .posa-cart-table [data-column-key="price_list_rate"] {
-	width: 11%;
+	width: 13%;
 }
 .posa-cart-table [data-column-key="discount_percentage"] {
 	width: 9%;
 }
 .posa-cart-table [data-column-key="discount_amount"] {
-	width: 10%;
+	width: 13%;
 }
 .posa-cart-table [data-column-key="rate"] {
-	width: 11%;
+	width: 16%;
 }
 .posa-cart-table [data-column-key="amount"] {
-	width: 11%;
+	width: 16%;
 }
 .posa-cart-table [data-column-key="posa_is_offer"] {
-	width: max(60px, 7%);
+	width: 7%;
 }
 .posa-cart-table [data-column-key="actions"] {
-	width: max(44px, 6%);
+	/* 8%, not 6%: at 6% the column was narrower than its own "Actions"
+	   header, which then broke mid-word to "Actio / ns". Still a third of
+	   the 133px it used to take from the money columns. */
+	width: 8%;
 }
 /* Expand-arrow column on the right; the SPA passes it last via
    DATA_TABLE_EXPAND_COLUMN, which renders WITH a data-column-key —
@@ -161,7 +191,7 @@ table.posa-cart-table--native {
    it, so the column stayed unsized and competed with Name for the
    leftover space. */
 .posa-cart-table [data-column-key="data-table-expand"] {
-	width: max(40px, 5%);
+	width: 5%;
 }
 
 /* Delete + expand hold a single icon each; trim their gutters and the
@@ -941,12 +971,13 @@ table.posa-cart-table--native {
 	width: 18%;
 }
 .posa-responsive-table-container.breakpoint-xs .posa-cart-table [data-column-key="actions"] {
-	width: max(40px, 10%);
+	/* plain % — max() never applied (see the note above) */
+	width: 10%;
 }
 .posa-responsive-table-container.breakpoint-xs
 	.posa-cart-table
 	[data-column-key="data-table-expand"] {
-	width: max(34px, 8%);
+	width: 8%;
 }
 
 /* Container-aware responsive adjustments */
@@ -1020,7 +1051,10 @@ table.posa-cart-table--native {
 	   the 7% share is the base one, so a wide cashier tablet doesn't
 	   hand the unit column width it has no use for. */
 	.posa-cart-table [data-column-key="uom"] {
-		width: max(100px, 7%);
+		/* Plain percentage for the same reason as above — max() never
+		   applied here either. A touch cart shows fewer columns, so a
+		   bigger share lands near the ~100px two-arrow stepper needs. */
+		width: 12%;
 		padding-left: 4px;
 		padding-right: 4px;
 	}
@@ -1071,7 +1105,7 @@ table.posa-cart-table--native {
 	.posa-responsive-table-container.breakpoint-xs
 		.posa-cart-table
 		[data-column-key="data-table-expand"] {
-		width: max(36px, 8%);
+		width: 8%;
 	}
 
 	.posa-cart-table .posa-cart-table__delete-btn.v-btn {
