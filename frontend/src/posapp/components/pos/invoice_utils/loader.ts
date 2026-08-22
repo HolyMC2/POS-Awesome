@@ -4,6 +4,7 @@ import {
 	getCachedCustomerBalance,
 } from "../../../../offline/index";
 import { useDiscounts } from "../../../composables/pos/shared/useDiscounts";
+import { hydrateComboFieldsForItems } from "./comboPersistence";
 
 declare const __: (_text: string, _args?: any[]) => string;
 declare const flt: (_value: unknown, _precision?: number) => number;
@@ -202,6 +203,11 @@ export async function load_invoice(
 	context.posa_offers = data.posa_offers || [];
 	context.items = data.items || [];
 	context.packed_items = data.packed_items || [];
+	// Stored JSON string -> the array `ItemsTable.vue` renders `ComboCartLine`
+	// from. Runs before any other item pass so nothing downstream sees the
+	// string shape. A draft saved before the field existed simply has none,
+	// which hydrates to "not a combo" rather than throwing.
+	hydrateComboFieldsForItems(context.items);
 
 	if (data.is_return && data.return_against) {
 		context.items.forEach((item) => {

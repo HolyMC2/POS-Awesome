@@ -4,6 +4,7 @@ import {
 	isOffline,
 } from "../../../../offline/index";
 import { _getPlcConversionRate } from "./currency";
+import { comboFieldsForPayload } from "./comboPersistence";
 
 declare const flt: (_value: unknown, _precision?: number) => number;
 declare const frappe: any;
@@ -560,6 +561,9 @@ export function get_invoice_items(context: any) {
 			posa_offer_applied: item.posa_offer_applied,
 			posa_is_offer: item.posa_is_offer,
 			posa_is_replace: item.posa_is_replace,
+			// Combo annotation is an ARRAY in the cart and a JSON string on the
+			// doctype — see comboPersistence.ts for why both are right.
+			...comboFieldsForPayload(item),
 			is_free_item: item.is_free_item,
 			qty: flt(item.qty),
 			uom: item.uom,
@@ -682,6 +686,9 @@ export function get_order_items(context: any) {
 			posa_offer_applied: item.posa_offer_applied,
 			posa_is_offer: item.posa_is_offer,
 			posa_is_replace: item.posa_is_replace,
+			// Combo annotation is an ARRAY in the cart and a JSON string on the
+			// doctype — see comboPersistence.ts for why both are right.
+			...comboFieldsForPayload(item),
 			is_free_item: item.is_free_item,
 			qty: flt(item.qty),
 			rate: flt(item.rate),

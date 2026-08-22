@@ -1,0 +1,109 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:product_bundle",
+ "creation": "2026-08-22 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "product_bundle",
+  "column_break_2",
+  "disabled",
+  "presentation_section",
+  "priority",
+  "targeting_section",
+  "targets"
+ ],
+ "fields": [
+  {
+   "description": "The ERPNext Product Bundle this combo presents. Components, and the stock decrement that follows them, live there — this record only decides how the register shows it.",
+   "fieldname": "product_bundle",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Product Bundle",
+   "options": "Product Bundle",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "presentation_section",
+   "fieldtype": "Section Break",
+   "label": "Presentation"
+  },
+  {
+   "default": "0",
+   "description": "Lower sorts first in the Combos category and in the “se suele llevar junto” strip.",
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "label": "Priority"
+  },
+  {
+   "fieldname": "targeting_section",
+   "fieldtype": "Section Break",
+   "label": "Targeting"
+  },
+  {
+   "description": "Items this combo is FOR. Leave empty for a universal combo, which is offered on every ticket. When set, the combo is only suggested once one of these items is in the cart.",
+   "fieldname": "targets",
+   "fieldtype": "Table",
+   "label": "Targets",
+   "options": "POS Combo Target"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-22 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "POSAwesome",
+ "name": "POS Combo",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

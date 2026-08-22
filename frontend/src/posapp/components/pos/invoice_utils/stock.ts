@@ -1,4 +1,7 @@
 import { parseBooleanSetting } from "../../../utils/stock";
+// Imported rather than retyped: three files now agree on this spelling, and a
+// silent divergence would drop the combo ceiling without failing anything.
+import { COMBO_COMPONENTS_FIELD } from "../../../composables/pos/items/comboLineAttachment";
 import { useStockUtils } from "../../../composables/pos/shared/useStockUtils";
 import { useBatchSerial } from "../../../composables/pos/shared/useBatchSerial";
 
@@ -81,7 +84,52 @@ export function calc_stock_qty(context: any, item: any, value: any) {
 	}
 }
 
+/**
+ * Does this line carry a combo's component list?
+ *
+ * Deliberately only "has components", not the reader's fuller `isComboLine`
+ * (which also excludes a broken combo): `posa_combo_broken` governs whether
+ * the row RENDERS as a combo after a partial return, and a half-returned combo
+ * still consumes its remaining components' stock. Rendering and stock are
+ * different questions and answering both with one predicate is how the ceiling
+ * would silently vanish mid-return.
+ */
+const carriesComboComponents = (item: any): boolean =>
+	Array.isArray(item?.[COMBO_COMPONENTS_FIELD]) && item[COMBO_COMPONENTS_FIELD].length > 0;
+
 export function update_qty_limits(context: any, item: any) {
+	// A combo parent is genuinely not a stock item — `expandBundle` sets
+	// `is_stock_item = 0` because the SUBSTRATE decrements its components, not
+	// it — so it falls into the early return below and had its ceiling wiped on
+	// every edit. The clamp held on the initial add (the attach set `max_qty`
+	// directly) and was cleared by the next qty change, which is the worst
+	// shape a stock bug can take: correct on the screen the cashier checks,
+	// gone by the time they finish.
+	//
+	// So a combo is handled BEFORE the non-stock return, and gets the ceiling
+	// nothing else in the system can supply — `available` is the number of
+	// whole combos the components allow, computed by the availability rule.
+	// `is_stock_item` stays 0: packed-item handling and the server both read it.
+	if (item && carriesComboComponents(item)) {
+		const blockSale = Boolean(
+			context.pos_profile?.posa_block_sale_beyond_available_qty ||
+			context.blockSaleBeyondAvailableQty,
+		);
+		const available = item._combo_available;
+		// No combo-specific toggle: a register that chose warn-and-sell keeps
+		// selling combos too, exactly as it does for every plain line.
+		if (blockSale && typeof available === "number" && Number.isFinite(available)) {
+			// Divided the same way a stock line is, so a combo sold by a
+			// multi-unit UOM is clamped in the unit the operator is typing in.
+			item.max_qty = flt(available / (item.conversion_factor || 1));
+			item.disable_increment = flt(item.qty) >= item.max_qty;
+		} else {
+			item.max_qty = undefined;
+			item.disable_increment = false;
+		}
+		return;
+	}
+
 	// Clamp only KNOWN stock items. Rows loaded from a saved doc (Sales
 	// Invoice Item has no is_stock_item column) or hydrated from a payload
 	// that omits the flag would otherwise inherit max_qty=0 from the

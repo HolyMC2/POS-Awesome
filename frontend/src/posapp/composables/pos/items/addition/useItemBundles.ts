@@ -1,8 +1,11 @@
 import { useBundles } from "../useBundles";
+import { useComboComponents } from "../useComboComponents";
+import { attachComboComponents } from "../comboLineAttachment";
 import { useStockUtils } from "../../shared/useStockUtils";
 
 export function useItemBundles() {
 	const { getBundleComponents } = useBundles();
+	const { getComboComponents } = useComboComponents();
 	const { calcStockQty } = useStockUtils();
 
 	const expandBundle = async (parent: any, context: any) => {
@@ -10,6 +13,36 @@ export function useItemBundles() {
 		if (!components || !components.length) {
 			return;
 		}
+
+		/*
+		 * Mark the line as a combo (roadmap §17.6).
+		 *
+		 * This is the only place in the product where a line learns it is a
+		 * combo, and it belongs here because this function is already the one
+		 * that knows the item is a Product Bundle — asking a second time
+		 * elsewhere would be a second source of truth about what a bundle is.
+		 *
+		 * A SECOND fetch rather than a reuse of `components` above: that list
+		 * comes from the packing read model and carries no rate, so
+		 * `priceCombo()` would compute a list price of 0 and render "ahorra
+		 * $0" under every combo — a wrong number on a ticket, which is worse
+		 * than no badge. It is cached per bundle and per pricing context and
+		 * fires only for bundles, so a plain scan pays nothing.
+		 *
+		 * Awaited, not fired and forgotten: `expandBundle` already runs inside
+		 * `runAsyncTask`, off the scan path, and the operator should not watch
+		 * a combo row appear a beat after the line it belongs to.
+		 */
+		const priced = await getComboComponents(parent.item_code, {
+			pos_profile: context.pos_profile,
+			customer: context.customer,
+		});
+		// The profile is what decides whether the availability rule becomes a
+		// CEILING or stays a displayed figure: `ceilingFromResolution` returns
+		// null unless `posa_block_sale_beyond_available_qty` is on. Called
+		// without it, the rule computes and shows but never blocks — which is
+		// the state this line closes.
+		attachComboComponents(parent, priced, { posProfile: context.pos_profile });
 		parent.is_bundle = 1;
 		parent.is_bundle_parent = 1;
 		parent.is_stock_item = 0;
