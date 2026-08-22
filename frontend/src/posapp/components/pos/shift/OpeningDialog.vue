@@ -61,6 +61,22 @@
 								/>
 							</v-col>
 
+							<!-- The readiness check (§5.1 / build plan §12 A). It sits
+							     ABOVE the opening amounts on purpose: the artboard's
+							     promise is that the register is verified before the
+							     cashier is asked for anything, and a check read after
+							     the float has been counted is a check read too late.
+							     Purely additive — the fields, the table and Submit
+							     below are untouched. -->
+							<v-col cols="12">
+								<OpeningReadiness
+									:company="company"
+									:pos-profile="pos_profile"
+									:payment-rows="payments_method_data"
+									@verdict="onReadinessVerdict"
+								/>
+							</v-col>
+
 							<!-- Payment Methods Section - Compact -->
 							<v-col cols="12">
 								<div class="section-header-compact">
@@ -127,7 +143,7 @@
 					</v-btn>
 					<v-btn
 						theme="dark"
-						:disabled="is_loading"
+						:disabled="is_loading || !readinessCanOpen"
 						:loading="is_loading"
 						@click="submit_dialog"
 						class="pos-action-btn submit-action-btn"
@@ -157,6 +173,7 @@ import {
 import { createBootstrapSnapshotFromRegisterData } from "../../../../offline/bootstrapSnapshot";
 import authService from "../../../services/authService";
 import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
+import OpeningReadiness from "./OpeningReadiness.vue";
 
 defineOptions({
 	name: "OpeningDialog",
@@ -200,6 +217,23 @@ const payments_methods_headers = [
 ];
 const itemsPerPage = ref(100);
 const max25chars = (v) => v.length <= 12 || "Input too long!";
+
+/**
+ * The §5.1 gate: "lo opcional avisa; lo necesario detiene".
+ *
+ * Defaults to TRUE, and that is the safe direction rather than the lazy one.
+ * A required check only stops the register when it actually FAILED — a check
+ * nobody could evaluate reports `unknown`, which never blocks. So a register
+ * whose caches are cold, or one running before the missing server fields ship,
+ * behaves exactly as it does today. The gate acquires teeth as the evidence
+ * arrives, never before, because a register walled shut by a check that could
+ * not run is a shop that cannot trade.
+ */
+const readinessCanOpen = ref(true);
+
+function onReadinessVerdict(verdict) {
+	readinessCanOpen.value = verdict.canOpen;
+}
 
 const currencySymbol = (currency) => get_currency_symbol?.(currency);
 
@@ -276,6 +310,12 @@ async function get_opening_dialog_data() {
 
 function submit_dialog() {
 	if (!payments_methods.value.length || !company.value || !pos_profile.value) {
+		return;
+	}
+	// The gate again, in code rather than only on the button. A disabled
+	// attribute is a rendering choice; this is the one that survives a keyboard
+	// activation, a stale render or somebody removing the binding later.
+	if (!readinessCanOpen.value) {
 		return;
 	}
 
