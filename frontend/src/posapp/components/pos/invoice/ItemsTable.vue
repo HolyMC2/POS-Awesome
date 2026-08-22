@@ -47,7 +47,30 @@
 					</td>
 				</tr>
 				<template v-for="item in visibleItems" :key="item.posa_row_id">
+					<!-- A combo is several items sold as one, so it gets one row
+					     that says so (§17.6, promoted into Scan Retail and
+					     Repair+Retail). ComboCartLine is a flex row, not a
+					     <tr> — a bare <div> inside <tbody> is hoisted out of
+					     the table by the parser, so it is wrapped in a spanning
+					     cell. The colspan tracks the visible column count
+					     because the profile decides how many there are.
+
+					     A partially-returned combo is deliberately NOT drawn
+					     this way: `comboReturns` marks it `broken` precisely
+					     because "COMBO · 3" beside two surviving components is
+					     a lie about what the customer still has. It falls
+					     through to the ordinary row. -->
+					<tr v-if="isComboLine(item)" class="posa-cart-combo-row">
+						<td :colspan="finalVisibleColumns.length || 1" class="pa-0">
+							<ComboCartLine
+								:line="comboLineFor(item)"
+								:format-currency="memoizedFormatCurrency"
+								@remove="removeItem(item)"
+							/>
+						</td>
+					</tr>
 					<CartItemRow
+						v-else
 						:item="item"
 						:visible-columns="finalVisibleColumns"
 						:posProfile="pos_profile"
@@ -151,6 +174,7 @@ import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { loadItemSelectorSettings } from "../../../utils/itemSelectorSettings";
 import { logComponentRender } from "../../../utils/perf";
 import CartItemRow from "./CartItemRow.vue";
+import ComboCartLine from "../combos/ComboCartLine.vue";
 import ItemsTableExpandedRow from "./ItemsTableExpandedRow.vue";
 
 import { useItemsTableSearch } from "../../../composables/pos/items/useItemsTableSearch";
@@ -228,6 +252,36 @@ const { isRtl } = useRtl();
 const { memoizedFormatFloat, memoizedFormatCurrency, clearFormatCache } = useFormatters({
 	formatFloat: props.formatFloat,
 	formatCurrency: props.formatCurrency,
+});
+
+/**
+ * Is this cart line a combo?
+ *
+ * The marker is `posa_combo_components` — a non-empty component list on the
+ * invoice item, following the `posa_` prefix every POS-owned field on this
+ * doctype already uses. A line without it is an ordinary item and renders the
+ * ordinary row, which is every line in the product today.
+ *
+ * ⚠ NOTHING POPULATES THIS FIELD YET. Wave 1 built the combo arithmetic
+ * (`comboPricing`, `comboReturns`, `comboCatalog`) and the row component; the
+ * add-to-cart path that attaches a bundle's components to the line it creates
+ * is not built, and it does not live in this file. So this predicate is
+ * currently false for every line — the render path is proven by tests, not by
+ * traffic. See the report accompanying this change.
+ */
+const isComboLine = (item: any): boolean =>
+	Array.isArray(item?.posa_combo_components) &&
+	item.posa_combo_components.length > 0 &&
+	!item?.posa_combo_broken;
+
+/** Shape the invoice item into the line `ComboCartLine` declares. */
+const comboLineFor = (item: any) => ({
+	item_code: String(item?.item_code ?? ""),
+	item_name: String(item?.item_name ?? item?.item_code ?? ""),
+	qty: Number(item?.qty) || 0,
+	rate: Number(item?.rate) || 0,
+	image: item?.image ?? null,
+	components: item?.posa_combo_components ?? [],
 });
 
 const responsive = useItemsTableResponsive(

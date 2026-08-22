@@ -29,9 +29,14 @@
 						{{ __(item.offer) }}
 					</template>
 					<template v-slot:item.offer_applied="{ item }">
+						<!-- Row actions inside a table are never the screen's primary,
+						     so neither carries a fill. Green/red here were doing
+						     applied-vs-not signalling with the two colours §17.7
+						     reserves for STATE; the verb already says which. -->
 						<v-btn
 							v-if="!item.offer_applied"
-							color="green"
+							variant="outlined"
+							size="small"
 							@click="applyOffer(item)"
 							:disabled="
 								(item.offer == 'Give Product' &&
@@ -45,7 +50,7 @@
 						>
 							{{ __("Apply") }}
 						</v-btn>
-						<v-btn v-else color="red" @click="removeOffer(item)">
+						<v-btn v-else variant="outlined" size="small" color="error" @click="removeOffer(item)">
 							{{ __("Remove") }}
 						</v-btn>
 					</template>
@@ -84,12 +89,13 @@
 		<v-card flat style="max-height: 11dvh; height: 11dvh" class="cards mb-0 mt-3 py-0">
 			<v-row align="start" no-gutters>
 				<v-col cols="12">
+					<!-- Amber is STATE (the band's shortfall tint). "Back" is
+					     navigation, so it takes no colour at all. -->
 					<v-btn
 						block
 						class="pa-1"
 						size="large"
-						color="warning"
-						theme="dark"
+						variant="outlined"
 						@click="back_to_invoice"
 						>{{ __("Back") }}</v-btn
 					>

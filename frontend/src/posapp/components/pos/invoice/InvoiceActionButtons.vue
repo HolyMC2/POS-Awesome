@@ -1,182 +1,81 @@
 <template>
-	<v-row dense data-perf-tag="pos-actions">
-		<!-- PAY moved to the top of the action grid. With every secondary
-		     button rendered (Save&Clear, Drafts, Select S.O, Invoice Mgmt,
-		     Cancel, Sales Return, Print Draft, Customer Screen) the grid
-		     totals 5 rows + PAY; on a 1440x900 viewport at 100% zoom the
-		     trailing PAY landed 5-7 px below the fold and operators had to
-		     scroll for the primary checkout action. Putting PAY first
-		     guarantees it stays in view regardless of which optional
-		     buttons the profile enables. -->
-		<v-col cols="12">
-			<v-btn
-				block
-				:variant="secondaryVariant"
-				color="success"
-				theme="dark"
-				size="large"
-				prepend-icon="mdi-credit-card"
-				@click="$emit('show-payment')"
-				class="summary-btn pay-btn"
-				data-pos-keyboard-target="pay"
-				:loading="paymentLoading"
-			>
-				{{ __("PAY") }}
-			</v-btn>
-		</v-col>
-		<!-- SALDO-INTEGRATION-POINT — launcher for the 3-step picker.
-		     Gated on the per-profile `saldo_enabled` flag (saldo Custom Field
-		     on POS Profile, default OFF, doco tenants only). -->
-		<v-col cols="12" v-if="showSaldoButton">
-			<v-btn
-				block
-				:variant="secondaryVariant"
-				color="primary"
-				theme="dark"
-				prepend-icon="mdi-cellphone-arrow-down"
-				@click="$emit('open-saldo-picker')"
-				class="summary-btn"
-				data-pos-keyboard-target="invoice-action"
-			>
-				{{ __("Recarga / Servicio") }}
-			</v-btn>
-		</v-col>
-		<!-- /SALDO-INTEGRATION-POINT -->
-		<v-col cols="6">
-			<v-btn
-				block
-				:variant="secondaryVariant"
-				color="accent"
-				theme="dark"
-				prepend-icon="mdi-content-save"
-				@click="$emit('save-and-clear')"
-				class="summary-btn"
-				data-pos-keyboard-target="invoice-action"
-				:loading="saveLoading"
-			>
-				{{ __("Save & Clear") }}
-			</v-btn>
-		</v-col>
-		<v-col cols="6">
-			<v-btn
-				block
-				:variant="secondaryVariant"
-				color="warning"
-				theme="dark"
-				prepend-icon="mdi-tray-full"
-				@click="$emit('load-drafts')"
-				class="white-text-btn summary-btn"
-				data-pos-keyboard-target="invoice-action"
-				:loading="loadDraftsLoading"
-			>
-				{{ __("Drafts") }}
-			</v-btn>
-		</v-col>
-		<v-col cols="6" v-if="pos_profile.custom_allow_select_sales_order == 1">
-			<v-btn
-				block
-				:variant="secondaryVariant"
-				color="info"
-				theme="dark"
-				prepend-icon="mdi-book-search"
-				@click="$emit('select-order')"
-				class="summary-btn"
-				data-pos-keyboard-target="invoice-action"
-				:loading="selectOrderLoading"
-			>
-				{{ __("Select S.O") }}
-			</v-btn>
-		</v-col>
-		<v-col cols="6">
-			<v-btn
-				block
-				:variant="secondaryVariant"
-				color="deep-purple"
-				theme="dark"
-				prepend-icon="mdi-folder-search-outline"
-				@click="$emit('open-invoice-management')"
-				class="summary-btn"
-				data-pos-keyboard-target="invoice-action"
-				:loading="invoiceManagementLoading"
-			>
-				{{ __("Invoice Mgmt") }}
-			</v-btn>
-		</v-col>
-		<v-col cols="6">
-			<v-btn
-				block
-				:variant="secondaryVariant"
-				color="error"
-				theme="dark"
-				prepend-icon="mdi-close-circle"
-				@click="$emit('cancel-sale')"
-				class="summary-btn"
-				data-pos-keyboard-target="invoice-action"
-				:loading="cancelLoading"
-			>
-				{{ __("Cancel Sale") }}
-			</v-btn>
-		</v-col>
+	<!-- The sale's secondary actions, as ONE line of keyboard-hint chips.
+	     `Main.dc.html` draws this area as a single 38px strip between the cart
+	     and the band — counts left, chips centre, figures right. What shipped
+	     instead was an eight-button grid of saturated `v-btn`s roughly 200px
+	     tall, which cost the register a third of its vertical space and put
+	     eight competing fills directly above a band built to hold exactly one
+	     accent (§17.7 invariant 2).
 
-		<v-col cols="6" v-if="pos_profile.posa_allow_return == 1">
-			<v-btn
-				block
-				:variant="secondaryVariant"
-				color="secondary"
-				theme="dark"
-				prepend-icon="mdi-backup-restore"
-				@click="$emit('open-returns')"
-				class="summary-btn"
-				data-pos-keyboard-target="invoice-action"
-				:loading="returnsLoading"
+	     Every chip prints the chord that actually triggers it, read from the
+	     resolved keymap rather than from the mock — see actionChips.ts. That
+	     also finally puts the shortcuts engine (§17.3) in front of the
+	     cashier, which is what it was built for: a chip reading "Alt+S
+	     Guardar" teaches the keyboard while it works. -->
+	<div class="pos-action-strip" data-perf-tag="pos-actions" data-testid="action-strip">
+		<span class="pos-action-strip__counts" data-testid="action-strip-counts">
+			{{ lineSummary }}
+		</span>
+
+		<v-btn
+			v-for="chip in chips"
+			:key="chip.id"
+			class="pos-action-strip__chip"
+			:class="{ 'pos-action-strip__chip--danger': chip.id === 'cancel-sale' }"
+			variant="text"
+			size="small"
+			density="comfortable"
+			:prepend-icon="chip.icon"
+			:data-testid="`action-chip-${chip.id}`"
+			:data-chip-scope="chip.scope"
+			data-pos-keyboard-target="invoice-action"
+			:loading="loadingFor(chip.id)"
+			@click="$emit(chip.id)"
+		>
+			<span class="pos-action-strip__verb">{{ __(chip.label) }}</span>
+			<!-- No chord element at all when unbound. An empty chip slot would
+			     read as "this has a shortcut and we forgot it". -->
+			<kbd
+				v-if="chordFor(chip.actionId)"
+				class="pos-action-strip__chord"
+				:data-testid="`action-chord-${chip.id}`"
+				>{{ chordFor(chip.actionId) }}</kbd
 			>
-				{{ __("Sales Return") }}
-			</v-btn>
-		</v-col>
-		<v-col cols="6" v-if="pos_profile.posa_allow_print_draft_invoices">
-			<v-btn
-				block
-				:variant="secondaryVariant"
-				color="primary"
-				theme="dark"
-				prepend-icon="mdi-printer"
-				@click="$emit('print-draft')"
-				class="summary-btn"
-				data-pos-keyboard-target="invoice-action"
-				:loading="printLoading"
-			>
-				{{ __("Print Draft") }}
-			</v-btn>
-		</v-col>
-		<v-col cols="6" v-if="showCustomerDisplayButton">
-			<v-btn
-				block
-				:variant="secondaryVariant"
-				color="indigo"
-				theme="dark"
-				prepend-icon="mdi-monitor"
-				@click="$emit('open-customer-display')"
-				class="summary-btn"
-				data-pos-keyboard-target="invoice-action"
-				:loading="customerDisplayLoading"
-			>
-				{{ __("Customer Screen") }}
-			</v-btn>
-		</v-col>
-	</v-row>
+		</v-btn>
+
+		<div class="pos-action-strip__spacer"></div>
+
+		<!-- Phone and lean-vertical only: no band mounts there, so this stays
+		     the only PAY there is, and it is the ONE accent on the screen. It
+		     was `success` + a green gradient; green is STATE in this register
+		     (the band tints itself green when there is change to give), and a
+		     green PAY on every sale teaches the cashier that green is just a
+		     button colour, after which the band's green signals nothing. -->
+		<v-btn
+			v-if="!bandOwnsPrimary"
+			class="pos-action-strip__pay"
+			variant="flat"
+			color="primary"
+			size="large"
+			prepend-icon="mdi-credit-card"
+			data-pos-keyboard-target="pay"
+			data-testid="action-strip-pay"
+			:loading="paymentLoading"
+			@click="$emit('show-payment')"
+		>
+			{{ __("PAY") }}
+		</v-btn>
+	</div>
 </template>
 
 <script setup>
 import { computed } from "vue";
-import { parseBooleanSetting } from "../../../utils/stock";
 import { useResponsive } from "../../../composables/core/useResponsive";
+import { getActiveKeymap } from "../../../shortcuts";
+import { ACTION_CHIPS, chordLabelFor, visibleChips } from "./actionChips";
 
 const props = defineProps({
-	pos_profile: {
-		type: Object,
-		required: true,
-		default: () => ({}),
-	},
+	pos_profile: { type: Object, default: () => ({}) },
 	saveLoading: Boolean,
 	loadDraftsLoading: Boolean,
 	selectOrderLoading: Boolean,
@@ -186,6 +85,16 @@ const props = defineProps({
 	printLoading: Boolean,
 	paymentLoading: Boolean,
 	customerDisplayLoading: Boolean,
+	/** Lines/pieces summary rendered at the strip's left, as the artboard does. */
+	lineSummary: { type: String, default: "" },
+	/**
+	 * True when the shell's ActionBand is mounted and carrying the primary
+	 * action. It is also the signal that a RAIL is mounted, since Pos.vue
+	 * mounts both on the same condition — so it doubles as "the rail owns the
+	 * destination actions". Defaults false so the phone and lean-vertical
+	 * paths keep every action and their PAY.
+	 */
+	bandOwnsPrimary: { type: Boolean, default: false },
 });
 
 defineEmits([
@@ -202,157 +111,133 @@ defineEmits([
 ]);
 
 const __ = window.__;
-const { isPhone } = useResponsive();
-// Phone: soft tonal fills instead of a stack of saturated solid buttons
-// (the "rainbow" wall). Desktop keeps the default elevated solids. PAY keeps
-// its own gradient regardless (pay-btn CSS), so it stays the strong CTA.
-const secondaryVariant = computed(() => (isPhone.value ? "tonal" : "elevated"));
-const showCustomerDisplayButton = computed(() =>
-	parseBooleanSetting(props.pos_profile?.posa_enable_customer_display),
-);
-// SALDO-INTEGRATION-POINT — only show the saldo launcher when the profile
-// opts in (saldo_enabled Custom Field on POS Profile, default OFF).
-const showSaldoButton = computed(() =>
-	parseBooleanSetting(props.pos_profile?.saldo_enabled),
-);
+useResponsive();
+
+const chips = computed(() => visibleChips(props.pos_profile, props.bandOwnsPrimary));
+
+// Read once per render rather than per chip: `getActiveKeymap()` is a memoized
+// lookup, but the strip re-renders on every cart mutation and this sits on the
+// sale path (§6).
+const keymap = computed(() => getActiveKeymap());
+const chordFor = (actionId) => chordLabelFor(actionId, keymap.value);
+
+const LOADING_BY_CHIP = {
+	"save-and-clear": "saveLoading",
+	"load-drafts": "loadDraftsLoading",
+	"select-order": "selectOrderLoading",
+	"cancel-sale": "cancelLoading",
+	"open-invoice-management": "invoiceManagementLoading",
+	"open-returns": "returnsLoading",
+	"print-draft": "printLoading",
+};
+const loadingFor = (id) => Boolean(props[LOADING_BY_CHIP[id]]);
+
+// Re-exported so a spec can assert the strip renders every chip the registry
+// defines for a given profile, rather than a hand-copied list.
+defineExpose({ ACTION_CHIPS });
 </script>
 
 <style scoped>
-.white-text-btn {
-	color: var(--pos-text-primary) !important;
+/* One line, 38px, matching Main.dc.html's strip: 9px vertical padding around
+   ~20px of content, a dashed top rule and a faintly lifted ground. The old
+   grid was ~200px of elevated blocks. */
+.pos-action-strip {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	padding: 9px 12px;
+	margin-top: 8px;
+	border-top: 1px dashed var(--pos-border-light, rgba(0, 0, 0, 0.06));
+	background: var(--pos-bg-secondary, #fcfdfe);
+	border-radius: 0 0 10px 10px;
 }
 
-.white-text-btn :deep(.v-btn__content) {
-	color: var(--pos-text-primary) !important;
+.pos-action-strip__counts {
+	font-size: 12px;
+	color: var(--pos-text-muted, #667085);
+	white-space: nowrap;
 }
 
-/* Enhanced button styling with better performance */
-.summary-btn {
-	transition: all 0.2s ease !important;
-	position: relative;
-	overflow: hidden;
-	/* Bumped 46 → 34 px so the 5-row x 2-col grid + PAY fit in the
-	   right-hand column without pushing PAY below the fold on a
-	   1440 x 900 viewport at 100 % zoom. Tested on lab: PAY bottom
-	   was at y=949 (vh=900) — operator had to scroll. New row pitch
-	   keeps PAY visible. */
-	min-height: 34px !important;
+.pos-action-strip__spacer {
+	flex: 1 1 auto;
+}
+
+/* Text variant: Vuetify routes `color` to the foreground for anything that is
+   not elevated/flat, so nothing here can become a fill by accident. No colour
+   is set at all — these inherit the surface's text colour, which is what the
+   artboard paints them (#667085 on #f2f4f7). */
+.pos-action-strip__chip {
+	text-transform: none !important;
+	letter-spacing: 0 !important;
+	font-size: 12px !important;
+	font-weight: 500 !important;
+	min-height: 28px !important;
+	padding: 0 9px !important;
+	border-radius: 999px !important;
+	color: var(--pos-text-muted, #667085) !important;
+	background: var(--pos-surface-variant, #f2f4f7) !important;
+}
+
+/* Destructive keeps red, as TEXT. A cashier already reads red for "this
+   undoes something", and that is red as state — it never becomes a fill. */
+.pos-action-strip__chip--danger {
+	color: var(--pos-error, #c0392f) !important;
+}
+
+.pos-action-strip__verb {
+	white-space: nowrap;
+}
+
+/* The chord is the quiet half: monospace, tabular, one step down, so the verb
+   still reads first. */
+.pos-action-strip__chord {
+	font-family: "Roboto Mono", ui-monospace, monospace;
+	font-variant-numeric: tabular-nums;
+	font-size: 10.5px;
+	font-weight: 700;
+	margin-left: 6px;
+	padding: 1px 5px;
+	border-radius: 5px;
+	background: var(--pos-surface, #fff);
+	color: var(--pos-text-muted, #667085);
+	box-shadow: inset 0 0 0 1px var(--pos-border-light, rgba(0, 0, 0, 0.08));
+}
+
+.pos-action-strip__pay {
+	min-height: 44px !important;
+	font-weight: 600 !important;
 	text-transform: none !important;
 }
 
-/* Vuetify v-row[dense] still leaves 4 px top + 4 px bottom on each
-   v-col. Across 6 rows that's ~48 px the action grid doesn't need.
-   Tighten it so the PAY button stays above the fold at 100 % zoom. */
-.v-row.v-row--dense > .v-col {
-	padding-top: 2px !important;
-	padding-bottom: 2px !important;
-}
-
-.summary-btn :deep(.v-btn__content) {
-	white-space: normal !important;
-	transition: all 0.2s ease;
-}
-
-.summary-btn:hover {
-	transform: translateY(-1px);
-	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
-}
-
-.summary-btn:active {
-	transform: translateY(0);
-}
-
-/* Special styling for the PAY button */
-.pay-btn {
-	font-weight: 600 !important;
-	font-size: 1.1rem !important;
-	/* PAY is the primary action — keep it tall enough to look
-	   important against the 36 px secondary buttons but still
-	   shorter than the previous 46 px so the whole grid fits. */
-	min-height: 44px !important;
-	background: linear-gradient(135deg, #4caf50, #45a049) !important;
-	box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3) !important;
-}
-
-.pay-btn:hover {
-	background: linear-gradient(135deg, #45a049, #3d8b40) !important;
-	box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4) !important;
-	transform: translateY(-2px);
-}
-
-/* PAY must pin its FOREGROUND next to the gradient above, not just the
-   background. On phones secondaryVariant is `tonal`, and Vuetify routes the
-   `color` prop of a non-elevated variant to the text instead of the fill
-   (vuetify/lib/composables/variant.js: ['elevated','flat'].includes(variant)
-   ? 'background' : 'text'). So color="success" emits `.text-success`
-   { color: rgb(var(--v-theme-success)) !important } — green letters laid over
-   the green gradient, i.e. the "just a green button, no text" PAY Marco hit
-   on Android. Two classes beat that one-class !important. The tonal underlay
-   is currentColor at activated-opacity, which would now wash the gradient
-   white, so it goes too. */
-.pay-btn,
-.pay-btn :deep(.v-btn__content),
-.pay-btn :deep(.v-icon) {
-	color: #fff !important;
-}
-
-.pay-btn :deep(.v-btn__underlay) {
-	opacity: 0;
-}
-
-/* Responsive optimizations */
+/* Phone: the strip stays one line conceptually but its targets stop being
+   mouse targets. 28px is a fine pointer size and far below the 44px coarse
+   floor theme.css enforces everywhere else (tests/touchTargetSweep.spec.ts),
+   so the chips grow. Density is a desktop win; it is never worth a missed tap.
+   PAY goes to 48px, where it has always been on a phone band. */
 @media (max-width: 768px) {
-	.summary-btn {
-		font-size: 0.8rem !important;
-		padding: 4px 8px !important;
-		min-height: 44px !important;
+	.pos-action-strip {
+		gap: 8px;
 	}
-
-	.pay-btn {
-		font-size: 0.95rem !important;
+	.pos-action-strip__counts {
+		width: 100%;
+	}
+	.pos-action-strip__chip {
+		min-height: 44px !important;
+		font-size: 13px !important;
+		padding: 0 12px !important;
+	}
+	.pos-action-strip__pay {
+		flex: 1 1 100%;
 		min-height: 48px !important;
 	}
 }
 
-/* Phone: keep the touch targets close to the 768px step instead of
-   dropping to 34 px — the sharp shrink is what made the action grid
-   read as cramped next to the (taller) bottom dock. */
-@media (max-width: 480px) {
-	.summary-btn {
-		font-size: 0.78rem !important;
-		padding: 4px 8px !important;
-		/* 44 px is the touch floor theme.css enforces for every other coarse
-		   target (see tests/touchTargetSweep.spec.ts); the narrowest phone was
-		   the only place the action grid dropped below it. */
+/* A touch screen at desktop width — the counter terminals this product runs
+   on — gets the same floor without the phone's other reflow. */
+@media (pointer: coarse) {
+	.pos-action-strip__chip {
 		min-height: 44px !important;
 	}
-
-	.pay-btn {
-		font-size: 0.92rem !important;
-		/* Never below the 768 px step — PAY is the primary target and must not
-		   shrink as the screen does. */
-		min-height: 48px !important;
-	}
-
-	.v-row.v-row--dense > .v-col {
-		padding-top: 3px !important;
-		padding-bottom: 3px !important;
-	}
-}
-
-/* Loading state animations */
-.summary-btn:deep(.v-btn__loader) {
-	opacity: 0.8;
-}
-
-/* Dark theme enhancements */
-:deep([data-theme="dark"]) .summary-btn,
-:deep(.v-theme--dark) .summary-btn {
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
-}
-
-:deep([data-theme="dark"]) .summary-btn:hover,
-:deep(.v-theme--dark) .summary-btn:hover {
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
 }
 </style>

@@ -24,11 +24,15 @@
 				</v-btn>
 			</v-col>
 			<v-col cols="6" class="pl-1">
+				<!-- Submit is the payment screen's ONE accent. This one used to be
+				     a second saturated fill in green — and green is STATE here,
+				     what the band tints itself when there is change to give. An
+				     outline keeps it a peer of Submit in size and position while
+				     leaving exactly one filled button on the screen. -->
 				<v-btn
 					block
 					size="large"
-					color="success"
-					variant="flat"
+					variant="outlined"
 					class="payment-submit-print-btn payment-footer-btn"
 					data-pos-keyboard-target="payment-submit-print"
 					@click="$emit('submit-and-print')"

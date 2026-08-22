@@ -71,21 +71,36 @@ describe("Invoice compact sale details", () => {
 		expect(wrapperRule).toContain("gap: var(--dynamic-sm)");
 	});
 
-	it("renders the toggle on phones only and starts collapsed", () => {
+	// CHANGED 2026-08-22. The toggle used to be phones-only (`v-if
+	// ="isCompactInvoice"`) and desktop rendered four config cards permanently
+	// expanded — roughly 300px above the cart on the screen whose entire
+	// argument is density. The disclosure is now the way in at EVERY width.
+	it("renders the toggle at every width and starts collapsed", () => {
 		expect(source).toMatch(
 			/class="invoice-details-toggle"[\s\S]{0,400}@click="toggleSaleDetails\(\)"/,
 		);
-		expect(source).toContain('v-if="isCompactInvoice"');
+		const toggle = source.slice(
+			source.indexOf('class="invoice-details-toggle"') - 200,
+			source.indexOf('class="invoice-details-toggle"'),
+		);
+		expect(
+			toggle,
+			"the toggle must no longer be gated on the compact breakpoint",
+		).not.toContain('v-if="isCompactInvoice"');
 		expect(source).toContain("saleDetailsOpen: false,");
 	});
 
-	it("keeps the config cards mounted and visible whenever the panel is not compact", () => {
-		expect(source).toContain(
-			'v-show="!isCompactInvoice || saleDetailsOpen"',
-		);
-		expect(source).not.toContain(
-			'v-if="!isCompactInvoice || saleDetailsOpen"',
-		);
+	// The visibility half changed with the density pass; the MOUNTING half did
+	// not, and it is the half that matters. `v-show` keeps the customer
+	// autocomplete, the delivery selector and the currency row alive while
+	// collapsed, so half-entered state survives a close/open. `v-if` would
+	// discard it, and the operator would blame the register.
+	it("keeps the config cards mounted while collapsed", () => {
+		expect(source).toContain('v-show="saleDetailsOpen"');
+		expect(
+			source,
+			"v-if would unmount the config cards and lose in-progress input",
+		).not.toContain('v-if="saleDetailsOpen"');
 	});
 
 	it("wires the disclosure for assistive tech", () => {

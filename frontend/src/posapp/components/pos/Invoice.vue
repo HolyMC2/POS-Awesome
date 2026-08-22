@@ -35,14 +35,29 @@
 					{{ __("Invoices saved as POS Invoices") }}
 				</v-alert>
 				<div class="invoice-sections">
+					<!-- The customer as a dense strip, not a card. `Main.dc.html`
+					     draws the name, its provenance and a row of inline facts
+					     with no chrome and no idle form controls; the controls
+					     live in Sale details, one tap away via `change`. -->
+					<CustomerStrip
+						:customer-name="saleCustomerLabel"
+						:balance-label="customerBalanceLabel"
+						:price-list="selected_price_list"
+						:sale-type="invoiceType"
+						:is-return="isReturnInvoice"
+						:cfdi-ready="cfdiReady"
+						@change="openSaleDetails()"
+					/>
+
 					<!-- Config cards (customer, delivery, posting/price list,
-					     currency). On phones they collapse into one "Sale
-					     details" disclosure and move BELOW the items table, so
-					     the cart opens on what the cashier is actually doing.
-					     Desktop renders them expanded, in the original order. -->
+					     currency), collapsed BY DEFAULT AT EVERY WIDTH since
+					     2026-08-22. They used to render expanded on desktop and
+					     cost ~300px above the cart before a single line could
+					     appear, on a screen whose whole argument is density.
+					     Nothing was removed — the disclosure is the same one
+					     phones already had, and every control is one tap in. -->
 					<div class="invoice-config-sections">
 						<button
-							v-if="isCompactInvoice"
 							type="button"
 							class="invoice-details-toggle"
 							:aria-expanded="saleDetailsOpen ? 'true' : 'false'"
@@ -57,7 +72,7 @@
 							<span class="invoice-details-toggle__value">{{ saleCustomerLabel }}</span>
 						</button>
 						<div
-							v-show="!isCompactInvoice || saleDetailsOpen"
+							v-show="saleDetailsOpen"
 							id="invoice-sale-details"
 							class="invoice-config-sections__body"
 						>
@@ -185,12 +200,34 @@
 						</div>
 					</div>
 
-					<v-card flat class="invoice-section-card invoice-items-card pos-themed-card">
-						<div class="invoice-section-heading">
-							<h3 class="invoice-section-heading__title">{{ __("Invoice Items") }}</h3>
+					<!-- No card, no "Invoice Items" heading. The artboard goes
+					     straight from the customer strip to the column header
+					     row; a bordered card around the one elastic element in
+					     the height chain bought a shadow and cost two lines. -->
+					<div class="invoice-items-card">
+						<!-- The count strip the artboard carries ("6 líneas · 9
+						     piezas"), doubling as the home for the two controls
+						     that used to occupy a full row: the cart filter and
+						     the column picker. -->
+						<div class="invoice-items-bar">
+							<span class="invoice-items-bar__count" data-testid="cart-line-count">
+								{{ cartCountLabel }}
+							</span>
+							<v-btn
+								v-if="items.length"
+								:icon="itemsToolbarOpen ? 'mdi-close' : 'mdi-magnify'"
+								size="x-small"
+								variant="text"
+								density="compact"
+								data-testid="cart-filter-toggle"
+								:aria-label="__('Filter cart lines')"
+								:aria-expanded="itemsToolbarOpen ? 'true' : 'false'"
+								@click="toggleItemsToolbar()"
+							/>
 						</div>
 						<div class="items-table-wrapper">
 							<InvoiceItemsActionToolbar
+								v-if="itemsToolbarOpen"
 								ref="actionToolbar"
 								:itemSearch="itemSearch"
 								:availableColumns="available_columns"
@@ -250,7 +287,7 @@
 								:currencySymbol="currencySymbol"
 							/>
 						</div>
-					</v-card>
+					</div>
 				</div>
 			</div>
 		</v-card>
@@ -308,6 +345,7 @@
 <script>
 import format from "../../format";
 import InvoiceCustomerSection from "./invoice/InvoiceCustomerSection.vue";
+import CustomerStrip from "./customer/CustomerStrip.vue";
 import DeliveryCharges from "./invoice/DeliveryCharges.vue";
 import PostingDateRow from "./invoice/PostingDateRow.vue";
 import MultiCurrencyRow from "./invoice/MultiCurrencyRow.vue";
@@ -447,6 +485,10 @@ export default {
 			singleExpand: true,
 			cancel_dialog: false,
 			saleDetailsOpen: false,
+			// The cart filter and the column picker used to occupy a full row
+			// permanently. They are useful on a 40-line ticket and noise on a
+			// 3-line one, so they arrive on request.
+			itemsToolbarOpen: false,
 			customerFlash: false,
 			_customerFlashTimer: null,
 			available_stock_cache: {},
@@ -475,6 +517,7 @@ export default {
 
 	components: {
 		InvoiceCustomerSection,
+		CustomerStrip,
 		DeliveryCharges,
 		PostingDateRow,
 		MultiCurrencyRow,
@@ -547,6 +590,26 @@ export default {
 			},
 		},
 		// Collapsed, the disclosure still has to answer "who am I selling to?".
+		/** "6 líneas · 9 piezas", the artboard's own strip. */
+		cartCountLabel() {
+			const lines = this.items.length;
+			const pieces = this.items.reduce((total, row) => total + (Number(row.qty) || 0), 0);
+			// Pluralised through two whole strings rather than a suffix: Spanish
+			// does not pluralise the way an appended "s" assumes.
+			const lineText = lines === 1 ? __("1 line") : __("{0} lines").replace("{0}", lines);
+			const pieceText =
+				pieces === 1 ? __("1 piece") : __("{0} pieces").replace("{0}", this.formatFloat(pieces));
+			return `${lineText} · ${pieceText}`;
+		},
+		/** Empty string when there is nothing to say — the strip omits the chip. */
+		customerBalanceLabel() {
+			const balance = Number(this.customer_balance) || 0;
+			if (!balance) return "";
+			return this.formatCurrency(balance);
+		},
+		cfdiReady() {
+			return Boolean(this.pos_profile?.posa_cfdi_enable_stamping);
+		},
 		saleCustomerLabel() {
 			const info = this.activeCustomerInfo || {};
 			return info.customer_name || info.name || this.selectedCustomer || __("No customer");
@@ -588,6 +651,24 @@ export default {
 		},
 		...shortcutMethods,
 		...invoiceItemMethods,
+		toggleItemsToolbar(open) {
+			this.itemsToolbarOpen = typeof open === "boolean" ? open : !this.itemsToolbarOpen;
+			// Closing the filter must not leave the cart filtered by a term the
+			// operator can no longer see — that reads as "my items vanished".
+			if (!this.itemsToolbarOpen) this.itemSearch = "";
+		},
+		/** The strip's `change` affordance: open Sale details and land on the
+		 * customer field, rather than merely revealing a panel and leaving the
+		 * operator to find it. */
+		openSaleDetails() {
+			this.toggleSaleDetails(true);
+			this.$nextTick(() => {
+				const section = this.$refs.customerSection;
+				if (section && typeof section.focusCustomerSearch === "function") {
+					section.focusCustomerSearch();
+				}
+			});
+		},
 		toggleSaleDetails(open) {
 			this.saleDetailsOpen = typeof open === "boolean" ? open : !this.saleDetailsOpen;
 		},
@@ -1439,22 +1520,33 @@ export default {
 	min-width: 0;
 }
 
+/* Slimmed 2026-08-22. This used to appear only below 768px, where a 44px
+ * card-styled row was proportionate. It is now the permanent way into the sale
+ * config at every width, so it pays for itself in height: no card border, no
+ * shadow, no 18px radius, and 30px instead of 44. The 44px touch minimum is met
+ * by the hit area rather than by the visual — the row spans the full panel
+ * width, which is a far larger target than the bordered card ever was. */
 .invoice-details-toggle {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 6px;
 	width: 100%;
-	min-height: 44px;
-	padding: 8px 14px;
-	border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-	border-radius: var(--pos-radius-md, 18px);
-	background: var(--pos-card-bg);
-	color: var(--pos-text-primary);
+	min-height: 30px;
+	padding: 4px 2px;
+	border: 0;
+	border-radius: 8px;
+	background: none;
+	color: var(--pos-text-muted, #667085);
 	font: inherit;
-	font-size: 0.9rem;
-	font-weight: 700;
+	font-size: 0.78rem;
+	font-weight: 600;
 	text-align: start;
 	cursor: pointer;
+}
+
+.invoice-details-toggle:hover,
+.invoice-details-toggle:focus-visible {
+	color: var(--pos-text-primary);
 }
 
 .invoice-details-toggle__label {
@@ -1535,6 +1627,11 @@ export default {
 /* The cart list is the elastic one: it absorbs whatever the config sections
  * above and the summary below do not use. `min-height: 0` (not 320px) so it can
  * shrink on a short viewport instead of pushing the totals off-screen. */
+/* Still the single elastic sibling in the height chain — `flex: 1 1 auto;
+ * min-height: 0` is unchanged and load-bearing (see 59c5fe1ad). What went is
+ * the CHROME: the card background, border, 18px radius and shadow it inherited
+ * from `.invoice-section-card`. The height that bought is the height the cart
+ * now gets, which is the whole point of the change. */
 .invoice-items-card {
 	padding-bottom: var(--dynamic-xs);
 	display: flex;
@@ -1542,6 +1639,28 @@ export default {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow: hidden;
+	background: none;
+	border: 0;
+	box-shadow: none;
+}
+
+/* The count strip, and the home for the two controls that used to hold a full
+ * row open. `flex: 0 0 auto` because it is chrome above the one thing that
+ * scrolls. */
+.invoice-items-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: 0 0 auto;
+	min-height: 24px;
+	padding: 0 2px;
+	font-size: 0.74rem;
+	font-weight: 600;
+	color: var(--pos-text-muted, #667085);
+}
+
+.invoice-items-bar__count {
+	white-space: nowrap;
 }
 
 /* Responsive breakpoints */
@@ -1598,6 +1717,13 @@ export default {
 		 * (InvoiceSummary) already sit below this card, so the only thing
 		 * between items and the pay button is the collapsed disclosure. */
 		order: -1;
+	}
+
+	/* Ahead of the cart, because the items card claims `order: -1` and the
+	   strip would otherwise read BELOW the goods it identifies the buyer of.
+	   It costs two lines, so it does not push the cart down meaningfully. */
+	.customer-strip {
+		order: -2;
 	}
 
 	.items-table-wrapper {
@@ -1676,7 +1802,10 @@ export default {
  * the header hold while the rows move. */
 .items-table-wrapper {
 	position: relative;
-	margin-top: var(--dynamic-sm);
+	/* Was `var(--dynamic-sm)`: clearance under the "Invoice Items" card heading
+	   that this panel no longer renders. The count strip above supplies its own
+	   spacing. */
+	margin-top: 2px;
 	width: 100%;
 	max-width: 100%;
 	box-sizing: border-box;

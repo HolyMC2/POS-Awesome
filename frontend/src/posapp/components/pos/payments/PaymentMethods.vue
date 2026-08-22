@@ -43,10 +43,12 @@
 				</v-col>
 				<v-col cols="12" md="5" v-if="!isMpesaC2bPayment(payment)">
 					<div class="payment-method-actions">
+						<!-- The payment screen's accent lives on Submit. A filled
+						     button per payment row multiplied it by the number of
+						     tender types, so the primary stopped standing out. -->
 						<v-btn
 							block
-							color="primary"
-							variant="flat"
+							variant="outlined"
 							class="payment-method-action-btn"
 							data-pos-keyboard-target="payment-action"
 							:data-test="`payment-method-action-${payment.mode_of_payment}`"
@@ -71,7 +73,6 @@
 							v-for="d in getVisibleDenominations(payment)"
 							:key="d"
 							size="small"
-							color="secondary"
 							variant="tonal"
 							class="payment-denominations__btn"
 							data-pos-keyboard-target="payment-denomination"
@@ -85,8 +86,7 @@
 				<v-col cols="12" v-if="isMpesaC2bPayment(payment)" class="pa-0">
 					<v-btn
 						block
-						color="success"
-						variant="flat"
+						variant="outlined"
 						class="payment-method-action-btn payment-method-action-btn--success"
 						data-pos-keyboard-target="payment-action"
 						@click="$emit('mpesa-dialog', payment)"
@@ -102,7 +102,6 @@
 				>
 					<v-btn
 						block
-						color="success"
 						variant="tonal"
 						class="payment-method-action-btn payment-method-action-btn--secondary"
 						data-pos-keyboard-target="payment-action"

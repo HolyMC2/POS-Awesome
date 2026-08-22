@@ -7,24 +7,23 @@
 					<span class="posa-cart-item-row__name" :title="item.item_name">{{
 						item.item_name
 					}}</span>
-					<v-chip v-if="item.is_bundle" color="secondary" size="x-small" class="ml-1">
+					<v-chip v-if="item.is_bundle" size="x-small" variant="tonal" class="ml-1">
 						{{ __("Bundle") }}
 					</v-chip>
-					<v-chip v-if="item.name_overridden" color="primary" size="x-small" class="ml-1">
+					<v-chip v-if="item.name_overridden" size="x-small" variant="tonal" class="ml-1">
 						{{ __("Edited") }}
 					</v-chip>
 					<v-chip
 						v-if="item.batch_no_is_expired"
 						color="error"
 						size="x-small"
-						variant="flat"
+						variant="tonal"
 						class="ml-1"
 					>
 						{{ __("Expired") }}
 					</v-chip>
 					<v-chip
 						v-if="item.has_batch_no && item.batch_no"
-						color="info"
 						size="x-small"
 						variant="tonal"
 						class="ml-1"
@@ -35,14 +34,14 @@
 						v-if="item.posa_is_offer || item.is_free_item"
 						color="success"
 						size="x-small"
-						variant="flat"
+						variant="tonal"
 						class="me-1"
 					>
 						{{ __("Offer Item") }}
 					</v-chip>
 					<v-tooltip v-if="item.pricing_rule_badge" location="bottom">
 						<template #activator="{ props }">
-							<v-chip v-bind="props" color="primary" size="x-small" class="ml-1">
+							<v-chip v-bind="props" size="x-small" variant="tonal" class="ml-1">
 								{{ item.pricing_rule_badge.label }}
 							</v-chip>
 						</template>
@@ -365,7 +364,6 @@
 			>
 				<v-btn
 					size="x-small"
-					color="primary"
 					variant="tonal"
 					class="ma-0 pa-0"
 					@click.stop="$emit('toggle-offer', item)"

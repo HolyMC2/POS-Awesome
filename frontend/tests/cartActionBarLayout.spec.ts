@@ -77,43 +77,46 @@ const summaryStyles = scopedStyles("posapp/components/pos/invoice/InvoiceSummary
 const shellStyles = scopedStyles("posapp/components/pos/shell/Pos.vue");
 
 describe("PAY keeps a readable label on the phone", () => {
-	it("pins a foreground wherever it pins a background", () => {
-		// The gradient is only half the button. On phones `secondaryVariant` is
-		// `tonal`, and Vuetify routes a non-elevated variant's `color` prop to the
-		// TEXT (lib/composables/variant.js: ['elevated','flat'].includes(variant)
-		// ? 'background' : 'text'), so color="success" emitted green letters on
-		// the green gradient — measured contrast 1.0, the label vanished.
-		expect(declaration(actionStyles, ".pay-btn", "background")).toMatch(/linear-gradient/);
-		const foreground = declaration(actionStyles, ".pay-btn", "color");
-		expect(foreground).toBeDefined();
-		expect(foreground).toContain("!important");
+	/**
+	 * These three assertions guarded a real bug — a green gradient background
+	 * with `color="success"` on a `tonal` variant, which Vuetify routes to the
+	 * TEXT, producing green letters on green and a PAY button with no visible
+	 * label on Android.
+	 *
+	 * W4-D removed the mechanism rather than the symptom: PAY is now
+	 * `variant="flat" color="primary"`, so Vuetify emits the background AND its
+	 * paired `on-primary` foreground itself, and there is no hand-rolled
+	 * gradient for a `color` prop to fight with. The lesson is kept as the rule
+	 * below — never paint a background here without pinning a foreground beside
+	 * it — because the next person reaching for a custom fill needs to meet it.
+	 */
+	it("never paints a background without pinning a foreground beside it", () => {
+		const background = declaration(actionStyles, ".pos-action-strip__pay", "background");
+		if (background === undefined) {
+			// Vuetify owns both halves — the safe state, and the current one.
+			return;
+		}
+		const foreground = declaration(actionStyles, ".pos-action-strip__pay", "color");
+		expect(
+			foreground,
+			"a hand-rolled PAY background must pin its own foreground — a `color` prop " +
+				"on a non-elevated variant lands on the TEXT and will paint it to match",
+		).toBeDefined();
 	});
 
-	it("paints the label itself, not only the button box", () => {
-		// Vuetify puts the text in `.v-btn__content`; a rule on the root alone
-		// loses to the generated `.text-success { color: … !important }` that
-		// lands on the same element.
-		const colourRule = parseRules(actionStyles).find(
-			(rule) => rule.selector.includes(".pay-btn") && /(?:^|;)\s*color\s*:/.test(rule.body),
-		);
-		expect(colourRule?.selector).toContain(".v-btn__content");
-		// `:deep()` is required — the content span carries VBtn's scope id, not
-		// InvoiceActionButtons'.
-		expect(colourRule?.selector).toContain(":deep(");
-	});
-
-	it("uses white, the same on-success the desktop variant already renders", () => {
-		// plugins/vuetify.ts sets `on-success: #ffffff` in both themes, so the
-		// elevated (desktop) PAY has always been white on this gradient. The
-		// phone now matches instead of inventing a colour.
-		expect(declaration(actionStyles, ".pay-btn", "color")).toMatch(/#fff|#ffffff|white/i);
+	it("leaves the accent to the theme rather than a literal", () => {
+		// Green was the other half of the old bug: it is STATE in this register
+		// (the band tints itself green when there is change to give), so a green
+		// PAY on every sale teaches the cashier the signal means nothing.
+		const styles = actionStyles;
+		expect(styles).not.toMatch(/#4caf50|#45a049|#3d8b40/i);
 	});
 });
 
-describe("action grid touch targets", () => {
+describe("action strip touch targets", () => {
 	it("never shrinks PAY below 48px on any phone band", () => {
 		for (const band of mediaBands(actionStyles)) {
-			const value = declaration(band.body, ".pay-btn", "min-height");
+			const value = declaration(band.body, ".pos-action-strip__pay", "min-height");
 			if (value === undefined) continue;
 			expect(pxOf(value), `@media (max-width: ${band.width}px)`).toBeGreaterThanOrEqual(48);
 		}
@@ -124,7 +127,7 @@ describe("action grid touch targets", () => {
 		// (tests/touchTargetSweep.spec.ts). The desktop base rule is allowed to
 		// be denser — it is a mouse target.
 		for (const band of mediaBands(actionStyles)) {
-			const value = declaration(band.body, ".summary-btn", "min-height");
+			const value = declaration(band.body, ".pos-action-strip__chip", "min-height");
 			if (value === undefined) continue;
 			expect(pxOf(value), `@media (max-width: ${band.width}px)`).toBeGreaterThanOrEqual(44);
 		}

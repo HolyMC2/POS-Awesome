@@ -82,10 +82,25 @@
 					{{ formatCurrency(return_discount_meta.prorated_discount) }}
 				</v-alert>
 
-				<div v-if="!useCompactSaleDock" class="summary-hero">
+				<div
+					v-if="!useCompactSaleDock"
+					class="summary-hero"
+					:class="{ 'summary-hero--band-owns-lane': bandOwnsSaleLane }"
+					:data-band-owns-lane="bandOwnsSaleLane ? 'true' : 'false'"
+				>
 					<div class="summary-hero__copy">
 						<span class="summary-hero__eyebrow">{{ __("Active sale") }}</span>
-						<strong class="summary-hero__amount">
+						<!-- Demoted, not deleted, when the band is present: the
+						     figure stays readable as a breakdown line but stops
+						     competing with the band's 60px total. Deleting it
+						     would take the subtotal off screen entirely, and the
+						     total alone does not tell a cashier what it is made
+						     of. The class does the demotion; the markup is one
+						     element either way so nothing can render twice. -->
+						<strong
+							class="summary-hero__amount"
+							data-testid="summary-subtotal"
+						>
 							{{ currencySymbol(displayCurrency) }}{{ formatCurrency(subtotal) }}
 						</strong>
 						<div class="summary-hero__meta">
@@ -107,7 +122,6 @@
 						v-if="pos_profile.posa_allow_user_to_edit_additional_discount && !discount_percentage_offer_name"
 						class="summary-discount-btn"
 						variant="tonal"
-						color="warning"
 						prepend-icon="mdi-tag-minus"
 						data-testid="open-discount-dialog"
 						@click="discountDialogOpen = true"
@@ -136,7 +150,7 @@
 							prepend-inner-icon="mdi-cash-minus"
 							variant="solo"
 							density="compact"
-							color="warning"
+							color="primary"
 							:prefix="currencySymbol(pos_profile.currency)"
 							inputmode="decimal"
 							enterkeyhint="done"
@@ -161,7 +175,7 @@
 							prepend-inner-icon="mdi-percent"
 							variant="solo"
 							density="compact"
-							color="warning"
+							color="primary"
 							inputmode="decimal"
 							enterkeyhint="done"
 							:disabled="
@@ -177,6 +191,8 @@
 			<v-col cols="12" :md="useCompactSaleDock ? 12 : 5" class="invoice-summary-actions">
 				<InvoiceActionButtons
 					:pos_profile="pos_profile"
+					:band-owns-primary="bandOwnsSaleLane"
+					:line-summary="lineSummary"
 					:saveLoading="saveLoading"
 					:loadDraftsLoading="loadDraftsLoading"
 					:selectOrderLoading="selectOrderLoading"
@@ -294,6 +310,7 @@ import {
 	shouldShowDocumentSourceSelector,
 } from "../../../utils/documentSources";
 import InvoiceActionButtons from "./InvoiceActionButtons.vue";
+import { bandOwnsLane } from "./bandLaneOwnership";
 import ParkedOrdersList from "./ParkedOrdersList.vue";
 import DocumentSourceSelector from "../shared/DocumentSourceSelector.vue";
 
@@ -376,6 +393,24 @@ const responsive = useResponsive();
 const uiStore = useUIStore();
 const verticalStore = useVerticalStore();
 const invoiceStore = useInvoiceStore();
+
+// Counts at the strip's left, the way `Main.dc.html` opens that line
+// ("6 líneas · 9 piezas"). Sourced from the store rather than recounted, so it
+// cannot disagree with the cart it describes.
+const __ = window.__;
+const lineSummary = computed(() => {
+	const lines = invoiceStore.itemsCount ?? 0;
+	const pieces = invoiceStore.totalQty ?? 0;
+	// ONE string with placeholders, not three fragments concatenated. Assembling
+	// a sentence from separate `__()` calls forces every translator to guess at
+	// an order and an agreement they cannot see — the same trap the offline
+	// overlay's bare "You can" fell into. It also let the wrong noun ship: the
+	// existing `Lines` row reads "Partidas" (accounting), while the artboard —
+	// which §17.7 makes the reference of record — writes "líneas" (the counter's
+	// word). A dedicated row lets this strip say líneas without repointing
+	// `Lines` for anyone else.
+	return __("{0} lines · {1} pcs", [lines, pieces]);
+});
 const { parkedOrders, draftSource } = storeToRefs(uiStore);
 
 // Cafetería "name on the cup" — only surfaces when the vertical preset enables
@@ -410,6 +445,20 @@ const additionalDiscountPercentageDisplay = ref(
 	normalizeDiscountDisplay(props.additional_discount_percentage),
 );
 const useCompactSaleDock = computed(() => responsive.windowWidth.value < 1100);
+/**
+ * True when the shell's ActionBand is mounted below this card and carrying
+ * the sale's number and primary action. The summary then yields BOTH — see
+ * `bandLaneOwnership.ts` for why the predicate is duplicated and how it is
+ * guarded against drifting from `Pos.vue`'s `railVisible`.
+ *
+ * What the summary keeps regardless: the subtotal/qty/discount breakdown (the
+ * band's 60px figure is the total, and a cashier still needs to see what it is
+ * made of) and every SECONDARY action. The invariant is one number and one
+ * PRIMARY action, not one button.
+ */
+const bandOwnsSaleLane = computed(() =>
+	bandOwnsLane(Boolean(verticalStore.leanVerticalLayout), responsive.windowWidth.value),
+);
 const showDesktopDrafts = computed(() => Boolean(responsive.isDesktop.value));
 const showReturnDiscountAlert = computed(
 	() =>
@@ -788,6 +837,27 @@ defineExpose({
 	   flex row split "MX$102.00" into "MX$10 / 2.00" — not a smaller total,
 	   a different and wrong number at a glance. */
 	white-space: nowrap;
+}
+
+/* Band present: the subtotal drops to breakdown weight so the band's 60px
+   total is unambiguously THE number on screen (§17.7 invariant 1). It is
+   demoted rather than hidden — a cashier still needs to see what the total is
+   made of, and the eyebrow is retitled by weight alone, not by swapping the
+   string, so nothing has to be translated twice.
+
+   Deliberately only type: no display:none, no height change. The card is
+   `flex: 0 0 auto` and the cart above it is the single elastic sibling
+   (commit 59c5fe1ad), so collapsing this block would hand the cart height it
+   would then have to give back the moment the band unmounts on a resize. */
+.summary-hero--band-owns-lane .summary-hero__amount {
+	font-size: 0.95rem;
+	font-weight: 600;
+	color: var(--pos-text-secondary);
+}
+
+.summary-hero--band-owns-lane .summary-hero__eyebrow {
+	color: var(--pos-text-secondary);
+	opacity: 0.85;
 }
 
 /* The Discount button keeps its own size and never squeezes the total;
