@@ -2460,3 +2460,93 @@ Say why the goods are coming back.,Di por qué regresa la mercancía.
 Within the return window — {0} days left. No authorisation needed.,Dentro del plazo de devolución — quedan {0} días. No necesita autorización.
 The return window closed on {0}. A supervisor has to authorise this one.,El plazo de devolución cerró el {0}. Un encargado tiene que autorizar ésta.
 This sale has no return window recorded. No authorisation needed.,Esta venta no tiene plazo de devolución registrado. No necesita autorización.
+Filter cart lines,Filtrar líneas de la venta
+SAT status,Estatus SAT
+Generate files,Generar archivos
+Send,Enviar
+Last stamp attempt failed,El último intento de timbrado falló
+The PAC rejected the stamp,El PAC rechazó el timbrado
+This invoice was already stamped,Esta factura ya estaba timbrada
+Could not generate the CFDI files,No se pudieron generar los archivos del CFDI
+CFDI sent to,CFDI enviado a
+Could not send the CFDI,No se pudo enviar el CFDI
+Send by email,Enviar por correo
+This RFC belongs to,Este RFC es de
+Use that customer,Usar ese cliente
+Generic RFC (público en general): régimen 616 + uso S01 apply.,RFC genérico (público en general): aplican régimen 616 y uso S01.
+The código postal must be 5 digits,El código postal debe tener 5 dígitos
+RFC,RFC
+"As registered with SAT, without SA DE CV suffix","Como está en el SAT, sin el sufijo SA DE CV"
+No matching régimen,Ningún régimen coincide
+No compatible uso for this régimen,Ningún uso compatible con este régimen
+No submitted invoices match this filter.,Ninguna factura emitida coincide con este filtro.
+Error,Error
+Back to invoice list,Volver a la lista de facturas
+"Folio, customer or RFC","Folio, cliente o RFC"
+change,cambiar
+CFDI ready,CFDI listo
+"Customer saved, but the fiscal data was rejected","El cliente se guardó, pero los datos fiscales se rechazaron"
+Could not delete the draft — it stays in your drafts,No se pudo borrar el borrador — se queda en tus borradores
+Compatible,Compatible
+Expected in drawer,Debe haber
+{0} % of sales,{0} % de ventas
+no sales to compare against,sin ventas con qué comparar
+Note on the difference,Nota de la diferencia
+mandatory,obligatoria
+optional,opcional
+A difference over {0} has to be explained before the shift can close.,Una diferencia mayor a {0} se tiene que explicar antes de cerrar el turno.
+"Say what happened, in a sentence — this is what a supervisor reads tomorrow.","Di qué pasó, en una frase — esto es lo que el encargado lee mañana."
+The note goes on the closing document with the shift.,La nota queda en el corte junto con el turno.
+Under {0} a difference is coins. Write a note anyway if you know why.,Abajo de {0} una diferencia es morralla. Aun así escribe la nota si sabes por qué.
+"What happened? For example: $25 short on sale B-04801, too much change given at close.","¿Qué pasó? Por ejemplo: faltaron $25 en la venta B-04801, se dio cambio de más al cerrar."
+Shift open,Turno abierto
+{0} tickets uploaded,{0} tickets subidos
+oldest first,de la más vieja primero
+{0} ready,{0} listas
+Service orders need a connection,Las órdenes de servicio necesitan conexión
+The order lives in the workshop's records; the register reads it from the server.,La orden vive en los registros del taller; la caja la lee del servidor.
+CFDI,CFDI
+"Find an order by folio, IMEI or phone.","Busca una orden por folio, IMEI o teléfono."
+Charging a service order needs a connection to the workshop's records.,Cobrar una orden de servicio necesita conexión con los registros del taller.
+This order was already invoiced. Check before charging it again.,Esta orden ya se facturó. Revisa antes de volver a cobrarla.
+"Folio, IMEI or phone…","Folio, IMEI o teléfono…"
+{0} ending {1},{0} terminado en {1}
+− Advance,− Anticipo
++ Counter,+ Mostrador
+Labour and parts,Mano de obra y refacciones
+labour,mano de obra
+part,refacción
+customer's part,pieza del cliente
+no charge,no se cobra
+from the counter,de mostrador
+same ticket,mismo ticket
+IMEI verified,IMEI verificado
+IMEI not verified,IMEI sin verificar
+IMEI check not recorded,No se registró la revisión del IMEI
+{0} photos,{0} fotos
+No photos,Sin fotos
+Photos not recorded,No se registraron fotos
+Not invoiced before,No facturada antes
+Already invoiced,Ya facturada
+Invoicing history not checked,No se revisó el historial de facturación
+{0} d warranty,garantía {0} d
+No warranty recorded,Sin garantía registrada
+Ready for pickup,Lista
+{0} has no note or coin,No hay billete ni moneda de {0}
+Prints ticket,Imprime ticket
+Payment method,Forma de pago
+Decimal point,Punto decimal
+Numeric keypad,Teclado numérico
+Backspace,Borrar
+Split payment,Dividir pago
+{0} x {1} labels are too small for this page — text was shrunk to fit. Use fewer rows or columns.,Las etiquetas de {0} x {1} no caben en esta hoja — el texto se encogió para entrar. Usa menos filas o columnas.
+Item '{0}' has no barcode,El artículo '{0}' no tiene código de barras
+No barcode found for UOM '{0}',No hay código de barras para la unidad '{0}'
+Additional discount,Descuento adicional
+Lookup only — nothing is added to the sale,Sólo consulta — no se agrega nada a la venta
+Searching…,Buscando…
+No item found,No se encontró el artículo
+Scan or type item / barcode,Escanea o escribe artículo / código
+Keyboard shortcuts,Atajos del teclado
+Customer credit redemption requires an online connection,El canje de crédito del cliente requiere conexión en línea
+"Cannot refund {0} for this return: only {1} was paid on the original invoice. Turn on ""Store as Credit?"" to record it as a credit note that reduces the customer's balance.","No se pueden devolver {0} en esta devolución: sólo se pagaron {1} en la factura original. Activa ""¿Guardar como crédito?"" para registrarlo como nota de crédito que baja el saldo del cliente."
