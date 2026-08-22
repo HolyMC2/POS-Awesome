@@ -207,9 +207,12 @@
 								>
 									{{ __("Reintentar") }}
 								</v-btn>
+								<!-- Neutral tonal, not amber. This sits beside a `tonal primary`
+								     "Reintentar" as its peer, and giving two peer actions two
+								     different tints is colour used as a category label — the
+								     habit that stops amber meaning "state" anywhere else. -->
 								<v-btn
 									size="small"
-									color="warning"
 									variant="tonal"
 									:loading="draftReviewBusy === row.queue_id"
 									@click="resolveDraftReview(row)"
@@ -376,6 +379,12 @@
 							<v-btn variant="text" @click="cancelRemoveInvoice">
 								{{ __("Cancelar") }}
 							</v-btn>
+							<!-- KEPT saturated, deliberately. This confirm is its own surface
+							     — a modal whose only coloured element this is — so "one
+							     saturated colour on the primary action" is satisfied, and here
+							     the destructive act IS the primary. Red on an irreversible
+							     delete is a safety affordance, not emphasis; the label carries
+							     the meaning for anyone who cannot see the colour. -->
 							<v-btn color="error" variant="elevated" @click="confirmRemoveInvoice">
 								{{ __("Eliminar definitivamente") }}
 							</v-btn>

@@ -69,10 +69,16 @@
 				</v-chip>
 			</template>
 			<template #item.actions="{ item }">
+				<!-- Three peer row actions used to carry three different tints —
+				     info, amber, red — which is the rainbow reproduced at row
+				     scale, once per movement in the list. Only the irreversible
+				     one keeps a colour now; the other two are neutral. The status
+				     chip above is untouched: it pairs `statusColor` with
+				     `statusLabel` text, so it is state a colourblind operator can
+				     still read, which is exactly what §17.7 permits. -->
 				<div class="d-flex flex-column ga-1 align-end">
 					<v-btn
 						size="x-small"
-						color="info"
 						variant="tonal"
 						:disabled="![1, 2].includes(item.docstatus) || actionLoading"
 						@click="$emit('duplicate', item)"
@@ -81,7 +87,6 @@
 					</v-btn>
 					<v-btn
 						size="x-small"
-						color="warning"
 						variant="tonal"
 						:disabled="!allowCancel || item.docstatus !== 1 || actionLoading"
 						@click="$emit('cancel', item)"

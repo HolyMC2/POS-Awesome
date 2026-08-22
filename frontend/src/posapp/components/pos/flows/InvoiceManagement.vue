@@ -154,7 +154,7 @@
 								/>
 								<v-btn
 									class="history-repair-toggle"
-									:color="historyShowRepairCandidatesOnly ? 'warning' : undefined"
+									:color="historyShowRepairCandidatesOnly ? 'primary' : undefined"
 									:variant="historyShowRepairCandidatesOnly ? 'flat' : 'outlined'"
 									prepend-icon="mdi-wrench-check-outline"
 									@click="
@@ -165,7 +165,7 @@
 									<v-chip
 										size="x-small"
 										variant="flat"
-										:color="historyShowRepairCandidatesOnly ? 'white' : 'warning'"
+										:color="historyShowRepairCandidatesOnly ? 'white' : undefined"
 										class="ms-2"
 									>
 										{{ historyRepairCandidateCount }}
@@ -512,10 +512,15 @@
 								/>
 							</div>
 
+							<!-- Selected filters take the ACCENT, uniformly. They used amber
+							     for three and red for Overdue, which reads as "this filter is
+							     a warning" — it is not, it is the one you picked. One colour
+							     with one meaning (active) replaces four colours used as
+							     category labels; the counts in the labels carry the severity. -->
 							<div class="status-strip mb-4">
 								<v-btn
 									:variant="partialStatus === 'All' ? 'flat' : 'outlined'"
-									:color="partialStatus === 'All' ? 'warning' : undefined"
+									:color="partialStatus === 'All' ? 'primary' : undefined"
 									size="small"
 									@click="partialStatus = 'All'"
 								>
@@ -523,7 +528,7 @@
 								</v-btn>
 								<v-btn
 									:variant="partialStatus === 'Partly Paid' ? 'flat' : 'outlined'"
-									:color="partialStatus === 'Partly Paid' ? 'warning' : undefined"
+									:color="partialStatus === 'Partly Paid' ? 'primary' : undefined"
 									size="small"
 									@click="partialStatus = 'Partly Paid'"
 								>
@@ -531,7 +536,7 @@
 								</v-btn>
 								<v-btn
 									:variant="partialStatus === 'Unpaid' ? 'flat' : 'outlined'"
-									:color="partialStatus === 'Unpaid' ? 'warning' : undefined"
+									:color="partialStatus === 'Unpaid' ? 'primary' : undefined"
 									size="small"
 									@click="partialStatus = 'Unpaid'"
 								>
@@ -539,7 +544,7 @@
 								</v-btn>
 								<v-btn
 									:variant="partialStatus === 'Overdue' ? 'flat' : 'outlined'"
-									:color="partialStatus === 'Overdue' ? 'error' : undefined"
+									:color="partialStatus === 'Overdue' ? 'primary' : undefined"
 									size="small"
 									@click="partialStatus = 'Overdue'"
 								>
@@ -777,7 +782,7 @@
 											prepend-icon="mdi-cash-plus"
 											size="small"
 											variant="flat"
-											color="warning"
+											color="primary"
 											:disabled="isOffline()"
 											@click="openAddPayment(invoice)"
 										>
@@ -1216,7 +1221,7 @@
 					</v-window>
 				</v-card-text>
 				<v-card-actions class="invoice-management-footer">
-					<v-btn color="error" variant="tonal" @click="uiStore.closeInvoiceManagement()">
+					<v-btn variant="text" @click="uiStore.closeInvoiceManagement()">
 						{{ __("Close") }}
 					</v-btn>
 				</v-card-actions>
@@ -2323,9 +2328,20 @@ export default {
 				action === "delivery_to_invoice"
 			);
 		},
+		/**
+		 * One accent per row, on the action the row exists for.
+		 *
+		 * This used to map each action to its own colour — amber for
+		 * `quote_submit`, green for `order_to_delivery_note`, the source
+		 * option's colour for the rest — which is colour spent as a category
+		 * label. Green and amber are STATE (§17.7 invariant 2), and once they
+		 * label a button they stop signalling anything on the band.
+		 *
+		 * Converting a draft into an invoice is what this surface is FOR, so it
+		 * keeps the accent (and, via `isChargeDraftAction`, the filled
+		 * variant). Every other action renders neutral text.
+		 */
 		draftActionColor(action) {
-			if (action === "quote_submit") return "warning";
-			if (action === "order_to_delivery_note") return "success";
 			if (
 				action === "order_to_invoice" ||
 				action === "quote_to_invoice" ||
@@ -2333,10 +2349,7 @@ export default {
 			) {
 				return "primary";
 			}
-			if (action === "quote_to_order" || action === "order_load" || action === "quote_edit_draft") {
-				return this.currentDraftSourceOption.color;
-			}
-			return this.currentDraftSourceOption.color;
+			return undefined;
 		},
 		async runDraftAction(invoice, action) {
 			if (!invoice?.name || !action) {

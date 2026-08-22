@@ -46,19 +46,28 @@
 			<v-divider></v-divider>
 			<v-card-actions class="dialog-actions-container">
 				<v-spacer></v-spacer>
+				<!-- The corte is a destination now, not a dialog over the sale, so
+				     "the primary action of this screen" is answerable: submitting
+				     the close. It carries the one accent (§17.7 invariant 2).
+				     Closing is a dismissal, not a destructive act — it was red for
+				     emphasis, which is the colour spending this invariant exists
+				     to stop, so it drops to neutral text.
+
+				     Green mattered most here. This screen's own band tints amber
+				     when the count differs from expected, and a green SUBMIT
+				     beside an amber difference taught the cashier that green is a
+				     button colour rather than a signal. -->
 				<v-btn
-					color="error"
-					variant="flat"
+					variant="text"
 					@click="closeDialog"
 					class="pos-action-btn cancel-action-btn"
 					size="large"
-					elevation="2"
 				>
 					<v-icon start>mdi-close-circle-outline</v-icon>
 					<span>{{ __("Close") }}</span>
 				</v-btn>
 				<v-btn
-					color="success"
+					color="primary"
 					variant="flat"
 					@click="submitDialog"
 					class="pos-action-btn submit-action-btn"

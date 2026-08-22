@@ -175,7 +175,11 @@
 							</v-btn>
 						</v-col>
 						<v-col cols="12" sm="4" md="auto">
-							<v-btn block variant="text" color="warning" @click="clear_search">
+							<!-- Neutral, not amber. Clearing a search is not a warning, and
+							     amber is reserved for state (§17.7 invariant 2) — spending it
+							     as a category label is what stops the band's amber shortfall
+							     from meaning anything. -->
+							<v-btn block variant="text" @click="clear_search">
 								<v-icon start>mdi-refresh</v-icon>
 								{{ __("Clear") }}
 							</v-btn>
@@ -186,7 +190,7 @@
 							md="auto"
 							v-if="pos_profile.posa_allow_return_without_invoice == 1"
 						>
-							<v-btn block variant="text" color="secondary" @click="return_without_invoice">
+							<v-btn block variant="text" @click="return_without_invoice">
 								{{ __("Return without Invoice") }}
 							</v-btn>
 						</v-col>
@@ -313,10 +317,19 @@
 					</v-row>
 				</v-container>
 				<v-card-actions class="mt-1 returns-card__footer">
-					<v-btn color="error" variant="tonal" @click="close_dialog">
+					<!-- Devolución is a rail destination now, so it has one primary:
+					     committing the selected invoices. That takes the accent.
+					     Close is a dismissal rather than a destructive act, so it
+					     drops to neutral text — red was emphasis, not meaning. -->
+					<v-btn variant="text" @click="close_dialog">
 						{{ __("Close") }}
 					</v-btn>
-					<v-btn v-if="selected.length" color="success" @click="submit_dialog">
+					<v-btn
+						v-if="selected.length"
+						color="primary"
+						variant="flat"
+						@click="submit_dialog"
+					>
 						{{ __("Select") }}
 					</v-btn>
 				</v-card-actions>
