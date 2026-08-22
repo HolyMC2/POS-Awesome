@@ -88,18 +88,53 @@
 					:class="{ 'summary-hero--band-owns-lane': bandOwnsSaleLane }"
 					:data-band-owns-lane="bandOwnsSaleLane ? 'true' : 'false'"
 				>
-					<div class="summary-hero__copy">
+					<!-- TWO SHAPES, and which one renders is decided by who owns the
+					     lane — not by CSS weight on a single shape, which is what
+					     shipped first and what the screenshot caught.
+
+					     Demoting the figure was not enough. Under an "ACTIVE SALE"
+					     eyebrow, an unlabelled amount reads as a total however small
+					     it is set, so the register showed the band's total, this
+					     figure, and the discount stacked together — three money
+					     numbers where §17.7 allows one. The fix is to say what the
+					     number IS: `Main.dc.html` writes "Subtotal $973.28" as a
+					     label/value pair, and a labelled subtotal cannot be mistaken
+					     for the total no matter how it is typeset.
+
+					     `qty` is gone from here on purpose too: the count strip below
+					     the cart already says "6 líneas · 9 piezas", and that is the
+					     artboard's home for it. -->
+					<div
+						v-if="bandOwnsSaleLane"
+						class="summary-breakdown"
+						data-testid="summary-breakdown"
+					>
+						<span class="summary-breakdown__pair">
+							<span class="summary-breakdown__label">{{ __("Subtotal") }}</span>
+							<span
+								class="summary-breakdown__value"
+								data-testid="summary-subtotal"
+								data-money-role="breakdown"
+								>{{ currencySymbol(displayCurrency) }}{{ formatCurrency(subtotal) }}</span
+							>
+						</span>
+						<span class="summary-breakdown__pair">
+							<span class="summary-breakdown__label">{{ __("Discount") }}</span>
+							<span class="summary-breakdown__value" data-money-role="breakdown"
+								>{{ currencySymbol(displayCurrency)
+								}}{{ formatCurrency(total_items_discount_amount) }}</span
+							>
+						</span>
+					</div>
+					<!-- No band below (a lean-vertical preset at desktop width): this
+					     card IS the lane, so the figure keeps its weight and carries
+					     the total role. -->
+					<div v-else class="summary-hero__copy">
 						<span class="summary-hero__eyebrow">{{ __("Active sale") }}</span>
-						<!-- Demoted, not deleted, when the band is present: the
-						     figure stays readable as a breakdown line but stops
-						     competing with the band's 60px total. Deleting it
-						     would take the subtotal off screen entirely, and the
-						     total alone does not tell a cashier what it is made
-						     of. The class does the demotion; the markup is one
-						     element either way so nothing can render twice. -->
 						<strong
 							class="summary-hero__amount"
 							data-testid="summary-subtotal"
+							data-money-role="total"
 						>
 							{{ currencySymbol(displayCurrency) }}{{ formatCurrency(subtotal) }}
 						</strong>
@@ -849,15 +884,49 @@ defineExpose({
    `flex: 0 0 auto` and the cart above it is the single elastic sibling
    (commit 59c5fe1ad), so collapsing this block would hand the cart height it
    would then have to give back the moment the band unmounts on a resize. */
-.summary-hero--band-owns-lane .summary-hero__amount {
+/* The breakdown shape: label/value pairs on one line, the way
+   `Main.dc.html` writes "Subtotal $973.28". No eyebrow and no hero weight —
+   the LABEL is what stops the figure reading as a total, not the type size. */
+.summary-breakdown {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 4px 18px;
+	min-width: 0;
+}
+
+.summary-breakdown__pair {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+	white-space: nowrap;
+}
+
+.summary-breakdown__label {
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--pos-text-muted, #667085);
+}
+
+.summary-breakdown__value {
 	font-size: 0.95rem;
 	font-weight: 600;
 	color: var(--pos-text-secondary);
+	font-variant-numeric: tabular-nums;
 }
 
-.summary-hero--band-owns-lane .summary-hero__eyebrow {
-	color: var(--pos-text-secondary);
-	opacity: 0.85;
+/* The card stops announcing itself when it is no longer the lane: no tint, no
+   border, no 20px radius. It is a breakdown line sitting above the band, and a
+   gradient panel around it competed with the one surface that should draw the
+   eye. */
+.summary-hero--band-owns-lane {
+	background: none;
+	border-color: transparent;
+	border-radius: 0;
+	padding: 4px 2px;
+	gap: 10px;
 }
 
 /* The Discount button keeps its own size and never squeezes the total;

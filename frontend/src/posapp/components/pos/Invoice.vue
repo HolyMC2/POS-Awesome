@@ -69,7 +69,12 @@
 								size="20"
 							/>
 							<span class="invoice-details-toggle__label">{{ __("Sale details") }}</span>
-							<span class="invoice-details-toggle__value">{{ saleCustomerLabel }}</span>
+							<!-- No customer name here. `CustomerStrip` states it directly
+							     above, and a disclosure that echoes the line above it is
+							     the register saying one fact twice. The comment this
+							     replaces claimed the collapsed row "still has to answer
+							     who am I selling to" — true before the strip existed,
+							     false the moment it landed. -->
 						</button>
 						<div
 							v-show="saleDetailsOpen"
@@ -209,12 +214,14 @@
 						     piezas"), doubling as the home for the two controls
 						     that used to occupy a full row: the cart filter and
 						     the column picker. -->
-						<div class="invoice-items-bar">
-							<span class="invoice-items-bar__count" data-testid="cart-line-count">
-								{{ cartCountLabel }}
-							</span>
+						<!-- The count moved OUT of here. `Main.dc.html` puts
+						     "6 líneas · 9 piezas" below the cart beside the chips, not
+						     above it, and `InvoiceSummary` already renders it there —
+						     so this bar was the second copy, in the wrong place, in a
+						     different format ("0.00 pieces" against "0 pcs"). What is
+						     left is the filter toggle, which has nowhere better to be. -->
+						<div v-if="items.length" class="invoice-items-bar">
 							<v-btn
-								v-if="items.length"
 								:icon="itemsToolbarOpen ? 'mdi-close' : 'mdi-magnify'"
 								size="x-small"
 								variant="text"
@@ -588,18 +595,6 @@ export default {
 			set(val) {
 				this.invoiceStore.setPostingDate(val);
 			},
-		},
-		// Collapsed, the disclosure still has to answer "who am I selling to?".
-		/** "6 líneas · 9 piezas", the artboard's own strip. */
-		cartCountLabel() {
-			const lines = this.items.length;
-			const pieces = this.items.reduce((total, row) => total + (Number(row.qty) || 0), 0);
-			// Pluralised through two whole strings rather than a suffix: Spanish
-			// does not pluralise the way an appended "s" assumes.
-			const lineText = lines === 1 ? __("1 line") : __("{0} lines").replace("{0}", lines);
-			const pieceText =
-				pieces === 1 ? __("1 piece") : __("{0} pieces").replace("{0}", this.formatFloat(pieces));
-			return `${lineText} · ${pieceText}`;
 		},
 		/** Empty string when there is nothing to say — the strip omits the chip. */
 		customerBalanceLabel() {
@@ -1550,20 +1545,12 @@ export default {
 }
 
 .invoice-details-toggle__label {
-	flex: 0 0 auto;
-}
-
-.invoice-details-toggle__value {
 	flex: 1 1 auto;
 	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	text-align: end;
-	font-weight: 500;
-	font-size: 0.82rem;
-	color: var(--pos-text-secondary);
+	text-align: start;
 }
+
+
 
 .invoice-top-grid {
 	display: grid;
@@ -1659,8 +1646,10 @@ export default {
 	color: var(--pos-text-muted, #667085);
 }
 
-.invoice-items-bar__count {
-	white-space: nowrap;
+/* The lone filter toggle aligns to the table's right edge, where the Actions
+   column is, rather than floating at the start of an otherwise empty bar. */
+.invoice-items-bar > :first-child {
+	margin-left: auto;
 }
 
 /* Responsive breakpoints */
