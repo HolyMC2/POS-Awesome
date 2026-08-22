@@ -13,6 +13,10 @@ import OfflineRouteUnavailable from "../components/system/OfflineRouteUnavailabl
 import { pinia } from "../stores";
 import { useUIStore } from "../stores/uiStore";
 import { useVerticalStore } from "../stores/verticalStore";
+import {
+	createDestinationGuard,
+	type ActivationContext,
+} from "../composables/pos/shell/useDestinationRouting";
 
 const OFFLINE_ROUTE_UNAVAILABLE_NAME = "offline-route-unavailable";
 
@@ -31,6 +35,86 @@ function allowsTableFeatures(): boolean {
 		return useVerticalStore(pinia).has("tables");
 	} catch {
 		return true;
+	}
+}
+
+/**
+ * Has the register booted far enough to be asked a gating question?
+ *
+ * The capability preset and the shift both arrive with the shift-open payload.
+ * Before that lands there is nothing to ask — and asking anyway would refuse
+ * EVERY destination, because `shiftOpen` reads false on a register that simply
+ * has not answered yet. That would break a cold-boot deep link into
+ * `/cash-movement` or `/closing`, both of which work today. Same reasoning the
+ * floor route's comment above already records; this is that rule generalised to
+ * every destination.
+ */
+function registerHasBooted(): boolean {
+	const ui = useUIStore(pinia);
+	return Boolean(ui.capabilityPayload || ui.posOpeningShift);
+}
+
+/**
+ * Server reachability, matching `useOnlineStatus`'s definition rather than
+ * `navigator.onLine`: a captive portal reports "online" while every server call
+ * hangs. Recomputed rather than subscribed — a guard runs once per navigation
+ * and must not register listeners it can never remove.
+ */
+function serverReachable(): boolean {
+	const navOnline = typeof navigator === "undefined" ? true : navigator.onLine;
+	const serverOnline = (window as unknown as { serverOnline?: boolean })
+		?.serverOnline;
+	return navOnline && serverOnline !== false;
+}
+
+function buildActivationContext(): ActivationContext {
+	const ui = useUIStore(pinia);
+	const vertical = useVerticalStore(pinia);
+	return {
+		isOnline: serverReachable(),
+		shiftOpen: Boolean(ui.posOpeningShift),
+		hasCapability: (capability: string) => {
+			try {
+				return vertical.has(capability);
+			} catch {
+				return false;
+			}
+		},
+		hasProfileFlag: (flag: string) =>
+			Boolean((ui.posProfile as Record<string, unknown> | null)?.[flag]),
+	};
+}
+
+const destinationGuard = createDestinationGuard(buildActivationContext);
+
+/**
+ * Capability gate for rail destinations, applied to the URL.
+ *
+ * Hiding a rail item while leaving its URL reachable is a gate with a hole in
+ * it, and a bookmark, a customer display or a support instruction finds that
+ * hole first. Returns the path to redirect to, or null to allow.
+ *
+ * Two refusals are deliberately NOT made here. Before boot nothing is asked at
+ * all (see `registerHasBooted`). And a redirect that lands back on the SAME
+ * path is dropped: `/pos` is itself the `sale` destination, so a closed shift
+ * would otherwise refuse `/pos`, redirect to `/pos`, and loop the router
+ * forever. A register with no shift open belongs on `/pos` looking at the
+ * opening dialog, which is exactly where that fallthrough leaves it.
+ */
+export function resolveDestinationRedirect(path: string): string | null {
+	try {
+		if (!registerHasBooted()) {
+			return null;
+		}
+		const verdict = destinationGuard(path);
+		if (verdict === true) {
+			return null;
+		}
+		const clean = String(path || "").split("?")[0]?.replace(/\/+$/, "") || "/";
+		return verdict === clean ? null : verdict;
+	} catch {
+		// A gate that throws must not strand the cashier on a blank router.
+		return null;
 	}
 }
 
@@ -216,6 +300,11 @@ const createPosAppRouter = () => {
 		});
 		if (to.meta?.requiresTables && !allowsTableFeatures()) {
 			next("/pos");
+			return;
+		}
+		const destinationRedirect = resolveDestinationRedirect(to.path);
+		if (destinationRedirect) {
+			next(destinationRedirect);
 			return;
 		}
 		if (!to.meta?.requiresSupervisor) {

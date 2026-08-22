@@ -1,11 +1,17 @@
 import {
 	computed,
+	inject,
 	onBeforeUnmount,
 	onMounted,
 	ref,
 	type ComputedRef,
 	type Ref,
 } from "vue";
+
+import {
+	DESTINATION_SURFACE,
+	type DestinationSurface,
+} from "../../components/pos/shell/destinations/surfaceContext";
 
 /**
  * Vuetify's `sm` floor. Under it a centred dialog is left with ~24px of gutter
@@ -32,6 +38,12 @@ export interface DialogFullscreenOptions extends DialogGeometry {
 
 export interface DialogFullscreenProps extends DialogGeometry {
 	fullscreen: boolean;
+	/** Teleport target — set only when hosted as a destination surface. */
+	attach?: HTMLElement | string;
+	/** Hosted surfaces carry no scrim: there is nothing behind them to dim. */
+	scrim?: boolean | string;
+	/** A surface is not dismissed by clicking beside it; the rail moves on. */
+	persistent?: boolean;
 }
 
 /**
@@ -48,6 +60,42 @@ function resolveDialogProps(
 	return fullscreen
 		? { fullscreen: true }
 		: { fullscreen: false, ...geometry };
+}
+
+/**
+ * Re-shape a dialog that is being rendered as a rail DESTINATION rather than as
+ * a modal (roadmap §17.7).
+ *
+ * Every flows sheet — Drafts, Returns, Sales Orders, Invoice Management — owns
+ * its own `v-dialog` driven by a store flag, so `DestinationHost` cannot reach
+ * inside and re-chrome it from outside. Instead the host provides
+ * `DESTINATION_SURFACE` and this function answers it: teleport into the
+ * destination area beside the rail, drop the scrim (nothing behind it needs
+ * dimming), and stop closing on an outside click — a surface is left by
+ * choosing another destination, not by tapping next to it.
+ *
+ * A component that never injects the key is returned its object UNCHANGED, by
+ * identity. That is what makes the migration incremental instead of a flag day:
+ * a dialog nobody hosts behaves exactly as it does today.
+ */
+function applyDestinationSurface(
+	props: DialogFullscreenProps,
+	surface: DestinationSurface | null,
+): DialogFullscreenProps {
+	const attach = surface?.attachTo.value;
+	if (!attach) {
+		return props;
+	}
+	// Geometry is dropped for the same reason `fullscreen` drops it: VOverlay
+	// writes width/min-width as INLINE styles that outrank any stylesheet, so a
+	// sheet carrying `min-width: 800px` would stay 800px wide inside a 520px
+	// destination area.
+	return {
+		fullscreen: false,
+		attach,
+		scrim: false,
+		persistent: true,
+	};
 }
 
 export function useDialogFullscreen(options: DialogFullscreenOptions = {}): {
@@ -78,9 +126,17 @@ export function useDialogFullscreen(options: DialogFullscreenOptions = {}): {
 		window.removeEventListener("resize", handleResize);
 	});
 
+	// `inject` outside a component setup returns undefined and warns; every
+	// caller of this composable is a setup, and the default keeps the composable
+	// usable from a plain unit test that mounts nothing.
+	const surface = inject<DestinationSurface | null>(DESTINATION_SURFACE, null);
+
 	const isFullscreenDialog = computed(() => windowWidth.value < breakpoint);
 	const dialogProps = computed(() =>
-		resolveDialogProps(isFullscreenDialog.value, geometry),
+		applyDestinationSurface(
+			resolveDialogProps(isFullscreenDialog.value, geometry),
+			surface,
+		),
 	);
 
 	// For components owning more than one dialog (cashier switch + terminal lock,
@@ -90,9 +146,12 @@ export function useDialogFullscreen(options: DialogFullscreenOptions = {}): {
 		const { breakpoint: ownBreakpoint = breakpoint, ...otherGeometry } =
 			other;
 		return computed(() =>
-			resolveDialogProps(
-				windowWidth.value < ownBreakpoint,
-				otherGeometry,
+			applyDestinationSurface(
+				resolveDialogProps(
+					windowWidth.value < ownBreakpoint,
+					otherGeometry,
+				),
+				surface,
 			),
 		);
 	};
