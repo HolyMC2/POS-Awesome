@@ -40,6 +40,27 @@
 						ref="debounce_search"
 					>
 						<template v-slot:append-inner>
+							<!-- `último:` (artboard node 21) — what the last scan RESOLVED
+							     to, not what was typed. Post-hoc confirmation for a fast
+							     gun: the row appearing somewhere in a list is not proof
+							     that the RIGHT row appeared. Desktop only; on a phone the
+							     field has no room and the cart is already in view. -->
+							<span
+								v-if="!isPhone && lastResolvedScan"
+								class="search-scan-echo"
+								data-testid="scan-echo"
+								:title="__('Last scan resolved to {0}', [lastResolvedScan])"
+							>
+								{{ __("last:") }} {{ lastResolvedScan }}
+							</span>
+							<span
+								v-if="!isPhone && searchChord"
+								class="search-chord-chip mono"
+								data-testid="scan-chord"
+								aria-hidden="true"
+							>
+								{{ searchChord }}
+							</span>
 							<v-chip
 								v-if="isPhone && posProfile.posa_input_qty && qtyMultiplierActive"
 								size="small"
@@ -86,6 +107,24 @@
 								: __('Scan with Camera')
 						"
 					>
+					</v-btn>
+					<!-- Opens the cajón from beside the field (artboard nodes 23-24),
+					     which is where a cashier's hand already is after a miss. It
+					     emits onto the SAME door the rail item and the chord use —
+					     one drawer state, three entry points, no fourth path. -->
+					<v-btn
+						v-if="showBrowse"
+						variant="outlined"
+						class="search-browse-btn"
+						data-testid="browse-catalog"
+						@click="$emit('browse-catalog')"
+						:aria-label="__('Browse catalogue')"
+					>
+						<v-icon icon="mdi-view-grid-outline" size="18" start />
+						<span class="search-browse-btn__label">{{ __("Browse catalogue") }}</span>
+						<span v-if="browseChord" class="search-chord-chip mono" aria-hidden="true">
+							{{ browseChord }}
+						</span>
 					</v-btn>
 					</div>
 					<div
@@ -225,6 +264,14 @@ const props = defineProps({
 	syncItemsCount: { type: Number, default: 0 },
 	context: { type: String, default: "pos" },
 	isPhone: { type: Boolean, default: false },
+	/** Item code the last scan resolved to. "" hides the echo entirely. */
+	lastResolvedScan: { type: String, default: "" },
+	/** Display chord for the action that focuses this field; null hides it. */
+	searchChord: { type: String, default: "" },
+	/** Display chord for opening the catalogue; null hides just the chip. */
+	browseChord: { type: String, default: "" },
+	/** Whether this header owns a catalogue to open (sale screen only). */
+	showBrowse: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -243,6 +290,7 @@ const emit = defineEmits([
 	"open-new-item",
 	"toggle-settings",
 	"reload-items",
+	"browse-catalog",
 ]);
 
 const debounce_search = ref(null);
@@ -301,6 +349,66 @@ defineExpose({
 </script>
 
 <style scoped>
+/* Scan-bar affordances (Riel y Cajón §17.7, artboard nodes 21-24).
+   Every colour resolves through `--pos-*` rather than the artboard's literals,
+   so the bar follows the dark theme the way the rest of the register does —
+   the shell components were converted for exactly this reason and the mock's
+   hexes are light-mode-only values. */
+
+/* `último: IPN001902`. Quiet on purpose: it is confirmation a cashier glances
+   at, not a thing competing with the field's own text. `tabular-nums` keeps a
+   changing code from shifting the label beside it. */
+.search-scan-echo {
+	font-size: 0.72rem;
+	color: var(--pos-text-muted, #667085);
+	opacity: 0.85;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+	margin-inline-end: 6px;
+}
+
+/* Chord chips. Neutral by construction — invariant 2 spends the register's one
+   saturated colour on the primary button, and a chip that competes with PAGAR
+   for attention is spending it twice. */
+.search-chord-chip {
+	display: inline-flex;
+	align-items: center;
+	height: 20px;
+	padding: 0 7px;
+	border-radius: 999px;
+	background: var(--pos-surface-variant, #f5f5f5);
+	color: var(--pos-text-muted, #667085);
+	font-size: 0.68rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+	font-family: "Roboto Mono", ui-monospace, monospace;
+}
+
+.search-browse-btn {
+	flex: none;
+	height: 40px;
+	border-radius: 10px;
+	border-color: var(--pos-border, rgba(0, 0, 0, 0.12));
+	color: var(--pos-text-secondary, #666666);
+	text-transform: none;
+	letter-spacing: 0;
+	font-weight: 500;
+	gap: 8px;
+}
+
+.search-browse-btn__label {
+	margin-inline-end: 2px;
+}
+
+/* Below the two-column boundary the label goes and the icon carries it — the
+   button keeps its job without spending width the ticket needs. */
+@media (max-width: 1099px) {
+	.search-browse-btn__label {
+		display: none;
+	}
+}
+
 /* The header card (selector-header-card) is the sticky element and owns
    the surface; a second sticky + background here painted a stacked
    double panel on phones. */

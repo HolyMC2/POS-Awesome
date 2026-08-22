@@ -50,7 +50,11 @@
 			</v-toolbar-title>
 		</div>
 
-		<v-spacer />
+		<!-- The register status line replaces the spacer rather than sitting
+		     beside it: it IS the middle of the bar. Convergence checklist item
+		     A — the artboard states the register's condition in words on this
+		     row, where we previously carried it as icons further right. -->
+		<RegisterStatusLine :input="registerStatusInput" />
 
 		<!-- Actions Section (right in LTR, left in RTL) -->
 		<div :class="['pos-navbar-actions-section', isRtl ? 'rtl-actions-section' : 'ltr-actions-section']">
@@ -249,16 +253,25 @@
 
 <script>
 import { useRtl } from "../../composables/core/useRtl";
-import { computed } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { useSyncStore } from "../../stores/syncStore";
+import { useUIStore } from "../../stores/uiStore";
+import { useInvoiceStore } from "../../stores/invoiceStore";
+import { useOnlineStatus } from "../../composables/core/useOnlineStatus";
+import { usePrintHealthShared } from "../../composables/core/usePrintHealthShared";
 import posLogo from "../pos/pos.png";
 import NavbarInfoGadgets from "./NavbarInfoGadgets.vue";
+import RegisterStatusLine from "./RegisterStatusLine.vue";
 import { BRAND } from "../../../brand";
+
+/** Display only shows HH:mm, so a minute is the tightest useful tick. */
+const CLOCK_TICK_MS = 30_000;
 
 export default {
 	name: "NavbarAppBar",
 	components: {
 		NavbarInfoGadgets,
+		RegisterStatusLine,
 	},
 	setup() {
 		const { isRtl, rtlStyles, rtlClasses } = useRtl();
@@ -276,6 +289,42 @@ export default {
 				(syncStore?.deadLetterCount || 0) +
 				(syncStore?.draftReviewCount || 0),
 		);
+
+		// Same try/catch discipline as syncStore above — every one of these is
+		// absent when a spec mounts this component without a pinia, and the
+		// status line must degrade to "nothing to say" rather than throwing
+		// inside the app bar.
+		let uiStore = null;
+		try {
+			uiStore = useUIStore();
+		} catch {
+			uiStore = null;
+		}
+		let invoiceStore = null;
+		try {
+			invoiceStore = useInvoiceStore();
+		} catch {
+			invoiceStore = null;
+		}
+		let onlineStatus = null;
+		try {
+			onlineStatus = useOnlineStatus();
+		} catch {
+			onlineStatus = null;
+		}
+		let printHealth = null;
+		try {
+			printHealth = usePrintHealthShared();
+		} catch {
+			printHealth = null;
+		}
+
+		const now = ref(new Date());
+		const clockTimer = setInterval(() => {
+			now.value = new Date();
+		}, CLOCK_TICK_MS);
+		onBeforeUnmount(() => clearInterval(clockTimer));
+
 		return {
 			isRtl,
 			rtlStyles,
@@ -283,6 +332,12 @@ export default {
 			posLogo,
 			attentionCount,
 			brand: BRAND,
+			navUiStore: uiStore,
+			navInvoiceStore: invoiceStore,
+			navOnlineStatus: onlineStatus,
+			navPrintHealth: printHealth,
+			navSyncStore: syncStore,
+			navNow: now,
 		};
 	},
 	data() {
@@ -373,6 +428,54 @@ export default {
 			}
 
 			return "";
+		},
+
+		/**
+		 * Everything the status strip needs, gathered from stores that already
+		 * hold it. Nothing here fetches — see the report for the two values the
+		 * artboard shows that have no read model yet (`31 tickets hoy` and the
+		 * saldo balance).
+		 */
+		registerStatusInput() {
+			const shift = this.navUiStore?.posOpeningShift || null;
+			const profile = this.posProfile || this.navUiStore?.posProfile || {};
+			return {
+				context: shift ? "sale" : "opening",
+				ticketName: this.navInvoiceStore?.invoiceDoc?.name || null,
+				profileName: profile?.name || null,
+				// No "Caja 2" equivalent exists in the data today — reported
+				// rather than invented, because a made-up till label on a
+				// multi-register tenant is worse than none.
+				registerLabel: null,
+				cashierName: this.cashierName || null,
+				shiftStart: shift?.period_start_date || null,
+				now: this.navNow,
+				locale: this.statusLocale,
+				// No read model. `null` omits the chip; a `0` would be a claim.
+				ticketsToday: null,
+				printerStatus: this.navPrintHealth?.rollup?.value || "unknown",
+				usesSilentPrint: Boolean(profile?.posa_silent_print),
+				online: this.navOnlineStatus?.isOnline?.value !== false,
+				pendingCount: this.navSyncStore?.pendingInvoicesCount || 0,
+				// The saldo app owns its own badge in the actions row; the
+				// strip does not duplicate a value it cannot source.
+				saldoLabel: null,
+				// Below the rail's breakpoint the strip sheds the clock, the
+				// day's count and the printer, matching the mobile artboards.
+				compact: this.windowWidth < 1100,
+			};
+		},
+
+		statusLocale() {
+			try {
+				return (
+					document?.documentElement?.lang ||
+					(frappe?.boot?.lang ? String(frappe.boot.lang) : null) ||
+					null
+				);
+			} catch {
+				return null;
+			}
 		},
 
 		// Mobile breakpoint detection

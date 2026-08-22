@@ -6,6 +6,7 @@ import {
 	parseBooleanSetting,
 } from "../../../utils/stock";
 import { debugLog } from "../../../utils/debug";
+import { recordResolvedScan } from "./useLastScanEcho";
 import { saveItems, savePriceListItems } from "../../../../offline/index";
 import { openItemSelectionDialog } from "../../../utils/itemSelectionDialog";
 import {
@@ -383,6 +384,12 @@ export function useScanProcessor(context: ScanProcessorContext) {
 				batch: newItem.to_set_batch_no || null,
 				serial: newItem.to_set_serial_no || null,
 			});
+			// `último:` on the scan bar (artboard node 21). Recorded HERE —
+			// after the line exists — and nowhere else, so the echo can only
+			// ever name a code that actually became a cart row. The miss
+			// branches below deliberately do not touch it: echoing a failed
+			// scan would teach the cashier to trust a wrong signal.
+			recordResolvedScan(newItem.item_code);
 			if (typeof scannerInput.playScanTone === "function") {
 				scannerInput.playScanTone("success");
 			}
