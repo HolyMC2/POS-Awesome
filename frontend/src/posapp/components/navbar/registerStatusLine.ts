@@ -33,6 +33,17 @@ export type RegisterContext = "sale" | "opening" | "closing";
 export interface StatusChip {
 	/** Stable id — the evidence lane and the tests select on it. */
 	id: string;
+	/**
+	 * What survives when the bar runs out of room. 1 never drops; higher
+	 * numbers drop first.
+	 *
+	 * The strip drops WHOLE chips by priority rather than ellipsing or
+	 * clipping them, because a value cut mid-word ("Online · synce") reads as
+	 * a bug rather than as a design, and a half-rendered claim about money is
+	 * worse than an absent one. Losing "31 tickets hoy" off a narrow register
+	 * is survivable; losing the connection state is not.
+	 */
+	priority: number;
 	/** Translation key; the component calls `__()`. */
 	labelKey: string;
 	/** `{0}`-style interpolation values, in order. */
@@ -61,6 +72,13 @@ export interface RegisterStatusInput {
 	profileName?: string | null;
 	/** The register/till within the profile — the artboard's "Caja 2". */
 	registerLabel?: string | null;
+	/**
+	 * NOT rendered here. The avatar chip in the actions row owns the cashier's
+	 * name, because there the name is the LABEL OF A CONTROL — clicking it
+	 * switches cashier — while here it would be a third restatement of a fact
+	 * already on screen twice. Kept in the interface so the ownership decision
+	 * is visible at the point someone would otherwise re-add it.
+	 */
 	cashierName?: string | null;
 	/** `POS Opening Shift.period_start_date`. */
 	shiftStart?: string | null;
@@ -161,8 +179,8 @@ function identitySegments(input: RegisterStatusInput): string[] {
 	}
 	const register = text(input.registerLabel);
 	if (register) segments.push(register);
-	const cashier = text(input.cashierName);
-	if (cashier) segments.push(cashier);
+	// `cashierName` is deliberately absent — see the interface. The avatar
+	// chip states it, and it states it as a control rather than as prose.
 	return segments;
 }
 
@@ -182,7 +200,7 @@ function identitySegments(input: RegisterStatusInput): string[] {
 function connectionChip(input: RegisterStatusInput): StatusChip {
 	const pending = Math.max(0, Number(input.pendingCount) || 0);
 	if (input.online === false) {
-		return { id: "connection", labelKey: "No connection", tone: "warning" };
+		return { id: "connection", labelKey: "No connection", tone: "warning", priority: 1 };
 	}
 	if (pending > 0) {
 		return {
@@ -190,12 +208,13 @@ function connectionChip(input: RegisterStatusInput): StatusChip {
 			labelKey: "To upload · {0}",
 			labelParams: [pending],
 			tone: "warning",
+			priority: 1,
 		};
 	}
 	if (input.compact) {
-		return { id: "connection", labelKey: "Online", tone: "positive" };
+		return { id: "connection", labelKey: "Online", tone: "positive", priority: 1 };
 	}
-	return { id: "connection", labelKey: "Online · synced", tone: "positive" };
+	return { id: "connection", labelKey: "Online · synced", tone: "positive", priority: 1 };
 }
 
 /**
@@ -208,12 +227,15 @@ function printerChip(input: RegisterStatusInput): StatusChip | null {
 	const status = input.printerStatus ?? "unknown";
 	if (status === "unknown") return null;
 	if (status === "ok") {
-		return { id: "printer", labelKey: "Printer ready", tone: "neutral" };
+		return { id: "printer", labelKey: "Printer ready", tone: "neutral", priority: 3 };
 	}
 	return {
 		id: "printer",
 		labelKey: status === "warn" ? "Printer needs attention" : "Printer unavailable",
 		tone: "warning",
+		// A printer that needs attention outranks a healthy one: "ready" is
+		// reassurance and can go, a fault is an instruction and cannot.
+		priority: 2,
 	};
 }
 
@@ -267,7 +289,7 @@ export function resolveRegisterStatusLine(
 	if (!input.compact) {
 		const clock = formatClock(input.now ?? null, input.locale);
 		if (clock) {
-			chips.push({ id: "clock", labelKey: clock, tone: "neutral", mono: true });
+			chips.push({ id: "clock", labelKey: clock, tone: "neutral", mono: true, priority: 5 });
 		}
 		if (typeof input.ticketsToday === "number" && Number.isFinite(input.ticketsToday)) {
 			chips.push({
@@ -275,18 +297,24 @@ export function resolveRegisterStatusLine(
 				labelKey: "{0} tickets today",
 				labelParams: [input.ticketsToday],
 				tone: "neutral",
+				priority: 4,
 			});
 		}
 		const printer = printerChip(input);
 		if (printer) chips.push(printer);
 	}
 
-	chips.push(connectionChip(input));
-
+	// Saldo BEFORE the connection chip. The stylesheet has always claimed the
+	// connection is "rendered last and therefore clipped last"; it was not —
+	// saldo was pushed after it, so on a tenant with the saldo app the chip
+	// that must never be lost was the second-to-last thing on the row. Order
+	// now matches the reasoning, and `priority` enforces it independently.
 	const saldo = text(input.saldoLabel);
 	if (saldo) {
-		chips.push({ id: "saldo", labelKey: saldo, tone: "warning", mono: true });
+		chips.push({ id: "saldo", labelKey: saldo, tone: "warning", mono: true, priority: 2 });
 	}
+
+	chips.push(connectionChip(input));
 
 	return { titleKey, titleParams, titleIsLiteral, subtitleKey, subtitleParams, chips };
 }

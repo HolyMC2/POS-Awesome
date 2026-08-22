@@ -29,6 +29,7 @@
 				:class="[`register-status-chip--${chip.tone}`, { mono: chip.mono }]"
 				:data-testid="`register-status-chip-${chip.id}`"
 				:data-tone="chip.tone"
+				:data-priority="chip.priority"
 			>
 				{{ chip.mono ? chip.labelKey : translate(chip.labelKey, chip.labelParams) }}
 			</span>
@@ -105,21 +106,28 @@ const subtitle = computed(() =>
 <style scoped>
 /* Height is inherited from the app bar on purpose: the strip replaces the
  * icons that already sat on that row, so it must cost zero extra vertical
- * space. `min-width: 0` down the chain is what lets the identity block ellipse
- * instead of pushing the chips off the end. */
+ * space. */
 .register-status-line {
 	display: flex;
 	align-items: center;
 	gap: 12px;
 	flex: 1 1 auto;
 	min-width: 0;
-	overflow: hidden;
 }
 
+/* The identity NEVER shrinks and never ellipses.
+ *
+ * It used to do both, and the register shipped a bar reading
+ * "Doco Ventas · Bot Playwright · shift since 0…" — a shift start cut off
+ * before its own digits. A truncated status line is worse than the icons it
+ * replaced, because an icon looks deliberate and a severed word looks broken.
+ * So the identity renders whole and the CHIPS yield instead: they are
+ * individually droppable by priority, and losing one whole chip states less
+ * without stating anything false. */
 .register-status-line__identity {
 	line-height: 1.2;
 	min-width: 0;
-	flex: 0 1 auto;
+	flex: 0 0 auto;
 }
 
 .register-status-line__title {
@@ -127,29 +135,25 @@ const subtitle = computed(() =>
 	font-weight: 700;
 	color: var(--pos-text-primary);
 	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .register-status-line__subtitle {
 	font-size: 10.5px;
 	color: var(--pos-text-muted);
 	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
-/* Chips are pushed to the trailing edge and are the first thing allowed to
- * scroll — losing "31 tickets hoy" off a narrow register is survivable;
- * losing the connection chip is not, so it is rendered last and therefore
- * clipped last. */
+/* No `overflow: hidden` here, deliberately. Clipping is what produced
+ * "Online · synce" — the connection chip, the one chip that must never lie
+ * about money, severed mid-word by the box it sat in. Chips are
+ * `flex: 0 0 auto` so they can never be squashed either; when the row runs
+ * out of room the priority rules below remove whole chips instead. */
 .register-status-line__chips {
 	display: flex;
 	align-items: center;
 	gap: 6px;
 	margin-inline-start: auto;
 	min-width: 0;
-	overflow: hidden;
 	flex: 0 1 auto;
 }
 
@@ -162,8 +166,32 @@ const subtitle = computed(() =>
 	font-weight: 500;
 	padding: 3px 9px;
 	white-space: nowrap;
+	flex: 0 0 auto;
 	background: var(--pos-surface-muted);
 	color: var(--pos-text-muted);
+}
+
+/* Drop order under pressure, highest priority number first. Informational
+ * chips go before operational ones: the clock is on the wall behind the
+ * cashier and the day's count can wait for the corte, but a printer fault is
+ * an instruction and the connection state is a claim about whether money has
+ * reached the server. Priority 1 has no rule here and therefore never drops. */
+@media (max-width: 1499px) {
+	.register-status-chip[data-priority="5"] {
+		display: none;
+	}
+}
+
+@media (max-width: 1359px) {
+	.register-status-chip[data-priority="4"] {
+		display: none;
+	}
+}
+
+@media (max-width: 1239px) {
+	.register-status-chip[data-priority="3"] {
+		display: none;
+	}
 }
 
 /* Tone is STATE, never emphasis (invariant 2). There is no accent tone here

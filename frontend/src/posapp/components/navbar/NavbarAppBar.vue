@@ -158,6 +158,12 @@
 						>
 							mdi-account-switch-outline
 						</v-icon>
+						<!-- The chip states the CASHIER and nothing else. Its meta
+						     line used to carry the POS profile, which the register
+						     status line on this same row now states — so the bar
+						     read "Doco Ventas" twice, three inches apart. The name
+						     stays here because here it is the label of a control:
+						     clicking it switches cashier. -->
 						<span
 							:class="[
 								'profile-chip__content',
@@ -166,9 +172,6 @@
 						>
 							<span class="pos-text-primary profile-chip__title">
 								{{ cashierChipLabel }}
-							</span>
-							<span v-if="cashierChipMeta" class="profile-chip__meta">
-								{{ cashierChipMeta }}
 							</span>
 						</span>
 					</v-chip>
@@ -418,17 +421,6 @@ export default {
 			return this.cashierName || this.displayName;
 		},
 
-		cashierChipMeta() {
-			if (!this.cashierName) {
-				return "";
-			}
-
-			if (this.displayName && this.displayName !== this.cashierName) {
-				return this.displayName;
-			}
-
-			return "";
-		},
 
 		/**
 		 * Everything the status strip needs, gathered from stores that already

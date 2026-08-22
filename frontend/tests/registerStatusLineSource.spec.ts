@@ -69,12 +69,27 @@ describe("the strip costs the app bar no height", () => {
 		expect(rootBlock).toContain("align-items: center");
 	});
 
-	it("lets the identity ellipse rather than push the chips off the end", () => {
-		// `min-width: 0` is the load-bearing half — a flex item defaults to
-		// `min-width: auto` and refuses to shrink below its content, so a long
-		// profile name would shove the connection chip out of the bar.
+	// This used to assert the OPPOSITE — that the identity was allowed to
+	// ellipse so it could not shove the chips off the bar. It shipped
+	// "shift since 0…" and "Online · synce" to a real register, and a value
+	// severed mid-word reads as a bug rather than as a design. The strip now
+	// renders whole fields or none.
+	it("never ellipses or clips a value — it drops whole chips instead", () => {
 		expect(style).toMatch(/\.register-status-line\s*\{[^}]*min-width:\s*0/);
-		expect(style).toMatch(/\.register-status-line__identity\s*\{[^}]*min-width:\s*0/);
+		expect(style).not.toContain("text-overflow");
+
+		// The chips row must not clip: that is what severed the connection
+		// chip, the one chip that carries a claim about money.
+		const chipsBlock = /\.register-status-line__chips\s*\{([^}]*)\}/.exec(style)?.[1] ?? "";
+		expect(chipsBlock).not.toMatch(/overflow:\s*hidden/);
+
+		// And an individual chip must not be squashed into unreadability.
+		const chipBlock = /\.register-status-chip\s*\{([^}]*)\}/.exec(style)?.[1] ?? "";
+		expect(chipBlock).toMatch(/flex:\s*0\s+0\s+auto/);
+
+		// Dropping is by priority, and priority 1 has no rule — it never goes.
+		expect(style).toMatch(/\[data-priority="5"\]/);
+		expect(style).not.toMatch(/\[data-priority="1"\][^{]*\{[^}]*display:\s*none/);
 	});
 });
 

@@ -91,12 +91,16 @@ describe("the synced claim — the only chip that can lie about money", () => {
 });
 
 describe("identity", () => {
-	it("names the ticket, the register, the cashier and the shift start", () => {
+	// Used to assert the cashier's name appeared here too. It no longer does:
+	// the avatar chip in the actions row states it, and there it is the label
+	// of a control rather than prose, so the bar stated one fact twice.
+	it("names the ticket, the register and the shift start — not the cashier", () => {
 		const line = resolveRegisterStatusLine(SELLING);
 		expect(line.titleKey).toBe("B-04812");
 		expect(line.titleIsLiteral).toBe(true);
 		expect(line.subtitleKey).toBe("{0} · shift since {1}");
-		expect(line.subtitleParams).toEqual(["Doco Ventas · Jenni", "09:02"]);
+		expect(line.subtitleParams).toEqual(["Doco Ventas", "09:02"]);
+		expect(JSON.stringify(line.subtitleParams)).not.toContain("Jenni");
 	});
 
 	it("reads the shift clock off the string, not through a timezone", () => {

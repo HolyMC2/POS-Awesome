@@ -357,19 +357,34 @@ const connectivityLabel = computed(() => {
 	min-width: unset;
 }
 
-/* Phone navbar: the connectivity wording is ~120 px of the bar and
-   the coloured icon already carries the state (plus its tooltip and
-   aria-label). Dropping the text here is what leaves the brand title
-   enough room to render whole instead of as a one-letter ellipsis. */
-@media (max-width: 767px) {
-	.status-info-always-visible {
-		display: none;
-	}
+/* RETIRED, at every width. The register status line now states the connection
+   in words on this same row, and it states it BETTER: it distinguishes
+   online-with-a-queue ("Por subir · 3") from online-and-synced, which is the
+   distinction that matters to somebody about to close a shift. Two labels for
+   one fact, three inches apart, is worse than either alone.
 
-	.status-section-enhanced {
-		margin-right: 0;
-		gap: 0;
-	}
+   The BUTTON stays, and deliberately — it carries everything the text never
+   did, and all of it would have been lost by deleting the component:
+     · the click target that opens the offline status panel;
+     · the tooltip naming the host and what it could not reach
+       ("Server Offline (ventas.example.com)");
+     · the bootstrap-warning dot and its tooltip lines;
+     · the "connecting" spinner while a recheck is in flight;
+     · the finer states the strip collapses — `Limited` (network up, server
+       down) reads as one amber icon distinct from offline's red, and
+       `Checking…` as the spinner. The strip has one `online` boolean and
+       renders both as "Sin conexión", so the icon is where that nuance
+       survives.
+
+   This generalises what the phone breakpoint already did for the same reason:
+   the wording was ~120 px of the bar and the icon already carried the state. */
+.status-info-always-visible {
+	display: none;
+}
+
+.status-section-enhanced {
+	margin-right: 0;
+	gap: 0;
 }
 
 @keyframes status-spin {
