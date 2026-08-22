@@ -21,6 +21,12 @@ import "@vuepic/vue-datepicker/dist/main.css";
 import "../../../posawesome/public/css/rtl.css";
 import "../style.css";
 import "./styles/theme.css";
+// AFTER theme.css, never before: `register-tokens.css` forwards `--pos-primary`
+// into `--reg-accent`, and a forward evaluated before its source is defined
+// resolves to nothing. (It forwards `--pos-primary` and NOT `--pos-accent` on
+// purpose — `--pos-accent` is orange #ff6b35, which would put a second
+// saturated colour on the register and break the one-accent invariant.)
+import "./styles/register-tokens.css";
 import eventBus from "./bus";
 import themePlugin from "./plugins/theme";
 import { pinia } from "./stores";

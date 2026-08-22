@@ -13,6 +13,7 @@
 			@acknowledge="acknowledgeScanError"
 		/>
 		<v-card
+			v-show="showCatalog"
 			:class="[
 				'selection selection-card mx-auto my-0 py-0 mt-3 pos-card dynamic-card resizable pos-themed-card',
 				{ 'selection-card--phone': isPhone },
@@ -30,7 +31,19 @@
 
 			<!-- Add dynamic-padding wrapper like Invoice component -->
 			<div class="dynamic-padding">
-				<v-card flat class="selector-header-card pos-themed-card">
+				<!-- `disabled` when there is no target, so the default (and the
+				     purchase / barcode-printing contexts) render exactly where
+				     they always did. Teleport moves DOM nodes only — the header
+				     keeps this component as its owner, so `v-show` on the card
+				     above cannot hide a teleported header, and there is still
+				     exactly one of it. -->
+				<!-- `defer` (Vue 3.5) resolves the target AFTER the current render
+				     cycle, so the shell may render its scan-bar slot anywhere in
+				     its own template — including below this component. Without it
+				     the target has to already exist at mount, which makes the
+				     wiring silently order-dependent. -->
+				<Teleport defer :to="headerTarget || 'body'" :disabled="!headerTarget">
+				<v-card flat class="selector-header-card pos-themed-card" :class="{ 'selector-header-card--detached': !!headerTarget }">
 					<ItemHeader
 						v-model:search-input="search_input"
 						v-model:qty-input="debounce_qty"
@@ -44,6 +57,11 @@
 						:sync-progress="syncProgressValue"
 						:sync-items-count="syncItemsCount"
 						:context="context"
+						:last-resolved-scan="lastResolvedScan"
+						:search-chord="searchChordLabel"
+						:browse-chord="browseChordLabel"
+						:show-browse="showBrowseButton"
+						@browse-catalog="openCatalogDrawer"
 						@esc="esc_event"
 						@enter="onEnter"
 						@search-keydown="handleSearchKeydown"
@@ -61,6 +79,7 @@
 						ref="itemHeader"
 					/>
 				</v-card>
+				</Teleport>
 
 				<ItemSettingsDialog
 					v-if="show_item_settings"
@@ -161,7 +180,11 @@
 		     out of reach — its controls move into ItemSettingsDialog, and
 		     offers/coupons already live on the mobile dock. -->
 		<ItemActionToolbar
-			v-if="!(verticalStore.leanVerticalLayout && context === 'pos') && !hideToolbarOnPhone"
+			v-if="
+				showCatalog &&
+				!(verticalStore.leanVerticalLayout && context === 'pos') &&
+				!hideToolbarOnPhone
+			"
 			v-model="item_group"
 			:items-group="items_group"
 			v-model:items-view="items_view"
@@ -218,6 +241,8 @@ import * as _ from "lodash";
 // Critical-path components — render on first paint, ship in the main chunk.
 import ItemActionToolbar from "./ItemActionToolbar.vue";
 import ItemHeader from "./ItemHeader.vue";
+import { lastResolvedScan } from "../../../composables/pos/items/useLastScanEcho";
+import { chordLabelFor } from "../../../composables/pos/items/useShortcutChordLabel";
 import ItemsSelectorCards from "./ItemsSelectorCards.vue";
 import ItemsSelectorTable from "./ItemsSelectorTable.vue";
 
@@ -288,9 +313,81 @@ const props = defineProps({
 		type: Boolean,
 		default: false,
 	},
+	/**
+	 * Where to render the search/scan header, if not in place.
+	 *
+	 * Riel y Cajón (§17.7) draws the scan bar on the SALE screen with the
+	 * catalogue behind an "Explorar catálogo" button — so the cashier scans
+	 * with the ticket at full width and the grid nowhere on screen. That is
+	 * the density argument for direction E over the rejected direction C.
+	 *
+	 * It is a Teleport target rather than a second component ON PURPOSE. The
+	 * scan bar already IS its own component (`ItemHeader.vue`, purely
+	 * presentational, all state via props/emits) — the thing that could not
+	 * move was its state owner, this file. Mounting a second scan field
+	 * instead would give the register two live scan targets, and every
+	 * barcode would be counted twice: a money bug, not a layout bug.
+	 * Teleport moves the ONE header's DOM nodes and leaves its owner alone,
+	 * so single-ownership is structural rather than something a caller has
+	 * to remember.
+	 *
+	 * Null keeps the header where it is, which is what purchase and
+	 * barcode-printing contexts want.
+	 */
+	headerTarget: {
+		type: [String, Object],
+		default: null,
+	},
+	/**
+	 * Hide the catalogue panel without unmounting it.
+	 *
+	 * `v-show`, never `v-if`: the scanner attaches to the DOCUMENT
+	 * (`useScannerInput` → `onScan.attachTo(document, …)`, guarded by a
+	 * `document._scannerAttached` singleton), so unmounting this component
+	 * detaches the shop's keyboard wedge. Toggling the catalogue must cost a
+	 * repaint, never the scanner — and never the loaded catalogue, the search
+	 * worker or the operator's half-typed query either.
+	 */
+	showCatalog: {
+		type: Boolean,
+		default: true,
+	},
 });
 
 const emit = defineEmits(["add-item"]);
+
+/**
+ * Scan-bar affordances (artboard nodes 22-24).
+ *
+ * Chords resolve from the ACTIVE keymap, never from the mock — ruling R8. The
+ * artboard prints `F2` on the field and `F4` on the catalogue; the shipped pack
+ * binds `items.focusSearch` to Alt+3 and `catalog.toggleDrawer` to Alt+B, and
+ * F4 has meant `employee.switch` since before the shortcuts engine existed. A
+ * chip naming a key that does something else is worse than no chip: the
+ * operator presses it once, switches cashier mid-sale, and stops trusting every
+ * other chip on the screen.
+ */
+const searchChordLabel = chordLabelFor("items.focusSearch") ?? "";
+const browseChordLabel = chordLabelFor("catalog.toggleDrawer") ?? "";
+
+/**
+ * The button exists only where there is a cajón to open — the sale screen,
+ * which is exactly where the header gets teleported. Purchase and
+ * barcode-printing render this component with no `headerTarget` and no drawer,
+ * and offering them a catalogue button would open nothing.
+ */
+const showBrowseButton = computed(() => !!props.headerTarget && props.context === "pos");
+
+/**
+ * The SAME door the rail item and the chord already use — `Pos.vue` owns the
+ * drawer state and listens for this one event. Reaching for a drawer method
+ * here would be a fourth entry point into a state that must have exactly one.
+ */
+const openCatalogDrawer = () => {
+	if (eventBus && typeof eventBus.emit === "function") {
+		eventBus.emit("toggle_catalog_drawer");
+	}
+};
 
 // 1. Initialize Stores and Core Composables
 const vmInstance = getCurrentInstance();
@@ -1461,6 +1558,21 @@ defineExpose({
 	background: var(--pos-surface-muted);
 	border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
 	border-radius: var(--pos-radius-md, 18px);
+}
+
+/* Teleported out to the sale screen (Riel y Cajón §17.7). It is no longer the
+   top of a scrolling panel, so the sticky/border chrome that made it read as a
+   panel header would read as a seam across the ticket instead. `position:
+   sticky` in particular is actively wrong here: its containing block is now
+   whatever the shell teleported it into, and it would pin against that.
+   Geometry matches Main.dc.html — a 56px bar carrying the register's accent. */
+.selector-header-card--detached {
+	position: static;
+	background: transparent;
+	border-bottom: 0;
+	border-radius: 0;
+	overflow: visible;
+	width: 100%;
 }
 
 .selector-results-card {

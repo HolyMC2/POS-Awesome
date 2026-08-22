@@ -60,91 +60,219 @@
 			:format-amount="formatChangeAmount"
 			@confirm="onChangeDueConfirmed"
 		></ChangeDueDialog>
-		<v-row
-			v-show="!dialog"
-			dense
-			class="ma-0 dynamic-main-row"
-			:class="{ 'dynamic-main-row--phone': isPhone }"
-		>
-			<v-col
-				v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'items'"
-				:xl="useCompactPosSwitcher ? 12 : 5"
-				:lg="useCompactPosSwitcher ? 12 : 5"
-				:md="useCompactPosSwitcher ? 12 : 5"
-				:sm="useCompactPosSwitcher ? 12 : 5"
-				cols="12"
-				class="pos dynamic-col dynamic-col--selector"
-			>
-				<component :is="ItemsView" context="pos" />
-			</v-col>
-			<v-col
-				v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'offers'"
-				:xl="useCompactPosSwitcher ? 12 : 5"
-				:lg="useCompactPosSwitcher ? 12 : 5"
-				:md="useCompactPosSwitcher ? 12 : 5"
-				:sm="useCompactPosSwitcher ? 12 : 5"
-				cols="12"
-				class="pos dynamic-col dynamic-col--selector"
-			>
-				<PosOffers></PosOffers>
-			</v-col>
-			<v-col
-				v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'coupons'"
-				:xl="useCompactPosSwitcher ? 12 : 5"
-				:lg="useCompactPosSwitcher ? 12 : 5"
-				:md="useCompactPosSwitcher ? 12 : 5"
-				:sm="useCompactPosSwitcher ? 12 : 5"
-				cols="12"
-				class="pos dynamic-col dynamic-col--selector"
-			>
-				<PosCoupons></PosCoupons>
-			</v-col>
-			<v-col
-				v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'floor'"
-				:xl="useCompactPosSwitcher ? 12 : 5"
-				:lg="useCompactPosSwitcher ? 12 : 5"
-				:md="useCompactPosSwitcher ? 12 : 5"
-				:sm="useCompactPosSwitcher ? 12 : 5"
-				cols="12"
-				class="pos dynamic-col dynamic-col--selector"
-			>
-				<!-- The panel's visibility is v-show like every other selector
-				     column; this v-if is the CAPABILITY gate, so a retail
-				     register never fetches the floor chunk and never opens a
-				     socket room. On a restaurant register it mounts with the
-				     shell and stays mounted, which is what keeps the dock badge
-				     honest before anyone has opened the floor. -->
-				<FloorView v-if="floorEnabled"></FloorView>
-			</v-col>
-			<v-col
-				v-if="
-					(!useCompactPosSwitcher || compactPanel === 'selector') &&
-					activeView === 'payment' &&
-					!usePaymentDialog
-				"
-				:xl="useCompactPosSwitcher ? 12 : 5"
-				:lg="useCompactPosSwitcher ? 12 : 5"
-				:md="useCompactPosSwitcher ? 12 : 5"
-				:sm="useCompactPosSwitcher ? 12 : 5"
-				cols="12"
-				class="pos dynamic-col dynamic-col--selector"
-			>
-				<Payments></Payments>
-			</v-col>
+		<!-- The register shell: rail on the left, everything else to its right
+		     (roadmap §17.7, direction E). The rail is the ONLY desktop nav; the
+		     navbar's actions menu survives because it still carries settings,
+		     printing, language and the cashier tools, none of which are
+		     destinations. Below the two-column boundary the dock is the nav and
+		     the rail is not drawn at all. -->
+		<div v-show="!dialog" class="register-shell">
+			<RegisterRail v-if="railVisible" :context="railContext" />
 
-			<v-col
-				v-show="!useCompactPosSwitcher || compactPanel === 'invoice'"
-				:xl="useCompactPosSwitcher ? 12 : 7"
-				:lg="useCompactPosSwitcher ? 12 : 7"
-				:md="useCompactPosSwitcher ? 12 : 7"
-				:sm="useCompactPosSwitcher ? 12 : 7"
-				cols="12"
-				class="pos dynamic-col dynamic-col--invoice"
-			>
-				<component :is="CartView" @open-saldo-picker="openSaldoPicker" />
-			</v-col>
-		</v-row>
-		<div v-if="showBottomDock" ref="mobileDock" class="mobile-dock">
+			<!-- `position: relative` is load-bearing, not cosmetic: the catalogue
+			     drawer's overlay presentation is `position: absolute` precisely so
+			     the action band below stays visible ("the drawer never reaches
+			     it"). Without a positioned ancestor it would escape to the
+			     viewport and cover the one number that matters. -->
+			<div class="register-shell__content">
+				<!-- A destination that is refused, or one of the hosted flows, takes
+				     the whole content area. The sale underneath is kept mounted
+				     (v-show, not v-if) so a cashier who glances at Facturas and
+				     comes back has the same cart, scroll position and focus. -->
+				<DestinationHost
+					v-if="hostedDestinationId"
+					:destination-id="hostedDestinationId"
+					:refusal="destinationRefusal"
+					:t="verticalT"
+					@dismiss="dismissDestination"
+				/>
+
+				<!--
+					Teleport target for ItemsSelector's scan/search header.
+
+					The register scans with the ticket at full width and the grid
+					nowhere on screen — that is the density argument for direction E
+					over the rejected direction C. `<Teleport defer>` resolves its
+					target AFTER the render cycle, so this div may sit above the
+					component that fills it.
+
+					An EMPTY div, never a second ItemHeader: the scanner attaches to
+					the DOCUMENT behind a `_scannerAttached` singleton, so a second
+					scan field would count every barcode twice. Teleport moves the one
+					header's nodes and leaves its owner mounted.
+				-->
+				<div v-show="!hostedDestinationId" id="register-scan-bar"></div>
+
+				<v-row
+					v-show="!hostedDestinationId"
+					dense
+					class="ma-0 dynamic-main-row"
+					:class="{
+						'dynamic-main-row--phone': isPhone,
+						'dynamic-main-row--with-drawer': drawerAnchoredOpen,
+					}"
+				>
+				<v-col
+					v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'offers'"
+					:xl="useCompactPosSwitcher ? 12 : 5"
+					:lg="useCompactPosSwitcher ? 12 : 5"
+					:md="useCompactPosSwitcher ? 12 : 5"
+					:sm="useCompactPosSwitcher ? 12 : 5"
+					cols="12"
+					class="pos dynamic-col dynamic-col--selector"
+				>
+					<PosOffers></PosOffers>
+				</v-col>
+				<v-col
+					v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'coupons'"
+					:xl="useCompactPosSwitcher ? 12 : 5"
+					:lg="useCompactPosSwitcher ? 12 : 5"
+					:md="useCompactPosSwitcher ? 12 : 5"
+					:sm="useCompactPosSwitcher ? 12 : 5"
+					cols="12"
+					class="pos dynamic-col dynamic-col--selector"
+				>
+					<PosCoupons></PosCoupons>
+				</v-col>
+				<v-col
+					v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'floor'"
+					:xl="useCompactPosSwitcher ? 12 : 5"
+					:lg="useCompactPosSwitcher ? 12 : 5"
+					:md="useCompactPosSwitcher ? 12 : 5"
+					:sm="useCompactPosSwitcher ? 12 : 5"
+					cols="12"
+					class="pos dynamic-col dynamic-col--selector"
+				>
+					<!-- The panel's visibility is v-show like every other selector
+					     column; this v-if is the CAPABILITY gate, so a retail
+					     register never fetches the floor chunk and never opens a
+					     socket room. On a restaurant register it mounts with the
+					     shell and stays mounted, which is what keeps the dock badge
+					     honest before anyone has opened the floor. -->
+					<FloorView v-if="floorEnabled"></FloorView>
+				</v-col>
+				<v-col
+					v-if="
+						(!useCompactPosSwitcher || compactPanel === 'selector') &&
+						activeView === 'payment' &&
+						!usePaymentDialog
+					"
+					:xl="useCompactPosSwitcher ? 12 : 5"
+					:lg="useCompactPosSwitcher ? 12 : 5"
+					:md="useCompactPosSwitcher ? 12 : 5"
+					:sm="useCompactPosSwitcher ? 12 : 5"
+					cols="12"
+					class="pos dynamic-col dynamic-col--selector"
+				>
+					<Payments></Payments>
+				</v-col>
+
+				<v-col
+					v-show="!useCompactPosSwitcher || compactPanel === 'invoice'"
+					:xl="12"
+					:lg="12"
+					:md="12"
+					:sm="12"
+					cols="12"
+					class="pos dynamic-col dynamic-col--invoice"
+				>
+					<component :is="CartView" @open-saldo-picker="openSaldoPicker" />
+				</v-col>
+
+					<!--
+						El cajón — INSIDE the row, deliberately.
+
+						Anchored presentation is "a plain flex sibling of the cart, inside
+						the content row" (CatalogDrawer.vue's own note), and it is not
+						positioned, so the full-width band below stays reachable — the
+						drawer "never reaches it". Placed below the row instead it would
+						stack under the cart, because the content wrapper is a flex
+						COLUMN.
+
+						Mounted unconditionally, and `#persistent` provided
+						unconditionally: the wrapper inside is `v-if="$slots.persistent"`,
+						which is static per call site, so a parent that toggled either one
+						would re-create exactly the remount this arrangement exists to
+						prevent.
+					-->
+					<CatalogDrawer
+						:phase="catalogDrawer.phase.value"
+						:presentation="catalogDrawer.presentation.value"
+						:open-reason="catalogDrawer.openReason.value"
+						:categories="catalogCategories"
+						:active-category="catalogDrawer.activeCategory.value"
+						:traps-focus="catalogDrawer.trapsFocus.value"
+						:shows-scrim="catalogDrawer.showsScrim.value"
+						:transition-duration-ms="catalogDrawer.transitionDurationMs.value"
+						:can-anchor="catalogDrawer.fitsAnchored.value"
+						@close="catalogDrawer.close"
+						@opened="onDrawerOpened"
+						@update:active-category="catalogDrawer.setCategory"
+						@update:anchored="catalogDrawer.setAnchored"
+					>
+						<template #persistent>
+							<!--
+								THE ItemsSelector. Exactly one, and it never unmounts.
+
+								It used to be two `v-if` branches — one here, one in the
+								selector column — which read as single ownership but was not.
+								`useScannerInput` attaches the keyboard wedge to the DOCUMENT
+								behind a `document._scannerAttached` singleton, and the
+								attach/detach pair is symmetric but ORDER-DEPENDENT: on close
+								the column patched first, the new instance's `initScanner()`
+								saw the flag still set by the not-yet-unmounted old one and
+								returned early, and then the old one cleared it. Net effect,
+								invisible without a scanner in the room: the shop's barcode
+								gun died the first time a cashier closed the catalogue.
+
+								Now the panel itself never unmounts — the layer's
+								`display: none` is the only hiding mechanism — so visibility
+								is `show-catalog` and the scan header teleports out to the
+								sale screen. Nothing in this subtree may become a `v-if`.
+							-->
+							<component
+								:is="ItemsView"
+								context="pos"
+								header-target="#register-scan-bar"
+								:show-catalog="catalogDrawer.isOpen.value"
+							/>
+						</template>
+					</CatalogDrawer>
+				</v-row>
+
+				<!-- "Se suele llevar junto". Above the band on purpose: it is an
+				     offer, and the band is the commitment. -->
+				<ComboSuggestionStrip
+					v-if="!hostedDestinationId && comboSuggestions.length"
+					:suggestions="comboSuggestions"
+					:format-currency="formatCurrency"
+					@add="addComboSuggestion"
+				/>
+
+				<!-- One band, one number, one action (§17.7 invariant 1). Desktop
+				     only: below the boundary the dock's own summary already owns
+				     that lane, and two of them would be two numbers. -->
+				<ActionBand
+					v-if="railVisible"
+					:state="bandState"
+					:format-currency="formatCurrency"
+					@primary="onBandPrimary"
+				/>
+
+			</div>
+		</div>
+
+		<!-- Offline is a STATE laid over whatever the cashier was doing, never a
+		     destination: the dock stays mounted and tappable underneath it. -->
+		<MobileOfflineOverlay
+			v-if="showBottomDock"
+			:visible="!isOnline"
+			:dock-height="bottomDockHeight"
+			:pending-count="queuedInvoiceCount"
+			:queued-amount-label="queuedAmountLabel"
+		/>
+
+		<div v-if="showBottomDock" ref="mobileDock" data-testid="mobile-dock" class="mobile-dock">
 			<div class="mobile-dock__summary">
 				<div class="mobile-dock__totals">
 					<strong class="mobile-dock__amount">{{ formattedCartTotal }}</strong>
@@ -237,9 +365,14 @@
 					:key="tab.id"
 					type="button"
 					class="mobile-dock__tab"
+					:data-testid="'dock-' + tab.id"
 					:class="[
 						tab.cls,
-						{ 'mobile-dock__tab--active': tab.isActive(), 'mobile-dock__tab--busy': tab.busy?.() },
+						{
+							'mobile-dock__tab--active': tab.isActive(),
+							'mobile-dock__tab--busy': tab.busy?.(),
+							'mobile-dock__tab--dimmed': isDockTabDimmedOffline(tab, isOnline),
+						},
 					]"
 					:aria-label="tab.ariaLabel()"
 					:aria-busy="tab.busy?.() ? 'true' : undefined"
@@ -272,9 +405,24 @@ import {
 	watch,
 	nextTick,
 } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { resolveCartView, resolveItemsView } from "../../../vertical/viewRegistry";
-import { buildDockTabDefs } from "../../../vertical/viewContracts";
+import { buildDockTabDefs, isDockTabDimmedOffline } from "../../../vertical/viewContracts";
+// Riel y Cajón (roadmap §17.7). All static, not async: the rail and the band
+// are on screen from first paint, and the drawer/host/overlay are chrome that
+// must already exist the instant a chord or a lost connection asks for them —
+// a chunk fetch at that moment is a chunk fetch at the worst moment.
+import RegisterRail from "./rail/RegisterRail.vue";
+import CatalogDrawer from "./drawer/CatalogDrawer.vue";
+import ActionBand from "./band/ActionBand.vue";
+import DestinationHost from "./destinations/DestinationHost.vue";
+import MobileOfflineOverlay from "./mobile/MobileOfflineOverlay.vue";
+import ComboSuggestionStrip from "../combos/ComboSuggestionStrip.vue";
+import { useCatalogDrawer } from "../../../composables/pos/shell/useCatalogDrawer";
+import { resolveBandState } from "../../../composables/pos/shell/bandState";
+import { useDestinationRouting } from "../../../composables/pos/shell/useDestinationRouting";
+import { buildCombosCategory, buildSuggestions } from "../../../composables/pos/combos/comboCatalog";
+import { useOnlineStatus } from "../../../composables/core/useOnlineStatus";
 import OpeningDialog from "../shift/OpeningDialog.vue";
 import PosOffers from "../offers/PosOffers.vue";
 import PosCoupons from "../offers/PosCoupons.vue";
@@ -672,6 +820,212 @@ export default {
 		// The defs themselves live in viewContracts.ts so the map is bound to
 		// DockTabId at compile time; this script block is plain JS and cannot
 		// carry that annotation itself.
+		// ── Riel y Cajón ────────────────────────────────────────────────
+		// The shell owns "where am I" and hands every surface the same answer.
+		const router = useRouter();
+		const { isOnline } = useOnlineStatus();
+		const verticalT = (key) => vertical.t(key);
+		const shiftOpen = computed(() => Boolean(shift.pos_opening_shift?.value));
+
+		// The rail draws only where it IS the navigation. Below the two-column
+		// boundary the dock is the nav, and drawing both would be two answers
+		// to one question.
+		const railVisible = computed(() => !useCompactPosSwitcher.value);
+
+		// Badge counts with no source yet. Deliberately refs at 0 rather than a
+		// fetch invented here: `resolveBadge` renders nothing for 0, so the rail
+		// shows no badge instead of a wrong one, and adding a shell-level poll
+		// for a number nobody has asked for would be new traffic on the hottest
+		// path in the product. Both need a real read model — see the handover.
+		const serviceOrderOpenCount = ref(0);
+		const draftInvoicesCount = ref(0);
+
+		const railGates = computed(() => ({
+			floor: floorEnabled.value,
+			externalDocumentCheckout: Boolean(vertical.externalDocumentCheckout),
+			saldo: showSaldoCatalogPicker.value,
+			// A profile that hides the closing shift genuinely cannot close from
+			// here; the rail must not offer a door that is bricked up.
+			closingShift: !parseBooleanSetting(posProfile.value?.posa_hide_closing_shift),
+		}));
+
+		// A hosted flow (Borradores, Facturas, Devolución, Orden, Recarga) or a
+		// refusal screen occupying the content area. Null means the sale is up.
+		const hostedDestinationId = ref(null);
+		const destinationRefusal = ref(null);
+
+		const destinationRouting = useDestinationRouting(
+			() => ({
+				isOnline: isOnline.value,
+				shiftOpen: shiftOpen.value,
+				hasCapability: (capability) => vertical.has(capability),
+				hasProfileFlag: (flag) => Boolean(posProfile.value?.[flag]),
+			}),
+			{
+				setPanelView: (view) => applySelectorView(view),
+				openSheet: (id) => {
+					destinationRefusal.value = null;
+					hostedDestinationId.value = id;
+				},
+				closeSheet: () => {
+					destinationRefusal.value = null;
+					hostedDestinationId.value = null;
+				},
+				navigate: (path) => {
+					router.push(path).catch(() => {});
+				},
+				// A refusal is a SURFACE, not a toast: the cashier who deep-linked
+				// into Devolución on a dead network needs the reason to still be
+				// there when they look up from the router.
+				refuse: (decision) => {
+					destinationRefusal.value = decision.reason;
+					hostedDestinationId.value = decision.destination?.id ?? null;
+				},
+			},
+		);
+
+		const dismissDestination = () => destinationRouting.dismiss();
+
+		const railContext = {
+			__,
+			t: verticalT,
+			gates: railGates,
+			activeDestinationId: destinationRouting.activeId,
+			shiftOpen,
+			offline: computed(() => !isOnline.value),
+			counts: { serviceOrderOpenCount, floorOpenOrdersCount, draftInvoicesCount },
+			navigate: (id) => {
+				destinationRouting.activate(id, "rail");
+			},
+		};
+
+		// Combos are not fetched yet — the read model lands with the doctype.
+		// An empty list means the drawer draws no chip row and the strip does not
+		// render at all, which is the honest state rather than a stub offer.
+		const comboOffers = ref([]);
+		const catalogCategories = computed(() => {
+			const category = buildCombosCategory(comboOffers.value);
+			return category ? [category] : [];
+		});
+		const comboSuggestions = computed(() =>
+			buildSuggestions(comboOffers.value, invoiceDoc.value?.items || []),
+		);
+		const addComboSuggestion = (suggestion) => {
+			eventBus.emit("add_item", { item_code: suggestion.item_code });
+		};
+
+		const catalogDrawer = useCatalogDrawer({
+			registerId: computed(() => posProfile.value?.name || ""),
+			viewportWidth: responsive.windowWidth,
+			categories: catalogCategories,
+		});
+		// While the drawer is showing it HOLDS the catalogue; the selector column
+		// gives it up rather than rendering a second copy. Exactly one
+		// ItemsSelector exists at any moment — see the template comment for why
+		// that is a scanning requirement, not a tidiness one.
+		// The catalogue now has exactly ONE home — the drawer's persistent slot —
+		// so the cart owns the whole row and only gives width back while an
+		// anchored drawer is actually open. That is the density argument for
+		// direction E: closed, the ticket is full width with just the teleported
+		// scan bar above it.
+		const drawerAnchoredOpen = computed(
+			() => catalogDrawer.isOpen.value && catalogDrawer.presentation.value === "anchored",
+		);
+
+		// Browse IS the drawer. Any request to show the catalogue opens it and
+		// any move away closes it, so the rail, the dock and the chord cannot
+		// disagree about whether the grid is up.
+		const applySelectorView = (view) => {
+			if (view === "items") {
+				catalogDrawer.open("rail");
+			} else if (catalogDrawer.isOpen.value) {
+				catalogDrawer.close();
+			}
+			setSelectorView(view);
+		};
+
+		/**
+		 * The drawer has settled visible.
+		 *
+		 * A virtualised grid measures ZERO height while its layer is
+		 * `display: none`, so it can come back with no rows until something tells
+		 * it to re-measure. `useItemSelectorLayout` listens on two channels: a
+		 * ResizeObserver on the container, which usually catches this on its own,
+		 * and a debounced window `resize`. Nudging the second one is cheap
+		 * insurance on a deliberate user action, and it beats a guessed
+		 * `setTimeout` — this is the moment, named by the drawer itself.
+		 *
+		 * `scheduleCardMetricsUpdate` is not on ItemsSelector's exposed API, so a
+		 * template ref cannot reach it from here without editing a file this task
+		 * does not own.
+		 */
+		const onDrawerOpened = () => {
+			window.dispatchEvent(new Event("resize"));
+		};
+
+		// One number, one action. `sale` is the only input the shell can answer
+		// today; tender, refund, recharge and closing arrive with the surfaces
+		// that own those numbers.
+		const bandState = computed(() =>
+			resolveBandState({
+				kind: "sale",
+				total: invoiceTotal.value,
+				itemCount: itemsCount.value,
+			}),
+		);
+		const onBandPrimary = (actionId) => {
+			if (actionId === "sale.pay") {
+				triggerInvoicePay();
+			}
+		};
+
+		// Offline queue figures are not published to the shell yet; 0 and an
+		// empty label render the overlay's copy without inventing a number.
+		const queuedInvoiceCount = ref(0);
+		const queuedAmountLabel = ref("");
+
+		// `serviceOrder` is a DESTINATION, not a selector panel: it is a hosted
+		// sheet in the destination registry, and `PosActiveView` (uiStore) does
+		// not contain it. So the dock gets a shimmed pair — the tab asks the same
+		// two questions every other tab asks, and for this one id they are
+		// answered by the destination router instead of by `activeView`. That
+		// keeps the rail and the dock on ONE piece of state, which is the whole
+		// point of §17.7's routing change, without widening a store union from a
+		// file this task does not own.
+		const SERVICE_ORDER_VIEW = "serviceOrder";
+		const dockActiveView = computed(() =>
+			hostedDestinationId.value === SERVICE_ORDER_VIEW ? SERVICE_ORDER_VIEW : activeView.value,
+		);
+		const dockSetSelectorView = (view) => {
+			if (view === SERVICE_ORDER_VIEW) {
+				destinationRouting.activate(SERVICE_ORDER_VIEW, "rail");
+				return;
+			}
+			applySelectorView(view);
+		};
+		const dockIsSelectorViewActive = (view) => {
+			if (view === SERVICE_ORDER_VIEW) {
+				return hostedDestinationId.value === SERVICE_ORDER_VIEW;
+			}
+			// Browse no longer has a column to be "on"; the drawer being up IS
+			// the state, so the tab must read the drawer or it lights the wrong
+			// thing on every preset.
+			if (view === "items") {
+				return catalogDrawer.isOpen.value;
+			}
+			return isSelectorViewActive(view);
+		};
+
+		// One event carrying a destination id, rather than one event per
+		// destination: the rail, the router and the chord all name the same
+		// thing, so a tenth destination costs a registry entry and nothing else.
+		const handleOpenDestination = (id) => {
+			destinationRouting.activate(String(id ?? ""), "shortcut");
+		};
+		const handleToggleCatalogDrawer = () => {
+			catalogDrawer.toggle("shortcut");
+		};
+
 		const DOCK_TAB_DEFS = buildDockTabDefs({
 			__,
 			t: vertical.t,
@@ -679,11 +1033,12 @@ export default {
 			couponsCount,
 			itemsCount,
 			floorOpenOrdersCount,
-			activeView,
+			serviceOrderOpenCount,
+			activeView: dockActiveView,
 			compactPanel,
 			paymentPending,
-			isSelectorViewActive,
-			setSelectorView,
+			isSelectorViewActive: dockIsSelectorViewActive,
+			setSelectorView: dockSetSelectorView,
 			showInvoicePanel,
 			triggerInvoicePay,
 		});
@@ -898,6 +1253,8 @@ export default {
 				// productos" has to land on the item list with the panel moved,
 				// which set_compact_panel alone cannot do from the floor view.
 				eventBus.on("set_selector_view", setSelectorView);
+				eventBus.on("open_destination", handleOpenDestination);
+				eventBus.on("toggle_catalog_drawer", handleToggleCatalogDrawer);
 				eventBus.on("open_returns", handleOpenReturns);
 				eventBus.on("open_new_address", handleOpenNewAddress);
 				eventBus.on("open_mpesa_payments", handleOpenMpesaPayments);
@@ -936,6 +1293,8 @@ export default {
 				eventBus.off("set_compact_panel", setCompactPanel);
 				eventBus.off("show_invoice_panel", showInvoicePanel);
 				eventBus.off("set_selector_view", setSelectorView);
+				eventBus.off("open_destination", handleOpenDestination);
+				eventBus.off("toggle_catalog_drawer", handleToggleCatalogDrawer);
 				eventBus.off("open_returns", handleOpenReturns);
 				eventBus.off("open_new_address", handleOpenNewAddress);
 				eventBus.off("open_mpesa_payments", handleOpenMpesaPayments);
@@ -1049,6 +1408,27 @@ export default {
 			ItemsView,
 			CartView,
 			floorEnabled,
+			// Riel y Cajón
+			railVisible,
+			railContext,
+			catalogDrawer,
+			drawerAnchoredOpen,
+			onDrawerOpened,
+			applySelectorView,
+			catalogCategories,
+			comboSuggestions,
+			addComboSuggestion,
+			bandState,
+			onBandPrimary,
+			hostedDestinationId,
+			destinationRefusal,
+			dismissDestination,
+			verticalT,
+			isOnline,
+			isDockTabDimmedOffline,
+			queuedInvoiceCount,
+			queuedAmountLabel,
+			bottomDockHeight,
 			dockTabs,
 			dockTabCount,
 			activeView,
@@ -1095,6 +1475,13 @@ export default {
 		};
 	},
 	components: {
+		// Riel y Cajón
+		RegisterRail,
+		CatalogDrawer,
+		ActionBand,
+		DestinationHost,
+		MobileOfflineOverlay,
+		ComboSuggestionStrip,
 		OpeningDialog,
 		ShortcutsCheatSheet,
 		PriceCheckDialog,
@@ -1604,5 +1991,71 @@ export default {
 		flex-direction: row;
 		gap: 6px;
 	}
+}
+/* ── Riel y Cajón (roadmap §17.7) ────────────────────────────────────────
+ * The shell is a flex ROW: the rail, then everything else. It slots into the
+ * height chain `.dynamic-container` already establishes at >=1100px, which is
+ * why both halves carry `min-height: 0` — a flex item defaults to
+ * `min-height: auto` and refuses to shrink below its content, and that is
+ * exactly how a "just add overflow" fix ends up nesting a second scrollport
+ * instead of removing one. Same lesson as commit 59c5fe1ad. */
+.register-shell {
+	display: flex;
+	align-items: stretch;
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+}
+
+.register-shell__content {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+	/* LOAD-BEARING. The catalogue drawer's overlay presentation is
+	 * `position: absolute` on purpose, so the action band below it stays
+	 * visible — "the drawer never reaches it". With no positioned ancestor the
+	 * overlay escapes to the viewport and covers the one number that matters. */
+	position: relative;
+}
+
+/* The row is the drawer's positioning context.
+ *
+ * `.catalog-drawer-layer--overlay` is `position: absolute; inset: 0` and
+ * deliberately NOT `fixed`, so the action band below stays visible and
+ * reachable while the catalogue is up. That is only true if the nearest
+ * positioned ancestor is this row rather than the viewport. */
+.dynamic-main-row {
+	position: relative;
+}
+
+/* An anchored drawer is a 400px flex sibling of the cart. The cart column is
+ * `cols="12"`, i.e. `flex: 0 0 100%`, which cannot shrink — so without this the
+ * row overflows by exactly the drawer's width and the ticket's right edge goes
+ * off screen. Closed, the cart keeps the whole row: that is the density win. */
+.dynamic-main-row--with-drawer .dynamic-col--invoice {
+	flex: 1 1 auto;
+	max-width: none;
+	min-width: 0;
+}
+
+/* A dock tab that needs signal dims; it is never removed. "El dock no miente"
+ * — what the cashier's thumb learned stays where it was, it just stops
+ * pretending it can work. The amber dot repeats it non-chromatically for
+ * anyone who cannot see the dimming. */
+.mobile-dock__tab--dimmed {
+	opacity: 0.45;
+}
+
+.mobile-dock__tab--dimmed::after {
+	content: "";
+	position: absolute;
+	top: 6px;
+	right: 10px;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: #e9a13b;
 }
 </style>
