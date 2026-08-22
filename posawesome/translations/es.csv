@@ -2133,3 +2133,14 @@ Back Office Cash Account is required for this movement.,Se requiere cuenta de ef
 Source and target accounts cannot be the same for this movement.,Las cuentas de origen y destino no pueden ser iguales para este movimiento.
 "Movement Type must be Expense, Deposit or Cash In.","El tipo de movimiento debe ser Gasto, Depósito o Entrada de Efectivo."
 Expense Account must be empty for Cash In entries.,La cuenta de gastos debe estar vacía para entradas de efectivo.
+Expense — cash out,Gasto — sale efectivo
+Deposit — drawer to back office,Depósito — de la caja a la oficina
+Cash In — back office to drawer,Entrada — de la oficina a la caja
+"Book an expense, send cash to the back office, or bring cash into the drawer.","Registra un gasto, envía efectivo a la oficina o mete efectivo a la caja."
+Cash ENTERS the drawer — this shift goes up by {0}.,ENTRA efectivo a la caja — este turno sube {0}.
+Cash LEAVES the drawer — this shift goes down by {0}.,SALE efectivo de la caja — este turno baja {0}.
+Register Drawer Account (money arrives here),Cuenta de la Caja (aquí llega el dinero)
+Register Drawer Account (money leaves here),Cuenta de la Caja (de aquí sale el dinero)
+Back Office Cash Account (money comes from here),Cuenta de Efectivo de Oficina (de aquí viene el dinero)
+Back Office Cash Account (money goes here),Cuenta de Efectivo de Oficina (aquí llega el dinero)
+(not set),(sin definir)

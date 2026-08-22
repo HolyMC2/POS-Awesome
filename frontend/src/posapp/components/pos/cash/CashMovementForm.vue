@@ -15,7 +15,7 @@
 			</div>
 		</div>
 		<div class="text-body-2 text-grey mb-4">
-			{{ __("Book expense or deposit from active shift.") }}
+			{{ __("Book an expense, send cash to the back office, or bring cash into the drawer.") }}
 		</div>
 
 		<v-alert
@@ -29,15 +29,8 @@
 		</v-alert>
 
 		<v-row dense>
-			<v-col cols="12" md="4">
-				<v-text-field
-					v-model="againstName"
-					variant="outlined"
-					density="compact"
-					:label="__('Against Name')"
-					:disabled="submitting || !enabled"
-				/>
-			</v-col>
+			<!-- Type leads the form: it decides the direction, so it is the first
+			     thing chosen and the first thing explained. -->
 			<v-col cols="12" md="4">
 				<v-select
 					v-model="movementType"
@@ -46,6 +39,15 @@
 					density="compact"
 					:label="__('Movement Type')"
 					:disabled="submitting || !enabled || movementTypes.length === 0"
+				/>
+			</v-col>
+			<v-col cols="12" md="4">
+				<v-text-field
+					v-model="againstName"
+					variant="outlined"
+					density="compact"
+					:label="__('Against Name')"
+					:disabled="submitting || !enabled"
 				/>
 			</v-col>
 			<v-col cols="12" md="4">
@@ -65,6 +67,35 @@
 					@update:model-value="onAmountInput"
 				/>
 			</v-col>
+			<v-col cols="12" v-if="movementType">
+				<!-- The form looks identical for every type because the payload is
+				     role-based; this strip is what tells the cashier which way the
+				     money actually moves before they commit it. -->
+				<div
+					class="cash-movement-form__direction"
+					:class="
+						direction.entersDrawer
+							? 'cash-movement-form__direction--in'
+							: 'cash-movement-form__direction--out'
+					"
+					data-testid="cash-movement-direction"
+				>
+					<v-icon
+						:icon="direction.entersDrawer ? 'mdi-cash-plus' : 'mdi-cash-minus'"
+						size="22"
+					/>
+					<div class="cash-movement-form__direction-body">
+						<div class="cash-movement-form__direction-flow">
+							<span class="cash-movement-form__account">{{ fromAccountLabel }}</span>
+							<v-icon icon="mdi-arrow-right" size="18" class="mx-1" />
+							<span class="cash-movement-form__account">{{ toAccountLabel }}</span>
+						</div>
+						<div class="cash-movement-form__direction-effect">
+							{{ directionSummary }}
+						</div>
+					</div>
+				</div>
+			</v-col>
 			<v-col cols="12" md="4" v-if="allowSourceAccountOverride">
 				<v-autocomplete
 					v-model="sourceAccount"
@@ -78,7 +109,7 @@
 					hide-no-data
 					variant="outlined"
 					density="compact"
-					:label="__('Source Cash Account (Optional Override)')"
+					:label="drawerAccountLabel"
 					:disabled="submitting || !enabled"
 				/>
 			</v-col>
@@ -112,14 +143,8 @@
 					hide-no-data
 					variant="outlined"
 					density="compact"
-					:label="
-						targetAccountLocked
-							? __('Back Office Cash Account')
-							: __('Back Office Cash Account (Optional Override)')
-					"
+					:label="backOfficeAccountLabel"
 					:disabled="submitting || !enabled || targetAccountLocked"
-					:hint="movementType === 'Cash In' ? __('Cash In moves money from this account into the register drawer.') : ''"
-					:persistent-hint="movementType === 'Cash In'"
 				/>
 			</v-col>
 			<v-col cols="12">
@@ -133,31 +158,19 @@
 					:disabled="submitting || !enabled"
 				/>
 			</v-col>
-			<v-col cols="12" class="d-flex ga-2">
+			<v-col cols="12">
+				<!-- One button, driven by the selected type. Three buttons with two
+				     permanently greyed out taught nobody which type they had picked. -->
 				<v-btn
-					color="primary"
-					:disabled="submitting || !enabled || !allowExpense || movementType !== 'Expense'"
-					:loading="submitting && movementType === 'Expense'"
-					@click="onSubmit('Expense')"
+					class="cash-movement-form__submit"
+					:color="direction.entersDrawer ? 'success' : 'primary'"
+					size="large"
+					block
+					:disabled="submitting || !enabled || !movementTypeAllowed"
+					:loading="submitting"
+					@click="onSubmit()"
 				>
-					{{ __("Submit Expense") }}
-				</v-btn>
-				<v-btn
-					color="secondary"
-					:disabled="submitting || !enabled || !allowDeposit || movementType !== 'Deposit'"
-					:loading="submitting && movementType === 'Deposit'"
-					@click="onSubmit('Deposit')"
-				>
-					{{ __("Submit Deposit") }}
-				</v-btn>
-				<v-btn
-					color="secondary"
-					variant="tonal"
-					:disabled="submitting || !enabled || !allowDeposit || movementType !== 'Cash In'"
-					:loading="submitting && movementType === 'Cash In'"
-					@click="onSubmit('Cash In')"
-				>
-					{{ __("Submit Cash In") }}
+					{{ submitLabel }}
 				</v-btn>
 			</v-col>
 		</v-row>
@@ -166,8 +179,12 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import {
+	describeDirection,
+	prefillFieldsFromMovement,
+	type MovementType,
+} from "../../../composables/pos/cash/movementDirection";
 
-type MovementType = "Expense" | "Deposit" | "Cash In";
 type AccountSearchType = "expense" | "cash";
 
 const __ = window.__ || ((text: string, _args?: any[]) => text);
@@ -219,17 +236,74 @@ const allowedSourceAccounts = computed(() =>
 	normalizeAllowedAccountList(props.context?.allowed_source_accounts),
 );
 const movementTypes = computed(() => {
+	// Titles name the direction, not just the type. "Deposit"/"Depósito" reads
+	// to a cashier as "money into the till", which is the opposite of what it
+	// posts — the option label itself has to say which way the cash goes.
 	const types: Array<{ title: string; value: MovementType }> = [];
 	if (allowExpense.value) {
-		types.push({ title: __("Expense"), value: "Expense" });
+		types.push({ title: __("Expense — cash out"), value: "Expense" });
 	}
 	if (allowDeposit.value) {
-		types.push({ title: __("Deposit"), value: "Deposit" });
+		types.push({ title: __("Deposit — drawer to back office"), value: "Deposit" });
 		// Cash In (change fund into the drawer) shares the deposit flag:
 		// same drawer <-> back-office trust domain, opposite direction.
-		types.push({ title: __("Cash In (Change Fund)"), value: "Cash In" });
+		types.push({ title: __("Cash In — back office to drawer"), value: "Cash In" });
 	}
 	return types;
+});
+
+const movementTypeAllowed = computed(() =>
+	movementTypes.value.some((type) => type.value === movementType.value),
+);
+
+const direction = computed(() =>
+	describeDirection(
+		movementType.value,
+		{
+			sourceAccount: sourceAccount.value,
+			expenseAccount: expenseAccount.value,
+			targetAccount: targetAccount.value,
+		},
+		props.context,
+	),
+);
+
+const unsetAccountLabel = computed(() => __("(not set)"));
+const fromAccountLabel = computed(() => direction.value.fromAccount || unsetAccountLabel.value);
+const toAccountLabel = computed(() => direction.value.toAccount || unsetAccountLabel.value);
+
+const formattedAmount = computed(() => {
+	const value = Number(amount.value) || 0;
+	const currency = props.context?.currency;
+	const formatter = (window as any).format_currency;
+	if (typeof formatter === "function") {
+		return formatter(Math.abs(value), currency);
+	}
+	return Math.abs(value).toFixed(2);
+});
+
+const directionSummary = computed(() =>
+	direction.value.entersDrawer
+		? __("Cash ENTERS the drawer — this shift goes up by {0}.", [formattedAmount.value])
+		: __("Cash LEAVES the drawer — this shift goes down by {0}.", [formattedAmount.value]),
+);
+
+const drawerAccountLabel = computed(() =>
+	direction.value.entersDrawer
+		? __("Register Drawer Account (money arrives here)")
+		: __("Register Drawer Account (money leaves here)"),
+);
+
+const backOfficeAccountLabel = computed(() =>
+	direction.value.entersDrawer
+		? __("Back Office Cash Account (money comes from here)")
+		: __("Back Office Cash Account (money goes here)"),
+);
+
+const submitLabel = computed(() => {
+	if (movementType.value === "Cash In") return __("Submit Cash In");
+	if (movementType.value === "Deposit") return __("Submit Deposit");
+	return __("Submit Expense");
 });
 
 watch(
@@ -432,7 +506,13 @@ function onTargetSearch(value: string) {
 	}, 250);
 }
 
-function onSubmit(type: MovementType) {
+function onSubmit() {
+	// The selected type IS the action now, so nothing can post a movement of a
+	// type the cashier did not have on screen.
+	const type = movementType.value;
+	if (!type || !movementTypeAllowed.value) {
+		return;
+	}
 	emit("submit", {
 		movementType: type,
 		amount: Number(amount.value || 0),
@@ -483,9 +563,14 @@ function resetFormState() {
 function applyPrefillData(data: any) {
 	if (!data) return;
 
-	const nextMovementType = data.movementType || data.movement_type;
-	if (nextMovementType === "Expense" || nextMovementType === "Deposit") {
-		movementType.value = nextMovementType;
+	// Cash In rows are STORED back-office -> drawer. Prefilling them raw both
+	// dropped the type (it only accepted Expense/Deposit) and left the accounts
+	// swapped, so "duplicate" on a Cash In quietly rebuilt it as a Deposit
+	// running the wrong way. The helper flips them back to role-based fields,
+	// matching what the backend's duplicate_cash_movement does.
+	const prefill = prefillFieldsFromMovement(data);
+	if (prefill.movementType) {
+		movementType.value = prefill.movementType;
 	}
 
 	const nextAmount = Number(data.amount);
@@ -496,9 +581,9 @@ function applyPrefillData(data: any) {
 	postingDate.value = String(data.postingDate || data.posting_date || getTodayDate()).slice(0, 10);
 	againstName.value = String(data.againstName || data.against_name || "");
 	remarks.value = String(data.remarks || "");
-	sourceAccount.value = String(data.sourceAccount || data.source_account || "");
-	expenseAccount.value = String(data.expenseAccount || data.expense_account || "");
-	targetAccount.value = String(data.targetAccount || data.target_account || "");
+	sourceAccount.value = prefill.sourceAccount;
+	expenseAccount.value = prefill.expenseAccount;
+	targetAccount.value = prefill.targetAccount;
 
 	ensureOptionExists(sourceAccountOptions.value, sourceAccount.value);
 	ensureOptionExists(expenseAccountOptions.value, expenseAccount.value);
@@ -528,5 +613,53 @@ watch(
 .cash-movement-form__posting-date {
 	width: min(220px, 100%);
 	min-width: 0;
+}
+
+.cash-movement-form__direction {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 10px 12px;
+	border-radius: 8px;
+	/* Colour is the second signal only — the wording carries the meaning, so a
+	   colour-blind cashier still reads ENTERS/LEAVES. */
+	border: 1px solid currentColor;
+}
+
+.cash-movement-form__direction--out {
+	color: rgb(var(--v-theme-warning));
+	background: rgba(var(--v-theme-warning), 0.08);
+}
+
+.cash-movement-form__direction--in {
+	color: rgb(var(--v-theme-success));
+	background: rgba(var(--v-theme-success), 0.08);
+}
+
+.cash-movement-form__direction-body {
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.cash-movement-form__direction-flow {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.cash-movement-form__account {
+	overflow-wrap: anywhere;
+}
+
+.cash-movement-form__direction-effect {
+	margin-top: 2px;
+	font-size: 0.8125rem;
+	opacity: 0.9;
+}
+
+.cash-movement-form__submit {
+	font-weight: 600;
 }
 </style>
