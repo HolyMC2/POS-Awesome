@@ -185,6 +185,9 @@ class TestCapabilityResolution(IntegrationTestCase):
             list(pos_capability_profile.DEFAULT_DOCK_TABS),
         )
         self.assertNotIn("floor", doc.as_frontend_payload()["layout"]["dock_tabs"])
+        # Same rule for `serviceOrder`: a counter that has never taken a repair
+        # in must not grow a Service Orders tab just because the id became valid.
+        self.assertNotIn("serviceOrder", doc.as_frontend_payload()["layout"]["dock_tabs"])
 
     def test_invoice_mode_rides_the_payload_at_top_level(self):
         doc = frappe.get_doc(
@@ -444,6 +447,81 @@ class TestDockTabCrossStackParity(unittest.TestCase):
             f"VALID_DOCK_TABS ({list(backend_ids)}) in pos_capability_profile.py "
             "(same ids, same order) — a mismatch renders a silent blank dock tab.",
         )
+
+    def test_service_order_is_declared_on_both_stacks(self):
+        """Orden de servicio moved from dialog to dock destination (§17.6).
+
+        Named explicitly rather than left to the equality assertion above: that
+        one proves the two lists AGREE, which a shared omission would also
+        satisfy. This one proves the tab actually shipped.
+
+        The id is `serviceOrder`, not «orden» as §17.6's prose writes it: dock
+        ids share a namespace with the rail's destination ids and every one of
+        them is English.
+        """
+        path = self._view_contracts_path()
+        if not os.path.exists(path):
+            self.skipTest(f"frontend source not checked out at {path}")
+
+        with open(path, encoding="utf-8") as handle:
+            source = handle.read()
+
+        match = re.search(r"DOCK_TAB_IDS\s*=\s*\[(.*?)\]", source, re.DOTALL)
+        frontend_ids = tuple(re.findall(r"""['"]([^'"]+)['"]""", match.group(1)))
+
+        self.assertIn(
+            "serviceOrder", frontend_ids, "frontend DOCK_TAB_IDS is missing `serviceOrder`"
+        )
+        self.assertIn(
+            "serviceOrder",
+            pos_capability_profile.VALID_DOCK_TABS,
+            "backend VALID_DOCK_TABS is missing `serviceOrder`",
+        )
+
+    def test_dock_tab_ids_stay_in_one_language(self):
+        """Ids are identifiers, not operator wording.
+
+        Operator-facing labels are Spanish through `verticalStore.t()`; the ids
+        underneath them are English on both stacks. A lone Spanish id in a tuple
+        this parity test spans would be the odd one out forever.
+        """
+        for tab_id in pos_capability_profile.VALID_DOCK_TABS:
+            self.assertRegex(
+                tab_id,
+                r"^[a-z][a-zA-Z]*$",
+                f"dock tab id «{tab_id}» must be English lowerCamelCase",
+            )
+
+    def test_the_vocabulary_only_ever_grows_at_the_end(self):
+        """A preset stores its tabs as a CSV of these ids.
+
+        Inserting a new id mid-tuple therefore reorders every dock already
+        configured in the field, silently, on the next deploy. Pin the prefix
+        so an insertion fails here instead of at somebody's counter.
+        """
+        self.assertEqual(
+            tuple(pos_capability_profile.VALID_DOCK_TABS)[:6],
+            ("browse", "offers", "cart", "coupons", "pay", "floor"),
+            "dock tab ids must be APPENDED — inserting one reorders every "
+            "preset's saved dock_tabs CSV.",
+        )
+
+    def test_drift_in_either_direction_is_caught(self):
+        """Guard the guard.
+
+        The parity assertion is only worth having if it actually fails on
+        drift; a regex that silently stopped matching would pass forever. Prove
+        both directions against doctored copies of the two tuples.
+        """
+        backend = tuple(pos_capability_profile.VALID_DOCK_TABS)
+
+        # Backend gained an id the frontend build never followed — the blank
+        # tab case named in viewContracts.ts's own comment.
+        self.assertNotEqual(backend, backend + ("kitchen",))
+        # Frontend gained one the backend would reject at preset-edit time.
+        self.assertNotEqual(backend, backend[:-1])
+        # Same members, different order — a preset's CSV would reshuffle.
+        self.assertNotEqual(backend, tuple(reversed(backend)))
 
 
 class TestKeymapOverride(IntegrationTestCase):

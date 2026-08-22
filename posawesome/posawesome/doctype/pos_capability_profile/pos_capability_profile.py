@@ -12,12 +12,18 @@ from frappe.model.document import Document
 # that names an unknown id (fail at edit time, not the counter); the payload
 # builder and the frontend registry additionally filter unknowns as a drift
 # defense for presets saved before a shipped id list catches up.
-VALID_DOCK_TABS = ("browse", "offers", "cart", "coupons", "pay", "floor")
+#
+# Must equal frontend DOCK_TAB_IDS (viewContracts.ts) in membership AND order —
+# TestDockTabCrossStackParity is the only machine check that keeps them equal.
+# APPEND, never insert: a preset stores its tabs as a CSV of these ids, so a
+# middle insertion silently reorders every dock already configured in the field.
+VALID_DOCK_TABS = ("browse", "offers", "cart", "coupons", "pay", "floor", "serviceOrder")
 
 # What a preset that names NO dock tabs falls back to. Deliberately not
 # VALID_DOCK_TABS: adding a vertical's tab to the valid list must not hand it
 # to every preset that left the field blank — a retail register would grow a
-# floor tab onto a floor it has no tables for.
+# floor tab onto a floor it has no tables for, and a "Service Orders" tab onto
+# a counter that has never taken a repair in.
 DEFAULT_DOCK_TABS = ("browse", "offers", "cart", "coupons", "pay")
 
 # Layout keys the frontend view registry has entries for. Kept in sync with

@@ -88,7 +88,7 @@
   },
   {
    "default": "browse, offers, cart, coupons, pay",
-   "description": "Comma-separated bottom-dock tab ids, in render order. Valid: browse, offers, cart, coupons, pay, floor.",
+   "description": "Comma-separated bottom-dock tab ids, in render order. Valid: browse, offers, cart, coupons, pay, floor, serviceOrder.",
    "fieldname": "dock_tabs",
    "fieldtype": "Small Text",
    "label": "Dock Tabs"

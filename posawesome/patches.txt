@@ -42,3 +42,4 @@ posawesome.patches.add_service_type_field
 posawesome.patches.add_restaurant_tip_amount_field
 posawesome.patches.add_tips_capability_to_mesas
 posawesome.patches.add_keymap_id_field
+posawesome.patches.move_repair_preset_floor_tab_to_service_order
