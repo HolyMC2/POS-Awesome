@@ -1,0 +1,18 @@
+{
+  "label": "after",
+  "viewport": "tablet-1024",
+  "capturedAt": "2026-08-22T19:41:11.251Z",
+  "posProfile": "unknown (opening dialog never appeared)",
+  "cartLines": 0,
+  "mobileDockVisible": false,
+  "railPresent": false,
+  "captured": [
+    "venta-vacia",
+    "venta"
+  ],
+  "missed": [
+    "basket (no demo SKU matched)",
+    "menu (actions trigger not found)",
+    "cobro (no basket or pay not offered)"
+  ]
+}

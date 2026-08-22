@@ -1,0 +1,19 @@
+{
+  "label": "before",
+  "viewport": "tablet-1024",
+  "capturedAt": "2026-08-22T18:25:23.311Z",
+  "posProfile": "unknown (opening dialog never appeared)",
+  "cartLines": 2,
+  "mobileDockVisible": true,
+  "captured": [
+    "venta-vacia",
+    "venta",
+    "menu",
+    "facturacion",
+    "sincronizar",
+    "cobro"
+  ],
+  "missed": [
+    "orden (action not offered by this profile)"
+  ]
+}

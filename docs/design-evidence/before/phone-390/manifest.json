@@ -1,0 +1,20 @@
+{
+  "label": "before",
+  "viewport": "phone-390",
+  "capturedAt": "2026-08-22T18:26:31.044Z",
+  "posProfile": "unknown (opening dialog never appeared)",
+  "cartLines": 0,
+  "mobileDockVisible": true,
+  "captured": [
+    "venta-vacia",
+    "venta",
+    "menu",
+    "facturacion",
+    "sincronizar"
+  ],
+  "missed": [
+    "basket (no demo SKU matched)",
+    "orden (action not offered by this profile)",
+    "cobro (no basket or pay not offered)"
+  ]
+}

@@ -49,7 +49,10 @@ const baseURL = process.env.POSA_SMOKE_BASE_URL || "http://127.0.0.1:8000";
 
 export default defineConfig({
 	testDir: "./tests",
-	testMatch: ["smoke/**/*.spec.ts", "e2e/**/*.spec.ts"],
+	// `visual/**` is the design-evidence lane (docs/POS-RIEL-Y-CAJON-BUILD.md
+	// §5). It captures rather than asserts, so it is opt-in by grep/path and
+	// never gates CI — a redesign is judged against the canvas by eye.
+	testMatch: ["smoke/**/*.spec.ts", "e2e/**/*.spec.ts", "visual/**/*.spec.ts"],
 	timeout: 120000,
 	fullyParallel: false,
 	forbidOnly: !!process.env.CI,
