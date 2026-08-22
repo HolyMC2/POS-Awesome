@@ -1,0 +1,226 @@
+/*
+ * Register shell tokens — Riel y Cajón (roadmap §17.7).
+ *
+ * Every value here is READ OFF the design canvas
+ * (muelle-site/design/register-hifi) or forwarded from theme.css. Nothing is
+ * invented: the canvas was drawn against the real POSAwesome palette, and a
+ * token that disagrees with theme.css would make the reference a lie.
+ *
+ * Load this AFTER theme.css so the forwards below resolve.
+ */
+
+.posapp,
+:root {
+	/* ---- the single accent ---------------------------------------------
+	 * NAMING TRAP, deliberately called out: theme.css already has
+	 * `--pos-accent: #ff6b35`, an ORANGE used for legacy highlights. That is
+	 * NOT the accent the canvas means. The canvas's `--ac` is the brand
+	 * primary teal (#0097a7), and it appears on exactly one control per
+	 * screen — the band's primary button. Forwarding from `--pos-primary`
+	 * rather than hard-coding also means dark mode (#00d4ff) and any tenant
+	 * brand layer (§17.4) come along for free.
+	 */
+	--reg-accent: var(--pos-primary, #0097a7);
+	--reg-accent-pressed: var(--pos-primary-variant, #00838f);
+	--reg-accent-soft: var(--pos-primary-container, #e0f7fa);
+	--reg-on-accent: var(--pos-on-primary, #ffffff);
+
+	/* ---- band geometry --------------------------------------------------
+	 * 134px is the band CARD. 60px is the NUMBER inside it. The roadmap
+	 * sentence "same 60 px, same lane" is about the number's size — every
+	 * artboard renders the band at height:134px with a font-size:60px figure,
+	 * and the discarded direction C is described as dropping "el total ... de
+	 * 60 px a 34 px", which only makes sense as type.
+	 */
+	--reg-band-height: 134px;
+	--reg-band-pad-x: 22px;
+	--reg-band-gap: 22px;
+	--reg-band-number-size: 60px;
+	--reg-band-number-tracking: -0.035em;
+	--reg-band-number-leading: 1.06;
+	--reg-band-divider-height: 88px;
+	--reg-band-action-height: 92px;
+	--reg-band-action-size: 22px;
+
+	/* ---- density scale --------------------------------------------------
+	 * The canvas raised density twice. It stays legible because the accent
+	 * count never rose with it — one saturated colour per screen is what
+	 * makes tight spacing read as calm rather than busy.
+	 */
+	--reg-space-2xs: 2px;
+	--reg-space-xs: 5px;
+	--reg-space-sm: 6px;
+	--reg-space-md: 10px;
+	--reg-space-lg: 14px;
+	--reg-space-xl: 22px;
+
+	--reg-row-height: 56px;
+	--reg-rail-width: 88px;
+	--reg-rail-item-height: 66px;
+
+	/* Forwarded, not redefined — theme.css owns these. */
+	--reg-radius-xs: var(--pos-radius-xs, 6px);
+	--reg-radius-sm: var(--pos-radius-sm, 10px);
+	--reg-radius-md: var(--pos-radius-md, 14px);
+	--reg-radius-lg: var(--pos-radius-lg, 18px);
+	--reg-touch-min: var(--pos-touch-target-min, 44px);
+
+	/* ---- surfaces, text and borders ------------------------------------
+	 * All forwarded, none literal. A component that paints with a hex cannot
+	 * follow theme.css's dark palette, which is how the register's primary
+	 * navigation ended up rendering as a light column beside a #121212 shell
+	 * (A1, wave 3). ActionBand.vue was already built this way and flipped
+	 * correctly; these exist so the drawer and the offline overlay can be too.
+	 */
+	--reg-surface: var(--pos-surface, #ffffff);
+	--reg-surface-sunken: var(--pos-bg-secondary, #f8f9fa);
+	--reg-surface-muted: var(--pos-surface-variant, #f2f4f7);
+	--reg-text-primary: var(--pos-text-primary, #212121);
+	--reg-text-secondary: var(--pos-text-secondary, #56606e);
+	--reg-text-muted: var(--pos-text-muted, #667085);
+	--reg-border: var(--pos-border, rgba(0, 0, 0, 0.12));
+	--reg-border-light: var(--pos-border-light, rgba(0, 0, 0, 0.06));
+	--reg-border-soft: #e6e9ee;
+	--reg-divider: #eceff3;
+	--reg-divider-soft: #f2f4f7;
+
+	/* Accent derivatives. These replace the canvas-era `--ac`, `--ac-soft` and
+	 * `--ac-edge` names, which were never defined anywhere in the app and so
+	 * always resolved to their literal fallbacks — invisible dead tokens. */
+	--reg-accent-edge: #9fdde6;
+	--reg-on-accent-soft: #00646f;
+	--reg-scrim: rgba(15, 23, 42, 0.32);
+
+	/* ---- tone palettes --------------------------------------------------
+	 * Three tints, four tones: `queued` renders neutral on purpose (see
+	 * bandState.ts). Amber and green are STATE. They never mark emphasis, and
+	 * tests/singleAccent.spec.ts fails the build if they start to.
+	 */
+	--reg-tone-neutral-bg: var(--pos-bg-primary, #ffffff);
+	--reg-tone-neutral-border: rgba(0, 0, 0, 0.06);
+	/* AA fix (A1, wave 3): the old literal #8b93a0 measured 3.10:1 on white —
+	 * a 10.5px uppercase label needs 4.5:1. Forwarding rather than picking a
+	 * new literal clears BOTH themes at once and costs no new token:
+	 * --pos-text-muted is #667085 in light (4.97:1 on #ffffff) and #b0b8c4 in
+	 * dark (9.37:1 on #121212). #667085 is also the canvas's own muted value
+	 * (_parts.txt), so the reference and the code still agree. */
+	--reg-tone-neutral-label: var(--pos-text-muted, #667085);
+	--reg-tone-neutral-number: var(--pos-text-primary, #212121);
+	--reg-tone-neutral-divider: #eceff3;
+
+	--reg-tone-positive-bg: #f4fbf7;
+	--reg-tone-positive-border: #cdead8;
+	--reg-tone-positive-label: #1b5e20;
+	--reg-tone-positive-number: #157a48;
+	--reg-tone-positive-divider: #cdead8;
+
+	--reg-tone-warning-bg: #fdf9f0;
+	--reg-tone-warning-border: #f0dcae;
+	--reg-tone-warning-label: #8a5a0d;
+	--reg-tone-warning-number: #8a5a0d;
+	--reg-tone-warning-divider: #f0dcae;
+	/* Offline-overlay extras. Same tone family, still STATE not emphasis. */
+	--reg-tone-warning-glyph-bg: #f7ead2;
+	--reg-tone-warning-strong: #6b4a10;
+	--reg-tone-warning-heading: #a15200;
+	--reg-tone-positive-tick: #2e7d32;
+}
+
+/* ---- dark theme -------------------------------------------------------
+ * Selector set copied from theme.css deliberately, all four of them, so the
+ * register flips at exactly the same moments the rest of the POS does. A
+ * register that follows only `[data-theme="dark"]` looks correct until a
+ * tenant on `automatic` opens it after sunset.
+ *
+ * Duplicated between the selector list and the media query for the same
+ * reason theme.css duplicates: a custom property set inside `@media` cannot
+ * be shared with a plain rule without a third indirection nobody would find.
+ */
+[data-theme="dark"],
+[data-theme-mode="dark"],
+.v-theme--dark {
+	/* Surfaces, text and borders need nothing here — they forward from
+	 * --pos-* and flip with theme.css already. Only the values with no
+	 * --pos-* equivalent are restated below. */
+	--reg-border-soft: rgba(255, 255, 255, 0.12);
+	--reg-divider: #373737;
+	--reg-divider-soft: #2d2d2d;
+
+	--reg-accent-edge: #00647d;
+	--reg-on-accent-soft: #7fe9ff;
+	--reg-scrim: rgba(0, 0, 0, 0.55);
+
+	--reg-tone-neutral-border: rgba(255, 255, 255, 0.06);
+	--reg-tone-neutral-divider: #373737;
+
+	/* Tone pairs come from theme.css's own dark button pairs rather than a
+	 * palette invented here: --pos-button-success-bg/-text and
+	 * --pos-button-warning-bg/-text already settled which greens and ambers
+	 * this product uses on a dark surface. Borders are darkened from the text
+	 * colour so the tint keeps the SUBTLE edge it has in light — theme.css's
+	 * own border values (#2e7d32, #f57c00) are saturated enough to read as
+	 * emphasis, which invariant 2 spends on the primary button alone. */
+	--reg-tone-positive-bg: #1e3323;
+	--reg-tone-positive-border: #2f5a3c;
+	--reg-tone-positive-label: #a5d6a7;
+	--reg-tone-positive-number: #81c784;
+	--reg-tone-positive-divider: #2f5a3c;
+	--reg-tone-positive-tick: #81c784;
+
+	--reg-tone-warning-bg: #3a2b10;
+	--reg-tone-warning-border: #6b5320;
+	--reg-tone-warning-label: #ffd54f;
+	--reg-tone-warning-number: #ffd54f;
+	--reg-tone-warning-divider: #6b5320;
+	--reg-tone-warning-glyph-bg: #4a3a18;
+	--reg-tone-warning-strong: #ffe08a;
+	--reg-tone-warning-heading: #ffb74d;
+}
+
+@media (prefers-color-scheme: dark) {
+	[data-theme-mode="automatic"] {
+		/* Surfaces, text and borders need nothing here — they forward from
+		 * --pos-* and flip with theme.css already. Only the values with no
+		 * --pos-* equivalent are restated below. */
+		--reg-border-soft: rgba(255, 255, 255, 0.12);
+		--reg-divider: #373737;
+		--reg-divider-soft: #2d2d2d;
+
+		--reg-accent-edge: #00647d;
+		--reg-on-accent-soft: #7fe9ff;
+		--reg-scrim: rgba(0, 0, 0, 0.55);
+
+		--reg-tone-neutral-border: rgba(255, 255, 255, 0.06);
+		--reg-tone-neutral-divider: #373737;
+
+		/* Tone pairs come from theme.css's own dark button pairs rather than a
+		 * palette invented here: --pos-button-success-bg/-text and
+		 * --pos-button-warning-bg/-text already settled which greens and ambers
+		 * this product uses on a dark surface. Borders are darkened from the text
+		 * colour so the tint keeps the SUBTLE edge it has in light — theme.css's
+		 * own border values (#2e7d32, #f57c00) are saturated enough to read as
+		 * emphasis, which invariant 2 spends on the primary button alone. */
+		--reg-tone-positive-bg: #1e3323;
+		--reg-tone-positive-border: #2f5a3c;
+		--reg-tone-positive-label: #a5d6a7;
+		--reg-tone-positive-number: #81c784;
+		--reg-tone-positive-divider: #2f5a3c;
+		--reg-tone-positive-tick: #81c784;
+
+		--reg-tone-warning-bg: #3a2b10;
+		--reg-tone-warning-border: #6b5320;
+		--reg-tone-warning-label: #ffd54f;
+		--reg-tone-warning-number: #ffd54f;
+		--reg-tone-warning-divider: #6b5320;
+		--reg-tone-warning-glyph-bg: #4a3a18;
+		--reg-tone-warning-strong: #ffe08a;
+		--reg-tone-warning-heading: #ffb74d;
+	}
+}
+
+/* Tabular figures are not decoration here. A total that reflows its digit
+ * widths while the cashier reads it is a total they re-read. */
+.reg-mono {
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: "tnum" 1;
+}
