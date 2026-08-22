@@ -35,7 +35,13 @@ export interface Keymap {
 export const MUELLE_DEFAULT: Keymap = {
 	id: "muelle-default",
 	// v2 (2026-08-18): + alt+c price checker, + alt+h cheat sheet.
-	version: 2,
+	// v3 (2026-08-22): + the six Riel y Cajón destinations. The artboard draws
+	// an F4 chip on "Explorar catálogo", and F4 is NOT taken for it: F4 has
+	// meant `employee.switch` since before the engine existed, and this pack's
+	// whole contract is that a trained cashier's fingers keep working. The
+	// catalogue gets alt+b instead, and the mock's chip is the thing that is
+	// wrong.
+	version: 3,
 	label: "Muelle POS (default)",
 	bindings: {
 		// navigation
@@ -77,6 +83,18 @@ export const MUELLE_DEFAULT: Keymap = {
 		"returns.open": ["alt+8"],
 		"invoice.cancelDialog": ["alt+2"],
 		"shift.details": ["f7"],
+
+		// Riel y Cajón destinations. Mnemonics follow the OPERATOR's word,
+		// not the English label, because the cashier types with the Spanish
+		// name in their head: gasto, orden, tiempo aire. `shift.close` joins
+		// the shift family already living on function keys (f7 details,
+		// f8 lock).
+		"cash.openMovement": ["alt+g"],
+		"invoice.openManagement": ["alt+i"],
+		"charges.openRequests": ["alt+o"],
+		"saldo.openRecharge": ["alt+t"],
+		"shift.close": ["f9"],
+		"catalog.toggleDrawer": ["alt+b"],
 	},
 };
 

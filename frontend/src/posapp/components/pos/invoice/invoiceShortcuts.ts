@@ -169,6 +169,46 @@ export const INVOICE_SHORTCUT_EFFECTS: Record<string, ShortcutEffect> = {
 		this.eventBus.emit("show_shortcuts_cheatsheet");
 	},
 
+	// ── Riel y Cajón destinations ───────────────────────────────────────
+	// These six do not act on the invoice; they ask the SHELL to change
+	// destination. They live here anyway because this is the surface that
+	// owns the keyboard while a sale is on screen, and an effect map with a
+	// hole in it fails tests/shortcutsEngine.spec.ts — every action in the
+	// registry must be bound, and every bound action must do something.
+	//
+	// One event carrying an id, rather than six named events: the rail, the
+	// router and the chord all name the same destination, so a seventh
+	// destination should cost a registry entry and nothing else.
+	"cash.openMovement"(event) {
+		consumeEvent(event);
+		this.eventBus.emit("open_destination", "expense");
+	},
+
+	"invoice.openManagement"(event) {
+		consumeEvent(event);
+		this.eventBus.emit("open_destination", "invoices");
+	},
+
+	"charges.openRequests"(event) {
+		consumeEvent(event);
+		this.eventBus.emit("open_destination", "serviceOrder");
+	},
+
+	"saldo.openRecharge"(event) {
+		consumeEvent(event);
+		this.eventBus.emit("open_destination", "recharge");
+	},
+
+	"shift.close"(event) {
+		consumeEvent(event);
+		this.eventBus.emit("open_destination", "closing");
+	},
+
+	"catalog.toggleDrawer"(event) {
+		consumeEvent(event);
+		this.eventBus.emit("toggle_catalog_drawer");
+	},
+
 	"items.priceCheck"(event) {
 		consumeEvent(event);
 		// Deliberately does NOT touch the compact panel or the cart: a price

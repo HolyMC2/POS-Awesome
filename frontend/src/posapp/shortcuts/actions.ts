@@ -31,9 +31,12 @@ export interface ShortcutAction {
 }
 
 /**
- * Every keyboard-reachable POS behavior that exists today, named. Adding an
- * action here does NOT bind it — an unbound action is legal (it simply has
- * no chord in a given pack) and shows in the cheat sheet as unbound.
+ * Every keyboard-reachable POS behavior that exists today, named.
+ *
+ * An action may be unbound in SOME pack — that is the point of packs. But the
+ * DEFAULT pack must bind every action in this list, and
+ * tests/shortcutsEngine.spec.ts fails the build otherwise. So adding an entry
+ * here is a two-file change: name it, then give it a chord in keymap.ts.
  */
 export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
 	// ── navigation ──────────────────────────────────────────────────────
@@ -84,6 +87,25 @@ export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
 	{ id: "returns.open", label: "Open returns", category: "documents" },
 	{ id: "invoice.cancelDialog", label: "Cancel current sale", category: "documents" },
 	{ id: "shift.details", label: "Shift details", category: "documents" },
+
+	// Rail destinations (Riel y Cajón, docs/POS-RIEL-Y-CAJON-BUILD.md). These
+	// five had no action id because they were only ever reachable as dialogs
+	// from the actions menu; promoting them to rail destinations makes them
+	// addressable, and an addressable destination needs a stable name before
+	// anything can bind a chord to it. Drafts and returns are absent from this
+	// block on purpose — `invoice.openDrafts` and `returns.open` already exist
+	// and the rail reuses them rather than minting synonyms.
+	{ id: "cash.openMovement", label: "Open cash movement", category: "documents", hint: "Expense, deposit or cash in" },
+	{ id: "invoice.openManagement", label: "Open invoices", category: "documents" },
+	{ id: "charges.openRequests", label: "Open service orders", category: "documents", hint: "Repairs and external charge requests" },
+	{ id: "saldo.openRecharge", label: "Open recharges", category: "documents" },
+	{ id: "shift.close", label: "Close shift", category: "documents", hint: "Corte de caja" },
+	{
+		id: "catalog.toggleDrawer",
+		label: "Open catalogue",
+		category: "navigation",
+		hint: "Browse items beside the sale",
+	},
 ] as const;
 
 export type ShortcutActionId = (typeof SHORTCUT_ACTIONS)[number]["id"];

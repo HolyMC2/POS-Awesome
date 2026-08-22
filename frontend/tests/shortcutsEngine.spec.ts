@@ -81,8 +81,25 @@ describe("legacy binding parity", () => {
 			"alt+h", // cheat sheet — discoverability shipped with the engine
 			"alt+c", // price checker (§17.2)
 		];
+		// Riel y Cajón (§17.7) promoted six dialogs to rail destinations, and a
+		// destination the rail can reach must be reachable from the keyboard
+		// too. Mnemonics follow the operator's Spanish word — gasto, orden,
+		// tiempo aire — because that is the word in the cashier's head.
+		// Deliberately NOT F4: the artboard draws an F4 chip on the catalogue,
+		// but F4 has meant `employee.switch` since before the engine, and this
+		// pack's contract is that trained fingers keep working.
+		const RAIL_DESTINATION_CHORDS = [
+			"alt+g", // cash movement (gasto)
+			"alt+i", // invoices
+			"alt+o", // service orders (orden)
+			"alt+t", // recharges (tiempo aire)
+			"alt+b", // catalogue drawer
+			"f9", // close shift — joins f7 details / f8 lock
+		];
 		const boundChords = [...new Set(resolved.bindings.map((b) => b.chord.id))].sort();
-		expect(boundChords).toEqual([...LEGACY_CHORD_IDS, ...ENGINE_ADDED_CHORDS].sort());
+		expect(boundChords).toEqual(
+			[...LEGACY_CHORD_IDS, ...ENGINE_ADDED_CHORDS, ...RAIL_DESTINATION_CHORDS].sort(),
+		);
 	});
 
 	it("uses key OR code, so a layout that reports only one still works", () => {

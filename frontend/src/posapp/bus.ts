@@ -113,6 +113,16 @@ export type Events = {
 	lock_pos_screen: void;
 	show_shortcuts_cheatsheet: void; // Alt+H → keymap discoverability overlay
 	show_price_check: void; // Alt+C → read-only price lookup
+	/**
+	 * Riel y Cajón (§17.7): the shell changes destination. ONE event carrying
+	 * a `RailDestinationId`, not one event per destination — the rail, the
+	 * router and the chord all name the same thing, so adding a tenth
+	 * destination should cost a registry entry and nothing else. Typed as
+	 * `string` rather than importing the union, because bus.ts is imported by
+	 * everything and must not pull the shell's module graph in behind it.
+	 */
+	open_destination: string;
+	toggle_catalog_drawer: void; // Alt+B → the catalogue beside the sale
 	open_mpesa_payments: { company: string; mode_of_payment: string; customer: string };
 	set_mpesa_payment: Record<string, any>;
 	open_ClosingDialog: Record<string, any>;
