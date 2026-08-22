@@ -21,7 +21,13 @@
 			<h3 class="upsell__title">{{ __("Often bought together") }}</h3>
 			<span class="upsell__sub">{{ __("· combos and accessories that go together") }}</span>
 			<div class="upsell__spacer"></div>
-			<span class="upsell__hint">{{ __("Enter adds the first") }}</span>
+			<!-- Drawn only while it is TRUE. The scan field owns Enter whenever
+			     it holds focus, which on a desktop register is nearly always, so
+			     an unconditional hint would be a lie in the common case — see
+			     `useUpsellEnter` for why binding it anyway is unsafe. -->
+			<span v-if="enterArmed" class="upsell__hint" data-testid="upsell-enter-hint">{{
+				__("Enter adds the first")
+			}}</span>
 		</header>
 
 		<ul class="upsell__grid">
@@ -47,14 +53,26 @@
 					<span class="upsell__body">
 						<span class="upsell__name">{{ suggestion.item_name }}</span>
 						<span class="upsell__meta mono">
-							{{ formatCurrency(suggestion.rate) }}
+							<!-- Every amount on the sale surface declares what it is
+							     (`registerSaysItOnce.spec.ts`). A tile price is an OFFER:
+							     not a total, not a breakdown of one — money for something
+							     the ticket does not yet contain. -->
+							<span data-money-role="offer">{{ formatCurrency(suggestion.rate) }}</span>
 							<span
 								v-if="suggestion.kind === 'combo'"
 								class="upsell__saving"
+								data-money-role="offer-saving"
 								data-testid="combo-saving"
 								>· {{ __("saves") }} {{ formatCurrency(suggestion.saving || 0) }}</span
 							>
-							<span v-else class="upsell__qty"
+							<!-- An ABSENT count draws nothing rather than `0`, because 0
+							     is a claim the cashier will repeat to the customer.
+							     `cartLineStock.ts` sets this rule for the cart's
+							     Existencia column; the strip obeys the same one. -->
+							<span
+								v-else-if="suggestion.availableQty !== null && suggestion.availableQty !== undefined"
+								class="upsell__qty"
+								data-testid="upsell-qty"
 								>· {{ suggestion.availableQty }} {{ __("pcs") }}</span
 							>
 							<!-- Combo stock rides beside the saving, and ONLY when the
@@ -98,6 +116,7 @@
 import { ref } from "vue";
 
 import type { ComboSuggestion } from "../../../composables/pos/combos/comboCatalog";
+import { useUpsellEnter } from "../../../composables/pos/combos/useUpsellEnter";
 
 /**
  * A combo tile shows stock only when the figure is bounded, known AND low.
@@ -124,6 +143,25 @@ const props = withDefaults(
 const emit = defineEmits<{ (_event: "add", _suggestion: ComboSuggestion): void }>();
 
 const onAdd = (suggestion: ComboSuggestion) => emit("add", suggestion);
+
+/**
+ * "Enter para agregar el primero", and the hint that promises it, from ONE
+ * boolean. `enter.armed` gates the header line in the template and is the same
+ * value the handler checks, so the sentence cannot outlive the shortcut — the
+ * failure this guards against is a hint that lies, which is worse than no hint
+ * because a cashier acts on it.
+ *
+ * Adding the FIRST tile, not the focused one: a focused tile is a `<button>`
+ * and activates itself natively, and `useUpsellEnter` stands aside for exactly
+ * that reason.
+ */
+const { armed: enterArmed } = useUpsellEnter({
+	isEnabled: () => props.suggestions.length > 0,
+	onEnter: () => {
+		const first = props.suggestions[0];
+		if (first) onAdd(first);
+	},
+});
 
 /**
  * The first tile is kept addressable because the header promises "Enter para

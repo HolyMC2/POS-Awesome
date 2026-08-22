@@ -13,6 +13,10 @@
  * so adding a future category costs nobody a change inside the drawer.
  */
 
+import {
+	describeLineStock,
+	type CartLineStockSource,
+} from "../../../components/pos/invoice/cartLineStock";
 import type { CatalogCategory } from "../shell/useCatalogDrawer";
 import type { ComboAvailabilityContext } from "./comboAvailability";
 import {
@@ -48,8 +52,18 @@ export interface ComboSuggestion {
 	image?: string | null;
 	/** Set for combos; drives the green "ahorra $N" note. */
 	saving?: number;
-	/** Set for plain accessories; drives the muted "· N pzas" note. */
-	availableQty?: number;
+	/**
+	 * Set for plain accessories; drives the muted "· N pzas" note.
+	 *
+	 * `null` means the register does not know — a service with no shelf, an
+	 * offline tile, a payload with no figure — and the tile draws NOTHING.
+	 * It is null rather than 0 because 0 is a claim: it tells the cashier the
+	 * shop has none, and they will repeat that to the customer. Same rule and
+	 * same vocabulary as `cartLineStock.describeLineStock`, which this is
+	 * computed from, so the strip and the cart's `Existencia` column cannot
+	 * disagree about what an absent figure means.
+	 */
+	availableQty?: number | null;
 	/** Which of the two shapes above this tile is. */
 	kind: "combo" | "item";
 	/**
@@ -132,6 +146,99 @@ export const combosForCart = (
 };
 
 /**
+ * The cart payload for a tile the cashier accepted.
+ *
+ * A tile carries what the STRIP draws — code, name, price, an image — and that
+ * is not what the cart needs. `useItemAddition.addItem` builds the line from
+ * the object it is handed: no `stock_uom`, no `is_stock_item`, no
+ * `has_batch_no`, no `_base_actual_qty` means a line that skips the stock gate,
+ * cannot pick a batch, and — for a combo — gives `expandBundle` nothing to
+ * build a packing list from, so the parent sells and no component decrements.
+ * Fabricating those fields from the tile would be inventing stock data on the
+ * money path.
+ *
+ * So the payload is the CATALOGUE's item, looked up by code, and `null` when
+ * the register's catalogue does not carry it. Null is a real answer the caller
+ * must handle — declining to add is honest, and a guessed line is not.
+ *
+ * `lookup` is `itemsStore.getItemByCode`, injected rather than imported so this
+ * module stays pure and testable without a store.
+ */
+export const suggestionAddPayload = (
+	suggestion: ComboSuggestion | null | undefined,
+	lookup: (_itemCode: string) => any,
+): Record<string, unknown> | null => {
+	const code = String(suggestion?.item_code ?? "").trim();
+	if (!code || typeof lookup !== "function") return null;
+	const catalogItem = lookup(code);
+	if (!catalogItem || !catalogItem.item_code) return null;
+	// Copied, never handed over: `addItem` mutates what it is given (uom
+	// defaulting, batch selection), and the catalogue's own row must not
+	// acquire a qty because someone tapped a tile.
+	return { ...catalogItem, qty: 1 };
+};
+
+/**
+ * A plain, non-combo tile: an accessory offered beside the combos.
+ *
+ * NOTHING FEEDS THIS TODAY, and that is a statement about the read model
+ * rather than about this module. The artboard mixes three accessories with one
+ * combo, but the register has no authored "these go together" relation for
+ * loose items: `api/combos.py` answers for bundles, and the only other
+ * authored association in the product — a Promotional Scheme's `Give Product`
+ * slab (`api/offers.py::_build_product_discount_offers`) — is a discount
+ * mechanism that auto-applies and gives its item free or at a slab rate, so
+ * drawing it here at list price would misquote it. Inferring accessories from
+ * item groups or sales history would be a recommendation engine nobody asked
+ * for and nobody could audit.
+ *
+ * So the parameter stays, typed and tested, and the strip ships the half that
+ * has a source. When an accessory read model lands it plugs in here and the
+ * ranking, the stock rule and the Enter binding already work.
+ */
+export interface SuggestionAccessory extends CartLineStockSource {
+	item_code: string;
+	item_name: string;
+	rate: number;
+	image?: string | null;
+}
+
+/**
+ * The strip's inputs, NAMED.
+ *
+ * This was four positional arguments and it was called wrong in the one place
+ * it was called: `Pos.vue` passed the cart's LINES where `accessories` goes
+ * and nothing where the cart goes, which — had a combo ever loaded — would
+ * have offered the cashier the four items they had just scanned. Positional
+ * arguments of the same shape (arrays of item-ish objects) cannot be told
+ * apart by the compiler or by a reader. Named ones can.
+ */
+export interface BuildSuggestionsInput {
+	/** The register's combos, from `useComboOffers`. */
+	combos?: readonly ComboOffer[];
+	/** Loose accessories. See `SuggestionAccessory` — nothing supplies these. */
+	accessories?: readonly SuggestionAccessory[];
+	/** The ticket, as lines or as bare item codes. Both are accepted. */
+	cart?: readonly (string | { item_code?: unknown })[];
+	limit?: number;
+	availabilityContext?: ComboAvailabilityContext;
+	lowStockThreshold?: number;
+}
+
+/**
+ * Item codes from the ticket, whether it arrived as lines or as codes.
+ *
+ * The shell holds `invoiceDoc.items` — full lines — while every spec here
+ * holds codes, and demanding one shape of both is how a caller ends up
+ * mapping at the call site and getting it wrong. Blank entries are dropped so
+ * a half-built line cannot match a combo whose `targets` is also blank.
+ */
+const cartCodes = (cart: readonly (string | { item_code?: unknown })[]): string[] =>
+	(cart ?? [])
+		.map((entry) => String((typeof entry === "string" ? entry : entry?.item_code) ?? "").trim())
+		.filter(Boolean);
+
+/**
  * Rank the up-sell strip.
  *
  * Combos that target something already in the cart come first, because a
@@ -142,17 +249,19 @@ export const combosForCart = (
  * one the cashier cannot build muscle memory against, and the artboard binds
  * Enter to "agregar el primero".
  */
-export const buildSuggestions = (
-	combos: readonly ComboOffer[],
-	accessories: readonly { item_code: string; item_name: string; rate: number; actual_qty?: number; image?: string | null }[],
-	cartItemCodes: readonly string[],
-	limit: number = SUGGESTION_LIMIT,
-	options: {
-		availabilityContext?: ComboAvailabilityContext;
-		lowStockThreshold?: number;
-	} = {},
-): ComboSuggestion[] => {
-	const inCart = new Set((cartItemCodes ?? []).map(String));
+export const buildSuggestions = (input: BuildSuggestionsInput): ComboSuggestion[] => {
+	const {
+		combos = [],
+		accessories = [],
+		cart = [],
+		limit = SUGGESTION_LIMIT,
+		availabilityContext,
+		lowStockThreshold,
+	} = input ?? {};
+	const options = { availabilityContext, lowStockThreshold };
+
+	const cartItemCodes = cartCodes(cart);
+	const inCart = new Set(cartItemCodes);
 	const eligible = combosForCart(combos, cartItemCodes);
 
 	const comboTiles: ComboSuggestion[] = eligible
@@ -195,12 +304,18 @@ export const buildSuggestions = (
 
 	const itemTiles: ComboSuggestion[] = (accessories ?? [])
 		.filter((item) => !inCart.has(String(item?.item_code ?? "")))
-		.map((item) => ({
+		.map((item) => ({ item, stock: describeLineStock(item, { lowStockThreshold }) }))
+		// The same rule the combos above obey, for the same reason: a KNOWN
+		// zero is a dead tile, and the strip binds Enter to whichever tile
+		// leads. Only a known zero is dropped — a service or an offline tile
+		// reads as unknown and stays, because not knowing is not being out.
+		.filter(({ stock }) => !(stock.show && stock.value === 0))
+		.map(({ item, stock }) => ({
 			item_code: item.item_code,
 			item_name: item.item_name,
 			rate: toNumber(item.rate),
 			image: item.image ?? null,
-			availableQty: toNumber(item.actual_qty),
+			availableQty: stock.show ? stock.value : null,
 			kind: "item" as const,
 			reason: "universal" as const,
 		}));
