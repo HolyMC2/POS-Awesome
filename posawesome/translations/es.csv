@@ -2144,3 +2144,110 @@ Register Drawer Account (money leaves here),Cuenta de la Caja (de aquí sale el 
 Back Office Cash Account (money comes from here),Cuenta de Efectivo de Oficina (de aquí viene el dinero)
 Back Office Cash Account (money goes here),Cuenta de Efectivo de Oficina (aquí llega el dinero)
 (not set),(sin definir)
+Total to charge · {0} items,Total a cobrar · {0} artículos
+Change to give,Cambio a entregar
+Still owed,Falta por cubrir
+Balance due · order {0},Saldo a pagar · orden {0}
+To refund · ticket {0},A devolver · ticket {0}
+To recharge · {0} · {1},A recargar · {0} · {1}
+Opening float,Fondo inicial
+To upload · {0} tickets queued,Por subir · {0} tickets en cola
+COLLECT AND CLOSE,COBRAR Y CERRAR
+COLLECT AND DELIVER,COBRAR Y ENTREGAR
+REFUND {0},DEVOLVER {0}
+RECHARGE,RECARGAR
+OPEN SHIFT,ABRIR TURNO
+CLOSE SHIFT,CERRAR TURNO
+KEEP SELLING,SEGUIR VENDIENDO
+Register navigation,Navegación de la caja
+Shift not open,Turno sin abrir
+Needs connection,Necesita conexión
+Needs a connection,Necesita conexión
+Service Order,Orden de servicio
+Floor,Salón
+Recharge,Recarga
+Top-up,Recarga
+Back to sale,Volver a la venta
+Open the register first,Abre primero la caja
+Not enabled on this register,No habilitado en esta caja
+This destination does not exist.,Ese destino no existe.
+This register's profile does not include {0}.,El perfil de esta caja no incluye {0}.
+"{0} talks to the server every time it runs, so it stays closed until this register is back online.","{0} consulta al servidor cada vez que se usa, así que queda cerrado hasta que la caja vuelva a tener conexión."
+The shift is the envelope around everything else. Open it and the whole rail comes alive.,El turno es el sobre de todo lo demás. Ábrelo y el riel completo se enciende.
+Catalogue,Catálogo
+Close catalogue,Cerrar catálogo
+Anchored,Anclado
+Floating,Flotante
+Esc closes,Esc cierra
+Waiting for signal,Espera señal
+no signal,sin señal
+It uploads by itself when the signal returns,Se sube solo cuando vuelva la señal
+Keep selling,Seguir vendiendo
+To upload,Por subir
+ticket,ticket
+tickets,tickets
+You can,Sí puedes
+Charge and print,Cobrar e imprimir
+Prices and stock,Precios y existencias
+Service orders with photos,Órdenes de servicio con fotos
+Stamp CFDI,Timbrar CFDI
+Airtime recharges,Recargas de tiempo aire
+Send by WhatsApp,Enviar por WhatsApp
+COMBO,COMBO
+saves,ahorra
+list,lista
+left,quedan
+pcs,pzas
+Often bought together,Se suele llevar junto
+· combos and accessories that go together,· combos y accesorios que salen juntos
+Enter adds the first,Enter para agregar el primero
+Open cash movement,Abrir movimiento de efectivo
+"Expense, deposit or cash in","Gasto, depósito o entrada de efectivo"
+Open service orders,Abrir órdenes de servicio
+Repairs and external charge requests,Reparaciones y cobros externos
+Open recharges,Abrir recargas
+Close shift,Corte de caja
+Corte de caja,Corte de caja
+Open catalogue,Abrir catálogo
+Browse items beside the sale,Explorar artículos junto a la venta
+Show invoice panel,Mostrar panel de la venta
+Focus item search,Ir a buscar artículo
+Focus toolbar search,Ir a la búsqueda de la barra
+Add top search result,Agregar el primer resultado
+Toggle item settings,Mostrar u ocultar ajustes del artículo
+Price checker,Checador de precios
+Look up a price without touching the sale,Consulta un precio sin tocar la venta
+Lock POS screen,Bloquear la pantalla
+Show keyboard shortcuts,Ver atajos del teclado
+Cycles through cart rows on repeat,Recorre las líneas del carrito al repetir
+Edit invoice discount,Editar descuento de la venta
+Edit delivery charges,Editar cargos de entrega
+Edit posting date,Editar fecha de registro
+Focus customer search,Ir a buscar cliente
+Select first customer,Elegir el primer cliente
+New customer,Cliente nuevo
+Switch employee,Cambiar de empleado
+Open payment screen,Abrir la pantalla de cobro
+Submit sale,Cerrar la venta
+Submit sale and print,Cerrar la venta e imprimir
+Save draft and clear,Guardar borrador y limpiar
+Open draft invoices,Abrir borradores
+Open draft orders,Abrir pedidos en borrador
+Open returns,Abrir devoluciones
+Cancel current sale,Cancelar la venta actual
+Remove first cart item,Quitar la primera línea
+Shift details,Detalle del turno
+{0} lines · {1} pcs,{0} líneas · {1} pzas
+last:,último:
+Browse catalogue,Explorar catálogo
+Last scan resolved to {0},El último escaneo resolvió a {0}
+Qty for next item,Cantidad para el siguiente artículo
+Quantity for next item — tap to reset,Cantidad para el siguiente artículo — toca para reiniciar
+Posts opening stock to,Registra la existencia inicial en
+This register has no warehouse — opening stock is unavailable,Esta caja no tiene almacén — no se puede registrar existencia inicial
+Opening quantity needs a purchase price — ERPNext values the stock with it.,La cantidad inicial necesita precio de compra — con él se valúa la existencia.
+Opening quantity needs a warehouse on this POS Profile.,La cantidad inicial necesita un almacén en este Perfil de POS.
+Opening quantity cannot be negative.,La cantidad inicial no puede ser negativa.
+Enter a purchase price first,Captura primero el precio de compra
+Saldo/recarga requires an online connection,Saldo/recarga necesita conexión
+Please verify the barcode or check the item's availability.,Verifica el código de barras o la disponibilidad del artículo.
