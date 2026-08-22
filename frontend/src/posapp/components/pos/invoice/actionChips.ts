@@ -107,7 +107,10 @@ export const ACTION_CHIPS: readonly ActionChipDef[] = [
 	{
 		id: "open-saldo-picker",
 		actionId: "saldo.openRecharge",
-		label: "Recarga / Servicio",
+		// English source, Spanish in es.csv — like every other label here. This
+		// one shipped as a Spanish literal, which reads fine on these tenants and
+		// silently makes the string untranslatable for any other.
+		label: "Recharge / Service",
 		icon: "mdi-cellphone-arrow-down",
 		scope: "destination",
 		profileFlag: "saldo_enabled",

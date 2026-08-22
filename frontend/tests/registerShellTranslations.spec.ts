@@ -46,6 +46,13 @@ const SCANNED_DIRS = [
 	// a directory outside the scan ships English silently.
 	"components/pos/items",
 	"composables/pos/items",
+	// And `invoice/` — where the action chips, the cart line and the summary
+	// live. Three directories have now been added to this list one at a time,
+	// each after a surface moved into it and shipped English silently. The
+	// pattern is the point: a scope kept by hand goes stale every time the UI
+	// is reorganised, and the strings it misses are disproportionately the ones
+	// an operator reads when something has gone wrong.
+	"components/pos/invoice",
 ];
 
 /**

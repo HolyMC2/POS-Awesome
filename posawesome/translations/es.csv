@@ -2251,3 +2251,15 @@ Opening quantity cannot be negative.,La cantidad inicial no puede ser negativa.
 Enter a purchase price first,Captura primero el precio de compra
 Saldo/recarga requires an online connection,Saldo/recarga necesita conexión
 Please verify the barcode or check the item's availability.,Verifica el código de barras o la disponibilidad del artículo.
+remaining {0},quedan {0}
+Amount off,Descuento por importe
+Percent off,Descuento por porcentaje
+New total,Nuevo total
+Subtotal,Subtotal
+discount,descuento
+qty,cant
+Tap again to remove,Toca otra vez para quitar
+Loading records...,Cargando registros...
+guests,comensales
+"For 'Product Bundle' items, Warehouse, Serial No and Batch No will be considered from the 'Packing List' table. If Warehouse and Batch No are same for all packing items for any 'Product Bundle' item, those values can be entered in the main Item table; values will be copied to 'Packing List' table.","En artículos de tipo «Product Bundle», el almacén, el número de serie y el lote se toman de la tabla «Packing List». Si el almacén y el lote son los mismos para todos los componentes de un «Product Bundle», pueden capturarse en la tabla principal de artículos; los valores se copian a «Packing List»."
+Recharge / Service,Recarga / Servicio
