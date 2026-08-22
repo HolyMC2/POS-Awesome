@@ -1292,3 +1292,146 @@ the next posawesome-push-prod (gated).
 4. Weight/fraction + cotizaciones/NC — the two real capability builds.
 5. Giro seed factory throughput — Platform 5, after three proven slices,
    then the fourteen-giro list is seed work, not code work.
+
+### 17.6 Odoo POS parity audit and the real gap list
+
+Trigger (2026-08-22): a marketing post (`muchconsulting.com/blog/odoo-2/
+odoo-pos-69`) read as if Odoo POS was far ahead. It is not a feature spec —
+about twenty bullets, no Odoo version named, no depth. Audited every claim
+against this repo before letting it touch the plan.
+
+**Result: 12 of the 13 things that post names are already shipped here.**
+The gap it exposed is marketing, not product. Building a roadmap from that
+post would have funded a rebuild of kitchen displays and table management
+we already have, while the genuine gaps go unmentioned in it.
+
+Claim-by-claim, with repo evidence:
+
+| Post claims | State | Evidence |
+|---|---|---|
+| Online + offline, syncs on reconnect | shipped | offline queue, `pos_invoice_submission_ledger` |
+| Multi-device | shipped | PWA, `service-worker.ts` |
+| Customisable interface | shipped | `pos_capability_profile` |
+| Cash / card / digital payments | shipped | `Payments.vue`, `mpesa_*` |
+| Loyalty + customer tracking | shipped | `wallet/`, `pos_coupon`, `referral_code` |
+| Integrated inventory + accounting | shipped | ERPNext substrate |
+| Multi-store / franchise | partial | ERPNext multi-company yes; no register-level store switcher |
+| Barcode scanning | shipped | + `scale_barcode_settings` |
+| Promotions and discounts | shipped | `pos_offer`, `pos_offer_detail` |
+| Real-time stock sync | shipped | |
+| Kitchen display, order priority | shipped | `pos_kitchen_station`, `..._item_group` |
+| Table + delivery service | shipped | `pos_floor`, `pos_table`, `pos_table_order`, `FloorEditor.vue`, `delivery_charges` |
+| Tickets / memberships | absent | §4.5 deposits/packages/memberships remain unbuilt |
+
+Ours-and-not-theirs (do not lose these in any parity framing): CFDI 4.0
+timbrado inline, bolsa de saldo, recargas y tiempo aire, taller/repair-order
+integration, QZ Tray printing, offline folio reservation.
+
+#### Verified gaps, by priority
+
+Priority is by docomexico/mumulenceria revenue, not by Odoo's feature count.
+Each entry names the score it improves (§15) or it does not get built.
+
+- **P1 — Combos / bundles.** `combo` appears twice in this document (§4.3
+  Quick Service, §5.6 price lifecycle "later" column) and three incidental
+  times in code. It is currently scoped as a Quick Service concern; that is
+  wrong. Scan Retail and Repair+Retail both sell case+mica+instalación every
+  day, and the manual version already exists as the "se suele llevar junto"
+  strip. Needs: bundle doctype with component lines, price override with
+  displayed saving, availability = min(components), stock decrement per
+  component, and return/partial-return semantics. Score: ticket average,
+  and it is the cheapest real revenue item on this list.
+- **P1 — Self-order / QR menu / kiosk.** Zero hits for `kiosk`, `self order`,
+  `qr menu` in frontend or app. Odoo 17+ headline feature. Genuinely absent —
+  but it is a Quick Service capability, and Quick Service is evidence-gated
+  under §14 "Later". Do not start it until a cafetería is contracted. Score:
+  certified giro coverage.
+- **P2 — Split bill.** Four incidental hits; table orders exist, per-diner
+  splitting does not. Already named inside Product 4 restaurant beta
+  ("split/merge"). Keep it there; do not promote.
+- **P2 — Loyalty points program.** `wallet/` gives stored value (monedero);
+  there are no earning rules, tiers or expiry. Coupons and gift cards exist
+  as separate doctypes. Needs a rules layer, not a new store. Score: repeat
+  purchase rate.
+- **P2 — Register-level store switcher.** Zero hits for `multi-store`. ERPNext
+  handles multi-company; the register cannot move between sucursales without
+  re-login. Bites any tenant with three branches. Overlaps the §14 "Later"
+  line "branch/multi-register management".
+- **P3 — Ship later / scheduled delivery.** Zero hits. `delivery_charges`
+  exists; scheduling does not. Low value for repair+retail.
+- **P3 — Memberships / subscriptions / packages.** §4.5 Service Counter
+  already lists "deposits, packages, memberships and outstanding balances"
+  as unbuilt. Confirmed absent. Leave with Service Counter's evidence gate.
+
+#### Disposition
+
+Only **combos** moves. It is promoted out of §4.3 Quick Service into the
+Scan Retail (Product 2) and Repair+Retail (Product 3) slices, because those
+are the two certified paths and both sell bundles today. Everything else on
+this list is either already scheduled inside an existing wave or is
+correctly parked behind the §14 entry gate — none of it is promoted on the
+strength of a blog post.
+
+Status (2026-08-22): **DESIGN ONLY.** Combos are drawn into the register
+mockups (`muelle-site/design/register-hifi`, direction E): a combo cart line
+carrying a `COMBO · n` badge, the component list and the saving; a Combos
+category in the catalogue drawer filtered by the customer's device; and a
+combo up-sell in the "se suele llevar junto" strip. Nothing is implemented.
+Availability shown as min(components) is the design's claim and needs a
+back-end decision before build.
+
+The marketing finding stands on its own and belongs to the SaaS side, not
+here: our feature surface beats the post we were worried about, and our
+description of it does not. That is a §17.4-adjacent brand/collateral task.
+
+Addendum (2026-08-22, same day): the register mockups promote **Orden de
+servicio from dialog to rail destination**, with a pending-count badge on the
+rail item the way Salón already carries one. Desktop needs no contract change —
+it is a shell route beside Venta. Mobile does: `DOCK_TAB_IDS`
+(`vertical/viewContracts.ts`) and `VALID_DOCK_TABS`
+(`pos_capability_profile.py`) currently hold the same six ids in the same order
+and a parity test asserts both. Adding `orden` is a three-link change in one
+commit — frontend tuple, backend tuple, and a `DockTabDef` in
+`buildDockTabDefs` (the file's own comment: a backend-allowed id absent from
+the frontend tuple renders a blank tab, and a missing def fails `vue-tsc`).
+The repair preset would spend `floor`, which it never uses, on `orden`. Badge
+source would be a new count alongside `floorOpenOrdersCount`.
+
+### 17.7 The register reference canvas
+
+`muelle-site/design/register-hifi` is now the visual reference for this
+document — direction E (rail + drawer), sixteen artboards on five pages:
+Turno, Venta, Modos, Móvil, Descartada. It is DESIGN, not committed scope;
+each mode still answers to its own §14 gate.
+
+Coverage against §5.6's lifecycle: every stage has a screen. **Reverse** was
+the only stage with none — `Devolución` was a rail item that dead-ended — and
+now carries return by ticket/item/customer/serial/no-receipt-with-signature,
+original tender attribution, exchange as linked return + sale, and the
+supervisor exception inbox §5.4 asks for. **Start** gained §5.1: the readiness
+check is verified, not collected, and the rail renders disabled until the
+shift opens, because until then the register genuinely cannot do anything.
+
+Coverage against §4: all four certified modes are drawn — 4.2 Controlled
+(weight + tare + price-embedded barcode, lot/expiry with FEFO, exento beside
+gravado on one ticket, merma with reason), 4.3 Quick Service, 4.4 Table
+Service, 4.6 Repair + Retail. 4.2 also renders the rule that "the giro chooses
+which identity controls are required": serial, IMEI, size and colour are
+absent from a carnicería, stated on screen.
+
+Two invariants hold across all sixteen and are the thing to preserve if
+anyone edits them:
+
+1. **One number, one action.** The bottom band always carries the single
+   number that matters at that moment and the single primary action — total,
+   change, difference, balance due, amount to refund, amount to recharge,
+   opening float, amount queued. Same 60 px, same lane, tint by state.
+2. **One accent.** Exactly one saturated colour per screen, on the primary
+   button. Amber and green are state, never emphasis. Density was raised
+   twice without breaking this; it is the property that makes the density
+   safe.
+
+Money reconciles across artboards on purpose: the $149 return of ticket
+B-04788 is the same line in the corte's movements, and the corte's closing
+$5,366 is the "ayer cerró con" on the opening screen. If a future edit breaks
+one of those, the reference is lying about being one register.
