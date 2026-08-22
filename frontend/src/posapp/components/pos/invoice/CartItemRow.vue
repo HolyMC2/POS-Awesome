@@ -70,6 +70,18 @@
 						<v-icon size="small">mdi-undo</v-icon>
 					</v-btn>
 				</div>
+				<!-- `IPN001545 · Accesorios` — how an operator confirms they
+				     scanned the RIGHT variant. This shop sells near-identical
+				     cases differing only by model and colour, so the name alone
+				     cannot settle it. Rendered only when there is something to
+				     say; never a fabricated category. -->
+				<div
+					v-if="lineIdentity"
+					class="posa-cart-item-row__identity"
+					data-testid="cart-line-identity"
+				>
+					{{ lineIdentity }}
+				</div>
 			</td>
 
 			<!-- Quantity Column -->
@@ -132,6 +144,25 @@
 						<v-icon size="small">mdi-plus</v-icon>
 					</v-btn>
 				</div>
+			</td>
+
+			<!-- Existencia. Absence renders NOTHING, never 0 — see
+			     cartLineStock.ts. A 0 is a claim the cashier will repeat to a
+			     customer; not knowing is not the same as having none. -->
+			<td
+				v-else-if="column.key === 'stock'"
+				class="text-end"
+				:data-column-key="'stock'"
+				:data-stock-reason="lineStock.reason"
+			>
+				<span
+					v-if="lineStock.show"
+					class="posa-cart-item-row__stock"
+					:class="{ 'posa-cart-item-row__stock--low': lineStock.isLow }"
+					data-testid="cart-line-stock"
+				>
+					{{ __("remaining {0}", [formatFloat(lineStock.value, hideQtyDecimals ? 0 : undefined)]) }}
+				</span>
 			</td>
 
 			<!-- UOM Column (Optional) -->
@@ -416,6 +447,7 @@
 <script setup>
 import { computed, nextTick, ref } from "vue";
 import { debugLog } from "../../../utils/debug";
+import { describeLineStock, describeLineIdentity } from "./cartLineStock";
 
 defineOptions({
 	name: "CartItemRow",
@@ -530,6 +562,15 @@ const memoDeps = computed(() => {
 		isEditingDiscountAmount.value,
 		// v-memo would swallow the armed-delete repaint without this
 		deleteArmed.value,
+		// Stock and identity are rendered cells, so they must be dependencies
+		// or v-memo pins a stale `quedan` on a line whose UOM just changed —
+		// the figure is divided by conversion_factor, so a box/single switch
+		// moves it without touching qty or rate.
+		props.item.actual_qty,
+		props.item._base_actual_qty,
+		props.item.conversion_factor,
+		props.item.item_code,
+		props.item.item_group,
 	];
 	debugLog(`[CartItemRow] memoDeps updated for ${props.item.item_code}`, {
 		uom: props.item.uom,
@@ -539,6 +580,22 @@ const memoDeps = computed(() => {
 	});
 	return deps;
 });
+
+/**
+ * `quedan N` for this line, and the `IPN… · Grupo` subtitle beneath its name.
+ *
+ * Both derive from data the line already carries — `useItemAddition` puts
+ * `actual_qty` / `_base_actual_qty` on every added item and clamps against the
+ * same figure. Nothing here fetches: a per-line request would be N round trips
+ * on the hottest path in the product.
+ */
+const lineStock = computed(() =>
+	describeLineStock(props.item, {
+		lowStockThreshold: props.posProfile?.posa_low_stock_alert_threshold,
+	}),
+);
+
+const lineIdentity = computed(() => describeLineIdentity(props.item));
 
 const qtyLength = computed(() => String(Math.abs(props.item.qty || 0)).replace(".", "").length);
 
@@ -758,6 +815,37 @@ function cancelDiscountAmountEdit() {
 </script>
 
 <style scoped>
+/* The line's identity subtitle and its stock figure.
+ *
+ * Both resolve through `--pos-*` rather than literal hex, so they follow the
+ * theme. The combo line still carries literals here (`#667085`, `#8a5a0d`) —
+ * it predates the dark-mode sweep and is not this file's to change, but the
+ * values below are the same colours by their token names, so the two rows read
+ * identically in light and, unlike the combo, stay legible in dark. */
+.posa-cart-item-row__identity {
+	font-size: 11.5px;
+	line-height: 1.25;
+	color: var(--pos-text-muted, #667085);
+	margin-top: 1px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.posa-cart-item-row__stock {
+	font-size: 12.5px;
+	color: var(--pos-text-muted, #667085);
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Amber is STATE, and this is a tint on text — never a fill. §17.7's second
+   invariant spends the one saturated accent on the primary button. */
+.posa-cart-item-row__stock--low {
+	color: var(--pos-button-warning-text, #e65100);
+	font-weight: 600;
+}
+
 /* Local styles specific to the row only */
 .delete-action-btn--armed {
 	background: rgb(var(--v-theme-error)) !important;

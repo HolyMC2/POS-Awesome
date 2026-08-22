@@ -35,15 +35,48 @@
 				</tr>
 			</thead>
 			<tbody>
+				<!--
+					An empty ticket says that it is empty, and nothing else.
+
+					What stood here was a 78 px illustration inside a 140 px
+					panel — some 270 px of cart — over the line "add items from
+					the selector to start building this sale". Both halves were
+					wrong by 2026-08-22. There is no selector: the catalogue is
+					a drawer, opened from the rail, from the chord, or from the
+					"Explorar catálogo" button that sits in the scan bar
+					directly above this table (`#register-scan-bar`,
+					`shell/Pos.vue`). Copy naming a control that no longer
+					exists is worse than silence — it sends the cashier hunting
+					for a panel that will never appear.
+
+					`Main.dc.html` is SILENT here rather than opposed: it never
+					draws an empty cart, so it rules on this region's density
+					and not on whether it speaks. The choice is ours, and it is
+					one descriptive line — not one instructional line.
+
+					Descriptive on purpose. The control an instruction would
+					name is already on screen, with its resolved chord chip, a
+					few pixels above this table on every viewport of the sale
+					screen; saying it a third time is the "everything twice"
+					defect in miniature. It is also the half that rots — this
+					copy needed fixing precisely BECAUSE it named a control,
+					while "No items in cart" would have come through the whole
+					redesign untouched.
+
+					What nothing else on the screen says is the state itself.
+					Zero rows is ambiguous — empty ticket, failed render, or a
+					cart search that hid every line — and the filtered case is
+					the dangerous one: read as an empty ticket, a cashier
+					re-rings a sale on top of six lines they cannot see. One
+					line separates the three, gives a screen reader something
+					to announce where zero rows announce nothing, and spends no
+					accent (§1 invariant 2 — the accent is the band's).
+				-->
 				<tr v-if="!visibleItems.length" class="posa-cart-empty-row">
 					<td :colspan="finalVisibleColumns.length">
-						<div class="posa-cart-empty-state">
-							<div class="posa-cart-empty-state__icon-wrap">
-								<v-icon :icon="emptyStateIcon" size="42" class="posa-cart-empty-state__icon" />
-							</div>
-							<div class="posa-cart-empty-state__title">{{ emptyStateTitle }}</div>
-							<div class="posa-cart-empty-state__subtitle">{{ emptyStateSubtitle }}</div>
-						</div>
+						<p class="posa-cart-empty-note" data-testid="cart-empty-note">
+							{{ emptyStateTitle }}
+						</p>
 					</td>
 				</tr>
 				<template v-for="item in visibleItems" :key="item.posa_row_id">
@@ -301,14 +334,13 @@ const visibleItems = computed(() => {
 	if (!term) return list;
 	return list.filter((row: any) => customItemFilter(row, term, row));
 });
-const emptyStateIcon = computed(() => (hasItemSearch.value ? "mdi-magnify" : "mdi-cart-outline"));
+// The empty cart's whole vocabulary: which of the two states it is in. Both
+// strings already ship translated; the instructional third one was retired
+// with the illustration (see the note on the empty row). `hasItemSearch` is
+// the only distinction worth drawing here, and it is the one that matters —
+// "no matching" tells the cashier a filter is on, which "no items" would hide.
 const emptyStateTitle = computed(() =>
 	hasItemSearch.value ? __("No matching items in cart") : __("No items in cart"),
-);
-const emptyStateSubtitle = computed(() =>
-	hasItemSearch.value
-		? __("Try a different search term or clear the cart search.")
-		: __("Add items from the selector to start building this sale."),
 );
 
 const memoizedIsNegative = computed(() => {
@@ -328,7 +360,77 @@ const {
 	tableDensity,
 } = responsive;
 
-const finalVisibleColumns = computed(() => [...responsiveHeaders.value, DATA_TABLE_EXPAND_COLUMN]);
+/**
+ * The cart's column anatomy, from `Main.dc.html` nodes 32–36:
+ *
+ *     Cant | Descripción | Existencia | Precio u. | Importe
+ *
+ * Two things happen here that do not happen in `available_columns`, and both
+ * belong to the TABLE rather than to the operator's column preferences.
+ *
+ * ORDER. Quantity comes first. It is the most-touched control on the row — a
+ * `− 1 +` stepper the cashier reaches for on most lines — and it sat third,
+ * behind the name. The operator chooses WHICH optional columns appear
+ * (`useInvoiceItems.available_columns`, persisted to localStorage); the
+ * artboard chooses the order they appear in, and a saved preference from
+ * before this change must not pin the old sequence. So the order is applied
+ * here, over whatever set survives the responsive filter.
+ *
+ * STOCK. `Existencia` is injected rather than registered, the same way
+ * `DATA_TABLE_EXPAND_COLUMN` is: it is structural, not optional. Registering
+ * it in `available_columns` would make it hideable and would also mean every
+ * register that has already saved a preference never sees it, since the saved
+ * list is a closed set of keys. If it should become hideable, the entry
+ * belongs in `useInvoiceItems.ts` — reported, not assumed.
+ */
+const CART_COLUMN_ORDER = [
+	"qty",
+	"item_name",
+	"uom",
+	"stock",
+	"price_list_rate",
+	"discount_percentage",
+	"discount_amount",
+	"rate",
+	"amount",
+	"posa_is_offer",
+	"actions",
+];
+
+// Plain numbers, deliberately. `calculateColumnWidth` scales these against the
+// container; a `max()` expression here is silently dropped under the table's
+// fixed layout and every column collapses to equal width.
+const STOCK_COLUMN = {
+	title: __("Stock"),
+	key: "stock",
+	align: "end" as const,
+	required: true,
+	sortable: false,
+	width: 96,
+	minWidth: 72,
+};
+
+const finalVisibleColumns = computed(() => {
+	const columns = [...responsiveHeaders.value];
+
+	// Only alongside the description — at the narrowest breakpoints the
+	// responsive filter drops down to a couple of columns, and a stock figure
+	// beside nothing to identify it by is noise.
+	const hasName = columns.some((column: any) => (column?.key || column?.value) === "item_name");
+	if (hasName && !columns.some((column: any) => (column?.key || column?.value) === "stock")) {
+		columns.push(STOCK_COLUMN);
+	}
+
+	const rank = (column: any) => {
+		const index = CART_COLUMN_ORDER.indexOf(column?.key || column?.value);
+		// An unrecognised column keeps its relative place at the end rather
+		// than jumping to the front, which is what index -1 would sort to.
+		return index === -1 ? CART_COLUMN_ORDER.length : index;
+	};
+	columns.sort((a: any, b: any) => rank(a) - rank(b));
+
+	return [...columns, DATA_TABLE_EXPAND_COLUMN];
+});
 
 const showColumnHeaders = computed(() =>
 	shouldShowColumnHeaders(visibleItems.value.length, breakpoint.value),
@@ -498,5 +600,34 @@ defineExpose({
 .posa-items-table-container {
 	position: relative;
 	transition: all 0.3s ease;
+}
+
+/*
+ * The empty ticket's one line.
+ *
+ * Scoped and named apart from the retired `.posa-cart-empty-state*` rules
+ * rather than overriding them: those live in `items-table-styles.css`, which
+ * this task does not own, and an override chain that has to out-specify a
+ * 140 px `min-height` is the kind of thing a later cleanup deletes the wrong
+ * half of. The row keeps `.posa-cart-empty-row`, which is still correct — it
+ * zeroes the cell padding, and at the xs breakpoint it opts the row out of
+ * the card grid the other rows become.
+ *
+ * No `min-height`, no `height`, no flex, no `overflow`. The cart is the
+ * register's only scrollport and its single elastic sibling (59c5fe1ad); this
+ * is content INSIDE that scrollport, so it must not declare a size of its own.
+ * Roughly 40 px against the illustration's ~270 px, and the difference is
+ * given back to the scrollport rather than spent on a gap.
+ *
+ * Muted secondary text, no background, no icon, no accent: it is a statement
+ * about the ticket, not a thing to look at.
+ */
+.posa-cart-empty-note {
+	margin: 0;
+	padding: 10px 12px;
+	text-align: center;
+	font-size: 0.85rem;
+	line-height: 1.4;
+	color: var(--pos-text-secondary);
 }
 </style>
