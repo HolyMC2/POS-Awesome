@@ -1386,7 +1386,14 @@ defineExpose({
 
 <style scoped>
 /* "dynamic-card" no longer composes from pos-card; the pos-card class is added directly in the template */
+/* Passes the column's height down to `.selection-card`. Without the flex
+ * column here the chain broke at this div and the card fell back to
+ * content height, which is why the panel needed an explicit vh in the
+ * first place. */
 .items-selector-shell {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
 	min-height: 0;
 	min-width: 0;
 }
@@ -1414,8 +1421,22 @@ defineExpose({
 	min-height: 0;
 }
 
+/* Desktop: no height of its own — it fills the column and hands the leftover
+ * to `.selector-results-card`, which hands it to the virtual scroller. The
+ * phone branch of useItemsSelectorPanelSizing still sets an explicit height
+ * inline, and that inline value wins over this rule, as intended. */
 .selection-card {
 	border-radius: 22px;
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	/* Load-bearing. The card carries Vuetify's `mx-auto`, and an auto margin on
+	 * the cross axis makes a flex item shrink-to-fit and centre instead of
+	 * stretching — so the moment `.items-selector-shell` became a flex column
+	 * (for the height chain) this panel collapsed to content width with dead
+	 * space beside it. As a plain block it had filled the column. */
+	width: 100%;
 }
 
 .selector-section-card {

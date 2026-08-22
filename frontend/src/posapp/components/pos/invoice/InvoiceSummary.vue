@@ -717,10 +717,16 @@ defineExpose({
 	transition: all 0.3s ease;
 }
 
+/* Pinned, not sticky-by-luck. `flex: 0 0 auto` is what guarantees the totals
+ * and the action grid keep their full height and stay on screen: the cart list
+ * above is the elastic sibling, so this can never be scrolled out of reach.
+ * `position: sticky` is kept for the mobile path, where the column still
+ * scrolls with the document. */
 .sticky-summary-card {
 	position: sticky;
 	bottom: 0;
 	z-index: 9;
+	flex: 0 0 auto;
 	box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
 }
 

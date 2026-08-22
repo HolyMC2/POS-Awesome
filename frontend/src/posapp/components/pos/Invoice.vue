@@ -4,22 +4,25 @@
 		<!-- Cancel Sale Confirmation Dialog -->
 		<CancelSaleDialog v-model="cancel_dialog" @confirm="cancel_invoice" />
 
-		<!-- Main Invoice Card (contains all invoice content) -->
+		<!-- Main Invoice Card (contains all invoice content).
+
+		     No inline height by design. This card used to be pinned to
+		     `var(--container-height)` — a 58–74vh GUESS from useResponsive —
+		     with `overflow: auto`, and that is what produced the two live
+		     scrollbars: the card scrolled internally because its height was a
+		     fraction of the VIEWPORT rather than of what was left in the column,
+		     and the shell scrolled because that fraction plus the summary
+		     overflowed the column. It now takes the leftover space via flex, and
+		     the cart table is the only scrollport. The `resize: vertical` handle
+		     went with it: it existed so the operator could drag around the wrong
+		     height. -->
 		<v-card
 			ref="invoiceCard"
-			:style="{
-				height: invoiceHeight || 'var(--container-height)',
-				maxHeight: invoiceHeight || 'var(--container-height)',
-				resize: canResizeInvoicePanel() ? 'vertical' : 'none',
-				overflow: 'auto',
-			}"
 			:class="[
-				'cards my-0 py-0 mt-3 resizable invoice-main-card',
+				'cards my-0 py-0 mt-3 invoice-main-card',
 				'pos-themed-card',
 				{ 'return-mode': isReturnInvoice },
 			]"
-			@mouseup="saveInvoiceHeight($refs.invoiceCard)"
-			@touchend="saveInvoiceHeight($refs.invoiceCard)"
 		>
 			<!-- Dynamic padding wrapper -->
 			<div class="dynamic-padding">
@@ -1324,13 +1327,20 @@ export default {
 	background-color: var(--pos-surface-muted) !important;
 }
 
+/* THE height chain (desktop). Exactly one element below this scrolls: the
+ * cart table wrapper. Every ancestor is `flex: 1 1 auto; min-height: 0` so the
+ * cart gets what is LEFT in the column, and the summary/action grid is
+ * `flex: 0 0 auto` so it is pinned and can never scroll out of reach.
+ * `min-height: 0` is the load-bearing half — flex items default to
+ * `min-height: auto` and refuse to shrink below their content, which is how a
+ * "just add overflow" fix ends up nesting a second scrollport instead. */
 .invoice-shell {
 	display: flex;
 	flex-direction: column;
 	gap: var(--dynamic-sm);
 	flex: 1 1 auto;
 	min-height: 0;
-	overflow: auto;
+	overflow: hidden;
 }
 
 /* No dock reservation here. The shell root is `class="pa-0 invoice-shell"`,
@@ -1346,8 +1356,9 @@ export default {
 .invoice-main-card {
 	display: flex;
 	flex-direction: column;
-	flex: 0 0 auto;
-	overflow: auto !important;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
 	min-width: 0;
 }
 
@@ -1521,25 +1532,36 @@ export default {
 	color: var(--pos-text-primary);
 }
 
+/* The cart list is the elastic one: it absorbs whatever the config sections
+ * above and the summary below do not use. `min-height: 0` (not 320px) so it can
+ * shrink on a short viewport instead of pushing the totals off-screen. */
 .invoice-items-card {
 	padding-bottom: var(--dynamic-xs);
 	display: flex;
 	flex-direction: column;
-	flex: 0 0 auto;
-	min-height: 320px;
-	overflow: visible;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
 }
 
 /* Responsive breakpoints */
 @media (max-width: 768px) {
+	/* Mobile deliberately opts OUT of the desktop height chain: DefaultLayout
+	 * hands the document back its own scroll below this width, the compact
+	 * switcher shows one panel at a time, and the fixed dock carries the
+	 * actions. So everything here goes back to natural height — a lone
+	 * scrollport inside a page that also scrolls is the phone version of the
+	 * same bug. */
 	.invoice-shell {
 		gap: var(--dynamic-xs);
+		flex: 0 0 auto;
+		overflow: visible;
 	}
 
 	.invoice-main-card {
 		height: auto !important;
 		max-height: none !important;
-		resize: none !important;
+		flex: 0 0 auto;
 		overflow: visible !important;
 	}
 
@@ -1584,7 +1606,10 @@ export default {
 		margin-right: 0;
 		width: 100%;
 		max-width: 100%;
+		flex: 0 0 auto;
 		min-height: 280px;
+		/* Give the scroll back to the page here — see the note above. */
+		overflow: visible;
 	}
 }
 
@@ -1645,6 +1670,10 @@ export default {
 	margin-bottom: 8px;
 }
 
+/* THE scrollport for the cart — the only one in this column. Its children keep
+ * `height: auto` so they grow naturally and this wrapper does the scrolling;
+ * the sticky column-selector below now sticks to THIS box, which is what makes
+ * the header hold while the rows move. */
 .items-table-wrapper {
 	position: relative;
 	margin-top: var(--dynamic-sm);
@@ -1653,9 +1682,13 @@ export default {
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
-	flex: 0 0 auto;
-	min-height: 320px;
+	flex: 1 1 auto;
+	min-height: 0;
 	min-width: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
 }
 
 :deep(.items-table-wrapper .column-selector-container) {
@@ -1665,9 +1698,11 @@ export default {
 	background: var(--pos-card-bg);
 }
 
+/* Natural height on purpose: the wrapper above scrolls, this grows. The old
+ * `min-height: 320px` forced a scroll even on a two-line cart. */
 :deep(.items-table-wrapper .posa-items-table-container) {
 	flex: 0 0 auto;
-	min-height: 320px;
+	min-height: 0;
 	height: auto !important;
 	max-height: none !important;
 	overflow: visible !important;

@@ -1241,6 +1241,36 @@ export default {
 	margin: 0;
 }
 
+/* Desktop (>=1100px, the two-column register) is viewport-locked: this view
+ * fits `.page-content` exactly, so the PAGE scrollbar never appears and the
+ * only scrolling happens inside a panel. Below 1100px nothing here applies —
+ * the compact switcher shows one panel at a time and the 769-1099 band still
+ * scrolls through `.page-content`, which tests/defaultLayoutMainScroller.spec.ts
+ * guards. Deliberately scoped rather than global for that reason. */
+@media (min-width: 1100px) {
+	.dynamic-container {
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	.dynamic-main-row {
+		flex: 1 1 auto;
+		min-height: 0;
+		flex-wrap: nowrap;
+	}
+
+	/* No `height: 100%` here on purpose — these columns carry a top margin, so
+	 * an explicit 100% would overflow the row by exactly that margin. The row's
+	 * default `align-items: stretch` already gives them full height. */
+	.dynamic-col--selector,
+	.dynamic-col--invoice {
+		min-height: 0;
+		overflow: hidden;
+	}
+}
+
 .dynamic-main-row--phone {
 	align-items: stretch;
 }

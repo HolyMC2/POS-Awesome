@@ -23,20 +23,32 @@ export function useItemsSelectorPanelSizing({
 	);
 
 	const selectorCardStyle = computed<CSSProperties>(() => {
-		const containerHeight = responsiveStyles.value["--container-height"];
-		const height = isPhone.value ? PHONE_SELECTOR_HEIGHT : containerHeight;
+		if (isPhone.value) {
+			// Phone keeps an explicit height: the document scrolls below 768px
+			// and the fixed dock eats the bottom, so the panel has to be told
+			// how much room it actually has. The virtual scroller owns all
+			// vertical scroll here — letting the card scroll too gave two
+			// nested scrollers and rows sliding behind the sticky search bar.
+			return {
+				height: PHONE_SELECTOR_HEIGHT,
+				maxHeight: PHONE_SELECTOR_HEIGHT,
+				minHeight: "calc(var(--viewport-height) * 0.46)",
+				overflow: "hidden",
+				position: "relative",
+			};
+		}
 
+		// Desktop takes the leftover space in its column instead of a slice of
+		// the viewport. The old version set `height: var(--container-height)`
+		// (58–74vh, guessed per breakpoint in useResponsive) plus
+		// `overflow: auto`, so the panel scrolled internally whenever the guess
+		// undershot the real column — while the page scrolled whenever it
+		// overshot. Both at once is what the cashier was fighting. The inner
+		// chain is already correct: `.selector-header-card` is `flex: 0 0 auto`
+		// and `.selector-results-card` is `flex: 1 1 auto; min-height: 0`, so
+		// the virtual scroller ends up the single scrollport.
 		return {
-			height,
-			maxHeight: height,
-			minHeight: isPhone.value
-				? "calc(var(--viewport-height) * 0.46)"
-				: containerHeight,
-			resize: canResizeSelectorPanel.value ? "vertical" : "none",
-			// On phone the virtual scroller owns all vertical scroll; letting
-			// the card scroll too gave two nested scrollers and rows sliding
-			// behind the sticky search bar.
-			overflow: isPhone.value ? "hidden" : "auto",
+			overflow: "hidden",
 			position: "relative",
 		};
 	});
