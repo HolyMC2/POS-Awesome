@@ -24,313 +24,111 @@
 						@click="close_dialog"
 					/>
 				</v-card-title>
-				<v-container class="returns-card__content">
-					<!-- Invoice ID and Date Range search -->
-					<v-row class="mb-2">
-						<v-col cols="12">
-							<v-alert
-								density="compact"
-								type="info"
-								variant="outlined"
-								v-if="!from_date && !to_date"
-							>
-								<small>{{ __("Use date range to search for older invoices") }}</small>
-							</v-alert>
-						</v-col>
-					</v-row>
-					<v-row class="mb-3">
-						<v-col cols="12" sm="6">
-							<v-text-field
-								color="primary"
-								:label="frappe._('Invoice ID')"
-								class="pos-themed-input"
-								hide-details
-								v-model="invoice_name"
-								density="compact"
-								clearable
-							></v-text-field>
-						</v-col>
-						<v-col cols="12" sm="3">
-							<VueDatePicker
-								v-model="from_date"
-								model-type="format"
-								format="dd-MM-yyyy"
-								:enable-time-picker="false"
-								auto-apply
-								class="pos-themed-input"
-								@update:model-value="formatFromDate()"
-							/>
-						</v-col>
-						<v-col cols="12" sm="3">
-							<VueDatePicker
-								v-model="to_date"
-								model-type="format"
-								format="dd-MM-yyyy"
-								:enable-time-picker="false"
-								auto-apply
-								class="pos-themed-input"
-								@update:model-value="formatToDate()"
-							/>
-						</v-col>
-					</v-row>
-
-					<!-- Customer search fields -->
-					<v-row class="mb-2">
-						<v-col cols="12" sm="6">
-							<v-text-field
-								color="primary"
-								:label="frappe._('Customer Name')"
-								class="pos-themed-input"
-								hide-details
-								v-model="customer_name"
-								density="compact"
-								clearable
-							></v-text-field>
-						</v-col>
-						<v-col cols="12" sm="6">
-							<v-text-field
-								color="primary"
-								:label="frappe._('Customer ID')"
-								class="pos-themed-input"
-								hide-details
-								v-model="customer_id"
-								density="compact"
-								clearable
-							></v-text-field>
-						</v-col>
-					</v-row>
-					<v-row class="mb-3">
-						<v-col cols="12" sm="6">
-							<v-text-field
-								color="primary"
-								:label="frappe._('Mobile Number')"
-								class="pos-themed-input"
-								hide-details
-								v-model="mobile_no"
-								density="compact"
-								clearable
-							></v-text-field>
-						</v-col>
-						<v-col cols="12" sm="6">
-							<v-text-field
-								color="primary"
-								:label="frappe._('Tax ID')"
-								class="pos-themed-input"
-								hide-details
-								v-model="tax_id"
-								density="compact"
-								clearable
-							></v-text-field>
-						</v-col>
-					</v-row>
-
-					<!-- Amount Filter -->
-					<v-row class="mb-3">
-						<v-col cols="12" sm="6">
-							<v-text-field
-								color="primary"
-								:label="frappe._('Minimum Amount')"
-								class="pos-themed-input"
-								hide-details
-								v-model="min_amount"
-								density="compact"
-								clearable
-								type="number"
-								inputmode="decimal"
-								enterkeyhint="done"
-								min="0"
-								placeholder="0"
-							></v-text-field>
-						</v-col>
-						<v-col cols="12" sm="6">
-							<v-text-field
-								color="primary"
-								:label="frappe._('Maximum Amount')"
-								class="pos-themed-input"
-								hide-details
-								v-model="max_amount"
-								density="compact"
-								clearable
-								type="number"
-								inputmode="decimal"
-								enterkeyhint="done"
-								min="0"
-								placeholder="No limit"
-							></v-text-field>
-						</v-col>
-					</v-row>
-
-					<v-row>
-						<v-col cols="12" class="pt-0 pb-0">
-							<v-divider></v-divider>
-						</v-col>
-					</v-row>
-
-					<!-- Action buttons -->
-					<v-row class="mt-2 mb-2 returns-actions">
-						<v-col cols="12" sm="4" md="auto">
-							<v-btn block variant="text" color="primary" @click="search_invoices">
-								<v-icon start>mdi-magnify</v-icon>
-								{{ __("Search") }}
-							</v-btn>
-						</v-col>
-						<v-col cols="12" sm="4" md="auto">
-							<!-- Neutral, not amber. Clearing a search is not a warning, and
-							     amber is reserved for state (§17.7 invariant 2) — spending it
-							     as a category label is what stops the band's amber shortfall
-							     from meaning anything. -->
-							<v-btn block variant="text" @click="clear_search">
-								<v-icon start>mdi-refresh</v-icon>
-								{{ __("Clear") }}
-							</v-btn>
-						</v-col>
-						<v-col
-							cols="12"
-							sm="4"
-							md="auto"
-							v-if="pos_profile.posa_allow_return_without_invoice == 1"
-						>
-							<v-btn block variant="text" @click="return_without_invoice">
-								{{ __("Return without Invoice") }}
-							</v-btn>
-						</v-col>
-					</v-row>
-
-					<!-- Results -->
-					<v-row>
-						<v-col cols="12" class="pa-0 mt-1" v-if="dialog_data && dialog_data.length > 0">
-							<div v-if="isCompactReturns" class="returns-results-list">
-								<button
-									v-for="item in dialog_data"
-									:key="item.name"
-									type="button"
-									class="returns-result-card"
-									:class="{
-										'returns-result-card--selected': isSelectedInvoice(item),
-										'returns-result-card--expired': item.posa_return_expired,
-									}"
-									@click="selectInvoice(item)"
-								>
-									<div class="returns-result-card__top">
-										<div class="returns-result-card__identity">
-											<strong>{{ item.customer }}</strong>
-											<span>{{ item.name }}</span>
-										</div>
-										<div class="returns-result-card__amount">
-											{{ currencySymbol(item.currency)
-											}}{{ formatCurrency(item.grand_total) }}
-										</div>
-									</div>
-									<div class="returns-result-card__meta">
-										<span
-											>{{ __("Date") }}:
-											{{ formatDateDisplay(item.posting_date) }}</span
-										>
-										<span v-if="item.posa_return_valid_upto">
-											{{ __("Valid until") }}:
-											{{ formatDateDisplay(item.posa_return_valid_upto) }}
-										</span>
-									</div>
-									<div class="returns-result-card__chips">
-										<v-chip
-											v-if="item.posa_return_expired"
-											color="error"
-											size="small"
-											label
-										>
-											{{ __("Return window passed") }}
-										</v-chip>
-										<v-chip
-											v-else-if="isSelectedInvoice(item)"
-											color="primary"
-											size="small"
-											label
-										>
-											{{ __("Selected") }}
-										</v-chip>
-									</div>
-								</button>
-							</div>
-							<v-data-table
-								v-else
-								:headers="headers"
-								:items="dialog_data"
-								item-key="name"
-								class="elevation-1 returns-table"
-								show-select
-								v-model="selected"
-								select-strategy="single"
-								return-object
-								:row-props="returnRowProps"
-								:footer-props="{
-									'items-per-page-options': [10, 25, 50, 100],
-									'items-per-page-text': 'Invoices per page',
-								}"
-								:items-per-page="25"
-							>
-								<template v-slot:item.posting_date="{ item }">
-									{{ formatDateDisplay(item.posting_date) }}
-								</template>
-								<template v-slot:item.posa_return_valid_upto="{ item }">
-									<div class="d-flex align-center">
-										<span v-if="item.posa_return_valid_upto">
-											{{ formatDateDisplay(item.posa_return_valid_upto) }}
-										</span>
-										<v-chip
-											v-if="item.posa_return_expired"
-											color="error"
-											size="small"
-											class="ml-2"
-											label
-										>
-											{{ __("Return window passed") }}
-										</v-chip>
-									</div>
-								</template>
-								<template v-slot:item.grand_total="{ item }">
-									{{ currencySymbol(item.currency) }}
-									{{ formatCurrency(item.grand_total) }}
-								</template>
-							</v-data-table>
-
-							<!-- Load More button at the bottom of results -->
-							<div class="text-center mt-3" v-if="has_more_invoices">
-								<v-btn
+				<v-card-text class="returns-card__content">
+					<ReturnFinder
+						:methods="findMethods"
+						:active-method="activeFindMethod"
+						:term="findTerm"
+						:searching="finding"
+						:searched-once="searched_once"
+						:search-error="findError"
+						:results="dialog_data"
+						:selected-sale="selectedSale"
+						:cashier="originalCashier"
+						:cashier-on-duty="cashierOnDuty"
+						:warranty="warranty"
+						:lines="returnLines"
+						:selection="returnSelection"
+						:authorisers="authorisers"
+						:no-ticket="noTicketView"
+						:format-currency="formatReturnCurrency"
+						:format-date="formatSaleDate"
+						@update:active-method="setFindMethod"
+						@update:term="setFindTerm"
+						@update:selection="setReturnSelection"
+						@update:no-ticket="patchNoTicket"
+						@search="search_invoices"
+						@select-sale="selectSale"
+						@proceed="proceed"
+					>
+						<template #filters>
+							<!-- The old search form's date and amount ranges, kept
+							     verbatim. The artboard replaces the four customer boxes
+							     (one "por cliente" field now ORs all four server-side) but
+							     says nothing about these, and the shipped dialog tells the
+							     operator in so many words to reach for the date range when
+							     an invoice is old. Losing that while converging a view
+							     would be a capability traded for a layout. -->
+							<div class="returns-filters">
+								<VueDatePicker
+									v-model="from_date"
+									model-type="format"
+									format="dd-MM-yyyy"
+									:enable-time-picker="false"
+									auto-apply
+									class="pos-themed-input"
+									@update:model-value="formatFromDate()"
+								/>
+								<VueDatePicker
+									v-model="to_date"
+									model-type="format"
+									format="dd-MM-yyyy"
+									:enable-time-picker="false"
+									auto-apply
+									class="pos-themed-input"
+									@update:model-value="formatToDate()"
+								/>
+								<v-text-field
 									color="primary"
-									variant="outlined"
-									:loading="loading_more"
-									@click="load_more_invoices"
-								>
-									{{ __("Load More Invoices") }}
+									:label="frappe._('Minimum Amount')"
+									class="pos-themed-input"
+									hide-details
+									v-model="min_amount"
+									density="compact"
+									type="number"
+									inputmode="decimal"
+									min="0"
+									placeholder="0"
+								></v-text-field>
+								<v-text-field
+									color="primary"
+									:label="frappe._('Maximum Amount')"
+									class="pos-themed-input"
+									hide-details
+									v-model="max_amount"
+									density="compact"
+									type="number"
+									inputmode="decimal"
+									min="0"
+									placeholder="No limit"
+								></v-text-field>
+								<v-btn block variant="text" @click="clear_search">
+									<v-icon start>mdi-refresh</v-icon>
+									{{ __("Clear") }}
 								</v-btn>
 							</div>
-						</v-col>
-						<v-col
-							cols="12"
-							class="text-center"
-							v-else-if="searched_once && (!dialog_data || dialog_data.length === 0)"
-						>
-							<v-alert type="warning" text>
-								{{ __("No invoices found. Try different search criteria.") }}
-							</v-alert>
-						</v-col>
-					</v-row>
-				</v-container>
+						</template>
+						<template #results-footer>
+							<v-btn
+								v-if="has_more_invoices"
+								block
+								color="primary"
+								variant="outlined"
+								:loading="loading_more"
+								@click="load_more_invoices"
+							>
+								{{ __("Load More Invoices") }}
+							</v-btn>
+						</template>
+					</ReturnFinder>
+				</v-card-text>
 				<v-card-actions class="mt-1 returns-card__footer">
-					<!-- Devolución is a rail destination now, so it has one primary:
-					     committing the selected invoices. That takes the accent.
-					     Close is a dismissal rather than a destructive act, so it
-					     drops to neutral text — red was emphasis, not meaning. -->
+					<!-- One primary per screen, and it is not here: "Continue the
+					     return" lives inside the finder beside the record it commits,
+					     which is the only place a cashier can read what they are about
+					     to hand back. Close is a dismissal, so it stays neutral text. -->
 					<v-btn variant="text" @click="close_dialog">
 						{{ __("Close") }}
-					</v-btn>
-					<v-btn
-						v-if="selected.length"
-						color="primary"
-						variant="flat"
-						@click="submit_dialog"
-					>
-						{{ __("Select") }}
 					</v-btn>
 				</v-card-actions>
 			</v-card>
@@ -342,10 +140,33 @@
 import format, { formatUtils } from "../../../format";
 import { useInvoiceStore } from "../../../stores/invoiceStore.js";
 import { useUIStore } from "../../../stores/uiStore.js";
+import { useEmployeeStore } from "../../../stores/employeeStore";
+import { useVerticalStore } from "../../../stores/verticalStore";
 import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import { useTheme } from "../../../composables/core/useTheme";
+import { getActiveKeymap } from "../../../shortcuts";
+import ReturnFinder from "./returns/ReturnFinder.vue";
+import { defaultFindMethod, describeFindMethods } from "./returns/findMethods";
+import { fetchSaleCashier, runFind } from "./returns/findOriginalSale";
+import { buildNoTicketRecord, evaluateNoTicketReturn } from "./returns/noTicketGate";
+import { defaultSelection, planReturnLines, selectedSourceItems } from "./returns/returnLines";
+import { resolveWarrantyWindow } from "./returns/warrantyWindow";
+
+/**
+ * The operator's half of the no-ticket request. `allowedByProfile` is NOT
+ * here: the profile answers that question, the operator cannot, and holding a
+ * copy of it in component state means holding a copy that is wrong for the
+ * first render — `openRequest`'s immediate watcher runs before `created`
+ * wires the POS Profile in.
+ */
+const emptyNoTicketState = () => ({
+	authoriserUser: null,
+	signatureTaken: false,
+	reason: null,
+});
 
 export default {
+	components: { ReturnFinder },
 	props: {
 		openRequest: {
 			type: Object,
@@ -356,6 +177,8 @@ export default {
 	setup() {
 		const invoiceStore = useInvoiceStore();
 		const uiStore = useUIStore();
+		const employeeStore = useEmployeeStore();
+		const verticalStore = useVerticalStore();
 		const theme = useTheme();
 		// Fullscreen below 1100 has to mean no inline geometry at all — VOverlay
 		// writes width/max-width as inline styles that beat the fullscreen rule.
@@ -367,6 +190,8 @@ export default {
 		return {
 			invoiceStore,
 			uiStore,
+			employeeStore,
+			verticalStore,
 			isCompactReturns,
 			dialogProps,
 			isDarkTheme: theme.isDark,
@@ -374,15 +199,8 @@ export default {
 	},
 	data: () => ({
 		invoicesDialog: false,
-		singleSelect: true,
-		selected: [],
 		dialog_data: [],
 		company: "",
-		invoice_name: "",
-		customer_name: "",
-		customer_id: "",
-		mobile_no: "",
-		tax_id: "",
 		from_date: null,
 		to_date: null,
 		from_date_formatted: null,
@@ -394,41 +212,83 @@ export default {
 		has_more_invoices: false,
 		loading_more: false,
 		searched_once: false,
-		current_search_params: null,
-		headers: [
-			{
-				title: __("Customer"),
-				value: "customer",
-				align: "start",
-				sortable: true,
-			},
-			{
-				title: __("Date"),
-				align: "start",
-				sortable: true,
-				value: "posting_date",
-			},
-			{
-				title: __("Invoice"),
-				value: "name",
-				align: "start",
-				sortable: true,
-			},
-			{
-				title: __("Return Valid Until"),
-				value: "posa_return_valid_upto",
-				align: "start",
-				sortable: false,
-			},
-			{
-				title: __("Amount"),
-				value: "grand_total",
-				align: "end",
-				sortable: false,
-			},
-		],
+
+		// ── the finder (docs/POS-RIEL-Y-CAJON-BUILD.md §12 D) ──────────────
+		// Which of the five ways is open, what has been typed into it, and what
+		// came back. `findError` is kept apart from an empty result on purpose:
+		// "no sale matched" sends the cashier to another way, "the search could
+		// not run" sends them to a supervisor.
+		activeFindMethod: "ticket",
+		findTerm: "",
+		finding: false,
+		findError: null,
+
+		// The resolved original and everything read off it. `return_doc` is the
+		// server's answer to `get_invoice_for_return` and stays the single
+		// source for the money mapping in `submit_dialog`.
+		selectedSale: null,
+		return_doc: null,
+		originalCashier: null,
+		warranty: null,
+		returnLines: [],
+		returnSelection: {},
+
+		noTicketState: emptyNoTicketState(),
 	}),
-	computed: {},
+	computed: {
+		findGates() {
+			return {
+				// Capability, never a giro: a register that does not track
+				// serials simply has four ways instead of five (R3).
+				serialIdentity: Boolean(this.verticalStore?.has?.("serial_imei")),
+				noReceiptReturns: Number(this.pos_profile?.posa_allow_return_without_invoice) === 1,
+			};
+		},
+		findMethods() {
+			// Chips come from the ACTIVE keymap, not from the artboard's F1–F4
+			// (R8). Today that resolves to no chips at all, which is the honest
+			// answer until the three-file change registers the actions.
+			return describeFindMethods(this.findGates, getActiveKeymap());
+		},
+		authorisers() {
+			return this.employeeStore?.terminalEmployees || [];
+		},
+		cashierOnDuty() {
+			return this.employeeStore?.currentCashierDisplay || "";
+		},
+		returnPlan() {
+			return planReturnLines(this.returnLines, this.returnSelection);
+		},
+		noTicketView() {
+			return { allowedByProfile: this.findGates.noReceiptReturns, ...this.noTicketState };
+		},
+		findContext() {
+			return {
+				call: (options) => frappe.call(options),
+				company: this.company,
+				posProfileName: this.pos_profile?.name,
+				doctype:
+					this.pos_profile && this.pos_profile.create_pos_invoice_instead_of_sales_invoice
+						? "POS Invoice"
+						: "Sales Invoice",
+			};
+		},
+		formatSaleDate() {
+			// The results table's own formatter, kept: it flips ISO to the
+			// operator's DD-MM-YYYY and round-trips Arabic numerals, and a
+			// register that suddenly printed ISO dates would be a regression
+			// hiding inside a redesign.
+			return (value) => this.formatDateDisplay(value);
+		},
+		formatReturnCurrency() {
+			// An arrow in a computed, not a method: the child receives this as a
+			// prop and a plain method reference would arrive unbound.
+			return (value) =>
+				`${this.currencySymbol(
+					this.selectedSale?.currency || this.pos_profile?.currency,
+				)}${this.formatCurrency(value)}`;
+		},
+	},
 	watch: {
 		openRequest: {
 			handler(request) {
@@ -448,11 +308,6 @@ export default {
 		open_dialog(data) {
 			this.invoicesDialog = true;
 			this.company = data;
-			this.invoice_name = "";
-			this.customer_name = "";
-			this.customer_id = "";
-			this.mobile_no = "";
-			this.tax_id = "";
 			this.from_date = null;
 			this.to_date = null;
 			this.from_date_formatted = null;
@@ -460,26 +315,41 @@ export default {
 			this.min_amount = "";
 			this.max_amount = "";
 			this.dialog_data = [];
-			this.selected = [];
 			this.page = 1;
 			this.has_more_invoices = false;
 			this.searched_once = false;
+			this.reset_finder();
 		},
-		isSelectedInvoice(item) {
-			return Array.isArray(this.selected) && this.selected.some((entry) => entry?.name === item?.name);
+		/**
+		 * Everything downstream of "which sale?" — cleared together, because a
+		 * half-reset finder is how a second return inherits the first one's
+		 * authoriser or its line selection.
+		 */
+		reset_finder() {
+			this.activeFindMethod = defaultFindMethod(this.findGates);
+			this.findTerm = "";
+			this.finding = false;
+			this.findError = null;
+			this.selectedSale = null;
+			this.return_doc = null;
+			this.originalCashier = null;
+			this.warranty = null;
+			this.returnLines = [];
+			this.returnSelection = {};
+			this.noTicketState = emptyNoTicketState();
 		},
-		selectInvoice(item) {
-			this.selected = item ? [item] : [];
+		setFindMethod(id) {
+			this.activeFindMethod = id;
+			this.findError = null;
 		},
-		returnRowProps({ item }) {
-			const rowClass = this.returnRowClass(item);
-			return rowClass ? { class: rowClass } : {};
+		setFindTerm(value) {
+			this.findTerm = value;
 		},
-		returnRowClass(item) {
-			if (!item || typeof item !== "object") {
-				return "";
-			}
-			return item.posa_return_expired ? "return-expired-row" : "";
+		setReturnSelection(value) {
+			this.returnSelection = value;
+		},
+		patchNoTicket(patch) {
+			this.noTicketState = { ...this.noTicketState, ...patch };
 		},
 		formatDateDisplay(dateStr) {
 			if (!dateStr) return "";
@@ -565,23 +435,10 @@ export default {
 				this.to_date_formatted = null;
 			}
 		},
-		clearFromDate() {
-			this.from_date = null;
-			this.from_date_formatted = null;
-		},
-		clearToDate() {
-			this.to_date = null;
-			this.to_date_formatted = null;
-		},
 		close_dialog() {
 			this.invoicesDialog = false;
 		},
 		clear_search() {
-			this.invoice_name = "";
-			this.customer_name = "";
-			this.customer_id = "";
-			this.mobile_no = "";
-			this.tax_id = "";
 			this.from_date = null;
 			this.to_date = null;
 			this.from_date_formatted = null;
@@ -592,154 +449,197 @@ export default {
 			this.page = 1;
 			this.has_more_invoices = false;
 			this.searched_once = false;
-		},
-		search_invoices_by_enter(e) {
-			if (e.keyCode === 13) {
-				this.search_invoices();
-			}
+			this.reset_finder();
 		},
 		search_invoices() {
 			this.page = 1;
 			this.dialog_data = [];
 			this.perform_search();
 		},
-		perform_search() {
-			const vm = this;
-			vm.loading_more = true;
-
-			// Format dates for API call in YYYY-MM-DD format
-			let formattedFromDate = null;
-			let formattedToDate = null;
-
-			if (vm.from_date) {
-				if (typeof vm.from_date === "object" && vm.from_date instanceof Date) {
-					// Format Date object to YYYY-MM-DD
-					formattedFromDate = [
-						vm.from_date.getFullYear(),
-						String(vm.from_date.getMonth() + 1).padStart(2, "0"),
-						String(vm.from_date.getDate()).padStart(2, "0"),
-					].join("-");
-				} else if (typeof vm.from_date === "string") {
-					const fromStr = formatUtils.fromArabicNumerals(vm.from_date);
-					if (fromStr.includes("/")) {
-						// Convert DD/MM/YYYY to YYYY-MM-DD
-						const parts = fromStr.split("/");
-						if (parts.length === 3) {
-							formattedFromDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-						}
-					} else if (fromStr.includes("-")) {
-						const parts = fromStr.split("-");
-						if (parts.length === 3) {
-							if (parts[0].length === 4) {
-								formattedFromDate = fromStr; // Already YYYY-MM-DD
-							} else {
-								formattedFromDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-							}
-						}
-					} else {
-						// Invalid format, skip date filter
-						formattedFromDate = null;
-					}
-				}
+		/**
+		 * Normalise whichever shape the date picker last handed us into the
+		 * `YYYY-MM-DD` the endpoint wants, or null.
+		 *
+		 * Lifted out of the old inline search body unchanged in behaviour: the
+		 * picker can hold a Date, a `DD-MM-YYYY` string, a `YYYY-MM-DD` string
+		 * or a `DD/MM/YYYY` one depending on how it was last set, and a wrong
+		 * guess here silently drops the filter rather than failing.
+		 */
+		normalizedDate(value) {
+			if (!value) return null;
+			if (typeof value === "object" && value instanceof Date) {
+				return [
+					value.getFullYear(),
+					String(value.getMonth() + 1).padStart(2, "0"),
+					String(value.getDate()).padStart(2, "0"),
+				].join("-");
 			}
+			if (typeof value !== "string") return null;
+			const text = formatUtils.fromArabicNumerals(value);
+			const parts = text.includes("/") ? text.split("/") : text.split("-");
+			if (parts.length !== 3) return null;
+			return parts[0].length === 4 ? `${parts[0]}-${parts[1]}-${parts[2]}` : `${parts[2]}-${parts[1]}-${parts[0]}`;
+		},
+		/**
+		 * Run the active way of finding a sale.
+		 *
+		 * Every route below reaches
+		 * `posawesome.posawesome.api.invoices.search_invoices_for_return` —
+		 * directly for ticket and customer, and as the second hop for item and
+		 * serial (`returns/findOriginalSale.ts`). Naming it here because this
+		 * method is where an operator's search becomes a server round trip, and
+		 * that is the fact §7's offline claim for `return` rests on: none of
+		 * these five ways can answer without the network.
+		 */
+		async perform_search() {
+			this.loading_more = true;
+			this.finding = true;
+			this.findError = null;
 
-			if (vm.to_date) {
-				if (typeof vm.to_date === "object" && vm.to_date instanceof Date) {
-					// Format Date object to YYYY-MM-DD
-					formattedToDate = [
-						vm.to_date.getFullYear(),
-						String(vm.to_date.getMonth() + 1).padStart(2, "0"),
-						String(vm.to_date.getDate()).padStart(2, "0"),
-					].join("-");
-				} else if (typeof vm.to_date === "string") {
-					const toStr = formatUtils.fromArabicNumerals(vm.to_date);
-					if (toStr.includes("/")) {
-						// Convert DD/MM/YYYY to YYYY-MM-DD
-						const parts = toStr.split("/");
-						if (parts.length === 3) {
-							formattedToDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-						}
-					} else if (toStr.includes("-")) {
-						const parts = toStr.split("-");
-						if (parts.length === 3) {
-							if (parts[0].length === 4) {
-								formattedToDate = toStr; // Already YYYY-MM-DD
-							} else {
-								formattedToDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-							}
-						}
-					} else {
-						// Invalid format, skip date filter
-						formattedToDate = null;
-					}
-				}
-			}
-
-			// Process amount filters
-			let minAmount = vm.min_amount ? parseFloat(formatUtils.fromArabicNumerals(vm.min_amount)) : null;
-			let maxAmount = vm.max_amount ? parseFloat(formatUtils.fromArabicNumerals(vm.max_amount)) : null;
-
-			// Save current search parameters for "load more" functionality
-			this.current_search_params = {
-				invoice_name: vm.invoice_name,
-				customer_name: vm.customer_name,
-				customer_id: vm.customer_id,
-				mobile_no: vm.mobile_no,
-				tax_id: vm.tax_id,
-				from_date: formattedFromDate,
-				to_date: formattedToDate,
-				min_amount: minAmount,
-				max_amount: maxAmount,
-				company: vm.company,
-				page: vm.page,
-				pos_profile: vm.pos_profile?.name,
-				doctype:
-					vm.pos_profile && vm.pos_profile.create_pos_invoice_instead_of_sales_invoice
-						? "POS Invoice"
-						: "Sales Invoice",
+			const parseAmount = (raw) => {
+				if (!raw) return null;
+				const parsed = parseFloat(formatUtils.fromArabicNumerals(String(raw)));
+				return Number.isFinite(parsed) ? parsed : null;
 			};
 
-			frappe.call({
-				method: "posawesome.posawesome.api.invoices.search_invoices_for_return",
-				args: this.current_search_params,
-				callback: function (r) {
-					vm.loading_more = false;
-					vm.searched_once = true;
-
-					if (r.message) {
-						// If this is page 1, replace data, otherwise append
-						if (vm.page === 1) {
-							vm.dialog_data = r.message.invoices;
-						} else {
-							vm.dialog_data = [...vm.dialog_data, ...r.message.invoices];
-						}
-
-						// Set flag if there are more invoices to load
-						vm.has_more_invoices = r.message.has_more;
-					} else {
-						vm.dialog_data = [];
-						vm.has_more_invoices = false;
-						vm.toastStore.show({
-							title: __("No invoices found"),
-							color: "warning",
-						});
-					}
-				},
-				error: function (err) {
-					vm.loading_more = false;
-					console.error("Error searching invoices:", err);
-					vm.toastStore.show({
-						title: __("Error searching invoices"),
-						color: "error",
-					});
-				},
+			const outcome = await runFind(this.findContext, this.activeFindMethod, this.findTerm, {
+				from_date: this.normalizedDate(this.from_date),
+				to_date: this.normalizedDate(this.to_date),
+				min_amount: parseAmount(this.min_amount),
+				max_amount: parseAmount(this.max_amount),
+				page: this.page,
 			});
+
+			this.loading_more = false;
+			this.finding = false;
+			this.searched_once = true;
+			this.findError = outcome.error;
+
+			if (outcome.error) {
+				console.error("Error searching invoices:", outcome.error);
+				this.toastStore.show({ title: __("Error searching invoices"), color: "error" });
+				this.dialog_data = this.page === 1 ? [] : this.dialog_data;
+				this.has_more_invoices = false;
+				return;
+			}
+
+			this.dialog_data = this.page === 1 ? outcome.rows : [...this.dialog_data, ...outcome.rows];
+			this.has_more_invoices = outcome.hasMore;
+
+			if (!this.dialog_data.length) {
+				this.toastStore.show({ title: __("No invoices found"), color: "warning" });
+			}
 		},
 		load_more_invoices() {
 			this.page += 1;
 			this.perform_search();
 		},
+		/**
+		 * The operator picked an original sale: pull its returnable lines and
+		 * everything the panel says about it.
+		 *
+		 * The detail fetch moves here from `submit_dialog` because the line
+		 * picker cannot exist without it — the artboard's whole middle column
+		 * is what this call returns. `submit_dialog` then commits exactly what
+		 * the cashier read, instead of fetching a second copy of it between the
+		 * reading and the button.
+		 */
+		async selectSale(row) {
+			if (!row?.name) return;
+			this.selectedSale = row;
+			this.return_doc = null;
+			this.returnLines = [];
+			this.returnSelection = {};
+			this.originalCashier = null;
+			this.warranty = null;
+
+			let return_doc = null;
+			try {
+				const { message } = await frappe.call({
+					method: "posawesome.posawesome.api.invoices.get_invoice_for_return",
+					args: {
+						invoice_name: row.name,
+						pos_profile: this.pos_profile?.name,
+						doctype: this.findContext.doctype,
+					},
+				});
+				return_doc = message;
+			} catch (error) {
+				console.error("Error loading invoice for return:", error);
+				this.toastStore.show({ title: __("Error loading invoice details"), color: "error" });
+				return;
+			}
+
+			if (!return_doc || !Array.isArray(return_doc.items) || return_doc.items.length === 0) {
+				this.toastStore.show({
+					title: __("No returnable items found for this invoice"),
+					color: "warning",
+				});
+				return;
+			}
+
+			this.return_doc = return_doc;
+			this.returnLines = return_doc.items;
+			// Everything, at full quantity — see returnLines.defaultSelection for
+			// why the artboard's partial tick is a state and not a default.
+			this.returnSelection = defaultSelection(return_doc.items);
+			// `frappe.datetime` is the SERVER's day, which is the one the warranty
+			// window was stamped against. Falling back to the browser's clock is
+			// the lesser evil of two — a register with a skewed clock reads the
+			// window a day out; a register with no date at all cannot say whether
+			// the return needs a supervisor.
+			this.warranty = resolveWarrantyWindow(
+				return_doc,
+				frappe?.datetime?.nowdate?.() || new Date().toISOString().slice(0, 10),
+			);
+			this.originalCashier = await fetchSaleCashier(this.findContext, row.name);
+		},
+		/**
+		 * The one primary action. It ROUTES; it does not decide. The supervised
+		 * path's decision belongs to `evaluateNoTicketReturn` and is re-checked
+		 * inside `return_without_invoice` rather than trusted from the render
+		 * that happened to draw the button enabled.
+		 */
+		proceed() {
+			if (this.activeFindMethod === "noReceipt") {
+				this.return_without_invoice();
+				return;
+			}
+			this.submit_dialog();
+		},
+		noTicketRequest() {
+			return {
+				allowedByProfile: this.noTicketView.allowedByProfile,
+				authorisers: this.authorisers,
+				authoriserUser: this.noTicketState.authoriserUser,
+				signatureTaken: this.noTicketState.signatureTaken,
+				reason: this.noTicketState.reason,
+			};
+		},
 		return_without_invoice() {
+			const record = buildNoTicketRecord(this.noTicketRequest());
+			if (!record) {
+				// Refused. The panel is already naming every blocker, so a toast
+				// would only make the cashier read the same list somewhere else.
+				console.warn(
+					"[POSA][Returns] no-ticket return refused",
+					evaluateNoTicketReturn(this.noTicketRequest()).blockers,
+				);
+				return;
+			}
+
+			// The record is NOT attached to the document, and that is a gap worth
+			// stating rather than papering over: `Sales Invoice` has no
+			// `posa_return_authorised_by` / `posa_return_reason` custom field
+			// (fixtures carry only `posa_return_validity_days` and
+			// `posa_return_valid_upto`), and Frappe drops an unknown key from a
+			// doc silently. Setting them here would look like an audit trail and
+			// persist nothing — the worst of the three options. What this gate
+			// does today is REFUSE the return until a supervisor is named, a
+			// signature is taken and a reason is given; §5.4's exception inbox
+			// needs those two fields before it can read any of it back.
+			console.info("[POSA][Returns] no-ticket return authorised", record);
+
 			const invoice_doc = {};
 			invoice_doc.items = [];
 			invoice_doc.is_return = 1;
@@ -748,45 +648,25 @@ export default {
 			this.invoicesDialog = false;
 		},
 		async submit_dialog() {
-			if (this.selected.length > 0) {
-				const selectedInvoice = this.selected[0];
-				const doctype =
-					this.pos_profile && this.pos_profile.create_pos_invoice_instead_of_sales_invoice
-						? "POS Invoice"
-						: "Sales Invoice";
+			const return_doc = this.return_doc;
+			// Which rows, at which quantities — the ONLY thing the picker changes
+			// about this document. Every money field below is still the server's
+			// own value, copied across untouched.
+			const chosen = selectedSourceItems(return_doc?.items, this.returnPlan);
 
-				let return_doc = null;
-				try {
-					const { message } = await frappe.call({
-						method: "posawesome.posawesome.api.invoices.get_invoice_for_return",
-						args: {
-							invoice_name: selectedInvoice.name,
-							pos_profile: this.pos_profile?.name,
-							doctype,
-						},
-					});
-					return_doc = message;
-				} catch (error) {
-					console.error("Error loading invoice for return:", error);
-					this.toastStore.show({
-						title: __("Error loading invoice details"),
-						color: "error",
-					});
-					return;
-				}
+			if (!return_doc || !chosen.length) {
+				this.toastStore.show({
+					title: __("Choose at least one item to return"),
+					color: "warning",
+				});
+				return;
+			}
 
-				if (!return_doc || !Array.isArray(return_doc.items) || return_doc.items.length === 0) {
-					this.toastStore.show({
-						title: __("No returnable items found for this invoice"),
-						color: "warning",
-					});
-					return;
-				}
-
+			if (chosen.length) {
 				const invoice_doc = {};
 				const items = [];
 
-				return_doc.items.forEach((item) => {
+				chosen.forEach((item) => {
 					const new_item = { ...item };
 					// reference original invoice row for backend validation
 					if (return_doc.doctype === "POS Invoice") {
@@ -890,10 +770,6 @@ export default {
 </script>
 
 <style scoped>
-.return-expired-row {
-	background-color: color-mix(in srgb, var(--pos-error) 14%, var(--pos-surface)) !important;
-}
-
 .returns-card {
 	display: flex;
 	flex-direction: column;
@@ -925,94 +801,24 @@ export default {
 	color: var(--pos-text-secondary);
 }
 
+/* The finder owns the only scrollport inside this card (59c5fe1ad): it is a
+ * flex column whose line list scrolls, so a second `overflow: auto` here would
+ * nest one scrollbar inside another. `min-height: 0` is the half that lets the
+ * child shrink at all — flex items default to `min-height: auto`. */
 .returns-card__content {
+	display: flex;
+	flex-direction: column;
 	flex: 1 1 auto;
-	overflow: auto;
-	padding-top: 4px;
+	min-height: 0;
+	overflow: hidden;
+	padding: 0;
 }
 
-.returns-actions {
-	align-items: stretch;
-}
-
-.returns-results-list {
+.returns-filters {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
-	padding: 4px 0;
-}
-
-.returns-result-card {
-	width: 100%;
-	border: 1px solid var(--pos-border);
-	border-radius: 18px;
-	background: var(--pos-card-bg);
-	padding: 14px;
-	text-align: left;
-	cursor: pointer;
-	transition:
-		border-color 0.18s ease,
-		box-shadow 0.18s ease,
-		transform 0.18s ease;
-}
-
-.returns-result-card:hover {
-	border-color: color-mix(in srgb, var(--pos-primary) 28%, var(--pos-border));
-	box-shadow: 0 10px 24px var(--pos-shadow);
-	transform: translateY(-1px);
-}
-
-.returns-result-card--selected {
-	border-color: var(--pos-primary);
-	box-shadow: 0 0 0 2px color-mix(in srgb, var(--pos-primary) 14%, transparent);
-}
-
-.returns-result-card--expired {
-	background: color-mix(in srgb, var(--pos-error) 6%, var(--pos-surface));
-}
-
-.returns-result-card__top {
-	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 12px;
-}
-
-.returns-result-card__identity {
-	display: flex;
-	flex-direction: column;
-	gap: 3px;
-	min-width: 0;
-}
-
-.returns-result-card__identity strong,
-.returns-result-card__amount {
-	color: var(--pos-text-primary);
-}
-
-.returns-result-card__identity span,
-.returns-result-card__meta {
-	color: var(--pos-text-secondary);
-	font-size: 0.86rem;
-}
-
-.returns-result-card__amount {
-	font-weight: 700;
-	white-space: nowrap;
-}
-
-.returns-result-card__meta {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	margin-top: 10px;
-}
-
-.returns-result-card__chips {
-	display: flex;
-	flex-wrap: wrap;
 	gap: 8px;
-	margin-top: 10px;
+	padding-top: 8px;
 }
 
 .returns-card__footer {
@@ -1026,25 +832,6 @@ export default {
 	border-top: 1px solid var(--pos-border);
 }
 
-.returns-table :deep(.v-table),
-.returns-table :deep(.v-table__wrapper),
-.returns-table :deep(table),
-.returns-table :deep(thead),
-.returns-table :deep(tbody),
-.returns-table :deep(tr),
-.returns-table :deep(td),
-.returns-table :deep(th) {
-	background: var(--pos-surface) !important;
-	color: var(--pos-text-primary) !important;
-}
-
-.returns-table :deep(th) {
-	background: var(--pos-table-header-bg) !important;
-}
-
-.returns-table :deep(tbody tr:hover) {
-	background: var(--pos-table-row-hover) !important;
-}
 
 @media (max-width: 1279px) {
 	.returns-card {
