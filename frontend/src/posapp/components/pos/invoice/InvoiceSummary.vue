@@ -63,6 +63,45 @@
 			/>
 		</div>
 
+		<!-- The tender, chosen BEFORE the primary action (`Main.dc.html` nodes
+		     127–131). The artboard draws this row inside the band, left of
+		     PAGAR; the band is not this card's to edit, so it takes the last
+		     row before it — the same place in the operator's reading order, and
+		     directly above PAY on a phone, where no band mounts at all.
+
+		     It ARMS the payment screen and nothing else. Tendered amount,
+		     change due, split payments and submission all stay exactly where
+		     they were; what moved earlier is a choice, not money.
+
+		     There is no fixed four. The chips are this register's own payment
+		     methods, so a carnicería with cash only renders ONE and no dead
+		     siblings. `Mixto` is not among them because it is not a method: it
+		     is the empty selection, reached by tapping the lit chip off, and it
+		     leaves the payment screen exactly as it opens today — every method
+		     listed, every amount open, which is already the split surface. -->
+		<div
+			v-if="tenderChips.length"
+			class="tender-strip"
+			role="group"
+			:aria-label="__('Method')"
+			data-testid="tender-strip"
+		>
+			<span class="tender-strip__label" aria-hidden="true">{{ __("Method") }}</span>
+			<button
+				v-for="chip in tenderChips"
+				:key="chip.mode"
+				type="button"
+				class="tender-strip__chip"
+				:class="{ 'tender-strip__chip--armed': chip.mode === armedTender }"
+				:aria-pressed="chip.mode === armedTender ? 'true' : 'false'"
+				data-testid="tender-chip"
+				:data-tender-mode="chip.mode"
+				@click="selectTender(chip.mode)"
+			>
+				{{ chip.mode }}
+			</button>
+		</div>
+
 		<v-row dense class="summary-content">
 			<v-col
 				v-if="!useCompactSaleDock || showReturnDiscountAlert"
@@ -346,6 +385,13 @@ import {
 } from "../../../utils/documentSources";
 import InvoiceActionButtons from "./InvoiceActionButtons.vue";
 import { bandOwnsLane } from "./bandLaneOwnership";
+import { mixedIsAvailable, resolveTenderChips } from "./tenderChips";
+import {
+	armTender,
+	peekArmedTender,
+	resetTenderSelection,
+	revalidateArmedTender,
+} from "./armedTender";
 import ParkedOrdersList from "./ParkedOrdersList.vue";
 import DocumentSourceSelector from "../shared/DocumentSourceSelector.vue";
 
@@ -447,6 +493,60 @@ const lineSummary = computed(() => {
 	return __("{0} lines · {1} pcs", [lines, pieces]);
 });
 const { parkedOrders, draftSource } = storeToRefs(uiStore);
+
+// ---- tender pre-selection ------------------------------------------------
+// The register's own payment methods, never a hardcoded list. `pos_profile`
+// carries the same `payments` child table `get_payments()` builds the invoice's
+// payment lines from, so the chips and the payment screen cannot offer
+// different tenders.
+const tenderChips = computed(() => resolveTenderChips(props.pos_profile));
+
+// What makes an arm valid, re-read on every change rather than captured at
+// selection time — the cart, the profile and the return flag all move
+// underneath a chosen tender.
+const tenderContext = computed(() => ({
+	cartHasItems: (invoiceStore.itemsCount ?? 0) > 0,
+	isReturn: Boolean(invoiceStore.invoiceDoc?.is_return),
+}));
+
+// Reactive because `peekArmedTender()` reads the holder's ref: a tender that
+// stops being valid un-lights its chip on the same tick it stops being armed,
+// so the strip can never show a selection the payment screen would ignore.
+const armedTender = computed(() => peekArmedTender());
+
+function selectTender(mode) {
+	// Tapping the lit chip clears it, and clearing IS "Mixto" — the payment
+	// screen with nothing pre-armed is already the split-payment surface. A
+	// register with one tender has nothing to mix, so its chip does not toggle
+	// off; that would leave the strip looking broken with no way back.
+	const next = armedTender.value === mode && mixedIsAvailable(tenderChips.value) ? null : mode;
+	armTender(next, tenderChips.value, tenderContext.value);
+}
+
+// One guard, run on every world change. A profile reload that drops a method,
+// a cart edit that empties the ticket, a sale that turns into a return — all
+// resolve through `resolveArmedTender`, so there is no second definition of
+// "valid" to drift from the first.
+watch(
+	[tenderChips, tenderContext],
+	([chips, context]) => {
+		revalidateArmedTender(chips, context);
+	},
+	{ immediate: true },
+);
+
+// The sale ended: back to the register's default rather than the previous
+// customer's tender. Suppressing an empty cart is not enough on its own —
+// without this, refilling the cart would re-light a choice made for a ticket
+// that has already been paid.
+watch(
+	() => invoiceStore.itemsCount ?? 0,
+	(count, previous) => {
+		if (count === 0 && (previous ?? 0) > 0) {
+			resetTenderSelection();
+		}
+	},
+);
 
 // Cafetería "name on the cup" — only surfaces when the vertical preset enables
 // the tab_identity capability. Off (retail) → nothing renders, no layout shift.
@@ -825,6 +925,72 @@ defineExpose({
 
 .summary-content {
 	row-gap: 6px;
+}
+
+/* One line, ~34px, the way `Main.dc.html` writes the strip it sits beside.
+   This area was cut from ~200px to ~38px this wave, so the chips pay for their
+   height by removing a step from every cash sale — they are a row, not a
+   panel, and nothing here changes the card's `flex: 0 0 auto`, so commit
+   59c5fe1ad's single-scrollport chain is untouched: the cart is still the one
+   elastic sibling. */
+.tender-strip {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 2px 2px 6px;
+}
+
+.tender-strip__label {
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--pos-text-muted, #667085);
+	margin-right: 2px;
+}
+
+/* Neutral by construction, and a native button so no Vuetify `color` prop can
+   quietly become a background here. */
+.tender-strip__chip {
+	appearance: none;
+	border: 1px solid transparent;
+	border-radius: 999px;
+	padding: 0 12px;
+	min-height: 28px;
+	font: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 1;
+	white-space: nowrap;
+	cursor: pointer;
+	background: var(--pos-surface-variant, #f2f4f7);
+	color: var(--pos-text-muted, #667085);
+}
+
+/* SELECTED IS STATE, NOT EMPHASIS (§17.7 invariant 2). The one saturated
+   accent on this screen belongs to the primary button, so the armed chip is
+   carried by the pale wash + its paired ink and a weight step — the same pair
+   `Main.dc.html` paints its lit chip with (`--ac-soft` on `#00646f`), and both
+   halves flip with the theme so dark mode is not a second palette. */
+.tender-strip__chip--armed {
+	background: var(--reg-accent-soft, #e0f7fa);
+	color: var(--reg-on-accent-soft, #00646f);
+	border-color: var(--reg-accent-edge, #9fdde6);
+	font-weight: 700;
+}
+
+.tender-strip__chip:focus-visible {
+	outline: 2px solid var(--pos-primary, #0097a7);
+	outline-offset: 2px;
+}
+
+/* A counter terminal is a touch screen at desktop width — same 44px floor the
+   action strip takes, without the phone reflow. */
+@media (pointer: coarse) {
+	.tender-strip__chip {
+		min-height: 44px;
+	}
 }
 
 .summary-tab-name,
