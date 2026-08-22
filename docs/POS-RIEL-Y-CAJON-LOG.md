@@ -7,6 +7,80 @@ only records successes is a log nobody can debug from.
 
 ---
 
+## 2026-08-22 · Committed, deployed, and the artboard convergence begins
+
+**13 atomic commits, `926428fa5` → `8a2e655d8`**, explicit staging throughout.
+One needed amending: `ItemsSelector.vue` went into the shell-wiring commit
+carrying scan-bar affordance bindings the message did not name — the exact
+"message must match the cached stat" failure. Amended rather than left wrong.
+
+Deployed, and the served stamp finally reads `8a2e655d875b` = HEAD. That was
+the point of committing first: `version.json` stamps the COMMIT hash, so every
+build of uncommitted work stamped identically while chunk hashes changed
+underneath, and the service worker could neither confirm the new bundle nor
+stop offering the old one.
+
+### The AFTER set is valid at last
+
+`Doco Ventas`, `railPresent: true`, `mobileDockVisible: false`. Rail, status
+line, customer strip, scan bar with `Browse catalogue Alt + B`, action chips
+carrying real resolved chords, and the band — all on a live register.
+
+### And it showed the register saying everything twice
+
+Three totals (band `$0.00`, `ACTIVE SALE MX$0.00`, `0.00 qty`), two count
+strips that did not even agree on format, two connection indicators, two
+customer names, and a ~270px empty-cart illustration whose copy said *"Add
+items from the selector"* — a control that no longer exists.
+
+The triple total is the one that matters: `bandState.ts` guarantees only one
+number can be PRODUCED and cannot stop a second being RENDERED elsewhere. Same
+gap that let the first double-total through. The fix is a count across the
+whole sale surface, not within any one component.
+
+### Wave 6
+
+- **Cart line anatomy** — `Cant | Descripción | Existencia | Precio u. |
+  Importe`, quantity first. Stock reads `_base_actual_qty / conversion_factor`,
+  the same expression `useItemAddition` clamps against, so the number the
+  cashier reads is the number the register enforces — a line sold by the 12-box
+  would otherwise claim 24 when 24 counts singles. `Existencia` is INJECTED
+  rather than registered, because registering it would make it hideable and
+  invisible to every register with a saved column preference. **The category
+  ancestry could not be sourced** and renders `IPN001545 · Fundas y Carcasas`
+  with no invented parent: on a mis-scan a fabricated category would confirm
+  the WRONG variant confidently, which inverts the subtitle's purpose.
+- **Top-bar dedup** — retired `StatusIndicator`'s text but kept its BUTTON,
+  which carried five things the strip cannot: the panel toggle, the tooltip
+  naming the unreachable host, the bootstrap-warning dot, the reconnecting
+  spinner, and `Limited` (network up, server down), which the strip's single
+  boolean would render as "Sin conexión". Truncation fixed at its cause —
+  identity ellipsing plus `overflow: hidden` — with chips dropped whole by
+  priority instead of clipped. **Latent bug found:** the stylesheet claimed the
+  connection chip was "rendered last and therefore clipped last"; `saldo` was
+  pushed after it, so on any saldo tenant the one chip that must never be lost
+  was second-to-last.
+
+### Two more translation holes, same shape as the cheat sheet
+
+`components/pos/items` was outside the scan (10 strings, all of them the ones
+an operator reads when something fails). Then
+`components/pos/invoice` too — 11 more, including `Subtotal`, `qty` and
+`discount`, which are on the sale screen in the AFTER screenshot. Both
+translated. The lesson is not "add another directory": it is that a scan
+scoped by hand goes stale every time a surface moves.
+
+### Agent economics — owner direction
+
+Marco: *"600k plus token per agent session is too much, once this wave is
+finish kill and start next waves on fresh agents."* Recorded as
+`feedback_agent_fresh_per_task`, with a correction after checking the numbers:
+resumption is the smaller cause. **`subagent_type: "fork"` inherits the LEAD's
+full context**, so a fork's floor rises with the session regardless of its
+task — freshly-spawned forks late in this session opened at 606k, 637k, 687k,
+690k, while identical work early on cost 270–330k. The lever is non-fork agents
+reading the plan doc, which is exactly why writing that doc early mattered.
+
 ## 2026-08-22 · Wave 3 audited, wave 4 fixing
 
 ### A1 — accessibility: two HIGH, one MEDIUM, and the drawer passed

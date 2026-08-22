@@ -1,18 +1,21 @@
 {
   "label": "after",
   "viewport": "phone-390",
-  "capturedAt": "2026-08-22T19:42:04.061Z",
+  "capturedAt": "2026-08-22T20:35:21.043Z",
   "posProfile": "unknown (opening dialog never appeared)",
   "cartLines": 0,
-  "mobileDockVisible": false,
+  "mobileDockVisible": true,
   "railPresent": false,
   "captured": [
     "venta-vacia",
-    "venta"
+    "venta",
+    "menu",
+    "facturacion",
+    "sincronizar"
   ],
   "missed": [
     "basket (no demo SKU matched)",
-    "menu (actions trigger not found)",
+    "orden (action not offered by this profile)",
     "cobro (no basket or pay not offered)"
   ]
 }

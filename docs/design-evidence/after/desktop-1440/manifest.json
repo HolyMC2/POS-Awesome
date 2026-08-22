@@ -1,18 +1,29 @@
 {
   "label": "after",
   "viewport": "desktop-1440",
-  "capturedAt": "2026-08-22T19:40:18.209Z",
-  "posProfile": "unknown (opening dialog never appeared)",
+  "capturedAt": "2026-08-22T20:32:58.895Z",
+  "posProfile": "Doco Ventas",
   "cartLines": 0,
   "mobileDockVisible": false,
-  "railPresent": false,
+  "railPresent": true,
   "captured": [
+    "apertura",
     "venta-vacia",
-    "venta"
+    "venta",
+    "riel",
+    "explorar",
+    "gasto",
+    "menu"
   ],
   "missed": [
     "basket (no demo SKU matched)",
-    "menu (actions trigger not found)",
+    "orden (not on this preset's rail)",
+    "borradores (not on this preset's rail)",
+    "facturas (not on this preset's rail)",
+    "devolucion (not on this preset's rail)",
+    "recarga (not on this preset's rail)",
+    "corte (not on this preset's rail)",
+    "cajon-abierto (drawer state was null)",
     "cobro (no basket or pay not offered)"
   ]
 }
