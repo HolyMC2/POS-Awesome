@@ -553,3 +553,126 @@ in `itemPricing.ts`, so the arithmetic exists.
 Order: A, C and B are the register's information density and are cheap
 relative to their effect. D is finishing something already built. E changes an
 interaction and deserves its own decision. F needs a permission model first.
+
+---
+
+## 12. Missing views — the other twenty artboards
+
+§11 converged `Main.dc.html`. It is **one of twenty-one artboards, and 133 of
+2,376 drawn nodes.** The rest of the canvas has been treated as "the shell
+covers it", which is true of the rail, the cajón and the band and false of
+everything each view puts inside them.
+
+Owner direction 2026-08-22: *"we still have gaps and missing views."* This is
+the register of them.
+
+**What "missing" means here.** Every one of these destinations REACHES a
+working surface today — the rail routes to it and the dialog behind it does its
+job. What is missing is the view the artboard draws. So none of this is broken;
+all of it is unconverged, and the difference matters when scoping.
+
+### A. Apertura — the ten-point readiness check (§5.1) · 149 nodes
+
+**The largest single gap, and the only one that changes what the software
+DOES.** Our `OpeningDialog` ASKS: company, profile, opening amounts. The
+artboard's subtitle is *"no se pregunta, se comprueba"* — it does not ask, it
+CHECKS, across ten points:
+
+1. Mode and branch · 2. Warehouse and price list, with the count of items that
+have a price · 3. Fiscal posture (CFDI 4.0, IVA, régimen, stamps remaining) ·
+4. **Payment methods each with an accounting account** — "4 de 4 con cuenta
+contable" · 5. Ticket and document formats · 6. Scanner, printer, drawer,
+terminal, customer display — "5 de 6", with the failing one named and marked
+**Opcional** · 7. Who sells and who authorises · 8. Test sale made and
+reverted · 9. Ready to work offline — catalogue cached, size, folios reserved
+· 10. Floor clear — no shifts left open from yesterday, no hung drafts.
+
+The rail renders DISABLED behind it, because until the shift opens the register
+genuinely cannot do anything — that part we built.
+
+The roadmap already commits to this: §5.1 says the readiness check is
+*verified, not collected*, and that "lo opcional avisa; lo necesario detiene" —
+optional warns, required stops. **A register that opens with a payment method
+missing its account will take money it cannot post.** This is the one item on
+this list with a money consequence, and it is why it is ranked first.
+
+### B. Cobro — the payment screen · 146 nodes
+
+Ours is `Payments.vue` / `PayView.vue`. The artboard adds, on the same screen
+as the tender: the full sale summary line by line; the customer's wallet
+balance AND what this purchase accrues (`Acumula $29.20`); and **the warranty
+that will be printed**, per category — "Fundas y adaptadores · 30 días",
+"Cambio físico por defecto · 7 días". The header carries hardware readiness
+(drawer connected, printer ready, terminal ready) because those are the three
+things that can fail at the moment of taking money.
+
+Item E armed the tender from the sale screen; this is where that lands.
+
+### C. Corte — counting the drawer · 177 nodes
+
+Ours is `ClosingDialog`. The artboard counts **by denomination** — ten rows,
+each a stepper (`$1,000 − 2 + $2,000.00` …) — rather than asking for a single
+total. That is how a cashier actually counts a drawer, and it makes the
+arithmetic checkable instead of trusted. Header carries the shift's span
+(`09:02 → 20:05 · 11 h 03 m`), tickets and open drafts.
+
+### D. Devolución — finding the sale · 122 nodes
+
+Ours is `Returns.vue`. The artboard leads with **five ways to find the
+original sale, each on a function key**: por ticket (F1), por artículo o código
+(F2), por cliente (F3), por serie o IMEI (F4), and sin ticket — which *pide
+firma*. Then the original sale's panel (date, cashier, customer, total,
+whether it was invoiced), the warranty window with whether authorisation is
+needed, and the line picker. The rule is stated on screen: *"se conserva el
+precio, el IVA y la forma de pago originales"* — money returns the way it
+came. §17.7 records that this artboard closes the Reverse stage of §5.6, which
+was the lifecycle's only gap.
+
+Note the chords: F1–F4 here, and R8 applies — render what the keymap binds.
+
+### E. Offline — the desktop queue · 134 nodes
+
+We built `MobileOfflineOverlay`. There is **no desktop equivalent**, and the
+artboard's is a different thing: a table of the sales held in this register —
+ticket, time, customer, contents, payment, total, status — *"se suben en
+orden, de la más vieja a la más nueva"*, plus how long the register has been
+offline and a Reintentar. Plus the sentence that does the real work: *"Todo se
+guarda en esta caja y se sube solo en cuanto vuelva la señal. Ningún ticket se
+pierde y nadie tiene que apuntar nada en papel."*
+
+### F. Recargas — airtime · 137 nodes
+
+Ours is the saldo picker dialog. The artboard is a destination: three tabs
+(tiempo aire, paquetes, pago de servicios), six carriers, a number field with
+**carrier detected by prefix**, amount presets, the commission taken and what
+remains of the saldo bolsa, and today's totals. Note §17.2 and the saldo
+memories: this path is docomexico-only and must not reach prod tenants that do
+not sell it.
+
+### G. Móvil — eight artboards, 463 nodes
+
+`MovilExplorar · MovilVenta · MovilCobro · MovilOrden · MovilCafe ·
+MovilSalon · MovilOffline · MovilCorte`. We shipped the dock contract, the
+`serviceOrder` tab and the offline overlay — the SHELL. The eight screens
+themselves are unconverged, and the phone is where most of these registers
+actually run.
+
+### H. Modes — four artboards, 548 nodes
+
+`Orden` (§4.6 Repair, a certified mode and already a rail destination),
+`Controlado` (§4.2 — scale with tare, lot and expiry with FEFO, exento beside
+gravado, merma with reason), `Cafetería` (§4.3), `Salón` (§4.4).
+
+**Only Orden is in scope.** The other three are behind §14's evidence gates —
+Quick Service and Table Service do not start until a cafetería is contracted.
+Listing them here is inventory, not backlog.
+
+### Ranking
+
+**A (Apertura)** first, alone, because it is the only one with a money
+consequence and the roadmap already commits to it. Then **D (Devolución)** and
+**C (Corte)**, which are the two surfaces where a mistake is expensive and the
+artboard's structure is materially better than ours. Then **B (Cobro)**, which
+item E now feeds. Then **E (Offline)** and **F (Recargas)**. **G (Móvil)** is a
+wave of its own and should follow the desktop views it mirrors. **H** stays
+gated except Orden.

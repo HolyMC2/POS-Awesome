@@ -2263,3 +2263,200 @@ Loading records...,Cargando registros...
 guests,comensales
 "For 'Product Bundle' items, Warehouse, Serial No and Batch No will be considered from the 'Packing List' table. If Warehouse and Batch No are same for all packing items for any 'Product Bundle' item, those values can be entered in the main Item table; values will be copied to 'Packing List' table.","En artículos de tipo «Product Bundle», el almacén, el número de serie y el lote se toman de la tabla «Packing List». Si el almacén y el lote son los mismos para todos los componentes de un «Product Bundle», pueden capturarse en la tabla principal de artículos; los valores se copian a «Packing List»."
 Recharge / Service,Recarga / Servicio
+"it is not asked, it is checked","no se pregunta, se comprueba"
+Optional,Opcional
+Not verified,Sin verificar
+Required,Necesario
+Verified,Verificado
+This register cannot open yet:,Esta caja todavía no puede abrir:
+"A register does not open when a payment method has no account, the warehouse cannot sell, the ticket format is missing or the trade's data is incomplete. Optional warns; required stops.","Una caja no abre si a una forma de pago le falta cuenta, si el almacén no sirve para vender, si falta el formato del ticket o si al giro le faltan datos. Lo opcional avisa; lo necesario detiene."
+Ticket printer,Impresora de tickets
+Scanner,Escáner
+Scale,Báscula
+Cash drawer,Cajón de dinero
+Card terminal,Terminal bancaria
+Customer display,Pantalla del cliente
+{0} tickets,{0} tickets
+{0} open drafts,{0} borradores abiertos
++ Cash sales,+ Ventas en efectivo
++ Advances taken,+ Anticipos recibidos
+− Withdrawals and payouts,− Retiros y salidas
+Drawer count,Conteo del cajón
+{0} denominations,{0} denominaciones
+= Expected in drawer,= Debe haber
+Counted,Contado
+entered by hand,capturado a mano
+By denominations,Por denominaciones
+Derived from the count above,Sale del conteo de arriba
+Use the count,Usar el conteo
+Enter the total by hand,Capturar el total a mano
+One less of {0},Uno menos de {0}
+One more of {0},Uno más de {0}
+How many of {0},Cuántos de {0}
+"Counted total, entered by hand","Total contado, capturado a mano"
+To upload by payment method,Por subir por forma de pago
+Nothing is lost,Nada se pierde
+Storage used on this register,Espacio usado en esta caja
+Ticket,Ticket
+Customer and contents,Cliente y contenido
+1 line,1 línea
+{0} lines,{0} líneas
+Nothing is waiting to upload,No hay nada por subir
+Sales taken on this register stay in this list until the server confirms them.,Las ventas hechas en esta caja se quedan en esta lista hasta que el servidor las confirma.
+Everything is saved on this register and uploads by itself as soon as the signal returns. No ticket is lost and nobody has to write anything on paper.,Todo se guarda en esta caja y se sube solo en cuanto vuelva la señal. Ningún ticket se pierde y nadie tiene que apuntar nada en papel.
+Retrying…,Reintentando…
+Retry now,Reintentar ahora
+Sales saved on this register,Ventas guardadas en esta caja
+"they upload in order, from the oldest to the newest","se suben en orden, de la más vieja a la más nueva"
+and {0} more tickets in the queue,y {0} tickets más en la cola
+1 sale could not be uploaded,1 venta no se pudo subir
+{0} sales could not be uploaded,{0} ventas no se pudieron subir
+1 sale was saved as a draft to review,1 venta se guardó como borrador para revisar
+{0} sales were saved as drafts to review,{0} ventas se guardaron como borradores para revisar
+open Offline Invoices to retry or export them,abre Facturas fuera de línea para reintentar o exportarlas
+No connection,Sin conexión
+Back online · {0} still to upload,De vuelta en línea · faltan {0} por subir
+Everything is uploaded,Todo está subido
+Saved on this register — survives a reload,Guardado en esta caja — aguanta una recarga
+"Each sale carries its own id, so a retry cannot bill twice","Cada venta lleva su propio id, así que un reintento no puede cobrar dos veces"
+Stock is discounted here while the signal is gone,Las existencias se descuentan aquí mientras no hay señal
+from,de
+gift card,tarjeta de regalo
+Sale summary,Resumen de la venta
+Earns,Acumula
+with this purchase,con esta compra
+Customer points,Puntos del cliente
+Customer wallet,Monedero del cliente
+lines,líneas
+items,artículos
+saved,ahorró
+Printer ready,Impresora lista
+Drawer connected,Cajón conectado
+Drawer not connected,Cajón sin conectar
+Terminal {0} ready,Terminal {0} lista
+Terminal ready,Terminal lista
+Choose at least one item to return,Elige al menos un artículo para devolver
+Find the sale,Encontrar la venta
+Narrow it down,Afinar la búsqueda
+The search could not run. Ask a supervisor before trying another way.,La búsqueda no se pudo hacer. Consulta al encargado antes de buscar por otro lado.
+No sale matched. Try another way to find it.,Ninguna venta coincide. Prueba con otra forma de encontrarla.
+Original sale,Venta original
+What the customer is bringing back,Qué regresa el cliente
+"the original price, tax and tender are kept","se conserva el precio, el IVA y la forma de pago originales"
+To return,A devolver
+of,de
+Find the sale first and its items will appear here.,Encuentra primero la venta y aquí aparecen sus artículos.
+Reason,Motivo
+Authorisation,Autorización
+On the record,Queda registrado
+Returned by,Quién devuelve
+Authorised by,Autoriza
+Continue the return,Continuar la devolución
+not named yet,sin nombrar
+not needed,no hace falta
+Reason and authorisation,Motivo y autorización
+The customer signed the printed return note,El cliente firmó la nota de devolución impresa
+By ticket,Por ticket
+By item or code,Por artículo o código
+By customer,Por cliente
+By serial or IMEI,Por serie o IMEI
+No ticket,Sin ticket
+needs a signature,pide firma
+Register check · {0} points,Revisión de la caja · {0} puntos
+{0} of {1} verified,{0} de {1} verificados
+· {0} optional,· {0} opcional
+· {0} not verified,· {0} sin verificar
+Mode and branch,Modo y sucursal
+The register has not resolved its mode yet,La caja todavía no resuelve su modo
+This register's capability profile does not resolve,El perfil de capacidades de esta caja no resuelve
+Standard retail register · {0},Caja de mostrador estándar · {0}
+Standard retail register,Caja de mostrador estándar
+{0} · {1},{0} · {1}
+{0},{0}
+Warehouse and price list,Almacén y lista de precios
+The register's warehouse and price list are not loaded yet,El almacén y la lista de precios de la caja todavía no cargan
+No warehouse and no price list on this register,Esta caja no tiene almacén ni lista de precios
+This register has no warehouse,Esta caja no tiene almacén
+This register has no price list,Esta caja no tiene lista de precios
+{0} · {1} · priced items not counted,{0} · {1} · artículos con precio sin contar
+{0} · {1} · {2} items with a price,{0} · {1} · {2} artículos con precio
+Fiscal posture,Postura fiscal
+The register's fiscal configuration is not loaded yet,La configuración fiscal de la caja todavía no carga
+Stamping is on but this register has no tax template,El timbrado está activo pero esta caja no tiene plantilla de impuestos
+No tax template — cannot tell exempt from unconfigured,Sin plantilla de impuestos — no se distingue exento de sin configurar
+{0} · IVA {1} % · {2},{0} · IVA {1} % · {2}
+{0} · IVA {1} %,{0} · IVA {1} %
+{0} · rate not read,{0} · tasa sin leer
+Payment methods and their accounts,Formas de pago con su cuenta
+The register's payment methods are not loaded yet,Las formas de pago de la caja todavía no cargan
+This register offers no payment method,Esta caja no ofrece ninguna forma de pago
+{0} payment methods · accounting accounts not reported,{0} formas de pago · cuentas contables sin reportar
+{0} of {1} with an accounting account · {2} cannot post,{0} de {1} con cuenta contable · {2} no puede registrar
+{0} · {1} of {1} with an accounting account,{0} · {1} de {1} con cuenta contable
+Ticket and document formats,Formatos de ticket y documentos
+The register's print formats are not loaded yet,Los formatos de impresión de la caja todavía no cargan
+This register has no ticket format,Esta caja no tiene formato de ticket
+{0} · {1} · CFDI PDF,{0} · {1} · CFDI PDF
+{0} · CFDI PDF,{0} · CFDI PDF
+"Scanner, printer, drawer, terminal and display","Escáner, impresora, cajón, terminal y pantalla"
+No device reported its state,Ningún dispositivo reportó su estado
+"{0} devices, none of them verifiable from here","{0} dispositivos, ninguno verificable desde aquí"
+{0} of {1} responding · {2} did not · {3} not verifiable,{0} de {1} responden · {2} no · {3} sin verificar
+{0} of {1} responding · {2} did not,{0} de {1} responden · {2} no
+{0} of {1} responding · {2} not verifiable,{0} de {1} responden · {2} sin verificar
+{0} of {1} responding,{0} de {1} responden
+Who sells and who authorises,Quién entra y quién autoriza
+The register's roster is not loaded yet,El personal de la caja todavía no carga
+{0} sells · nobody checked who authorises,{0} cobra · nadie revisó quién autoriza
+{0} sells · nobody on this register can authorise an exception,{0} cobra · nadie en esta caja puede autorizar una excepción
+Nobody on this register can authorise an exception,Nadie en esta caja puede autorizar una excepción
+{0} sells · {1} authorises,{0} cobra · {1} autoriza
+{1} authorises,{1} autoriza
+Test sale and its reversal,Venta de prueba y su cancelación
+No test sale is recorded for this register,No hay venta de prueba registrada para esta caja
+No test sale has been made on this register,No se ha hecho venta de prueba en esta caja
+Made and reversed on {0} · left at zero,Hecha y revertida el {0} · quedó en cero
+Made and reversed · left at zero,Hecha y revertida · quedó en cero
+Ready to work offline,Lista para trabajar sin internet
+Offline readiness has not been measured on this device,En este equipo no se ha medido si puede trabajar sin internet
+Not cached yet: {0},Todavía no se guarda: {0}
+Catalogue and prices cached on this register,Catálogo y precios guardados en la caja
+Catalogue and prices cached on this register · {0} MB,Catálogo y precios guardados en la caja · {0} MB
+Clear to open,Salida a piso
+The register has not checked yesterday's shifts,La caja no ha revisado los turnos de ayer
+A shift is still open for this cashier · close it first,Este cajero tiene un turno abierto · ciérralo primero
+No shift left open · {0} drafts parked · {1} tickets still to upload,Sin turnos abiertos · {0} borradores colgados · {1} tickets por subir
+No shift left open · {0} drafts parked,Sin turnos abiertos · {0} borradores colgados
+No shift left open · {0} tickets still to upload,Sin turnos abiertos · {0} tickets por subir
+No shift left open · no parked drafts · nothing to upload,Sin turnos abiertos · sin borradores colgados · sin tickets por subir
+The internet dropped — keep selling,Se cayó el internet — sigue cobrando
+Back online — the queue is emptying itself,De vuelta en línea — la cola se vacía sola
+No connection for,Sin conexión desde
+Holding sales for,Guardando ventas desde
+Waiting,En espera
+Uploading,Subiendo
+Retrying · attempt {0},Reintentando · intento {0}
+Saved as draft — review,Guardada como borrador — revisar
+Not uploaded — needs attention,No se subió — necesita atención
+Uploaded,Ya subido
+Mixed,Mixto
+On credit,A crédito
+No payment recorded,Sin pago registrado
+Printer needs attention,Revisa la impresora
+Printer unavailable,Impresora no disponible
+Ticket number,Número de ticket
+Item code or name,Código o nombre del artículo
+"Name, phone or RFC","Nombre, teléfono o RFC"
+Serial or IMEI,Serie o IMEI
+Did not fit,No le quedó
+Arrived faulty,Salió defectuoso
+Wrong item,Se equivocó
+This register does not accept returns without a ticket.,Esta caja no acepta devoluciones sin ticket.
+Name the supervisor who authorises this return.,Nombra al encargado que autoriza esta devolución.
+That supervisor is not signed in to this terminal.,Ese encargado no está firmado en esta caja.
+Only a supervisor can authorise a return without a ticket.,Sólo un encargado puede autorizar una devolución sin ticket.
+Confirm the customer signed the return note.,Confirma que el cliente firmó la nota de devolución.
+Say why the goods are coming back.,Di por qué regresa la mercancía.
+Within the return window — {0} days left. No authorisation needed.,Dentro del plazo de devolución — quedan {0} días. No necesita autorización.
+The return window closed on {0}. A supervisor has to authorise this one.,El plazo de devolución cerró el {0}. Un encargado tiene que autorizar ésta.
+This sale has no return window recorded. No authorisation needed.,Esta venta no tiene plazo de devolución registrado. No necesita autorización.

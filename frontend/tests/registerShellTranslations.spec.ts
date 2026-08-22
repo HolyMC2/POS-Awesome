@@ -53,6 +53,15 @@ const SCANNED_DIRS = [
 	// is reorganised, and the strings it misses are disproportionately the ones
 	// an operator reads when something has gone wrong.
 	"components/pos/invoice",
+	// The views added when the register stopped being one screen: the readiness
+	// check, the corte's drawer count, the desktop offline queue, the payment
+	// surface and the returns flow. Every one of these was outside the scan on
+	// the day it was written — which is the fifth time that has happened here.
+	"components/pos/shift",
+	"components/pos/closing",
+	"components/pos/offline",
+	"components/pos/payments",
+	"components/pos/flows",
 ];
 
 /**
