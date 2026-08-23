@@ -487,13 +487,28 @@ defineExpose({ focusableChildren });
 
 .catalog-drawer-layer--overlay .catalog-drawer {
 	position: relative;
-	z-index: 1;
+	/* ABOVE the scrim (z 11). At z 1 the scrim painted and CLICKED over the
+	 * panel — every tap in the floating catalogue landed on the scrim and the
+	 * drawer was inert (Marco, cafetería 08-23). elementFromPoint pinned it. */
+	z-index: 12;
+	/* Floating means floating: a card with air around it, not a flush
+	 * full-height slab that reads as a stuck sheet. Un-anchoring exists so a
+	 * wide register can give the catalogue MORE room than the anchored column
+	 * — so the overlay is wider than its anchored counterpart in both views. */
+	margin: 12px;
+	border-radius: 16px;
+	width: min(52%, 560px);
+	box-shadow: 0 18px 48px -12px rgba(16, 20, 30, 0.35);
 	transform: translateX(100%);
 	opacity: 0;
 	will-change: transform, opacity;
 	transition:
 		transform var(--catalog-drawer-duration, 180ms) cubic-bezier(0.2, 0, 0, 1),
 		opacity var(--catalog-drawer-duration, 180ms) linear;
+}
+
+.catalog-drawer-layer--overlay.catalog-drawer-layer--cards .catalog-drawer {
+	width: min(62%, 720px);
 }
 
 .catalog-drawer-layer--overlay .catalog-drawer--in {

@@ -86,19 +86,33 @@ describe("the anchored width follows the items view", () => {
 		expect(CATALOG_DRAWER_CARD_MAX_WIDTH).toBeGreaterThan(CATALOG_DRAWER_WIDTH);
 	});
 
-	it("touches neither overlay nor inline", () => {
-		for (const presentation of ["overlay", "inline"] as const) {
-			expect(
-				rule(`.catalog-drawer-layer--${presentation}`),
-				`${presentation} must not size itself off the items view`,
-			).not.toContain("min(");
-		}
-		// The cards rule is anchored-only by construction: it is a compound
-		// selector on the anchored class, so an overlay carrying the marker
-		// still gets the sheet geometry.
+	it("leaves inline alone, and floats the overlay WIDER than its anchored twin", () => {
+		expect(
+			rule(".catalog-drawer-layer--inline"),
+			"inline must not size itself off the items view",
+		).not.toContain("min(");
+		// Un-anchoring exists so a wide register can give the catalogue MORE
+		// room — a floating panel the same 400px as the anchored column was
+		// nothing but a dimmed register (Marco, 08-23).
+		expect(rule(".catalog-drawer-layer--overlay .catalog-drawer")).toContain(
+			"width: min(52%, 560px)",
+		);
+		expect(
+			rule(".catalog-drawer-layer--overlay.catalog-drawer-layer--cards .catalog-drawer"),
+		).toContain("width: min(62%, 720px)");
 		expect(STYLE_BLOCK).toContain(
 			".catalog-drawer-layer--anchored.catalog-drawer-layer--cards",
 		);
+	});
+
+	it("keeps the floating panel ABOVE its scrim", () => {
+		// At z 1 under the z 11 scrim, elementFromPoint anywhere in the panel
+		// answered "scrim": every tap in the floating catalogue was a close.
+		const panelZ = Number(
+			rule(".catalog-drawer-layer--overlay .catalog-drawer").match(/z-index:\s*(\d+)/)?.[1],
+		);
+		const scrimZ = Number(rule(".catalog-drawer__scrim").match(/z-index:\s*(\d+)/)?.[1]);
+		expect(panelZ).toBeGreaterThan(scrimZ);
 	});
 });
 
