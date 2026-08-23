@@ -129,6 +129,22 @@ test("every rail destination keeps the shell", async ({ page }) => {
 				hostLeft: hostBox ? Math.round(hostBox.left) : null,
 				hostWidth: hostBox ? Math.round(hostBox.width) : null,
 				hostText: host ? (host.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60) : null,
+				// WHAT overflows, not just how many. A count alone cannot tell a
+				// benign off-screen panel from a clipped heading, and this audit
+				// has already reported 545 "overflows" on a healthy screen once.
+				overflowSample: (() => {
+					const out: string[] = [];
+					document.querySelectorAll("body *").forEach((el) => {
+						if (out.length >= 4) return;
+						const r = (el as HTMLElement).getBoundingClientRect();
+						if (r.width === 0 || r.height === 0) return;
+						if (!visible(el)) return;
+						if (r.right <= vw + 1) return;
+						const e = el as HTMLElement;
+						out.push(`${e.tagName.toLowerCase()}.${(e.className || "").toString().split(" ")[0]} @${Math.round(r.left)}..${Math.round(r.right)}`);
+					});
+					return out;
+				})(),
 			};
 		});
 

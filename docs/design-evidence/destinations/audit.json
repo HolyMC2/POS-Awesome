@@ -16,7 +16,13 @@
     "hostedState": null,
     "hostLeft": null,
     "hostWidth": null,
-    "hostText": null
+    "hostText": null,
+    "overflowSample": [
+      "nav.v-navigation-drawer @1440..1800",
+      "div.v-navigation-drawer__content @1441..1800",
+      "div.drafts-drawer__body @1453..1788",
+      "div.document-source-selector @1457..1784"
+    ]
   },
   {
     "id": "browse",
@@ -35,7 +41,13 @@
     "hostedState": null,
     "hostLeft": null,
     "hostWidth": null,
-    "hostText": null
+    "hostText": null,
+    "overflowSample": [
+      "nav.v-navigation-drawer @1440..1800",
+      "div.v-navigation-drawer__content @1441..1800",
+      "div.drafts-drawer__body @1453..1788",
+      "div.document-source-selector @1457..1784"
+    ]
   },
   {
     "id": "floor",
@@ -64,7 +76,13 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": "Cash MovementPosting DatePosting DateBook an expense, send c"
+    "hostText": "Cash MovementPosting DatePosting DateBook an expense, send c",
+    "overflowSample": [
+      "table. @685..1634",
+      "thead. @685..1634",
+      "tr. @685..1634",
+      "th.v-data-table__td @1358..1460"
+    ]
   },
   {
     "id": "drafts",
@@ -83,7 +101,10 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": ""
+    "hostText": "",
+    "overflowSample": [
+      "div.v-row @84..1452"
+    ]
   },
   {
     "id": "invoices",
@@ -102,7 +123,10 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": ""
+    "hostText": "",
+    "overflowSample": [
+      "div.v-row @84..1452"
+    ]
   },
   {
     "id": "return",
@@ -121,7 +145,10 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": ""
+    "hostText": "",
+    "overflowSample": [
+      "div.v-row @84..1452"
+    ]
   },
   {
     "id": "recharge",
@@ -140,7 +167,8 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": ""
+    "hostText": "",
+    "overflowSample": []
   },
   {
     "id": "closing",
@@ -159,6 +187,7 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": "Closing POS ShiftReconcile payment methods and close shift02"
+    "hostText": "Closing POS ShiftReconcile payment methods and close shift02",
+    "overflowSample": []
   }
 ]
