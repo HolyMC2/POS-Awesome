@@ -22,12 +22,18 @@
 		>
 			<thead v-if="showColumnHeaders" :class="`responsive-header container-${breakpoint}`">
 				<tr>
+					<!-- The header reads its alignment from the SAME column object
+					     the cell does (`cartColumnAlign.ts`). It used to read
+					     nothing at all: `.posa-cart-table th` centres every
+					     header, so `Stock` sat centred over a right-aligned
+					     figure. Never restate an alignment here. -->
 					<th
 						v-for="column in finalVisibleColumns"
 						:key="(column as any).key || (column as any).value || column.title"
 						class="posa-cart-th"
-						:class="(column as any).cellClass || null"
+						:class="[(column as any).cellClass || null, cartAlignClass(column)]"
 						:data-column-key="(column as any).key || (column as any).value"
+						:data-column-align="(column as any).align"
 						:title="column.title || undefined"
 					>
 						<span class="posa-cart-th__label">{{ column.title }}</span>
@@ -209,6 +215,8 @@ import { logComponentRender } from "../../../utils/perf";
 import CartItemRow from "./CartItemRow.vue";
 import ComboCartLine from "../combos/ComboCartLine.vue";
 import ItemsTableExpandedRow from "./ItemsTableExpandedRow.vue";
+
+import { cartAlignClass, resolveCartColumnAlign } from "./cartColumnAlign";
 
 import { useItemsTableSearch } from "../../../composables/pos/items/useItemsTableSearch";
 import { useItemsTableDragDrop } from "../../../composables/pos/items/useItemsTableDragDrop";
@@ -429,7 +437,16 @@ const finalVisibleColumns = computed(() => {
 	};
 	columns.sort((a: any, b: any) => rank(a) - rank(b));
 
-	return [...columns, DATA_TABLE_EXPAND_COLUMN];
+	// ALIGNMENT, applied here for the same reason ORDER is: the operator's
+	// registry says WHICH columns exist, the artboard says how the table draws
+	// the set that survives. Resolved onto a COPY — `DATA_TABLE_EXPAND_COLUMN`
+	// is a shared module-level const and mutating it would leak into every
+	// other consumer. From here on `column.align` is the single answer that the
+	// header, the cell and the cell's inner flex box all read.
+	return [...columns, DATA_TABLE_EXPAND_COLUMN].map((column: any) => ({
+		...column,
+		align: resolveCartColumnAlign(column),
+	}));
 });
 
 const showColumnHeaders = computed(() =>

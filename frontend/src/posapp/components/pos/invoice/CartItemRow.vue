@@ -1,8 +1,15 @@
 <template>
 	<tr class="posa-cart-item-row" v-memo="memoDeps">
 		<template v-for="column in visibleColumns" :key="column.key">
+			<!--
+				EVERY cell below takes its alignment from `cartAlignClass(column)`
+				and nothing else. A literal `class="text-end"` here is what let
+				`Stock` point right while its header pointed at the middle, and
+				what let `discount_amount` render centred while the column that
+				declared it said `end`. See `cartColumnAlign.ts`.
+			-->
 			<!-- Item Name Column -->
-			<td v-if="column.key === 'item_name'" class="text-start" :data-column-key="'item_name'">
+			<td v-if="column.key === 'item_name'" :class="cartAlignClass(column)" :data-column-key="'item_name'">
 				<div class="d-flex align-center posa-cart-item-row__name-cell">
 					<span class="posa-cart-item-row__name" :title="item.item_name">{{
 						item.item_name
@@ -85,7 +92,7 @@
 			</td>
 
 			<!-- Quantity Column -->
-			<td v-else-if="column.key === 'qty'" class="text-center" :data-column-key="'qty'">
+			<td v-else-if="column.key === 'qty'" :class="cartAlignClass(column)" :data-column-key="'qty'">
 				<div class="posa-cart-table__qty-counter" :class="{ 'rtl-layout': isRTL }">
 					<v-btn
 						:disabled="disableDecrement"
@@ -151,7 +158,7 @@
 			     customer; not knowing is not the same as having none. -->
 			<td
 				v-else-if="column.key === 'stock'"
-				class="text-end"
+				:class="cartAlignClass(column)"
 				:data-column-key="'stock'"
 				:data-stock-reason="lineStock.reason"
 			>
@@ -166,8 +173,8 @@
 			</td>
 
 			<!-- UOM Column (Optional) -->
-			<td v-else-if="column.key === 'uom'" class="text-center" :data-column-key="'uom'">
-				<div class="posa-cart-table__editor-box uom-editor" @click.stop>
+			<td v-else-if="column.key === 'uom'" :class="cartAlignClass(column)" :data-column-key="'uom'">
+				<div class="posa-cart-table__editor-box uom-editor" :class="cartJustifyClass(column)" @click.stop>
 					<v-btn
 						size="x-small"
 						variant="flat"
@@ -226,10 +233,10 @@
 			<!-- Price List Rate (Optional) -->
 			<td
 				v-else-if="column.key === 'price_list_rate'"
-				class="text-end"
+				:class="cartAlignClass(column)"
 				:data-column-key="'price_list_rate'"
 			>
-				<div class="currency-display right-aligned" :title="priceListRateLabel">
+				<div class="currency-display" :class="cartJustifyClass(column)" :title="priceListRateLabel">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span
 						class="amount-value"
@@ -243,10 +250,10 @@
 			<!-- Discount % (Optional) -->
 			<td
 				v-else-if="column.key === 'discount_percentage'"
-				class="text-center"
+				:class="cartAlignClass(column)"
 				:data-column-key="'discount_percentage'"
 			>
-				<div class="posa-cart-table__editor-box">
+				<div class="posa-cart-table__editor-box" :class="cartJustifyClass(column)">
 					<div
 						v-if="!isEditingDiscountPercent"
 						class="posa-cart-table__editor-display"
@@ -294,10 +301,10 @@
 			<!-- Discount Amount (Optional) -->
 			<td
 				v-else-if="column.key === 'discount_amount'"
-				class="text-center"
+				:class="cartAlignClass(column)"
 				:data-column-key="'discount_amount'"
 			>
-				<div class="posa-cart-table__editor-box">
+				<div class="posa-cart-table__editor-box" :class="cartJustifyClass(column)">
 					<div
 						v-if="!isEditingDiscountAmount"
 						class="posa-cart-table__editor-display"
@@ -335,8 +342,8 @@
 			</td>
 
 			<!-- Rate Column -->
-			<td v-else-if="column.key === 'rate'" class="text-center" :data-column-key="'rate'">
-				<div class="posa-cart-table__editor-box">
+			<td v-else-if="column.key === 'rate'" :class="cartAlignClass(column)" :data-column-key="'rate'">
+				<div class="posa-cart-table__editor-box" :class="cartJustifyClass(column)">
 					<div
 						v-if="!isEditingRate"
 						class="posa-cart-table__editor-display"
@@ -375,8 +382,8 @@
 			</td>
 
 			<!-- Amount Column -->
-			<td v-else-if="column.key === 'amount'" class="text-center" :data-column-key="'amount'">
-				<div class="currency-display right-aligned" :title="amountLabel">
+			<td v-else-if="column.key === 'amount'" :class="cartAlignClass(column)" :data-column-key="'amount'">
+				<div class="currency-display" :class="cartJustifyClass(column)" :title="amountLabel">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span
 						class="amount-value"
@@ -390,7 +397,7 @@
 			<!-- Offer Toggle (Optional) -->
 			<td
 				v-else-if="column.key === 'posa_is_offer'"
-				class="text-center"
+				:class="cartAlignClass(column)"
 				:data-column-key="'posa_is_offer'"
 			>
 				<v-btn
@@ -404,7 +411,7 @@
 			</td>
 
 			<!-- Actions -->
-			<td v-else-if="column.key === 'actions'" class="text-center" :data-column-key="'actions'">
+			<td v-else-if="column.key === 'actions'" :class="cartAlignClass(column)" :data-column-key="'actions'">
 				<!-- Touch: first tap arms (turns red), second tap within 2.5s
 				     deletes — a stray tap 4px from the row's tap-to-add area
 				     must not silently drop a line. Mouse deletes in one click
@@ -424,7 +431,7 @@
 
 			<td
 				v-else-if="column.key === 'data-table-expand'"
-				class="text-center"
+				:class="cartAlignClass(column)"
 				:data-column-key="'data-table-expand'"
 			>
 				<v-btn
@@ -448,6 +455,7 @@
 import { computed, nextTick, ref } from "vue";
 import { debugLog } from "../../../utils/debug";
 import { describeLineStock, describeLineIdentity } from "./cartLineStock";
+import { cartAlignClass, cartJustifyClass } from "./cartColumnAlign";
 
 defineOptions({
 	name: "CartItemRow",
@@ -553,7 +561,10 @@ const memoDeps = computed(() => {
 		props.item.is_free_item,
 		props.item.price_list_rate,
 		props.isExpanded,
-		props.visibleColumns.map((column) => column?.key).join("|"),
+		// Key AND align: the row is `v-memo`'d, and now that the cell classes
+		// are computed from `column.align` a re-aligned column that kept its
+		// key would leave the whole row pinned to the old side.
+		props.visibleColumns.map((column) => `${column?.key}:${column?.align}`).join("|"),
 		// Include edit states to ensure UI updates when switching modes
 		isEditingQty.value,
 		isEditingRate.value,
@@ -884,8 +895,30 @@ function cancelDiscountAmountEdit() {
 	text-align: start;
 }
 
-.currency-display.right-aligned {
+/*
+ * WHERE A FLEX CELL POINTS — the column's answer, not the cell's.
+ *
+ * `text-align` does not move a flex child, so the money cells and the inline
+ * editors need this as well as the `text-…` class on the `<td>`. What stood
+ * here was `.currency-display.right-aligned { justify-content: center }`: a
+ * class NAMED right-aligned that centred, which is why `price_list_rate`
+ * carried `text-end` on its cell and still drew its figure in the middle.
+ *
+ * Specificity: scoped compiles these to `(0,2,0)`, which beats the global
+ * `.posa-cart-table__editor-box` `(0,1,0)` in `items-table-styles.css` (a file
+ * this task does not own) and ties with `.currency-display` above — so they
+ * must stay BELOW it in source order.
+ */
+.posa-cart-cell--start {
+	justify-content: flex-start;
+}
+
+.posa-cart-cell--center {
 	justify-content: center;
+}
+
+.posa-cart-cell--end {
+	justify-content: flex-end;
 }
 
 .amount-value {
@@ -899,10 +932,6 @@ function cancelDiscountAmountEdit() {
 		"tnum" 1,
 		"lnum" 1,
 		"kern" 1;
-}
-
-.amount-value.right-aligned {
-	text-align: center;
 }
 
 /* Money cells truncate rather than paint over the next column; the
