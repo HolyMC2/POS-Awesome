@@ -124,6 +124,20 @@
 	--reg-tone-warning-strong: #6b4a10;
 	--reg-tone-warning-heading: #a15200;
 	--reg-tone-positive-tick: #2e7d32;
+
+	/* Two tones the ledger's status chips need and the band never did
+	 * (build plan §15.2, artboard `Facturas.dc.html`). `negative` is the
+	 * overdue invoice, `returned` is the one that came back. Same contract as
+	 * the three above — tint, edge and LABEL, never a fill on an action — and
+	 * each label clears AA on its own tint: #b42318 on #fdeaea is 5.68:1 and
+	 * #5b3fb8 on #ede9fe is 6.21:1. */
+	--reg-tone-negative-bg: #fdeaea;
+	--reg-tone-negative-border: #f6cfcf;
+	--reg-tone-negative-label: #b42318;
+
+	--reg-tone-returned-bg: #ede9fe;
+	--reg-tone-returned-border: #d7cffb;
+	--reg-tone-returned-label: #5b3fb8;
 }
 
 /* ---- dark theme -------------------------------------------------------
@@ -175,6 +189,17 @@
 	--reg-tone-warning-glyph-bg: #4a3a18;
 	--reg-tone-warning-strong: #ffe08a;
 	--reg-tone-warning-heading: #ffb74d;
+
+	/* The ledger tones on a dark surface: the tint darkens, the label
+	 * lifts, and each pair keeps AA against its own tint — #ff8f87 on
+	 * #3a1d1c is 6.94:1, #c4b5fd on #2a2340 is 8.05:1. */
+	--reg-tone-negative-bg: #3a1d1c;
+	--reg-tone-negative-border: #6b3230;
+	--reg-tone-negative-label: #ff8f87;
+
+	--reg-tone-returned-bg: #2a2340;
+	--reg-tone-returned-border: #453a66;
+	--reg-tone-returned-label: #c4b5fd;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -215,6 +240,17 @@
 		--reg-tone-warning-glyph-bg: #4a3a18;
 		--reg-tone-warning-strong: #ffe08a;
 		--reg-tone-warning-heading: #ffb74d;
+
+		/* The ledger tones on a dark surface: the tint darkens, the label
+		 * lifts, and each pair keeps AA against its own tint — #ff8f87 on
+		 * #3a1d1c is 6.94:1, #c4b5fd on #2a2340 is 8.05:1. */
+		--reg-tone-negative-bg: #3a1d1c;
+		--reg-tone-negative-border: #6b3230;
+		--reg-tone-negative-label: #ff8f87;
+
+		--reg-tone-returned-bg: #2a2340;
+		--reg-tone-returned-border: #453a66;
+		--reg-tone-returned-label: #c4b5fd;
 	}
 }
 
