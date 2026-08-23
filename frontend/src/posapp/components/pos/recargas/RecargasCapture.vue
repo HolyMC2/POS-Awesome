@@ -32,7 +32,19 @@
 					:data-testid="`recargas-carrier-${carrier.id}`"
 					@click="chooseCarrier(carrier.id)"
 				>
-					{{ carrier.label }}
+					<!-- The logo the old SaldoCatalogPicker always showed — a cashier
+					     finds Telcel by its mark, not by reading 30 labels. The API's
+					     `logotipo` rides the catalog as `carrier.logo`; a carrier
+					     without one falls back to the label alone, never an icon that
+					     pretends to be a brand. -->
+					<img
+						v-if="carrier.logo"
+						class="recargas__carrier-logo"
+						:src="carrier.logo"
+						alt=""
+						loading="lazy"
+					/>
+					<span class="recargas__carrier-label">{{ carrier.label }}</span>
 				</button>
 			</div>
 		</div>
@@ -465,6 +477,24 @@ defineExpose({ intent, hint, referenceMismatch });
 	font-size: 12px;
 	font-weight: 500;
 	padding: 6px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+}
+
+.recargas__carrier-logo {
+	height: 24px;
+	max-width: 72px;
+	object-fit: contain;
+}
+
+.recargas__carrier-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
 }
 
 .recargas__tab.is-on,
