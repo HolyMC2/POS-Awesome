@@ -602,6 +602,9 @@ const displayedItems = computed(() => {
 		hideZeroRate: hide_zero_rate_items.value,
 		hideVariants: pos_profile.value?.posa_hide_variants_items,
 		onlyBarcode: showOnlyBarcodeItemsRef.value,
+		// Saldo items live on the Recargas destination only (owner direction
+		// 2026-08-22): never in the catalogue, never as a search hit.
+		hideSaldo: true,
 		limit: enable_custom_items_per_page.value ? items_per_page.value : itemsPerPage.value,
 	});
 });

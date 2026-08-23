@@ -160,6 +160,30 @@ describe("it draws the catalogue the register actually has", () => {
 	});
 });
 
+describe("the number is typed twice", () => {
+	it("arms nothing until the second field matches, and names the mismatch", async () => {
+		const onIntent = vi.fn();
+		const view = mountView({ onIntent });
+		await view.find('[data-testid="recargas-reference"]').setValue("5528416390");
+		expect(onIntent).toHaveBeenLastCalledWith(
+			expect.objectContaining({ intent: expect.objectContaining({ reference: "" }) }),
+		);
+		expect(view.find('[data-testid="recargas-reference-mismatch"]').exists()).toBe(false);
+
+		await view.find('[data-testid="recargas-reference-confirm"]').setValue("5528416391");
+		expect(view.find('[data-testid="recargas-reference-mismatch"]').exists()).toBe(true);
+		expect(onIntent).toHaveBeenLastCalledWith(
+			expect.objectContaining({ intent: expect.objectContaining({ reference: "" }) }),
+		);
+
+		await view.find('[data-testid="recargas-reference-confirm"]').setValue("5528416390");
+		expect(view.find('[data-testid="recargas-reference-mismatch"]').exists()).toBe(false);
+		expect(onIntent).toHaveBeenLastCalledWith(
+			expect.objectContaining({ intent: expect.objectContaining({ reference: "5528416390" }) }),
+		);
+	});
+});
+
 describe("what the number field says, and what it refuses to say", () => {
 	it("says nothing at all about an empty field", () => {
 		expect(mountView().find('[data-testid="recargas-hint"]').exists()).toBe(false);
@@ -216,6 +240,7 @@ describe("the band carries the number, and it is armed only by a real choice", (
 		const onIntent = vi.fn();
 		const view = mountView({ onIntent });
 		await view.find('[data-testid="recargas-reference"]').setValue("5528416390");
+		await view.find('[data-testid="recargas-reference-confirm"]').setValue("5528416390");
 		await view.find('[data-testid="recargas-carrier-Telcel"]').trigger("click");
 		await view.find('[data-testid="recargas-amount-TEL200"]').trigger("click");
 		expect(onIntent).toHaveBeenLastCalledWith({

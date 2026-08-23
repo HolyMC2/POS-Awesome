@@ -25,6 +25,16 @@ type SearchItem = {
 	[key: string]: unknown;
 };
 
+/**
+ * A saldo item: `saldo_enabled` ships in the get_items payload on saldo
+ * tenants and is truthy on airtime / service-payment Items. Same reading as
+ * `shouldBlockSaldoOffline` in useItemAddition.
+ */
+export function isSaldoItem(item: { saldo_enabled?: unknown } | null | undefined): boolean {
+	const flag = item?.saldo_enabled;
+	return flag !== undefined && flag !== null && Number(flag) > 0;
+}
+
 export function useItemSearch() {
 	const searchCache = new Map<string, SearchItem[]>();
 	const showOnlyBarcodeItems = ref(false);
@@ -190,7 +200,22 @@ export function useItemSearch() {
 			hideZeroRate = false,
 			hideVariants = false,
 			onlyBarcode = false,
+			hideSaldo = false,
 			limit = 50,
+		}: {
+			searchTerm?: string;
+			hideZeroRate?: boolean;
+			hideVariants?: boolean;
+			onlyBarcode?: boolean;
+			/**
+			 * Drop saldo (airtime / service-payment) items. They are sold from
+			 * the Recargas destination, where the number is typed twice and the
+			 * company is chosen on purpose; a saldo item reached from the sale
+			 * catalogue or the scan field skips all of that. The items STAY in
+			 * the store — the recharge hand-off still resolves them by code.
+			 */
+			hideSaldo?: boolean;
+			limit?: number;
 		} = {},
 	) => {
 		if (!items || !items.length) return [];
@@ -203,7 +228,8 @@ export function useItemSearch() {
 			!needsLocalSearch &&
 			!hideZeroRate &&
 			!hideVariants &&
-			!onlyBarcode
+			!onlyBarcode &&
+			!hideSaldo
 		) {
 			return items.slice(0, limit);
 		}
@@ -266,6 +292,9 @@ export function useItemSearch() {
 			if (hideVariants) {
 				if (item.variant_of) continue;
 			}
+
+			// 5. Saldo Filter — see `hideSaldo`.
+			if (hideSaldo && isSaldoItem(item as { saldo_enabled?: unknown })) continue;
 
 			// 4. Barcode Filter
 			if (onlyBarcode) {

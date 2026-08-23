@@ -78,6 +78,36 @@
 					autocomplete="off"
 					data-testid="recargas-reference"
 				/>
+				<!-- Typed twice, on purpose (owner direction 2026-08-22). A recharge to
+				     the wrong number is charged and cannot be undone — TAECEL's spec:
+				     every request that arrives is charged — so the number has to be
+				     confirmed by a second typing, not by a glance. Only a number both
+				     fields agree on reaches the intent; until then the band stays
+				     disarmed and the mismatch is named under the field. -->
+				<label class="recargas__label recargas__label--confirm" for="recargas-reference-confirm">{{
+					__("Type the number again")
+				}}</label>
+				<input
+					id="recargas-reference-confirm"
+					v-model="referenceConfirm"
+					class="recargas__input reg-mono"
+					:class="{ 'recargas__input--mismatch': referenceMismatch }"
+					type="tel"
+					inputmode="numeric"
+					autocomplete="off"
+					data-testid="recargas-reference-confirm"
+					:aria-invalid="referenceMismatch ? 'true' : undefined"
+					aria-describedby="recargas-reference-mismatch"
+				/>
+				<span
+					v-if="referenceMismatch"
+					id="recargas-reference-mismatch"
+					class="recargas__mismatch"
+					role="alert"
+					data-testid="recargas-reference-mismatch"
+				>
+					{{ __("The numbers do not match") }}
+				</span>
 				<div class="recargas__quick">
 					<!-- Both of these are real: the last row of today's ledger, and the
 					     phone on the customer the register already has open. The
@@ -98,7 +128,7 @@
 						type="button"
 						class="recargas__quick-btn"
 						data-testid="recargas-customer-phone"
-						@click="reference = customerPhone"
+						@click="fillReference(customerPhone)"
 					>
 						{{ __("From the customer on screen") }}
 					</button>
@@ -208,7 +238,25 @@ const activeTabId = ref<string | null>(null);
 const carrierId = ref<string | null>(null);
 const productCode = ref<string | null>(null);
 const reference = ref("");
+const referenceConfirm = ref("");
 const freeAmount = ref("");
+
+/** Both fields, trimmed. A number the operator typed twice the same way. */
+const referenceConfirmed = computed(
+	() => reference.value.trim() !== "" && reference.value.trim() === referenceConfirm.value.trim(),
+);
+/** Named only once the second field has something in it — an empty confirm
+ * is "not yet", not "wrong". */
+const referenceMismatch = computed(
+	() => referenceConfirm.value.trim() !== "" && !referenceConfirmed.value,
+);
+
+/** A number that came from a RECORD — today's ledger, the customer on screen —
+ * was not typed, so there is nothing to mistype; both fields take it. */
+function fillReference(value: string): void {
+	reference.value = value;
+	referenceConfirm.value = value;
+}
 
 // The first tab is the landing tab and it follows the catalogue rather than a
 // remembered choice: `catalog_tree` already orders Tiempo Aire first, which is
@@ -308,7 +356,7 @@ function repeatLast(): void {
 	// The masked reference on screen cannot be typed back into the field, so the
 	// unmasked one is read from the row it was built from.
 	const source = (props.rows ?? []).find((row) => String(row?.name ?? "") === entry.id);
-	reference.value = String(source?.referencia ?? "");
+	fillReference(String(source?.referencia ?? ""));
 	if (entry.carrier) {
 		chooseCarrier(entry.carrier);
 	}
@@ -323,7 +371,10 @@ function repeatLast(): void {
 const intent = computed<RechargeIntent>(() => ({
 	carrier: carrierId.value,
 	carrierLabel: selectedCarrier.value?.label ?? null,
-	reference: reference.value.trim(),
+	// Only a confirmed number is an intent; `rechargeBandInput` reads an empty
+	// reference as "not ready", which is exactly the state a half-typed or
+	// mistyped confirmation should leave the band in.
+	reference: referenceConfirmed.value ? reference.value.trim() : "",
 	amount: amount.value,
 	itemCode: selectedProduct.value?.code ?? null,
 }));
@@ -336,7 +387,7 @@ watch(
 	{ immediate: true, deep: true },
 );
 
-defineExpose({ intent, hint });
+defineExpose({ intent, hint, referenceMismatch });
 </script>
 
 <style scoped>
@@ -528,5 +579,20 @@ defineExpose({ intent, hint });
 	.recargas__entry {
 		grid-template-columns: 1fr;
 	}
+}
+
+.recargas__label--confirm {
+	margin-top: 8px;
+}
+
+.recargas__input--mismatch {
+	border-color: var(--reg-tone-danger-ink);
+}
+
+.recargas__mismatch {
+	display: block;
+	margin-top: 4px;
+	font-size: 11.5px;
+	color: var(--reg-tone-danger-ink);
 }
 </style>
