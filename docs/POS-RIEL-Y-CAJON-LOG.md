@@ -79,13 +79,73 @@ does.
   come off the same rows.
 - **Por cobrar** — Σ `outstanding_amount` over `unpaidInvoices`, with the
   overdue count from the same `due_date < today && outstanding > 0` rule
-  `isOverdue` uses, restated pure in `ledgerModel.ts` so a spec can reach it.
-- **Devuelto** — Σ |`grand_total`| over today's `is_return` rows, with
-  `return_against` deciding whether the caption says "all with a ticket".
+  `isOverdue` uses, restated pure in `ledgerRows.ts` so a spec can reach it.
+- **Devuelto** — Σ |`grand_total`| over the loaded `is_return` rows (NOT day
+  scoped; see the outcome below), with `return_against` deciding whether the
+  caption says "all against a ticket".
 
 A collection that has not loaded yields `null`, not `0` — the corte header's
 rule — so the segment counts and the figures render a dash until the first
 load lands rather than announcing an empty day.
+
+### What actually happened
+
+**364 spec files / 3,799 tests green, `vue-tsc` exit 0, `vite build` clean.**
+Baseline was 362 / 3,733: **+2 spec files and +66 tests, zero regressions**,
+and `InvoiceManagement.vue`'s `data()`, `computed`, `watch` and `methods`
+came out byte-for-byte identical — verified by slicing both halves out of
+`git show HEAD:…` and comparing, not asserted from memory.
+
+Four things the build taught that the plan did not have:
+
+- **The engine's collections cannot say "not loaded".** `historyInvoices`
+  is `[]` before the first read and `[]` after an empty day, and there is
+  no third state to read without adding one to `data()`. So the seam passes
+  `loaded: !loading && posProfile ? historyInvoices : null`, which spends a
+  dash on every refresh in exchange for never announcing an empty day the
+  register has not read. §15.2's `null` ≠ `0` rule is worth that flicker.
+- **`Devuelto` is not a day figure, and the artboard's caption said so.**
+  §15.2 reads "Σ |grand_total| of returns" with no day in it, while
+  `Vendido hoy` names its own. Scoping the refund figure to today would
+  have made it disagree with the Devoluciones segment beside it, which
+  counts every loaded return — so the figure and the count are now the same
+  number, deliberately.
+- **A ledger status chip cannot reuse the app's status keys.** `es.csv` has
+  `Paid,Pagado` and `Overdue,Vencido` because elsewhere they describe a
+  payment; every noun here is a *factura*, and a two-column CSV has no
+  context column. The chips therefore key on `Paid invoice`, `Overdue
+  invoice` and friends, which is the only way to get the artboard's
+  "Pagada" and "Vencida" without changing what four other surfaces say.
+- **Vuetify's dialog geometry fights a hosted SURFACE.** `useDialogFullscreen`
+  already makes the overlay `contained`, but `.v-dialog > .v-overlay__content`
+  still carries a 24 px margin and a `calc(100% - 48px)` box — right for a
+  modal over the sale, wrong for the destination itself. A second
+  content-class, applied only in `ledgerMode`, takes the whole host.
+
+### Deviations from the plan, each on the record
+
+- **A fifth child.** §15.3 names four plus the model; `InvoiceLedgerSurface.vue`
+  is the composition root, and it exists so the three pieces of state the
+  ledger needs (armed finder mode, selected ticket, the text in the box) do
+  not become three keys on `data()`.
+- **`ledgerModel.ts` is two files.** It reached 667 lines, over this repo's
+  500 limit, so row shaping and the day's arithmetic moved to
+  `ledgerRows.ts`. The split is one-way — nothing in `ledgerRows.ts` imports
+  from the model — and the model re-exports it, so callers still have one
+  import and there is no cycle.
+- **Two spec files, not one.** Same limit, same reasoning:
+  `invoiceLedger.spec.ts` keeps the model and the engine seam,
+  `invoiceLedgerSurface.spec.ts` mounts the children, `ledgerFixtures.ts`
+  carries what both need.
+- **`es.csv` was edited rather than reported.** §7 routes translations
+  through the lead because six writers share one file; this ran in an
+  isolated worktree with `registerShellTranslations.spec.ts` as a build
+  gate, so the 43 rows are in the feature commit. They are all appends at
+  the end of the file, which is the cheapest possible merge.
+- **The Hoy segment scopes history to today.** The tab layout showed all
+  submitted invoices; the segment named Hoy has to mean today, so choosing
+  it writes today into `historyDateFrom/To`. The date chip and the Fecha
+  mode — one control, not two — widen it again.
 
 ## 2026-08-22 · Cobro hosted surface
 
