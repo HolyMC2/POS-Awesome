@@ -20,15 +20,50 @@
 			</div>
 		</div>
 
+		<!-- THE LANE, and why it is filled rather than narrowed.
+		     ────────────────────────────────────────────────────────────────
+		     The owner marked this band as an empty lane: at 1440 the number sat
+		     hard left and PAGAR hard right with ~1000px of nothing between.
+
+		     Two ways out, and `Main.dc.html` settles it. Its band is NOT two
+		     elements stretched apart — it is FOUR blocks read left to right,
+		     `430px` figure · divider · `216px` breakdown (Subtotal · IVA ·
+		     Descuento) · divider · `Cobrar con` chips · a `flex: 1` spacer of
+		     about 66px · `252px` PAGAR. The residual is 5% of the lane. So the
+		     void is not a distribution problem to be solved by capping the
+		     spacer — capping it would unpin PAGAR from the right edge and move
+		     the emptiness rather than remove it. The lane is empty because its
+		     content is one card too high: `InvoiceSummary` already renders that
+		     breakdown and those tender chips, in the artboard's own order,
+		     directly above this band.
+
+		     So the band publishes the two lanes and lets the surface that OWNS
+		     those figures fill them. `display: contents` on an unfilled lane is
+		     load-bearing: it generates no box, so an empty lane contributes
+		     neither width nor one of the band's 22px gaps, and the register
+		     that has nothing to put here looks exactly as it does today.
+
+		     Filled by `<Teleport>` from `InvoiceSummary`, the way
+		     `ItemsSelector` fills the shell's `#register-scan-bar`: the band
+		     stays ignorant of what a sale's subtotal is (the reason it takes
+		     `state` and formats it rather than computing it), and the summary
+		     keeps ownership of its own money. A slot would mean the same
+		     figures reaching here through `Pos.vue`, which has neither the tax
+		     breakdown nor the register's payment methods.
+
+		     Slot first, always: `ClosingDialog` passes `#breakdown` and must
+		     keep getting a divider and a real column. -->
 		<template v-if="$slots.breakdown">
 			<div class="action-band__divider" aria-hidden="true"></div>
 			<div class="action-band__breakdown"><slot name="breakdown" /></div>
 		</template>
+		<div v-else class="action-band__lane" data-band-lane="breakdown"></div>
 
 		<template v-if="$slots.context">
 			<div class="action-band__divider" aria-hidden="true"></div>
 			<div class="action-band__context"><slot name="context" /></div>
 		</template>
+		<div v-else class="action-band__lane" data-band-lane="context"></div>
 
 		<div class="action-band__spacer"></div>
 
@@ -152,7 +187,28 @@ const primaryParams = computed(() =>
 
 .action-band__figure {
 	flex: none;
-	min-width: 0;
+	/* A column, not a shrink-wrapped label. `Main.dc.html` gives the figure a
+	 * fixed 430px block so everything to its right starts at the same x on
+	 * every ticket; ours takes a FLOOR rather than a fixed width, because our
+	 * label is a translated string and the artboard's is not.
+	 *
+	 * The `30vw` half is what keeps 1100px — the two-column boundary, and a
+	 * real counter width — working: 430px there would leave the breakdown and
+	 * the tender to be squeezed out of a lane that has 926px to spend. At 1440
+	 * `min()` resolves to the artboard's own number.
+	 *
+	 * `min-width: 0` was inert here; `flex: none` already refuses to shrink. */
+	min-width: var(--reg-band-figure-min, min(430px, 30vw));
+}
+
+/* A lane the band OWNS but does not fill. `display: contents` so an unfilled
+ * one generates no box at all: no width, and — since flex gaps sit between
+ * flex ITEMS — none of the band's 22px gaps either. Filled, its children
+ * become direct flex items of the band and take the band's gap and centring,
+ * which is what lets `InvoiceSummary` teleport a divider and a column in and
+ * have them land in the artboard's rhythm without restating it. */
+.action-band__lane {
+	display: contents;
 }
 
 .action-band__label {
@@ -270,6 +326,13 @@ const primaryParams = computed(() =>
 		padding: var(--reg-space-md, 10px) var(--reg-space-lg);
 		gap: var(--reg-space-lg);
 		flex-wrap: wrap;
+	}
+
+	/* The figure gives up its column floor here. The sale screen mounts no band
+	 * below this width, but `ClosingDialog` does at every width, and a 300px
+	 * floor on a 390px phone pushes its breakdown off the card. */
+	.action-band__figure {
+		min-width: 0;
 	}
 
 	.action-band__number {

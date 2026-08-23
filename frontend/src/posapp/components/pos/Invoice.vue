@@ -57,25 +57,59 @@
 					     Nothing was removed — the disclosure is the same one
 					     phones already had, and every control is one tap in. -->
 					<div class="invoice-config-sections">
-						<button
-							type="button"
-							class="invoice-details-toggle"
-							:aria-expanded="saleDetailsOpen ? 'true' : 'false'"
-							aria-controls="invoice-sale-details"
-							@click="toggleSaleDetails()"
-						>
-							<v-icon
-								:icon="saleDetailsOpen ? 'mdi-chevron-up' : 'mdi-chevron-down'"
-								size="20"
+						<!-- ONE control strip above the cart, not two.
+
+						     `.invoice-items-bar` used to be a second row, below this
+						     one and inside the items card. It was built to carry the
+						     artboard's count ("6 líneas · 9 piezas"); the count then
+						     moved to the summary, where `Main.dc.html` actually draws
+						     it, and the strip stayed behind for its last tenant — the
+						     cart filter. What that left on a live register with items
+						     in the cart was a table-width, half-height band with a
+						     lone icon right-aligned into the Actions column, sitting
+						     directly above the column header: it reads as a cut-off
+						     row rendered above its own header, which is what the owner
+						     marked. It only ever rendered with `items.length`, which
+						     is why the empty-cart evidence never showed it.
+
+						     This row already spans the panel and its right half is
+						     empty, so hosting the toggle here costs no height at all,
+						     and the strip's ~28px goes to the cart — the column's one
+						     elastic sibling (59c5fe1ad), which is where reclaimed
+						     height has to go or it becomes a new gap. -->
+						<div class="invoice-items-bar">
+							<button
+								type="button"
+								class="invoice-details-toggle"
+								:aria-expanded="saleDetailsOpen ? 'true' : 'false'"
+								aria-controls="invoice-sale-details"
+								@click="toggleSaleDetails()"
+							>
+								<v-icon
+									:icon="saleDetailsOpen ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+									size="20"
+								/>
+								<span class="invoice-details-toggle__label">{{ __("Sale details") }}</span>
+								<!-- No customer name here. `CustomerStrip` states it directly
+								     above, and a disclosure that echoes the line above it is
+								     the register saying one fact twice. The comment this
+								     replaces claimed the collapsed row "still has to answer
+								     who am I selling to" — true before the strip existed,
+								     false the moment it landed. -->
+							</button>
+							<v-btn
+								v-if="items.length"
+								class="invoice-items-bar__filter"
+								:icon="itemsToolbarOpen ? 'mdi-close' : 'mdi-magnify'"
+								size="x-small"
+								variant="text"
+								density="compact"
+								data-testid="cart-filter-toggle"
+								:aria-label="__('Filter cart lines')"
+								:aria-expanded="itemsToolbarOpen ? 'true' : 'false'"
+								@click="toggleItemsToolbar()"
 							/>
-							<span class="invoice-details-toggle__label">{{ __("Sale details") }}</span>
-							<!-- No customer name here. `CustomerStrip` states it directly
-							     above, and a disclosure that echoes the line above it is
-							     the register saying one fact twice. The comment this
-							     replaces claimed the collapsed row "still has to answer
-							     who am I selling to" — true before the strip existed,
-							     false the moment it landed. -->
-						</button>
+						</div>
 						<div
 							v-show="saleDetailsOpen"
 							id="invoice-sale-details"
@@ -210,28 +244,11 @@
 					     row; a bordered card around the one elastic element in
 					     the height chain bought a shadow and cost two lines. -->
 					<div class="invoice-items-card">
-						<!-- The count strip the artboard carries ("6 líneas · 9
-						     piezas"), doubling as the home for the two controls
-						     that used to occupy a full row: the cart filter and
-						     the column picker. -->
-						<!-- The count moved OUT of here. `Main.dc.html` puts
-						     "6 líneas · 9 piezas" below the cart beside the chips, not
-						     above it, and `InvoiceSummary` already renders it there —
-						     so this bar was the second copy, in the wrong place, in a
-						     different format ("0.00 pieces" against "0 pcs"). What is
-						     left is the filter toggle, which has nowhere better to be. -->
-						<div v-if="items.length" class="invoice-items-bar">
-							<v-btn
-								:icon="itemsToolbarOpen ? 'mdi-close' : 'mdi-magnify'"
-								size="x-small"
-								variant="text"
-								density="compact"
-								data-testid="cart-filter-toggle"
-								:aria-label="__('Filter cart lines')"
-								:aria-expanded="itemsToolbarOpen ? 'true' : 'false'"
-								@click="toggleItemsToolbar()"
-							/>
-						</div>
+						<!-- Nothing between this card's top and the table. The count
+						     moved to the summary (where `Main.dc.html` draws it) and
+						     the filter moved up to the `Sale details` row, so the
+						     scrollport starts at the column header, exactly as the
+						     artboard goes customer strip → header → rows. -->
 						<div class="items-table-wrapper">
 							<InvoiceItemsActionToolbar
 								v-if="itemsToolbarOpen"
@@ -316,8 +333,18 @@
 		/>
 
 		<!-- Payment Section -->
+		<!-- The band's two lanes, named by attribute rather than by id because
+		     `ClosingDialog` mounts an ActionBand of its own; an attribute
+		     selector is a lookup, an id would be a uniqueness claim across two
+		     surfaces that are only mutually exclusive by convention. The summary
+		     teleports its breakdown and its tender into them when the shell band
+		     is on screen, and renders both in place when it is not — see
+		     `ActionBand.vue`'s lane comment for why the band does not simply
+		     take them as a slot. -->
 		<InvoiceSummary
 			ref="invoiceSummary"
+			band-breakdown-target="[data-band-lane='breakdown']"
+			band-context-target="[data-band-lane='context']"
 			:pos_profile="pos_profile"
 			:total_qty="total_qty"
 			:additional_discount="additional_discount"
@@ -1525,7 +1552,12 @@ export default {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	width: 100%;
+	/* Was `width: 100%`. It now shares a flex row with the cart filter, so it
+	   takes the free width instead of claiming all of it; the hit area is
+	   still the whole row minus one icon, which is what met the 44px touch
+	   minimum by area rather than by height. */
+	flex: 1 1 auto;
+	min-width: 0;
 	min-height: 30px;
 	padding: 4px 2px;
 	border: 0;
@@ -1631,24 +1663,27 @@ export default {
 	box-shadow: none;
 }
 
-/* The count strip, and the home for the two controls that used to hold a full
- * row open. `flex: 0 0 auto` because it is chrome above the one thing that
- * scrolls. */
+/* THE control strip above the cart — one row, not two. It carries the
+ * `Sale details` disclosure and, at its far end, the cart filter. It used to
+ * be a strip of its own below this one, holding nothing but that filter, which
+ * on a cart with lines rendered as a half-height row above the table's own
+ * header. `flex: 0 0 auto` because it is chrome above the one thing that
+ * scrolls; its height is the disclosure's, so the filter is free. */
 .invoice-items-bar {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	flex: 0 0 auto;
-	min-height: 24px;
+	min-height: 30px;
 	padding: 0 2px;
 	font-size: 0.74rem;
 	font-weight: 600;
 	color: var(--pos-text-muted, #667085);
 }
 
-/* The lone filter toggle aligns to the table's right edge, where the Actions
-   column is, rather than floating at the start of an otherwise empty bar. */
-.invoice-items-bar > :first-child {
+/* Still the table's right edge, where the Actions column is — the toggle just
+   reaches it from a row that was already on screen. */
+.invoice-items-bar__filter {
 	margin-left: auto;
 }
 
@@ -1791,10 +1826,12 @@ export default {
  * the header hold while the rows move. */
 .items-table-wrapper {
 	position: relative;
-	/* Was `var(--dynamic-sm)`: clearance under the "Invoice Items" card heading
-	   that this panel no longer renders. The count strip above supplies its own
-	   spacing. */
-	margin-top: 2px;
+	/* No top inset. It was `var(--dynamic-sm)` — clearance under an "Invoice
+	   Items" card heading this panel stopped rendering — then 2px of clearance
+	   under a count strip that has also gone. Nothing sits above the scrollport
+	   now, so an inset here is a gap between the customer strip and the first
+	   thing a cashier scanned. */
+	margin-top: 0;
 	width: 100%;
 	max-width: 100%;
 	box-sizing: border-box;
@@ -1814,6 +1851,17 @@ export default {
 	top: 0;
 	z-index: 3;
 	background: var(--pos-card-bg);
+}
+
+/* The cart's card is the artboard's: a hairline and a 1px shadow.
+ * `items-table-styles.css` gives `.posa-cart-table` `box-shadow: 0 12px 24px`,
+ * which at that blur paints a haze band ABOVE its own top border — a soft strip
+ * the width of the table sitting over the column header, which is the other
+ * half of what reads as a clipped row up there. That stylesheet is shared and
+ * not this panel's to edit, so the correction is scoped to the cart's
+ * scrollport and no other surface using it changes. */
+:deep(.items-table-wrapper .posa-cart-table) {
+	box-shadow: 0 1px 2px var(--pos-shadow-light);
 }
 
 /* Natural height on purpose: the wrapper above scrolls, this grows. The old

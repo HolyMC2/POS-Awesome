@@ -126,51 +126,76 @@
 				     `qty` is gone from here on purpose too: the count strip below
 				     the cart already says "6 líneas · 9 piezas", and that is the
 				     artboard's home for it. -->
-				<div
-					v-if="bandOwnsSaleLane"
-					class="summary-breakdown"
-					data-testid="summary-breakdown"
-				>
-					<span class="summary-breakdown__pair">
-						<span class="summary-breakdown__label">{{ __("Subtotal") }}</span>
-						<span
-							class="summary-breakdown__value"
-							data-testid="summary-subtotal"
-							data-money-role="breakdown"
-							>{{ currencySymbol(displayCurrency) }}{{ formatCurrency(netSubtotal) }}</span
-						>
-					</span>
-					<!-- The line a Mexican operator actually checks, and the one
-					     the breakdown was missing. Its label is the tenant's own
-					     (`IVA 16 %`, from the tax row's description and rate — see
-					     saleTaxBreakdown.ts), never a constant, because the rate
-					     varies by ticket and by country. Absent, not zeroed, when
-					     the register cannot work it out: `IVA $0.00` is a claim
-					     about this ticket. -->
-					<span v-if="taxBreakdown" class="summary-breakdown__pair">
-						<span class="summary-breakdown__label" data-testid="summary-tax-label">{{
-							taxBreakdown.label
-						}}</span>
-						<span
-							class="summary-breakdown__value"
-							data-testid="summary-tax"
-							data-money-role="tax"
-							>{{ currencySymbol(displayCurrency)
-							}}{{ formatCurrency(taxBreakdown.amount) }}</span
-						>
-					</span>
-					<span class="summary-breakdown__pair">
-						<span class="summary-breakdown__label">{{ __("Discount") }}</span>
-						<span class="summary-breakdown__value" data-money-role="breakdown"
-							>{{ currencySymbol(displayCurrency)
-							}}{{ formatCurrency(total_items_discount_amount) }}</span
-						>
-					</span>
-				</div>
+				<!-- Into the band's own lane when there is one. `Main.dc.html`
+				     draws Subtotal · IVA · Descuento as the 216px column between
+				     the 60px figure and the tender, INSIDE the band; rendering it
+				     one card above left that lane empty across a thousand pixels,
+				     which is what the owner marked. The band publishes the lane
+				     (`[data-band-lane]`) and this card fills it, the way
+				     `ItemsSelector` fills `#register-scan-bar` — the money stays
+				     owned by the surface that computes it, and the band keeps
+				     knowing nothing but `state`.
+
+				     Disabled — so rendered right here, unchanged — whenever there
+				     is no lane to fill: a phone, a lean-vertical preset, or a
+				     mount with no target at all. Disabled is also what keeps Vue
+				     silent about a selector it cannot resolve. -->
+				<Teleport defer :to="bandBreakdownTarget || 'body'" :disabled="!bandLaneActive">
+					<span
+						v-if="bandLaneActive"
+						class="summary-band-divider"
+						aria-hidden="true"
+					></span>
+					<div
+						v-if="bandOwnsSaleLane"
+						class="summary-breakdown"
+						data-testid="summary-breakdown"
+					>
+						<span class="summary-breakdown__pair">
+							<span class="summary-breakdown__label">{{ __("Subtotal") }}</span>
+							<span
+								class="summary-breakdown__value"
+								data-testid="summary-subtotal"
+								data-money-role="breakdown"
+								>{{ currencySymbol(displayCurrency) }}{{ formatCurrency(netSubtotal) }}</span
+							>
+						</span>
+						<!-- The line a Mexican operator actually checks, and the one
+						     the breakdown was missing. Its label is the tenant's own
+						     (`IVA 16 %`, from the tax row's description and rate — see
+						     saleTaxBreakdown.ts), never a constant, because the rate
+						     varies by ticket and by country. Absent, not zeroed, when
+						     the register cannot work it out: `IVA $0.00` is a claim
+						     about this ticket. -->
+						<span v-if="taxBreakdown" class="summary-breakdown__pair">
+							<span class="summary-breakdown__label" data-testid="summary-tax-label">{{
+								taxBreakdown.label
+							}}</span>
+							<span
+								class="summary-breakdown__value"
+								data-testid="summary-tax"
+								data-money-role="tax"
+								>{{ currencySymbol(displayCurrency)
+								}}{{ formatCurrency(taxBreakdown.amount) }}</span
+							>
+						</span>
+						<span class="summary-breakdown__pair">
+							<span class="summary-breakdown__label">{{ __("Discount") }}</span>
+							<span class="summary-breakdown__value" data-money-role="breakdown"
+								>{{ currencySymbol(displayCurrency)
+								}}{{ formatCurrency(total_items_discount_amount) }}</span
+							>
+						</span>
+					</div>
+				</Teleport>
 				<!-- No band below (a lean-vertical preset at desktop width): this
 				     card IS the lane, so the figure keeps its weight and carries
 				     the total role. -->
-				<div v-else class="summary-hero__copy">
+				<!-- Stated as the complement rather than as `v-else`: the breakdown
+				     it pairs with now sits inside a `<Teleport>`, so the two are no
+				     longer adjacent siblings and Vue cannot chain them. Same two
+				     mutually exclusive shapes, one condition, written twice. -->
+				<div v-if="!bandOwnsSaleLane" class="summary-hero__copy">
 					<span class="summary-hero__eyebrow">{{ __("Active sale") }}</span>
 					<strong
 						class="summary-hero__amount"
@@ -267,10 +292,17 @@
 
 			<!-- The tender, chosen BEFORE the primary action (`Main.dc.html`
 			     nodes 127–131). The artboard draws it inside the band, in the
-			     column immediately left of PAGAR; the band is not this card's to
-			     edit, so it takes the end of the card's last row — the same
-			     place in the operator's reading order, and the same place on the
-			     screen, directly above the button it arms.
+			     column immediately left of PAGAR, and it now goes there: the
+			     band publishes its context lane and this card teleports into it.
+			     It used to take the end of this row instead, because the band
+			     offered nowhere to put it — the same place in the operator's
+			     reading order and the same place on the screen, but one card up,
+			     which is half of why that band read as an empty lane.
+
+			     The rule is unchanged and better served: THE TENDER IS ADJACENT
+			     TO THE BUTTON IT ARMS. In the band it is the column immediately
+			     left of PAGAR; with no band — phone, lean-vertical — it stays
+			     here, at the end of the row above the strip that carries PAY.
 
 			     It ARMS the payment screen and nothing else. Tendered amount,
 			     change due, split payments and submission all stay exactly where
@@ -282,28 +314,35 @@
 			     is the empty selection, reached by tapping the lit chip off, and it
 			     leaves the payment screen exactly as it opens today — every method
 			     listed, every amount open, which is already the split surface. -->
-			<div
-				v-if="tenderChips.length"
-				class="tender-strip"
-				role="group"
-				:aria-label="__('Method')"
-				data-testid="tender-strip"
-			>
-				<span class="tender-strip__label" aria-hidden="true">{{ __("Method") }}</span>
-				<button
-					v-for="chip in tenderChips"
-					:key="chip.mode"
-					type="button"
-					class="tender-strip__chip"
-					:class="{ 'tender-strip__chip--armed': chip.mode === armedTender }"
-					:aria-pressed="chip.mode === armedTender ? 'true' : 'false'"
-					data-testid="tender-chip"
-					:data-tender-mode="chip.mode"
-					@click="selectTender(chip.mode)"
+			<Teleport defer :to="bandContextTarget || 'body'" :disabled="!bandLaneActive">
+				<span
+					v-if="bandLaneActive && tenderChips.length"
+					class="summary-band-divider"
+					aria-hidden="true"
+				></span>
+				<div
+					v-if="tenderChips.length"
+					class="tender-strip"
+					role="group"
+					:aria-label="__('Method')"
+					data-testid="tender-strip"
 				>
-					{{ chip.mode }}
-				</button>
-			</div>
+					<span class="tender-strip__label" aria-hidden="true">{{ __("Method") }}</span>
+					<button
+						v-for="chip in tenderChips"
+						:key="chip.mode"
+						type="button"
+						class="tender-strip__chip"
+						:class="{ 'tender-strip__chip--armed': chip.mode === armedTender }"
+						:aria-pressed="chip.mode === armedTender ? 'true' : 'false'"
+						data-testid="tender-chip"
+						:data-tender-mode="chip.mode"
+						@click="selectTender(chip.mode)"
+					>
+						{{ chip.mode }}
+					</button>
+				</div>
+			</Teleport>
 		</div>
 
 		<!-- No band below, so this strip carries PAY and the tender above stays
@@ -438,6 +477,15 @@ const props = defineProps({
 	discount_percentage_offer_name: [String, Number],
 	isNumber: Function,
 	return_discount_meta: Object,
+	/**
+	 * Selectors for the shell band's two lanes, passed by `Invoice.vue`. Empty
+	 * by default, and an empty target means "render in place" — which is what
+	 * every unit mount of this card gets, and what a phone gets, and what a
+	 * lean-vertical preset gets. The card must be correct standing alone; the
+	 * band is an opportunity, not a dependency.
+	 */
+	bandBreakdownTarget: { type: String, default: "" },
+	bandContextTarget: { type: String, default: "" },
 });
 
 const emit = defineEmits([
@@ -696,6 +744,20 @@ const useCompactSaleDock = computed(() => responsive.windowWidth.value < 1100);
  */
 const bandOwnsSaleLane = computed(() =>
 	bandOwnsLane(Boolean(verticalStore.leanVerticalLayout), responsive.windowWidth.value),
+);
+
+/**
+ * Is there a band lane to teleport into right now?
+ *
+ * BOTH halves are required, and each catches a different miss. Without a
+ * target this card is mounted somewhere that never draws a band (a spec, a
+ * harness) and must render its own money; without `bandOwnsSaleLane` the band
+ * is not mounted at all (phone, lean-vertical) and the selector would resolve
+ * to nothing. It also gates `<Teleport disabled>`, which is what keeps Vue from
+ * warning about a target that legitimately is not there.
+ */
+const bandLaneActive = computed(
+	() => bandOwnsSaleLane.value && Boolean(props.bandBreakdownTarget || props.bandContextTarget),
 );
 const showDesktopDrafts = computed(() => Boolean(responsive.isDesktop.value));
 const showReturnDiscountAlert = computed(
@@ -1211,6 +1273,66 @@ defineExpose({
 	font-weight: 600;
 	color: var(--pos-text-secondary);
 	font-variant-numeric: tabular-nums;
+}
+
+/* ---- teleported into the band's lane --------------------------------
+ * These rules apply to markup that lives, at runtime, inside `.action-band`.
+ * They belong HERE and not in `ActionBand.vue` for a mechanical reason: a
+ * `<style scoped>` block only reaches elements its own component rendered, and
+ * the band did not render these. So the band owns the lane's rhythm (its 22px
+ * gap and its centring) and this card owns how its own columns look inside it.
+ *
+ * `min-height` rather than `height`: the artboard's rule is 88px against a
+ * 134px band, and a height in this stylesheet is how a footer strip becomes a
+ * panel again (tests/saleFooterHeight.spec.ts pins that). */
+.summary-band-divider {
+	flex: none;
+	width: 1px;
+	min-height: var(--reg-band-divider-height, 88px);
+	background: var(--reg-tone-neutral-divider, #eceff3);
+}
+
+/* `Main.dc.html` gives the breakdown a 216px column and stacks the pairs down
+ * it; in this card the same markup runs along one line. Same element, two
+ * lanes, so the column shape is stated where the column exists. */
+.action-band .summary-breakdown {
+	flex: 0 1 auto;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 6px;
+	width: var(--reg-band-breakdown-width, 216px);
+}
+
+.action-band .summary-breakdown__pair {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+/* Two columns of chips, the artboard's `repeat(2, 104px)`, so a register with
+ * four methods reads as a block beside PAGAR instead of a long ribbon that
+ * shoves it off the right edge. `max-content` keeps a cash-only register to
+ * one column instead of one chip and one hole. */
+.action-band .tender-strip {
+	flex: 0 1 auto;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, var(--reg-band-tender-col, 104px)));
+	justify-content: start;
+	align-content: center;
+	gap: 6px;
+	padding: 0;
+}
+
+.action-band .tender-strip__label {
+	grid-column: 1 / -1;
+	margin-right: 0;
+}
+
+.action-band .tender-strip__chip {
+	justify-content: center;
+	padding: 0 9px;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* The card stops announcing itself when it is no longer the lane: no tint, no
