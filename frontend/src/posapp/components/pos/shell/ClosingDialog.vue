@@ -9,58 +9,78 @@
 				@close="dismissCorte"
 			/>
 
-			<v-card-text class="pa-0 white-background">
-				<v-container class="closing-container">
-					<v-row class="mb-6">
-						<v-col cols="12" class="pa-1">
-							<ShiftOverview
-								:loading="overviewLoading"
-								:primary-insights="primaryInsights"
-								:secondary-insights="secondaryInsights"
-								:multi-currency-totals="multiCurrencyTotals"
-								:credit-invoices-by-currency="creditInvoicesByCurrency"
-								:returns-by-currency="returnsByCurrency"
-								:change-returned-rows="changeReturnedRows"
-								:cash-expected-by-currency="cashExpectedByCurrency"
-								:cash-movement-summary="cashMovementSummary"
-								:payments-by-mode="paymentsByMode"
-								:overview-company-currency="overviewCompanyCurrency"
-								:format-currency-with-symbol="formatCurrencyWithSymbol"
-								:should-show-company-equivalent="shouldShowCompanyEquivalent"
-								:show-exchange-rates="showExchangeRates"
-								:format-exchange-rates="formatExchangeRates"
-								:is-cash-mode="isCashMode"
-								:overpayment-deduction-for-currency="overpaymentDeductionForCurrency"
-							/>
-						</v-col>
-					</v-row>
-					<v-row>
-						<!-- The drawer is counted by denomination and the other
-						     tenders are reconciled beside it, because they are two
-						     different acts: one is physical counting, the other is
-						     reading a terminal's totals off a slip. -->
-						<v-col v-if="cashRow" cols="12" md="5" class="pa-1">
-							<DrawerCount
-								:currency="drawerCurrency"
-								:expected="expectedCash"
-								:breakdown="expectedBreakdown"
-								:initial-counted="initialCountedCash"
-								:format-currency="formatCurrencyWithSymbolForDrawer"
-								@update:counted="onDrawerCounted"
-							/>
-						</v-col>
-						<v-col cols="12" :md="cashRow ? 7 : 12" class="pa-1">
-							<PaymentReconciliation
-								:payments="dialog_data.payment_reconciliation"
-								:headers="headers"
-								:items-per-page="itemsPerPage"
-								:company-currency-symbol="companyCurrencySymbol"
-								:format-currency="formatCurrency"
-								:format-float="formatFloat"
-							/>
-						</v-col>
-					</v-row>
-				</v-container>
+			<!--
+				`Corte.dc.html` draws three columns that fill the height, with
+				the band across the bottom — never one scrolling list. This body
+				is the frame for that: `v-dialog scrollable` hands the scroll to
+				`.v-card-text`, which is how the count, the reconciliation and
+				seven overview tables ended up in ONE scrollport, and how the
+				figure the cashier is counting against scrolled off the screen
+				while they counted.
+
+				So the body stops being the scroller and the columns below own
+				their own scrollports. It stays a plain flex column here — a
+				`min-height: 0` flex child cannot push a parent that is already
+				sized by the card's flex chain, so Vuetify's own `overflow-y`
+				on this element simply never has anything to scroll.
+			-->
+			<v-card-text class="pa-0 white-background closing-body">
+				<div class="closing-layout" :class="{ 'closing-layout--no-count': !cashRow }">
+					<!-- The shift's headline figures stay ON SCREEN: they are what
+					     the count is being checked against. -->
+					<ShiftInsightTiles
+						class="closing-layout__tiles"
+						:primary-insights="primaryInsights"
+						:secondary-insights="secondaryInsights"
+					/>
+
+					<!-- Counting the drawer is the ACT this screen exists for, so
+					     it holds its own column and never scrolls away from the
+					     difference band below it. -->
+					<div v-if="cashRow" class="closing-layout__count">
+						<DrawerCount
+							:currency="drawerCurrency"
+							:expected="expectedCash"
+							:breakdown="expectedBreakdown"
+							:initial-counted="initialCountedCash"
+							:format-currency="formatCurrencyWithSymbolForDrawer"
+							@update:counted="onDrawerCounted"
+						/>
+					</div>
+
+					<!-- The evidence: the other tenders reconciled first, because
+					     that is the other thing the cashier has to TYPE, and the
+					     shift's tables under them. This is the one region that
+					     genuinely overflows, so this is the one region that
+					     scrolls. -->
+					<div class="closing-layout__detail">
+						<PaymentReconciliation
+							:payments="dialog_data.payment_reconciliation"
+							:headers="headers"
+							:items-per-page="itemsPerPage"
+							:company-currency-symbol="companyCurrencySymbol"
+							:format-currency="formatCurrency"
+							:format-float="formatFloat"
+						/>
+						<ShiftOverview
+							:loading="overviewLoading"
+							:multi-currency-totals="multiCurrencyTotals"
+							:credit-invoices-by-currency="creditInvoicesByCurrency"
+							:returns-by-currency="returnsByCurrency"
+							:change-returned-rows="changeReturnedRows"
+							:cash-expected-by-currency="cashExpectedByCurrency"
+							:cash-movement-summary="cashMovementSummary"
+							:payments-by-mode="paymentsByMode"
+							:overview-company-currency="overviewCompanyCurrency"
+							:format-currency-with-symbol="formatCurrencyWithSymbol"
+							:should-show-company-equivalent="shouldShowCompanyEquivalent"
+							:show-exchange-rates="showExchangeRates"
+							:format-exchange-rates="formatExchangeRates"
+							:is-cash-mode="isCashMode"
+							:overpayment-deduction-for-currency="overpaymentDeductionForCurrency"
+						/>
+					</div>
+				</div>
 			</v-card-text>
 
 			<v-divider></v-divider>
@@ -191,6 +211,7 @@ import { useDialogFullscreen } from "../../../composables/core/useDialogFullscre
 import { resolveBandState } from "../../../composables/pos/shell/bandState";
 
 import ClosingHeader from "../closing/ClosingHeader.vue";
+import ShiftInsightTiles from "../closing/ShiftInsightTiles.vue";
 import ShiftOverview from "../closing/ShiftOverview.vue";
 import PaymentReconciliation from "../closing/PaymentReconciliation.vue";
 import DrawerCount from "../closing/DrawerCount.vue";
@@ -217,6 +238,7 @@ export default {
 	name: "ClosingDialog",
 	components: {
 		ClosingHeader,
+		ShiftInsightTiles,
 		ShiftOverview,
 		PaymentReconciliation,
 		DrawerCount,
@@ -231,7 +253,13 @@ export default {
 		// Fullscreen on phones — a 900px card at 390px was a floating sheet
 		// scrolling in two axes over a wall of stat cards + a wide recon
 		// table (user report 2026-08-10).
-		const { dialogProps } = useDialogFullscreen({ maxWidth: 900 });
+		//
+		// 1100 rather than 900: the corte is two columns now — the drawer
+		// count beside the reconciliation — and 900 left the recon table's six
+		// columns about 500px. Nothing under the `sm` floor changes (the sheet
+		// is fullscreen there) and nothing between the two changes either,
+		// because VOverlay already caps its content at the viewport.
+		const { dialogProps } = useDialogFullscreen({ maxWidth: 1100 });
 
 		// Initialize composables
 		const {
@@ -600,8 +628,99 @@ export default {
 	overflow: hidden;
 }
 
-.closing-container {
-	padding: 24px;
+/*
+ * The body is a frame, not a scrollport. `min-height: 0` is the load-bearing
+ * half: a flex child defaults to `min-height: auto` and would refuse to shrink
+ * below the seven overview tables inside it, which is exactly how the card's
+ * own scroll came to own the whole corte.
+ */
+.closing-body {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+/*
+ * `Corte.dc.html`: columns that fill the height, with the band across the
+ * bottom. Two of the artboard's three exist here — the count and the evidence;
+ * its third is «Equipo en piso», which this register has no data for and which
+ * is therefore not drawn rather than faked.
+ *
+ * The tiles row is `auto` and the column row is `1fr`, so the grid is exactly
+ * as tall as the body and the columns divide what is left.
+ */
+.closing-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+	grid-template-rows: auto minmax(0, 1fr);
+	grid-template-areas:
+		"tiles tiles"
+		"count detail";
+	gap: 16px;
+	padding: 16px;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+/*
+ * A profile with no cash mode has no drawer to count — `isCashMode` answers
+ * that from the server's own figures, not from a label — so the column goes
+ * with it rather than standing there empty beside the evidence.
+ */
+.closing-layout--no-count {
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-areas:
+		"tiles"
+		"detail";
+}
+
+.closing-layout__tiles {
+	grid-area: tiles;
+}
+
+/* The count holds still. It is what the difference band below is counting
+   against, and a figure you have to scroll back to is a figure you retype. */
+.closing-layout__count {
+	grid-area: count;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+/* The one region that genuinely overflows, and therefore the only one that
+   scrolls: the other tenders, then the shift's evidence tables. */
+.closing-layout__detail {
+	grid-area: detail;
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+/*
+ * Under the two-column width there is no room to put the count beside the
+ * evidence, so the corte becomes one column again — and the body hands the
+ * scroll back to the card, because a single column that cannot scroll is worse
+ * than one that does.
+ */
+@media (max-width: 959px) {
+	.closing-body {
+		display: block;
+	}
+
+	.closing-layout {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto auto auto;
+		grid-template-areas:
+			"tiles"
+			"count"
+			"detail";
+	}
+
+	.closing-layout__count,
+	.closing-layout__detail {
+		overflow: visible;
+	}
 }
 
 /* Fullscreen sheet on phones: square the card, reclaim the padding the
@@ -614,12 +733,9 @@ export default {
 		height: 100%;
 	}
 
-	.closing-container {
+	.closing-layout {
 		padding: 10px;
-	}
-
-	.closing-container :deep(.mb-6) {
-		margin-bottom: 12px !important;
+		gap: 12px;
 	}
 }
 

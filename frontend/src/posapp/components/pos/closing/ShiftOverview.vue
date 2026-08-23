@@ -13,53 +13,15 @@
 			<v-progress-circular color="primary" indeterminate size="32"></v-progress-circular>
 		</div>
 
+		<!--
+			The headline tiles are NOT here any more: they moved to
+			`ShiftInsightTiles.vue` so the corte can pin them above the columns
+			while this evidence scrolls beneath. What is left is the evidence —
+			seven tables the cashier reads, none of which has to stay on screen
+			while they count.
+		-->
 		<div v-else class="overview-wrapper">
-			<div class="insight-grid">
-				<v-row dense>
-					<v-col
-						v-for="card in primaryInsights"
-						:key="card.key"
-						cols="6"
-						sm="6"
-						md="3"
-						class="d-flex"
-					>
-						<div class="insight-card">
-							<div class="insight-icon" :class="card.color">
-								<v-icon size="22">{{ card.icon }}</v-icon>
-							</div>
-							<div class="insight-body">
-								<div class="insight-label">{{ card.label }}</div>
-								<div class="insight-value">{{ card.value }}</div>
-								<div class="insight-caption">{{ card.caption }}</div>
-							</div>
-						</div>
-					</v-col>
-				</v-row>
-				<v-row dense class="mt-2" v-if="secondaryInsights.length">
-					<v-col
-						v-for="card in secondaryInsights"
-						:key="card.key"
-						cols="6"
-						sm="6"
-						md="3"
-						class="d-flex"
-					>
-						<div class="insight-card compact">
-							<div class="insight-icon" :class="card.color">
-								<v-icon size="20">{{ card.icon }}</v-icon>
-							</div>
-							<div class="insight-body">
-								<div class="insight-label">{{ card.label }}</div>
-								<div class="insight-value">{{ card.value }}</div>
-								<div class="insight-caption">{{ card.caption }}</div>
-							</div>
-						</div>
-					</v-col>
-				</v-row>
-			</div>
-
-			<div class="table-section mt-6">
+			<div class="table-section">
 				<div class="table-header mb-2">
 					<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
 						{{ __("Totals by Invoice Currency") }}
@@ -466,6 +428,14 @@
 						</div>
 					</div>
 					<!-- End: Change Returned -->
+				</v-col>
+				<!--
+					The cash pair belongs in the SECOND half of this row. All
+					three sections used to sit in the first `md="6"` column, so
+					the corte drew a tall left stack against an empty right half
+					and then scrolled past the fold to finish it.
+				-->
+				<v-col cols="12" md="6">
 					<div class="table-section">
 						<div class="table-header mb-2">
 							<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
@@ -683,8 +653,6 @@
 <script setup>
 defineProps({
 	loading: Boolean,
-	primaryInsights: Array,
-	secondaryInsights: Array,
 	multiCurrencyTotals: Array,
 	creditInvoicesByCurrency: Array,
 	returnsByCurrency: Array,
@@ -715,102 +683,6 @@ const __ = window.__ || ((t) => t);
 
 .table-header {
 	margin-bottom: 24px;
-}
-
-.insight-grid {
-	margin-bottom: 8px;
-}
-
-.insight-card {
-	background: rgb(var(--v-theme-surface));
-	border-radius: 12px;
-	padding: 16px;
-	display: flex;
-	align-items: flex-start;
-	gap: 16px;
-	border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-	width: 100%;
-	transition: all 0.2s ease;
-}
-
-.insight-card:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-	border-color: rgba(var(--v-border-color), 0.5);
-}
-
-.insight-card.compact {
-	padding: 12px 16px;
-}
-
-.insight-icon {
-	width: 48px;
-	height: 48px;
-	border-radius: 12px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-shrink: 0;
-}
-.insight-card.compact .insight-icon {
-	width: 40px;
-	height: 40px;
-}
-
-/* Accent Colors for Icons - Theme Aware */
-.accent-primary {
-	background-color: rgba(var(--v-theme-primary), 0.1);
-	color: rgb(var(--v-theme-primary));
-}
-.accent-success {
-	background-color: rgba(var(--v-theme-success), 0.1);
-	color: rgb(var(--v-theme-success));
-}
-.accent-secondary {
-	background-color: rgba(var(--v-theme-secondary), 0.1);
-	color: rgb(var(--v-theme-secondary));
-}
-.accent-info {
-	background-color: rgba(var(--v-theme-info), 0.1);
-	color: rgb(var(--v-theme-info));
-}
-.accent-warning {
-	background-color: rgba(var(--v-theme-warning), 0.1);
-	color: rgb(var(--v-theme-warning));
-}
-
-.insight-body {
-	flex: 1;
-	min-width: 0;
-}
-
-.insight-label {
-	font-size: 0.75rem;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	opacity: 0.7;
-	font-weight: 600;
-	margin-bottom: 4px;
-}
-
-.insight-value {
-	font-size: 1.25rem;
-	font-weight: 700;
-	line-height: 1.2;
-}
-
-.insight-card.compact .insight-value {
-	font-size: 1.1rem;
-}
-
-.insight-caption {
-	font-size: 0.75rem;
-	opacity: 0.6;
-	margin-top: 4px;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .table-section {
@@ -905,33 +777,6 @@ const __ = window.__ || ((t) => t);
 @media (max-width: 600px) {
 	.overview-wrapper {
 		gap: 12px;
-	}
-
-	.insight-card,
-	.insight-card.compact {
-		padding: 10px;
-		gap: 10px;
-		flex-direction: column;
-	}
-
-	.insight-icon,
-	.insight-card.compact .insight-icon {
-		width: 32px;
-		height: 32px;
-	}
-
-	.insight-label {
-		font-size: 0.62rem;
-		margin-bottom: 2px;
-	}
-
-	.insight-value,
-	.insight-card.compact .insight-value {
-		font-size: 0.95rem;
-	}
-
-	.insight-caption {
-		font-size: 0.62rem;
 	}
 
 	.table-header {
