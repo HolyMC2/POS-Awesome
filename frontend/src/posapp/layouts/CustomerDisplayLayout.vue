@@ -34,6 +34,10 @@
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
-	padding: 12px;
+	/* Scales with the panel rather than sitting at a fixed 12px. This window
+	   runs on anything from a 1280x820 popup to a 24" screen bolted to the
+	   counter, and a gutter that stays 12px on the big one crowds a figure the
+	   customer is meant to read from two metres back. */
+	padding: clamp(12px, 1.6vw, 28px);
 }
 </style>
