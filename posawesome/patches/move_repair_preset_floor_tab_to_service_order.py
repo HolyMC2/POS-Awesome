@@ -33,6 +33,11 @@ from posawesome.posawesome.doctype.pos_capability_profile.pos_capability_profile
 
 
 def execute():
+    # A site migrating up from before the doctype existed runs this patch
+    # BEFORE sync creates the table (pre-model-sync ordering); there is
+    # nothing to move there yet, and the seed writes the corrected tabs.
+    if not frappe.db.table_exists("POS Capability Profile"):
+        return
     for name in frappe.get_all("POS Capability Profile", pluck="name"):
         tabs = _split_csv(frappe.db.get_value("POS Capability Profile", name, "dock_tabs"))
         if "floor" not in tabs:
