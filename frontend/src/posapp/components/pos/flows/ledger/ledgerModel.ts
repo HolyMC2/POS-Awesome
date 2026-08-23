@@ -142,15 +142,69 @@ export interface LedgerSegmentIntent {
 	to: string;
 }
 
-export const segmentIntent = (id: LedgerSegmentId, today: string): LedgerSegmentIntent => {
+export const segmentIntent = (
+	id: LedgerSegmentId,
+	today: string,
+	options: { recent?: boolean } = {},
+): LedgerSegmentIntent => {
 	const segment = getSegment(id);
+	// Hoy fallen back to Recientes asks the engine for history UNSCOPED — the
+	// latest rows the tab already orders by — instead of an empty day.
+	const scoped = segment.todayScoped && !options.recent;
 	return {
 		segment: id,
 		tab: segment.tab,
-		from: segment.todayScoped ? today : "",
-		to: segment.todayScoped ? today : "",
+		from: scoped ? today : "",
+		to: scoped ? today : "",
 	};
 };
+
+/**
+ * Hoy when there is nothing to show for today becomes Recientes (owner
+ * direction 2026-08-22): the latest history rows, under a label that says so.
+ * A register opened at 02:02 that has sold nothing yet should not greet the
+ * cashier with an empty list when yesterday's tickets are one query away.
+ *
+ * The decision is made only once the tab has READ (`loaded !== null`): an
+ * empty array from a register that has not looked yet is not "nothing today".
+ * The figures are untouched — `describeFigures` scopes `sold` to today's
+ * posting date on its own, so a broader load cannot inflate "Vendido hoy".
+ */
+export interface TodayPresentation {
+	/** Show the latest rows instead of an empty day. */
+	recent: boolean;
+	/** The segment's label, English source: "Today" or "Recent". */
+	label: string;
+}
+
+export const todayPresentation = (input: {
+	segment: LedgerSegmentId;
+	/** `collections.history.loaded` — null until the tab has read. */
+	historyLoaded: readonly unknown[] | null;
+	/** Rows whose posting date is today, i.e. `figures.sold.count`. */
+	todayCount: number | null;
+	/** Already fallen back on this mount; stays until Hoy is chosen again. */
+	alreadyRecent: boolean;
+}): TodayPresentation => {
+	if (input.segment !== "today") {
+		return { recent: false, label: TODAY_SEGMENT.label };
+	}
+	if (input.alreadyRecent) {
+		return { recent: true, label: "Recent" };
+	}
+	const read = input.historyLoaded !== null;
+	const nothingToday = read && (input.todayCount ?? 0) === 0 && input.historyLoaded!.length === 0;
+	return nothingToday ? { recent: true, label: "Recent" } : { recent: false, label: TODAY_SEGMENT.label };
+};
+
+/** The segments with Hoy relabelled while it is showing Recientes. */
+export const presentSegments = (
+	segments: readonly LedgerSegment[],
+	presentation: TodayPresentation,
+): LedgerSegment[] =>
+	segments.map((segment) =>
+		segment.id === "today" ? { ...segment, label: presentation.label } : segment,
+	);
 
 /* -------------------------------------------------------------------------- */
 /* Finder modes                                                                */
@@ -332,8 +386,18 @@ export const collectionForSegment = (
 export const segmentCounts = (
 	collections: LedgerCollections,
 	figures: LedgerFigures,
+	options: { recent?: boolean } = {},
 ): Record<LedgerSegmentId, number | null> => ({
-	today: figures.sold ? figures.sold.count : null,
+	// Recientes counts what the list shows — the loaded history rows — because
+	// "0" beside a segment listing twenty-five tickets is the header
+	// contradicting the list.
+	today: options.recent
+		? collections.history.loaded
+			? collections.history.loaded.length
+			: null
+		: figures.sold
+			? figures.sold.count
+			: null,
 	// No shift field is listed, so there is nothing to count and the segment
 	// is not rendered at all — see `LedgerSegmentGates.shiftScoped`.
 	shift: null,

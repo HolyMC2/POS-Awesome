@@ -48,3 +48,19 @@ describe("the shell keeps the floating copies down while the rail hosts them", (
 		expect(shell).toContain('eventBus.emit("recharge:submit")');
 	});
 });
+
+describe("a loaded draft lands on the sale", () => {
+	const source = readFileSync(
+		resolve("src/posapp/components/pos/flows/InvoiceManagement.vue"),
+		"utf8",
+	);
+
+	it("routes the ledger's draft action through the glue that activates the sale", () => {
+		expect(source).toContain('@draft-action="runLedgerDraftAction($event.invoice, $event.action)"');
+		// The cue is the sheet having closed (a document reached the cart),
+		// and the answer is the ONE shell event every destination change uses.
+		const glue = source.slice(source.indexOf("async runLedgerDraftAction("));
+		expect(glue.slice(0, 400)).toContain("!this.uiStore.invoiceManagementDialog");
+		expect(glue.slice(0, 400)).toContain('this.eventBus.emit("open_destination", "sale")');
+	});
+});

@@ -93,7 +93,7 @@
 					@collect="openAddPayment($event)"
 					@delete-draft="deleteDraft($event)"
 					@repair="repairChangeAllocation($event)"
-					@draft-action="runDraftAction($event.invoice, $event.action)"
+					@draft-action="runLedgerDraftAction($event.invoice, $event.action)"
 				/>
 			</v-card>
 
@@ -2673,6 +2673,23 @@ export default {
 			} catch (error) {
 				console.error("Error loading invoice details:", error);
 				this.toastStore.show({ title: __("Unable to load invoice details"), color: "error" });
+			}
+		},
+		/**
+		 * Ledger glue (owner direction 2026-08-22): a draft that was LOADED has
+		 * to land the cashier on the sale, not wherever the rail was before.
+		 *
+		 * `loadDraft` closes this sheet, and the host answers a close with
+		 * `dismiss` — which returns to the PREVIOUS destination. Come to
+		 * Borradores from Facturas and "Retomar" would leave you looking at
+		 * Facturas with the draft already on the ticket behind it. The sheet
+		 * having closed is the one signal that a document reached the cart
+		 * (deleting a draft leaves the sheet up), so that is the cue.
+		 */
+		async runLedgerDraftAction(invoice, action) {
+			await this.runDraftAction(invoice, action);
+			if (!this.uiStore.invoiceManagementDialog && this.eventBus?.emit) {
+				this.eventBus.emit("open_destination", "sale");
 			}
 		},
 		async loadDraft(invoice) {

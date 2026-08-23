@@ -21,7 +21,9 @@ import {
 	parseAmountQuery,
 	segmentCounts,
 	segmentForDestination,
+	presentSegments,
 	segmentIntent,
+	todayPresentation,
 	shortTime,
 	type LedgerRowSource,
 } from "../src/posapp/components/pos/flows/ledger/ledgerModel";
@@ -107,6 +109,48 @@ describe("the segment replaces the tabs, and Turno is absent rather than empty",
 			to: "",
 		});
 		expect(segmentIntent("returns", TODAY).from).toBe("");
+	});
+
+	it("Hoy fallen back to Recientes asks for history unscoped", () => {
+		expect(segmentIntent("today", TODAY, { recent: true })).toEqual({
+			segment: "today",
+			tab: "history",
+			from: "",
+			to: "",
+		});
+		expect(segmentIntent("pending", TODAY, { recent: true }).from).toBe("");
+	});
+
+	it("falls back to Recientes only once today has been READ and found empty", () => {
+		const base = { segment: "today" as const, todayCount: 0, alreadyRecent: false };
+		// Not read yet: no verdict, no relabel.
+		expect(todayPresentation({ ...base, historyLoaded: null })).toEqual({
+			recent: false,
+			label: "Today",
+		});
+		// Read, empty: Recientes.
+		expect(todayPresentation({ ...base, historyLoaded: [] })).toEqual({
+			recent: true,
+			label: "Recent",
+		});
+		// Read, something today: Hoy stays Hoy.
+		expect(todayPresentation({ ...base, historyLoaded: [{}], todayCount: 1 })).toEqual({
+			recent: false,
+			label: "Today",
+		});
+		// Other segments never relabel.
+		expect(todayPresentation({ ...base, segment: "pending", historyLoaded: [] }).recent).toBe(false);
+		// Once fallen back, the loaded (unscoped) rows do not flip it back.
+		expect(todayPresentation({ ...base, historyLoaded: [{}, {}], alreadyRecent: true })).toEqual({
+			recent: true,
+			label: "Recent",
+		});
+		const segments = presentSegments(describeSegments({ shiftScoped: false }), {
+			recent: true,
+			label: "Recent",
+		});
+		expect(segments[0]?.label).toBe("Recent");
+		expect(segments[1]?.label).toBe("Pending invoices");
 	});
 
 	it("reads each segment's own collection", () => {
@@ -391,7 +435,9 @@ describe("the engine is chromed, not rewritten", () => {
 			'@collect="openAddPayment($event)"',
 			'@delete-draft="deleteDraft($event)"',
 			'@repair="repairChangeAllocation($event)"',
-			'@draft-action="runDraftAction($event.invoice, $event.action)"',
+			// Through the glue that lands a LOADED draft on the sale
+			// (hostedSheetsSource.spec.ts pins what the glue does).
+			'@draft-action="runLedgerDraftAction($event.invoice, $event.action)"',
 			'@page="setTabPage($event.tab, $event.page)"',
 		]) {
 			expect(invoiceManagementSource, `${binding} is not the wiring`).toContain(binding);

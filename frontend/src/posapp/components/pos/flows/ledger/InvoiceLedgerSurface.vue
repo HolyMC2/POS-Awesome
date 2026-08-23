@@ -104,7 +104,9 @@ import {
 	parseAmountQuery,
 	segmentCounts,
 	segmentForDestination,
+	presentSegments,
 	segmentIntent,
+	todayPresentation,
 	type LedgerCollections,
 	type LedgerFindModeId,
 	type LedgerRow,
@@ -197,7 +199,25 @@ const today = computed(() => {
  * may not edit. A segment that cannot tell one shift from another would be a
  * button that filters nothing, so there is no button.
  */
-const segments = computed(() => describeSegments({ shiftScoped: false }));
+const baseSegments = computed(() => describeSegments({ shiftScoped: false }));
+
+/**
+ * Hoy → Recientes when today is empty (`todayPresentation`). `recent` is held
+ * here because the fallback is a decision about THIS mount: once the list has
+ * fallen back it stays there until the operator chooses Hoy again, which
+ * asks for today once more and may fall back again — two loads, never a
+ * loop, because the watch only fires on a change of what was read.
+ */
+const recent = ref(false);
+const presentation = computed(() =>
+	todayPresentation({
+		segment: segment.value,
+		historyLoaded: props.collections.history.loaded,
+		todayCount: figures.value.sold ? figures.value.sold.count : null,
+		alreadyRecent: recent.value,
+	}),
+);
+const segments = computed(() => presentSegments(baseSegments.value, presentation.value));
 
 // The keymap is not consulted because no ledger action is registered:
 // `describeFindModes()` resolves every `chords` to `[]` and the chips draw no
@@ -215,7 +235,9 @@ const figures = computed(() =>
 	}),
 );
 
-const counts = computed(() => segmentCounts(props.collections, figures.value));
+const counts = computed(() =>
+	segmentCounts(props.collections, figures.value, { recent: recent.value }),
+);
 
 const collection = computed(() => collectionForSegment(props.collections, segment.value));
 const activeTab = computed(() => getSegment(segment.value).tab);
@@ -276,6 +298,8 @@ const publishFilters = (from = props.dateFrom, to = props.dateTo) => {
 const chooseSegment = (id: LedgerSegmentId) => {
 	segment.value = id;
 	selectedName.value = null;
+	// Choosing Hoy by hand asks for today again, even after a fallback.
+	recent.value = false;
 	const intent = segmentIntent(id, today.value);
 	emit("tab", intent.tab);
 	publishFilters(intent.from, intent.to);
@@ -316,6 +340,17 @@ const onDraftAction = (action: string) => {
 };
 
 /* ---- staying in step with the engine ----------------------------------- */
+
+// Today read and found empty: fall back to the latest rows, once.
+watch(
+	() => presentation.value.recent,
+	(wantsRecent) => {
+		if (!wantsRecent || recent.value) return;
+		recent.value = true;
+		const intent = segmentIntent("today", today.value, { recent: true });
+		publishFilters(intent.from, intent.to);
+	},
+);
 
 // The engine can move the tab without us: the store's `openInvoiceManagement`
 // does exactly that when the rail re-enters on a different destination.
