@@ -916,3 +916,130 @@ HOW they are laid out:
 - A screenshot at 1440 × 900 of the hosted Cobro with a real cart, captured by
   the lead on the lab after merge (`docs/design-evidence/after/desktop-1440/
   cobro.png` — the one artboard the AFTER set never captured).
+
+---
+
+## 15. Facturas — the ledger with a finder (build plan)
+
+Owner decision 2026-08-22 on the canvas «Facturas de la caja»
+(https://claude.ai/code/artifact/f496291b-c679-4b3b-a556-0e85cb6cd5e3):
+**direction A (Libro) plus C's finder chips.** Build `Main.dc.html` of that
+canvas with the finder modes from `Buscador.dc.html` folded into A's search
+box. Working artboards live in the lead's scratchpad `facturas-canvas/`; the
+canvas is the reference.
+
+### 15.1 What exists
+
+- `InvoiceManagement.vue` (3,264 lines, Options API) is the engine for BOTH
+  rail destinations — `drafts` and `invoices` host it (tab chosen from the
+  surface's `destinationId`, see `useHostedSheet`) — and for the floating
+  modal below the rail boundary. Four tabs: `history`, `partial` (unpaid),
+  `drafts`, `returns`; card or list view; per-tab search/status/date filters;
+  a detail sheet (`detailDialog`, `selectedInvoiceDetail`) with payment
+  history, Add Payment, Print, Repair Change Allocation.
+- Loaders: `loadHistory`, `loadUnpaidInvoices`, `loadDrafts`, returns via
+  `refreshActiveTab`/`refreshAll`; paginated 25 per tab (`paginateCollection`,
+  `resetTabPage`). Actions: `viewInvoice`, `loadDraft`, `deleteDraft`,
+  `createReturn`, `openAddPayment`, `printInvoice`, `runDraftAction`,
+  `repairChangeAllocation`.
+- List fields (`getInvoiceListFields`): `name customer customer_name
+  posting_date posting_time grand_total paid_amount outstanding_amount status
+  currency pos_profile owner modified_by` (+ `due_date` on unpaid; `change_amount
+  is_return return_against` on history). **Not in the list:** the tender (mode
+  of payment), the cashier's display name (only `owner`), any CFDI/stamp state,
+  the opening shift.
+
+### 15.2 The target (A + C's chips)
+
+```
+┌ rail ┬────────────────────────────────────────────────────────────────────────┐
+│      │ [Hoy 31 | Turno 24 | Pendientes 11 | Borradores 62 | Devoluciones 11]       │
+│      │                         [🔍 Ticket · Cliente · Fecha · Monto  ______ ] [vie 22 ago ▾]│
+│      │ ┌Vendido hoy┐ ┌Por cobrar┐ ┌Devuelto┐ ┌(Timbrado — only if sourced)┐        │
+│      │ ┌──────────────────────────────────────────────┐ ┌── Ticket B-04812 ──────┐ │
+│      │ │ TICKET HORA CLIENTE CAJERO COBRO TOTAL ESTADO │ │ $1,129.00 · chips        │ │
+│      │ │ B-04812 19:52 Alejandra… Jenni Efectivo 1,129 │ │ Artículos · 3 líneas     │ │
+│      │ │ … (selected row: tint + 3px accent edge)       │ │ Cobro: Efectivo / Cambio │ │
+│      │ │ ↑↓ recorre · Enter abre · …         1–8 de 31 │ │ [Imprimir][Devolver][…]  │ │
+│      │ └──────────────────────────────────────────────┘ └──────────────────────────┘ │
+│      │ BAND (the sale's, unchanged)                                                   │
+└──────┴────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Segment** replaces the tabs: `Hoy` = history, posting_date = today ·
+  `Turno` = history rows of the open shift — ONLY if a shift field can be
+  listed (`posa_pos_opening_shift` or equivalent on the doctype); otherwise
+  the segment has no Turno and says nothing · `Pendientes` = `partial` ·
+  `Borradores` = `drafts` · `Devoluciones` = `returns`. Counts on the segment
+  are the loaded collection sizes, drawn only when the collection has loaded
+  (`null` ≠ 0 — same rule as the corte header).
+- **Finder chips** (from C): one search box, four modes — `Ticket`,
+  `Cliente`, `Fecha`, `Monto`. Ticket and Cliente feed the tab's existing
+  search; Fecha turns the box into the existing from/to range; Monto filters
+  the loaded rows by `grand_total` (exact, then ±1 % tolerance) — client-side,
+  and the footer says "de las 25 cargadas" when it is. Chords on the chips
+  ONLY if bound in `shortcuts/keymap.ts` (R8): add `invoices.findByTicket`
+  … `findByAmount` actions and bind free chords (not F1–F4 — the browser owns
+  them; not Alt+2/Alt+7/Alt+S which the sale uses), or draw no chord.
+- **Four figures** (`data-money-role` each, none `total`): Vendido hoy =
+  Σ grand_total of today's non-return history · Por cobrar = Σ
+  outstanding_amount of `partial` with the overdue count (`isOverdue`) ·
+  Devuelto = Σ |grand_total| of returns · **Timbrado — absent** unless a CFDI
+  field can be added to `getInvoiceListFields` cheaply; do not invent it.
+- **Table** columns: Ticket · Hora · Cliente · Cajero · Cobro · Total ·
+  Estado. **Cajero** renders only if `owner` resolves to a display name the
+  client already holds (employeeStore's terminal employees, or boot user
+  info) — otherwise the column is dropped, not filled with an email. **Cobro**
+  (tender) is NOT in the list payload: drop the column unless the loader
+  can carry it in one call; never a second request per row. Estado chips from
+  `status`/`isOverdue`/`is_return`/draft source — tones as the art (Pagada
+  green, Parcial amber, Vencida red, Borrador grey, Devuelta violet), colour
+  as LABEL never as fill (invariant 2).
+- **Detail panel** (right, 372 px): the selected row's `selectedInvoiceDetail`
+  — header (ticket, total, customer · cashier · time, status chips), items,
+  cobro rows (payments + change), and the actions the tab already offers:
+  Imprimir · Devolver · Cobrar saldo (unpaid only, the one filled button
+  there — it is the panel's action, the band stays the sale's) · Retomar /
+  Eliminar (drafts) · Reparar cambio when `isRepairCandidate`. Replaces the
+  detail DIALOG on the hosted surface; the dialog stays for the floating modal.
+- **Keyboard**: ↑↓ moves the selected row, Enter opens/focuses the panel,
+  Home/End; the footer names only bound keys.
+- Two destinations, one surface: `drafts` lands on the Borradores segment,
+  `invoices` on Hoy. Dark mode through `--reg-*` / `--pos-*` tokens.
+
+### 15.3 Approach — engine stays, chrome changes
+
+Same rule as Cobro (§14.4): `InvoiceManagement.vue`'s `data()` and `methods`
+stay byte-identical for everything that loads, filters, prints, returns,
+pays or repairs. Add ONE layout branch in its template, `v-if="ledgerMode"`
+(true when hosted — `useHostedSheet` already tells it), that mounts new
+children under `components/pos/flows/ledger/`:
+
+- `InvoiceLedgerHeader.vue` — segment + finder (chips + box) + date chip.
+- `InvoiceLedgerFigures.vue` — the figures, each with its source.
+- `InvoiceLedgerTable.vue` — rows, selection, keyboard ring.
+- `InvoiceLedgerPanel.vue` — the detail panel and its action buttons.
+- `ledgerModel.ts` — PURE: segment → collection, finder mode → filter
+  arguments, figure arithmetic, row shaping (status tone, overdue, tender),
+  amount matching. This is where the specs bite.
+
+Children receive plain props and emit intents; the parent maps intents to the
+existing methods (`viewInvoice`, `printInvoice`, `createReturn`,
+`openAddPayment`, `loadDraft`, `deleteDraft`, `runDraftAction`,
+`repairChangeAllocation`) and filter state (`historySearch`,
+`historyDateFrom/To`, …). No new server method; no change to
+`documentSources.ts` or the invoice store. Files ≤ 500 lines; the existing
+file grows by the branch and the glue only.
+
+### 15.4 Verification — what "done" means
+
+- `vitest run` GREEN with `invoiceLedger.spec.ts`: segment mapping, finder
+  modes (incl. amount tolerance and the "loaded rows only" note), figures from
+  fixture rows, overdue/tone rules, keyboard ring, the absences (no Timbrado,
+  no Cobro column without a source), one `band-primary`, no `total` role on
+  the surface. Existing `invoiceManagement*`, `draftDialogs`, `accent*`,
+  `registerSaysItOnce`, `hostedSheets*`, `registerShellTranslations` stay
+  green (every string gets an `es.csv` row).
+- `vue-tsc --noEmit` 0; `vite build` clean.
+- Evidence by the lead after merge: the destination audit lane (drafts /
+  invoices) and a new `after/desktop-1440/facturas.png`.
