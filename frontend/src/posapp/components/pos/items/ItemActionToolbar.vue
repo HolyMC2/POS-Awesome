@@ -104,8 +104,22 @@ defineEmits(["update:modelValue", "update:itemsView", "open-offers", "open-coupo
 
 .view-toggle-btn {
 	height: 36px;
+	/* The toggle lives in a sm=4 column that measures ~116px inside the
+	 * anchored drawer — narrower than its two buttons' natural width, which
+	 * overflowed the column and grew a horizontal scrollbar under LIST/CARD.
+	 * Fit the column instead: the group takes the column's width and the
+	 * buttons split it, shrinking their padding before anything scrolls. */
+	width: 100%;
+	min-width: 0;
+	overflow: hidden;
 	border: 1px solid var(--pos-border-light);
 	border-radius: var(--pos-radius-sm);
+}
+
+.view-toggle-btn :deep(.v-btn) {
+	flex: 1 1 50%;
+	min-width: 0;
+	padding: 0 var(--pos-space-2);
 }
 
 .dynamic-padding {
@@ -147,10 +161,6 @@ defineEmits(["update:modelValue", "update:itemsView", "open-offers", "open-coupo
 
 	.dynamic-spacing-sm {
 		padding: var(--dynamic-xs) !important;
-	}
-
-	.view-toggle-btn {
-		width: 100%;
 	}
 
 	.action-btn-consistent {
