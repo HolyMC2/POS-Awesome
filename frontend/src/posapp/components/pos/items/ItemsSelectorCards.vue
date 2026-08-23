@@ -56,6 +56,8 @@
 					:format-number="formatNumber"
 					:rate-precision="ratePrecision"
 					:is-negative="isNegative"
+					:compact="isCompact"
+					:low-stock-threshold="posProfile?.posa_low_stock_alert_threshold"
 					:style="{
 						width: cardColumnWidth + 'px',
 						height: cardRowHeight + 'px',
@@ -75,6 +77,7 @@ import { RecycleScroller } from "vue-virtual-scroller";
 import "vue-virtual-scroller/dist/vue-virtual-scroller.css";
 import ItemCard from "./ItemCard.vue";
 import Skeleton from "../../ui/Skeleton.vue";
+import { isCompactCard } from "../../../utils/itemSelectorLayout.js";
 
 const props = defineProps({
 	displayedItems: { type: Array, default: () => [] },
@@ -105,6 +108,14 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["select-item", "dragstart", "dragend", "virtual-range-update", "clear-search"]);
+
+/**
+ * The card's anatomy follows the width it is actually drawn at, and it asks
+ * the SAME pure predicate that `useItemSelectorLayout` uses to size the slot.
+ * A second threshold here — a media query, a window check — is how a compact
+ * card ends up in a roomy slot with 100px of dead space under it.
+ */
+const isCompact = computed(() => isCompactCard(props.cardColumnWidth));
 
 const showClearButton = computed(() => {
 	return Boolean(props.searchInput) || (props.itemGroup && props.itemGroup !== "ALL");
@@ -208,14 +219,21 @@ defineExpose({ scrollToItem, getScrollerElement, scrollerRef });
 }
 
 /* Loading skeletons — a SIBLING of the scroller (v-if/v-else), never inside
-   it. auto-fill on the same 216px track `getCardColumnsForContainer` uses
-   keeps the placeholder in step with the real grid at every panel width, with
-   no media queries to drift out of sync. */
+   it. auto-fill on the same minimum card width `getCardColumnsForContainer`
+   uses keeps the placeholder in step with the real grid at every panel width,
+   with no media queries to drift out of sync.
+
+   148px is `CARD_MIN_WIDTH` in `utils/itemSelectorLayout.ts`, written out
+   because scoped CSS cannot read a TS constant; `catalogCardGrid.spec.ts`
+   asserts the two are the same number. It was 216 — sized for the catalogue
+   when it was a 40% column — and at the 400px drawer that meant the skeleton
+   promised one giant card and the real grid then delivered one, which is why
+   nobody noticed the track had gone stale. */
 .items-card-grid {
 	flex: 1 1 auto;
 	min-height: 0;
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
 	gap: 16px;
 	padding: 16px;
 	overflow-y: auto;

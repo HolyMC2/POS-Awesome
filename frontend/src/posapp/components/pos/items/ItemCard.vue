@@ -1,6 +1,10 @@
 <template>
 	<div
-		:class="['card-item-card', { 'item-highlighted': isItemHighlighted }]"
+		:class="[
+			'card-item-card',
+			{ 'item-highlighted': isItemHighlighted, 'card-item-card--compact': compact },
+		]"
+		:data-card-anatomy="compact ? 'compact' : 'roomy'"
 		data-pos-keyboard-target="item-card"
 		tabindex="0"
 		role="button"
@@ -57,8 +61,27 @@
 						</span>
 					</div>
 				</div>
-				<div class="card-item-stock">
-					<v-icon size="small" class="stock-icon"> mdi-package-variant </v-icon>
+				<!--
+					Existencia, under the same rule the cart line follows
+					(`cartLineStock.ts`): an ABSENT figure draws NOTHING, never a
+					`0`. A rendered 0 is a claim — it says the shop has none of
+					this, and a cashier who reads it repeats it to a customer,
+					while the shelf may be full and the register simply offline.
+					A real zero still draws, tinted, because that is exactly when
+					the figure is worth having.
+
+					The package glyph goes at compact width: it is decoration,
+					and at 159px the two artboards (`Cajon.dc.html`,
+					`MovilExplorar.dc.html`) both give that room to the figure.
+				-->
+				<div
+					v-if="lineStock.show"
+					class="card-item-stock"
+					:class="{ 'card-item-stock--low': lineStock.isLow }"
+					data-testid="card-item-stock"
+					:data-stock-reason="lineStock.reason"
+				>
+					<v-icon v-if="!compact" size="small" class="stock-icon"> mdi-package-variant </v-icon>
 					<span
 						class="stock-amount"
 						:class="{
@@ -78,6 +101,7 @@
 import { computed, ref, watch } from "vue";
 import placeholderImage from "../placeholder-image.png";
 import ItemRateInfoMenu from "./ItemRateInfoMenu.vue";
+import { describeLineStock } from "../invoice/cartLineStock";
 
 const props = defineProps({
 	item: { type: Object, required: true },
@@ -93,6 +117,16 @@ const props = defineProps({
 	formatNumber: { type: Function, required: true },
 	ratePrecision: { type: Function, required: true },
 	isNegative: { type: Function, default: (val) => val < 0 },
+	/**
+	 * Drawn at a width where the roomy anatomy does not fit — the anchored
+	 * drawer's ~159px column, the phone's grid. Decided by
+	 * `isCompactCard(cardColumnWidth)` in `ItemsSelectorCards`, never by a
+	 * media query: the card's width is a property of the PANEL, and a 400px
+	 * drawer on a 1440 screen is a desktop by every window measure.
+	 */
+	compact: { type: Boolean, default: false },
+	/** `posa_low_stock_alert_threshold` — the register's own number. */
+	lowStockThreshold: { type: [Number, String], default: 0 },
 });
 
 const emit = defineEmits(["click", "dragstart", "dragend"]);
@@ -178,11 +212,24 @@ const showSecondaryPrice = computed(() => {
 	);
 });
 
+/**
+ * Whether there is a stock figure to draw at all, and whether it is low —
+ * decided by the SAME rule the cart line uses, so the number a cashier reads
+ * on the card and the number they read on the line they just added cannot
+ * disagree about what "no figure" means.
+ */
+const lineStock = computed(() =>
+	describeLineStock(props.item, { lowStockThreshold: props.lowStockThreshold }),
+);
+
 const formattedActualQty = computed(() => {
-	const numericQty = Number(props.item.actual_qty ?? 0);
-	if (!Number.isFinite(numericQty)) {
-		return 0;
-	}
+	// `describeLineStock` clamps a negative to 0 — correct for a cart line,
+	// where a negative available is not a shelf count. On a catalogue card an
+	// over-sold item is a state the shop needs to SEE, so the figure comes from
+	// the raw quantity when it is negative. The decision to draw it at all, and
+	// to tint it, still belongs to the shared rule.
+	const raw = Number(props.item.actual_qty);
+	const numericQty = Number.isFinite(raw) && raw < 0 ? raw : (lineStock.value.value ?? 0);
 	if (props.hideQtyDecimals) {
 		return props.formatNumber(Math.round(numericQty), 0);
 	}
@@ -379,8 +426,27 @@ const onDragEnd = (event) => {
 .stock-uom {
 	font-size: 0.7rem;
 	text-transform: uppercase;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
+/* Amber is STATE, and state on a figure is a TINT, never a fill (§17.7
+   invariant 2). The one saturated accent on this screen belongs to the primary
+   action in the band; a wall of cards is exactly where a second one starts
+   competing. Same treatment, same token, as `.posa-cart-item-row__stock--low`. */
+.card-item-stock--low .stock-amount,
+.card-item-stock--low .stock-uom {
+	color: var(--pos-button-warning-text, #e65100);
+	font-weight: 700;
+}
+
+/* The small-WINDOW tuning, for the band between the compact card and the full
+   one — a landscape phone or a small tablet whose panel still affords ~210px
+   columns. It must stay ABOVE the compact block: a media query adds no
+   specificity, so the two would be settled by source order alone, and on a
+   portrait phone (which is compact) the 112px plate would win and overflow the
+   184px slot by 24px. */
 @media (max-width: 768px) {
 	.card-item-image-container {
 		height: 112px;
@@ -398,4 +464,100 @@ const onDragEnd = (event) => {
 		font-size: 0.7rem;
 	}
 }
+
+/* ==========================================================================
+   COMPACT ANATOMY — the card at the anchored drawer's width.
+   ==========================================================================
+
+   The catalogue is a 400px drawer now, so its grid column is about 159px and
+   two cards sit per row. Nothing is DROPPED at this size: the artboards
+   (`Cajon.dc.html` nodes 34-39, `MovilExplorar.dc.html` nodes 22-33) draw the
+   same four things on a 181px and a 179px card — the picture, the name over
+   two clamped lines, the code, and the price beside the stock figure. They are
+   simply smaller, and the one thing that goes is the package glyph, which is
+   decoration.
+
+   That is also the answer `Rejilla.dc.html` was rejected for proposing: at a
+   narrow width, a text-only list of near-identical names ("Anillo Case Honor
+   X8A Rojo" / "…Negro") is SLOWER to hit than small pictures. Shrink the card;
+   do not turn it into a row.
+
+   Sizes are proportional to the artboard's: an 88px plate under a 159px card
+   is the same ratio as its 72px plate under 181px, so the grid reads as one
+   family at both widths. Every number here is paid for out of the 184px slot
+   `getCardRowHeight` reserves — 88 + 8 + 30 + 13 + 22 + 16 of padding = 177,
+   with the slack going to the name's line-height.
+
+   The whole card is the tap target (`role="button"` on the root), so the 44px
+   coarse-pointer floor is met by the card itself at 159 × 184 rather than by
+   any control inside it. The single control that IS inside — the rate-info
+   trigger — carries its own 44px box bled out on negative margin, guarded by
+   `touchTargetSweep.spec.ts`. */
+.card-item-card--compact .card-item-image-container {
+	height: 88px;
+}
+
+.card-item-card--compact .card-item-content {
+	padding: 8px;
+	gap: 4px;
+}
+
+.card-item-card--compact .card-item-header {
+	gap: 1px;
+}
+
+.card-item-card--compact .card-item-name {
+	font-size: 0.78rem;
+	font-weight: 600;
+	line-height: 1.22;
+}
+
+.card-item-card--compact .card-item-code {
+	font-size: 0.66rem;
+}
+
+.card-item-card--compact .card-item-details {
+	align-items: baseline;
+	gap: 6px;
+}
+
+/* The price is the half that may truncate; the stock figure is the half that
+   must not, because a clipped quantity is a wrong quantity. */
+.card-item-card--compact .primary-price {
+	font-size: 0.86rem;
+	flex-wrap: nowrap;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.card-item-card--compact .price-amount {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.card-item-card--compact .secondary-price {
+	font-size: 0.68rem;
+}
+
+.card-item-card--compact .card-item-stock {
+	flex: 0 0 auto;
+	align-items: baseline;
+	gap: 3px;
+	padding: 1px 6px;
+	font-size: 0.72rem;
+}
+
+.card-item-card--compact .stock-uom {
+	font-size: 0.62rem;
+}
+
+/* No lift on a card this size: the 3px translate reads as jitter across a
+   dense two-column grid, and the drawer has no room to paint the larger
+   shadow. */
+.card-item-card--compact:hover {
+	transform: none;
+}
+
 </style>

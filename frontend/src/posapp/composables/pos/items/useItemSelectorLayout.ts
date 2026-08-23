@@ -3,8 +3,10 @@ import _ from "lodash";
 import {
 	getCardColumns,
 	getCardColumnsForContainer,
+	getCardColumnWidth,
 	getCardGap,
 	getCardPadding,
+	getCardRowHeight,
 } from "../../../utils/itemSelectorLayout.js";
 
 type SelectorLayoutOptions = {
@@ -67,22 +69,29 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 
 	// Computed Metrics — container-measured when available, window fallback
 	// until the panel mounts.
-	const cardColumns = computed(() => {
-		const containerColumns = getCardColumnsForContainer(measuredContainerWidth.value);
-		return containerColumns > 0 ? containerColumns : getCardColumns(windowWidth.value);
-	});
 	const cardGap = computed(() => getCardGap(windowWidth.value));
 	const cardPadding = computed(() => getCardPadding(windowWidth.value));
 
-	const cardRowHeight = computed(() => {
-		if (windowWidth.value <= 768) {
-			return 260;
-		}
-		if (windowWidth.value <= 1200) {
-			return 280;
-		}
-		return 300;
+	// The count is decided with the SAME gap and padding the grid is then laid
+	// out with. The old call passed the container width alone, so the count and
+	// the width disagreed about how much room there was — which is how a grid
+	// that "fitted" still put its last card outside the scrollport.
+	const cardColumns = computed(() => {
+		const containerColumns = getCardColumnsForContainer(
+			measuredContainerWidth.value,
+			cardGap.value,
+			cardPadding.value,
+		);
+		return containerColumns > 0 ? containerColumns : getCardColumns(windowWidth.value);
 	});
+
+	// Height follows the CARD's width, not the window's: the 400px drawer on a
+	// 1440 screen is a "desktop" by every window measure and a phone-width
+	// panel by the only measure that matters here.
+	// `ItemsSelectorCards` asks `isCompactCard(cardColumnWidth)` the same
+	// question for the card's anatomy; one function, one answer, so the slot
+	// and the thing in it cannot disagree about which card is being drawn.
+	const cardRowHeight = computed(() => getCardRowHeight(cardColumnWidth.value, windowWidth.value));
 
 	const cardSlotHeight = computed(() => cardRowHeight.value + cardGap.value);
 	const cardSlotWidth = computed(() => cardColumnWidth.value + cardGap.value);
@@ -96,19 +105,16 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 	});
 
 	const cardColumnWidth = computed(() => {
-		const columns = Math.max(1, cardColumns.value);
-		// Note: We might need a more robust way to get container width if it's dynamic
-		// Ideally pass a ref to the container element
 		const containerWidth = cardContainerWidth.value || 0;
 		if (!containerWidth) {
-			return 240; // Safe default
+			return 240; // Pre-measurement only.
 		}
-
-		const gapTotal = cardGap.value * (columns - 1);
-		const paddingTotal = cardPadding.value * 2;
-		const available = Math.max(0, containerWidth - gapTotal - paddingTotal);
-		const width = Math.floor(available / columns);
-		return Math.max(180, width);
+		return getCardColumnWidth(
+			containerWidth,
+			cardColumns.value,
+			cardGap.value,
+			cardPadding.value,
+		);
 	});
 
 	// Actions
