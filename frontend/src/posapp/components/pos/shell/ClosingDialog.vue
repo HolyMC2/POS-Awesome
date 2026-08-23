@@ -6,7 +6,7 @@
 				:period-end="dialog_data.period_end_date"
 				:ticket-count="shiftTicketCount"
 				:open-drafts="shiftOpenDrafts"
-				@close="closeDialog"
+				@close="dismissCorte"
 			/>
 
 			<v-card-text class="pa-0 white-background">
@@ -98,6 +98,42 @@
 				</ActionBand>
 			</div>
 
+			<!-- Hosted as a rail destination the shell already owns the band
+			     lane, so the corte does not draw a second one — but the
+			     DIFFERENCE is the number this whole screen exists to produce,
+			     and the artboard prints it beside «Debe haber» and «Contado».
+			     So it stays, as a summary line rather than a band: no accent,
+			     no second primary, same strings `resolveBandState` already
+			     names. -->
+			<div
+				v-else-if="bandState"
+				class="closing-difference"
+				:class="`closing-difference--${bandState.tone}`"
+				data-testid="closing-difference"
+			>
+				<div class="closing-difference__row">
+					<span>{{ __("Expected in drawer") }}</span>
+					<span class="reg-mono" data-money-role="expected">{{
+						formatCurrencyWithSymbolForDrawer(expectedCash)
+					}}</span>
+				</div>
+				<div class="closing-difference__row">
+					<span>{{ __("Counted") }}</span>
+					<span class="reg-mono" data-money-role="counted">{{
+						formatCurrencyWithSymbolForDrawer(countedCash)
+					}}</span>
+				</div>
+				<div class="closing-difference__row closing-difference__row--total">
+					<span>{{ __(bandState.labelKey) }}</span>
+					<span
+						class="reg-mono"
+						data-money-role="difference"
+						data-testid="closing-difference-value"
+						>{{ formatCurrencyWithSymbolForDrawer(bandState.value) }}</span
+					>
+				</div>
+			</div>
+
 			<v-card-actions class="dialog-actions-container">
 				<v-spacer></v-spacer>
 				<!-- The corte is a destination now, not a dialog over the sale, so
@@ -113,7 +149,7 @@
 				     button colour rather than a signal. -->
 				<v-btn
 					variant="text"
-					@click="closeDialog"
+					@click="dismissCorte"
 					class="pos-action-btn cancel-action-btn"
 					size="large"
 				>
@@ -161,6 +197,22 @@ import DrawerCount from "../closing/DrawerCount.vue";
 import ActionBand from "./band/ActionBand.vue";
 import { DESTINATION_SURFACE } from "./destinations/surfaceContext";
 
+/**
+ * How many copies of the corte are currently on screen AS A DESTINATION.
+ *
+ * There is always one `<ClosingDialog />` in `DefaultLayout`, because the
+ * navbar's «Close shift» has to work from `/reports` and `/payments` too,
+ * where there is no rail to host anything. Once the corte is also a rail
+ * destination, the shell mounts a second copy inside `DestinationHost` — and
+ * both hear the same `open_ClosingDialog` on the same bus, which would put a
+ * floating modal on top of the hosted surface.
+ *
+ * Module scope rather than a store because it is not state anybody outside
+ * this component may ask about: it exists for exactly one rule, stated once —
+ * while the shell is showing the corte, the floating copy stands down.
+ */
+const hostedCorteCount = ref(0);
+
 export default {
 	name: "ClosingDialog",
 	components: {
@@ -170,7 +222,7 @@ export default {
 		DrawerCount,
 		ActionBand,
 	},
-	emits: ["band"],
+	emits: ["band", "close"],
 	setup(_props, { emit }) {
 		const uiStore = useUIStore();
 		const eventBus = inject("eventBus");
@@ -358,10 +410,23 @@ export default {
 		// hosting this surface can feed its own band from the same state.
 		watch(bandState, (state) => emit("band", state), { immediate: true });
 
-		// Injected only when DestinationHost is rendering us; absent on the
-		// standalone `/closing` route, which is where this dialog lives today.
+		// Injected only when DestinationHost is rendering us; absent for the
+		// floating copy `DefaultLayout` keeps for the routes with no rail.
 		const destinationSurface = inject(DESTINATION_SURFACE, null);
 		const bandOwnsAction = computed(() => !destinationSurface);
+		const isHosted = Boolean(destinationSurface);
+
+		/**
+		 * Leaving the corte is leaving the DESTINATION, not just hiding a
+		 * dialog: closing the overlay alone would leave the host showing an
+		 * empty surface with no way out. `DestinationHost` turns this into its
+		 * own `dismiss`, which returns to whatever the cashier was on before —
+		 * never a hardcoded sale.
+		 */
+		const dismissCorte = () => {
+			closeDialog();
+			emit("close");
+		};
 
 		/** The drawer counts in ONE currency, so its figures carry that symbol. */
 		const formatCurrencyWithSymbolForDrawer = (value) =>
@@ -383,25 +448,60 @@ export default {
 			}
 		};
 
+		const handleOpenClosingDialog = (data) => {
+			// The floating copy stands down while the shell is showing the
+			// corte as a destination — one act must not open two screens.
+			if (!isHosted && hostedCorteCount.value > 0) {
+				return;
+			}
+			closingDialog.value = true;
+			dialog_data.value = data;
+			fetchOverview(data.pos_opening_shift, pos_profile.value?.currency);
+		};
+
+		// A floating copy that was ALREADY up when the rail opened the corte
+		// steps aside rather than sitting over it.
+		watch(hostedCorteCount, (hosted) => {
+			if (hosted > 0 && !isHosted && closingDialog.value) {
+				closeDialog();
+			}
+		});
+
 		onMounted(() => {
 			headers.value = [...baseHeaders];
 			window.addEventListener("keydown", handleKeydown);
 
 			if (eventBus) {
-				eventBus.on("open_ClosingDialog", (data) => {
-					closingDialog.value = true;
-					dialog_data.value = data;
-					fetchOverview(data.pos_opening_shift, pos_profile.value?.currency);
-				});
+				eventBus.on("open_ClosingDialog", handleOpenClosingDialog);
 			} else {
 				console.error("ClosingDialog: eventBus not provided");
+			}
+
+			if (isHosted) {
+				hostedCorteCount.value += 1;
+				// The corte cannot be drawn from nothing: the closing shift is
+				// PREPARED server-side (`make_closing_shift_from_opening`,
+				// which also submits printed drafts and can refuse). The shell
+				// already answers `open_shift_details` with exactly that call,
+				// so the destination asks for it instead of forking the flow —
+				// the rail and the navbar close the same shift the same way.
+				if (eventBus && !closingDialog.value) {
+					eventBus.emit("open_shift_details");
+				}
 			}
 		});
 
 		onBeforeUnmount(() => {
 			window.removeEventListener("keydown", handleKeydown);
+			if (isHosted) {
+				hostedCorteCount.value = Math.max(0, hostedCorteCount.value - 1);
+			}
 			if (eventBus) {
-				eventBus.off("open_ClosingDialog");
+				// Always pass the handler: a bare `off("open_ClosingDialog")`
+				// removes EVERY listener for the event, so the hosted copy
+				// unmounting would take the layout copy's listener with it and
+				// the navbar's «Close shift» would silently stop working.
+				eventBus.off("open_ClosingDialog", handleOpenClosingDialog);
 			}
 		});
 
@@ -430,6 +530,7 @@ export default {
 			overviewLoading,
 			pos_profile,
 			closeDialog,
+			dismissCorte,
 			fetchOverview,
 			submitDialog,
 			...summary,
@@ -463,6 +564,37 @@ export default {
 </script>
 
 <style scoped>
+/* The difference, when the shell owns the band lane. A summary line, not a
+ * second band: it carries no accent and no primary action, so §17.7's one
+ * accent per screen still lands on the corte's Submit. */
+.closing-difference {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 10px 16px;
+	font-size: 13px;
+	border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.closing-difference__row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+.closing-difference__row--total {
+	font-weight: 700;
+	font-size: 15px;
+	margin-top: 2px;
+}
+
+/* Amber is STATE here, exactly as in the band: a count that does not match is
+ * an exception whether it is short or over. Never emphasis. */
+.closing-difference--warning .closing-difference__row--total {
+	color: rgb(var(--v-theme-warning));
+}
+
 .closing-dialog-card {
 	border-radius: 16px;
 	overflow: hidden;

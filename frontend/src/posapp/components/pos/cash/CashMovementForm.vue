@@ -1,7 +1,7 @@
 <template>
-	<v-card class="pa-4 pos-themed-card">
-		<div class="d-flex flex-wrap align-center justify-space-between ga-3 mb-1">
-			<div class="text-h6">{{ __("Cash Movement") }}</div>
+	<v-card class="pos-themed-card cash-movement-form__card">
+		<div class="cash-movement-form__head">
+			<div class="cash-movement-form__title">{{ __("Cash Movement") }}</div>
 			<div class="cash-movement-form__posting-date">
 				<v-text-field
 					v-model="postingDate"
@@ -14,7 +14,7 @@
 				/>
 			</div>
 		</div>
-		<div class="text-body-2 text-grey mb-4">
+		<div class="cash-movement-form__subtitle">
 			{{ __("Book an expense, send cash to the back office, or bring cash into the drawer.") }}
 		</div>
 
@@ -87,7 +87,7 @@
 					<div class="cash-movement-form__direction-body">
 						<div class="cash-movement-form__direction-flow">
 							<span class="cash-movement-form__account">{{ fromAccountLabel }}</span>
-							<v-icon icon="mdi-arrow-right" size="18" class="mx-1" />
+							<v-icon icon="mdi-arrow-right" size="18" class="cash-movement-form__arrow" />
 							<span class="cash-movement-form__account">{{ toAccountLabel }}</span>
 						</div>
 						<div class="cash-movement-form__direction-effect">
@@ -610,6 +610,46 @@ watch(
 </script>
 
 <style scoped>
+/* The card's own chrome, in real CSS.
+ *
+ * It used to be `pa-4` plus `d-flex … justify-space-between ga-3` plus
+ * `text-h6` — Vuetify spacing/display utilities, none of which are in the web
+ * route's stylesheet (see `CashMovementView.vue`'s template note). The card
+ * therefore had no padding at all, the heading rendered at body size and the
+ * posting-date field dropped onto its own line. Nothing about the FORM changes
+ * here: the direction strip, the account labels and the submit are untouched.
+ */
+.cash-movement-form__card {
+	padding: 16px;
+}
+
+.cash-movement-form__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 4px;
+}
+
+.cash-movement-form__title {
+	font-size: 1.125rem;
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.cash-movement-form__subtitle {
+	font-size: 0.875rem;
+	line-height: 1.4;
+	color: rgb(var(--v-theme-on-surface));
+	opacity: 0.7;
+	margin-bottom: 16px;
+}
+
+.cash-movement-form__arrow {
+	margin-inline: 4px;
+}
+
 .cash-movement-form__posting-date {
 	width: min(220px, 100%);
 	min-width: 0;

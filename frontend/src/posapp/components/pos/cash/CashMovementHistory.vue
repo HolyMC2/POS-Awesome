@@ -1,11 +1,11 @@
 <template>
-	<v-card class="pa-4 pos-themed-card">
-		<div class="d-flex align-center justify-space-between mb-3">
+	<v-card class="pos-themed-card cash-movement-history__card">
+		<div class="cash-movement-history__head">
 			<div>
-				<div class="text-h6">{{ __("Cash Movements") }}</div>
-				<div class="text-body-2 text-grey">{{ __("Latest entries for current shift") }}</div>
+				<div class="cash-movement-history__title">{{ __("Cash Movements") }}</div>
+				<div class="cash-movement-history__subtitle">{{ __("Latest entries for current shift") }}</div>
 			</div>
-			<div class="d-flex align-center ga-2">
+			<div class="cash-movement-history__actions">
 				<v-chip v-if="pendingOfflineCount > 0" color="warning" size="small" variant="tonal">
 					{{ __("Offline Queue: {0}", [pendingOfflineCount]) }}
 				</v-chip>
@@ -76,7 +76,7 @@
 				     chip above is untouched: it pairs `statusColor` with
 				     `statusLabel` text, so it is state a colourblind operator can
 				     still read, which is exactly what §17.7 permits. -->
-				<div class="d-flex flex-column ga-1 align-end">
+				<div class="cash-movement-history__row-actions">
 					<v-btn
 						size="x-small"
 						variant="tonal"
@@ -223,3 +223,62 @@ function formatPostingDate(value: string) {
 	return `${dd}-${mm}-${yyyy}`;
 }
 </script>
+
+<style scoped>
+/* Real CSS for the card's chrome, for the reason `CashMovementView.vue`'s
+ * template note records: the `pa-4` / `d-flex` / `text-h6` utilities this card
+ * used are not in the web route's stylesheet, so it rendered with no padding
+ * and a body-sized heading. */
+.cash-movement-history__card {
+	padding: 16px;
+	/* The history is the half of the destination that earns the leftover
+	 * height, so the card fills its column and the table grows into it rather
+	 * than leaving the bottom of the surface empty. */
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.cash-movement-history__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.cash-movement-history__title {
+	font-size: 1.125rem;
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.cash-movement-history__subtitle {
+	font-size: 0.875rem;
+	line-height: 1.4;
+	color: rgb(var(--v-theme-on-surface));
+	opacity: 0.7;
+}
+
+.cash-movement-history__row-actions {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 4px;
+}
+
+.cash-movement-history__actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+}
+
+/* The table is the elastic child. It grows inside the card; it does NOT open a
+ * scrollport of its own — the destination's `__body` is the only one on this
+ * surface (commit 59c5fe1ad). */
+.cash-movement-history__card > :deep(.v-data-table) {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+</style>

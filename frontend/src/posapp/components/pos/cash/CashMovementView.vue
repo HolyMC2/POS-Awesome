@@ -1,32 +1,54 @@
 <template>
-	<div class="pa-3">
-		<div class="d-flex justify-end mb-3" v-if="pendingOfflineCount > 0">
-			<v-btn
-				variant="outlined"
-				color="warning"
-				:loading="syncingOffline"
-				:disabled="isOffline()"
-				@click="handleSyncOffline"
+	<!--
+		Gasto as a DESTINATION, not a dialog body on a page of its own.
+
+		What it was: a `pa-3` div wrapping a `v-row`, sized by Vuetify spacing
+		utilities. Those utilities are not in the web route's stylesheet at all
+		(only `vuetify/components` CSS is bundled; the full `vuetify.min.css`
+		is injected by the Desk loader and nowhere else), so `pa-3` and `pa-4`
+		contributed ZERO padding while `v-row`'s −4px dense margin — component
+		CSS, and therefore present — stayed real. The row hung 4px outside its
+		container on both sides, the card's text sat flush against a clipped
+		left edge, and "Cash Movement" lost its C.
+
+		So the geometry is authored here instead of borrowed from a utility that
+		may or may not exist. One scrollport (`__body`), the same height-chain
+		discipline the register columns use, and the history stretches to the
+		full height rather than leaving half the surface empty under it.
+	-->
+	<div class="cash-movement-destination">
+		<div
+			v-if="pendingOfflineCount > 0 || errorMessage || (contextLoaded && !context?.enable_cash_movement)"
+			class="cash-movement-destination__notices"
+		>
+			<div v-if="pendingOfflineCount > 0" class="cash-movement-destination__sync">
+				<v-btn
+					variant="outlined"
+					color="warning"
+					:loading="syncingOffline"
+					:disabled="isOffline()"
+					@click="handleSyncOffline"
+				>
+					{{ __("Sync Offline Cash Movements ({0})", [pendingOfflineCount]) }}
+				</v-btn>
+			</div>
+
+			<v-alert v-if="errorMessage" type="error" variant="tonal" density="compact">
+				{{ errorMessage }}
+			</v-alert>
+
+			<v-alert
+				v-if="contextLoaded && !context?.enable_cash_movement"
+				type="warning"
+				variant="tonal"
+				density="compact"
 			>
-				{{ __("Sync Offline Cash Movements ({0})", [pendingOfflineCount]) }}
-			</v-btn>
+				{{ __("Cash Movement is disabled in current POS Profile.") }}
+			</v-alert>
 		</div>
 
-		<v-alert v-if="errorMessage" type="error" variant="tonal" density="compact" class="mb-3">
-			{{ errorMessage }}
-		</v-alert>
-
-		<v-alert
-			v-if="contextLoaded && !context?.enable_cash_movement"
-			type="warning"
-			variant="tonal"
-			class="mb-3"
-		>
-			{{ __("Cash Movement is disabled in current POS Profile.") }}
-		</v-alert>
-
-		<v-row dense>
-			<v-col cols="12" md="5">
+		<div class="cash-movement-destination__body">
+			<div class="cash-movement-destination__col cash-movement-destination__col--form">
 				<CashMovementForm
 					:context="context"
 					:submitting="submitting"
@@ -35,8 +57,8 @@
 					:prefill-data="prefillData"
 					@submit="handleSubmit"
 				/>
-			</v-col>
-			<v-col cols="12" md="7">
+			</div>
+			<div class="cash-movement-destination__col cash-movement-destination__col--history">
 				<CashMovementHistory
 					:rows="historyRows"
 					:loading="loading"
@@ -53,8 +75,8 @@
 					@delete="handleDelete"
 					@filter-change="handleFilterChange"
 				/>
-			</v-col>
-		</v-row>
+			</div>
+		</div>
 	</div>
 </template>
 
@@ -288,3 +310,78 @@ watch(
 	{ immediate: true },
 );
 </script>
+<style scoped>
+/* Fills the destination surface and refuses to grow past it — `min-height: 0`
+ * is the half that does the work, same as `.destination-host` and the register
+ * columns (commit 59c5fe1ad). */
+.cash-movement-destination {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+}
+
+.cash-movement-destination__notices {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px 16px 0;
+}
+
+.cash-movement-destination__sync {
+	display: flex;
+	justify-content: flex-end;
+}
+
+/* THE only scrollport on this surface. The host above it is `overflow: hidden`
+ * and every column inside is `min-width: 0`, so nothing nests a second one. */
+.cash-movement-destination__body {
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	overscroll-behavior: contain;
+	padding: 16px;
+	display: grid;
+	gap: 16px;
+	/* One grid, two columns — the form and its history were previously two
+	 * `v-col`s that shared nothing but a row. `minmax(min-content, 1fr)` on the
+	 * row lets the history fill the surface instead of leaving half of it
+	 * empty, and still lets the pair grow past it and scroll. */
+	grid-template-columns: minmax(320px, 5fr) minmax(0, 7fr);
+	grid-template-rows: minmax(min-content, 1fr);
+}
+
+.cash-movement-destination__col {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* A form is as tall as its fields; only the table earns the leftover height. */
+.cash-movement-destination__col--form {
+	align-self: start;
+}
+
+.cash-movement-destination__col--history > :deep(*) {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+/* Below the two-column boundary the surface is one column, in reading order:
+ * the form first, its history under it. */
+@media (max-width: 1100px) {
+	.cash-movement-destination__body {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto;
+		padding: 12px;
+	}
+
+	.cash-movement-destination__col--form {
+		align-self: stretch;
+	}
+}
+</style>

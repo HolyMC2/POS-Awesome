@@ -21,8 +21,21 @@
 		</div>
 
 		<!-- The hosted flow renders itself. We do not wrap, clone or restyle it;
-		     it keeps its own dialog, its own store flag and all of its logic. -->
-		<component :is="sheetComponent" v-else-if="sheetComponent" v-bind="$attrs" />
+		     it keeps its own dialog, its own store flag and all of its logic.
+
+		     `@close` is the one thing we do listen for: a flow that closes its
+		     own overlay would otherwise leave this host on screen showing
+		     nothing, with the rail beside it and no way out. It becomes a
+		     `dismiss`, which returns to the PREVIOUS destination rather than a
+		     hardcoded sale. A flow that never emits it behaves exactly as it
+		     does today. -->
+		<component
+			:is="sheetComponent"
+			v-else-if="sheetComponent"
+			v-bind="$attrs"
+			@close="$emit('dismiss')"
+			@band="$emit('band', $event)"
+		/>
 
 		<div v-else class="destination-host__loading">
 			<v-progress-circular indeterminate color="primary" size="28" />
@@ -52,6 +65,7 @@ import {
 	type DestinationId,
 	type DestinationState,
 } from "../../../../composables/pos/shell/destinationRegistry";
+import type { BandState } from "../../../../composables/pos/shell/bandState";
 import type { RefusalReason } from "../../../../composables/pos/shell/useDestinationRouting";
 import { DESTINATION_SURFACE } from "./surfaceContext";
 
@@ -65,7 +79,17 @@ const props = defineProps<{
 	t: (key: string) => string;
 }>();
 
-defineEmits<{ dismiss: [] }>();
+/**
+ * `band` relays a hosted surface's own band state up to the shell.
+ *
+ * `ClosingDialog` already publishes one — *"published upward whether or not we
+ * render a band ourselves, so a shell hosting this surface can feed its own
+ * band from the same state"* — and until now that promise dead-ended here,
+ * because the host dropped the event. It no longer does. The shell is free to
+ * ignore it, which is what it does today: the corte keeps its own Submit and
+ * prints the difference on its own surface (see `closing-difference`).
+ */
+defineEmits<{ dismiss: []; band: [BandState] }>();
 
 const surfaceEl = ref<HTMLElement | null>(null);
 const destinationIdRef = computed(() => String(props.destinationId));

@@ -39,8 +39,24 @@ export type OfflinePolicy =
 /**
  * How the shell reaches a destination.
  * - `panel` — a selector column already in Pos.vue (uiStore.activeView).
- * - `sheet` — an existing flows dialog, hosted full-surface by DestinationHost.
- * - `route` — already has its own vue-router entry; navigate to it.
+ * - `sheet` — an existing flows dialog or view, hosted full-surface by
+ *   DestinationHost, INSIDE `.register-shell` so the rail stays on screen.
+ * - `route` — the shell hands off to vue-router and stops owning the screen.
+ *
+ * `route` is still a real mechanism and still typed, but no destination uses
+ * it any more, and `destinationRail.spec.ts` fails BY NAME if one starts to.
+ * `expense` and `closing` did, and the owner found what that means: opening
+ * Gasto from the rail replaced the whole shell with a standalone page — no
+ * rail, no band, and the only way back is the browser. A rail item that
+ * removes the rail is a navigation dead end, and §17.7's premise is that the
+ * rail IS the desktop navigation.
+ *
+ * The deep links did NOT go away with the kind, and that was the point worth
+ * arguing: `/cash-movement` and `/closing` still exist, are still bookmarkable
+ * and still land on the same screen — they now mount the register shell and
+ * ask it to open on that destination, exactly as `/floor` has always done for
+ * the floor panel. The route keeps every reason it had to exist; it stops
+ * being a different screen.
  */
 export type DestinationKind = "panel" | "sheet" | "route";
 
@@ -180,7 +196,9 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 	{
 		id: "expense",
 		labelKey: "Expense",
-		kind: "route",
+		// Hosted, not navigated to. `/cash-movement` predates the rail and is
+		// kept — it mounts the shell and opens this sheet.
+		kind: "sheet",
 		path: "/cash-movement",
 		capability: null,
 		profileFlag: null,
@@ -243,7 +261,11 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 	{
 		id: "closing",
 		labelKey: "Close Shift",
-		kind: "route",
+		// The canvas draws the corte WITH the rail (`Corte.dc.html` — nine rail
+		// items, Corte lit). It is a destination, not a screen of its own, and
+		// ClosingDialog was already written for that: it injects
+		// DESTINATION_SURFACE to decide who owns the lane.
+		kind: "sheet",
 		path: "/closing",
 		capability: null,
 		profileFlag: null,
@@ -318,4 +340,17 @@ export const SHEET_COMPONENTS: Record<string, () => Promise<unknown>> = {
 	invoices: () => import("../../../components/pos/flows/InvoiceManagement.vue"),
 	"return": () => import("../../../components/pos/flows/Returns.vue"),
 	recharge: () => import("@saldo/SaldoCatalogPicker.vue"),
+	// Not a dialog: `CashMovementView` is a plain view, so it renders straight
+	// into the surface with no overlay in between. That is also why it never
+	// reached the `useDialogFullscreen` seam and kept its modal-body geometry.
+	expense: () => import("../../../components/pos/cash/CashMovementView.vue"),
+	closing: () => import("../../../components/pos/shell/ClosingDialog.vue"),
 };
+
+/**
+ * Destinations the shell HOSTS rather than navigates to — i.e. the ones that
+ * keep the rail on screen. A `sheet` has a component in `SHEET_COMPONENTS` by
+ * definition (the host has nothing to draw otherwise), and that pairing is
+ * checked rather than assumed.
+ */
+export const isHostedDestination = (def: DestinationDef): boolean => def.kind === "sheet";

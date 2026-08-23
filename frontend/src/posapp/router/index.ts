@@ -17,6 +17,7 @@ import {
 	createDestinationGuard,
 	type ActivationContext,
 } from "../composables/pos/shell/useDestinationRouting";
+import { DESTINATIONS } from "../composables/pos/shell/destinationRegistry";
 
 const OFFLINE_ROUTE_UNAVAILABLE_NAME = "offline-route-unavailable";
 
@@ -118,12 +119,69 @@ export function resolveDestinationRedirect(path: string): string | null {
 	}
 }
 
+/**
+ * Deep-link routes for rail destinations, generated FROM the registry.
+ *
+ * Hand-written route entries are how `expense` and `closing` became bare pages
+ * in the first place: the registry said "this destination has a path" and the
+ * router answered that path with a component that was not the shell, so the
+ * rail — the only desktop navigation there is — went with it. Generating them
+ * removes the opportunity. A destination added to the registry tomorrow gets a
+ * URL that mounts the shell, and there is no place to type the other thing.
+ *
+ * `/pos` and `/floor` stay hand-written above: `/pos` is the shell itself and
+ * must not pay for a wrapper on the hottest route in the product, and `/floor`
+ * carries `requiresTables` and the `initialView` the shell already honours.
+ */
+const HAND_WRITTEN_SHELL_PATHS = new Set(["/pos", "/floor"]);
+
+/**
+ * Titles these two routes already carried, kept verbatim. The route title is
+ * user-facing (it is the document title), so the conversion moves the strings
+ * rather than renaming them; the rest take their existing registry label.
+ */
+const LEGACY_DESTINATION_ROUTE_META: Record<
+	string,
+	{ title: string; loadingMessage: string }
+> = {
+	expense: { title: "Cash Movement", loadingMessage: "Loading cash movement..." },
+	closing: { title: "Close Shift", loadingMessage: "Loading close shift..." },
+};
+
+function buildDestinationRoutes() {
+	return DESTINATIONS.filter(
+		(def) => !HAND_WRITTEN_SHELL_PATHS.has(def.path),
+	).map((def) => ({
+		path: def.path,
+		component: () =>
+			import(
+				"../components/pos/shell/destinations/DestinationRouteShell.vue"
+			),
+		meta: {
+			// No `loadingMessage` for the generated ones: the existing
+			// `resolveRouteLoadingMessage` fallback derives one from the title
+			// rather than this file inventing a string per destination.
+			title: def.labelKey,
+			...LEGACY_DESTINATION_ROUTE_META[def.id],
+			layout: "default",
+			registerShell: true,
+			initialDestination: def.id,
+		},
+	}));
+}
+
 const routes = [
 	{ path: "/", redirect: "/pos" },
 	{
 		path: "/pos",
 		component: () => import("../components/pos/shell/Pos.vue"),
-		meta: { title: "POS", layout: "default", loadingMessage: "Loading POS..." },
+		meta: {
+			title: "POS",
+			layout: "default",
+			loadingMessage: "Loading POS...",
+			registerShell: true,
+			initialDestination: "sale",
+		},
 	},
 	{
 		// The floor is a panel of the POS shell, not a screen of its own (spec
@@ -137,8 +195,13 @@ const routes = [
 			loadingMessage: "Loading floor...",
 			requiresTables: true,
 			initialView: "floor",
+			registerShell: true,
+			initialDestination: "floor",
 		},
 	},
+	// Every other destination's deep link, built FROM the registry — see
+	// `buildDestinationRoutes`.
+	...buildDestinationRoutes(),
 	{
 		path: "/orders",
 		component: () =>
@@ -186,24 +249,6 @@ const routes = [
 			title: "Barcode Printing",
 			layout: "default",
 			loadingMessage: "Loading barcode printing...",
-		},
-	},
-	{
-		path: "/cash-movement",
-		component: () => import("../components/pos/cash/CashMovementView.vue"),
-		meta: {
-			title: "Cash Movement",
-			layout: "default",
-			loadingMessage: "Loading cash movement...",
-		},
-	},
-	{
-		path: "/closing",
-		component: () => import("../components/pos/shell/ClosingDialog.vue"),
-		meta: {
-			title: "Close Shift",
-			layout: "default",
-			loadingMessage: "Loading close shift...",
 		},
 	},
 	{

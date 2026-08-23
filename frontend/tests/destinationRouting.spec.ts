@@ -177,11 +177,26 @@ describe("one source of truth for where I am", () => {
 		expect(routing.activeId.value).toBe("drafts");
 	});
 
-	it("navigates for a route destination", () => {
+	it("hosts Gasto rather than navigating away from the shell", () => {
+		// `expense` was a `route` kind, and following it replaced the whole
+		// shell with a standalone page: no rail, no band, and the only way back
+		// was the browser. The path did not go away with the kind —
+		// `/cash-movement` still resolves to this destination (see the
+		// `syncFromPath` case below and `destinationRail.spec.ts`) — but
+		// reaching it from the rail keeps the operator inside the shell.
 		const fx = effects();
 		const routing = useDestinationRouting(() => ctx(), fx);
 		routing.activate("expense", "rail");
-		expect(fx.calls.nav).toEqual(["/cash-movement"]);
+		expect(fx.calls.sheet).toEqual(["expense"]);
+		expect(fx.calls.nav).toEqual([]);
+	});
+
+	it("hosts the corte rather than navigating away from the shell", () => {
+		const fx = effects();
+		const routing = useDestinationRouting(() => ctx(), fx);
+		routing.activate("closing", "rail");
+		expect(fx.calls.sheet).toEqual(["closing"]);
+		expect(fx.calls.nav).toEqual([]);
 	});
 
 	it("does NOT re-navigate when the browser is telling us where we are", () => {
@@ -245,9 +260,12 @@ describe("one source of truth for where I am", () => {
 			const decision = routing.activate(entry.def.id, "rail");
 			expect(decision.allowed, `${entry.def.id} did not resolve`).toBe(true);
 		}
-		// Every kind was exercised: a panel moved, sheets opened, routes navigated.
+		// A panel moved and sheets opened — and NOTHING navigated away. That
+		// last line is the property the owner's bug was the absence of: the
+		// rail is the desktop navigation, so a rail item that hands the screen
+		// to vue-router takes the navigation with it.
 		expect(fx.calls.panel.length).toBeGreaterThan(0);
 		expect(fx.calls.sheet.length).toBeGreaterThan(0);
-		expect(fx.calls.nav.length).toBeGreaterThan(0);
+		expect(fx.calls.nav).toEqual([]);
 	});
 });
