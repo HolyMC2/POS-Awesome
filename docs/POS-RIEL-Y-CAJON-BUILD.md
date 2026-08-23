@@ -386,6 +386,26 @@ exactly. The remainder keeps its discount and is marked `broken` rather than
 repriced — repricing survivors at list raises a price *during a return*,
 which is indefensible at the counter.
 
+### R11 — no hamburger on the rail layout; the drawer's pages ride the rail behind «Más» (08-22)
+
+Owner direction: *"hide the hamburger entirely on the rail layout, add the
+missing views to the rail."* `_rail.txt` had said it from the start — "the
+only nav — no hamburger". With the rail on screen `NavbarAppBar` drops the
+≡ (`uiStore.railLayout`, published by the shell); below the rail boundary the
+drawer stays the nav. The five pages the drawer held — Payments, Purchase
+Orders, Barcode Labels, Gift Cards, Dashboard — are rail destinations now
+(`group: "tools"`, `surface: "page"`, hosted beside the rail, deep links kept
+and generated from the registry). They render behind ONE pill, «Más»: sixteen
+66 px pills do not fit a 900 px register. The pill opens a flyout with a hint
+per tool, and while a tool is active it wears that tool's icon and label, so
+the rail never grows past ten pills and still says where the operator is.
+Gift Cards is gated on `posa_use_gift_cards`, Dashboard on supervisor access
+(`access: "supervisor"`, the same probe the route already asked) — absent, not
+disabled (R3). Canvas: «Riel con herramientas»
+(https://claude.ai/code/artifact/f03f6196-1935-4a90-9372-64c365e44f6b);
+artboards `Main.dc.html` (Más closed) and `Herramientas.dc.html` (open) in
+`muelle-site/design/register-hifi`.
+
 ---
 
 ## 9. Wave 3 — audit scope
