@@ -145,6 +145,7 @@ import {
 import { useRtl } from "../composables/core/useRtl";
 import { createAppResume } from "../composables/core/useAppResume";
 import { useSocketStore } from "../stores/socketStore";
+import { useVerticalStore } from "../stores/verticalStore";
 import { useBootSync } from "../composables/runtime/useBootSync";
 import { useNetworkLifecycle } from "../composables/runtime/useNetworkLifecycle";
 import { useUpdateChecks } from "../composables/runtime/useUpdateChecks";
@@ -220,6 +221,9 @@ const getScopeState =
 	typeof loadingApi?.getScopeState === "function" ? loadingApi.getScopeState : createFallbackLoadingScope;
 const { get_closing_data } = usePosShift();
 const syncStore = useSyncStore();
+const verticalStore = useVerticalStore();
+// The restaurant-only sync resources; see runOfflineSyncResource's gate.
+const TABLES_CAPABILITY_RESOURCES = new Set(["pos_floor", "pos_table", "restaurant_orders"]);
 const customersStore = useCustomersStore();
 const itemsStore = useItemsStore();
 const offlineSyncStore = useOfflineSyncStore();
@@ -626,6 +630,15 @@ async function callOfflineSyncMethod(method, args = {}) {
 }
 
 async function runOfflineSyncResource(resource) {
+	// Floors/tables are the restaurant catalog and the server refuses the
+	// pull (403) for a register without them; without this gate every sync
+	// trigger burned a request pair and logged an error. Idle, not error —
+	// there is nothing to retry until the vertical grows the capability.
+	if (TABLES_CAPABILITY_RESOURCES.has(resource?.id) && !verticalStore.has("tables")) {
+		return {
+			status: "idle",
+		};
+	}
 	const profile = getOfflineSyncProfile();
 	if (!profile?.name) {
 		return {
