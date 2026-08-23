@@ -565,7 +565,7 @@ const lineSummary = computed(() => {
 	// `Lines` for anyone else.
 	return __("{0} lines · {1} pcs", [lines, pieces]);
 });
-const { parkedOrders, draftSource } = storeToRefs(uiStore);
+const { parkedOrders, draftSource, paymentDialogOpen } = storeToRefs(uiStore);
 
 // ---- the action strip, bound once and positioned twice --------------------
 // The strip renders ABOVE the money where the band below carries PAGAR, and
@@ -756,8 +756,29 @@ const bandOwnsSaleLane = computed(() =>
  * to nothing. It also gates `<Teleport disabled>`, which is what keeps Vue from
  * warning about a target that legitimately is not there.
  */
+/**
+ * Is the band below still the SALE's band?
+ *
+ * `paymentDialogOpen` is the register's word for "the payment screen is up",
+ * and above 1100px that screen is Cobro, hosted in this shell's own content
+ * area with the sale kept mounted (`v-show`) behind it. The band then belongs
+ * to Cobro: it carries the CHANGE and `COBRAR Y CERRAR`, and the Cobro surface
+ * states the ticket's breakdown and its payment methods in its own columns.
+ * Teleporting this card's copies into it would say both a second time in the
+ * one place §17.7 reserves for a single number — which is exactly what the
+ * owner marked on 2026-08-23 ("the band duplicates the surface").
+ *
+ * Scoped to Cobro on purpose: the SALE band keeps its breakdown and its tender
+ * chips, which is the whole point of the lanes existing.
+ *
+ * Below 1100px the flag is also raised (the payment dialog, the phone sheet),
+ * and `bandOwnsSaleLane` is already false there — so this narrows nothing that
+ * was not narrow.
+ */
+const saleOwnsBand = computed(() => bandOwnsSaleLane.value && !paymentDialogOpen.value);
+
 const bandLaneActive = computed(
-	() => bandOwnsSaleLane.value && Boolean(props.bandBreakdownTarget || props.bandContextTarget),
+	() => saleOwnsBand.value && Boolean(props.bandBreakdownTarget || props.bandContextTarget),
 );
 const showDesktopDrafts = computed(() => Boolean(responsive.isDesktop.value));
 const showReturnDiscountAlert = computed(
