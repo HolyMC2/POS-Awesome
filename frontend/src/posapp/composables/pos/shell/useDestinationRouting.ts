@@ -39,6 +39,12 @@ export interface ActivationContext {
 	hasCapability: (capability: string) => boolean;
 	/** Truthiness of a `posa_*` flag on the active POS Profile. */
 	hasProfileFlag: (flag: string) => boolean;
+	/**
+	 * The cashier on duty holds supervisor access. Optional because most
+	 * callers predate the dashboard destination; absent reads as `false`,
+	 * which is the safe direction for an access rule.
+	 */
+	isSupervisor?: boolean;
 }
 
 export type RefusalReason = "unknown" | "shift_closed" | "gated" | "offline";
@@ -56,8 +62,13 @@ export type ActivationDecision =
  */
 export function isDestinationEnabled(
 	def: DestinationDef,
-	ctx: Pick<ActivationContext, "hasCapability" | "hasProfileFlag">,
+	ctx: Pick<ActivationContext, "hasCapability" | "hasProfileFlag" | "isSupervisor">,
 ): boolean {
+	// Access is checked FIRST and independently: a supervisor-only page is
+	// not enabled for a cashier whatever the profile says.
+	if (def.access === "supervisor" && !ctx.isSupervisor) {
+		return false;
+	}
 	if (!def.capability && !def.profileFlag) {
 		return true;
 	}

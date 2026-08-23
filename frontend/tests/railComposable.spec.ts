@@ -14,6 +14,8 @@ const ALL_GATES: RailGateMap = {
 	externalDocumentCheckout: true,
 	saldo: true,
 	closingShift: true,
+	giftCards: true,
+	dashboard: true,
 };
 
 function makeContext(overrides: Partial<Record<string, unknown>> = {}) {
@@ -124,8 +126,12 @@ describe("useRegisterRail — offline", () => {
 		// orders — and `drafts` is blocked, because nothing caches them.
 		expect(dimmed.sort()).toEqual([
 			"closing",
+			"dashboard",
 			"drafts",
+			"giftCards",
 			"invoices",
+			"payments",
+			"purchase",
 			"recharge",
 			"return",
 			"serviceOrder",
@@ -170,13 +176,16 @@ describe("useRegisterRail — keyboard", () => {
 	it("moves up and wraps at the start", () => {
 		const { rail } = makeContext();
 		press(rail, "ArrowUp");
-		expect(rail.focusedIndex.value).toBe(rail.items.value.length - 1);
+		// The ring is the PILLS: tools live in the "More" flyout, which owns
+		// its own focus, so the wrap lands on the last pill (Corte).
+		expect(rail.focusedIndex.value).toBe(rail.keyboardItems.value.length - 1);
+		expect(rail.keyboardItems.value.at(-1)?.id).toBe("closing");
 	});
 
 	it("jumps with Home and End", () => {
 		const { rail } = makeContext();
 		press(rail, "End");
-		expect(rail.focusedIndex.value).toBe(rail.items.value.length - 1);
+		expect(rail.focusedIndex.value).toBe(rail.keyboardItems.value.length - 1);
 		press(rail, "Home");
 		expect(rail.focusedIndex.value).toBe(0);
 	});
@@ -222,9 +231,39 @@ describe("useRegisterRail — groups", () => {
 	it("splits render groups without losing an entry", () => {
 		const { rail } = makeContext();
 		expect(rail.footerItems.value.map((item) => item.id)).toEqual(["closing"]);
-		expect(rail.primaryItems.value.length + rail.footerItems.value.length).toBe(
+		expect(
+			rail.primaryItems.value.length + rail.toolsItems.value.length + rail.footerItems.value.length,
+		).toBe(rail.items.value.length);
+		// The keyboard ring is the pills; every tool is off it and in the flyout.
+		expect(rail.keyboardItems.value.length + rail.toolsItems.value.length).toBe(
 			rail.items.value.length,
 		);
+		expect(rail.keyboardItems.value.some((item) => item.group === "tools")).toBe(false);
+	});
+
+	it("the More pill wears the active tool, and nothing when a pill is active", () => {
+		const active = ref("sale");
+		const rail = useRegisterRail({
+			__: (k) => k,
+			t: (k) => k,
+			gates: ref<RailGateMap>({ ...ALL_GATES }),
+			activeDestinationId: active,
+			shiftOpen: ref(true),
+			offline: ref(false),
+			counts: {},
+			navigate: () => {},
+		});
+		expect(rail.activeTool.value).toBeNull();
+		active.value = "payments";
+		expect(rail.activeTool.value?.id).toBe("payments");
+		expect(rail.activeTool.value?.hint).toBe("Collect against open invoices");
+		expect(rail.toolsItems.value.map((item) => item.id)).toEqual([
+			"payments",
+			"purchase",
+			"barcode",
+			"giftCards",
+			"dashboard",
+		]);
 	});
 
 	it("reacts to a computed gate source", () => {

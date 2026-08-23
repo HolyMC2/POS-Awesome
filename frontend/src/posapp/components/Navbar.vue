@@ -2,6 +2,7 @@
 	<nav :class="['pos-themed-card', rtlClasses]">
 		<!-- Use the modular NavbarAppBar component -->
 		<NavbarAppBar
+			:show-nav-icon="!uiStore.railLayout"
 			:pos-profile="posProfile"
 			:cashier-name="currentCashierDisplay"
 			:pending-invoices="pendingInvoices"

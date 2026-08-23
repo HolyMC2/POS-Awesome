@@ -1,0 +1,27 @@
+{
+  "capturedAt": "2026-08-23T03:47:25.704Z",
+  "hamburgerVisible": false,
+  "moreVisible": true,
+  "tools": [
+    {
+      "id": "payments",
+      "label": "Payments",
+      "hint": "Collect against open invoices"
+    },
+    {
+      "id": "purchase",
+      "label": "Purchase Orders",
+      "hint": "Orders to suppliers"
+    },
+    {
+      "id": "barcode",
+      "label": "Barcode Labels",
+      "hint": "Print labels from the catalogue"
+    },
+    {
+      "id": "dashboard",
+      "label": "Dashboard",
+      "hint": "Today, the shift and each cashier"
+    }
+  ]
+}

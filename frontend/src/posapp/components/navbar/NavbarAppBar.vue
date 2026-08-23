@@ -13,6 +13,7 @@
 		<!-- Brand Section (left in LTR, right in RTL) -->
 		<div :class="['pos-navbar-brand-section', isRtl ? 'rtl-brand-section' : 'ltr-brand-section']">
 			<v-app-bar-nav-icon
+				v-if="showNavIcon"
 				ref="navIcon"
 				@click="$emit('nav-click')"
 				:aria-label="__('Toggle navigation drawer')"
@@ -365,6 +366,12 @@ export default {
 		}
 	},
 	props: {
+		/**
+		 * The hamburger. Off while the register shell shows the rail (roadmap
+		 * §17.7: the rail is the only desktop nav); on for every page that has
+		 * no rail and below the rail breakpoint, where the drawer IS the nav.
+		 */
+		showNavIcon: { type: Boolean, default: true },
 		posProfile: {
 			type: Object,
 			default: () => ({}),

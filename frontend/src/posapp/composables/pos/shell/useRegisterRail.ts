@@ -71,6 +71,8 @@ export interface RailItem {
 	 */
 	ariaLabel: string;
 	shortcutActionId: string | null;
+	/** Tools flyout only — see `RailDestination.hint`. */
+	hint: string | null;
 	/**
 	 * The destination's declared offline standing, passed through unchanged
 	 * from the registry so the evidence lane and the wave-3 audit can read
@@ -127,6 +129,7 @@ export function useRegisterRail(ctx: RegisterRailContext) {
 				disabled,
 				ariaLabel: notes.length ? `${label} — ${notes.join(" · ")}` : label,
 				shortcutActionId: destination.shortcutActionId,
+				hint: destination.hint ? ctx.__(destination.hint) : null,
 				offlineAvailability: destination.offlineAvailability,
 			};
 		}),
@@ -136,7 +139,26 @@ export function useRegisterRail(ctx: RegisterRailContext) {
 		computed<RailItem[]>(() => items.value.filter((item) => item.group === group));
 
 	const primaryItems = inGroup("primary");
+	const toolsItems = inGroup("tools");
 	const footerItems = inGroup("footer");
+
+	/**
+	 * The tool currently on screen, if any. The rail's "More" item wears its
+	 * icon and label while it is active, so the rail shows where the operator
+	 * IS without growing a pill per tool.
+	 */
+	const activeTool = computed<RailItem | null>(
+		() => toolsItems.value.find((item) => item.active) ?? null,
+	);
+
+	/**
+	 * What the arrow keys walk: the pills on the rail. Tool items live in the
+	 * flyout and take the menu's own focus; the "More" pill is a tab stop of
+	 * its own between the two groups.
+	 */
+	const keyboardItems = computed<RailItem[]>(() =>
+		items.value.filter((item) => item.group !== "tools"),
+	);
 
 	/**
 	 * Roving tabindex: the rail is ONE tab stop, and the arrows move inside
@@ -147,7 +169,7 @@ export function useRegisterRail(ctx: RegisterRailContext) {
 	const focusedIndex = ref(0);
 
 	const clampFocus = () => {
-		const last = items.value.length - 1;
+		const last = keyboardItems.value.length - 1;
 		if (last < 0) {
 			focusedIndex.value = 0;
 			return;
@@ -167,7 +189,7 @@ export function useRegisterRail(ctx: RegisterRailContext) {
 	 * why it cannot be used.
 	 */
 	const moveFocus = (delta: number) => {
-		const count = items.value.length;
+		const count = keyboardItems.value.length;
 		if (!count) {
 			return;
 		}
@@ -185,7 +207,7 @@ export function useRegisterRail(ctx: RegisterRailContext) {
 
 	const activateFocused = () => {
 		clampFocus();
-		const item = items.value[focusedIndex.value];
+		const item = keyboardItems.value[focusedIndex.value];
 		return item ? activate(item.id) : false;
 	};
 
@@ -202,7 +224,7 @@ export function useRegisterRail(ctx: RegisterRailContext) {
 				focusIndex(0);
 				return true;
 			case "End":
-				focusIndex(items.value.length - 1);
+				focusIndex(keyboardItems.value.length - 1);
 				return true;
 			case "Enter":
 			case " ":
@@ -216,7 +238,10 @@ export function useRegisterRail(ctx: RegisterRailContext) {
 	return {
 		items,
 		primaryItems,
+		toolsItems,
 		footerItems,
+		activeTool,
+		keyboardItems,
 		railDisabled,
 		focusedIndex,
 		focusIndex,

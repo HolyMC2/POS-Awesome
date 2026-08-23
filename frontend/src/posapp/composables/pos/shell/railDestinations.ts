@@ -39,6 +39,14 @@ export const RAIL_DESTINATION_IDS = [
 	"invoices",
 	"return",
 	"recharge",
+	// The tools group (§17.7 addendum 2026-08-22): the pages the hamburger
+	// drawer used to hold. They render behind ONE rail item, "More", because
+	// sixteen 66px items do not fit a 900px register — see `RailGroup`.
+	"payments",
+	"purchase",
+	"barcode",
+	"giftCards",
+	"dashboard",
 	"closing",
 ] as const;
 
@@ -51,7 +59,15 @@ export type RailDestinationId = (typeof RAIL_DESTINATION_IDS)[number];
  * should not advertise it (§4.2: "what the giro does not use does not
  * appear").
  */
-export type RailGate = "floor" | "externalDocumentCheckout" | "saldo" | "closingShift";
+export type RailGate =
+	| "floor"
+	| "externalDocumentCheckout"
+	| "saldo"
+	| "closingShift"
+	/** `posa_use_gift_cards` on the POS Profile. */
+	| "giftCards"
+	/** Supervisor access — the same probe the dashboard route already asks. */
+	| "dashboard";
 
 export type RailGateMap = Readonly<Record<RailGate, boolean>>;
 
@@ -111,8 +127,16 @@ export type RailBadgeSource =
  */
 export type RailOfflineAvailability = "available" | "queued" | "cachedReadOnly" | "blocked";
 
-/** Where the destination sits in the rail's two groups. */
-export type RailGroup = "primary" | "footer";
+/**
+ * Where the destination sits in the rail's three groups.
+ *
+ * `tools` is the one the artboard did not draw (`Riel con herramientas`
+ * canvas, 2026-08-22): it renders as a SINGLE rail item — "More" — that opens
+ * a flyout listing its members, and while one of them is the active
+ * destination that item wears the member's icon and label. The rail never
+ * grows past ten items; the register never loses a page it had.
+ */
+export type RailGroup = "primary" | "tools" | "footer";
 
 export interface RailDestination {
 	id: RailDestinationId;
@@ -142,6 +166,12 @@ export interface RailDestination {
 	 */
 	shortcutActionId: string | null;
 	offlineAvailability: RailOfflineAvailability;
+	/**
+	 * One line under the label in the tools flyout — what the page is FOR.
+	 * English source, translated at render. Only the tools group carries one:
+	 * a rail pill has no room for it and the primary destinations need none.
+	 */
+	hint?: string;
 	/**
 	 * The module that makes `offlineAvailability` checkable, as a repo path.
 	 *
@@ -294,6 +324,74 @@ export const RAIL_DESTINATIONS: readonly RailDestination[] = [
 		// Primary, not footer: the artboard's spacer sits BELOW Recarga.
 		// Selling air time is selling; only the session controls go bottom.
 		group: "primary",
+	},
+	{
+		id: "payments",
+		label: "Payments",
+		icon: "mdi-credit-card-outline",
+		badgeSource: null,
+		gate: null,
+		shortcutActionId: null,
+		// Receiving a payment against an outstanding invoice needs the
+		// invoice's live balance; there is nothing local to settle against.
+		offlineAvailability: "blocked",
+		backedBy: null,
+		group: "tools",
+		hint: "Collect against open invoices",
+	},
+	{
+		id: "purchase",
+		label: "Purchase Orders",
+		icon: "mdi-cart-plus",
+		badgeSource: null,
+		gate: null,
+		shortcutActionId: null,
+		// A purchase order is submitted to the server as it is built.
+		offlineAvailability: "blocked",
+		backedBy: null,
+		group: "tools",
+		hint: "Orders to suppliers",
+	},
+	{
+		id: "barcode",
+		label: "Barcode Labels",
+		icon: "mdi-barcode",
+		badgeSource: null,
+		gate: null,
+		shortcutActionId: null,
+		// Labels are laid out from the cached catalogue and printed through
+		// QZ, which is local; what it cannot do offline is find an item the
+		// cache never loaded.
+		offlineAvailability: "cachedReadOnly",
+		backedBy: "src/offline/cache.ts",
+		group: "tools",
+		hint: "Print labels from the catalogue",
+	},
+	{
+		id: "giftCards",
+		label: "Gift Cards",
+		icon: "mdi-wallet-giftcard",
+		badgeSource: null,
+		gate: "giftCards",
+		shortcutActionId: null,
+		// A balance is a server fact; a card issued offline would be a card
+		// nobody can redeem.
+		offlineAvailability: "blocked",
+		backedBy: null,
+		group: "tools",
+		hint: "Balance, issue and top up",
+	},
+	{
+		id: "dashboard",
+		label: "Dashboard",
+		icon: "mdi-view-dashboard-outline",
+		badgeSource: null,
+		gate: "dashboard",
+		shortcutActionId: null,
+		offlineAvailability: "blocked",
+		backedBy: null,
+		group: "tools",
+		hint: "Today, the shift and each cashier",
 	},
 	{
 		id: "closing",

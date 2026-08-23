@@ -72,7 +72,10 @@ import {
 	type RefusalReason,
 } from "../src/posapp/composables/pos/shell/useDestinationRouting";
 import type { RegisterRailContext } from "../src/posapp/composables/pos/shell/useRegisterRail";
-import type { RailGateMap } from "../src/posapp/composables/pos/shell/railDestinations";
+import {
+	getRailDestination,
+	type RailGateMap,
+} from "../src/posapp/composables/pos/shell/railDestinations";
 import createPosAppRouter, { resolveDestinationRedirect } from "../src/posapp/router/index";
 import { pinia } from "../src/posapp/stores";
 import { useUIStore } from "../src/posapp/stores/uiStore";
@@ -89,7 +92,10 @@ const ALL_GATES: RailGateMap = {
 	externalDocumentCheckout: true,
 	saldo: true,
 	closingShift: true,
+	giftCards: true,
+	dashboard: true,
 };
+
 
 const { router } = createPosAppRouter();
 
@@ -127,6 +133,7 @@ function mountShell(overrides: Partial<ActivationContext> = {}): Fixture {
 		shiftOpen: true,
 		hasCapability: () => true,
 		hasProfileFlag: () => true,
+		isSupervisor: true,
 		...overrides,
 	};
 
@@ -230,7 +237,15 @@ async function assertRailSurvives(id: string): Promise<void> {
 					`there is, so this is a dead end (§17.7). Rendered instead:\n${html.slice(0, 200)}`,
 			);
 		}
-		if (!fixture.wrapper.find(`[data-rail-destination="${id}"]`).exists()) {
+		// A tool is reached through the "More" pill's flyout (a `v-menu`, which
+		// this runtime-only mount cannot open), and while it is the active
+		// destination that pill WEARS it — the rail says where the operator is
+		// without a pill per tool. That pill is the tool's rail item.
+		if (getRailDestination(id)?.group === "tools") {
+			if (!fixture.wrapper.find(`[data-rail-tools][data-active-tool="${id}"]`).exists()) {
+				throw new Error(`tool "${id}" is active but the "More" pill does not show it`);
+			}
+		} else if (!fixture.wrapper.find(`[data-rail-destination="${id}"]`).exists()) {
 			throw new Error(`destination "${id}" is on the rail but its own rail item is gone`);
 		}
 	} finally {
@@ -280,11 +295,12 @@ describe("the rail-presence assertion actually bites", () => {
 	it("fails BY NAME when a destination is flipped back to a bare route", async () => {
 		const def = DESTINATIONS.find((d) => d.id === "expense") as DestinationDef;
 		const original = { kind: def.kind, path: def.path };
-		// `/barcode` is a real standalone page — the exact shape `/cash-movement`
-		// used to have: its own route, its own component, no shell.
+		// `/reports` is a real standalone page — the exact shape `/cash-movement`
+		// used to have: its own route, its own component, no shell. (`/barcode`
+		// played this part until it became a tools destination.)
 		Object.assign(def as unknown as Record<string, unknown>, {
 			kind: "route",
-			path: "/barcode",
+			path: "/reports",
 		});
 
 		let failure: Error | null = null;

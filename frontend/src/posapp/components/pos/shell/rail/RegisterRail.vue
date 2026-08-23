@@ -61,6 +61,26 @@
 			</li>
 		</ul>
 
+		<!-- The tools group: the pages the hamburger drawer used to hold, behind
+		     ONE pill. Sixteen 66px pills do not fit a 900px register, so
+		     "More" opens a flyout and, while a tool is the active destination,
+		     wears that tool's icon and label (canvas «Riel con herramientas»).
+		     It is its own tab stop; the arrow keys walk the pills around it and
+		     the menu owns focus inside itself. -->
+		<div v-if="toolsItems.length" class="register-rail__group register-rail__group--tools">
+			<div class="register-rail__divider" aria-hidden="true"></div>
+			<RailToolsMenu
+				:ref="registerToolsRef"
+				:items="toolsItems"
+				:active-tool="activeTool"
+				:disabled="railDisabled"
+				:tab-index="tabIndexFor(TOOLS_SLOT)"
+				:__="__"
+				@activate="activate"
+				@focus-pill="focusItem(TOOLS_SLOT)"
+			/>
+		</div>
+
 		<div class="register-rail__spacer"></div>
 
 		<ul class="register-rail__group" role="list">
@@ -99,7 +119,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
+
+import RailToolsMenu from "./RailToolsMenu.vue";
 
 import {
 	useRegisterRail,
@@ -113,11 +135,18 @@ const props = defineProps<{ context: RegisterRailContext }>();
 const __ = (key: string) => props.context.__(key);
 
 const rail = useRegisterRail(props.context);
-const { items, primaryItems, footerItems, railDisabled, focusedIndex } = rail;
+const { items, primaryItems, toolsItems, footerItems, activeTool, railDisabled } = rail;
 
-const itemRefs = new Map<RailDestinationId, HTMLElement>();
+/**
+ * The "More" pill's slot in the focus ring. Not a destination id — it opens a
+ * menu — so the ring is keyed by string and this sentinel sits between the
+ * primary pills and Corte, exactly where the pill renders.
+ */
+const TOOLS_SLOT = "__tools__";
 
-const registerItemRef = (el: unknown, id: RailDestinationId) => {
+const itemRefs = new Map<string, HTMLElement>();
+
+const registerItemRef = (el: unknown, id: string) => {
 	const element = (el as { $el?: HTMLElement } | HTMLElement | null) ?? null;
 	const node =
 		element && "$el" in (element as object)
@@ -130,22 +159,47 @@ const registerItemRef = (el: unknown, id: RailDestinationId) => {
 	}
 };
 
-/**
- * Roving tabindex: exactly one item is in the tab order at a time. Without
- * this the rail costs eight Tab presses to step past, which is the reason
- * keyboard users abandon a nav rail entirely.
- */
-const focusedId = computed<RailDestinationId | null>(
-	() => (items.value[focusedIndex.value] as RailItem | undefined)?.id ?? null,
-);
-
-const tabIndexFor = (id: RailDestinationId) => (focusedId.value === id ? 0 : -1);
-
-const focusItem = (id: RailDestinationId) => {
-	const index = items.value.findIndex((item) => item.id === id);
-	if (index >= 0) {
-		rail.focusIndex(index);
+const toolsMenu = ref<InstanceType<typeof RailToolsMenu> | null>(null);
+const registerToolsRef = (el: unknown) => {
+	const instance = el as { pillEl?: HTMLElement | null } | null;
+	toolsMenu.value = el as InstanceType<typeof RailToolsMenu> | null;
+	if (instance?.pillEl) {
+		itemRefs.set(TOOLS_SLOT, instance.pillEl);
+	} else {
+		itemRefs.delete(TOOLS_SLOT);
 	}
+};
+
+/**
+ * Roving tabindex: exactly one control is in the tab order at a time. Without
+ * this the rail costs eleven Tab presses to step past, which is the reason
+ * keyboard users abandon a nav rail entirely. The ring is the PILLS in render
+ * order — primary, the "More" pill, Corte — and the tools flyout owns its own
+ * focus once opened.
+ */
+const ring = computed<string[]>(() => [
+	...primaryItems.value.map((item) => item.id),
+	...(toolsItems.value.length ? [TOOLS_SLOT] : []),
+	...footerItems.value.map((item) => item.id),
+]);
+const ringIndex = ref(0);
+const focusedKey = computed<string | null>(() => ring.value[ringIndex.value] ?? null);
+
+const tabIndexFor = (key: string) => (focusedKey.value === key ? 0 : -1);
+
+const focusItem = (key: string) => {
+	const index = ring.value.indexOf(key);
+	if (index >= 0) {
+		ringIndex.value = index;
+	}
+};
+
+const moveFocus = (delta: number) => {
+	const count = ring.value.length;
+	if (!count) {
+		return;
+	}
+	ringIndex.value = (ringIndex.value + delta + count) % count;
 };
 
 const activate = (id: RailDestinationId) => {
@@ -153,8 +207,41 @@ const activate = (id: RailDestinationId) => {
 	rail.activate(id);
 };
 
+/** Returns true when the key was consumed. Mirrors `useRegisterRail.onKeydown`
+ * with one extra case: Enter or Space on the "More" slot opens the flyout. */
+const consumeKey = (event: KeyboardEvent): boolean => {
+	switch (event.key) {
+		case "ArrowDown":
+			moveFocus(1);
+			return true;
+		case "ArrowUp":
+			moveFocus(-1);
+			return true;
+		case "Home":
+			ringIndex.value = 0;
+			return true;
+		case "End":
+			ringIndex.value = Math.max(0, ring.value.length - 1);
+			return true;
+		case "Enter":
+		case " ": {
+			const key = focusedKey.value;
+			if (key === TOOLS_SLOT) {
+				if (!railDisabled.value) {
+					toolsMenu.value?.toggle();
+				}
+			} else if (key) {
+				rail.activate(key as RailDestinationId);
+			}
+			return true;
+		}
+		default:
+			return false;
+	}
+};
+
 const handleKeydown = (event: KeyboardEvent) => {
-	if (rail.onKeydown(event)) {
+	if (consumeKey(event)) {
 		// Arrows would scroll the shell and Space would page it; the rail
 		// consumed them, so nothing else should also act on them.
 		event.preventDefault();
@@ -168,18 +255,22 @@ const handleKeydown = (event: KeyboardEvent) => {
  * is still `tabindex="-1"` works, but focusing one Vue is about to re-render
  * does not survive the patch.
  */
-watch(focusedId, async (id) => {
-	if (!id) {
+watch(focusedKey, async (key) => {
+	if (!key) {
 		return;
 	}
 	await nextTick();
-	const node = itemRefs.get(id);
+	const node = itemRefs.get(key);
 	if (node && document.activeElement !== node && node.closest(".register-rail")?.contains(document.activeElement)) {
 		node.focus();
 	}
 });
 
-defineExpose({ items, railDisabled });
+watch(ring, () => {
+	ringIndex.value = Math.min(ringIndex.value, Math.max(0, ring.value.length - 1));
+});
+
+defineExpose({ items, toolsItems, activeTool, railDisabled });
 </script>
 
 <style scoped>
@@ -328,6 +419,17 @@ defineExpose({ items, railDisabled });
 	background: var(--reg-rail-badge-bg, #e9a13b);
 }
 
+/* ---- tools: the "More" pill and its flyout --------------------------- */
+.register-rail__group--tools {
+	gap: 0;
+}
+
+.register-rail__divider {
+	height: 1px;
+	margin: 4px 10px 7px;
+	background: var(--reg-rail-divider, #dfe4ea);
+}
+
 .register-rail__avatar {
 	display: grid;
 	place-items: center;
@@ -349,6 +451,9 @@ defineExpose({ items, railDisabled });
 	--reg-rail-surface-idle: var(--pos-bg-primary, #121212);
 	--reg-rail-label: var(--pos-text-muted, #b0b8c4);
 	--reg-rail-label-active: var(--pos-primary, #00d4ff);
+	--reg-rail-divider: var(--pos-border, rgba(255, 255, 255, 0.12));
+	--reg-rail-pressed: rgba(255, 255, 255, 0.08);
+	--reg-rail-tool-on: rgba(0, 212, 255, 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -358,6 +463,9 @@ defineExpose({ items, railDisabled });
 		--reg-rail-surface-idle: var(--pos-bg-primary, #121212);
 		--reg-rail-label: var(--pos-text-muted, #b0b8c4);
 		--reg-rail-label-active: var(--pos-primary, #00d4ff);
+		--reg-rail-divider: var(--pos-border, rgba(255, 255, 255, 0.12));
+		--reg-rail-pressed: rgba(255, 255, 255, 0.08);
+		--reg-rail-tool-on: rgba(0, 212, 255, 0.12);
 	}
 }
 </style>

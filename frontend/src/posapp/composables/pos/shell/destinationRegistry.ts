@@ -125,6 +125,20 @@ export interface DestinationDef {
 	badgeSource: string | null;
 	/** uiStore.activeView value — panels only. */
 	panelView?: "items" | "offers" | "coupons" | "floor";
+	/**
+	 * Who may enter, beyond capability and profile flag. `supervisor` is the
+	 * dashboard's existing rule (`requiresSupervisor` on its route, the same
+	 * probe the navbar asked before listing it); it lives here so the rail,
+	 * the URL and the chord refuse it the same way.
+	 */
+	access?: "supervisor";
+	/**
+	 * `page` — a full view that was a route of its own (Payments, Purchase
+	 * Orders, Barcode Labels, Gift Cards, Dashboard). It sizes itself to a
+	 * page and scrolls, so the host lets it, instead of clipping it to the
+	 * flows-sheet discipline of one inner scrollport.
+	 */
+	surface?: "page";
 }
 
 /**
@@ -258,6 +272,71 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 		shortcutActionId: "saldo.openRecharge",
 		badgeSource: null,
 	},
+	// ---- the tools group: the hamburger drawer's pages, hosted ------------
+	// Each of these had a hand-written route that mounted the page ALONE —
+	// no rail, no band, the browser's Back as the only way out — which is the
+	// exact trap `route` kind describes above. They keep their paths.
+	{
+		id: "payments",
+		labelKey: "Payments",
+		kind: "sheet",
+		path: "/payments",
+		capability: null,
+		profileFlag: null,
+		offline: "online_required",
+		shortcutActionId: null,
+		badgeSource: null,
+		surface: "page",
+	},
+	{
+		id: "purchase",
+		labelKey: "Purchase Orders",
+		kind: "sheet",
+		path: "/orders",
+		capability: null,
+		profileFlag: null,
+		offline: "online_required",
+		shortcutActionId: null,
+		badgeSource: null,
+		surface: "page",
+	},
+	{
+		id: "barcode",
+		labelKey: "Barcode Labels",
+		kind: "sheet",
+		path: "/barcode",
+		capability: null,
+		profileFlag: null,
+		offline: "offline_read",
+		shortcutActionId: null,
+		badgeSource: null,
+		surface: "page",
+	},
+	{
+		id: "giftCards",
+		labelKey: "Gift Cards",
+		kind: "sheet",
+		path: "/gift-cards",
+		capability: null,
+		profileFlag: "posa_use_gift_cards",
+		offline: "online_required",
+		shortcutActionId: null,
+		badgeSource: null,
+		surface: "page",
+	},
+	{
+		id: "dashboard",
+		labelKey: "Dashboard",
+		kind: "sheet",
+		path: "/dashboard",
+		capability: null,
+		profileFlag: null,
+		access: "supervisor",
+		offline: "online_required",
+		shortcutActionId: null,
+		badgeSource: null,
+		surface: "page",
+	},
 	{
 		id: "closing",
 		labelKey: "Close Shift",
@@ -356,6 +435,12 @@ export const SHEET_COMPONENTS: Record<string, () => Promise<unknown>> = {
 	// reached the `useDialogFullscreen` seam and kept its modal-body geometry.
 	expense: () => import("../../../components/pos/cash/CashMovementView.vue"),
 	closing: () => import("../../../components/pos/shell/ClosingDialog.vue"),
+	// Tools: plain views, rendered straight into a scrolling page surface.
+	payments: () => import("../../../components/pos/shell/PayView.vue"),
+	purchase: () => import("../../../components/pos/purchase/PurchaseOrders.vue"),
+	barcode: () => import("../../../components/pos/shell/BarcodePrinting.vue"),
+	giftCards: () => import("../../../components/pos/wallet/GiftCardsView.vue"),
+	dashboard: () => import("../../../components/reports/Reports.vue"),
 };
 
 /**

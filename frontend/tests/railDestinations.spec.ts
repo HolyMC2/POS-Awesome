@@ -20,6 +20,8 @@ const ALL_GATES: RailGateMap = {
 	externalDocumentCheckout: true,
 	saldo: true,
 	closingShift: true,
+	giftCards: true,
+	dashboard: true,
 };
 
 const gates = (overrides: Partial<RailGateMap> = {}): RailGateMap => ({
@@ -57,6 +59,13 @@ describe("rail destination registry", () => {
 			"invoices",
 			"return",
 			"recharge",
+			// The tools group — one "More" pill on the rail, five entries in
+			// its flyout (canvas «Riel con herramientas»).
+			"payments",
+			"purchase",
+			"barcode",
+			"giftCards",
+			"dashboard",
 			"closing",
 		]);
 	});
@@ -111,8 +120,20 @@ describe("rail capability gating", () => {
 			externalDocumentCheckout: false,
 			saldo: false,
 			closingShift: false,
+			giftCards: false,
+			dashboard: false,
 		});
-		expect(idsOf(none)).toEqual(["sale", "browse", "expense", "drafts", "invoices", "return"]);
+		expect(idsOf(none)).toEqual([
+			"sale",
+			"browse",
+			"expense",
+			"drafts",
+			"invoices",
+			"return",
+			"payments",
+			"purchase",
+			"barcode",
+		]);
 	});
 });
 
@@ -151,12 +172,42 @@ describe("rail offline contract", () => {
 		const blocked = RAIL_DESTINATIONS.filter(isOfflineBlocked).map((d) => d.id);
 		expect(blocked.sort()).toEqual([
 			"closing",
+			"dashboard",
 			"drafts",
+			"giftCards",
 			"invoices",
+			"payments",
+			"purchase",
 			"recharge",
 			"return",
 			"serviceOrder",
 		]);
+	});
+
+	it("keeps the hamburger's pages in the tools group, absent when gated", () => {
+		const visible = visibleRailDestinations(gates());
+		expect(idsOf(railDestinationsInGroup(visible, "tools"))).toEqual([
+			"payments",
+			"purchase",
+			"barcode",
+			"giftCards",
+			"dashboard",
+		]);
+		// Gated = absent, not disabled (R3): a cashier never sees Tablero, a
+		// profile without gift cards never sees Monedero.
+		const cashier = visibleRailDestinations(gates({ dashboard: false, giftCards: false }));
+		expect(idsOf(railDestinationsInGroup(cashier, "tools"))).toEqual([
+			"payments",
+			"purchase",
+			"barcode",
+		]);
+		// Every tool explains itself in the flyout; no pill ever needs to.
+		for (const tool of railDestinationsInGroup(visible, "tools")) {
+			expect(tool.hint, `${tool.id} has no hint`).toBeTruthy();
+		}
+		for (const pill of railDestinationsInGroup(visible, "primary")) {
+			expect(pill.hint).toBeUndefined();
+		}
 	});
 
 	it("keeps queued and cached surfaces reachable", () => {

@@ -57,6 +57,18 @@ export const useUIStore = defineStore("ui", () => {
   const activeView = ref<PosActiveView>("items");
   const paymentDialogOpen = ref(false);
 
+  /**
+   * The register shell is showing the rail (roadmap §17.7). Published by
+   * Pos.vue so chrome OUTSIDE the shell — the navbar's hamburger — can stand
+   * down: with the rail on screen the drawer is a second list of the same
+   * destinations. False whenever the shell is not mounted, so pages with no
+   * rail keep their drawer.
+   */
+  const railLayout = ref(false);
+  const setRailLayout = (value: boolean) => {
+    railLayout.value = Boolean(value);
+  };
+
   const invoiceManagementDialog = ref(false);
   const invoiceManagementTargetTab = ref<string>("history");
   const invoiceManagementDraftSource = ref<string>("invoice");
@@ -401,6 +413,8 @@ export const useUIStore = defineStore("ui", () => {
     freezeMessage,
     activeView,
     paymentDialogOpen,
+    railLayout,
+    setRailLayout,
     invoiceManagementDialog,
     invoiceManagementTargetTab,
     invoiceManagementDraftSource,

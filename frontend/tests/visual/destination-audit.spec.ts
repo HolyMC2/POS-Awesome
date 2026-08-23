@@ -27,7 +27,10 @@ test.use({ actionTimeout: 8_000, navigationTimeout: 45_000 });
 /** Registry ids, in rail order. `floor` is gated off on a retail preset. */
 const DESTINATIONS = [
 	"sale", "browse", "floor", "serviceOrder", "expense",
-	"drafts", "invoices", "return", "recharge", "closing",
+	"drafts", "invoices", "return", "recharge",
+	// The tools group lives behind the "More" pill; the loop opens it first.
+	"payments", "purchase", "barcode", "giftCards", "dashboard",
+	"closing",
 ];
 
 test("every rail destination keeps the shell", async ({ page }) => {
@@ -74,8 +77,19 @@ test("every rail destination keeps the shell", async ({ page }) => {
 	const findings: unknown[] = [];
 
 	for (const id of DESTINATIONS) {
-		const item = page.locator(`[data-rail-destination="${id}"]`).first();
-		const onRail = await item.isVisible().catch(() => false);
+		let item = page.locator(`[data-rail-destination="${id}"]`).first();
+		let onRail = await item.isVisible().catch(() => false);
+		if (!onRail) {
+			// A tool sits in the "More" flyout; open it and look again.
+			const more = page.locator('[data-testid="rail-tools"]').first();
+			if (await more.isVisible().catch(() => false)) {
+				await more.click().catch(() => {});
+				await page.waitForTimeout(600);
+				item = page.locator(`[role="menu"] [data-rail-destination="${id}"]`).first();
+				onRail = await item.isVisible().catch(() => false);
+				if (!onRail) await page.keyboard.press("Escape").catch(() => {});
+			}
+		}
 		if (!onRail) {
 			findings.push({ id, onRail: false, note: "absent from this preset's rail" });
 			continue;

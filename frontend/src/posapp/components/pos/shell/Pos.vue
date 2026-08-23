@@ -434,6 +434,8 @@ import ComboSuggestionStrip from "../combos/ComboSuggestionStrip.vue";
 import { useCatalogDrawer } from "../../../composables/pos/shell/useCatalogDrawer";
 import { resolveBandState } from "../../../composables/pos/shell/bandState";
 import { useDestinationRouting } from "../../../composables/pos/shell/useDestinationRouting";
+import { useEmployeeStore } from "../../../stores/employeeStore";
+import { getDashboardAccessCached } from "../../../services/dashboardService";
 import { buildCombosCategory, buildSuggestions } from "../../../composables/pos/combos/comboCatalog";
 import { useOnlineStatus } from "../../../composables/core/useOnlineStatus";
 import OpeningDialog from "../shift/OpeningDialog.vue";
@@ -851,6 +853,10 @@ export default {
 		// boundary the dock is the nav, and drawing both would be two answers
 		// to one question.
 		const railVisible = computed(() => !useCompactPosSwitcher.value);
+		// Published to the store so the navbar can drop its hamburger while the
+		// rail is the nav, and pick it back up the moment the shell unmounts.
+		watch(railVisible, (visible) => uiStore.setRailLayout(visible), { immediate: true });
+		onBeforeUnmount(() => uiStore.setRailLayout(false));
 
 		// Badge counts with no source yet. Deliberately refs at 0 rather than a
 		// fetch invented here: `resolveBadge` renders nothing for 0, so the rail
@@ -860,6 +866,25 @@ export default {
 		const serviceOrderOpenCount = ref(0);
 		const draftInvoicesCount = ref(0);
 
+		// Supervisor access for the dashboard: the cashier flag answers at once,
+		// the server probe (the same one the dashboard route asks) corrects it.
+		// Rail gates are ABSENT-not-disabled (R3), so a plain cashier never sees
+		// Tablero at all.
+		const employeeStore = useEmployeeStore();
+		const dashboardProbeAllowed = ref(null);
+		const supervisorAccess = computed(() =>
+			dashboardProbeAllowed.value !== null
+				? dashboardProbeAllowed.value
+				: Boolean(employeeStore.currentCashier?.is_supervisor),
+		);
+		getDashboardAccessCached()
+			.then((result) => {
+				dashboardProbeAllowed.value = Boolean(result?.allowed);
+			})
+			.catch(() => {
+				// Probe unreachable (offline): the cashier flag stands.
+			});
+
 		const railGates = computed(() => ({
 			floor: floorEnabled.value,
 			externalDocumentCheckout: Boolean(vertical.externalDocumentCheckout),
@@ -867,6 +892,8 @@ export default {
 			// A profile that hides the closing shift genuinely cannot close from
 			// here; the rail must not offer a door that is bricked up.
 			closingShift: !parseBooleanSetting(posProfile.value?.posa_hide_closing_shift),
+			giftCards: parseBooleanSetting(posProfile.value?.posa_use_gift_cards),
+			dashboard: supervisorAccess.value,
 		}));
 
 		// A hosted flow (Borradores, Facturas, Devolución, Orden, Recarga) or a
@@ -880,6 +907,7 @@ export default {
 				shiftOpen: shiftOpen.value,
 				hasCapability: (capability) => vertical.has(capability),
 				hasProfileFlag: (flag) => Boolean(posProfile.value?.[flag]),
+				isSupervisor: supervisorAccess.value,
 			}),
 			{
 				setPanelView: (view) => applySelectorView(view),

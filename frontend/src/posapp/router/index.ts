@@ -12,6 +12,7 @@ import { getDashboardAccessCached } from "../services/dashboardService";
 import OfflineRouteUnavailable from "../components/system/OfflineRouteUnavailable.vue";
 import { pinia } from "../stores";
 import { useUIStore } from "../stores/uiStore";
+import { useEmployeeStore } from "../stores/employeeStore";
 import { useVerticalStore } from "../stores/verticalStore";
 import {
 	createDestinationGuard,
@@ -83,6 +84,10 @@ function buildActivationContext(): ActivationContext {
 		},
 		hasProfileFlag: (flag: string) =>
 			Boolean((ui.posProfile as Record<string, unknown> | null)?.[flag]),
+		// The synchronous half of the dashboard rule. The server probe
+		// (`requiresSupervisor` below) still runs for the dashboard's own
+		// route; this answers the rail and the guard without a round trip.
+		isSupervisor: Boolean(useEmployeeStore(pinia).currentCashier?.is_supervisor),
 	};
 }
 
@@ -142,10 +147,22 @@ const HAND_WRITTEN_SHELL_PATHS = new Set(["/pos", "/floor"]);
  */
 const LEGACY_DESTINATION_ROUTE_META: Record<
 	string,
-	{ title: string; loadingMessage: string }
+	{ title: string; loadingMessage: string; requiresSupervisor?: true }
 > = {
 	expense: { title: "Cash Movement", loadingMessage: "Loading cash movement..." },
 	closing: { title: "Close Shift", loadingMessage: "Loading close shift..." },
+	// The tools group (2026-08-22): five more pages that used to mount alone.
+	payments: { title: "Payments", loadingMessage: "Loading payments..." },
+	purchase: { title: "Orders", loadingMessage: "Loading orders..." },
+	barcode: { title: "Barcode Printing", loadingMessage: "Loading barcode printing..." },
+	giftCards: { title: "Gift Cards", loadingMessage: "Loading gift cards..." },
+	// The probe-backed refusal the route already had; the rail's gate and the
+	// destination guard add the synchronous half (`access: "supervisor"`).
+	dashboard: {
+		title: "Awesome Dashboard",
+		loadingMessage: "Loading dashboard...",
+		requiresSupervisor: true,
+	},
 };
 
 function buildDestinationRoutes() {
@@ -203,36 +220,6 @@ const routes = [
 	// `buildDestinationRoutes`.
 	...buildDestinationRoutes(),
 	{
-		path: "/orders",
-		component: () =>
-			import("../components/pos/purchase/PurchaseOrders.vue"),
-		meta: { title: "Orders", layout: "default", loadingMessage: "Loading orders..." },
-	},
-	{
-		path: "/payments",
-		component: () => import("../components/pos/shell/PayView.vue"),
-		meta: { title: "Payments", layout: "default", loadingMessage: "Loading payments..." },
-	},
-	{
-		path: "/gift-cards",
-		component: () => import("../components/pos/wallet/GiftCardsView.vue"),
-		meta: {
-			title: "Gift Cards",
-			layout: "default",
-			loadingMessage: "Loading gift cards...",
-		},
-	},
-	{
-		path: "/dashboard",
-		component: () => import("@/posapp/components/reports/Reports.vue"),
-		meta: {
-			title: "Awesome Dashboard",
-			layout: "default",
-			loadingMessage: "Loading dashboard...",
-			requiresSupervisor: true,
-		},
-	},
-	{
 		path: "/reports",
 		component: () => import("@/posapp/components/reports/Reports.vue"),
 		meta: {
@@ -240,15 +227,6 @@ const routes = [
 			layout: "default",
 			loadingMessage: "Loading reports...",
 			requiresSupervisor: true,
-		},
-	},
-	{
-		path: "/barcode",
-		component: () => import("../components/pos/shell/BarcodePrinting.vue"),
-		meta: {
-			title: "Barcode Printing",
-			layout: "default",
-			loadingMessage: "Loading barcode printing...",
 		},
 	},
 	{

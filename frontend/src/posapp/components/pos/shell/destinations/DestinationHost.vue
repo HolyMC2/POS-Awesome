@@ -2,7 +2,9 @@
 	<section
 		ref="surfaceEl"
 		class="destination-host"
+		:class="{ 'destination-host--page': surfaceKind === 'page' }"
 		:data-testid="testId"
+		:data-destination-surface="surfaceKind"
 		:data-destination="destinationId"
 		:data-destination-state="state"
 		:aria-label="label"
@@ -100,6 +102,8 @@ provide(DESTINATION_SURFACE, {
 });
 
 const def = computed(() => getDestination(props.destinationId) ?? null);
+/** `page` for the tools views (they scroll as a page); `sheet` otherwise. */
+const surfaceKind = computed(() => (def.value?.surface === "page" ? "page" : "sheet"));
 const label = computed(() => (def.value ? props.t(def.value.labelKey) : ""));
 
 // Derived from the registry, never hand-written here: the rail stamps
@@ -175,6 +179,14 @@ const refusalBody = computed(() => {
 	min-height: 0;
 	position: relative;
 	overflow: hidden;
+}
+
+/* A hosted PAGE keeps its own height (PayView sizes itself to the viewport,
+ * the dashboard stacks cards) and the host becomes its scrollport. The sheet
+ * discipline — one inner scrollport, the host clips — stays for the flows. */
+.destination-host--page {
+	overflow: auto;
+	overscroll-behavior: contain;
 }
 
 .destination-host__refusal,
