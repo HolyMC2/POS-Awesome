@@ -2599,3 +2599,46 @@ Customer tax details,Datos fiscales del cliente
 On file for this customer,En el expediente de este cliente
 Type the number again,Escribe el número otra vez
 The numbers do not match,Los números no coinciden
+Sold today,Vendido hoy
+Receivable,Por cobrar
+Refunded,Devuelto
+No sales yet today,Sin ventas todavía hoy
+{0} tickets · average {1},{0} tickets · ticket medio {1}
+Nothing outstanding,Nada por cobrar
+{0} invoices · none overdue,{0} facturas · ninguna vencida
+{0} invoices · {1} overdue,{0} facturas · {1} vencidas
+No refunds,Sin devoluciones
+{0} refunds · all against a ticket,{0} devoluciones · todas con ticket
+{0} refunds · {1} with no ticket,{0} devoluciones · {1} sin ticket
+From,Desde
+To,Hasta
+Every date,Todas las fechas
+Invoice segments,Secciones de facturas
+Customer name,Nombre del cliente
+Choose a ticket to see it here,Elige un ticket para verlo aquí
+Ticket {0},Ticket {0}
+Change to repair,Cambio por reparar
+Items · {0} lines,Artículos · {0} líneas
+Balance due,Saldo pendiente
+Press Enter to read this ticket,Pulsa Enter para leer este ticket
+Collect balance,Cobrar saldo
+Repair change,Reparar cambio
+Hour,Hora
+Reading the register…,Leyendo la caja…
+Nothing on this list yet,Nada en esta lista todavía
+↑↓ moves · Enter opens · Home and End jump,↑↓ recorre · Enter abre · Inicio y Fin saltan
+{0} of the {1} loaded,{0} de las {1} cargadas
+{0}–{1} of {2},{0}–{1} de {2}
+Previous page,Página anterior
+Next page,Página siguiente
+Shift,Turno
+Pending invoices,Pendientes
+By date,Por fecha
+By amount,Por monto
+Draft invoice,Borrador
+Returned invoice,Devuelta
+Overdue invoice,Vencida
+Paid invoice,Pagada
+Partly paid invoice,Parcial
+Credit note issued,Nota de crédito
+Unpaid invoice,Pendiente

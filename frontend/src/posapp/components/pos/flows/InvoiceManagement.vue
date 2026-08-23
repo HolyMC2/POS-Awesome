@@ -5,9 +5,100 @@
 			v-bind="dialogProps"
 			scrollable
 			:theme="isDarkTheme ? 'dark' : 'light'"
-			content-class="invoice-management-dialog-content"
+			:content-class="[
+				'invoice-management-dialog-content',
+				ledgerMode ? 'invoice-ledger-dialog-content' : '',
+			]"
 		>
+			<!--
+				THE LEDGER (build plan §15). One branch, taken only while the rail
+				HOSTS this sheet — `useHostedSheet` already knows, and publishes it
+				as `ledgerMode`. Everything below the rail boundary keeps the tab
+				layout in the `v-else` card, untouched.
+
+				The engine is not re-implemented here. Every binding is an existing
+				`data` field or an existing computed, and every listener lands on a
+				method that was already written: this is a second CHROME over the
+				same 3,283 lines, which is the rule §14.4 set for Cobro.
+			-->
+			<v-card v-if="ledgerMode" class="pos-themed-card invoice-ledger-card" variant="flat">
+				<InvoiceLedgerSurface
+					:destination-id="ledgerDestinationId"
+					:active-tab="activeTab"
+					:page-size="pageSize"
+					:date-from="historyDateFrom"
+					:date-to="historyDateTo"
+					:loading="loading"
+					:detail="selectedInvoiceDetail"
+					:employees="employeeStore.terminalEmployees"
+					:current-cashier="currentCashier"
+					:format-currency="formatCurrency"
+					:format-float="formatFloat"
+					:currency-symbol="currencySymbol(posProfile && posProfile.currency)"
+					:is-repair-candidate="isRepairCandidate"
+					:draft-actions-for="draftActions"
+					:draft-action-label="draftActionLabel"
+					:can-delete-draft="canDeleteActiveDraftSource"
+					:repair-busy="repairChangeLoading"
+					:offline="isOffline()"
+					:collections="{
+						history: {
+							page: paginatedHistoryInvoices,
+							total: filteredHistoryInvoices.length,
+							pageNo: tabPages.history,
+							pageCount: historyPageCount,
+							loaded: !loading && posProfile ? historyInvoices : null,
+						},
+						partial: {
+							page: paginatedUnpaidInvoices,
+							total: filteredUnpaidInvoices.length,
+							pageNo: tabPages.partial,
+							pageCount: partialPageCount,
+							loaded: !loading && posProfile ? unpaidInvoices : null,
+						},
+						drafts: {
+							page: paginatedDraftInvoices,
+							total: filteredDraftInvoices.length,
+							pageNo: tabPages.drafts,
+							pageCount: draftsPageCount,
+							loaded: !loading && posProfile ? draftRecords : null,
+						},
+						returns: {
+							page: paginatedReturnInvoices,
+							total: filteredReturnInvoices.length,
+							pageNo: tabPages.returns,
+							pageCount: returnsPageCount,
+							loaded: null,
+						},
+					}"
+					@tab="activeTab = $event"
+					@filters="
+						historySearch = $event.search;
+						partialSearch = $event.search;
+						draftSearch = $event.search;
+						returnSearch = $event.search;
+						historyDateFrom = $event.from;
+						historyDateTo = $event.to;
+						partialDateFrom = $event.from;
+						partialDateTo = $event.to;
+						draftDateFrom = $event.from;
+						draftDateTo = $event.to;
+						returnDateFrom = $event.from;
+						returnDateTo = $event.to
+					"
+					@page="setTabPage($event.tab, $event.page)"
+					@open="viewInvoice($event)"
+					@print="printInvoice($event)"
+					@return="createReturn($event)"
+					@collect="openAddPayment($event)"
+					@delete-draft="deleteDraft($event)"
+					@repair="repairChangeAllocation($event)"
+					@draft-action="runDraftAction($event.invoice, $event.action)"
+				/>
+			</v-card>
+
 			<v-card
+				v-else
 				:class="[
 					'pos-themed-card invoice-management-card',
 					isDarkTheme ? 'invoice-management-card--dark' : 'invoice-management-card--light',
@@ -1229,7 +1320,15 @@
 		</v-dialog>
 	</v-row>
 
+	<!--
+		On the hosted surface the detail PANEL replaces this dialog (§15.2), so
+		it does not mount. `viewInvoice` is untouched and still sets
+		`detailDialog` — it simply has no dialog to raise here, and the panel
+		reads the `selectedInvoiceDetail` it fetched. Below the rail boundary
+		the floating modal keeps the dialog exactly as it was.
+	-->
 	<v-dialog
+		v-if="!ledgerMode"
 		v-model="detailDialog"
 		v-bind="detailDialogProps"
 		scrollable
@@ -1408,6 +1507,7 @@ import { notifyQzPrintFallback, printDocumentViaQz } from "../../../services/qzT
 import { useHostedSheet } from "../../../composables/pos/shell/useHostedSheet";
 import { isOffline } from "../../../../offline/index";
 import DocumentSourceSelector from "../shared/DocumentSourceSelector.vue";
+import InvoiceLedgerSurface from "./ledger/InvoiceLedgerSurface.vue";
 import {
 	canDeleteDocumentSourceRecord,
 	commitDocumentFlowAction,
@@ -1428,6 +1528,7 @@ export default {
 	mixins: [format],
 	components: {
 		DocumentSourceSelector,
+		InvoiceLedgerSurface,
 	},
 	// `close` is only ever emitted while hosted as a rail destination — see
 	// `useHostedSheet`. The floating modal closes itself through the store.
@@ -1479,6 +1580,12 @@ export default {
 			emit,
 		});
 		return {
+			// The ledger is the chrome the RAIL gets; the floating modal keeps
+			// the tabs. `useHostedSheet` already answered both questions, and
+			// re-deriving either one here would be a second source of truth
+			// about which surface this instance is.
+			ledgerMode: hosted.isHosted,
+			ledgerDestinationId: hosted.destinationId,
 			uiStore,
 			invoiceStore,
 			customersStore,
@@ -2748,6 +2855,34 @@ export default {
 	display: flex;
 	flex-direction: column;
 	max-height: min(94vh, 1040px);
+}
+
+/* Vuetify gives `.v-dialog > .v-overlay__content` a 24 px margin and a
+ * `calc(100% - 48px)` box. Right for a modal floating over the sale, wrong for
+ * a SURFACE: the ledger IS the destination, so it takes the whole host and the
+ * rail sits flush against it, the way the artboard draws it. */
+.invoice-ledger-dialog-content {
+	margin: 0 !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	height: 100% !important;
+	max-height: 100% !important;
+}
+
+/* The ledger card is the HOSTED chrome and takes the whole destination area:
+ * `useDialogFullscreen` already made the overlay `contained` inside
+ * `.destination-host`, so a max-height here would leave a gap the rail's
+ * background shows through. No gradient wash either — the ledger's own
+ * surface tokens carry it, and the tabs' two radial tints were decoration for
+ * a modal floating over the sale. */
+.invoice-ledger-card {
+	background: var(--reg-surface-sunken, var(--pos-bg-secondary, #f8f9fa)) !important;
+	color: var(--pos-text-primary) !important;
+	border: 0;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
 }
 
 .invoice-management-card--dark {
