@@ -63,233 +63,257 @@
 			/>
 		</div>
 
-		<!-- The tender, chosen BEFORE the primary action (`Main.dc.html` nodes
-		     127–131). The artboard draws this row inside the band, left of
-		     PAGAR; the band is not this card's to edit, so it takes the last
-		     row before it — the same place in the operator's reading order, and
-		     directly above PAY on a phone, where no band mounts at all.
+		<!-- THE ORDER IS THE ARTBOARD'S, read top to bottom (`Main.dc.html`
+		     nodes 108–131):
 
-		     It ARMS the payment screen and nothing else. Tendered amount,
-		     change due, split payments and submission all stay exactly where
-		     they were; what moved earlier is a choice, not money.
+		         6 líneas · 9 piezas   ·  F3 Borrador  F5 Factura  Esc Cancelar
+		         Subtotal · IVA 16 % · Descuento          Cobrar con: …
+		         → PAGAR (the band's, below this card)
 
-		     There is no fixed four. The chips are this register's own payment
-		     methods, so a carnicería with cash only renders ONE and no dead
-		     siblings. `Mixto` is not among them because it is not a method: it
-		     is the empty selection, reached by tapping the lit chip off, and it
-		     leaves the payment screen exactly as it opens today — every method
-		     listed, every amount open, which is already the split surface. -->
-		<div
-			v-if="tenderChips.length"
-			class="tender-strip"
-			role="group"
-			:aria-label="__('Method')"
-			data-testid="tender-strip"
+		     The counts-and-chips line leads the footer only where the band
+		     below carries PAGAR. Where no band mounts — phone, lean-vertical —
+		     that strip IS the primary, so it moves to the bottom instead and
+		     the tender stays immediately above it.
+
+		     One rule produces both arrangements: THE TENDER IS ADJACENT TO THE
+		     BUTTON IT ARMS. That adjacency is the whole argument for choosing
+		     the tender early — PAGAR then completes a decision already made —
+		     and a tender stranded above the totals reads as a filter on them
+		     instead.
+
+		     Bound through objects rather than written out twice: the strip
+		     takes eleven props and ten listeners, and two hand-copied
+		     invocations of that are two that drift. -->
+		<InvoiceActionButtons
+			v-if="bandOwnsSaleLane"
+			v-bind="actionStripProps"
+			v-on="actionStripHandlers"
+		/>
+
+		<v-alert
+			v-if="showReturnDiscountAlert"
+			density="compact"
+			type="info"
+			variant="tonal"
+			class="summary-field summary-field--alert"
 		>
-			<span class="tender-strip__label" aria-hidden="true">{{ __("Method") }}</span>
-			<button
-				v-for="chip in tenderChips"
-				:key="chip.mode"
-				type="button"
-				class="tender-strip__chip"
-				:class="{ 'tender-strip__chip--armed': chip.mode === armedTender }"
-				:aria-pressed="chip.mode === armedTender ? 'true' : 'false'"
-				data-testid="tender-chip"
-				:data-tender-mode="chip.mode"
-				@click="selectTender(chip.mode)"
-			>
-				{{ chip.mode }}
-			</button>
-		</div>
+			{{ __("Prorated return discount") }}: {{ formatRatio(return_discount_meta.ratio) }} -
+			{{ __("Original") }}: {{ formatCurrency(return_discount_meta.original_discount) }},
+			{{ __("Applied") }}:
+			{{ formatCurrency(return_discount_meta.prorated_discount) }}
+		</v-alert>
 
-		<v-row dense class="summary-content">
-			<v-col
-				v-if="!useCompactSaleDock || showReturnDiscountAlert"
-				cols="12"
-				:md="useCompactSaleDock ? 12 : 7"
+		<div v-if="!useCompactSaleDock || tenderChips.length" class="summary-money-row">
+			<div
+				v-if="!useCompactSaleDock"
+				class="summary-hero"
+				:class="{ 'summary-hero--band-owns-lane': bandOwnsSaleLane }"
+				:data-band-owns-lane="bandOwnsSaleLane ? 'true' : 'false'"
 			>
-				<v-alert
-					v-if="showReturnDiscountAlert"
-					density="compact"
-					type="info"
-					variant="tonal"
-					class="summary-field summary-field--alert"
-				>
-					{{ __("Prorated return discount") }}: {{ formatRatio(return_discount_meta.ratio) }} -
-					{{ __("Original") }}: {{ formatCurrency(return_discount_meta.original_discount) }},
-					{{ __("Applied") }}:
-					{{ formatCurrency(return_discount_meta.prorated_discount) }}
-				</v-alert>
+				<!-- TWO SHAPES, and which one renders is decided by who owns the
+				     lane — not by CSS weight on a single shape, which is what
+				     shipped first and what the screenshot caught.
 
+				     Demoting the figure was not enough. Under an "ACTIVE SALE"
+				     eyebrow, an unlabelled amount reads as a total however small
+				     it is set, so the register showed the band's total, this
+				     figure, and the discount stacked together — three money
+				     numbers where §17.7 allows one. The fix is to say what the
+				     number IS: `Main.dc.html` writes "Subtotal $973.28" as a
+				     label/value pair, and a labelled subtotal cannot be mistaken
+				     for the total no matter how it is typeset.
+
+				     `qty` is gone from here on purpose too: the count strip below
+				     the cart already says "6 líneas · 9 piezas", and that is the
+				     artboard's home for it. -->
 				<div
-					v-if="!useCompactSaleDock"
-					class="summary-hero"
-					:class="{ 'summary-hero--band-owns-lane': bandOwnsSaleLane }"
-					:data-band-owns-lane="bandOwnsSaleLane ? 'true' : 'false'"
+					v-if="bandOwnsSaleLane"
+					class="summary-breakdown"
+					data-testid="summary-breakdown"
 				>
-					<!-- TWO SHAPES, and which one renders is decided by who owns the
-					     lane — not by CSS weight on a single shape, which is what
-					     shipped first and what the screenshot caught.
-
-					     Demoting the figure was not enough. Under an "ACTIVE SALE"
-					     eyebrow, an unlabelled amount reads as a total however small
-					     it is set, so the register showed the band's total, this
-					     figure, and the discount stacked together — three money
-					     numbers where §17.7 allows one. The fix is to say what the
-					     number IS: `Main.dc.html` writes "Subtotal $973.28" as a
-					     label/value pair, and a labelled subtotal cannot be mistaken
-					     for the total no matter how it is typeset.
-
-					     `qty` is gone from here on purpose too: the count strip below
-					     the cart already says "6 líneas · 9 piezas", and that is the
-					     artboard's home for it. -->
-					<div
-						v-if="bandOwnsSaleLane"
-						class="summary-breakdown"
-						data-testid="summary-breakdown"
-					>
-						<span class="summary-breakdown__pair">
-							<span class="summary-breakdown__label">{{ __("Subtotal") }}</span>
-							<span
-								class="summary-breakdown__value"
-								data-testid="summary-subtotal"
-								data-money-role="breakdown"
-								>{{ currencySymbol(displayCurrency) }}{{ formatCurrency(subtotal) }}</span
-							>
-						</span>
-						<span class="summary-breakdown__pair">
-							<span class="summary-breakdown__label">{{ __("Discount") }}</span>
-							<span class="summary-breakdown__value" data-money-role="breakdown"
-								>{{ currencySymbol(displayCurrency)
-								}}{{ formatCurrency(total_items_discount_amount) }}</span
-							>
-						</span>
-					</div>
-					<!-- No band below (a lean-vertical preset at desktop width): this
-					     card IS the lane, so the figure keeps its weight and carries
-					     the total role. -->
-					<div v-else class="summary-hero__copy">
-						<span class="summary-hero__eyebrow">{{ __("Active sale") }}</span>
-						<strong
-							class="summary-hero__amount"
+					<span class="summary-breakdown__pair">
+						<span class="summary-breakdown__label">{{ __("Subtotal") }}</span>
+						<span
+							class="summary-breakdown__value"
 							data-testid="summary-subtotal"
-							data-money-role="total"
+							data-money-role="breakdown"
+							>{{ currencySymbol(displayCurrency) }}{{ formatCurrency(netSubtotal) }}</span
 						>
-							{{ currencySymbol(displayCurrency) }}{{ formatCurrency(subtotal) }}
-						</strong>
-						<div class="summary-hero__meta">
-							<span
-								>{{ formatFloat(total_qty, hide_qty_decimals ? 0 : undefined) }}
-								{{ __("qty") }}</span
-							>
-							<span>
-								{{ currencySymbol(displayCurrency)
-								}}{{ formatCurrency(total_items_discount_amount) }}
-								{{ __("discount") }}
-							</span>
-						</div>
-					</div>
-
-					<!-- The field stays (muscle memory, Alt+A); the button is the
-					     clearer target a busy counter needs — §17.2. -->
-					<v-btn
-						v-if="pos_profile.posa_allow_user_to_edit_additional_discount && !discount_percentage_offer_name"
-						class="summary-discount-btn"
-						variant="tonal"
-						prepend-icon="mdi-tag-minus"
-						data-testid="open-discount-dialog"
-						@click="discountDialogOpen = true"
-					>{{ __("Discount") }}</v-btn>
-
-					<DiscountDialog
-						v-model="discountDialogOpen"
-						:base-total="Number(subtotal) || 0"
-						:currency-symbol="currencySymbol(pos_profile.currency)"
-						:initial-mode="pos_profile.posa_use_percentage_discount ? 'percentage' : 'amount'"
-						:initial-percentage="additional_discount_percentage"
-						:initial-amount="additional_discount"
-						@apply="applyDiscountFromDialog"
-						@clear="clearDiscountFromDialog"
-					/>
-
-					<div class="summary-hero__field-wrap">
-						<v-text-field
-							v-if="!pos_profile.posa_use_percentage_discount"
-							ref="additionalDiscountField"
-							v-model="additionalDiscountDisplay"
-							@update:model-value="handleAdditionalDiscountUpdate"
-							@focus="handleAdditionalDiscountFocus"
-							@blur="handleAdditionalDiscountBlur"
-							:label="frappe._('Additional Discount')"
-							prepend-inner-icon="mdi-cash-minus"
-							variant="solo"
-							density="compact"
-							color="primary"
-							:prefix="currencySymbol(pos_profile.currency)"
-							inputmode="decimal"
-							enterkeyhint="done"
-							:disabled="
-								!pos_profile.posa_allow_user_to_edit_additional_discount ||
-								!!discount_percentage_offer_name
-							"
-							class="summary-field summary-field--dock"
-						/>
-
-						<v-text-field
-							v-else
-							ref="additionalDiscountField"
-							v-model="additionalDiscountPercentageDisplay"
-							@update:model-value="handleAdditionalDiscountPercentageUpdate"
-							@change="$emit('update_discount_umount')"
-							@focus="handleAdditionalDiscountPercentageFocus"
-							@blur="handleAdditionalDiscountPercentageBlur"
-							:rules="[isNumber]"
-							:label="frappe._('Additional Discount %')"
-							suffix="%"
-							prepend-inner-icon="mdi-percent"
-							variant="solo"
-							density="compact"
-							color="primary"
-							inputmode="decimal"
-							enterkeyhint="done"
-							:disabled="
-								!pos_profile.posa_allow_user_to_edit_additional_discount ||
-								!!discount_percentage_offer_name
-							"
-							class="summary-field summary-field--dock"
-						/>
+					</span>
+					<!-- The line a Mexican operator actually checks, and the one
+					     the breakdown was missing. Its label is the tenant's own
+					     (`IVA 16 %`, from the tax row's description and rate — see
+					     saleTaxBreakdown.ts), never a constant, because the rate
+					     varies by ticket and by country. Absent, not zeroed, when
+					     the register cannot work it out: `IVA $0.00` is a claim
+					     about this ticket. -->
+					<span v-if="taxBreakdown" class="summary-breakdown__pair">
+						<span class="summary-breakdown__label" data-testid="summary-tax-label">{{
+							taxBreakdown.label
+						}}</span>
+						<span
+							class="summary-breakdown__value"
+							data-testid="summary-tax"
+							data-money-role="tax"
+							>{{ currencySymbol(displayCurrency)
+							}}{{ formatCurrency(taxBreakdown.amount) }}</span
+						>
+					</span>
+					<span class="summary-breakdown__pair">
+						<span class="summary-breakdown__label">{{ __("Discount") }}</span>
+						<span class="summary-breakdown__value" data-money-role="breakdown"
+							>{{ currencySymbol(displayCurrency)
+							}}{{ formatCurrency(total_items_discount_amount) }}</span
+						>
+					</span>
+				</div>
+				<!-- No band below (a lean-vertical preset at desktop width): this
+				     card IS the lane, so the figure keeps its weight and carries
+				     the total role. -->
+				<div v-else class="summary-hero__copy">
+					<span class="summary-hero__eyebrow">{{ __("Active sale") }}</span>
+					<strong
+						class="summary-hero__amount"
+						data-testid="summary-subtotal"
+						data-money-role="total"
+					>
+						{{ currencySymbol(displayCurrency) }}{{ formatCurrency(subtotal) }}
+					</strong>
+					<div class="summary-hero__meta">
+						<span
+							>{{ formatFloat(total_qty, hide_qty_decimals ? 0 : undefined) }}
+							{{ __("qty") }}</span
+						>
+						<span>
+							{{ currencySymbol(displayCurrency)
+							}}{{ formatCurrency(total_items_discount_amount) }}
+							{{ __("discount") }}
+						</span>
 					</div>
 				</div>
-			</v-col>
 
-			<v-col cols="12" :md="useCompactSaleDock ? 12 : 5" class="invoice-summary-actions">
-				<InvoiceActionButtons
-					:pos_profile="pos_profile"
-					:band-owns-primary="bandOwnsSaleLane"
-					:line-summary="lineSummary"
-					:saveLoading="saveLoading"
-					:loadDraftsLoading="loadDraftsLoading"
-					:selectOrderLoading="selectOrderLoading"
-					:selectPurchaseOrderLoading="selectPurchaseOrderLoading"
-					:cancelLoading="cancelLoading"
-					:invoiceManagementLoading="invoiceManagementLoading"
-					:returnsLoading="returnsLoading"
-					:printLoading="printLoading"
-					:paymentLoading="paymentLoading"
-					:customerDisplayLoading="customerDisplayLoading"
-					@save-and-clear="handleSaveAndClear"
-					@load-drafts="handleLoadDrafts"
-					@select-order="handleSelectOrder"
-					@cancel-sale="handleCancelSale"
-					@open-invoice-management="handleOpenInvoiceManagement"
-					@open-returns="handleOpenReturns"
-					@print-draft="handlePrintDraft"
-					@show-payment="handleShowPayment"
-					@open-customer-display="handleOpenCustomerDisplay"
-					@open-saldo-picker="$emit('open-saldo-picker')"
+				<!-- The field stays (muscle memory, Alt+A); the button is the
+				     clearer target a busy counter needs — §17.2. -->
+				<v-btn
+					v-if="pos_profile.posa_allow_user_to_edit_additional_discount && !discount_percentage_offer_name"
+					class="summary-discount-btn"
+					variant="tonal"
+					prepend-icon="mdi-tag-minus"
+					data-testid="open-discount-dialog"
+					@click="discountDialogOpen = true"
+				>{{ __("Discount") }}</v-btn>
+
+				<DiscountDialog
+					v-model="discountDialogOpen"
+					:base-total="Number(subtotal) || 0"
+					:currency-symbol="currencySymbol(pos_profile.currency)"
+					:initial-mode="pos_profile.posa_use_percentage_discount ? 'percentage' : 'amount'"
+					:initial-percentage="additional_discount_percentage"
+					:initial-amount="additional_discount"
+					@apply="applyDiscountFromDialog"
+					@clear="clearDiscountFromDialog"
 				/>
-			</v-col>
-		</v-row>
+
+				<div class="summary-hero__field-wrap">
+					<v-text-field
+						v-if="!pos_profile.posa_use_percentage_discount"
+						ref="additionalDiscountField"
+						v-model="additionalDiscountDisplay"
+						@update:model-value="handleAdditionalDiscountUpdate"
+						@focus="handleAdditionalDiscountFocus"
+						@blur="handleAdditionalDiscountBlur"
+						:label="frappe._('Additional Discount')"
+						prepend-inner-icon="mdi-cash-minus"
+						variant="solo"
+						density="compact"
+						color="primary"
+						:prefix="currencySymbol(pos_profile.currency)"
+						inputmode="decimal"
+						enterkeyhint="done"
+						:disabled="
+							!pos_profile.posa_allow_user_to_edit_additional_discount ||
+							!!discount_percentage_offer_name
+						"
+						class="summary-field summary-field--dock"
+					/>
+
+					<v-text-field
+						v-else
+						ref="additionalDiscountField"
+						v-model="additionalDiscountPercentageDisplay"
+						@update:model-value="handleAdditionalDiscountPercentageUpdate"
+						@change="$emit('update_discount_umount')"
+						@focus="handleAdditionalDiscountPercentageFocus"
+						@blur="handleAdditionalDiscountPercentageBlur"
+						:rules="[isNumber]"
+						:label="frappe._('Additional Discount %')"
+						suffix="%"
+						prepend-inner-icon="mdi-percent"
+						variant="solo"
+						density="compact"
+						color="primary"
+						inputmode="decimal"
+						enterkeyhint="done"
+						:disabled="
+							!pos_profile.posa_allow_user_to_edit_additional_discount ||
+							!!discount_percentage_offer_name
+						"
+						class="summary-field summary-field--dock"
+					/>
+				</div>
+			</div>
+
+			<div class="summary-money-row__spacer"></div>
+
+			<!-- The tender, chosen BEFORE the primary action (`Main.dc.html`
+			     nodes 127–131). The artboard draws it inside the band, in the
+			     column immediately left of PAGAR; the band is not this card's to
+			     edit, so it takes the end of the card's last row — the same
+			     place in the operator's reading order, and the same place on the
+			     screen, directly above the button it arms.
+
+			     It ARMS the payment screen and nothing else. Tendered amount,
+			     change due, split payments and submission all stay exactly where
+			     they were; what moved earlier is a choice, not money.
+
+			     There is no fixed four. The chips are this register's own payment
+			     methods, so a carnicería with cash only renders ONE and no dead
+			     siblings. `Mixto` is not among them because it is not a method: it
+			     is the empty selection, reached by tapping the lit chip off, and it
+			     leaves the payment screen exactly as it opens today — every method
+			     listed, every amount open, which is already the split surface. -->
+			<div
+				v-if="tenderChips.length"
+				class="tender-strip"
+				role="group"
+				:aria-label="__('Method')"
+				data-testid="tender-strip"
+			>
+				<span class="tender-strip__label" aria-hidden="true">{{ __("Method") }}</span>
+				<button
+					v-for="chip in tenderChips"
+					:key="chip.mode"
+					type="button"
+					class="tender-strip__chip"
+					:class="{ 'tender-strip__chip--armed': chip.mode === armedTender }"
+					:aria-pressed="chip.mode === armedTender ? 'true' : 'false'"
+					data-testid="tender-chip"
+					:data-tender-mode="chip.mode"
+					@click="selectTender(chip.mode)"
+				>
+					{{ chip.mode }}
+				</button>
+			</div>
+		</div>
+
+		<!-- No band below, so this strip carries PAY and the tender above stays
+		     adjacent to it. Same component, same bindings — only the position
+		     moves. -->
+		<InvoiceActionButtons
+			v-if="!bandOwnsSaleLane"
+			v-bind="actionStripProps"
+			v-on="actionStripHandlers"
+		/>
 	</v-card>
 
 	<v-navigation-drawer
@@ -369,7 +393,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { loadItemSelectorSettings } from "../../../utils/itemSelectorSettings";
 import { useResponsive } from "../../../composables/core/useResponsive";
@@ -385,6 +409,7 @@ import {
 } from "../../../utils/documentSources";
 import InvoiceActionButtons from "./InvoiceActionButtons.vue";
 import { bandOwnsLane } from "./bandLaneOwnership";
+import { resolveTaxBreakdown } from "./saleTaxBreakdown";
 import { mixedIsAvailable, resolveTenderChips } from "./tenderChips";
 import {
 	armTender,
@@ -493,6 +518,84 @@ const lineSummary = computed(() => {
 	return __("{0} lines · {1} pcs", [lines, pieces]);
 });
 const { parkedOrders, draftSource } = storeToRefs(uiStore);
+
+// ---- the action strip, bound once and positioned twice --------------------
+// The strip renders ABOVE the money where the band below carries PAGAR, and
+// BELOW it where no band mounts and the strip carries PAY itself — so the
+// tender is always the row adjacent to the primary. Eleven props and ten
+// listeners are bound through objects rather than hand-copied into two
+// invocations, because two copies of a list this long drift.
+const actionStripProps = computed(() => ({
+	pos_profile: props.pos_profile,
+	bandOwnsPrimary: bandOwnsSaleLane.value,
+	lineSummary: lineSummary.value,
+	saveLoading: saveLoading.value,
+	loadDraftsLoading: loadDraftsLoading.value,
+	selectOrderLoading: selectOrderLoading.value,
+	cancelLoading: cancelLoading.value,
+	invoiceManagementLoading: invoiceManagementLoading.value,
+	returnsLoading: returnsLoading.value,
+	printLoading: printLoading.value,
+	paymentLoading: paymentLoading.value,
+	customerDisplayLoading: customerDisplayLoading.value,
+}));
+// camelCase keys: Vue's `toHandlers` prefixes `on` without camelizing, and
+// `emit("save-and-clear")` looks for `onSaveAndClear` first.
+const actionStripHandlers = {
+	saveAndClear: handleSaveAndClear,
+	loadDrafts: handleLoadDrafts,
+	selectOrder: handleSelectOrder,
+	cancelSale: handleCancelSale,
+	openInvoiceManagement: handleOpenInvoiceManagement,
+	openReturns: handleOpenReturns,
+	printDraft: handlePrintDraft,
+	showPayment: handleShowPayment,
+	openCustomerDisplay: handleOpenCustomerDisplay,
+	openSaldoPicker: () => emit("open-saldo-picker"),
+};
+
+// ---- the IVA line --------------------------------------------------------
+// The rate is never a constant: it comes from the ticket's own tax rows when
+// the document has any, and otherwise from the Sales Taxes and Charges
+// Template `usePosShift` caches at shift open. That cache is reached through a
+// dynamic import behind a try/catch — the same shape `readinessSnapshot.ts`
+// uses — so a register whose offline layer failed to load renders no IVA pair
+// instead of failing to render a footer.
+const cachedTaxTemplate = ref(null);
+const loadTaxTemplate = async () => {
+	const name = props.pos_profile?.taxes_and_charges;
+	if (!name) {
+		cachedTaxTemplate.value = null;
+		return;
+	}
+	try {
+		const offline = await import("../../../../offline/index");
+		cachedTaxTemplate.value = offline?.getTaxTemplate?.(name) ?? null;
+	} catch {
+		cachedTaxTemplate.value = null;
+	}
+};
+onMounted(loadTaxTemplate);
+// The template is a property of the SHIFT, not of the cart, so it is re-read
+// only when the register changes profile — never on a cart edit.
+watch(() => props.pos_profile?.taxes_and_charges, loadTaxTemplate);
+
+const taxBreakdown = computed(() =>
+	resolveTaxBreakdown({
+		docTaxes: invoiceStore.invoiceDoc?.taxes,
+		template: cachedTaxTemplate.value,
+		subtotal: props.subtotal,
+		// Only reached by a template row that left `description` blank; the
+		// tenant's own wording wins whenever it exists.
+		taxLabel: __("Tax"),
+	}),
+);
+
+// What `Subtotal` means once an IVA pair sits beside it: the pre-tax base, so
+// the three figures reconcile with the band's total the way `Main.dc.html`
+// draws them (973.28 + 155.72 = 1,129.00). With no tax line to state, it is the
+// figure it has always been.
+const netSubtotal = computed(() => taxBreakdown.value?.net ?? props.subtotal);
 
 // ---- tender pre-selection ------------------------------------------------
 // The register's own payment methods, never a hardcoded list. `pos_profile`
@@ -923,22 +1026,44 @@ defineExpose({
  * `.dynamic-container` padding-bottom instead; see the note in Invoice.vue.
  * Pinned by tests/cartActionBarLayout.spec.ts. */
 
-.summary-content {
-	row-gap: 6px;
+/* ONE line where there is room for one, in the artboard's own left-to-right
+   order: Subtotal · IVA · Descuento … Cobrar con … and then PAGAR, on the band
+   below. Replaces the `v-row` + two `v-col`s that put the chips BESIDE the
+   money and forced them to wrap onto a second line inside a 5/12 column — the
+   reorder is why this footer got shorter rather than taller.
+
+   It wraps rather than crushes, and the tender is the last child in both
+   states, so wrapping moves it down but never past the button it arms. No
+   height, no flex-grow, no overflow: the card stays `flex: 0 0 auto` and the
+   cart above stays the single elastic sibling (commit 59c5fe1ad). */
+.summary-money-row {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px 16px;
 }
 
-/* One line, ~34px, the way `Main.dc.html` writes the strip it sits beside.
-   This area was cut from ~200px to ~38px this wave, so the chips pay for their
-   height by removing a step from every cash sale — they are a row, not a
-   panel, and nothing here changes the card's `flex: 0 0 auto`, so commit
-   59c5fe1ad's single-scrollport chain is untouched: the cart is still the one
-   elastic sibling. */
+/* Pushes the tender to the row's end, where the band's PAGAR sits below it.
+   Its own element rather than `justify-content`, because the money block must
+   stay left-aligned when the row wraps. */
+.summary-money-row__spacer {
+	flex: 1 1 auto;
+}
+
+/* The END of the money row rather than a row of its own — the artboard draws
+   `Cobrar con` as the band column immediately left of PAGAR, and giving it its
+   own line would have cost this footer a third one. This area was cut from
+   ~200px to ~38px this wave, so the chips pay for their height by removing a
+   step from every cash sale. Symmetric padding because it now sits centred
+   beside the totals instead of stacked above them, and no height, no grow and
+   no overflow, so commit 59c5fe1ad's single-scrollport chain is untouched: the
+   cart is still the one elastic sibling. */
 .tender-strip {
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
 	gap: 6px;
-	padding: 2px 2px 6px;
+	padding: 2px;
 }
 
 .tender-strip__label {
@@ -1006,6 +1131,11 @@ defineExpose({
 	   button) beside a fixed 260px field, so on a narrow panel something has
 	   to give. It must never be the total. */
 	flex-wrap: wrap;
+	/* Takes the free width inside `.summary-money-row` so the tender is pushed
+	   to the end; `min-width: 0` keeps the breakdown shrinking instead of
+	   forcing the row wider than the card. */
+	flex: 1 1 auto;
+	min-width: 0;
 	gap: 14px;
 	padding: 14px 16px;
 	border-radius: 20px;
@@ -1113,11 +1243,6 @@ defineExpose({
 	width: min(260px, 100%);
 }
 
-.invoice-summary-actions {
-	position: sticky;
-	bottom: 0;
-}
-
 .summary-field {
 	transition: all 0.2s ease;
 }
@@ -1141,10 +1266,6 @@ defineExpose({
 		bottom: auto;
 		box-shadow: none;
 	}
-
-	.invoice-summary-actions {
-		position: static;
-	}
 }
 
 @media (max-width: 768px) {
@@ -1162,10 +1283,6 @@ defineExpose({
 
 	.summary-hero__field-wrap {
 		width: 100%;
-	}
-
-	.invoice-summary-actions {
-		position: static;
 	}
 
 	.cards {
