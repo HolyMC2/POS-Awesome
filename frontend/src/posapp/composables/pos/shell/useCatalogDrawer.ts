@@ -49,6 +49,36 @@ export const CATALOG_DRAWER_ACTION_ID = "catalog.toggleDrawer";
 export const CATALOG_DRAWER_WIDTH = 400;
 
 /**
+ * Anchored width in CARD view: a share of the content row, and a ceiling.
+ *
+ * `Cajon.dc.html` draws 400px because it draws a phone-repair register, whose
+ * catalogue is a drawer of accessories two cards wide. `Cafeteria.dc.html`
+ * draws the other end of the same trade-off: there the card MENU is the
+ * surface the cashier works from and it takes four columns of the main area.
+ * So the width follows what the panel is SHOWING. A list packs at any width
+ * (`itemSelectorLayout.ts`), and widening it would take room off the ticket
+ * for nothing; a grid of cards buys a column with every ~190px.
+ *
+ * A share rather than a pixel width so the cart keeps the majority of the row
+ * at every width the drawer can anchor at — 45% of the narrowest anchoring row
+ * is ~445px, which still leaves the ticket more than it takes. The ceiling
+ * exists because past ~three columns the cards stop being a menu and start
+ * being wallpaper (`CARD_MAX_COLUMNS` makes the same argument).
+ *
+ * `CatalogDrawer.vue` states these two figures in CSS; the stylesheet cannot
+ * read a module, so `catalogDrawerWidth.spec.ts` checks the pair still agree.
+ */
+export const CATALOG_DRAWER_CARD_WIDTH_SHARE = 0.45;
+export const CATALOG_DRAWER_CARD_MAX_WIDTH = 560;
+
+/**
+ * What the slotted selector is drawing. The drawer never asks a store for it —
+ * the toolbar owns the choice and `ItemsSelector` publishes it upward, so the
+ * frame learns it the same way it learns everything else: as a prop.
+ */
+export type CatalogItemsView = "card" | "list";
+
+/**
  * The register's existing two-column boundary. Above it the desktop register
  * is viewport-locked and an anchored drawer fits; below it the compact
  * switcher shows one panel at a time, so the drawer must overlay instead.

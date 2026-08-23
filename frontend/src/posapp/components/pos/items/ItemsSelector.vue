@@ -354,7 +354,7 @@ const props = defineProps({
 	},
 });
 
-const emit = defineEmits(["add-item"]);
+const emit = defineEmits(["add-item", "update:itemsView"]);
 
 /**
  * Scan-bar affordances (artboard nodes 22-24).
@@ -1225,6 +1225,12 @@ watch(activeView, (view) => {
 		requestItemSearchFocus();
 	}
 });
+
+// The anchored drawer sizes itself by what this panel is DRAWING — a card menu
+// earns columns, a list does not. Published rather than read: the choice is
+// this component's state and the shell must not reach into the preference the
+// toolbar writes. `immediate` because the seeded view is already the answer.
+watch(items_view, (view) => emit("update:itemsView", view), { immediate: true });
 
 let suppressItemsViewSave = false;
 watch(items_view, (view) => {

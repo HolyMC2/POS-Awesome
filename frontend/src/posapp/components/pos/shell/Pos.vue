@@ -230,6 +230,7 @@
 						:shows-scrim="catalogDrawer.showsScrim.value"
 						:transition-duration-ms="catalogDrawer.transitionDurationMs.value"
 						:can-anchor="catalogDrawer.canAnchor.value"
+						:items-view="catalogItemsView"
 						@close="closeCatalogDrawer"
 						@opened="onDrawerOpened"
 						@update:active-category="catalogDrawer.setCategory"
@@ -260,6 +261,7 @@
 								context="pos"
 								header-target="#register-scan-bar"
 								:show-catalog="catalogDrawer.isOpen.value"
+								@update:items-view="catalogItemsView = $event"
 							/>
 						</template>
 					</CatalogDrawer>
@@ -1072,6 +1074,17 @@ export default {
 			eventBus.emit("add_item", { item_code: suggestion.item_code });
 		};
 
+		/**
+		 * What the slotted selector is drawing, published by `ItemsSelector`.
+		 *
+		 * The drawer's anchored WIDTH follows it — a card menu needs columns, a
+		 * list does not — and this is the only way the shell learns it without
+		 * reaching into the preference the items toolbar owns. Seeded to `list`
+		 * so the first frame is the narrow drawer rather than a wide one that
+		 * snaps back.
+		 */
+		const catalogItemsView = ref("list");
+
 		const catalogDrawer = useCatalogDrawer({
 			registerId: computed(() => posProfile.value?.name || ""),
 			viewportWidth: responsive.windowWidth,
@@ -1692,6 +1705,7 @@ export default {
 			railContext,
 			openRegisterSetting,
 			catalogDrawer,
+			catalogItemsView,
 			drawerAnchoredOpen,
 			onDrawerOpened,
 			closeCatalogDrawer,

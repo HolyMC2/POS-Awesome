@@ -1,7 +1,13 @@
 <template>
 	<div
 		class="catalog-drawer-layer"
-		:class="[`catalog-drawer-layer--${presentation}`, { 'catalog-drawer-layer--closed': phase === 'closed' }]"
+		:class="[
+			`catalog-drawer-layer--${presentation}`,
+			{
+				'catalog-drawer-layer--closed': phase === 'closed',
+				'catalog-drawer-layer--cards': itemsView === 'card',
+			},
+		]"
 		data-testid="catalog-drawer"
 		:data-drawer-state="phase"
 		:data-open-reason="openReason ?? undefined"
@@ -200,6 +206,7 @@ import type {
 	CatalogDrawerOpenReason,
 	CatalogDrawerPhase,
 	CatalogDrawerPresentation,
+	CatalogItemsView,
 } from "../../../../composables/pos/shell/useCatalogDrawer";
 
 const __ = window.__ || ((value: string) => value);
@@ -219,6 +226,13 @@ const props = withDefaults(
 		/** Whether the anchored/floating choice is offered at this width. */
 		canAnchor?: boolean;
 		footerHint?: string | null;
+		/**
+		 * What the slotted selector is drawing. Anchored only: a card grid earns
+		 * a wider column, a list does not. Defaults to `list` so a caller that
+		 * does not know keeps the artboard's 400px rather than taking width off
+		 * the ticket on a guess.
+		 */
+		itemsView?: CatalogItemsView;
 	}>(),
 	{
 		categories: () => [],
@@ -229,6 +243,7 @@ const props = withDefaults(
 		transitionDurationMs: 0,
 		canAnchor: false,
 		footerHint: null,
+		itemsView: "list",
 	},
 );
 
@@ -390,6 +405,28 @@ defineExpose({ focusableChildren });
 	flex: none;
 	display: flex;
 	min-height: 0;
+}
+
+/*
+ * CARD view takes more of the row; LIST view keeps the artboard's 400px.
+ *
+ * `Cajon.dc.html` draws the drawer at 400px for a phone-repair register, where
+ * the catalogue is an accessory drawer two cards wide. `Cafeteria.dc.html`
+ * draws the case this rule exists for — a card MENU is the surface the cashier
+ * works from — and the register cannot show that menu two cards at a time.
+ *
+ * A `min()` rather than a measured width: the cart's share stays a layout fact
+ * instead of a number two files have to keep agreeing on, and the percentage
+ * resolves against the content row, which is exactly "45% of the register"
+ * because an anchored layer is a flex sibling of the ticket inside that row.
+ * `useCatalogDrawer.ts` names the same two figures for the composable's
+ * consumers; `catalogDrawerWidth.spec.ts` fails if they drift apart.
+ *
+ * NOT animated, and it must not become animated: `width` is the layout
+ * property this file's animation contract exists to keep out of transitions.
+ */
+.catalog-drawer-layer--anchored.catalog-drawer-layer--cards {
+	width: min(45%, 560px);
 }
 
 /*
