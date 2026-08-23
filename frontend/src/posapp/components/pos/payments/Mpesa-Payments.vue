@@ -67,11 +67,13 @@
 				</v-container>
 				<v-card-actions class="mt-4">
 					<v-spacer></v-spacer>
-					<v-btn color="error mx-2" theme="dark" @click="close_dialog">Close</v-btn>
+					<!-- `color="error mx-2"` smuggled a utility class into the colour
+					     prop, so the margin never applied and the button was red for
+					     dismissing a picker. Both were accidents. -->
+					<v-btn variant="text" class="mx-2" @click="close_dialog">Close</v-btn>
 					<v-btn
 						v-if="selected.length"
-						color="success"
-						theme="dark"
+						color="primary"
 						:loading="isSubmitting"
 						:disabled="isSubmitting"
 						@click="submit_dialog"

@@ -14,11 +14,20 @@
 					displayAmount
 				}}</strong>
 			</div>
+			<!-- The green moved off this button and onto the figure above it, which
+			     is where ActionBand already puts it: "only the surface, the caption
+			     and the figure change — the button is untouched by tone on purpose,
+			     because state must never move the accent". This dialog is the band's
+			     change moment shown as a modal, so it says the same thing the same
+			     way. Green on the button was emphasis wearing a state's colour, and
+			     it is the one screen where that reading is hardest to undo — a
+			     cashier who learns green means "confirm" here stops reading the
+			     band's green as "there is money to hand back". -->
 			<div class="change-due-actions">
 				<v-btn
 					block
 					size="x-large"
-					color="success"
+					color="primary"
 					variant="flat"
 					class="change-due-confirm"
 					data-testid="change-due-confirm"
@@ -115,13 +124,21 @@ const onConfirm = () => {
 
 /* Read from a meter away — this is the number the cashier counts out of the
    drawer, so it outranks everything else on screen. Scales with the viewport
-   so a phone sheet does not clip a five-figure amount. */
+   so a phone sheet does not clip a five-figure amount.
+
+   The colour is the band's POSITIVE tone, so "there is change to give" is
+   spelled identically whether the register says it in the lane or in this
+   modal. Bare token, no fallback literal: if register-tokens.css is ever not
+   wired in, an unresolved var makes `color` invalid at computed-value time
+   and the amount inherits the card's --pos-text-primary — which is exactly
+   the right degradation, and better than a hex that would freeze one theme's
+   green into the other. */
 .change-due-amount {
 	font-size: clamp(3rem, 14vw, 4.5rem);
 	font-weight: 800;
 	line-height: 1.05;
 	font-variant-numeric: tabular-nums;
-	color: var(--pos-text-primary);
+	color: var(--reg-tone-positive-number);
 	word-break: break-word;
 }
 

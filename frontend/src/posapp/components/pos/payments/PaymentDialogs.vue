@@ -31,10 +31,15 @@
 				</v-card-text>
 				<v-card-actions>
 					<v-spacer></v-spacer>
-					<v-btn color="error" theme="dark" @click="$emit('update:customDaysDialog', false)">
+					<!-- Closing swallows nothing: the due days are only applied by the
+					     button beside this one. `theme="dark"` goes with the colour —
+					     on a text button it would paint a white label onto a white
+					     dialog, and on the primary it froze the accent at the dark
+					     theme's cyan whatever the tenant was running. -->
+					<v-btn variant="text" @click="$emit('update:customDaysDialog', false)">
 						{{ $__("Close") }}
 					</v-btn>
-					<v-btn color="primary" theme="dark" @click="$emit('apply-custom-days')">
+					<v-btn color="primary" @click="$emit('apply-custom-days')">
 						{{ $__("Apply") }}
 					</v-btn>
 				</v-card-actions>
@@ -70,10 +75,10 @@
 				</v-card-text>
 				<v-card-actions>
 					<v-spacer></v-spacer>
-					<v-btn color="error" theme="dark" @click="$emit('update:phoneDialog', false)">
+					<v-btn variant="text" @click="$emit('update:phoneDialog', false)">
 						{{ $__("Close") }}
 					</v-btn>
-					<v-btn color="primary" theme="dark" @click="$emit('request-payment')">
+					<v-btn color="primary" @click="$emit('request-payment')">
 						{{ $__("Request") }}
 					</v-btn>
 				</v-card-actions>

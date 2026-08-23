@@ -117,11 +117,14 @@
 					</v-container>
 				</v-card-text>
 				<v-card-actions class="sales-orders-card__footer">
-					<v-btn color="error" variant="tonal" @click="close_dialog">
+					<!-- Closing a picker dismisses it; nothing is lost and nothing is
+					     undone, so red here was decoration. Red stays for acts that
+					     cannot be taken back. -->
+					<v-btn variant="text" @click="close_dialog">
 						{{ __("Close") }}
 					</v-btn>
 					<v-btn
-						color="success"
+						color="primary"
 						:loading="isSubmitting"
 						:disabled="isSubmitting || selected.length === 0"
 						@click="submit_dialog"
