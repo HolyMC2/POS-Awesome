@@ -733,3 +733,166 @@ is the money path's core. The largest unconverged surface, and the one that
 wants a written plan before an agent goes near it.
 
 **Gated, not missing:** `floor/` (10 files) is Salón.
+
+---
+
+## 14. Cobro — the payment screen as a hosted surface (build plan)
+
+§13.6 said `Payments.vue` "wants a written plan before an agent goes near it".
+This is that plan. Owner direction 2026-08-22: *"we need a new designed
+payments view"* — the Cobro pieces shipped in wave 6 (`PaymentReadinessHeader`,
+`PaymentSaleSummary`, wallet, armed tender) landed INSIDE the old single-column
+dialog, and a dialog with better sections is still the old screen.
+
+### 14.1 What exists, stated plainly
+
+- **Desktop today**: `Pos.vue` → `usePaymentDialog` (≥ 992 px) → a `v-dialog`
+  over the shell with `<Payments dialog-mode />`; below 992 px the same
+  component replaces the selector column (`activeView === "payment"`). PAGAR on
+  the band → `triggerInvoicePay` → `request_invoice_payment` → Invoice.vue
+  validates and calls `uiStore.openPaymentDialog()`.
+- **`Payments.vue`** (3,126 lines, Options API) is ONE vertical list of
+  sections: readiness header · sale summary · `PaymentSummary` · tips ·
+  `PaymentMethods` (×2, multi-currency) · gift card · redemption ·
+  `InvoiceTotals` · `PaymentAdditionalInfo` · purchase order · `PaymentOptions`
+  (print / stamp / send) · customer credit · `PaymentSelectionFields` ·
+  `PaymentActionButtons` · `PaymentDialogs`. Its logic already lives in
+  composables: `usePaymentMethods`, `usePaymentCalculations`,
+  `usePaymentSubmission`, `usePaymentPrinting`, `useRedemptionLogic`,
+  `usePurchaseOrder`, `useHardwareReadiness`, `armedTender.ts`,
+  `saleSummary.ts`, `walletSummary.ts`.
+- **The artboard** is `muelle-site/design/register-hifi/Cobro.dc.html`
+  (146 text nodes, listed in 14.3). It is a SURFACE beside the rail — nine rail
+  items lit, `Volver a la venta` top-left — not a modal.
+- **Already built for the mobile Cobro** and reusable as-is:
+  `mobile/pay/PayKeypad.vue` + `keypadEntry.ts` (the 7-8-9 pad with `00`,
+  Borrar, Aplicar), `mobile/pay/ChangeToHand.vue` + `changeBreakdown.ts`
+  (the change suggestion, run on `closing/denominations.ts` backwards),
+  `payTotals.ts`. The band's `tender` kind (`bandState.ts`) already yields
+  `Change to give` / `Still owed` and the action `sale.collectAndClose`.
+
+### 14.2 The target
+
+A desktop Cobro surface hosted in `.register-shell__content` beside the rail,
+in the artboard's three columns, replacing the `v-dialog` on the layout that
+has a rail. The narrow layout (no rail) keeps `Payments.vue` in its column,
+untouched in behaviour.
+
+```
+┌ rail ┬──────────────────────────────────────────────────────────────────────┐
+│      │ ← Volver a la venta   Cobro · Ticket B-04812                          │
+│      │ Doco Ventas · Caja 2 · Jenni · <cliente>   [Cajón] [Impresora] [Terminal] [Saldo] │
+│      ├──────────────────────┬──────────────────────────┬────────────────────┤
+│      │ Resumen de la venta  │ Forma de pago            │ Facturar           │
+│      │  6 líneas · 9 pzas   │  Efectivo Tarjeta Transf.│  CFDI 4.0 al cerrar│
+│      │  combo / lines       │  Monedero Vale           │  Uso · Régimen ·   │
+│      │ Monedero del cliente │ Recibido en efectivo     │  Forma · Método    │
+│      │  $418 · Acumula $29  │  $1,200.00  Exacto presets│ Datos fiscales    │
+│      │ Garantía que se      │  keypad 7 8 9 / 4 5 6 …  │  Timbres 137       │
+│      │  imprime (por cat.)  │ Pagos aplicados          │ Enviar comprobante │
+│      │ Subtotal · IVA ·     │  Efectivo 1,200.00       │  WhatsApp Correo   │
+│      │  Total $1,129.00     │  Falta por cubrir $0.00  │  Sólo imprimir     │
+│      │                      │ Al cerrar (checklist)    │ Cambio a entregar  │
+│      │                      │                          │  $71 · 1×$50 1×$20 │
+│      ├──────────────────────┴──────────────────────────┴────────────────────┤
+│      │ BAND: Cambio a entregar $71.00                  [ COBRAR Y CERRAR ]  │
+└──────┴──────────────────────────────────────────────────────────────────────┘
+```
+
+Column 1 is the money's WHY (summary, wallet, warranty, totals). Column 2 is
+the money's HOW (tender chips, amount, keypad, applied payments, what happens
+at close). Column 3 is the money's PAPER (CFDI, receipt channel, change).
+The band owns the one number and the one action: `resolveBandState({ kind:
+"tender", total, received })` → `COLLECT AND CLOSE`. No second total, no
+second primary button anywhere on the surface (`registerSaysItOnce.spec.ts`,
+`bandOwnsTheLane.spec.ts`).
+
+### 14.3 The artboard's text, node by node (Cobro.dc.html)
+
+`Volver a la venta` · `Cobro · Ticket B-04812` · `Doco Ventas · Caja 2 · Jenni ·
+Alejandra Ríos Bautista` · `Cajón conectado` · `Impresora lista` · `Terminal
+BBVA lista` · `Saldo $1,240` ‖ `Resumen de la venta` · `6 líneas · 9 pzas` ·
+`Combo Protección iPhone 15 Pro` · `3 artículos · ahorró $41` · `299.00` · five
+lines `IPN… · 1 ×` with amounts ‖ `Monedero del cliente` · `$418.00` ·
+`Acumula` · `$29.20` · `con esta compra` ‖ `Garantía que se imprime` · `Fundas
+y adaptadores` · `30 días` · `Cambio físico por defecto` · `7 días` ‖
+`Subtotal $973.28` · `IVA 16 % $155.72` · `Total $1,129.00` ‖ `Forma de pago` ·
+`Efectivo` · `Tarjeta` · `Transferencia` · `Monedero` · `Vale` ‖ `Recibido en
+efectivo` · `Enter cobra · F6 divide el pago` · `$1,200.00` · `Exacto` ·
+`$1,150` · `$1,200` · `$1,500` · `$2,000` · keypad `7 8 9 Borrar / 4 5 6 00 /
+1 2 3 Aplicar / 0 .` ‖ `Pagos aplicados` · `Efectivo 1,200.00` · `Falta por
+cubrir $0.00` ‖ `Al cerrar` · `Imprime ticket` · `Timbra el CFDI 4.0` · `Envía
+por WhatsApp` · `Descuenta 9 piezas` · `Abona al monedero` ‖ `Facturar` ·
+`CFDI 4.0 al cerrar` · `Uso CFDI G03 · Gastos en general` · `Régimen 626 ·
+RESICO` · `Forma de pago 01 · Efectivo` · `Método PUE` · `Datos fiscales en el
+expediente` · `Timbres disponibles 137` · `Del paquete de 200 · se renueva el
+1.º` ‖ `Datos fiscales del cliente` · `RFC RIBA•••••••M4` · `Código postal
+97000` · `Validado ante el SAT hace 3 semanas` ‖ `Facturación de hoy` ·
+`Timbradas 6` · `Con error 0` · `Última 19:31` ‖ `Enviar el comprobante` ·
+`WhatsApp` · `Correo` · `Sólo imprimir` · `55 •••• 6390 · confirmado` ‖
+`Cambio a entregar` · `$71.00` · `Total $1,129.00` · `Recibido $1,200.00` ·
+`Falta $0.00` · `Sugerencia de cambio` · `1 × $50` · `1 × $20` · `1 × $1` ·
+`Hay 7 billetes de $50 y 8 monedas de $20 en el cajón` ‖ `COBRAR Y CERRAR`.
+
+**Source or absence, every figure.** Same rule as Recargas (§12 F): a figure
+with no read model behind it is NOT drawn, and the absence is commented where
+the figure would have gone. Known absences to expect: the warranty-per-category
+table (no doctype carries it — leave the section out with a comment, do not
+invent days), `Timbres disponibles` and `Facturación de hoy` (only if the CFDI
+store already exposes them; `cfdiStore.ts` is the place to look), drawer
+denomination counts for the change suggestion (`ChangeToHand` already handles
+an unknown drawer), `Acumula` (only if `walletSummary.ts` computes it today).
+
+### 14.4 Approach, ranked by money-path risk
+
+**Engine stays, chrome changes.** `Payments.vue`'s state and composables are
+the engine; the submit path (`usePaymentSubmission` → `submit_invoice`) is not
+touched, re-ordered or wrapped. What changes is WHERE the sections render and
+HOW they are laid out:
+
+1. Extract nothing from the money path. Add a `cobro` layout to `Payments.vue`
+   — or a `CobroView.vue` that mounts `Payments.vue` and re-homes its sections
+   through named slots / teleports — whichever keeps `Payments.vue`'s
+   `data()`/`methods` byte-identical. The agent picks and records the reason in
+   the LOG. Prefer the option that leaves the existing `paymentsCompactSheet`,
+   `paymentActionButtons` and `cobro*` specs passing without edits.
+2. Host it beside the rail. In `Pos.vue`, when `railVisible && paymentDialogOpen`,
+   render the Cobro surface INSIDE `.register-shell__content` (the same slot
+   `DestinationHost` uses, `v-show`ing the sale beneath) instead of the
+   `v-dialog`. Below the rail boundary nothing changes. `Volver a la venta`
+   and the existing cancel path are the same act (`cancel_payment`).
+3. The band. The surface publishes `resolveBandState({ kind: "tender", total,
+   received })` upward (the `band` relay `DestinationHost` already carries; the
+   shell adopts hosted band states in `onHostedBand` — extend
+   `HOSTED_BAND_KINDS` to `change`/`shortfall`) and the shell answers
+   `sale.collectAndClose` by calling the SAME submit the dialog's button calls
+   today. `PaymentActionButtons` stays mounted for the narrow layout; on the
+   hosted surface it does not render a second primary (bandOwnsTheLane).
+4. Keypad + presets + change: reuse `PayKeypad`, `keypadEntry.ts`,
+   `ChangeToHand`, `changeBreakdown.ts`. The `Exacto`/preset chips feed the
+   same `received` the keypad does. `F6 divide el pago` only if the split flow
+   already exists in `usePaymentMethods` — otherwise the hint is not drawn (R8:
+   render the BOUND chord, never the mock's).
+5. Tender chips = `PaymentMethods` re-skinned as the artboard's row, driven by
+   `armedTender.ts` (item E already arms the tender on the sale screen; Cobro
+   is where it lands — `armedTenderDrivesPayment.spec.ts` must keep passing).
+6. CFDI column: `cfdi/CfdiStampForm.vue` and `CustomerFiscalFields.vue` are
+   the existing surfaces; compose, do not fork. Gate on the CFDI capability
+   exactly as `cfdiNavbarGating.spec.ts` expects.
+7. Single accent, `data-money-role` on every figure, `__()` on every string
+   with an `es.csv` row, files ≤ 500 lines, no `color=` fills
+   (`singleAccent.spec.ts`), dark mode tokens (`--reg-*`), keyboard reach.
+
+### 14.5 Verification — what "done" means for this item
+
+- `vitest run` GREEN including a new `cobroSurface.spec.ts`: three columns at
+  1440, the band shows `change` after a received amount, `sale.collectAndClose`
+  reaches the submit spy, one `[data-testid="band-primary"]`, one `total`
+  money role, `Volver a la venta` cancels.
+- `vue-tsc --noEmit` exit 0; `vite build` clean.
+- `registerShellTranslations.spec.ts` GREEN (every new string has a row).
+- No diff in `usePaymentSubmission.ts`, `invoiceService.ts` or any server
+  method. If the plan needs one, stop and write it down instead.
+- A screenshot at 1440 × 900 of the hosted Cobro with a real cart, captured by
+  the lead on the lab after merge (`docs/design-evidence/after/desktop-1440/
+  cobro.png` — the one artboard the AFTER set never captured).
