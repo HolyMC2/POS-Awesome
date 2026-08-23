@@ -431,7 +431,7 @@ describe("the engine is chromed, not rewritten", () => {
 		for (const binding of [
 			'@open="viewInvoice($event)"',
 			'@print="printInvoice($event)"',
-			'@return="createReturn($event)"',
+			'@return="runLedgerReturn($event)"',
 			'@collect="openAddPayment($event)"',
 			'@delete-draft="deleteDraft($event)"',
 			'@repair="repairChangeAllocation($event)"',

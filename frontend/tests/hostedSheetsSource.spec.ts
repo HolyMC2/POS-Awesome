@@ -59,8 +59,9 @@ describe("a loaded draft lands on the sale", () => {
 		expect(source).toContain('@draft-action="runLedgerDraftAction($event.invoice, $event.action)"');
 		// The cue is the sheet having closed (a document reached the cart),
 		// and the answer is the ONE shell event every destination change uses.
-		const glue = source.slice(source.indexOf("async runLedgerDraftAction("));
-		expect(glue.slice(0, 400)).toContain("!this.uiStore.invoiceManagementDialog");
-		expect(glue.slice(0, 400)).toContain('this.eventBus.emit("open_destination", "sale")');
+		expect(source).toContain('@return="runLedgerReturn($event)"');
+		const glue = source.slice(source.indexOf("landOnSaleIfClosed() {"));
+		expect(glue.slice(0, 300)).toContain("!this.uiStore.invoiceManagementDialog");
+		expect(glue.slice(0, 300)).toContain('this.eventBus.emit("open_destination", "sale")');
 	});
 });

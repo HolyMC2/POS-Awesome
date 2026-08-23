@@ -89,7 +89,7 @@
 					@page="setTabPage($event.tab, $event.page)"
 					@open="viewInvoice($event)"
 					@print="printInvoice($event)"
-					@return="createReturn($event)"
+					@return="runLedgerReturn($event)"
 					@collect="openAddPayment($event)"
 					@delete-draft="deleteDraft($event)"
 					@repair="repairChangeAllocation($event)"
@@ -2688,6 +2688,15 @@ export default {
 		 */
 		async runLedgerDraftAction(invoice, action) {
 			await this.runDraftAction(invoice, action);
+			this.landOnSaleIfClosed();
+		},
+		/** Same cue for Devolver: the return lines went to the cart, the sheet
+		 * closed, the cashier belongs on the sale with them. */
+		async runLedgerReturn(invoice) {
+			await this.createReturn(invoice);
+			this.landOnSaleIfClosed();
+		},
+		landOnSaleIfClosed() {
 			if (!this.uiStore.invoiceManagementDialog && this.eventBus?.emit) {
 				this.eventBus.emit("open_destination", "sale");
 			}
