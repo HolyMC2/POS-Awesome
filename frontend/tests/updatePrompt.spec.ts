@@ -100,6 +100,11 @@ describe("UpdatePrompt", () => {
 	beforeEach(() => {
 		setActivePinia(createPinia());
 		(globalThis as any).__ = (value: string) => value;
+		// invoiceStore reads frappe.datetime at setup; the idle probe needs it.
+		(globalThis as any).frappe = {
+			datetime: { nowdate: () => "2026-08-23" },
+		};
+		window.sessionStorage.removeItem("posa_update_auto_applied");
 	});
 
 	it("renders the update prompt as a non-blocking dialog", async () => {
@@ -129,5 +134,46 @@ describe("UpdatePrompt", () => {
 		expect(updateStore.dismissedVersion).toBe("build-2000");
 		expect(updateStore.shouldPrompt).toBe(false);
 		expect(wrapper.get('[data-test="update-dialog"]').attributes("data-model-value")).toBe("false");
+	});
+
+	it("auto-applies a waiting update once the register is idle", async () => {
+		vi.useFakeTimers();
+		try {
+			const updateStore = useUpdateStore();
+			const reloadAction = vi.fn();
+			updateStore.setReloadAction(reloadAction);
+			updateStore.setCurrentVersion("build-1000", 1000);
+			updateStore.setAvailableVersion("build-2000", 2000);
+
+			mountPrompt();
+			await vi.advanceTimersByTimeAsync(15_000);
+
+			expect(reloadAction).toHaveBeenCalledTimes(1);
+			expect(window.sessionStorage.getItem("posa_update_auto_applied")).toBe("build-2000");
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("auto-applies each version at most once per tab", async () => {
+		vi.useFakeTimers();
+		try {
+			window.sessionStorage.setItem("posa_update_auto_applied", "build-2000");
+			const updateStore = useUpdateStore();
+			const reloadAction = vi.fn();
+			updateStore.setReloadAction(reloadAction);
+			updateStore.setCurrentVersion("build-1000", 1000);
+			updateStore.setAvailableVersion("build-2000", 2000);
+
+			mountPrompt();
+			await vi.advanceTimersByTimeAsync(120_000);
+
+			// The stamp says this version already got its reload; the manual
+			// prompt stands so a failed activation cannot loop the register.
+			expect(reloadAction).not.toHaveBeenCalled();
+			expect(updateStore.shouldPrompt).toBe(true);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

@@ -78,8 +78,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useUpdateStore } from "../../stores/updateStore";
+import { useUIStore } from "../../stores/uiStore";
+import { useInvoiceStore } from "../../stores/invoiceStore";
 
 defineOptions({
 	name: "UpdatePrompt",
@@ -98,6 +100,81 @@ watch(
 	},
 	{ immediate: true },
 );
+
+// A waiting update self-applies the moment the register is idle — a shared
+// register cannot depend on a cashier pressing «Reload Now», and until the
+// reload lands the running shell keeps requesting the PREVIOUS build's lazy
+// chunks. Idle = empty cart and no payment in flight; the sessionStorage
+// stamp makes each version auto-apply at most once per tab, so a reload
+// that fails to advance the version (SW pinned, cache poisoned) degrades
+// back to the manual prompt instead of a reload loop.
+const AUTO_APPLY_STAMP_KEY = "posa_update_auto_applied";
+const AUTO_APPLY_FIRST_DELAY_MS = 15_000;
+const AUTO_APPLY_RECHECK_MS = 60_000;
+let autoApplyTimer: number | null = null;
+
+function autoApplyStampMatches(version: string | null): boolean {
+	try {
+		return Boolean(version) && window.sessionStorage?.getItem(AUTO_APPLY_STAMP_KEY) === version;
+	} catch {
+		return true; // storage unreadable → never auto-reload, prompt stands
+	}
+}
+
+function registerIsIdle(): boolean {
+	// Lazy store access: the stores are singletons by the time the timer
+	// fires, and a context where they cannot initialise must read as BUSY —
+	// an auto-reload we cannot prove safe is one we do not take.
+	try {
+		const uiStore = useUIStore();
+		const invoiceStore = useInvoiceStore();
+		return (Number(invoiceStore.itemsCount) || 0) === 0 && !uiStore.paymentDialogOpen;
+	} catch {
+		return false;
+	}
+}
+
+function clearAutoApplyTimer() {
+	if (autoApplyTimer !== null) {
+		window.clearTimeout(autoApplyTimer);
+		autoApplyTimer = null;
+	}
+}
+
+function scheduleAutoApply(delayMs: number) {
+	clearAutoApplyTimer();
+	autoApplyTimer = window.setTimeout(() => {
+		autoApplyTimer = null;
+		const version = updateStore.availableVersion;
+		if (!updateStore.isUpdateReady || updateStore.reloading || autoApplyStampMatches(version)) {
+			return;
+		}
+		if (!registerIsIdle()) {
+			scheduleAutoApply(AUTO_APPLY_RECHECK_MS);
+			return;
+		}
+		try {
+			window.sessionStorage?.setItem(AUTO_APPLY_STAMP_KEY, version || "");
+		} catch {
+			return; // cannot stamp → cannot guard the loop → stay manual
+		}
+		updateStore.reloadNow();
+	}, delayMs);
+}
+
+watch(
+	() => updateStore.isUpdateReady,
+	(ready) => {
+		if (ready && !autoApplyStampMatches(updateStore.availableVersion)) {
+			scheduleAutoApply(AUTO_APPLY_FIRST_DELAY_MS);
+		} else {
+			clearAutoApplyTimer();
+		}
+	},
+	{ immediate: true },
+);
+
+onBeforeUnmount(clearAutoApplyTimer);
 
 const label = computed(() => updateStore.formattedAvailableVersion);
 const detail = computed(() => updateStore.formattedAvailableDetails);
