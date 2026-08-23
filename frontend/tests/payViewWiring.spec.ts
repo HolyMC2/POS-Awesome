@@ -73,8 +73,11 @@ describe("the payment screen mounts what §12 item B built for it", () => {
 		expect(tag, "the wallet is the artboard's own block; bind it").toMatch(/:wallet=/);
 		expect(tag, "the summary needs a currency formatter").toMatch(/:format-currency=/);
 		// Its own rule: it refuses to draw a cart that is still on screen. The
-		// binding must be real, not hardcoded false.
-		expect(tag).toMatch(/:cart-on-screen="cartOnScreen"/);
+		// binding must be real, not hardcoded false — the Cobro surface is
+		// allowed to answer false for ITSELF (the cart is behind that surface,
+		// not beside it, so the summary is the only place those lines can be
+		// read) and every other layout still resolves through `cartOnScreen`.
+		expect(tag).toMatch(/:cart-on-screen="(?:cobroMode \? false : )?cartOnScreen"/);
 		expect(text).toMatch(/const cartOnScreen = computed\(/);
 	});
 
