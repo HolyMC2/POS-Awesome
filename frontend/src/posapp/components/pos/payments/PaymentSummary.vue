@@ -1,6 +1,14 @@
 <template>
 	<v-row v-if="invoice_doc" class="payment-summary-grid" dense>
-		<v-col cols="12" sm="7">
+		<!--
+			Paid and outstanding, unless the screen already says them. On the
+			Cobro surface the tender pad prints «Pagos aplicados / Falta por
+			cubrir» beside the keypad and the band carries the same shortfall a
+			third time — three copies of two figures, which is exactly the
+			defect the register's "say it once" rule exists to stop. The change
+			fields below are NOT covered by either, so they stay.
+		-->
+		<v-col v-if="!hideTendered" cols="12" sm="7">
 			<v-text-field
 				variant="solo"
 				color="primary"
@@ -14,7 +22,7 @@
 				@click="$emit('show-paid-amount')"
 			></v-text-field>
 		</v-col>
-		<v-col cols="12" sm="5">
+		<v-col v-if="!hideTendered" cols="12" sm="5">
 			<v-text-field
 				variant="solo"
 				color="primary"
@@ -103,6 +111,16 @@ const props = defineProps({
 	giftCardCode: {
 		type: String,
 		default: "",
+	},
+	/**
+	 * Drop the paid/outstanding pair because the surface already prints it.
+	 * A presentation flag, and only that — every other field, rule and emit is
+	 * unchanged, and it defaults to false so the dialog and the phone sheet
+	 * render exactly what they always did.
+	 */
+	hideTendered: {
+		type: Boolean,
+		default: false,
 	},
 });
 

@@ -7,6 +7,7 @@ import { nextTick } from "vue";
 
 import shellSource from "../src/posapp/components/pos/shell/Pos.vue?raw";
 import paymentsSource from "../src/posapp/components/pos/Payments.vue?raw";
+import summarySource from "../src/posapp/components/pos/payments/PaymentSummary.vue?raw";
 import ActionBand from "../src/posapp/components/pos/shell/band/ActionBand.vue";
 import PaymentReadinessHeader from "../src/posapp/components/pos/payments/PaymentReadinessHeader.vue";
 import CobroTenderPad from "../src/posapp/components/pos/payments/cobro/CobroTenderPad.vue";
@@ -99,20 +100,26 @@ describe("the surface is hosted beside the rail, not raised over it", () => {
 	});
 });
 
-describe("three columns at 1440", () => {
-	// The grid is laid over the sections `Payments.vue` already has — there is
-	// no second markup tree to keep in step.
-	const styles = paymentsSource.slice(paymentsSource.lastIndexOf("<style"));
-	const rule = (selector: string) => {
-		const start = styles.indexOf(`${selector} {`);
-		expect(start, `${selector} has no rule`).toBeGreaterThan(-1);
-		return styles.slice(start, styles.indexOf("}", start));
-	};
+// The grid is laid over the sections `Payments.vue` already has — there is no
+// second markup tree to keep in step, so the layout is read off the stylesheet
+// the same way the sections are read off the template.
+const styles = paymentsSource.slice(paymentsSource.lastIndexOf("<style"));
+const rule = (selector: string) => {
+	const start = styles.indexOf(`${selector} {`);
+	expect(start, `${selector} has no rule`).toBeGreaterThan(-1);
+	return styles.slice(start, styles.indexOf("}", start));
+};
 
+describe("three columns at 1440", () => {
 	it("lays the sections out in three tracks", () => {
 		const grid = rule(".payment-sections--cobro");
 		expect(grid).toContain("display: grid");
-		expect(grid.match(/minmax\(0, [^)]+\)/g) ?? []).toHaveLength(3);
+		// COLUMNS only. The rows carry `minmax()` of their own now — they are
+		// what keeps the surface one screen — so counting them here would read
+		// six tracks where the artboard draws three.
+		const columns = /grid-template-columns:([^;]+);/.exec(grid);
+		expect(columns).not.toBeNull();
+		expect((columns as RegExpExecArray)[1].match(/minmax\(0, [^)]+\)/g) ?? []).toHaveLength(3);
 	});
 
 	it("names an area for every section it renders, so none is auto-placed", () => {
@@ -135,6 +142,54 @@ describe("three columns at 1440", () => {
 		}
 	});
 
+	it("sizes every content row so the grid cannot outgrow its box", () => {
+		// The consolidation, stated as a property. An `auto` row is sized by its
+		// content, so the tallest section would decide the height of the surface
+		// and push the rest past the viewport the shell clips it to — which is
+		// precisely how the hosted Cobro came to read as "the new screen with
+		// the old one stacked below it".
+		const rows = /grid-template-rows:([^;]+);/.exec(rule(".payment-sections--cobro"));
+		expect(rows, "the cobro grid states no explicit rows").not.toBeNull();
+		const tracks = (rows as RegExpExecArray)[1].trim().split(/\s+(?![^(]*\))/);
+
+		// First is the readiness header (content-height, one row of chips), last
+		// four are the two content rows per column plus the tip strip.
+		expect(tracks[0]).toBe("auto");
+		const contentTracks = tracks.slice(1);
+		const autoTracks = contentTracks.filter((track) => track === "auto");
+		// Exactly one `auto` survives: the restaurant tip's row, which has to
+		// collapse to nothing on the registers that never draw it.
+		expect(autoTracks).toHaveLength(1);
+		for (const track of contentTracks.filter((track) => track !== "auto")) {
+			expect(track, `${track} is not an fr row — it can grow past the box`).toMatch(
+				/^minmax\(0,\s*[0-9.]+fr\)$/,
+			);
+		}
+	});
+
+	it("gives the tip strip an area, because it is the one child that is not a section", () => {
+		// Without one it is AUTO-PLACED into an implicit sixth row, which is the
+		// single remaining way this grid can overflow the box it is clipped to.
+		expect(styles).toMatch(
+			/\.payment-sections--cobro \.restaurant-tip \{\s*grid-area: tip;/,
+		);
+		expect(rule(".payment-sections--cobro")).toContain("tip");
+	});
+
+	it("makes each section the scrollport for its own cell", () => {
+		const section = rule(".payment-sections--cobro .payment-section");
+		expect(section).toContain("overflow-y: auto");
+		// `min-height: 0` is the load-bearing half: a grid item defaults to
+		// `min-height: auto` and refuses to shrink below its content.
+		expect(section).toContain("min-height: 0");
+	});
+
+	it("stops the surface itself from scrolling, so the band stays put", () => {
+		expect(paymentsSource).toContain(
+			`:class="['payment-scroll', cobroMode ? 'overflow-hidden' : 'overflow-y-auto']"`,
+		);
+	});
+
 	it("puts the WHY, the HOW and the PAPER in that order", () => {
 		const areas = /grid-template-areas:([\s\S]*?);/.exec(rule(".payment-sections--cobro"));
 		expect(areas).not.toBeNull();
@@ -144,6 +199,84 @@ describe("three columns at 1440", () => {
 			.filter(Boolean);
 		expect(rows[0]).toBe("readiness readiness readiness");
 		expect(rows[1]).toBe("summary tender paper");
+	});
+});
+
+describe("the legacy tail folds instead of stacking", () => {
+	it("hides the settlement and print sections behind one disclosure, on Cobro only", () => {
+		// Two sections, one control. Everywhere else the condition is constant
+		// and both render outright, which is why it reads `!cobroMode ||`.
+		expect(
+			paymentsSource.match(/v-show="!cobroMode \|\| cobroDetailsExpanded"/g) ?? [],
+		).toHaveLength(2);
+		expect(paymentsSource).toContain('data-testid="cobro-more-options"');
+		expect(paymentsSource).toContain(
+			'aria-controls="payment-cobro-settlement payment-cobro-meta"',
+		);
+		expect(paymentsSource).toContain('id="payment-cobro-settlement"');
+		expect(paymentsSource).toContain('id="payment-cobro-meta"');
+	});
+
+	it("keeps them MOUNTED, so a half-typed write-off survives the fold", () => {
+		expect(paymentsSource).not.toMatch(/v-if="!cobroMode \|\| cobroDetailsExpanded"/);
+	});
+
+	it("draws the control in the column that answers what happens at close", () => {
+		// Inside the paper section, after `Charge and print` — not a fourth
+		// column and not a second primary.
+		expect(paymentsSource).toMatch(
+			/data-testid="cobro-charge-and-print"[\s\S]{0,900}data-testid="cobro-more-options"[\s\S]{0,400}<\/section>/,
+		);
+	});
+
+	it("unfolds itself whenever a settlement the cashier engaged is inside it", () => {
+		// The same rule `moreMethodsExpanded` applies to a typed second tender:
+		// a disclosure may hide an untouched control, never an active one.
+		// `is_cashback` is inverted because FALSE is the state that hides the
+		// payment methods, and the switch that undoes it is in this section.
+		expect(paymentsSource).toMatch(
+			/const cobroDetailsExpanded = computed\(\s*\(\) =>\s*cobroDetailsOpen\.value \|\|\s*!is_cashback\.value \|\|\s*is_credit_sale\.value \|\|\s*is_credit_return\.value \|\|\s*is_write_off_change\.value \|\|\s*redeem_customer_credit\.value,/,
+		);
+	});
+
+	it("reclaims the rows it folded away instead of leaving dead space", () => {
+		const lean = rule(".payment-sections--cobro-lean");
+		const rows = /grid-template-areas:([\s\S]*?);/
+			.exec(lean)?.[1]
+			.split("\n")
+			.map((row) => row.replace(/"/g, "").trim())
+			.filter(Boolean);
+		expect(rows).toBeDefined();
+		// The change card takes the whole column back — the sections below it
+		// are `display: none`, and their cells would otherwise be two empty
+		// rows under it.
+		expect((rows as string[]).slice(1).every((row) => row.endsWith("paper"))).toBe(true);
+		expect(paymentsSource).toContain(
+			"'payment-sections--cobro-lean': cobroMode && !cobroDetailsExpanded,",
+		);
+	});
+
+	it("starts the next sale folded, like the sheet's own disclosures", () => {
+		expect(paymentsSource).toMatch(
+			/moreMethodsOpen\.value = false;\s*breakdownOpen\.value = false;\s*cobroDetailsOpen\.value = false;/,
+		);
+	});
+
+	it("drops the paid/outstanding pair the pad and the band already print", () => {
+		// Three copies of two figures: the pad's «Pagos aplicados / Falta por
+		// cubrir», the band's shortfall, and the summary's own read-only pair.
+		// The change fields underneath are drawn nowhere else, so the flag is
+		// scoped to the pair rather than to the component.
+		expect(paymentsSource).toMatch(
+			/<PaymentSummary\s+:hide-tendered="cobroMode"/,
+		);
+		expect((summarySource.match(/v-if="!hideTendered"/g) ?? []).length).toBe(2);
+		expect(summarySource).toMatch(/hideTendered: \{\s*type: Boolean,\s*default: false,/);
+	});
+
+	it("borrows a label the register already ships in Spanish", () => {
+		expect(paymentsSource).toContain('{{ __("More options") }}');
+		expect(styles).toContain(".payment-disclosure");
 	});
 });
 

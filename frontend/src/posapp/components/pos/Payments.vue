@@ -25,7 +25,17 @@
 				location="top"
 				color="info"
 			></v-progress-linear>
-			<div ref="paymentContainer" class="overflow-y-auto payment-scroll">
+			<!--
+				Cobro owns a scrollport per COLUMN, so the surface itself must
+				not scroll: the band below it carries the one action, and a
+				screen that scrolls away from its own action is the defect §14
+				exists to remove. Every other layout keeps the single scrolling
+				list it has always had.
+			-->
+			<div
+				ref="paymentContainer"
+				:class="['payment-scroll', cobroMode ? 'overflow-hidden' : 'overflow-y-auto']"
+			>
 				<!--
 					COBRO. The three columns are a GRID over these same
 					sections, not a second markup tree: `payment-sections--cobro`
@@ -34,11 +44,21 @@
 					list to lay it out differently would have meant maintaining
 					every binding on this screen twice, which is how two payment
 					screens start to disagree.
+
+					EVERY row of that grid is an `fr`, and every section scrolls
+					inside its own cell. That is what keeps the surface one
+					screen: an `auto` row would be sized by its content, and the
+					legacy tail below is exactly the content that would then push
+					the grid past the viewport it is clipped to.
 				-->
 				<div
 					:class="[
 						'payment-sections',
-						{ 'payment-sections--dialog': dialogMode, 'payment-sections--cobro': cobroMode },
+						{
+							'payment-sections--dialog': dialogMode,
+							'payment-sections--cobro': cobroMode,
+							'payment-sections--cobro-lean': cobroMode && !cobroDetailsExpanded,
+						},
 					]"
 				>
 					<!-- The way back to the cart, and the three devices that can
@@ -78,7 +98,12 @@
 								formatCurrency(invoiceChargeTotal, invoice_doc.currency)
 							}}</strong>
 						</div>
+						<!-- `hide-tendered` on Cobro only: the pad prints «Pagos
+						     aplicados / Falta por cubrir» one column over and the
+						     band carries the shortfall a third time. The change
+						     fields are not drawn anywhere else, so they stay. -->
 						<PaymentSummary
+							:hide-tendered="cobroMode"
 							:invoice_doc="invoice_doc"
 							:total_payments_display="total_payments_display"
 							:diff_payment_display="diff_payment_display"
@@ -158,6 +183,31 @@
 						>
 							{{ __("Charge and print") }}
 						</v-btn>
+						<!--
+							The settlement fields and the print picker are this
+							screen's legacy tail: real, rarely touched, and the
+							reason the hosted surface read as "the new screen with
+							the old one stacked below it". They fold behind one
+							disclosure, in the column that already answers "what
+							happens when this closes" — and they unfold themselves
+							the moment a flag inside them is actually set, the same
+							rule `moreMethodsExpanded` applies to a typed second
+							tender.
+						-->
+						<button
+							type="button"
+							class="payment-disclosure"
+							data-testid="cobro-more-options"
+							:aria-expanded="cobroDetailsExpanded ? 'true' : 'false'"
+							aria-controls="payment-cobro-settlement payment-cobro-meta"
+							@click="toggleCobroDetails()"
+						>
+							<v-icon
+								:icon="cobroDetailsExpanded ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+								size="18"
+							/>
+							<span class="payment-disclosure__label">{{ __("More options") }}</span>
+						</button>
 					</section>
 
 					<RestaurantTipSelector
@@ -325,7 +375,18 @@
 						/>
 					</section>
 
-					<section class="payment-section payment-section--settlement">
+					<!--
+						`v-show`, never `v-if`: a half-typed write-off amount or a
+						due date the cashier is still choosing must survive the
+						disclosure closing over it. Outside Cobro the condition is
+						constant, so the dialog and the phone sheet render exactly
+						what they always did.
+					-->
+					<section
+						id="payment-cobro-settlement"
+						v-show="!cobroMode || cobroDetailsExpanded"
+						class="payment-section payment-section--settlement"
+					>
 						<div class="payment-section__header">
 							<h3 class="payment-section__title">{{ __("Credit and Output") }}</h3>
 						</div>
@@ -379,7 +440,11 @@
 						/>
 					</section>
 
-					<section class="payment-section payment-section--meta">
+					<section
+						id="payment-cobro-meta"
+						v-show="!cobroMode || cobroDetailsExpanded"
+						class="payment-section payment-section--meta"
+					>
 						<div class="payment-section__header">
 							<h3 class="payment-section__title">{{ __("Sales Person and Print") }}</h3>
 						</div>
@@ -718,6 +783,16 @@ const toggleMoreMethods = (open) => {
 
 const toggleBreakdown = (open) => {
 	breakdownOpen.value = typeof open === "boolean" ? open : !breakdownOpen.value;
+};
+
+// Cobro's legacy tail — settlement options and the print picker — behind one
+// disclosure in the column that already answers "what happens when this
+// closes". Only ever consulted under `cobroMode`; every other layout renders
+// both sections outright, which is why the template asks `!cobroMode ||`.
+const cobroDetailsOpen = ref(false);
+
+const toggleCobroDetails = (open) => {
+	cobroDetailsOpen.value = typeof open === "boolean" ? open : !cobroDetailsOpen.value;
 };
 
 // Computed Properties
@@ -1150,6 +1225,20 @@ const secondaryMethodsHaveAmount = computed(() =>
 );
 
 const moreMethodsExpanded = computed(() => moreMethodsOpen.value || secondaryMethodsHaveAmount.value);
+
+// Same rule one column over: a settlement the cashier has actually engaged
+// must never hide behind the disclosure. `is_cashback` reads inverted on
+// purpose — false is the state that HIDES the payment methods, and the switch
+// that undoes it lives in the section this would have folded away.
+const cobroDetailsExpanded = computed(
+	() =>
+		cobroDetailsOpen.value ||
+		!is_cashback.value ||
+		is_credit_sale.value ||
+		is_credit_return.value ||
+		is_write_off_change.value ||
+		redeem_customer_credit.value,
+);
 
 // Both method lists are the same component with the same wiring — bound once
 // so the collapsed list can never drift from the primary one. Computeds are
@@ -2644,6 +2733,7 @@ watch(isPaymentOpen, (isOpen) => {
 		// Next sale starts as a sheet again, not wherever this one was left.
 		moreMethodsOpen.value = false;
 		breakdownOpen.value = false;
+		cobroDetailsOpen.value = false;
 	}
 });
 
@@ -2964,15 +3054,59 @@ defineExpose({
 
 .payment-sections--cobro {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.95fr);
+	/* `Cobro.dc.html` measures 384 / flexible / 316 inside a 1344 content area.
+	   Stated as shares rather than pixels so the same proportion survives a
+	   1280 counter monitor and a 1920 one. */
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 0.8fr);
+	/*
+	 * Every content row is an `fr`, which is the whole consolidation: an `auto`
+	 * row is sized by its content, so the tallest section on the screen would
+	 * decide the height of the surface and push the rest past the viewport it
+	 * is clipped to. With `fr` the grid can never exceed its box, and the
+	 * sections scroll inside their own cells instead — one scrollport per
+	 * region, exactly as `Cobro.dc.html` draws its three cards.
+	 *
+	 * The tip row is the one exception and is `auto` on purpose: it holds a
+	 * single restaurant-only strip and collapses to zero everywhere else,
+	 * which an `fr` row would not do.
+	 */
+	grid-template-rows: auto minmax(0, 1.6fr) auto minmax(0, 1fr) minmax(0, 0.5fr);
 	gap: var(--pos-space-2);
-	align-items: start;
+	/* `stretch`, not `start`: a section only scrolls inside a cell it fills. */
+	align-items: stretch;
+	flex: 1 1 auto;
+	min-height: 0;
 	grid-template-areas:
 		"readiness readiness readiness"
 		"summary tender paper"
-		"summary methods paper"
+		"summary tip paper"
 		"adjustments methods settlement"
 		"adjustments methods meta";
+}
+
+/*
+ * Collapsed, the settlement and print sections are `display: none` and their
+ * cells would be two empty rows of dead space under the change card. So the
+ * paper column takes the height back — the same grid, one modifier, no second
+ * markup tree.
+ */
+.payment-sections--cobro-lean {
+	grid-template-areas:
+		"readiness readiness readiness"
+		"summary tender paper"
+		"summary tip paper"
+		"adjustments methods paper"
+		"adjustments methods paper";
+}
+
+/*
+ * The restaurant tip strip is the one child of this list that is not a
+ * `payment-section`, so without an area of its own it would be AUTO-PLACED —
+ * into an implicit sixth row, which is the one way this grid can still
+ * overflow the box it is clipped to.
+ */
+.payment-sections--cobro .restaurant-tip {
+	grid-area: tip;
 }
 
 /* Same rule as the dialog: an unplaced child would be auto-placed into the
@@ -2984,6 +3118,12 @@ defineExpose({
 .payment-sections--cobro .payment-section {
 	padding: 10px;
 	gap: 10px;
+	/* The section IS the scrollport for its cell. `min-height: 0` is the
+	   load-bearing half — a grid item defaults to `min-height: auto` and
+	   refuses to shrink below its content, which is how a bounded row still
+	   ends up overflowing. */
+	min-height: 0;
+	overflow-y: auto;
 }
 
 .payment-sections--cobro .payment-section--summary {
@@ -3030,10 +3170,15 @@ defineExpose({
 	gap: var(--reg-space-md, 10px);
 }
 
-/* The ticket has a whole column to itself here, so it gets more of it than
-   the dialog's stacked left column could give it. */
+/* The ticket has a whole column to itself here, and the column is bounded by
+   its own grid row — so the cap that the dialog needs is not only unnecessary,
+   it would leave the card short of the cell it is supposed to fill. The lines
+   scroll inside `.pay-summary__lines`, which is what it was built for, and the
+   paid/change fields below it keep their place at the bottom of the card. */
 .payment-sections--cobro .payment-sale-summary {
-	max-height: 46vh;
+	max-height: none;
+	flex: 1 1 auto;
+	min-height: 0;
 }
 
 .payment-cobro-print {
