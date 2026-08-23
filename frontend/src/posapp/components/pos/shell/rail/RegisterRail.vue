@@ -73,10 +73,12 @@
 				:ref="registerToolsRef"
 				:items="toolsItems"
 				:active-tool="activeTool"
+				:settings="settingsItems"
 				:disabled="railDisabled"
 				:tab-index="tabIndexFor(TOOLS_SLOT)"
 				:__="__"
 				@activate="activate"
+				@setting="(id) => emit('setting', id)"
 				@focus-pill="focusItem(TOOLS_SLOT)"
 			/>
 		</div>
@@ -129,13 +131,24 @@ import {
 	type RailItem,
 } from "../../../../composables/pos/shell/useRegisterRail";
 import type { RailDestinationId } from "../../../../composables/pos/shell/railDestinations";
+import type { RailSettingId } from "../../../../composables/pos/shell/railSettings";
 
 const props = defineProps<{ context: RegisterRailContext }>();
+
+/**
+ * Destinations travel down the context (`context.navigate`); a settings entry
+ * comes back OUT as an event instead, because it is not the rail's to open —
+ * only the shell has the bus that reaches the navbar menu that owns the
+ * dialogs. Keeping it off the context is also what keeps this component
+ * mountable from a spec with four plain refs.
+ */
+const emit = defineEmits<{ setting: [RailSettingId] }>();
 
 const __ = (key: string) => props.context.__(key);
 
 const rail = useRegisterRail(props.context);
-const { items, primaryItems, toolsItems, footerItems, activeTool, railDisabled } = rail;
+const { items, primaryItems, toolsItems, footerItems, settingsItems, activeTool, railDisabled } =
+	rail;
 
 /**
  * The "More" pill's slot in the focus ring. Not a destination id — it opens a

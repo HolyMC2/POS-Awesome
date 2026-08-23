@@ -10,6 +10,7 @@ import {
 	type RailGroup,
 	type RailOfflineAvailability,
 } from "./railDestinations";
+import { resolveRailSettings, type RailSettingItem } from "./railSettings";
 
 /**
  * Resolves the pure rail registry against this register's live state.
@@ -45,6 +46,13 @@ export interface RegisterRailContext {
 	shiftOpen: Ref<boolean> | ComputedRef<boolean>;
 	/** Register has no usable connection right now. */
 	offline: Ref<boolean> | ComputedRef<boolean>;
+	/**
+	 * `posa_silent_print` on the POS Profile. Not a `RailGate`: it gates no
+	 * destination, only the printer entry in the tools flyout's settings group
+	 * — and it has to answer the same way `NavbarMenu` does, or the rail
+	 * advertises a certificate flow for a printer this register does not have.
+	 */
+	silentPrint?: Ref<boolean> | ComputedRef<boolean>;
 	/** Live counts, keyed by the registry's badge sources. */
 	counts: Partial<Record<RailBadgeSource, Ref<number> | ComputedRef<number>>>;
 	/** Shell navigation. Called only for a destination that is not disabled. */
@@ -141,6 +149,20 @@ export function useRegisterRail(ctx: RegisterRailContext) {
 	const primaryItems = inGroup("primary");
 	const toolsItems = inGroup("tools");
 	const footerItems = inGroup("footer");
+
+	/**
+	 * The settings entries that share the tools flyout, resolved the same way
+	 * the destinations are. They are the navbar menu's, reached by id — see
+	 * `railSettings.ts` for why the rail names one instead of opening it.
+	 */
+	const settingsItems = computed<RailSettingItem[]>(() =>
+		resolveRailSettings({
+			__: ctx.__,
+			silentPrint: ctx.silentPrint?.value === true,
+			offline: ctx.offline.value,
+			railDisabled: railDisabled.value,
+		}),
+	);
 
 	/**
 	 * The tool currently on screen, if any. The rail's "More" item wears its
@@ -240,6 +262,7 @@ export function useRegisterRail(ctx: RegisterRailContext) {
 		primaryItems,
 		toolsItems,
 		footerItems,
+		settingsItems,
 		activeTool,
 		keyboardItems,
 		railDisabled,

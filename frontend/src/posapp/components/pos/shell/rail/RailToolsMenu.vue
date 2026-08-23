@@ -73,6 +73,46 @@
 				</span>
 				<span v-if="item.dimmed" class="register-rail__dot register-rail__dot--tool" aria-hidden="true"></span>
 			</button>
+
+			<!-- The settings the navbar's actions menu carries. The rail replaced
+			     the hamburger drawer as the desktop navigation, so a cashier
+			     standing at it should not have to go back up to the top bar to
+			     change the language or check for an update. Rendered here rather
+			     than reached: what is NOT here is a second copy of any dialog —
+			     each entry names a NavbarMenu action id and that menu opens its
+			     own (railSettings.ts). Separated by a rule because the group
+			     above is pages and this one is dialogs. -->
+			<template v-if="settings.length">
+				<div class="register-rail__flyout-divider" role="separator"></div>
+				<div class="register-rail__flyout-title">{{ __("Settings") }}</div>
+				<button
+					v-for="setting in settings"
+					:key="setting.id"
+					type="button"
+					role="menuitem"
+					class="register-rail__tool"
+					:class="{ 'register-rail__tool--dimmed': setting.dimmed }"
+					:data-rail-setting="setting.id"
+					:aria-label="setting.ariaLabel"
+					:aria-disabled="setting.disabled ? 'true' : undefined"
+					@click="choose(setting.id)"
+				>
+					<span class="register-rail__tool-icon" aria-hidden="true">
+						<v-icon :icon="setting.icon" :size="20" />
+					</span>
+					<span class="register-rail__tool-copy">
+						<span class="register-rail__tool-label">{{ setting.label }}</span>
+						<span class="register-rail__tool-hint">{{
+							setting.dimmed ? __("Needs connection") : setting.hint
+						}}</span>
+					</span>
+					<span
+						v-if="setting.dimmed"
+						class="register-rail__dot register-rail__dot--tool"
+						aria-hidden="true"
+					></span>
+				</button>
+			</template>
 		</div>
 	</v-menu>
 </template>
@@ -84,10 +124,13 @@ const pillEl = ref<HTMLElement | null>(null);
 
 import type { RailItem } from "../../../../composables/pos/shell/useRegisterRail";
 import type { RailDestinationId } from "../../../../composables/pos/shell/railDestinations";
+import type { RailSettingId, RailSettingItem } from "../../../../composables/pos/shell/railSettings";
 
 const props = defineProps<{
 	items: RailItem[];
 	activeTool: RailItem | null;
+	/** The navbar menu's settings entries, resolved — see `railSettings.ts`. */
+	settings: RailSettingItem[];
 	/** The whole rail is inert until the shift opens (§5.1). */
 	disabled: boolean;
 	/** The rail's roving tabindex for this pill (0 when it is the ring's stop). */
@@ -95,7 +138,11 @@ const props = defineProps<{
 	__: (key: string) => string;
 }>();
 
-const emit = defineEmits<{ activate: [RailDestinationId]; "focus-pill": [] }>();
+const emit = defineEmits<{
+	activate: [RailDestinationId];
+	setting: [RailSettingId];
+	"focus-pill": [];
+}>();
 
 const __ = (key: string) => props.__(key);
 
@@ -108,6 +155,24 @@ const toolsAriaLabel = computed(() => {
 
 const activate = (id: RailDestinationId) => {
 	emit("activate", id);
+	toolsOpen.value = false;
+};
+
+/**
+ * A settings entry is refused HERE, unlike a destination.
+ *
+ * `activate` can emit freely because `useRegisterRail.activate` refuses a
+ * disabled item before it reaches the shell. A setting has no such guard
+ * downstream — the shell forwards the id straight onto the bus — so an
+ * `aria-disabled` entry that still emitted would open the dialog it just told
+ * the operator it could not open.
+ */
+const choose = (id: RailSettingId) => {
+	const setting = props.settings.find((candidate) => candidate.id === id);
+	if (!setting || setting.disabled) {
+		return;
+	}
+	emit("setting", id);
 	toolsOpen.value = false;
 };
 
@@ -191,6 +256,17 @@ defineExpose({ pillEl, toggle, toolsOpen });
 	border-radius: 14px;
 	background: var(--pos-surface-raised, #ffffff);
 	box-shadow: 0 10px 28px rgba(16, 20, 30, 0.14);
+}
+
+/* The flyout holds two kinds of thing — pages above, dialogs below — and the
+ * rule is what says so before the group titles name them. `--pos-border` and
+ * not `--reg-rail-divider`: v-menu TELEPORTS this content to <body>, so it
+ * lands outside `.register-rail` where the `--reg-rail-*` names are defined
+ * and would fall back to their light literals in dark mode. */
+.register-rail__flyout-divider {
+	height: 1px;
+	margin: 6px 6px 2px;
+	background: var(--pos-border, #dfe4ea);
 }
 
 .register-rail__flyout-title {

@@ -84,7 +84,7 @@
 		     destinations. Below the two-column boundary the dock is the nav and
 		     the rail is not drawn at all. -->
 		<div v-show="!dialog" class="register-shell">
-			<RegisterRail v-if="railVisible" :context="railContext" />
+			<RegisterRail v-if="railVisible" :context="railContext" @setting="openRegisterSetting" />
 
 			<!-- `position: relative` is load-bearing, not cosmetic: the catalogue
 			     drawer's overlay presentation is `position: absolute` precisely so
@@ -1037,10 +1037,24 @@ export default {
 			activeDestinationId: destinationRouting.activeId,
 			shiftOpen,
 			offline: computed(() => !isOnline.value),
+			// Same question the navbar menu asks of the same flag, so the two
+			// menus cannot offer different printer entries on one register.
+			silentPrint: computed(() => parseBooleanSetting(posProfile.value?.posa_silent_print)),
 			counts: { serviceOrderOpenCount, floorOpenOrdersCount, draftInvoicesCount },
 			navigate: (id) => {
 				destinationRouting.activate(id, "rail");
 			},
+		};
+
+		/**
+		 * The rail's «Más» flyout offers the navbar actions menu's settings
+		 * entries. It cannot open them — the dialogs and the gating that decides
+		 * they exist live in `NavbarMenu.vue`, a different tree — so it NAMES one
+		 * and that menu runs its own handler for it. One copy of each dialog, one
+		 * place the gates live, two ways in.
+		 */
+		const openRegisterSetting = (id) => {
+			eventBus.emit("run_menu_action", { id });
 		};
 
 		// Combos are not fetched yet — the read model lands with the doctype.
@@ -1676,6 +1690,7 @@ export default {
 			railVisible,
 			cobroHosted,
 			railContext,
+			openRegisterSetting,
 			catalogDrawer,
 			drawerAnchoredOpen,
 			onDrawerOpened,

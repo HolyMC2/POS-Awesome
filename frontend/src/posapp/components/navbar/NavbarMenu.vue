@@ -397,6 +397,12 @@ export default {
 	beforeUnmount() {
 		// Clean up the event listener
 		window.removeEventListener("resize", this.handleResize);
+		// Always pass the handler: a bare off() removes EVERY listener for the
+		// event, including ones another component registered.
+		if (this.menuActionHandler) {
+			this.eventBus?.off?.("run_menu_action", this.menuActionHandler);
+			this.menuActionHandler = null;
+		}
 		stopPrintHealthMonitor();
 	},
 	watch: {
@@ -675,6 +681,22 @@ export default {
 				},
 			];
 		},
+		/**
+		 * Every action this menu can run, flat.
+		 *
+		 * The register rail's «Más» flyout reaches these by id over the bus
+		 * (`run_menu_action`), and going through the SAME list is the whole
+		 * point: an entry the profile has gated off — no silent print, no
+		 * supervisor — is simply not in it, so naming it does nothing without
+		 * anyone having to write a second gate that could then disagree.
+		 */
+		menuActions() {
+			return [
+				...this.quickActions,
+				...this.settingsSections.flatMap((section) => section.actions),
+				...this.supervisorSections.flatMap((section) => section.actions),
+			];
+		},
 		settingsActionCount() {
 			const count =
 				this.settingsSections.reduce((total, section) => total + section.actions.length, 0) +
@@ -706,6 +728,11 @@ export default {
 			this.windowWidth = window.innerWidth;
 		};
 		window.addEventListener("resize", this.handleResize);
+		// Registered before the awaits below: the rail can name an action the
+		// moment the register is on screen, and `initializeLanguage` is a round
+		// trip that would otherwise swallow it.
+		this.menuActionHandler = (payload) => this.runMenuAction(payload);
+		this.eventBus?.on?.("run_menu_action", this.menuActionHandler);
 		await this.initializeLanguage();
 		this.initializeWesternNumerals();
 	},
@@ -744,6 +771,23 @@ export default {
 					"warning",
 					8000,
 				);
+			}
+		},
+
+		/**
+		 * Run one of this menu's own actions, named by id from somewhere else —
+		 * today the register rail's «Más» flyout, which carries four of these
+		 * entries but owns none of their dialogs.
+		 *
+		 * An unknown or gated-off id is silently ignored rather than throwing:
+		 * the caller is a menu drawn from a registry, and a register whose
+		 * profile turned an entry off should behave as if it was never offered.
+		 */
+		runMenuAction(payload) {
+			const id = typeof payload === "string" ? payload : payload?.id;
+			const action = this.menuActions.find((candidate) => candidate.id === id);
+			if (action) {
+				this.handleAction(action);
 			}
 		},
 
