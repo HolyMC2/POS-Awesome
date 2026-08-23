@@ -7,6 +7,86 @@ only records successes is a log nobody can debug from.
 
 ---
 
+## 2026-08-22 · Facturas — the ledger with a finder
+
+### Approach, written before the layout
+
+Same rule as Cobro (§14.4, §15.3): **engine stays, chrome changes.**
+`InvoiceManagement.vue` keeps its 3,283 lines of `data()` and `methods`
+byte-identical. What it gains is ONE template branch — a second `<v-card>`
+under `v-if="ledgerMode"` — and one line in `setup()` that publishes
+`ledgerMode` from the `useHostedSheet` handle the component already builds.
+No new `data` key, no new `computed`, no new method, no server call.
+
+**Where the new state lives, and why not in `data()`.** The ledger needs
+three things the tabs never had: which finder mode is armed, which row is
+selected, and the keyboard ring's index. Putting them in `data()` would
+break the byte-identical rule for the sake of three refs, so §15.3's four
+children get a fifth: `InvoiceLedgerSurface.vue`, the composition root that
+owns exactly those three and nothing else. Everything it does to the ENGINE
+it does by emitting an intent that the parent's template binds straight to
+an existing method or an existing filter field — `@open="viewInvoice"`,
+`@segment="activeTab = $event.tab; historyDateFrom = $event.from; …"`. The
+parent's template is the glue; there is no glue layer in its script.
+
+**The detail panel replaces the detail DIALOG, and only while hosted.** The
+second `v-dialog` (lines 1232–1382) gets `v-if="!ledgerMode"`. `viewInvoice`
+still sets `detailDialog = true` — untouched — it simply has no dialog to
+raise on this surface, and `selectedInvoiceDetail` is what the panel reads.
+The floating modal below the rail boundary keeps the dialog exactly as it is.
+
+### What the payload can and cannot pay for
+
+The rule from §14.3 and Recargas §12 F: a figure with no read model is not
+drawn, and the absence is commented where the figure would have gone. Four
+of the artboard's promises fail that test, and all four fail for the SAME
+reason — they would need `getInvoiceListFields` or `loadHistory` to change,
+and those are methods.
+
+- **`Timbrado 28 de 31` · the row's `CFDI` chip.** No CFDI/stamp field is in
+  the list payload, and there is no client-side store that holds one per
+  invoice. Adding it is a `loadHistory` edit.
+- **`Cobro` column (`Efectivo` · `Tarjeta` · `Transfer.` · `Mixto`).** The
+  tender lives in the invoice's `payments` child table, which the list call
+  does not read. `viewInvoice` fetches the whole document for ONE row, so the
+  PANEL can show the tender honestly — and it does. A column would need a
+  request per row, which §15.2 forbids outright.
+- **`Turno 24`.** `posa_pos_opening_shift` really is on the doctype
+  (`buildInvoiceFilters` deletes it in supervisor scope, `document.ts:389`
+  writes it), so this one is a listable field rather than a missing one — but
+  listing it is still a `loadHistory` edit. The segment therefore has no
+  Turno and says nothing about one, exactly as §15.2 allows.
+- **`F1`–`F4` on the finder chips, `F2` on the search box, `F5 imprime ·
+  F8 devuelve` in the footer.** R8: the chip renders the BOUND chord or no
+  chord. `MUELLE_DEFAULT` binds none of these to a ledger action (`f8` is
+  `app.lockScreen`), and registering four new ones is the three-file change
+  R8 spells out, in files this task does not own. So the chips carry no
+  chord, `chordsForAction` is imported from `returns/findMethods.ts` and
+  resolves to an empty list today, and the moment the lead binds them the
+  chips fill in with no further edit.
+
+`Cajero` is the one column that survives its own test: `employeeStore`
+already holds `{ user, full_name }` for the terminal's employees and seeds
+`currentCashier` from `frappe.session`, so `owner` resolves to a display
+name the client is already holding. The column renders when at least one
+visible row resolves and is DROPPED — not filled with an email — when none
+does.
+
+### The three figures that are drawn, and where each comes from
+
+- **Vendido hoy** — Σ `grand_total` over `historyInvoices` where
+  `!is_return` and `posting_date` is today; the caption's count and average
+  come off the same rows.
+- **Por cobrar** — Σ `outstanding_amount` over `unpaidInvoices`, with the
+  overdue count from the same `due_date < today && outstanding > 0` rule
+  `isOverdue` uses, restated pure in `ledgerModel.ts` so a spec can reach it.
+- **Devuelto** — Σ |`grand_total`| over today's `is_return` rows, with
+  `return_against` deciding whether the caption says "all with a ticket".
+
+A collection that has not loaded yields `null`, not `0` — the corte header's
+rule — so the segment counts and the figures render a dash until the first
+load lands rather than announcing an empty day.
+
 ## 2026-08-22 · Cobro hosted surface
 
 ### Which option of §14.4 item 1, and why
