@@ -2587,3 +2587,13 @@ Orders to suppliers,Órdenes de compra a proveedores
 Print labels from the catalogue,Imprimir etiquetas desde el catálogo
 "Balance, issue and top up","Saldo, emisión y recarga"
 "Today, the shift and each cashier","El día, el turno y cada cajero"
+Received in cash,Recibido en efectivo
+Amount received,Recibido
+charges,cobra
+Exact,Exacto
+Applied payments,Pagos aplicados
+Nothing tendered yet,Aún no hay pagos aplicados
+On closing,Al cerrar
+Deducts {0} pcs from stock,Descuenta {0} pzas del inventario
+Customer tax details,Datos fiscales del cliente
+On file for this customer,En el expediente de este cliente

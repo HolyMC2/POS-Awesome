@@ -3,7 +3,11 @@
 	<div
 		ref="paymentRoot"
 		data-pos-keyboard-root="payment"
-		:class="['payment-shell', dialogMode ? 'payment-shell--dialog' : 'payment-shell--anchored']"
+		:class="[
+			'payment-shell',
+			dialogMode ? 'payment-shell--dialog' : 'payment-shell--anchored',
+			{ 'payment-shell--cobro': cobroMode },
+		]"
 		:style="anchoredShellStyle"
 		data-perf-tag="payment"
 	>
@@ -11,6 +15,7 @@
 			:class="[
 				'selection mx-auto my-0 pos-themed-card payment-card',
 				dialogMode ? 'payment-card--dialog' : 'mt-3',
+				{ 'payment-card--cobro': cobroMode },
 			]"
 		>
 			<v-progress-linear
@@ -21,7 +26,21 @@
 				color="info"
 			></v-progress-linear>
 			<div ref="paymentContainer" class="overflow-y-auto payment-scroll">
-				<div :class="['payment-sections', { 'payment-sections--dialog': dialogMode }]">
+				<!--
+					COBRO. The three columns are a GRID over these same
+					sections, not a second markup tree: `payment-sections--cobro`
+					assigns each one an area, and the two sections the artboard
+					adds render below behind `v-if="cobroMode"`. Duplicating the
+					list to lay it out differently would have meant maintaining
+					every binding on this screen twice, which is how two payment
+					screens start to disagree.
+				-->
+				<div
+					:class="[
+						'payment-sections',
+						{ 'payment-sections--dialog': dialogMode, 'payment-sections--cobro': cobroMode },
+					]"
+				>
 					<!-- The way back to the cart, and the three devices that can
 					     fail while the customer is standing there. The header
 					     draws a chip only where the register has evidence, so a
@@ -39,10 +58,13 @@
 						<!-- What the money is FOR, on the screen where it is taken.
 						     It suppresses itself when the cart is still beside this
 						     panel — see `cartOnScreen`. -->
+						<!-- Cobro is a full surface: the cart is BEHIND it, not beside
+						     it, so the summary is the only place those lines can be
+						     read and it must not suppress itself. -->
 						<PaymentSaleSummary
 							class="payment-sale-summary"
 							:items="invoice_doc?.items"
-							:cart-on-screen="cartOnScreen"
+							:cart-on-screen="cobroMode ? false : cartOnScreen"
 							:wallet="customerWallet"
 							:format-currency="formatSummaryCurrency"
 						/>
@@ -75,6 +97,67 @@
 							@show-paid-change="showPaidChange"
 							@update-credit-change="handleCreditChangeUpdate"
 						/>
+					</section>
+
+					<!--
+						COBRO, column two — the money's HOW.
+
+						The pad, the tender chips and the preset chips all leave
+						through `paymentMethodsHandlers`: the SAME object the
+						payment cards below are wired to, landing on
+						`handlePaymentAmountChange`, `set_full_amount` and
+						`setPaymentToDenomination`. Not one new handler, not one
+						new figure. `PaymentMethods` still renders below it, which
+						is where a split across two tenders is typed.
+					-->
+					<section v-if="cobroMode" class="payment-section payment-section--tender">
+						<CobroTenderPad
+							:payments="visiblePaymentMethods"
+							:currency="invoice_doc?.currency"
+							:is-return="Boolean(invoice_doc?.is_return)"
+							:uses-gift-cards="Boolean(pos_profile?.posa_use_gift_cards)"
+							:cart-has-items="Boolean(invoice_doc?.items?.length)"
+							:format-currency="formatCurrency"
+							:get-visible-denominations="getVisibleDenominations"
+							:is-cash-like-payment="isCashLikePayment"
+							:diff-payment="diff_payment"
+							v-on="paymentMethodsHandlers"
+						/>
+						<CobroOnClose
+							:item-count="Number(invoice_doc?.total_qty) || 0"
+							:updates-stock="Boolean(invoice_doc?.update_stock)"
+						/>
+					</section>
+
+					<!--
+						COBRO, column three — the money's PAPER.
+
+						`Charge and print` is `submit(undefined, false, true)`, the
+						same call the footer's `Submit & Print` makes; it is here
+						because the footer does not render on this surface (the
+						band owns the primary) and losing the print path would be
+						a regression dressed as a redesign. Outlined and unpainted:
+						it is a paper choice, not a second primary.
+					-->
+					<section v-if="cobroMode" class="payment-section payment-section--paper">
+						<CobroChangeCard
+							:total="invoiceChargeTotal"
+							:tendered="total_payments"
+							:currency="invoice_doc?.currency"
+							:format-currency="formatCurrency"
+							:tax-id="customer_info?.tax_id || ''"
+						/>
+						<v-btn
+							block
+							variant="outlined"
+							class="payment-cobro-print"
+							data-testid="cobro-charge-and-print"
+							:loading="loading"
+							:disabled="loading || validatePayment"
+							@click="submit(undefined, false, true)"
+						>
+							{{ __("Charge and print") }}
+						</v-btn>
 					</section>
 
 					<RestaurantTipSelector
@@ -317,7 +400,19 @@
 			</div>
 		</v-card>
 
-		<div :class="['payment-footer', dialogMode ? 'payment-footer--dialog' : 'payment-footer--anchored']">
+		<!--
+			The footer does not render on the Cobro surface. `ActionBand` owns
+			the one action there (`sale.collectAndClose` → the same `submit`),
+			and Submit is the payment screen's ONE accent — drawing it a second
+			time under a band that already carries it is both a second primary
+			and a second saturated fill. `Cancel Payment` is not lost either:
+			the header's `Volver a la venta` is the same `cancel_payment()`.
+			The component stays mounted on every other layout.
+		-->
+		<div
+			v-if="!cobroMode"
+			:class="['payment-footer', dialogMode ? 'payment-footer--dialog' : 'payment-footer--anchored']"
+		>
 			<PaymentActionButtons
 				ref="submitButton"
 				:loading="loading"
@@ -438,12 +533,32 @@ import PaymentReadinessHeader from "./payments/PaymentReadinessHeader.vue";
 import { useHardwareReadiness } from "./payments/useHardwareReadiness";
 import PaymentDialogs from "./payments/PaymentDialogs.vue";
 import RestaurantTipSelector from "./payments/RestaurantTipSelector.vue";
+// Cobro — the desktop payment SURFACE (build plan §14). Chrome only: these
+// three render this component's own state and reach its own handlers through
+// the contract `PaymentMethods` already has. Nothing below `<script setup>`
+// changed for them beyond these imports and the `cobroMode` prop.
+import CobroTenderPad from "./payments/cobro/CobroTenderPad.vue";
+import CobroOnClose from "./payments/cobro/CobroOnClose.vue";
+import CobroChangeCard from "./payments/cobro/CobroChangeCard.vue";
 // MP-INTEGRATION-POINT (sale checkout): hard gate — isolated, no-op when off.
 import MpPointSaleGateDialog from "../pos_pay/MpPointSaleGateDialog.vue";
 import { useMpPointSaleGate } from "../../composables/pos/payments/useMpPointSaleGate";
 
 const props = defineProps({
 	dialogMode: {
+		type: Boolean,
+		default: false,
+	},
+	/**
+	 * The desktop Cobro surface, hosted beside the rail (build plan §14.2).
+	 *
+	 * A LAYOUT flag, and only that: the same sections, the same bindings, the
+	 * same submit, arranged in the artboard's three columns instead of one
+	 * scrolling list. Nothing in this file's state or handlers reads it —
+	 * grep it and you will find the template and the stylesheet, which is the
+	 * property §14.4 asked for.
+	 */
+	cobroMode: {
 		type: Boolean,
 		default: false,
 	},
@@ -2817,6 +2932,112 @@ defineExpose({
 
 .payment-sections--dialog .payment-section--meta {
 	grid-area: meta;
+}
+
+/* ── Cobro — the hosted payment surface (build plan §14.2) ────────────────
+   The artboard's three columns, laid over the sections this screen already
+   has rather than over a second markup tree. Column one is the money's WHY
+   (the ticket, the wallet, the totals), two is the HOW (tender, pad, the
+   method cards a split is typed into), three is the PAPER (change, print,
+   settlement). The band below owns the one number and the one action, so
+   nothing here draws a total or a primary of its own.
+
+   Only ever above 1100px: `Pos.vue` hosts this when the rail is visible, and
+   the rail's step and `COMPACT_PAYMENT_WIDTH` are the same 1100. */
+.payment-shell--cobro {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: var(--pos-space-2);
+	overflow: hidden;
+}
+
+.payment-card--cobro {
+	flex: 1 1 auto;
+	min-height: 0;
+	height: auto;
+	max-height: none;
+	margin-top: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.payment-sections--cobro {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.95fr);
+	gap: var(--pos-space-2);
+	align-items: start;
+	grid-template-areas:
+		"readiness readiness readiness"
+		"summary tender paper"
+		"summary methods paper"
+		"adjustments methods settlement"
+		"adjustments methods meta";
+}
+
+/* Same rule as the dialog: an unplaced child would be auto-placed into the
+   first free cell and shove a named section out of it. */
+.payment-sections--cobro .payment-readiness {
+	grid-area: readiness;
+}
+
+.payment-sections--cobro .payment-section {
+	padding: 10px;
+	gap: 10px;
+}
+
+.payment-sections--cobro .payment-section--summary {
+	grid-area: summary;
+}
+
+.payment-sections--cobro .payment-section--tender {
+	grid-area: tender;
+}
+
+.payment-sections--cobro .payment-section--paper {
+	grid-area: paper;
+}
+
+.payment-sections--cobro .payment-section--methods {
+	grid-area: methods;
+}
+
+.payment-sections--cobro .payment-section--adjustments {
+	grid-area: adjustments;
+}
+
+.payment-sections--cobro .payment-section--settlement {
+	grid-area: settlement;
+}
+
+.payment-sections--cobro .payment-section--meta {
+	grid-area: meta;
+}
+
+/* The two Cobro sections carry their own cards inside, so the section itself
+   is a bare column — a card inside a card is the density the surface exists
+   to remove. */
+.payment-section--tender,
+.payment-section--paper {
+	background: transparent;
+	border: 0;
+	padding: 0;
+}
+
+.payment-sections--cobro .payment-section--tender,
+.payment-sections--cobro .payment-section--paper {
+	padding: 0;
+	gap: var(--reg-space-md, 10px);
+}
+
+/* The ticket has a whole column to itself here, so it gets more of it than
+   the dialog's stacked left column could give it. */
+.payment-sections--cobro .payment-sale-summary {
+	max-height: 46vh;
+}
+
+.payment-cobro-print {
+	min-height: var(--reg-touch-min, 44px);
 }
 
 .payment-section--summary {
