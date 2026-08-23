@@ -100,6 +100,37 @@ Not drawn, each with the absence commented where the figure would have gone:
 - **`Saldo $1,240` in the header.** The saldo balance is not on the payment
   screen's inputs.
 
+### What actually happened
+
+**361 spec files / 3,706 tests green, `vue-tsc` exit 0, `vite build` clean.**
+`Payments-*.js` stayed its own 147 kB chunk, which it only does because
+`CobroSurface` imports it with `defineAsyncComponent` — a plain import there
+would have folded the whole payment stack into the shell's first paint, and §6
+budgets payment-open at 150 ms p95 on the assumption that it does not.
+
+Three things the build taught, none of them in the plan:
+
+- **`cartOnScreen` is wrong on this surface, and the computed could not be
+  touched.** `PaymentSaleSummary` refuses to draw a ticket the cashier can
+  already see, and it decides that from `!dialogMode && !compactPaymentLayout`
+  — both false above 1100 px, so on the hosted Cobro it concluded the cart was
+  beside it and drew nothing. The cart is BEHIND this surface. The binding
+  answers `false` for cobro and resolves through `cartOnScreen` everywhere
+  else; `payViewWiring.spec.ts` pinned the literal binding text to stop it
+  being hardcoded to false, and its regex was widened to admit exactly that
+  one branch rather than the general case.
+- **A comment can break a source-scanning spec.** `shellIntegrationWiring`
+  finds the drawer's positioned ancestor with
+  `indexOf(".register-shell__content")` and reads the next 600 characters. A
+  new comment in `Pos.vue` naming that class matched first, so the test read
+  prose instead of a rule. The comment was reworded. Worth recording because
+  the next agent will write the same comment.
+- **`singleAccent` cannot pass in a fresh worktree until something builds.**
+  It asserts the `.vue.css` sidecars exist before proving nothing imports
+  them, and those are gitignored build artifacts. Red on a clean checkout,
+  green after `vite build`. Not a regression, and not obvious from the failure
+  text.
+
 ### The pad's fourth column
 
 `PayKeypad` is reused whole, and its layout module puts `Dividir pago` where
