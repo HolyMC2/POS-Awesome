@@ -44,6 +44,12 @@ export interface DialogFullscreenProps extends DialogGeometry {
 	scrim?: boolean | string;
 	/** A surface is not dismissed by clicking beside it; the rail moves on. */
 	persistent?: boolean;
+	/**
+	 * Hosted surfaces are `contained`: Vuetify then positions the overlay
+	 * `absolute` inside the attach target instead of `fixed` over the viewport,
+	 * which is what keeps the rail and the band on screen beside a hosted sheet.
+	 */
+	contained?: boolean;
 }
 
 /**
@@ -90,9 +96,17 @@ function applyDestinationSurface(
 	// writes width/min-width as INLINE styles that outrank any stylesheet, so a
 	// sheet carrying `min-width: 800px` would stay 800px wide inside a 520px
 	// destination area.
+	//
+	// `contained` is the half that was missing: `attach` alone only moves the
+	// overlay's DOM node, and VOverlay still paints it `position: fixed` over
+	// the whole viewport — the hosted corte covered the rail, the navbar and
+	// the band (see `docs/design-evidence/destinations/closing.png`). With
+	// `contained` Vuetify adds `v-overlay--absolute`, and the overlay fills its
+	// positioned ancestor — `.destination-host` — and nothing beyond it.
 	return {
 		fullscreen: false,
 		attach,
+		contained: true,
 		scrim: false,
 		persistent: true,
 	};

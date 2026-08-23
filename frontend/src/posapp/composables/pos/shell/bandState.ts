@@ -229,12 +229,25 @@ export function resolveBandState(input: BandInput): BandState {
 
 		case "recharge": {
 			const amount = round2(num(input.amount));
+			// The caption names what the register knows and nothing else. With
+			// the destination just opened — no company, no number — the full
+			// form rendered as "To recharge · ·", two separators around two
+			// blanks. Same rule as the readiness chips: no chip without evidence.
+			const known = [input.carrier, input.msisdn].filter(
+				(part): part is string => typeof part === "string" && part.trim().length > 0,
+			);
+			const labelKey =
+				known.length === 2
+					? "To recharge · {0} · {1}"
+					: known.length === 1
+						? "To recharge · {0}"
+						: "To recharge";
 			return {
 				kind: "recharge",
 				tone: "neutral",
 				value: amount,
-				labelKey: "To recharge · {0} · {1}",
-				labelParams: [input.carrier ?? "", input.msisdn ?? ""],
+				labelKey,
+				labelParams: known,
 				primaryAction: { id: "recharge.submit", labelKey: "RECHARGE" },
 				primaryEnabled: input.ready ?? amount > 0,
 			};

@@ -1,5 +1,5 @@
 <template>
-	<v-dialog v-model="dialogModel" max-width="640">
+	<v-dialog v-model="dialogModel" v-bind="dialogProps">
 		<v-card>
 			<v-card-title class="d-flex align-center">
 				<v-icon start color="primary">mdi-cash-register</v-icon>
@@ -66,6 +66,8 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
+import { useDialogFullscreen } from "../../composables/core/useDialogFullscreen";
+import { useHostedSheet } from "../../composables/pos/shell/useHostedSheet";
 import { useInvoiceStore } from "../../stores/invoiceStore";
 import { useUIStore } from "../../stores/uiStore";
 import { useToastStore } from "../../stores/toastStore";
@@ -74,7 +76,25 @@ const props = defineProps({
 	modelValue: { type: Boolean, default: false },
 	posProfile: { type: Object, default: () => ({}) },
 });
-const emit = defineEmits(["update:modelValue"]);
+// `close` is only emitted while hosted as the rail's Orden de servicio
+// destination (see `useHostedSheet`); the navbar copy uses `update:modelValue`.
+const emit = defineEmits(["update:modelValue", "close"]);
+
+// Same geometry as before (640 wide, fullscreen on phones); when hosted the
+// helper swaps it for the destination surface beside the rail.
+const { dialogProps } = useDialogFullscreen({ maxWidth: 640 });
+
+// Hosted, the open state is OURS: nobody outside passes `modelValue` to a
+// component the rail mounted, and the rail choosing the destination is the
+// open request. Floating (navbar), it stays the parent's v-model.
+const hostedOpen = ref(false);
+const hosted = useHostedSheet({
+	open: hostedOpen,
+	openSheet: () => {
+		hostedOpen.value = true;
+	},
+	emit,
+});
 
 // Stores are resolved lazily inside the handlers: the invoice store touches
 // frappe.datetime at init, which must not run just because the navbar
@@ -82,8 +102,14 @@ const emit = defineEmits(["update:modelValue"]);
 const __ = window.__ || ((t) => t);
 
 const dialogModel = computed({
-	get: () => props.modelValue,
-	set: (value) => emit("update:modelValue", value),
+	get: () => (hosted.isHosted ? hostedOpen.value : props.modelValue),
+	set: (value) => {
+		if (hosted.isHosted) {
+			hostedOpen.value = value;
+			return;
+		}
+		emit("update:modelValue", value);
+	},
 });
 
 const loading = ref(false);
@@ -157,7 +183,7 @@ async function selectRequest(request) {
 }
 
 watch(
-	() => props.modelValue,
+	() => dialogModel.value,
 	(open) => {
 		if (open) refresh();
 	},

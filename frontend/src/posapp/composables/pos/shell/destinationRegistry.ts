@@ -336,10 +336,21 @@ export function destinationForPath(path: string): DestinationDef | undefined {
  */
 export const SHEET_COMPONENTS: Record<string, () => Promise<unknown>> = {
 	serviceOrder: () => import("../../../components/navbar/ChargeRequestsDialog.vue"),
-	drafts: () => import("../../../components/pos/flows/Drafts.vue"),
+	// Borradores and Facturas are ONE component on two tabs. `Drafts.vue` was
+	// never a surface: its only act on opening is to close itself and open
+	// Invoice Management on the drafts tab, so hosting it put a redirect on
+	// screen — a redirect whose target was a floating modal the host could not
+	// show. The host mounts the target directly and the surface's
+	// `destinationId` picks the tab (see `useHostedSheet` in InvoiceManagement).
+	drafts: () => import("../../../components/pos/flows/InvoiceManagement.vue"),
 	invoices: () => import("../../../components/pos/flows/InvoiceManagement.vue"),
 	"return": () => import("../../../components/pos/flows/Returns.vue"),
-	recharge: () => import("@saldo/SaldoCatalogPicker.vue"),
+	// The designed destination (§12 F), not the catalogue picker. The picker
+	// is a two-step modal the cart still opens below the two-column boundary;
+	// hosted, it waited for a `modelValue` nobody set and the surface stayed
+	// empty. `RecargasDestination` reads, arms the band and hands the line to
+	// the cart through the picker's own event — the money path is unchanged.
+	recharge: () => import("../../../components/pos/recargas/RecargasDestination.vue"),
 	// Not a dialog: `CashMovementView` is a plain view, so it renders straight
 	// into the surface with no overlay in between. That is also why it never
 	// reached the `useDialogFullscreen` seam and kept its modal-body geometry.

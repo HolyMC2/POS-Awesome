@@ -1405,6 +1405,7 @@ import {
 	watchPrintWindow,
 } from "../../../plugins/print";
 import { notifyQzPrintFallback, printDocumentViaQz } from "../../../services/qzTray";
+import { useHostedSheet } from "../../../composables/pos/shell/useHostedSheet";
 import { isOffline } from "../../../../offline/index";
 import DocumentSourceSelector from "../shared/DocumentSourceSelector.vue";
 import {
@@ -1428,7 +1429,10 @@ export default {
 	components: {
 		DocumentSourceSelector,
 	},
-	setup() {
+	// `close` is only ever emitted while hosted as a rail destination — see
+	// `useHostedSheet`. The floating modal closes itself through the store.
+	emits: ["close"],
+	setup(_props, { emit }) {
 		const uiStore = useUIStore();
 		const invoiceStore = useInvoiceStore();
 		const customersStore = useCustomersStore();
@@ -1459,6 +1463,21 @@ export default {
 		const { invoiceManagementDialog, invoiceManagementTargetTab, posProfile, posOpeningShift } =
 			storeToRefs(uiStore);
 		const { currentCashier } = storeToRefs(employeeStore);
+
+		// Two rail destinations land on this one component: Borradores opens it
+		// on the drafts tab, Facturas on history. The surface says which, and
+		// the tab is set THROUGH the store's own open call so the
+		// `invoiceManagementDialog` watcher below reads the target exactly as it
+		// does for the navbar button — one open path, not two.
+		const hosted = useHostedSheet({
+			open: invoiceManagementDialog,
+			openSheet: () => {
+				const tab = hosted.destinationId?.value === "drafts" ? "drafts" : "history";
+				uiStore.openInvoiceManagement(tab, uiStore.draftSource || "invoice");
+			},
+			closeSheet: () => uiStore.closeInvoiceManagement(),
+			emit,
+		});
 		return {
 			uiStore,
 			invoiceStore,

@@ -123,6 +123,14 @@ export type Events = {
 	 */
 	open_destination: string;
 	toggle_catalog_drawer: void; // Alt+B → the catalogue beside the sale
+	/**
+	 * The band's `recharge.submit` pressed while Recargas is the hosted
+	 * destination. The shell owns the band and the destination owns the
+	 * intent, so the press travels back down as an event rather than the
+	 * shell reaching into a component it only hosts. Handled in
+	 * `RecargasDestination.vue`.
+	 */
+	"recharge:submit": void;
 	open_mpesa_payments: { company: string; mode_of_payment: string; customer: string };
 	set_mpesa_payment: Record<string, any>;
 	open_ClosingDialog: Record<string, any>;

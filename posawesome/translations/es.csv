@@ -2572,3 +2572,8 @@ the pouch got it back by itself,la bolsa lo recuperó sola
 Confirming,Confirmando
 Not delivered,No entregada
 Under review,En revisión
+Recharge not added,Recarga no agregada
+The reference did not pass validation.,La referencia no pasó la validación.
+The register could not validate the reference. Try again.,La caja no pudo validar la referencia. Inténtalo de nuevo.
+To recharge,A recargar
+To recharge · {0},A recargar · {0}

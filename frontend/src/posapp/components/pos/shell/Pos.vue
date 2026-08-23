@@ -6,10 +6,22 @@
 		:class="[rtlClasses]"
 		:style="[responsiveStyles, layoutStyleOverrides, rtlStyles]"
 	>
-		<Drafts v-if="uiStore.draftsDialog"></Drafts>
-		<InvoiceManagement v-if="uiStore.invoiceManagementDialog"></InvoiceManagement>
+		<!-- The FLOATING copies of the flows sheets, for the layout with no
+		     rail (the dock is the nav there). With the rail on screen these
+		     same components are hosted as destinations by DestinationHost
+		     below, and the legacy open triggers are turned into rail
+		     activations — see `legacyDialogRedirect`. Gating the floating
+		     copy on the same condition is what stops a hosted sheet's store
+		     flag from raising a second, modal copy over the surface. -->
+		<Drafts v-if="uiStore.draftsDialog && !railVisible"></Drafts>
+		<InvoiceManagement
+			v-if="uiStore.invoiceManagementDialog && !invoiceManagementHosted"
+		></InvoiceManagement>
 		<SalesOrders v-if="uiStore.ordersDialog"></SalesOrders>
-		<Returns v-if="returnsMounted" :open-request="returnsOpenRequest"></Returns>
+		<Returns
+			v-if="returnsMounted && !railVisible"
+			:open-request="returnsOpenRequest"
+		></Returns>
 		<NewAddress v-if="newAddressMounted" :open-request="newAddressOpenRequest"></NewAddress>
 		<MpesaPayments v-if="mpesaMounted" :open-request="mpesaOpenRequest"></MpesaPayments>
 		<Variants v-if="uiStore.variantsDialog"></Variants>
@@ -85,6 +97,7 @@
 					:refusal="destinationRefusal"
 					:t="verticalT"
 					@dismiss="dismissDestination"
+					@band="onHostedBand"
 				/>
 
 				<!--
@@ -498,6 +511,13 @@ export default {
 			if (!saldoEnabledForProfile()) {
 				return;
 			}
+			// With the rail on screen, Recarga is a DESTINATION (§12 F) and the
+			// cart's button is one more way to reach it. The two-step picker
+			// stays the mechanism for the layout with no rail.
+			if (railVisible.value) {
+				destinationRouting.activate("recharge", "shortcut");
+				return;
+			}
 			saldoPickerOpen.value = true;
 		};
 		const onSaldoPicked = (payload) => {
@@ -886,6 +906,69 @@ export default {
 
 		const dismissDestination = () => destinationRouting.dismiss();
 
+		// Borradores and Facturas are both InvoiceManagement, hosted. While
+		// either is up, the floating copy behind `uiStore.invoiceManagementDialog`
+		// must stay down — the hosted instance raises that same flag.
+		const invoiceManagementHosted = computed(() =>
+			["drafts", "invoices"].includes(hostedDestinationId.value),
+		);
+
+		// A hosted surface may publish its own band state (DestinationHost
+		// relays `band`). The shell adopts it ONLY for kinds it can act on:
+		// `recharge` is the one whose primary action the shell answers today
+		// (`recharge.submit` → bus → RecargasDestination). The corte also
+		// publishes one and keeps its own Submit; adopting it here without an
+		// action behind `shift.close` would show a button that does nothing.
+		const hostedBandState = ref(null);
+		const HOSTED_BAND_KINDS = ["recharge"];
+		const onHostedBand = (state) => {
+			hostedBandState.value =
+				state && HOSTED_BAND_KINDS.includes(state.kind) ? state : null;
+		};
+		watch(hostedDestinationId, () => {
+			hostedBandState.value = null;
+		});
+
+		/**
+		 * The legacy open triggers — `uiStore.openDrafts` after Alt+L,
+		 * `uiStore.openInvoiceManagement` from the navbar and from Drafts'
+		 * own redirect — raise a FLOATING modal. With the rail on screen those
+		 * sheets are destinations, so the trigger is turned into the rail
+		 * activation it means and the flag is lowered before the floating
+		 * copy can mount. Below the two-column boundary nothing changes.
+		 *
+		 * Not a loop: the hosted InvoiceManagement raises the same flag on
+		 * mount, and by then `invoiceManagementHosted` is already true.
+		 */
+		const legacyDialogRedirect = (id) => {
+			if (!railVisible.value) {
+				return false;
+			}
+			destinationRouting.activate(id, "shortcut");
+			return true;
+		};
+		watch(
+			() => uiStore.draftsDialog,
+			(open) => {
+				if (open && railVisible.value) {
+					uiStore.closeDrafts();
+					legacyDialogRedirect("drafts");
+				}
+			},
+		);
+		watch(
+			() => uiStore.invoiceManagementDialog,
+			(open) => {
+				if (!open || !railVisible.value || invoiceManagementHosted.value) {
+					return;
+				}
+				// Read before closing: `closeInvoiceManagement` resets the tab.
+				const target = uiStore.invoiceManagementTargetTab === "drafts" ? "drafts" : "invoices";
+				uiStore.closeInvoiceManagement();
+				legacyDialogRedirect(target);
+			},
+		);
+
 		const railContext = {
 			__,
 			t: verticalT,
@@ -966,16 +1049,23 @@ export default {
 		// One number, one action. `sale` is the only input the shell can answer
 		// today; tender, refund, recharge and closing arrive with the surfaces
 		// that own those numbers.
-		const bandState = computed(() =>
-			resolveBandState({
-				kind: "sale",
-				total: invoiceTotal.value,
-				itemCount: itemsCount.value,
-			}),
+		const bandState = computed(
+			() =>
+				hostedBandState.value ??
+				resolveBandState({
+					kind: "sale",
+					total: invoiceTotal.value,
+					itemCount: itemsCount.value,
+				}),
 		);
 		const onBandPrimary = (actionId) => {
 			if (actionId === "sale.pay") {
 				triggerInvoicePay();
+				return;
+			}
+			if (actionId === "recharge.submit") {
+				// The destination owns the intent; the press travels down.
+				eventBus.emit("recharge:submit");
 			}
 		};
 
@@ -1159,6 +1249,12 @@ export default {
 			});
 		};
 		const handleOpenReturns = (company) => {
+			// Alt+8 and the invoice's "return" action both say `open_returns`;
+			// with the rail on screen that means the Devolución destination,
+			// which opens itself on the POS Profile's company.
+			if (legacyDialogRedirect("return")) {
+				return;
+			}
 			returnsMounted.value = true;
 			returnsOpenRequest.value = {
 				company,
@@ -1420,7 +1516,9 @@ export default {
 			addComboSuggestion,
 			bandState,
 			onBandPrimary,
+			onHostedBand,
 			hostedDestinationId,
+			invoiceManagementHosted,
 			destinationRefusal,
 			dismissDestination,
 			verticalT,

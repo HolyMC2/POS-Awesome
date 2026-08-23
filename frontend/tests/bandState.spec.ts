@@ -210,7 +210,19 @@ describe("Recargas · Recargas.dc.html", () => {
 		});
 		expect(state.value).toBe(200);
 		expect(state.tone).toBe("neutral");
+		expect(state.labelKey).toBe("To recharge · {0} · {1}");
 		expect(state.labelParams).toEqual(["Telcel", "55 2841 6390"]);
+	});
+
+	it("names only what it knows — a freshly opened Recarga is not '· ·'", () => {
+		const empty = resolveBandState({ kind: "recharge", amount: 0 });
+		expect(empty.labelKey).toBe("To recharge");
+		expect(empty.labelParams).toEqual([]);
+		expect(empty.primaryEnabled).toBe(false);
+
+		const carrierOnly = resolveBandState({ kind: "recharge", amount: 0, carrier: "Telcel", msisdn: "" });
+		expect(carrierOnly.labelKey).toBe("To recharge · {0}");
+		expect(carrierOnly.labelParams).toEqual(["Telcel"]);
 	});
 });
 

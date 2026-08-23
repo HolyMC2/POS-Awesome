@@ -137,7 +137,9 @@
 </template>
 
 <script>
+import { ref } from "vue";
 import format, { formatUtils } from "../../../format";
+import { useHostedSheet } from "../../../composables/pos/shell/useHostedSheet";
 import { useInvoiceStore } from "../../../stores/invoiceStore.js";
 import { useUIStore } from "../../../stores/uiStore.js";
 import { useEmployeeStore } from "../../../stores/employeeStore";
@@ -174,7 +176,10 @@ export default {
 		},
 	},
 	mixins: [format],
-	setup() {
+	// `close` is only ever emitted while hosted as a rail destination — see
+	// `useHostedSheet`. The floating modal closes itself.
+	emits: ["close"],
+	setup(_props, { emit }) {
 		const invoiceStore = useInvoiceStore();
 		const uiStore = useUIStore();
 		const employeeStore = useEmployeeStore();
@@ -187,6 +192,12 @@ export default {
 			width: "min(1120px, 96vw)",
 			maxWidth: "1120px",
 		});
+		// Lives here rather than in `data()` so the hosted-sheet contract can
+		// watch it; `this.invoicesDialog` reads and writes it the same way.
+		const invoicesDialog = ref(false);
+		// The open itself happens in `mounted()`: it needs the company off the
+		// POS Profile, which `created` wires onto the instance.
+		const hosted = useHostedSheet({ open: invoicesDialog, emit });
 		return {
 			invoiceStore,
 			uiStore,
@@ -194,11 +205,12 @@ export default {
 			verticalStore,
 			isCompactReturns,
 			dialogProps,
+			invoicesDialog,
+			isHosted: hosted.isHosted,
 			isDarkTheme: theme.isDark,
 		};
 	},
 	data: () => ({
-		invoicesDialog: false,
 		dialog_data: [],
 		company: "",
 		from_date: null,
@@ -751,9 +763,14 @@ export default {
 		},
 	},
 	created: function () {
-		this.eventBus.on("open_returns", (data) => {
+		// Kept on the instance so `beforeUnmount` can remove THIS listener. A
+		// bare `off("open_returns")` strips every listener on the event —
+		// including the shell's — and this component now unmounts every time
+		// the rail leaves Devolución.
+		this.handleOpenReturnsEvent = (data) => {
 			this.open_dialog(data);
-		});
+		};
+		this.eventBus.on("open_returns", this.handleOpenReturnsEvent);
 
 		this.$watch(
 			() => this.uiStore.posProfile,
@@ -763,8 +780,15 @@ export default {
 			{ deep: false, immediate: true },
 		);
 	},
+	mounted() {
+		// Hosted by the rail: the destination being chosen IS the open request
+		// (see `useHostedSheet`). The floating copy keeps waiting for the bus.
+		if (this.isHosted) {
+			this.open_dialog(this.uiStore.posProfile?.company || this.pos_profile?.company || "");
+		}
+	},
 	beforeUnmount() {
-		this.eventBus.off("open_returns");
+		this.eventBus.off("open_returns", this.handleOpenReturnsEvent);
 	},
 };
 </script>

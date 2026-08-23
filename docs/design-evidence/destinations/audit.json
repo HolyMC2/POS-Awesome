@@ -68,7 +68,7 @@
     "railWidth": 96,
     "bandPresent": true,
     "overflowLeft": 0,
-    "overflowRight": 17,
+    "overflowRight": 0,
     "widestElement": 1440,
     "viewportWidth": 1440,
     "docScrollWidth": 1440,
@@ -77,12 +77,7 @@
     "hostLeft": 96,
     "hostWidth": 1344,
     "hostText": "Cash MovementPosting DatePosting DateBook an expense, send c",
-    "overflowSample": [
-      "table. @685..1634",
-      "thead. @685..1634",
-      "tr. @685..1634",
-      "th.v-data-table__td @1358..1460"
-    ]
+    "overflowSample": []
   },
   {
     "id": "drafts",
@@ -101,7 +96,7 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": "",
+    "hostText": "Invoice ManagementTrack recent sales, collect unpaid balance",
     "overflowSample": [
       "div.v-row @84..1452"
     ]
@@ -123,7 +118,7 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": "",
+    "hostText": "Invoice ManagementTrack recent sales, collect unpaid balance",
     "overflowSample": [
       "div.v-row @84..1452"
     ]
@@ -145,7 +140,7 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": "",
+    "hostText": "Select Return InvoiceSearch an invoice and continue the retu",
     "overflowSample": [
       "div.v-row @84..1452"
     ]
@@ -167,7 +162,7 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": "",
+    "hostText": "Airtime rechargesit is charged from your saldo pouch0 top-up",
     "overflowSample": []
   },
   {
