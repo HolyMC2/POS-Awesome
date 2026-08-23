@@ -243,6 +243,24 @@ def _fetch_remote(app_path: str) -> None:
         return
 
 
+def _is_ancestor(app_path: str, maybe_ancestor: str, of: str) -> bool:
+    """True when ``maybe_ancestor`` is already contained in ``of``. On any git
+    failure answer True — the safe reading is «no update», never a false
+    prompt on every register."""
+    try:
+        rc = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", maybe_ancestor, of],
+            cwd=app_path,
+            stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+        ).returncode
+    except Exception:
+        return True
+    if rc == 1:  # the one answer git gives for a genuine "not contained"
+        return False
+    return True  # 0 = ancestor; anything else = git error = no prompt
+
+
 def _get_remote_heads(app_path: str) -> Dict[str, str]:
     try:
         output = (
@@ -384,7 +402,14 @@ def get_remote_update_info() -> Dict[str, Any]:
     current_hash = base.get("commit_hash") if base else None
     if heads and current_hash and current_branch:
         remote_head = heads.get(current_branch)
-        if remote_head and remote_head != current_hash:
+        # Inequality is NOT "remote ahead": a checkout with unpushed commits
+        # (every lab build before Marco's sweep) differs from origin while
+        # being NEWER, and reporting that as an update made every register
+        # prompt «Actualización disponible» for a commit it already contains.
+        # Remote is ahead only when it is NOT an ancestor of the local head.
+        if remote_head and remote_head != current_hash and not _is_ancestor(
+            app_path, remote_head, current_hash
+        ):
             different = {current_branch: remote_head}
             data["remote_ahead"] = different
             ref = f"origin/{current_branch}"
