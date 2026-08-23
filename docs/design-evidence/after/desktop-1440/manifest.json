@@ -1,13 +1,12 @@
 {
   "label": "after",
   "viewport": "desktop-1440",
-  "capturedAt": "2026-08-22T20:32:58.895Z",
-  "posProfile": "Doco Ventas",
+  "capturedAt": "2026-08-23T00:10:17.580Z",
+  "posProfile": "unknown (opening dialog never appeared)",
   "cartLines": 0,
   "mobileDockVisible": false,
   "railPresent": true,
   "captured": [
-    "apertura",
     "venta-vacia",
     "venta",
     "riel",

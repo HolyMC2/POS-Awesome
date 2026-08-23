@@ -7,6 +7,72 @@ only records successes is a log nobody can debug from.
 
 ---
 
+## 2026-08-22 · Six desktop views, six mobile views, and the scan that maintains itself
+
+**337 spec files / 3,261 tests, `vue-tsc` exit 0, build clean, deployed** with
+the served stamp matching HEAD. Baseline was 238 / 1,719: **+99 spec files and
++1,542 tests, zero regressions**, across 30 commits.
+
+### What the artboards were carrying that we did not have
+
+Reading the other twenty artboards properly (plan §12) turned up three business
+rules, not three layouts:
+
+- **`Nota del faltante · obligatoria`** — a corte difference requires a written
+  explanation before the shift closes. The artboard does not say from which
+  peso, and that answer decides whether the control works:
+  `tolerance = max(floorMajor, rateOfTakings × takings)`. $50 is 25 % of a $200
+  taquería shift and 0.45 % of an $11,000 one, so one fixed threshold is either
+  meaningless at the top or tyrannical at the bottom — and a mandatory note on
+  a rounding difference trains cashiers to type nonsense, which destroys the
+  control. The gate also separates "empty" from "what was typed is not an
+  explanation", because a control that accepts any keystroke is a habit.
+- **`pieza del cliente · no se cobra · 0`** — a service-order line that is part
+  of the job and costs nothing. Visible because the customer's own glass is in
+  their phone; excluded from the total because they already own it. A
+  zero-priced line that silently drops off screen is how someone gets asked to
+  pay for their own part.
+- **`0.23 % de ventas`** — the corte difference against the day's takings,
+  which is what makes $25 legible at 8pm without arithmetic.
+
+### Decisions worth keeping
+
+- **`bandState.ts` stayed viewport-blind.** Mobile draws `COBRAR $1,129.00`
+  with the amount in the button where desktop draws `PAGAR` above a 60px
+  number. Handing the money module a `viewport` discriminant would have made
+  layout a money concern and leaked every future breakpoint into the one place
+  that guarantees "one number, one action". The mobile label uses the
+  `labelKey` + `labelParams` shape `REFUND {0}` already established.
+- **Making change reuses the corte's denomination module**, run backwards —
+  greedy over the same list, same integer minor units. A second denomination
+  table would have been a second place for the float bug to reappear.
+- **The offline capability columns come "from the manifest and from nothing
+  else"** — the same manifest whose claims were corrected in §8 R4. A
+  hand-written list would drift from it the first time a capability changed.
+- **Compatibility is real but narrow, and says so.** Exactly one authored
+  relation exists — `POS Combo.targets` — so a combo that fits a device makes
+  its components compatible by derivation. A combo with no targets is excluded,
+  because compatible-with-everything is compatible-with-nothing as a filter,
+  and where nothing can be derived the chip does not render: a "Compatible"
+  chip that quietly shows the whole catalogue is a lie the cashier repeats to a
+  customer.
+- **`unknown` never collapses into `pass`** in the opening readiness matrix. A
+  green tick nobody earned converts "we could not tell" into "we confirmed".
+
+### The recurring hole, closed properly
+
+The translation scan's scope was a hand-kept directory list, and **it went
+stale six times** — the shortcuts registry, `items/`, `invoice/`, then
+`shift`/`closing`/`offline`/`payments`/`flows`, then `mobile/`. Every time the
+spec stayed GREEN while looking in the wrong place, and the strings it missed
+were disproportionately the ones an operator reads when something has already
+gone wrong.
+
+Measuring the whole POS found 109 untranslated strings — only about forty more
+than the mobile views alone. So the scope is now a walk of `components/pos` and
+`composables/pos`, every exclusion has to justify itself in a comment, and the
+list stopped being something a person has to remember.
+
 ## 2026-08-22 · Committed, deployed, and the artboard convergence begins
 
 **13 atomic commits, `926428fa5` → `8a2e655d8`**, explicit staging throughout.

@@ -667,6 +667,18 @@ gravado, merma with reason), `Cafetería` (§4.3), `Salón` (§4.4).
 Quick Service and Table Service do not start until a cafetería is contracted.
 Listing them here is inventory, not backlog.
 
+### Status — 2026-08-22
+
+**Built:** A Apertura · B Cobro · C Corte · D Devolución · E Offline ·
+G Móvil (six of eight — `MovilVenta`, `MovilExplorar`, `MovilCobro`,
+`MovilOrden`, `MovilCorte`, `MovilOffline`).
+
+**In flight:** F Recargas.
+
+**Gated, not missing:** `MovilCafe` and `MovilSalon` are Cafetería and Salón
+surfaces, and H's four mode artboards — all behind §14's evidence gates until
+a cafetería is contracted. Building them is the thing §17.6 warned against.
+
 ### Ranking
 
 **A (Apertura)** first, alone, because it is the only one with a money
@@ -676,3 +688,48 @@ artboard's structure is materially better than ours. Then **B (Cobro)**, which
 item E now feeds. Then **E (Offline)** and **F (Recargas)**. **G (Móvil)** is a
 wave of its own and should follow the desktop views it mirrors. **H** stays
 gated except Orden.
+
+---
+
+## 13. What still wants a revamp
+
+Surveyed rather than guessed, 2026-08-22, ranked by what a shopkeeper meets.
+
+**1. Customer display** (`components/customer_display`, 2 files). The screen the
+CUSTOMER looks at while paying — the most brand-visible surface in the product,
+and nothing in this programme has touched it. Small, low-risk, and the one
+place where looking unfinished is seen by someone who is not paid to tolerate
+it.
+
+**2. `NavbarMenu.vue`** (1,580 lines). The rail replaced navigation, but this
+still holds settings, printing, language, cashier tools and QZ setup. It is now
+the only surface one tap from a converged register that did not get the density
+or accent treatment.
+
+**3. `Reports.vue`** (5,393 lines). ~~The entire remaining accent debt in one
+place.~~ **Corrected 2026-08-22: that was wrong, and wrong in the way this
+whole programme keeps warning about.** The "63 saturated fills" came from
+counting `color=` occurrences, which is the same naive measure an earlier audit
+used to report 41 violations where only 17 were fills. Measured properly —
+by VARIANT, since Vuetify paints `color` as a background only for
+`flat`/`elevated`/`tonal`/default — that file holds **four `v-btn`, none of
+them a state fill**. Its 63 occurrences are chips, icons and progress bars
+carrying colour as a LABEL, which is exactly what invariant 2 reserves state
+colours for.
+
+So Reports carries no accent debt. It is still a revamp candidate on size and
+age alone, but it is not the accent backlog, and `singleAccent.spec.ts` now
+walks it so that a real fill added there tomorrow fails.
+
+**4. CFDI** (`components/pos/cfdi`, 4 files). Fiscal surfaces where a cashier
+and an accountant read the same words. Its 39 untranslated strings were fixed
+in `dcf38edec`; the view itself is unconverged.
+
+**5. `BarcodePrinting.vue`** (1,976) and `CameraScanner.vue` (833) — both
+hardware-adjacent, both predating the design system.
+
+**6. `Payments.vue`** (3,034). Deliberately untouched all programme because it
+is the money path's core. The largest unconverged surface, and the one that
+wants a written plan before an agent goes near it.
+
+**Gated, not missing:** `floor/` (10 files) is Salón.

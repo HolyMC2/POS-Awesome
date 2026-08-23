@@ -2550,3 +2550,25 @@ Scan or type item / barcode,Escanea o escribe artículo / código
 Keyboard shortcuts,Atajos del teclado
 Customer credit redemption requires an online connection,El canje de crédito del cliente requiere conexión en línea
 "Cannot refund {0} for this return: only {1} was paid on the original invoice. Turn on ""Store as Credit?"" to record it as a credit note that reduces the customer's balance.","No se pueden devolver {0} en esta devolución: sólo se pagaron {1} en la factura original. Activa ""¿Guardar como crédito?"" para registrarlo como nota de crédito que baja el saldo del cliente."
+Saldo pouch available,Bolsa de saldo disponible
+Left after this top-up,Te queda después de la recarga
+Keep typing the number,Sigue escribiendo el número
+This number has been topped up on more than one company here,Este número se ha recargado aquí con más de una compañía
+Which company?,¿Cuál compañía?
+it is charged from your saldo pouch,se cobra de tu bolsa de saldo
+Number to top up,Número a recargar
+Repeat last,Repetir última
+From the customer on screen,Del cliente en pantalla
+Today's top-ups,Recargas de hoy
+{0} operations,{0} operaciones
+{0} top-ups today,{0} recargas hoy
+No top-ups yet today,Todavía no hay recargas hoy
+Number,Número
+Free amount,Otro monto
+Recharged here before on {0},Aquí se recargó antes con {0}
+Refunded to the pouch,Devuelto a la bolsa
+the pouch got it back by itself,la bolsa lo recuperó sola
+…,…
+Confirming,Confirmando
+Not delivered,No entregada
+Under review,En revisión
