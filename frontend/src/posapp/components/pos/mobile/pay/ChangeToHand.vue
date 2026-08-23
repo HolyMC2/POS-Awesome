@@ -68,7 +68,14 @@
 		</p>
 
 		<dl class="change-card__figures">
-			<div class="change-card__figure">
+			<!--
+				The desktop Cobro states the ticket's total in its own column, in
+				`CobroTotalsFooter`, and a second copy here would put it on the
+				screen twice — the defect the surface was rebuilt to remove. The
+				phone has no such column, so it keeps the figure and the flag
+				defaults to false.
+			-->
+			<div v-if="!hideTotal" class="change-card__figure">
 				<dt>{{ __("Total") }}</dt>
 				<dd class="reg-mono" data-testid="movil-pay-total" data-money-role="total">
 					{{ formatCurrency(totals.total) }}
@@ -123,10 +130,15 @@ import { minorToMajor } from "../../closing/denominations";
 import { noteFaceMajor, type ChangeNote } from "./changeBreakdown";
 import type { PayTotals } from "./payTotals";
 
-const props = defineProps<{
-	totals: PayTotals;
-	formatCurrency: (_value: number) => string;
-}>();
+const props = withDefaults(
+	defineProps<{
+		totals: PayTotals;
+		formatCurrency: (_value: number) => string;
+		/** Drop the `Total` figure because the surface already states it. */
+		hideTotal?: boolean;
+	}>(),
+	{ hideTotal: false },
+);
 
 // Bare `__` is a Frappe desk global; absent under vitest and in a bare mount.
 const __ = (value: string): string =>

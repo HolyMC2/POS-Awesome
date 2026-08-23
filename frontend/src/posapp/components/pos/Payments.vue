@@ -26,30 +26,39 @@
 				color="info"
 			></v-progress-linear>
 			<!--
-				Cobro owns a scrollport per COLUMN, so the surface itself must
-				not scroll: the band below it carries the one action, and a
-				screen that scrolls away from its own action is the defect §14
-				exists to remove. Every other layout keeps the single scrolling
-				list it has always had.
+				NOTHING INSIDE COBRO SCROLLS, and the surface does not either.
+				The previous round gave every column its own scrollport, which
+				answered "the screen is too tall" with four scrollbars and was
+				rejected for it ("why so many scrolls?", owner 2026-08-23). What
+				keeps the panel on one screen now is that every region is sized
+				to its content and ONE region — the pad — absorbs the slack; the
+				sale-lines list is the single exception, because a fifty-line
+				ticket has to give somewhere.
+
+				`More options` is the one state that cannot fit: it unfolds three
+				legacy form sections under the panel, so THEN the surface scrolls
+				as one. The band lives in the shell, outside this box, so it
+				never scrolls away from the action it carries.
+
+				Every other layout keeps the single scrolling list it has always
+				had.
 			-->
 			<div
 				ref="paymentContainer"
-				:class="['payment-scroll', cobroMode ? 'overflow-hidden' : 'overflow-y-auto']"
+				:class="[
+					'payment-scroll',
+					cobroMode ? 'payment-scroll--cobro' : 'overflow-y-auto',
+					{ 'payment-scroll--flow': cobroMode && cobroDetailsExpanded },
+				]"
 			>
 				<!--
 					COBRO. The three columns are a GRID over these same
 					sections, not a second markup tree: `payment-sections--cobro`
-					assigns each one an area, and the two sections the artboard
-					adds render below behind `v-if="cobroMode"`. Duplicating the
+					assigns each one an area, and the sections the artboard adds
+					render below behind `v-if="cobroMode"`. Duplicating the
 					list to lay it out differently would have meant maintaining
 					every binding on this screen twice, which is how two payment
 					screens start to disagree.
-
-					EVERY row of that grid is an `fr`, and every section scrolls
-					inside its own cell. That is what keeps the surface one
-					screen: an `auto` row would be sized by its content, and the
-					legacy tail below is exactly the content that would then push
-					the grid past the viewport it is clipped to.
 				-->
 				<div
 					:class="[
@@ -72,7 +81,11 @@
 						@back="cancel_payment()"
 					/>
 					<section class="payment-section payment-section--summary">
-						<div class="payment-section__header">
+						<!-- Cobro's ticket card carries its own heading («Resumen
+						     de la venta · 6 líneas · 9 pzas», the artboard's), so
+						     a section title above it is the column saying its name
+						     twice. -->
+						<div v-if="!cobroMode" class="payment-section__header">
 							<h3 class="payment-section__title">{{ __("Payment Summary") }}</h3>
 						</div>
 						<!-- What the money is FOR, on the screen where it is taken.
@@ -98,11 +111,33 @@
 								formatCurrency(invoiceChargeTotal, invoice_doc.currency)
 							}}</strong>
 						</div>
-						<!-- `hide-tendered` on Cobro only: the pad prints «Pagos
-						     aplicados / Falta por cubrir» one column over and the
-						     band carries the shortfall a third time. The change
-						     fields are not drawn anywhere else, so they stay. -->
+						<!--
+							COBRO, column one's foot — the ticket's own totals.
+							Subtotal · IVA · Descuento · Total, four single-line
+							rows, and the ONE place this surface states the total.
+							The nine-field `InvoiceTotals` breakdown is still here,
+							one click away behind `More options`.
+						-->
+						<CobroTotalsFooter
+							v-if="cobroMode && invoice_doc"
+							:subtotal="Number(invoice_doc.net_total) || 0"
+							:tax-label="cobroTaxLabel"
+							:tax="Number(invoice_doc.total_taxes_and_charges) || 0"
+							:discount="cobroDiscountTotal"
+							:total="invoiceChargeTotal"
+							:format-currency="formatSummaryCurrency"
+							:currency-symbol="currencySymbol(invoice_doc.currency)"
+						/>
+						<!-- `hide-tendered` on Cobro only: the paper column prints
+						     «Recibido / Falta por cubrir» and the band carries the
+						     shortfall a third time. What is left is the Paid/Credit
+						     Change pair, which are INPUTS for splitting change
+						     between drawer and credit — occasional, so on Cobro
+						     they fold with the rest of the tail. `v-show`, so a
+						     half-typed credit change survives the fold; outside
+						     Cobro the condition is constant. -->
 						<PaymentSummary
+							v-show="!cobroMode || cobroDetailsExpanded"
 							:hide-tendered="cobroMode"
 							:invoice_doc="invoice_doc"
 							:total_payments_display="total_payments_display"
@@ -127,25 +162,25 @@
 					<!--
 						COBRO, column two — the money's HOW.
 
-						The pad, the tender chips and the preset chips all leave
-						through `paymentMethodsHandlers`: the SAME object the
-						payment cards below are wired to, landing on
+						The pad and the preset chips leave through
+						`paymentMethodsHandlers`: the SAME object the payment
+						cards below are wired to, landing on
 						`handlePaymentAmountChange`, `set_full_amount` and
 						`setPaymentToDenomination`. Not one new handler, not one
-						new figure. `PaymentMethods` still renders below it, which
-						is where a split across two tenders is typed.
+						new figure. The method rows below take the same object,
+						which is where a split across two tenders is typed.
+
+						This section is the column's ELASTIC half: the pad fills
+						whatever height the grid gives it, which is what lets the
+						panel fit a 1280×800 counter without a scrollbar.
 					-->
 					<section v-if="cobroMode" class="payment-section payment-section--tender">
 						<CobroTenderPad
 							:payments="visiblePaymentMethods"
 							:currency="invoice_doc?.currency"
 							:is-return="Boolean(invoice_doc?.is_return)"
-							:uses-gift-cards="Boolean(pos_profile?.posa_use_gift_cards)"
-							:cart-has-items="Boolean(invoice_doc?.items?.length)"
 							:format-currency="formatCurrency"
 							:get-visible-denominations="getVisibleDenominations"
-							:is-cash-like-payment="isCashLikePayment"
-							:diff-payment="diff_payment"
 							v-on="paymentMethodsHandlers"
 						/>
 						<CobroOnClose
@@ -199,7 +234,7 @@
 							class="payment-disclosure"
 							data-testid="cobro-more-options"
 							:aria-expanded="cobroDetailsExpanded ? 'true' : 'false'"
-							aria-controls="payment-cobro-settlement payment-cobro-meta"
+							aria-controls="payment-cobro-adjustments payment-cobro-settlement payment-cobro-meta"
 							@click="toggleCobroDetails()"
 						>
 							<v-icon
@@ -223,9 +258,34 @@
 						v-if="is_cashback && invoice_doc"
 						class="payment-section payment-section--methods"
 					>
-						<div class="payment-section__header">
+						<!-- Cobro's list carries its own «Forma de pago» heading,
+						     the artboard's, so the section title would be the
+						     second one. -->
+						<div v-if="!cobroMode" class="payment-section__header">
 							<h3 class="payment-section__title">{{ __("Payment Methods") }}</h3>
 						</div>
+						<!--
+							COBRO: one compact line per configured tender — icon,
+							name, amount — under the pad it feeds. Same events, same
+							handlers object, no new seam on the money path; the card
+							list below is what every other layout still renders.
+						-->
+						<CobroMethodRows
+							v-if="cobroMode"
+							:payments="visiblePaymentMethods"
+							:currency="invoice_doc?.currency"
+							:is-return="Boolean(invoice_doc?.is_return)"
+							:request-payment-field="request_payment_field"
+							:uses-gift-cards="Boolean(pos_profile?.posa_use_gift_cards)"
+							:cart-has-items="Boolean(invoice_doc?.items?.length)"
+							:currency-symbol="currencySymbol"
+							:format-currency="formatCurrency"
+							:is-number="isNumber"
+							:is-cash-like-payment="isCashLikePayment"
+							:is-mpesa-c2b-payment="is_mpesa_c2b_payment"
+							:is-gift-card-payment="isGiftCardPayment"
+							v-on="paymentMethodsHandlers"
+						/>
 						<!-- Phone: the default method keeps its full card (amount +
 						     quick-cash chips) and the remaining methods collapse
 						     behind one disclosure row, so the sheet is not a scroll
@@ -235,6 +295,7 @@
 						     split payment behaves identically either side of the
 						     disclosure. -->
 						<PaymentMethods
+							v-else
 							v-bind="paymentMethodsProps"
 							v-on="paymentMethodsHandlers"
 							:payments="compactPaymentLayout ? primaryPaymentMethods : visiblePaymentMethods"
@@ -289,7 +350,20 @@
 						/>
 					</section>
 
-					<section class="payment-section payment-section--adjustments">
+					<!--
+						«Canje y Totales», Fulfillment Details and the purchase
+						order join the tail on Cobro. They are the fields the
+						owner found in the PRIMARY column with a scrollbar of
+						their own: real, occasionally needed, and never while the
+						customer is holding out a note. `v-show`, so a half-typed
+						PO number survives the fold; outside Cobro the condition
+						is constant and the section renders outright.
+					-->
+					<section
+						id="payment-cobro-adjustments"
+						v-show="!cobroMode || cobroDetailsExpanded"
+						class="payment-section payment-section--adjustments"
+					>
 						<div class="payment-section__header">
 							<h3 class="payment-section__title">{{ __("Redemption and Totals") }}</h3>
 						</div>
@@ -599,12 +673,16 @@ import { useHardwareReadiness } from "./payments/useHardwareReadiness";
 import PaymentDialogs from "./payments/PaymentDialogs.vue";
 import RestaurantTipSelector from "./payments/RestaurantTipSelector.vue";
 // Cobro — the desktop payment SURFACE (build plan §14). Chrome only: these
-// three render this component's own state and reach its own handlers through
+// five render this component's own state and reach its own handlers through
 // the contract `PaymentMethods` already has. Nothing below `<script setup>`
-// changed for them beyond these imports and the `cobroMode` prop.
+// changed for them beyond these imports, the `cobroMode` prop and two derived
+// LABELS (`cobroTaxLabel`, `cobroDiscountTotal`) that move no money.
 import CobroTenderPad from "./payments/cobro/CobroTenderPad.vue";
+import CobroMethodRows from "./payments/cobro/CobroMethodRows.vue";
+import CobroTotalsFooter from "./payments/cobro/CobroTotalsFooter.vue";
 import CobroOnClose from "./payments/cobro/CobroOnClose.vue";
 import CobroChangeCard from "./payments/cobro/CobroChangeCard.vue";
+import { resolveTaxBreakdown } from "./invoice/saleTaxBreakdown";
 // MP-INTEGRATION-POINT (sale checkout): hard gate — isolated, no-op when off.
 import MpPointSaleGateDialog from "../pos_pay/MpPointSaleGateDialog.vue";
 import { useMpPointSaleGate } from "../../composables/pos/payments/useMpPointSaleGate";
@@ -1280,6 +1358,38 @@ const invoiceChargeTotal = computed(() => {
 	}
 	return flt(doc.rounded_total || doc.grand_total, currency_precision.value);
 });
+
+// ── Cobro's totals footer — two derived LABELS, no arithmetic on money ────
+// Both figures the footer states beside these come straight off the document
+// (`net_total`, `total_taxes_and_charges`, `invoiceChargeTotal`). What is
+// derived here is the tax's NAME and the sum of the two discount fields the
+// nine-field breakdown states separately.
+
+// `IVA 16 %` — the tenant's own word for its tax, from the document's own tax
+// row, through the module the sale band already labels its pair with. Only the
+// LABEL is taken: the amount is the server's `total_taxes_and_charges`, which
+// is authoritative on a screen whose document has been through the server.
+// Blank when the register cannot name one row confidently, which is the
+// footer's signal to draw no tax line at all rather than an `IVA $0.00`.
+const cobroTaxLabel = computed(() => {
+	const doc = invoice_doc.value;
+	if (!doc) return "";
+	const breakdown = resolveTaxBreakdown({
+		docTaxes: doc.taxes,
+		subtotal: doc.net_total,
+		taxLabel: __("Tax"),
+	});
+	return breakdown ? breakdown.label : __("Tax and Charges");
+});
+
+// `Descuento`: item/rate discounts plus the invoice-level one — the same sum
+// `InvoiceTotals` publishes as «Total Discount», so the footer and the full
+// breakdown behind `More options` cannot state two different discounts.
+const cobroDiscountTotal = computed(
+	() =>
+		Math.abs(paymentItemDiscountTotal.value) +
+		Math.abs(flt(invoice_doc.value?.discount_amount || 0, currency_precision.value)),
+);
 
 const giftCardAppliedAmount = computed(() =>
 	(Array.isArray(giftCardRedemptions.value) ? giftCardRedemptions.value : []).reduce(
@@ -3027,10 +3137,33 @@ defineExpose({
 /* ── Cobro — the hosted payment surface (build plan §14.2) ────────────────
    The artboard's three columns, laid over the sections this screen already
    has rather than over a second markup tree. Column one is the money's WHY
-   (the ticket, the wallet, the totals), two is the HOW (tender, pad, the
-   method cards a split is typed into), three is the PAPER (change, print,
-   settlement). The band below owns the one number and the one action, so
-   nothing here draws a total or a primary of its own.
+   (the ticket and its totals), two is the HOW (the pad and the method rows a
+   split is typed into), three is the PAPER (the outcome, print, the tail).
+   The band below owns the one number and the one action, so nothing here
+   draws a primary of its own.
+
+   ── WHAT KEEPS IT ON ONE SCREEN, AND WHY IT IS NOT `fr` ROWS ──────────────
+   The previous round bounded every row with `fr` and made each section its
+   own scrollport. That is a correct way to stop a grid overflowing and a
+   wrong way to build a control panel: four scrollbars appeared, half of them
+   cutting a control in two (the numpad's «4 5 6» row, an amount field), and
+   the owner rejected it — «why so many scrolls? it has to feel like one
+   coherent ops control panel».
+
+   So the rows are sized by their CONTENT, and one region gives:
+
+     · the ticket's LINE LIST scrolls (`.pay-summary__lines`), because a
+       fifty-line ticket has no other honest answer;
+     · the PAD stretches (`minmax(0, 1fr)` on the tender row, and
+       `CobroTenderPad` hands the slack to the keypad grid), so the column
+       fills a 1080px-tall screen and compresses on an 800px one;
+     · everything else — totals footer, method rows, change readout, buttons —
+       is content-height and small enough to fit at 1280×800.
+
+   `More options` is the one state that cannot fit: it unfolds three legacy
+   form sections into a fourth row, so the SURFACE scrolls as one instead
+   (`.payment-scroll--flow`). One scrollbar, only while the cashier asked for
+   the fields behind it.
 
    Only ever above 1100px: `Pos.vue` hosts this when the rail is visible, and
    the rail's step and `COMPACT_PAYMENT_WIDTH` are the same 1100. */
@@ -3052,58 +3185,69 @@ defineExpose({
 	flex-direction: column;
 }
 
+/* The surface does not scroll while the panel fits, which is its default and
+   the state a cashier lives in. `--flow` is the disclosure open: the fourth
+   row of legacy forms cannot fit, so the whole surface becomes ONE scrollport
+   rather than the columns becoming four. Declared after `--cobro` because the
+   two tie on specificity and this one has to win. */
+.payment-scroll--cobro {
+	overflow: hidden;
+}
+
+.payment-scroll--flow {
+	overflow-y: auto;
+}
+
 .payment-sections--cobro {
 	display: grid;
 	/* `Cobro.dc.html` measures 384 / flexible / 316 inside a 1344 content area.
 	   Stated as shares rather than pixels so the same proportion survives a
 	   1280 counter monitor and a 1920 one. */
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 0.8fr);
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 0.85fr);
 	/*
-	 * Every content row is an `fr`, which is the whole consolidation: an `auto`
-	 * row is sized by its content, so the tallest section on the screen would
-	 * decide the height of the surface and push the rest past the viewport it
-	 * is clipped to. With `fr` the grid can never exceed its box, and the
-	 * sections scroll inside their own cells instead — one scrollport per
-	 * region, exactly as `Cobro.dc.html` draws its three cards.
-	 *
-	 * The tip row is the one exception and is `auto` on purpose: it holds a
-	 * single restaurant-only strip and collapses to zero everywhere else,
-	 * which an `fr` row would not do.
+	 * THE EXPANDED shape. `More options` is open, so the panel keeps a floor
+	 * (a 420px row is still a usable pad and a readable ticket) and the legacy
+	 * row below it takes whatever height its forms need — the surface scrolls.
 	 */
-	grid-template-rows: auto minmax(0, 1.6fr) auto minmax(0, 1fr) minmax(0, 0.5fr);
+	grid-template-rows: auto minmax(420px, auto) auto auto auto;
 	gap: var(--pos-space-2);
-	/* `stretch`, not `start`: a section only scrolls inside a cell it fills. */
+	/* `stretch`, not `start`: the ticket card and the change card fill the
+	   height their column was given instead of floating at the top of it. */
 	align-items: stretch;
-	flex: 1 1 auto;
+	flex: 0 0 auto;
 	min-height: 0;
 	grid-template-areas:
 		"readiness readiness readiness"
 		"summary tender paper"
-		"summary tip paper"
-		"adjustments methods settlement"
-		"adjustments methods meta";
+		"summary methods paper"
+		"tip tip tip"
+		"adjustments settlement meta";
 }
 
 /*
- * Collapsed, the settlement and print sections are `display: none` and their
- * cells would be two empty rows of dead space under the change card. So the
- * paper column takes the height back — the same grid, one modifier, no second
- * markup tree.
+ * THE PANEL, folded — what the surface looks like the moment PAGAR is pressed.
+ *
+ * The three legacy sections are `display: none` here, so they are not grid
+ * items at all and the fifth row simply does not exist. The panel row takes
+ * the remaining height (`minmax(0, 1fr)`) and the grid fills its box exactly:
+ * nothing to scroll, nothing clipped.
  */
 .payment-sections--cobro-lean {
+	grid-template-rows: auto minmax(0, 1fr) auto auto;
 	grid-template-areas:
 		"readiness readiness readiness"
 		"summary tender paper"
-		"summary tip paper"
-		"adjustments methods paper"
-		"adjustments methods paper";
+		"summary methods paper"
+		"tip tip tip";
+	flex: 1 1 auto;
 }
 
 /*
  * The restaurant tip strip is the one child of this list that is not a
  * `payment-section`, so without an area of its own it would be AUTO-PLACED —
- * into an implicit sixth row, which is the one way this grid can still
- * overflow the box it is clipped to.
+ * into an implicit row, which is the one way this grid can still overflow the
+ * box it is clipped to. Full width and last: it is a decision about the whole
+ * ticket, and the register that never draws it collapses the row to nothing.
  */
 .payment-sections--cobro .restaurant-tip {
 	grid-area: tip;
@@ -3115,15 +3259,31 @@ defineExpose({
 	grid-area: readiness;
 }
 
+/*
+ * NO SCROLLPORT HERE. A section is a bare column of cards on this surface —
+ * the card chrome belongs to what is inside it, and a card inside a card is
+ * the density the panel exists to remove. `min-height: 0` stays because a
+ * grid item defaults to `min-height: auto` and would refuse to let the pad
+ * compress.
+ */
 .payment-sections--cobro .payment-section {
+	background: transparent;
+	border: 0;
+	padding: 0;
+	gap: var(--reg-space-md, 10px);
+	min-height: 0;
+}
+
+/* The tail's three sections are FORMS, not cards of their own, so they keep
+   the panel chrome the rest of the screen gives up. */
+.payment-sections--cobro .payment-section--adjustments,
+.payment-sections--cobro .payment-section--settlement,
+.payment-sections--cobro .payment-section--meta {
+	background: var(--pos-surface-muted);
+	border: 1px solid var(--pos-border-light);
+	border-radius: var(--pos-radius-md);
 	padding: 10px;
 	gap: 10px;
-	/* The section IS the scrollport for its cell. `min-height: 0` is the
-	   load-bearing half — a grid item defaults to `min-height: auto` and
-	   refuses to shrink below its content, which is how a bounded row still
-	   ends up overflowing. */
-	min-height: 0;
-	overflow-y: auto;
 }
 
 .payment-sections--cobro .payment-section--summary {
@@ -3154,9 +3314,8 @@ defineExpose({
 	grid-area: meta;
 }
 
-/* The two Cobro sections carry their own cards inside, so the section itself
-   is a bare column — a card inside a card is the density the surface exists
-   to remove. */
+/* These two only ever exist under `--cobro` (both are `v-if="cobroMode"`), so
+   the bare treatment is stated once rather than scoped twice. */
 .payment-section--tender,
 .payment-section--paper {
 	background: transparent;
@@ -3164,25 +3323,59 @@ defineExpose({
 	padding: 0;
 }
 
-.payment-sections--cobro .payment-section--tender,
-.payment-sections--cobro .payment-section--paper {
-	padding: 0;
-	gap: var(--reg-space-md, 10px);
-}
-
 /* The ticket has a whole column to itself here, and the column is bounded by
    its own grid row — so the cap that the dialog needs is not only unnecessary,
-   it would leave the card short of the cell it is supposed to fill. The lines
-   scroll inside `.pay-summary__lines`, which is what it was built for, and the
-   paid/change fields below it keep their place at the bottom of the card. */
+   it would leave the card short of the cell it is supposed to fill. THE ONE
+   PERMITTED SCROLLPORT on this surface is inside it: `.pay-summary__lines`,
+   which is what that element was built for. */
 .payment-sections--cobro .payment-sale-summary {
 	max-height: none;
 	flex: 1 1 auto;
 	min-height: 0;
 }
 
+/* The pad is the elastic half of column two; the method rows below are sized
+   by their content, so the two together fill the column exactly. */
+.payment-sections--cobro .payment-section--tender {
+	min-height: 0;
+}
+
+/* A normal button, not a bordered rectangle with a word floating in it. The
+   paper column's actions sit at the size any other secondary action gets. */
 .payment-cobro-print {
 	min-height: var(--reg-touch-min, 44px);
+	flex: none;
+}
+
+.payment-sections--cobro .payment-disclosure {
+	flex: none;
+}
+
+/*
+ * BELOW THE HEIGHT THE PANEL IS DESIGNED FOR.
+ *
+ * The mandate is zero scrollports at 1280×800 and the panel meets it —
+ * measured on the real box model in headless chromium, the numpad's keys
+ * resolve to 45px with three tenders on the ticket and 58px with two, and no
+ * region overflows at any of 1280×800, 1280×900, 1718×1023 or 1920×1080.
+ * (`CobroMethodRows` carries the other half of that measurement: below 900px
+ * of viewport the method list packs into columns, which is what buys the pad
+ * those twelve points.)
+ *
+ * Under roughly 740px, though, the pad would keep shrinking past the point of
+ * being a pad. Something has to give there, and CLIPPING a control is the one
+ * answer worse than a scrollbar — so the panel keeps a floor and the surface
+ * scrolls as ONE, the same mechanism `More options` already uses.
+ */
+@media (max-height: 739px) {
+	.payment-scroll--cobro {
+		overflow-y: auto;
+	}
+
+	.payment-sections--cobro-lean {
+		grid-template-rows: auto minmax(440px, auto) auto auto;
+		flex: 0 0 auto;
+	}
 }
 
 .payment-section--summary {

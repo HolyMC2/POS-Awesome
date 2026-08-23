@@ -18,19 +18,21 @@
 		A checklist that promises four things and keeps one is worse than a
 		checklist with one line on it.
 	-->
-	<section v-if="promises.length" class="cobro-close" data-testid="cobro-on-close">
-		<h3 class="cobro-close__label">{{ __("On closing") }}</h3>
-		<ul class="cobro-close__list">
-			<li
-				v-for="promise in promises"
-				:key="promise.key"
-				class="cobro-close__item"
-				:data-testid="`cobro-promise-${promise.key}`"
-			>
-				{{ promise.text }}
-			</li>
-		</ul>
-	</section>
+	<p v-if="promises.length" class="cobro-close" data-testid="cobro-on-close">
+		<!-- ONE LINE, at the foot of the tender column. It was a card with a
+		     heading and a list, which on a screen where the only item is
+		     "Descuenta 1 pzas del inventario" spent 70px of the column the pad
+		     needed and read as a block ABOVE the keys (owner, 2026-08-23). A
+		     caption is what a single standing fact is worth. -->
+		<span class="cobro-close__label">{{ __("On closing") }}</span>
+		<span
+			v-for="promise in promises"
+			:key="promise.key"
+			class="cobro-close__item"
+			:data-testid="`cobro-promise-${promise.key}`"
+			>{{ promise.text }}</span
+		>
+	</p>
 </template>
 
 <script setup>
@@ -66,14 +68,15 @@ const promises = computed(() => {
 
 <style scoped>
 .cobro-close {
-	border-radius: var(--reg-radius-md, 14px);
-	border: 1px solid var(--reg-border-light, rgba(0, 0, 0, 0.06));
-	background: var(--reg-surface, #fff);
-	padding: var(--reg-space-lg, 14px);
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--reg-space-sm, 6px);
+	margin: 0;
+	padding: 0 var(--reg-space-xs, 5px);
 }
 
 .cobro-close__label {
-	margin: 0 0 var(--reg-space-sm, 6px);
 	font-size: 10.5px;
 	font-weight: 700;
 	letter-spacing: 0.07em;
@@ -81,17 +84,8 @@ const promises = computed(() => {
 	color: var(--reg-tone-neutral-label, #667085);
 }
 
-.cobro-close__list {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: var(--reg-space-xs, 5px);
-}
-
 .cobro-close__item {
-	font-size: 13px;
-	color: var(--reg-text-secondary, #56606e);
+	font-size: 11.5px;
+	color: var(--reg-text-muted, #667085);
 }
 </style>

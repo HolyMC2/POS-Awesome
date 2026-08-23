@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 
 import PaymentSaleSummary from "../src/posapp/components/pos/payments/PaymentSaleSummary.vue";
+import CobroTotalsFooter from "../src/posapp/components/pos/payments/cobro/CobroTotalsFooter.vue";
+import CobroTenderPad from "../src/posapp/components/pos/payments/cobro/CobroTenderPad.vue";
+import CobroMethodRows from "../src/posapp/components/pos/payments/cobro/CobroMethodRows.vue";
+import CobroChangeCard from "../src/posapp/components/pos/payments/cobro/CobroChangeCard.vue";
 
 /**
  * The payment screen says a fact once — the same rule
@@ -101,10 +105,124 @@ describe("the summary claims no total", () => {
 	});
 
 	it("renders no subtotal or tax line either", () => {
-		// Both are already on this screen, in `InvoiceTotals`. Restating them
-		// beside the lines is how one number becomes three.
+		// The lines card states the LINES. Subtotal, IVA and Total are the
+		// card BELOW it on the Cobro surface (`CobroTotalsFooter`) and
+		// `InvoiceTotals` everywhere else; restating them among the lines is
+		// how one number becomes three.
 		const text = mountSummary().text();
 		expect(text).not.toMatch(/subtotal/i);
 		expect(text).not.toMatch(/\bIVA\b|tax/i);
+	});
+});
+
+/**
+ * ── The Cobro surface, column by column ──────────────────────────────────
+ *
+ * Owner, 2026-08-23: «every figure said once». The surface has four columns'
+ * worth of money on it, so the rule is stated as an INVENTORY — mount each
+ * column, collect what it declares, and assert the union has no duplicates.
+ *
+ * What is deliberately NOT a declared figure: the amount input on a method
+ * row. It is a CONTROL — the field a cashier types into — and the same
+ * reasoning exempts `PaymentSummary`'s read-only fields, which declare no
+ * role either. A figure is a statement the screen makes; an input is a
+ * statement the cashier makes.
+ */
+const CASH = { mode_of_payment: "Efectivo", amount: 1200, default: 1, type: "Cash" };
+const CARD_ROW = { mode_of_payment: "Tarjeta", amount: 0, default: 0, type: "Bank" };
+
+const rolesOf = (wrapper: { findAll: (_selector: string) => any[] }) =>
+	wrapper.findAll("[data-money-role]").map((element) => element.attributes("data-money-role"));
+
+const mountTotals = () =>
+	mount(CobroTotalsFooter, {
+		props: {
+			subtotal: 973.28,
+			taxLabel: "IVA 16 %",
+			tax: 155.72,
+			discount: 41,
+			total: 1129,
+			formatCurrency: money,
+			currencySymbol: "$",
+		},
+	});
+
+const mountPad = () =>
+	mount(CobroTenderPad, {
+		props: {
+			payments: [{ ...CASH }, { ...CARD_ROW }],
+			currency: "MXN",
+			formatCurrency: (value: number) => money(value),
+			getVisibleDenominations: () => [1150, 1200],
+		},
+	});
+
+const mountMethods = () =>
+	mount(CobroMethodRows, {
+		props: {
+			payments: [{ ...CASH }, { ...CARD_ROW }],
+			currency: "MXN",
+			currencySymbol: () => "$",
+			formatCurrency: (value: number) => money(value),
+			isNumber: () => true,
+			isCashLikePayment: (payment: { type?: string }) => payment?.type === "Cash",
+			isMpesaC2bPayment: () => false,
+		},
+	});
+
+const mountChange = () =>
+	mount(CobroChangeCard, {
+		props: {
+			total: 1129,
+			tendered: 1200,
+			currency: "MXN",
+			formatCurrency: (value: number) => money(value),
+		},
+	});
+
+describe("the Cobro columns state each figure once", () => {
+	it("puts the ticket's totals in column one, and only there", () => {
+		expect(rolesOf(mountTotals()).sort()).toEqual(["discount", "subtotal", "tax", "total"]);
+		for (const column of [mountPad(), mountMethods(), mountChange()]) {
+			for (const role of ["subtotal", "tax", "discount", "total"]) {
+				expect(rolesOf(column)).not.toContain(role);
+			}
+		}
+	});
+
+	it("puts the outcome in column three, and only there", () => {
+		// `Recibido`, `Falta por cubrir` and `Cambio a entregar` — the three
+		// figures a cashier reads to know where the sale stands. The band
+		// repeats the change alone, as its ONE number, which is the band's job.
+		const roles = rolesOf(mountChange());
+		expect(roles).toContain("change");
+		expect(roles).toContain("received");
+		expect(roles).toContain("shortfall");
+		for (const column of [mountPad(), mountMethods(), mountTotals()]) {
+			for (const role of ["change", "received", "shortfall"]) {
+				expect(rolesOf(column)).not.toContain(role);
+			}
+		}
+	});
+
+	it("leaves column two with the amount being keyed and the shortcuts", () => {
+		// The pad states nothing about the sale. Its display is the ENTRY
+		// buffer — 0.00 until a digit is pressed — and the presets are offers,
+		// not facts.
+		expect(new Set(rolesOf(mountPad()))).toEqual(new Set(["keyed", "preset"]));
+		// The method rows carry amounts in INPUTS, which declare no role: the
+		// figure there is the cashier's, not the screen's.
+		expect(rolesOf(mountMethods())).toEqual([]);
+		expect(mountMethods().findAll("input").length).toBe(2);
+	});
+
+	it("declares no role twice across the whole surface", () => {
+		const declared = [mountTotals(), mountPad(), mountMethods(), mountChange()].flatMap(rolesOf);
+		// Roles that legitimately repeat are the per-ROW ones: a line, a preset
+		// chip, a denomination note. Everything else is a fact about the sale
+		// and may appear exactly once.
+		const perRow = new Set(["line", "line-saving", "preset", "change-note"]);
+		const singular = declared.filter((role) => !perRow.has(role as string));
+		expect(new Set(singular).size, `duplicated: ${singular.join(", ")}`).toBe(singular.length);
 	});
 });

@@ -11,8 +11,11 @@ import summarySource from "../src/posapp/components/pos/payments/PaymentSummary.
 import ActionBand from "../src/posapp/components/pos/shell/band/ActionBand.vue";
 import PaymentReadinessHeader from "../src/posapp/components/pos/payments/PaymentReadinessHeader.vue";
 import CobroTenderPad from "../src/posapp/components/pos/payments/cobro/CobroTenderPad.vue";
+import CobroMethodRows from "../src/posapp/components/pos/payments/cobro/CobroMethodRows.vue";
+import CobroTotalsFooter from "../src/posapp/components/pos/payments/cobro/CobroTotalsFooter.vue";
 import CobroChangeCard from "../src/posapp/components/pos/payments/cobro/CobroChangeCard.vue";
 import CobroOnClose from "../src/posapp/components/pos/payments/cobro/CobroOnClose.vue";
+import PayKeypad from "../src/posapp/components/pos/mobile/pay/PayKeypad.vue";
 import { resolveBandState } from "../src/posapp/composables/pos/shell/bandState";
 import { resetTenderSelection } from "../src/posapp/components/pos/invoice/armedTender";
 
@@ -48,13 +51,23 @@ const CARD = { mode_of_payment: "Tarjeta", amount: 0, default: 0, type: "Bank" }
 const padProps = (payments: Record<string, unknown>[], overrides = {}) => ({
 	payments,
 	currency: "MXN",
-	usesGiftCards: false,
 	formatCurrency: (value: number) => money(value),
 	// The register's own suggestion source, stubbed to what it returns for a
 	// $1,129 sale — the artboard's own preset row.
 	getVisibleDenominations: () => [1150, 1200, 1500, 2000],
+	...overrides,
+});
+
+/** The method list's contract — every prop is one `PaymentMethods` takes. */
+const methodProps = (payments: Record<string, unknown>[], overrides = {}) => ({
+	payments,
+	currency: "MXN",
+	usesGiftCards: false,
+	currencySymbol: () => "$",
+	formatCurrency: (value: number) => money(value),
+	isNumber: () => true,
 	isCashLikePayment: (payment: { type?: string }) => payment?.type === "Cash",
-	diffPayment: 1129,
+	isMpesaC2bPayment: () => false,
 	...overrides,
 });
 
@@ -142,29 +155,28 @@ describe("three columns at 1440", () => {
 		}
 	});
 
-	it("sizes every content row so the grid cannot outgrow its box", () => {
-		// The consolidation, stated as a property. An `auto` row is sized by its
-		// content, so the tallest section would decide the height of the surface
-		// and push the rest past the viewport the shell clips it to — which is
-		// precisely how the hosted Cobro came to read as "the new screen with
-		// the old one stacked below it".
-		const rows = /grid-template-rows:([^;]+);/.exec(rule(".payment-sections--cobro"));
-		expect(rows, "the cobro grid states no explicit rows").not.toBeNull();
+	it("bounds the folded panel to its box, with the pad as the row that gives", () => {
+		// The panel a cashier meets — `More options` closed — fills the surface
+		// exactly: one bounded row for the three columns, and content-height
+		// rows either side of it. `minmax(0, 1fr)` is what lets the tender row
+		// COMPRESS, which is how the column fits an 800px screen without a
+		// scrollbar; see `cobroControlPanel.spec.ts` for the no-scroll half.
+		const rows = /grid-template-rows:([^;]+);/.exec(rule(".payment-sections--cobro-lean"));
+		expect(rows, "the folded cobro grid states no explicit rows").not.toBeNull();
 		const tracks = (rows as RegExpExecArray)[1].trim().split(/\s+(?![^(]*\))/);
 
-		// First is the readiness header (content-height, one row of chips), last
-		// four are the two content rows per column plus the tip strip.
-		expect(tracks[0]).toBe("auto");
-		const contentTracks = tracks.slice(1);
-		const autoTracks = contentTracks.filter((track) => track === "auto");
-		// Exactly one `auto` survives: the restaurant tip's row, which has to
-		// collapse to nothing on the registers that never draw it.
-		expect(autoTracks).toHaveLength(1);
-		for (const track of contentTracks.filter((track) => track !== "auto")) {
-			expect(track, `${track} is not an fr row — it can grow past the box`).toMatch(
-				/^minmax\(0,\s*[0-9.]+fr\)$/,
-			);
-		}
+		// readiness · the three columns · the method rows · the tip strip.
+		expect(tracks).toEqual(["auto", "minmax(0, 1fr)", "auto", "auto"]);
+	});
+
+	it("keeps a floor under the panel when the tail unfolds", () => {
+		// Expanded, the legacy forms take a fourth row and the SURFACE scrolls,
+		// so the panel above must not be squeezed to nothing to make room for
+		// them — 420px is still a usable pad and a readable ticket.
+		const rows = /grid-template-rows:([^;]+);/.exec(rule(".payment-sections--cobro"));
+		expect(rows).not.toBeNull();
+		expect((rows as RegExpExecArray)[1]).toContain("minmax(420px, auto)");
+		expect(rule(".payment-scroll--flow")).toContain("overflow-y: auto");
 	});
 
 	it("gives the tip strip an area, because it is the one child that is not a section", () => {
@@ -176,18 +188,20 @@ describe("three columns at 1440", () => {
 		expect(rule(".payment-sections--cobro")).toContain("tip");
 	});
 
-	it("makes each section the scrollport for its own cell", () => {
+	it("makes no section a scrollport of its own", () => {
+		// The inversion of round two, and the whole of round three. Each column
+		// used to scroll inside its cell; four scrollbars, half of them cutting
+		// a control in two, is what the owner rejected.
 		const section = rule(".payment-sections--cobro .payment-section");
-		expect(section).toContain("overflow-y: auto");
-		// `min-height: 0` is the load-bearing half: a grid item defaults to
-		// `min-height: auto` and refuses to shrink below its content.
+		expect(section).not.toContain("overflow");
+		// `min-height: 0` stays: a grid item defaults to `min-height: auto` and
+		// would refuse to let the pad compress.
 		expect(section).toContain("min-height: 0");
 	});
 
 	it("stops the surface itself from scrolling, so the band stays put", () => {
-		expect(paymentsSource).toContain(
-			`:class="['payment-scroll', cobroMode ? 'overflow-hidden' : 'overflow-y-auto']"`,
-		);
+		expect(paymentsSource).toContain(`cobroMode ? 'payment-scroll--cobro' : 'overflow-y-auto',`);
+		expect(rule(".payment-scroll--cobro")).toContain("overflow: hidden");
 	});
 
 	it("puts the WHY, the HOW and the PAPER in that order", () => {
@@ -203,16 +217,21 @@ describe("three columns at 1440", () => {
 });
 
 describe("the legacy tail folds instead of stacking", () => {
-	it("hides the settlement and print sections behind one disclosure, on Cobro only", () => {
-		// Two sections, one control. Everywhere else the condition is constant
-		// and both render outright, which is why it reads `!cobroMode ||`.
+	it("hides the whole occasional tail behind one disclosure, on Cobro only", () => {
+		// FOUR now, not two: «Canje y Totales» (with Fulfillment Details and the
+		// purchase order inside it) joined the fold, and so did the Paid/Credit
+		// Change pair — the owner found all of them in the PRIMARY column with a
+		// scrollbar of their own. Everywhere else the condition is constant and
+		// every one of them renders outright, which is why it reads
+		// `!cobroMode ||`.
 		expect(
 			paymentsSource.match(/v-show="!cobroMode \|\| cobroDetailsExpanded"/g) ?? [],
-		).toHaveLength(2);
+		).toHaveLength(4);
 		expect(paymentsSource).toContain('data-testid="cobro-more-options"');
 		expect(paymentsSource).toContain(
-			'aria-controls="payment-cobro-settlement payment-cobro-meta"',
+			'aria-controls="payment-cobro-adjustments payment-cobro-settlement payment-cobro-meta"',
 		);
+		expect(paymentsSource).toContain('id="payment-cobro-adjustments"');
 		expect(paymentsSource).toContain('id="payment-cobro-settlement"');
 		expect(paymentsSource).toContain('id="payment-cobro-meta"');
 	});
@@ -225,7 +244,7 @@ describe("the legacy tail folds instead of stacking", () => {
 		// Inside the paper section, after `Charge and print` — not a fourth
 		// column and not a second primary.
 		expect(paymentsSource).toMatch(
-			/data-testid="cobro-charge-and-print"[\s\S]{0,900}data-testid="cobro-more-options"[\s\S]{0,400}<\/section>/,
+			/data-testid="cobro-charge-and-print"[\s\S]{0,1200}data-testid="cobro-more-options"[\s\S]{0,600}<\/section>/,
 		);
 	});
 
@@ -239,18 +258,20 @@ describe("the legacy tail folds instead of stacking", () => {
 		);
 	});
 
-	it("reclaims the rows it folded away instead of leaving dead space", () => {
-		const lean = rule(".payment-sections--cobro-lean");
-		const rows = /grid-template-areas:([\s\S]*?);/
-			.exec(lean)?.[1]
-			.split("\n")
-			.map((row) => row.replace(/"/g, "").trim())
-			.filter(Boolean);
-		expect(rows).toBeDefined();
-		// The change card takes the whole column back — the sections below it
-		// are `display: none`, and their cells would otherwise be two empty
-		// rows under it.
-		expect((rows as string[]).slice(1).every((row) => row.endsWith("paper"))).toBe(true);
+	it("drops the folded rows from the grid instead of leaving dead space", () => {
+		const areas = (selector: string) =>
+			(/grid-template-areas:([\s\S]*?);/
+				.exec(rule(selector))?.[1]
+				.split("\n")
+				.map((row) => row.replace(/"/g, "").trim())
+				.filter(Boolean) ?? []) as string[];
+
+		// A `display: none` section is not a grid item at all, so the folded
+		// template simply does not state the tail's row — no empty cells, no
+		// stretched column pretending to fill them.
+		expect(areas(".payment-sections--cobro")).toContain("adjustments settlement meta");
+		expect(areas(".payment-sections--cobro-lean")).not.toContain("adjustments settlement meta");
+		expect(areas(".payment-sections--cobro-lean")).toHaveLength(4);
 		expect(paymentsSource).toContain(
 			"'payment-sections--cobro-lean': cobroMode && !cobroDetailsExpanded,",
 		);
@@ -262,13 +283,14 @@ describe("the legacy tail folds instead of stacking", () => {
 		);
 	});
 
-	it("drops the paid/outstanding pair the pad and the band already print", () => {
-		// Three copies of two figures: the pad's «Pagos aplicados / Falta por
+	it("drops the paid/outstanding pair the paper column and the band already print", () => {
+		// Three copies of two figures: the paper column's «Recibido / Falta por
 		// cubrir», the band's shortfall, and the summary's own read-only pair.
 		// The change fields underneath are drawn nowhere else, so the flag is
-		// scoped to the pair rather than to the component.
+		// scoped to the pair rather than to the component — and the pair itself
+		// folds with the rest of the tail.
 		expect(paymentsSource).toMatch(
-			/<PaymentSummary\s+:hide-tendered="cobroMode"/,
+			/<PaymentSummary\s+v-show="!cobroMode \|\| cobroDetailsExpanded"\s+:hide-tendered="cobroMode"/,
 		);
 		expect((summarySource.match(/v-if="!hideTendered"/g) ?? []).length).toBe(2);
 		expect(summarySource).toMatch(/hideTendered: \{\s*type: Boolean,\s*default: false,/);
@@ -342,20 +364,33 @@ describe("the band owns the one number and the one action", () => {
 		expect(paymentsSource).toMatch(/<div\s+v-if="!cobroMode"\s+:class="\['payment-footer'/);
 
 		// And the surface carries exactly ONE figure declared as the total —
-		// the artboard's own `Total $1,129.00` inside the change card. The
-		// pad claims none, `InvoiceTotals` and `PaymentSummary` declare no
-		// roles at all, and the band's number is the CHANGE, not the total.
+		// the ticket's own, in column one's totals footer. The pad claims none
+		// and the change card claims none either now (`hide-total`), because
+		// stating `Total` beside `Recibido` put it on the screen twice; the
+		// band's number is the CHANGE, not the total.
 		const pad = mount(CobroTenderPad, { props: padProps([{ ...CASH }, { ...CARD }]) });
 		const change = mount(CobroChangeCard, {
 			props: { total: 1129, tendered: 1200, currency: "MXN", formatCurrency: money },
 		});
+		const totals = mount(CobroTotalsFooter, {
+			props: {
+				subtotal: 973.28,
+				taxLabel: "IVA 16 %",
+				tax: 155.72,
+				discount: 0,
+				total: 1129,
+				formatCurrency: (value: number) => money(value),
+				currencySymbol: "$",
+			},
+		});
 
 		expect(pad.findAll('[data-money-role="total"]')).toHaveLength(0);
-		const totals = change.findAll('[data-money-role="total"]');
-		expect(totals).toHaveLength(1);
-		expect(totals[0].attributes("data-testid")).toBe("movil-pay-total");
+		expect(change.findAll('[data-money-role="total"]')).toHaveLength(0);
+		const declared = totals.findAll('[data-money-role="total"]');
+		expect(declared).toHaveLength(1);
+		expect(declared[0].attributes("data-testid")).toBe("cobro-total");
 
-		for (const wrapper of [pad, change]) {
+		for (const wrapper of [pad, change, totals]) {
 			expect(wrapper.findAll('[data-testid="band-primary"]')).toHaveLength(0);
 		}
 	});
@@ -372,7 +407,7 @@ describe("the pad writes through the register's own handlers", () => {
 		for (const key of ["1", "2", "0", "0"]) {
 			await pad.find(`[data-testid="movil-key-${key}"]`).trigger("click");
 		}
-		await pad.find('[data-testid="cobro-apply"]').trigger("click");
+		await pad.find('[data-testid="movil-key-split"]').trigger("click");
 
 		expect(onUpdateAmount).toHaveBeenCalledTimes(1);
 		// The row itself, not a copy — `handlePaymentAmountChange` writes
@@ -388,13 +423,13 @@ describe("the pad writes through the register's own handlers", () => {
 			props: { ...padProps([{ ...CASH }]), "onUpdate-amount": onUpdateAmount },
 		});
 		expect(
-			pad.find('[data-testid="cobro-apply"]').attributes("disabled"),
+			pad.find('[data-testid="movil-key-split"]').attributes("disabled"),
 		).toBeDefined();
-		await pad.find('[data-testid="cobro-apply"]').trigger("click");
+		await pad.find('[data-testid="movil-key-split"]').trigger("click");
 		expect(onUpdateAmount).not.toHaveBeenCalled();
 	});
 
-	it("`Exacto` and a tender chip are the register's `set-full-amount`", async () => {
+	it("`Exacto` and a method row are the register's `set-full-amount`", async () => {
 		const onSetFullAmount = vi.fn();
 		const rows = [{ ...CASH }, { ...CARD }];
 		const pad = mount(CobroTenderPad, {
@@ -404,7 +439,13 @@ describe("the pad writes through the register's own handlers", () => {
 		await pad.find('[data-testid="cobro-exact"]').trigger("click");
 		expect(onSetFullAmount).toHaveBeenLastCalledWith(rows[0], false);
 
-		await pad.find('[data-testid="cobro-tender-Tarjeta"]').trigger("click");
+		// Choosing the tender moved out of the pad and into the row that
+		// receives the money — one control, not a chip strip agreeing with a
+		// card list.
+		const methods = mount(CobroMethodRows, {
+			props: { ...methodProps(rows), "onSet-full-amount": onSetFullAmount },
+		});
+		await methods.find('[data-testid="cobro-tender-Tarjeta"]').trigger("click");
 		expect(onSetFullAmount).toHaveBeenLastCalledWith(rows[1], false);
 	});
 
@@ -422,16 +463,41 @@ describe("the pad writes through the register's own handlers", () => {
 
 	it("lights the row that carries the money, not a second store", async () => {
 		const rows = [{ ...CASH }, { ...CARD, amount: 1129 }];
-		const pad = mount(CobroTenderPad, { props: padProps(rows) });
+		const methods = mount(CobroMethodRows, { props: methodProps(rows) });
 		await nextTick();
 
-		expect(pad.find('[data-testid="cobro-tender-Tarjeta"]').attributes("data-armed")).toBe(
+		expect(methods.find('[data-testid="cobro-tender-Tarjeta"]').attributes("data-armed")).toBe(
 			"true",
 		);
-		expect(pad.find('[data-testid="cobro-tender-Efectivo"]').attributes("data-armed")).toBe(
+		expect(methods.find('[data-testid="cobro-tender-Efectivo"]').attributes("data-armed")).toBe(
 			"false",
 		);
-		expect(pad.find('[data-testid="cobro-received"]').text()).toBe(money(1129));
+		// The amount is the ROW's, in an input the cashier can correct.
+		expect(
+			(methods.find('[data-testid="cobro-amount-Tarjeta"]').element as HTMLInputElement).value,
+		).toBe(money(1129));
+	});
+
+	it("aims the pad at the same row the method list lights", async () => {
+		// One rule, one module (`resolveTenderTarget`). Two copies of it is how
+		// the highlighted method stops being the one that receives the money.
+		const onUpdateAmount = vi.fn();
+		const rows = [{ ...CASH }, { ...CARD, amount: 1129 }];
+		const pad = mount(CobroTenderPad, {
+			props: { ...padProps(rows), "onUpdate-amount": onUpdateAmount },
+		});
+		const methods = mount(CobroMethodRows, { props: methodProps(rows) });
+		await nextTick();
+
+		for (const key of ["5", "0"]) {
+			await pad.find(`[data-testid="movil-key-${key}"]`).trigger("click");
+		}
+		await pad.find('[data-testid="movil-key-split"]').trigger("click");
+
+		expect(onUpdateAmount.mock.calls[0][0].mode_of_payment).toBe("Tarjeta");
+		expect(methods.find('[data-testid="cobro-tender-Tarjeta"]').attributes("data-armed")).toBe(
+			"true",
+		);
 	});
 
 	it("emits nothing the payment cards do not already emit", () => {
@@ -441,10 +507,23 @@ describe("the pad writes through the register's own handlers", () => {
 		expect(paymentsSource).toMatch(/<CobroTenderPad[\s\S]{0,900}v-on="paymentMethodsHandlers"/);
 	});
 
-	it("draws no split hint, because no split flow exists to bind (R8)", () => {
+	it("spends the pad's action key on `Aplicar`, not on a split that does not exist", () => {
+		// R8: no split flow exists in `usePaymentMethods`, so the fourth
+		// column's tall key would have been a permanently disabled button
+		// beside a separate Apply. `Cobro.dc.html` draws `Aplicar` in exactly
+		// that cell, and the layout of fourteen keys is untouched.
 		const pad = mount(CobroTenderPad, { props: padProps([{ ...CASH }]) });
-		expect(pad.find('[data-testid="movil-key-split"]').attributes("disabled")).toBeDefined();
+		expect(pad.find('[data-testid="movil-key-split"]').text()).toBe("Apply");
+		expect(pad.text()).not.toMatch(/Split payment/);
 		expect(pad.text()).not.toMatch(/F6/);
+	});
+
+	it("leaves the phone's pad naming its own action", () => {
+		// `actionLabel` is absent there, so `KEYPAD_LAYOUT`'s own label stands.
+		const keypad = mount(PayKeypad, {
+			props: { entry: "", minorPerMajor: 100, displayLabel: money(0), splitEnabled: true },
+		});
+		expect(keypad.find('[data-testid="movil-key-split"]').text()).toBe("Split payment");
 	});
 });
 

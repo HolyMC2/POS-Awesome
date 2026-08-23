@@ -6,6 +6,7 @@
 			keyboard over a keypad the register already drew.
 		-->
 		<output
+			v-if="showDisplay"
 			class="pay-keypad__display reg-mono"
 			data-testid="movil-keyed-amount"
 			data-money-role="keyed"
@@ -27,7 +28,7 @@
 				:aria-label="ariaLabel(button)"
 				@click="press(button.key)"
 			>
-				{{ button.translate ? __(button.label) : button.label }}
+				{{ labelFor(button) }}
 			</button>
 		</div>
 	</div>
@@ -57,16 +58,43 @@ import {
 	type KeypadKey,
 } from "./keypadEntry";
 
-const props = defineProps<{
-	/** The raw entry buffer, owned by the screen. */
-	entry: string;
-	/** Minor units per major, so the pad knows how many decimals to accept. */
-	minorPerMajor: number;
-	/** What the entry currently comes to, already formatted by the screen. */
-	displayLabel: string;
-	/** `splitIsAvailable(...)`, decided one level up where the totals live. */
-	splitEnabled: boolean;
-}>();
+const props = withDefaults(
+	defineProps<{
+		/** The raw entry buffer, owned by the screen. */
+		entry: string;
+		/** Minor units per major, so the pad knows how many decimals to accept. */
+		minorPerMajor: number;
+		/** What the entry currently comes to, already formatted by the screen. */
+		displayLabel: string;
+		/** `splitIsAvailable(...)`, decided one level up where the totals live. */
+		splitEnabled: boolean;
+		/**
+		 * The fourth column's tall key is the PAD'S ACTION SLOT. On the phone that
+		 * action is `Dividir pago`, which is what `KEYPAD_LAYOUT` names it; the
+		 * desktop Cobro spends the same slot on `Aplicar` (`Cobro.dc.html` draws
+		 * exactly that, in exactly that cell). Passing the label rather than
+		 * editing the layout keeps ONE grid of fourteen keys — the most-tapped
+		 * surface in the product — instead of forking it per screen.
+		 *
+		 * Absent means the layout's own label, so the phone is untouched.
+		 */
+		actionLabel?: string;
+		/**
+		 * Whether the pad draws the amount itself.
+		 *
+		 * The phone's pad IS the screen, so it leads with the figure. The desktop
+		 * Cobro puts the same figure in a LABELLED field — `Cobro.dc.html` draws
+		 * `Recibido en efectivo` above its amount box — and a caption row above a
+		 * display row costs that column twenty-one points it spends on key height
+		 * instead. So the screen above draws the field and the pad draws the keys.
+		 *
+		 * `displayLabel` is still required either way: it is what the entry comes
+		 * to, and the screen renders the same string.
+		 */
+		showDisplay?: boolean;
+	}>(),
+	{ actionLabel: undefined, showDisplay: true },
+);
 
 const emit = defineEmits<{
 	(_event: "update:entry", _entry: string): void;
@@ -78,6 +106,11 @@ const __ = (value: string): string =>
 	typeof window !== "undefined" && (window as any).__ ? (window as any).__(value) : value;
 
 const layout = computed<readonly KeypadButton[]>(() => KEYPAD_LAYOUT);
+
+const labelFor = (button: KeypadButton): string => {
+	if (button.key === "split" && props.actionLabel) return props.actionLabel;
+	return button.translate ? __(button.label) : button.label;
+};
 
 const spanClass = (button: KeypadButton): string[] => {
 	const classes: string[] = [];

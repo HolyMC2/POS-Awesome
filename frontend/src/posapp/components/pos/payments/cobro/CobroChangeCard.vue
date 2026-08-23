@@ -21,26 +21,33 @@
 			between. What the register really offers is printing, and that is
 			the button its own footer has always had.
 		-->
+		<!--
+			`Cambio a entregar`, with the notes the drawer has to hand back, and
+			the two figures that say where the sale stands: `Recibido` and
+			`Falta por cubrir`. THE OUTCOME COLUMN, and the one place on this
+			surface those three are stated — the pad shows what is being keyed,
+			the method rows show what sits on each tender, and the band repeats
+			only the change, as its one number.
+
+			The band and this card cannot disagree: both read the committed
+			payment rows, and the pad's buffer moves neither until `Aplicar` —
+			see `CobroTenderPad`.
+
+			`hide-total` because the ticket's total is `CobroTotalsFooter`'s, one
+			column to the left. `Hay 7 billetes de $50 y 8 monedas de $20 en el
+			cajón` is not drawn: the drawer's live denomination counts have no
+			read model, and `ChangeToHand` already handles an unknown drawer by
+			suggesting from the currency's faces alone.
+		-->
+		<ChangeToHand :totals="totals" :format-currency="formatChange" hide-total />
+
+		<!-- Below the outcome, not above it: the customer's RFC is a fact about
+		     the paperwork, and the cashier's eye belongs on the change first. -->
 		<section v-if="maskedTaxId" class="cobro-paper__card" data-testid="cobro-fiscal">
 			<h3 class="cobro-paper__label">{{ __("Customer tax details") }}</h3>
 			<p class="cobro-paper__rfc reg-mono" data-testid="cobro-rfc">{{ maskedTaxId }}</p>
 			<p class="cobro-paper__note">{{ __("On file for this customer") }}</p>
 		</section>
-
-		<!--
-			`Cambio a entregar`, with the notes the drawer has to hand back.
-
-			The band above carries the same figure as its ONE number; this card
-			exists for the BREAKDOWN, which is the cashier's next physical act.
-			They cannot disagree: both read the committed payment rows, and the
-			pad's buffer moves neither until `Aplicar` — see `CobroTenderPad`.
-
-			`Hay 7 billetes de $50 y 8 monedas de $20 en el cajón` is not drawn:
-			the drawer's live denomination counts have no read model, and
-			`ChangeToHand` already handles an unknown drawer by suggesting from
-			the currency's faces alone.
-		-->
-		<ChangeToHand :totals="totals" :format-currency="formatChange" />
 	</div>
 </template>
 
