@@ -614,13 +614,11 @@ export default {
 					to: "/dashboard",
 				});
 			}
-			if (this.posProfile?.posa_enable_cash_movement) {
-				items.push({
-					text: "Cash Movement",
-					icon: "mdi-cash-sync",
-					to: "/cash-movement",
-				});
-			}
+			// No "Cash Movement" entry: on the desktop register it is the rail's
+			// Gasto destination (roadmap §17.7 — the rail is the only nav, and a
+			// second list of the same destinations is two sidebars). The
+			// `/cash-movement` deep link still exists and still mounts the shell
+			// on that destination, so nothing a bookmark reached is lost.
 			this.items = items;
 		},
 		async fetchTerminalEmployees() {
