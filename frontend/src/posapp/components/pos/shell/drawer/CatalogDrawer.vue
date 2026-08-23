@@ -389,7 +389,14 @@ defineExpose({ focusableChildren });
  * stable element to read `data-drawer-state` off. `display: none` keeps that
  * promise without letting an empty 400px column into the row.
  */
-.catalog-drawer-layer--closed {
+.catalog-drawer-layer--closed,
+/* The compound is load-bearing, not redundant: `--overlay` declares
+ * `display: flex` LATER in this sheet at the same single-class specificity,
+ * so on source order a closed OVERLAY layer stayed displayed — invisible,
+ * inset: 0, and eating every click on the register (Marco's «floating is
+ * broken», 08-23; playwright showed the closed layer intercepting). Two
+ * classes outweigh one, whatever the order. */
+.catalog-drawer-layer--overlay.catalog-drawer-layer--closed {
 	display: none;
 }
 
