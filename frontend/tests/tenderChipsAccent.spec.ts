@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
  * Source-scanned rather than mounted, for the reason `singleAccent.spec.ts`
  * gives: the guarantee is "no such declaration exists", and only a scan can
  * prove a negative. That suite walks `components/pos/shell/**` and so does not
- * reach this file (`tests/auditAccentCoverage.spec.ts` records that hole); this
+ * reach this file (`tests/singleAccent.spec.ts` now walks it); this
  * one closes it for the row it adds.
  *
  * No jsdom — this reads real files (build plan §10).
@@ -92,7 +92,7 @@ describe("no chip carries a saturated fill", () => {
 	});
 
 	it("reaches for no Vuetify colour prop on the strip", () => {
-		// `tests/auditAccentCoverage.spec.ts` records InvoiceSummary at ZERO
+		// `tests/singleAccent.spec.ts` records InvoiceSummary at ZERO
 		// saturated `color="…"` props. Vuetify routes `color` to the background
 		// for elevated/flat variants, which is exactly how eight secondary
 		// buttons became eight fills above the band. Native buttons here.

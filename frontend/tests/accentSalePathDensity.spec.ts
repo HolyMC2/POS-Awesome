@@ -4,7 +4,7 @@
  * Two properties, and neither survives on review alone.
  *
  * The colour half is §17.7 invariant 2: exactly one saturated accent per
- * screen, on the primary. `auditAccentCoverage.spec.ts` ratchets the count;
+ * screen, on the primary. `singleAccent.spec.ts` walks the whole POS and ratchets the count;
  * this file pins the shape.
  *
  * The density half is the one a screenshot proves once and then stops
