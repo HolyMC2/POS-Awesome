@@ -14,6 +14,7 @@ import { computed, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+	resolveSearchDrawerIntent,
 	CATALOG_DRAWER_ANCHOR_MIN_WIDTH,
 	CATALOG_DRAWER_CLOSE_MS,
 	CATALOG_DRAWER_OPEN_MS,
@@ -177,6 +178,9 @@ describe("open reason decides where the operator lands", () => {
 		// Landing them in "Fundas" because that is where they were last would
 		// hide the item whose barcode just failed.
 		expect(resolveLandingCategory("scan-miss", "fundas", CATEGORIES)).toBeNull();
+		// A search lands on everything too: a category on top of the term
+		// would hide the matches the drawer opened to show.
+		expect(resolveLandingCategory("search", "fundas", CATEGORIES)).toBeNull();
 	});
 
 	it("an empty cart lands on the featured category", () => {
@@ -321,5 +325,43 @@ describe("dispose", () => {
 
 		drawer.dispose();
 		expect(document.body.style.overflow).toBe("scroll");
+	});
+});
+
+describe("typing opens the drawer on the matches", () => {
+	it("opens a closed, anchored drawer as soon as there is a term", () => {
+		expect(
+			resolveSearchDrawerIntent({ term: "An", isOpen: false, presentation: "anchored", openReason: null }),
+		).toBe("open");
+	});
+
+	it("never opens an overlay under a typing cashier — it would trap the keyboard", () => {
+		expect(
+			resolveSearchDrawerIntent({ term: "An", isOpen: false, presentation: "overlay", openReason: null }),
+		).toBeNull();
+	});
+
+	it("leaves an open drawer alone while typing continues", () => {
+		expect(
+			resolveSearchDrawerIntent({ term: "Anillo", isOpen: true, presentation: "anchored", openReason: "search" }),
+		).toBeNull();
+		expect(
+			resolveSearchDrawerIntent({ term: "Anillo", isOpen: true, presentation: "anchored", openReason: "rail" }),
+		).toBeNull();
+	});
+
+	it("closes only the drawer the typing opened when the field empties", () => {
+		expect(
+			resolveSearchDrawerIntent({ term: "", isOpen: true, presentation: "anchored", openReason: "search" }),
+		).toBe("close");
+		expect(
+			resolveSearchDrawerIntent({ term: "   ", isOpen: true, presentation: "anchored", openReason: "search" }),
+		).toBe("close");
+		expect(
+			resolveSearchDrawerIntent({ term: "", isOpen: true, presentation: "anchored", openReason: "rail" }),
+		).toBeNull();
+		expect(
+			resolveSearchDrawerIntent({ term: "", isOpen: false, presentation: "anchored", openReason: null }),
+		).toBeNull();
 	});
 });

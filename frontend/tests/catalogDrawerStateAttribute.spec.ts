@@ -204,7 +204,7 @@ describe("data-drawer-state tracks the machine", () => {
 });
 
 describe("data-open-reason", () => {
-	it.each<[CatalogDrawerOpenReason]>([["rail"], ["scan-miss"], ["shortcut"], ["empty-cart"]])(
+	it.each<[CatalogDrawerOpenReason]>([["rail"], ["scan-miss"], ["shortcut"], ["empty-cart"], ["search"]])(
 		"publishes %s so the harness can screenshot each entry path",
 		async (reason) => {
 			const wrapper = mountHost();

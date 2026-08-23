@@ -51,10 +51,10 @@ test("PAGAR opens the Cobro surface beside the rail", async ({ page }) => {
 		if (await snack.isVisible().catch(() => false)) await snack.click().catch(() => {});
 	}
 
-	// Typing into the scan field filters the catalogue but does not open the
-	// drawer that shows the matches (recorded in the report as `typedOnlyHits`),
-	// so the lane opens the drawer first — the way a cashier would press
-	// "Browse catalogue" — and picks the match there.
+	// Typing into the scan field opens the drawer on the matches
+	// (`resolveSearchDrawerIntent`); `typedOnlyHits` records how many are
+	// visible from typing alone. Browse is still pressed afterwards so the lane
+	// does not depend on the debounce to find its row.
 	const box = page.getByRole("textbox", { name: "Search, scan or browse item" }).first();
 	await box.click({ timeout: 5_000 }).catch(() => {});
 	await box.fill("Anillo").catch(() => {});
@@ -135,6 +135,7 @@ test("PAGAR opens the Cobro surface beside the rail", async ({ page }) => {
 		if (await confirm.isVisible().catch(() => false)) await confirm.click().catch(() => {});
 	}
 
+	expect(typedOnlyHits, "typing shows its matches without pressing Browse").toBeGreaterThan(0);
 	expect(added, "at least one demo item on the ticket").toBeGreaterThan(0);
 	expect(seen.cobroHost, "the Cobro surface is hosted").toBeTruthy();
 	expect(seen.railVisible, "the rail stays on screen").toBeTruthy();

@@ -70,6 +70,15 @@ export function useItemsSelectorSearchInput({
 			searchFocusGuard.armPreserveNextFocusClear();
 		}
 		scannerInput.handleSearchInput?.(normalized);
+		// The shell listens: with the ticket at full width the matches live
+		// in the drawer, and the drawer has to know someone is looking.
+		//
+		// Through the INJECTED bus, never a module import of `bus`: this
+		// composable ships in the lazy ItemsSelector chunk, and a module
+		// import there resolved to a second mitt instance nobody in the shell
+		// listens on — `focus_item_search` two lines below always worked
+		// because it went this way. Verified on the lab 2026-08-22.
+		eventBus?.emit?.("item_search_changed", normalized);
 	};
 
 	const prepareSearchInjection = () => {

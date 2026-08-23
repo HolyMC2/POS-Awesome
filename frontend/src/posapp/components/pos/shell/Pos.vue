@@ -444,7 +444,13 @@ import DestinationHost from "./destinations/DestinationHost.vue";
 import CobroSurface from "./cobro/CobroSurface.vue";
 import MobileOfflineOverlay from "./mobile/MobileOfflineOverlay.vue";
 import ComboSuggestionStrip from "../combos/ComboSuggestionStrip.vue";
-import { useCatalogDrawer } from "../../../composables/pos/shell/useCatalogDrawer";
+import {
+	resolveSearchDrawerIntent,
+	useCatalogDrawer,
+} from "../../../composables/pos/shell/useCatalogDrawer";
+
+/** See `handleItemSearchChanged`: longer than a scanner's burst, shorter than a keystroke. */
+const SEARCH_DRAWER_DEBOUNCE_MS = 200;
 import { resolveBandState } from "../../../composables/pos/shell/bandState";
 import { useDestinationRouting } from "../../../composables/pos/shell/useDestinationRouting";
 import { useEmployeeStore } from "../../../stores/employeeStore";
@@ -1182,6 +1188,34 @@ export default {
 			catalogDrawer.toggle("shortcut");
 		};
 
+		/**
+		 * Typing opens the drawer on the matches (`resolveSearchDrawerIntent`).
+		 * Debounced: a barcode wedge types ten characters and Enter inside
+		 * ~100ms, and the field is empty again before the timer fires, so a scan
+		 * never flashes the drawer open and shut. A person typing "Anillo" is
+		 * well past the delay by the second letter.
+		 */
+		let searchDrawerTimer = null;
+		const handleItemSearchChanged = (term) => {
+			if (searchDrawerTimer !== null) {
+				clearTimeout(searchDrawerTimer);
+			}
+			searchDrawerTimer = setTimeout(() => {
+				searchDrawerTimer = null;
+				const intent = resolveSearchDrawerIntent({
+					term: String(term ?? ""),
+					isOpen: catalogDrawer.isOpen.value,
+					presentation: catalogDrawer.presentation.value,
+					openReason: catalogDrawer.openReason.value,
+				});
+				if (intent === "open") {
+					catalogDrawer.open("search");
+				} else if (intent === "close") {
+					catalogDrawer.close();
+				}
+			}, SEARCH_DRAWER_DEBOUNCE_MS);
+		};
+
 		const DOCK_TAB_DEFS = buildDockTabDefs({
 			__,
 			t: vertical.t,
@@ -1417,6 +1451,7 @@ export default {
 				eventBus.on("set_selector_view", setSelectorView);
 				eventBus.on("open_destination", handleOpenDestination);
 				eventBus.on("toggle_catalog_drawer", handleToggleCatalogDrawer);
+				eventBus.on("item_search_changed", handleItemSearchChanged);
 				eventBus.on("open_returns", handleOpenReturns);
 				eventBus.on("open_new_address", handleOpenNewAddress);
 				eventBus.on("open_mpesa_payments", handleOpenMpesaPayments);
@@ -1457,6 +1492,10 @@ export default {
 				eventBus.off("set_selector_view", setSelectorView);
 				eventBus.off("open_destination", handleOpenDestination);
 				eventBus.off("toggle_catalog_drawer", handleToggleCatalogDrawer);
+				eventBus.off("item_search_changed", handleItemSearchChanged);
+				if (searchDrawerTimer !== null) {
+					clearTimeout(searchDrawerTimer);
+				}
 				eventBus.off("open_returns", handleOpenReturns);
 				eventBus.off("open_new_address", handleOpenNewAddress);
 				eventBus.off("open_mpesa_payments", handleOpenMpesaPayments);

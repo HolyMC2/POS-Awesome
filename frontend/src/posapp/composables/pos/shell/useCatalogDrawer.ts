@@ -61,7 +61,41 @@ export type CatalogDrawerPresentation = "anchored" | "overlay";
  * Why the drawer opened. Not decoration: it decides where the operator lands.
  * A scan that missed and a deliberate browse want different first screens.
  */
-export type CatalogDrawerOpenReason = "rail" | "scan-miss" | "shortcut" | "empty-cart";
+export type CatalogDrawerOpenReason = "rail" | "scan-miss" | "shortcut" | "empty-cart" | "search";
+
+/**
+ * What typing into the scan field should do to the drawer.
+ *
+ * The field sits on the sale screen with the ticket at full width (direction
+ * E); the matches it filters live in the drawer. Until 2026-08-22 the drawer
+ * stayed closed while the operator typed, so the register filtered a list
+ * nobody could see and the cashier learned to press Browse first (the Cobro
+ * lane recorded it as `typedOnlyHits: 0`).
+ *
+ * - A term on a closed, ANCHORED drawer opens it. Overlay is excluded on
+ *   purpose: an overlay traps focus, and a drawer that opens under a typing
+ *   cashier and takes the keyboard away from the field is worse than the
+ *   closed one. Below the anchor width the dock's Browse tab remains the way.
+ * - An empty term closes a drawer that THIS typing opened (reason `search`),
+ *   and leaves alone one the operator opened deliberately.
+ * - Everything else is not this helper's business.
+ *
+ * Pure, so the shell can debounce it and a spec can walk every branch.
+ */
+export type SearchDrawerIntent = "open" | "close" | null;
+
+export function resolveSearchDrawerIntent(input: {
+	term: string;
+	isOpen: boolean;
+	presentation: CatalogDrawerPresentation;
+	openReason: CatalogDrawerOpenReason | null;
+}): SearchDrawerIntent {
+	const term = String(input.term ?? "").trim();
+	if (term) {
+		return !input.isOpen && input.presentation === "anchored" ? "open" : null;
+	}
+	return input.isOpen && input.openReason === "search" ? "close" : null;
+}
 
 /**
  * Contract for the `categories` prop. Combos arrive through it from T6; the
@@ -142,7 +176,10 @@ export function resolveLandingCategory(
 	const has = (id: string | null): id is string =>
 		id !== null && categories.some((category) => category.id === id);
 
-	if (reason === "scan-miss") {
+	// A search lands on ALL categories for the same reason a miss does: a
+	// category filter on top of the term would hide the very matches the
+	// drawer opened to show.
+	if (reason === "scan-miss" || reason === "search") {
 		return null;
 	}
 	if (reason === "empty-cart") {

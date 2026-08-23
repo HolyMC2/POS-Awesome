@@ -87,6 +87,13 @@ export type Events = {
 
 	// ---- focus / layout -----------------------------------------------------
 	focus_item_search: void;
+	/**
+	 * The scan field's text changed (every keystroke, scanner wedges included).
+	 * Emitted by `useItemsSelectorSearchInput`; the shell debounces it and
+	 * opens the catalogue drawer on the matches — see
+	 * `resolveSearchDrawerIntent`.
+	 */
+	item_search_changed: string;
 	focus_additional_discount: void;
 	set_compact_panel: "selector" | "invoice";
 	/**
