@@ -22,10 +22,30 @@
 			></v-progress-linear>
 			<div ref="paymentContainer" class="overflow-y-auto payment-scroll">
 				<div :class="['payment-sections', { 'payment-sections--dialog': dialogMode }]">
+					<!-- The way back to the cart, and the three devices that can
+					     fail while the customer is standing there. The header
+					     draws a chip only where the register has evidence, so a
+					     shop with no drawer integration and no terminal probe
+					     sees the back affordance and nothing else. -->
+					<PaymentReadinessHeader
+						class="payment-readiness"
+						:hardware="hardwareReadiness"
+						@back="cancel_payment()"
+					/>
 					<section class="payment-section payment-section--summary">
 						<div class="payment-section__header">
 							<h3 class="payment-section__title">{{ __("Payment Summary") }}</h3>
 						</div>
+						<!-- What the money is FOR, on the screen where it is taken.
+						     It suppresses itself when the cart is still beside this
+						     panel — see `cartOnScreen`. -->
+						<PaymentSaleSummary
+							class="payment-sale-summary"
+							:items="invoice_doc?.items"
+							:cart-on-screen="cartOnScreen"
+							:wallet="customerWallet"
+							:format-currency="formatSummaryCurrency"
+						/>
 						<!-- Phone: lead with the number the cashier is about to
 						     charge. On desk it is one of nine fields in the totals
 						     breakdown below; here it is the headline, so the three
@@ -392,6 +412,8 @@ import {
 	resolvePreferredPaymentLine,
 	resolveReturnDefaultAmount,
 } from "../../utils/paymentInitialization";
+import { applyArmedPaymentPreference } from "./payments/armedTenderPreselect";
+import { peekArmedTender } from "./invoice/armedTender";
 import { resolvePaymentPrintFormatDoctypes } from "../../utils/paymentPrintDoctype";
 import { resolvePaymentPrintFormat } from "../../utils/paymentPrintFormat";
 import { parseBooleanSetting } from "../../utils/stock";
@@ -411,6 +433,9 @@ import PaymentPurchaseOrder from "./payments/PaymentPurchaseOrder.vue";
 import PaymentCustomerCreditDetails from "./payments/PaymentCustomerCreditDetails.vue";
 import PaymentOptions from "./payments/PaymentOptions.vue";
 import PaymentSelectionFields from "./payments/PaymentSelectionFields.vue";
+import PaymentSaleSummary from "./payments/PaymentSaleSummary.vue";
+import PaymentReadinessHeader from "./payments/PaymentReadinessHeader.vue";
+import { useHardwareReadiness } from "./payments/useHardwareReadiness";
 import PaymentDialogs from "./payments/PaymentDialogs.vue";
 import RestaurantTipSelector from "./payments/RestaurantTipSelector.vue";
 // MP-INTEGRATION-POINT (sale checkout): hard gate — isolated, no-op when off.
@@ -931,6 +956,41 @@ const { ensureReturnPaymentsAreNegative, restoreReturnPayments, validateSubmissi
 		currencyPrecision: currency_precision,
 		restaurantTipAmount,
 	});
+
+// ── The artboard's payment screen (§12 item B) ───────────────────────────
+// Three presentation seams, all read-only. Not one of them can move a peso:
+// they are handed what the register already holds and draw it.
+
+// `PaymentSaleSummary` refuses to draw a second copy of a cart that is still
+// on screen. Today neither mount has one — the dialog puts the cart behind a
+// scrim and the anchored panel (only mounted below 992px, where the shell's
+// switcher is compact) swaps it away — but the condition is written out
+// rather than hardcoded to `false`, so a layout that brings the cart back
+// silences the duplicate instead of shipping it.
+const cartOnScreen = computed(() => !props.dialogMode && !compactPaymentLayout.value);
+
+// The component's contract is `(value) => string`; ours takes a currency too.
+const formatSummaryCurrency = (value) => formatCurrency(value, invoice_doc.value?.currency);
+
+// Which wallet, and whether it may be claimed at all, is `walletSummary`'s
+// decision — it is the module that knows loyalty accrues and stored value
+// does not. This only sources the fields.
+const customerWallet = computed(() => ({
+	loyaltyProgram: customer_info.value?.loyalty_program ?? null,
+	// `available_points_amount` answers 0 for "no points" AND for "no invoice
+	// yet"; only the first is a fact, so the second reads null and the card
+	// stays absent rather than promising an empty wallet.
+	loyaltyValue: invoice_doc.value ? available_points_amount.value : null,
+	storedValueBalance: customer_info.value?.stored_value_balance ?? null,
+	// No read model: `collection_factor` never reaches the client. The line is
+	// absent, not guessed — see `walletSummary.ts`.
+	accrual: null,
+	isReturn: Boolean(invoice_doc.value?.is_return),
+}));
+
+// Subscribes to the print-health singleton the navbar dot already runs; it
+// starts nothing and fetches nothing at the moment of taking money.
+const hardwareReadiness = useHardwareReadiness({ posProfile: pos_profile });
 
 const isGiftCardPayment = (payment) => {
 	if (!pos_profile.value?.posa_use_gift_cards) {
@@ -1558,6 +1618,21 @@ const ensurePaymentLinesInitialized = (doc = invoice_doc.value) => {
 			doc.payments = fallbackPayments;
 		}
 	}
+
+	// The tender armed on the sale screen decides which line this screen opens
+	// on (§11 item E → §12 item B). Before this call it was discarded, so the
+	// chip strip cost a tap and bought nothing: PAGAR always landed on Efectivo.
+	//
+	// It runs HERE, above everything that fills an amount, because `default` is
+	// what all four consumers read — the badge, the quick-cash denominations,
+	// `primaryPaymentMethod` and `resolvePreferredPaymentLine`. Moving the flag
+	// once keeps them agreeing; overriding them one at a time would not.
+	// Nothing below changes: the same code fills, rounds, caps and splits the
+	// same way, on the line the cashier chose instead of the one they did not.
+	applyArmedPaymentPreference(doc.payments, peekArmedTender(), {
+		isReturn: Boolean(doc.is_return),
+		paymentsTouched: paymentsTouched.value,
+	});
 
 	// For returns, always show all profile payment methods so user can split refund
 	// NOTE: the is_credit_return default is decided once when the return is loaded
@@ -2686,10 +2761,27 @@ defineExpose({
 	gap: var(--pos-space-2);
 	align-items: start;
 	grid-template-areas:
+		"readiness readiness"
 		"summary adjustments"
 		"methods adjustments"
 		"settlement adjustments"
 		"settlement meta";
+}
+
+/* The dialog lays its sections out by NAME, so an unplaced child would be
+   auto-placed into the first free cell and shove the summary out of it. The
+   header owns a full-width row of its own above them. */
+.payment-sections--dialog .payment-readiness {
+	grid-area: readiness;
+}
+
+/* A thirty-line ticket must not push the payment methods below the fold —
+   they sit in the row under the summary in the dialog's left column. The
+   card is capped and its own list scrolls inside it, which is what
+   `.pay-summary__lines` (flex:1, min-height:0, overflow-y:auto) was built
+   for; it just never had a bounded parent until now. */
+.payment-sale-summary {
+	max-height: 34vh;
 }
 
 .payment-section {

@@ -5,13 +5,13 @@
  * pressing PAY; `armedTender.ts` holds that pick. This is the read side: which
  * of the invoice's payment lines the payment screen should open on.
  *
- * ⚠ THE CHANGE THIS ENABLES IS NOT MADE HERE. `Payments.vue` and
- * `utils/paymentInitialization.ts` are the money path and are outside this
- * task's write scope, so this module ships as the tested resolver and the
- * one-line call is in the report. It exists rather than being inlined because
- * the failure it guards against — arming a tender the invoice does not carry —
- * puts the full amount on a Mode of Payment nobody chose, and a guard written
- * inline in a 3,000-line component is a guard nobody re-reads.
+ * ⚠ WHERE THE CHANGE LANDS. `Payments.vue`'s `ensurePaymentLinesInitialized`
+ * calls `applyArmedPaymentPreference` once, before
+ * `initializePaymentLinesForDialog`; `utils/paymentInitialization.ts` is
+ * untouched. The guard lives here rather than inline because the failure it
+ * prevents — arming a tender the invoice does not carry — puts the full amount
+ * on a Mode of Payment nobody chose, and a guard written inline in a
+ * 3,000-line component is a guard nobody re-reads.
  *
  * What it decides: WHICH LINE, never how much. Amounts, splits, change and
  * submission are untouched; the pre-arm only moves the cursor.
@@ -46,4 +46,60 @@ export const resolveArmedPaymentLine = (
 	if (!armed) return null;
 	const rows = Array.isArray(payments) ? payments : [];
 	return rows.find((row) => !!row?.mode_of_payment && row.mode_of_payment === armed) ?? null;
+};
+
+/** What can withdraw the arm's authority at the moment the screen opens. */
+export interface ArmedPreferenceContext {
+	/**
+	 * A refund is not "cobrar con". The strip already refuses to arm one, and
+	 * this refuses again in case the sale turned into a return after the arm.
+	 */
+	isReturn?: boolean | null;
+	/**
+	 * The cashier has entered an amount. From that moment the screen is theirs:
+	 * re-opening it must not move the money off the line they typed on.
+	 */
+	paymentsTouched?: boolean | null;
+}
+
+/**
+ * Make the armed tender the line the payment screen opens on.
+ *
+ * `default` is the register's OWN word for "the line the screen opens on":
+ * the `Default` badge, the quick-cash denominations, `primaryPaymentMethod`
+ * and `resolvePreferredPaymentLine` all read it. Moving the flag is therefore
+ * the one change that keeps every one of them agreeing — and the reason it is
+ * a flag move rather than four separate overrides.
+ *
+ * ⚠ WHICH LINE, NEVER HOW MUCH. Not one figure is computed here.
+ * `initializePaymentLinesForDialog` still fills the amount, still rounds it,
+ * still caps a refund, still splits the same way — on the line this function
+ * pointed it at. Moving the badge WITHOUT moving the pre-fill would be the
+ * worse bug: the total would sit on Efectivo behind a card labelled Tarjeta,
+ * a split nobody asked for.
+ *
+ * Returns the armed line, or `null` for "no opinion" — unarmed, MIXED, stale,
+ * a return, or a screen the cashier has already typed on. In every one of
+ * those the payment lines are left exactly as they were and today's default
+ * stands, which is the behaviour the register has always had.
+ */
+export const applyArmedPaymentPreference = (
+	payments: (PaymentLine | null | undefined)[] | null | undefined,
+	armed: string | null | undefined,
+	context: ArmedPreferenceContext = {},
+): PaymentLine | null => {
+	if (context.isReturn || context.paymentsTouched) return null;
+
+	const rows = Array.isArray(payments) ? payments : [];
+	const line = resolveArmedPaymentLine(rows, armed);
+	if (!line) return null;
+
+	// Every row, not just the two that change: a second surviving `default`
+	// would make `resolvePreferredPaymentLine` and `primaryPaymentMethod` pick
+	// by array order, and they walk the array differently.
+	for (const row of rows) {
+		if (!row) continue;
+		row.default = row === line ? 1 : 0;
+	}
+	return line;
 };

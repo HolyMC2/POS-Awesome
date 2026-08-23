@@ -92,16 +92,29 @@ const __ = window.__;
 		box-shadow 0.18s ease,
 		background-color 0.18s ease,
 		transform 0.18s ease !important;
-	color: #ffffff !important;
 	min-height: 48px !important;
 }
 
+/* The screen's ONE saturated fill. White text belongs to it alone — it used
+   to sit on `.payment-footer-btn` and painted every footer button white,
+   which is why the outlined sibling below had to be filled to stay legible. */
 .payment-submit-btn {
 	background-color: rgb(var(--v-theme-primary)) !important;
+	color: #ffffff !important;
 }
 
+/* The template above has declared this `variant="outlined"` since the accent
+   sweep; the stylesheet kept filling it green anyway, so the screen shipped
+   with a green button beside a band that tints green for "change to give".
+   Green is STATE. An outline keeps it a peer of Submit in size and position
+   with the accent still spent exactly once. */
 .payment-submit-print-btn {
-	background-color: rgb(var(--v-theme-success)) !important;
+	background-color: transparent !important;
+	color: var(--pos-text-primary, rgba(0, 0, 0, 0.87)) !important;
+	/* on-surface rather than `--pos-border` (0.12): a 1px hairline at 12%
+	   opacity does not read as a peer of a filled 48px button. 38% is
+	   Vuetify's own outlined weight and it flips with the theme. */
+	border: 1px solid rgba(var(--v-theme-on-surface), 0.38) !important;
 }
 
 /* Slim, low-emphasis exit — a text row, not a full red bar competing with the
@@ -146,7 +159,9 @@ const __ = window.__;
 .payment-submit-print-btn:focus,
 .payment-submit-print-btn:focus-visible,
 .payment-submit-print-btn:active {
-	background-color: rgba(var(--v-theme-success), 0.9) !important;
+	/* Neutral wash under the finger, not a colour reveal — the hover state of
+	   a secondary must not become the second accent the rest fix removed. */
+	background-color: rgba(var(--v-theme-on-surface), 0.06) !important;
 }
 
 .payment-footer-btn:active {

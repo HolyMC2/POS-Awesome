@@ -87,7 +87,7 @@
 					<v-btn
 						block
 						variant="outlined"
-						class="payment-method-action-btn payment-method-action-btn--success"
+						class="payment-method-action-btn"
 						data-pos-keyboard-target="payment-action"
 						@click="$emit('mpesa-dialog', payment)"
 					>
@@ -102,7 +102,7 @@
 				>
 					<v-btn
 						block
-						variant="tonal"
+						variant="outlined"
 						class="payment-method-action-btn payment-method-action-btn--secondary"
 						data-pos-keyboard-target="payment-action"
 						:disabled="payment.amount === 0"
@@ -229,6 +229,12 @@ const blurTarget = (event) => {
 	font-weight: 700;
 }
 
+/* The template above declares this `variant="outlined"` and says why: one
+   filled button per payment row multiplied the accent by the number of
+   tenders, so the primary stopped standing out. The stylesheet went on
+   filling it with the brand accent anyway — a register with three methods
+   drew three saturated teal bars beside the one on Submit. Outlined here so
+   the markup and the paint finally agree. */
 .payment-method-action-btn {
 	--v-theme-overlay-multiplier: 0 !important;
 	min-height: 44px;
@@ -240,8 +246,9 @@ const blurTarget = (event) => {
 		box-shadow 0.18s ease,
 		background-color 0.18s ease,
 		transform 0.18s ease !important;
-	background-color: rgb(var(--v-theme-primary)) !important;
-	color: #ffffff !important;
+	background-color: transparent !important;
+	color: var(--pos-text-primary, rgba(0, 0, 0, 0.87)) !important;
+	border: 1px solid rgba(var(--v-theme-on-surface), 0.38) !important;
 }
 
 .payment-method-actions {
@@ -254,7 +261,9 @@ const blurTarget = (event) => {
 .payment-method-action-btn:active {
 	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18) !important;
 	transform: translateY(-1px);
-	background-color: rgba(var(--v-theme-primary), 0.9) !important;
+	/* Neutral under the finger — a hover that reveals the accent would put it
+	   back on the screen one row at a time. */
+	background-color: rgba(var(--v-theme-on-surface), 0.06) !important;
 }
 
 .payment-method-action-btn:active {
@@ -267,28 +276,16 @@ const blurTarget = (event) => {
 	background: transparent !important;
 }
 
-.payment-method-action-btn--success {
-	background: rgb(var(--v-theme-success)) !important;
-	color: #ffffff !important;
-}
-
-.payment-method-action-btn--success:hover,
-.payment-method-action-btn--success:focus,
-.payment-method-action-btn--success:focus-visible,
-.payment-method-action-btn--success:active {
-	background-color: rgba(var(--v-theme-success), 0.9) !important;
-}
-
+/* M-Pesa's "Get Payments" and the phone method's "Request Payment". Both were
+   green — a saturated fill and a tint — and neither is reporting a state:
+   they are ordinary actions on a payment row. Green on this screen belongs to
+   change due, and a button wearing it teaches the cashier the band's green
+   means nothing. Both inherit the neutral outline above; `--secondary` keeps
+   only its lighter weight, so the pair still reads as primary-then-secondary
+   within the row. */
 .payment-method-action-btn--secondary {
-	background: rgba(var(--v-theme-success), 0.14) !important;
-	color: rgb(var(--v-theme-success)) !important;
-}
-
-.payment-method-action-btn--secondary:hover,
-.payment-method-action-btn--secondary:focus,
-.payment-method-action-btn--secondary:focus-visible,
-.payment-method-action-btn--secondary:active {
-	background-color: rgba(var(--v-theme-success), 0.2) !important;
+	font-weight: 600;
+	border-color: rgba(var(--v-theme-on-surface), 0.24) !important;
 }
 
 .payment-denominations {
