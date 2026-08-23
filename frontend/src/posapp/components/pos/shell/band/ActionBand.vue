@@ -238,7 +238,14 @@ const primaryParams = computed(() =>
 
 .action-band__breakdown,
 .action-band__context {
-	flex: none;
+	/* 0 1 auto, not none: with every lane refusing to shrink, a band whose
+	 * content outgrows it (the es-MX «IVA 16% (INCLUIDO EN EL PRECIO)» label
+	 * beside the method chips, cafetería 08-23) overlapped text on text.
+	 * These two lanes give way first and CLIP — the figure and the primary
+	 * never shrink, so the one number and the one action stay whole. */
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
 	font-size: 12.5px;
 }
 
