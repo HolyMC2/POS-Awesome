@@ -1,0 +1,21 @@
+{
+ "golden_flow_id": "abarrotes-scan-basket-v1",
+ "manifest_id": "abarrotes-comercio-thin",
+ "passed": false,
+ "playwright_exit": 1,
+ "site": "demo-abarrotes.lab.xoloitzcuintles.com",
+ "spec": {
+  "git_rev": "1f1c212db",
+  "path": "tests/e2e/golden-flow-scan-retail.spec.ts",
+  "sha256": "f74ad1009f6f81709e477bd5e96357f18e75e9c89f035828a2f28755253e377b"
+ },
+ "started_at": "2026-08-23T20:54:46+00:00",
+ "verdict": {
+  "duration_ms": 243101,
+  "expected": 0,
+  "flaky": 0,
+  "passed": false,
+  "skipped": 0,
+  "unexpected": 1
+ }
+}

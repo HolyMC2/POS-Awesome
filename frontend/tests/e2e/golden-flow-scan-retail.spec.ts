@@ -124,16 +124,21 @@ test("scan-retail golden flow: shift → mixed basket → cash → submitted tax
 	// Duplicate-scan quantity behaviour (§4.1): one row, qty 2.
 	await expect(page.getByText("2.00").first()).toBeVisible({ timeout: 10_000 });
 
-	await page.getByRole("button", { name: /^pay$/i }).click();
-	// Cash prefills the exact total (change 0) — submit completes the sale.
+	await page.getByRole("button", { name: /^pay$/i }).first().click();
+	// Cash prefills the exact total (change 0) — completing the sale is the
+	// legacy dialog's «Submit» below the two-column boundary, or the band's
+	// «COLLECT AND CLOSE» when Cobro is hosted beside the rail (§14.2) —
+	// same submit() either way, so the certification accepts either surface.
 	// On a resumed shift (no opening dialog) the first Pay click occasionally
 	// lands before the invoice round-trip arms the panel and nothing opens —
 	// one measured re-click keeps the unattended job flake-free.
-	const submit = page.getByRole("button", { name: /^submit$/i }).first();
+	const submit = page
+		.getByRole("button", { name: /^submit$|collect and close/i })
+		.first();
 	try {
 		await submit.waitFor({ state: "visible", timeout: 20_000 });
 	} catch {
-		await page.getByRole("button", { name: /^pay$/i }).click();
+		await page.getByRole("button", { name: /^pay$/i }).first().click();
 		await submit.waitFor({ state: "visible", timeout: 30_000 });
 	}
 	await submit.click();
