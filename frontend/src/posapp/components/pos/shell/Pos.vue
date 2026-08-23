@@ -1886,8 +1886,21 @@ export default {
 	max-height: calc(100dvh - 24px);
 }
 
+/* NOTHING here animates, and that is the rule rather than an omission.
+ *
+ * The compact shell switches panels by flipping `v-show` on siblings, so a
+ * dock tap is one repaint — except that this container used to carry
+ * `all 0.3s ease` and the columns `padding 0.3s ease`. `all` silently covers
+ * the layout properties, so every panel change eased its padding and its
+ * safe-space over 300ms while the panel underneath had already swapped: the
+ * flicker Marco reported. Browse was worse still, because it also waited on a
+ * modal sheet to slide in.
+ *
+ * One rule for every dock destination: instant. Anything reinstated here has
+ * to hold for Cart, Ofertas, Cupones, Salón, Cobro and Browse alike, or the
+ * dock has a slow tab again — `compactPanelSwitchInstant.spec.ts` enforces it.
+ */
 .dynamic-container {
-	transition: all 0.3s ease;
 	padding-bottom: calc(var(--bottom-safe-space) + var(--dynamic-xs));
 	min-width: 0;
 }
@@ -1933,7 +1946,6 @@ export default {
 
 .dynamic-col {
 	padding: var(--dynamic-sm);
-	transition: padding 0.3s ease;
 	margin-top: var(--dynamic-sm);
 }
 
