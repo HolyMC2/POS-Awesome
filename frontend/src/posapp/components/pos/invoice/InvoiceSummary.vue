@@ -1307,6 +1307,22 @@ defineExpose({
 	display: flex;
 	justify-content: space-between;
 	gap: 12px;
+	/* The column is a fixed 216px while the pairs are nowrap — the es-MX
+	 * «IVA 16% (INCLUIDO EN EL PRECIO)» label runs ~277px and was drawn OVER
+	 * the neighbouring method chips (cafetería 08-23). The label gives way
+	 * with an ellipsis; the money keeps its digits whole. */
+	min-width: 0;
+}
+
+.action-band .summary-breakdown__label {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.action-band .summary-breakdown__value {
+	flex: none;
 }
 
 /* Two columns of chips, the artboard's `repeat(2, 104px)`, so a register with
