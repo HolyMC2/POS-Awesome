@@ -21,6 +21,13 @@
  *    so narrow viewports fall back to an OVERLAY, which IS modal. The design
  *    does not draw that state because it only draws the desktop register, but
  *    geometry forces it.
+ * 3. Where the shell is COMPACT there is no cart to sit beside or to cover:
+ *    the dock switches one panel at a time, and the catalogue is one of those
+ *    panels. So it presents INLINE — in flow, full width, not modal, and with
+ *    no transition, because a Browse tab that animates while Cart and Cupones
+ *    flip instantly reads as the slow one rather than as the considered one.
+ *    That is the whole difference between a drawer and a panel, and it is why
+ *    `inline` is a presentation here rather than a second component.
  *
  * Presentation therefore decides behaviour, and both live here rather than in
  * the component, so the policy can be unit-tested without mounting anything.
@@ -55,7 +62,7 @@ export const CATALOG_DRAWER_OPEN_MS = 180;
 export const CATALOG_DRAWER_CLOSE_MS = 140;
 
 export type CatalogDrawerPhase = "closed" | "opening" | "open" | "closing";
-export type CatalogDrawerPresentation = "anchored" | "overlay";
+export type CatalogDrawerPresentation = "anchored" | "overlay" | "inline";
 
 /**
  * Why the drawer opened. Not decoration: it decides where the operator lands.
@@ -121,6 +128,13 @@ export interface UseCatalogDrawerOptions {
 	registerId: Ref<string> | ComputedRef<string>;
 	/** Live viewport width; drives the anchored/overlay decision. */
 	viewportWidth: Ref<number> | ComputedRef<number>;
+	/**
+	 * The shell is showing one panel at a time (`useCompactPosSwitcher`), so
+	 * the catalogue is a panel rather than a drawer — see rule 3 in the header.
+	 * Asked of the shell rather than re-derived from the width, because a lean
+	 * vertical preset is compact at any width and geometry cannot see that.
+	 */
+	compact?: Ref<boolean> | ComputedRef<boolean>;
 	/** Categories currently offered, for resolving the landing category. */
 	categories: Ref<CatalogCategory[]> | ComputedRef<CatalogCategory[]>;
 	/** Honour `prefers-reduced-motion`; when true the overlay is instant too. */
@@ -191,7 +205,7 @@ export function resolveLandingCategory(
 }
 
 export function useCatalogDrawer(options: UseCatalogDrawerOptions) {
-	const { registerId, viewportWidth, categories, prefersReducedMotion } = options;
+	const { registerId, viewportWidth, categories, prefersReducedMotion, compact } = options;
 
 	const phase = ref<CatalogDrawerPhase>("closed");
 	const openReason = ref<CatalogDrawerOpenReason | null>(null);
@@ -210,11 +224,24 @@ export function useCatalogDrawer(options: UseCatalogDrawerOptions) {
 
 	const fitsAnchored = computed(() => viewportWidth.value >= CATALOG_DRAWER_ANCHOR_MIN_WIDTH);
 
-	const presentation = computed<CatalogDrawerPresentation>(() =>
-		fitsAnchored.value && !anchorOptOut.value ? "anchored" : "overlay",
-	);
+	const presentation = computed<CatalogDrawerPresentation>(() => {
+		// Compact wins over geometry: a lean vertical preset shows one panel at
+		// a time on a 1440px screen too, and anchoring 400px beside a cart that
+		// is not on screen would leave the register drawing half a layout.
+		if (compact?.value === true) {
+			return "inline";
+		}
+		return fitsAnchored.value && !anchorOptOut.value ? "anchored" : "overlay";
+	});
 
-	/** An overlay is modal; an anchored panel is a sibling of the cart. */
+	/**
+	 * Whether to OFFER the anchored/floating choice. Geometry is only half the
+	 * question: inline has no cart beside it to push either, so a wide lean
+	 * register would otherwise get a chip that cannot change anything.
+	 */
+	const canAnchor = computed(() => fitsAnchored.value && presentation.value !== "inline");
+
+	/** An overlay is modal; anchored and inline panels are siblings of the cart. */
 	const isModal = computed(() => presentation.value === "overlay");
 
 	const isVisible = computed(() => phase.value !== "closed");
@@ -223,12 +250,13 @@ export function useCatalogDrawer(options: UseCatalogDrawerOptions) {
 	const reducedMotion = computed(() => prefersReducedMotion?.value === true);
 
 	/**
-	 * Zero for anchored (pushing is layout — see the file header) and zero when
-	 * the operator asked for reduced motion. The component reads this rather
-	 * than hard-coding a duration, so the two paths cannot drift.
+	 * Zero for anchored (pushing is layout — see the file header), zero for
+	 * inline (it is one of the dock's panels, and the others flip instantly)
+	 * and zero when the operator asked for reduced motion. The component reads
+	 * this rather than hard-coding a duration, so the paths cannot drift.
 	 */
 	const transitionDurationMs = computed(() => {
-		if (presentation.value === "anchored" || reducedMotion.value) {
+		if (presentation.value !== "overlay" || reducedMotion.value) {
 			return 0;
 		}
 		return phase.value === "closing" ? CATALOG_DRAWER_CLOSE_MS : CATALOG_DRAWER_OPEN_MS;
@@ -365,6 +393,7 @@ export function useCatalogDrawer(options: UseCatalogDrawerOptions) {
 		presentation,
 		isModal,
 		fitsAnchored,
+		canAnchor,
 		// policy — the component reads these instead of re-deciding
 		trapsFocus,
 		locksScroll,

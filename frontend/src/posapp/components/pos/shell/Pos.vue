@@ -229,8 +229,8 @@
 						:traps-focus="catalogDrawer.trapsFocus.value"
 						:shows-scrim="catalogDrawer.showsScrim.value"
 						:transition-duration-ms="catalogDrawer.transitionDurationMs.value"
-						:can-anchor="catalogDrawer.fitsAnchored.value"
-						@close="catalogDrawer.close"
+						:can-anchor="catalogDrawer.canAnchor.value"
+						@close="closeCatalogDrawer"
 						@opened="onDrawerOpened"
 						@update:active-category="catalogDrawer.setCategory"
 						@update:anchored="catalogDrawer.setAnchored"
@@ -1062,6 +1062,7 @@ export default {
 			registerId: computed(() => posProfile.value?.name || ""),
 			viewportWidth: responsive.windowWidth,
 			categories: catalogCategories,
+			compact: useCompactPosSwitcher,
 		});
 		// While the drawer is showing it HOLDS the catalogue; the selector column
 		// gives it up rather than rendering a second copy. Exactly one
@@ -1079,13 +1080,63 @@ export default {
 		// Browse IS the drawer. Any request to show the catalogue opens it and
 		// any move away closes it, so the rail, the dock and the chord cannot
 		// disagree about whether the grid is up.
-		const applySelectorView = (view) => {
+		const applySelectorView = (view, reason = "rail") => {
 			if (view === "items") {
-				catalogDrawer.open("rail");
+				catalogDrawer.open(reason);
 			} else if (catalogDrawer.isOpen.value) {
 				catalogDrawer.close();
 			}
 			setSelectorView(view);
+		};
+
+		/**
+		 * Compact: the catalogue IS the selector panel, so its state FOLLOWS the
+		 * panel instead of being toggled beside it.
+		 *
+		 * The register boots on `selector` + `items` and the only ItemsSelector
+		 * lives in the drawer, so a drawer that boots closed left the compact
+		 * shell with every column hidden — a blank screen, which is what Marco
+		 * reported. Deriving it here rather than opening once at boot also keeps
+		 * the two honest afterwards: every path that moves the panel (the dock,
+		 * the bus, the floor's "add products", a returning cashier) lands on the
+		 * grid without each one having to remember to open the drawer.
+		 *
+		 * `items` and not merely `selector`: Ofertas, Cupones, Salón and the
+		 * inline payment panel are the OTHER selector-panel views, and each has
+		 * a column of its own. Opening the catalogue over them would draw two.
+		 */
+		watch(
+			[() => catalogDrawer.presentation.value, compactPanel, activeView],
+			([presentation, panel, view]) => {
+				if (presentation !== "inline") {
+					return;
+				}
+				const catalogueIsThePanel = panel === "selector" && view === "items";
+				if (catalogueIsThePanel && !catalogDrawer.isOpen.value) {
+					// A landing, not a resume: `empty-cart` starts on the featured
+					// category rather than wherever this register was last.
+					catalogDrawer.open("empty-cart");
+				} else if (!catalogueIsThePanel && catalogDrawer.isOpen.value) {
+					catalogDrawer.close();
+				}
+			},
+			{ immediate: true },
+		);
+
+		/**
+		 * Closing the catalogue has to LAND somewhere. Anchored and overlay both
+		 * close onto a cart that was already beside or behind them; inline is
+		 * the panel itself, so closing it without moving the compact shell would
+		 * leave the register showing nothing — the same blank the watcher above
+		 * exists to prevent. The ticket is the only other panel, so × goes there
+		 * and the watcher closes the drawer on the way.
+		 */
+		const closeCatalogDrawer = () => {
+			if (catalogDrawer.presentation.value === "inline") {
+				showInvoicePanel();
+				return;
+			}
+			catalogDrawer.close();
 		};
 
 		/**
@@ -1185,6 +1236,18 @@ export default {
 			destinationRouting.activate(String(id ?? ""), "shortcut");
 		};
 		const handleToggleCatalogDrawer = () => {
+			// Inline the catalogue IS a panel, so "toggle it" means swapping
+			// panels. Closing it where it stands would leave the compact shell
+			// with nothing drawn — the same hole `closeCatalogDrawer` closes for
+			// the × and the landing rule closes at boot.
+			if (catalogDrawer.presentation.value === "inline") {
+				if (catalogDrawer.isOpen.value) {
+					showInvoicePanel();
+				} else {
+					applySelectorView("items", "shortcut");
+				}
+				return;
+			}
 			catalogDrawer.toggle("shortcut");
 		};
 
@@ -1616,6 +1679,7 @@ export default {
 			catalogDrawer,
 			drawerAnchoredOpen,
 			onDrawerOpened,
+			closeCatalogDrawer,
 			applySelectorView,
 			catalogCategories,
 			comboSuggestions,

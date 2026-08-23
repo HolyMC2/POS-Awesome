@@ -406,6 +406,22 @@ defineExpose({ focusableChildren });
 	min-height: 0;
 }
 
+/*
+ * Inline: the compact shell's selector PANEL, in flow, taking the whole row.
+ * Not a drawer over anything — below the two-column boundary the dock shows
+ * one panel at a time and this is one of them, so it neither pushes a cart
+ * that is off screen nor covers one. No `position`, no `z-index`, and nothing
+ * animated at all — Browse has to flip exactly as fast as Cart and Cupones do.
+ */
+.catalog-drawer-layer--inline {
+	flex: 1 1 100%;
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	padding: var(--dynamic-sm);
+	margin-top: var(--dynamic-sm);
+}
+
 .catalog-drawer {
 	display: flex;
 	flex-direction: column;
@@ -422,6 +438,14 @@ defineExpose({ focusableChildren });
 
 .catalog-drawer-layer--anchored .catalog-drawer {
 	flex: 1;
+}
+
+.catalog-drawer-layer--inline .catalog-drawer {
+	width: 100%;
+	flex: 1;
+	/* The edge shadow draws a panel sliding in from the right. Inline nothing
+	 * slid, so it would be a shadow cast by a movement that never happened. */
+	box-shadow: none;
 }
 
 .catalog-drawer-layer--overlay .catalog-drawer {
@@ -617,6 +641,16 @@ defineExpose({ focusableChildren });
 .catalog-drawer__hint {
 	font-size: 11px;
 	color: var(--reg-text-muted, #9aa2ae);
+}
+
+/*
+ * The footer promises "Esc cierra", and inline is the one presentation that
+ * cannot keep it: a phone has no Esc key, and the row it costs comes straight
+ * off the grid. Hidden rather than removed from the template — the panel is
+ * the same panel in all three presentations, and only this promise changes.
+ */
+.catalog-drawer-layer--inline .catalog-drawer__footer {
+	display: none;
 }
 
 .mono {

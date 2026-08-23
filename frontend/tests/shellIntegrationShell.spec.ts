@@ -76,6 +76,10 @@ const mountShell = (eventBus = makeBus()) => ({
 describe("shell integration — Riel y Cajón", () => {
 	beforeEach(() => {
 		setActivePinia(createPinia());
+		// jsdom's own default, restated so a test that mounts a desktop-width
+		// register cannot leave the next one on 1440 — the compact switcher
+		// reads this at setup and nothing resets it between files.
+		window.innerWidth = 1024;
 		vi.stubGlobal("__", (value: string) => value);
 		vi.stubGlobal("frappe", {
 			session: { user: "tester@example.com" },
@@ -131,13 +135,39 @@ describe("shell integration — Riel y Cajón", () => {
 		expect(vm.hostedDestinationId).toBeNull();
 	});
 
-	it("toggles the catalogue drawer from the bus, and back", async () => {
+	it("toggles the catalogue from the bus, and back", async () => {
+		// jsdom is 1024px, so this is the COMPACT shell: the catalogue is the
+		// panel the register boots on, and the chord swaps panels rather than
+		// covering one. Closing it in place would leave the shell drawing
+		// nothing, which is the defect the inline presentation exists to fix.
 		const { bus, wrapper } = mountShell();
 		const vm = wrapper.vm as any;
 		// `catalogDrawer` is returned as a plain object of refs, so setup's
 		// unwrapping does not reach inside it — the template says
 		// `catalogDrawer.phase.value` for the same reason.
 		const drawer = vm.catalogDrawer;
+		expect(drawer.presentation.value).toBe("inline");
+		expect(drawer.isOpen.value).toBe(true);
+
+		bus.emit("toggle_catalog_drawer");
+		await nextTick();
+		expect(drawer.isOpen.value).toBe(false);
+		expect(vm.compactPanel).toBe("invoice");
+
+		bus.emit("toggle_catalog_drawer");
+		await nextTick();
+		expect(drawer.isOpen.value).toBe(true);
+		expect(drawer.openReason.value).toBe("shortcut");
+		expect(vm.compactPanel).toBe("selector");
+	});
+
+	it("covers and uncovers the cart with the same chord on a desktop register", async () => {
+		// Above the boundary the catalogue is a drawer beside a cart that stays
+		// on screen, so the chord opens and closes it in place.
+		window.innerWidth = 1440;
+		const { bus, wrapper } = mountShell();
+		const drawer = (wrapper.vm as any).catalogDrawer;
+		expect(drawer.presentation.value).toBe("anchored");
 		expect(drawer.phase.value).toBe("closed");
 
 		bus.emit("toggle_catalog_drawer");
@@ -199,22 +229,33 @@ describe("shell integration — Riel y Cajón", () => {
 
 	it("gives the cart the whole row until an anchored drawer opens", () => {
 		// The density argument for direction E, asserted rather than described:
-		// closed, the ticket is full width with only the teleported scan bar
-		// above it.
-		const vm = mountShell().wrapper.vm as any;
-		expect(vm.drawerAnchoredOpen).toBe(false);
+		// only the ANCHORED presentation is a flex sibling of the ticket, so it
+		// is the only one that may take width from it.
+		//
+		// jsdom is 1024px, i.e. the compact shell, where the catalogue replaces
+		// the cart as the panel instead of squeezing it.
+		const compact = mountShell().wrapper.vm as any;
+		expect(compact.catalogDrawer.presentation.value).toBe("inline");
+		expect(compact.drawerAnchoredOpen).toBe(false);
 
-		vm.catalogDrawer.open("rail");
-		// jsdom is 1024px, below the 1100px anchor threshold, so this opens as an
-		// OVERLAY — which must not take width from the cart either.
-		expect(vm.catalogDrawer.presentation.value).toBe("overlay");
-		expect(vm.drawerAnchoredOpen).toBe(false);
+		// The floating (overlay) presentation is a sheet over the row and must
+		// not take width either — that is what un-anchoring buys.
+		window.innerWidth = 1440;
+		const wide = mountShell().wrapper.vm as any;
+		wide.catalogDrawer.setAnchored(false);
+		wide.catalogDrawer.open("rail");
+		expect(wide.catalogDrawer.presentation.value).toBe("overlay");
+		expect(wide.drawerAnchoredOpen).toBe(false);
 	});
 
-	it("treats browse as the drawer, not as a column", () => {
+	it("treats browse as the drawer, not as a column", async () => {
 		// The catalogue has exactly one home now. If the dock's Buscar tab still
 		// only swapped `activeView`, it would light up with nothing behind it.
 		const vm = mountShell().wrapper.vm as any;
+		// Compact boots ON the catalogue, so start from the ticket — otherwise
+		// the tab would be "confirmed" by a state it never had to reach.
+		vm.showInvoicePanel();
+		await nextTick();
 		expect(vm.catalogDrawer.isOpen.value).toBe(false);
 
 		vm.applySelectorView("items");
