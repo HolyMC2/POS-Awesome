@@ -7,6 +7,108 @@ only records successes is a log nobody can debug from.
 
 ---
 
+## 2026-08-22 · Cobro hosted surface
+
+### Which option of §14.4 item 1, and why
+
+**Option one: a `cobro` layout inside `Payments.vue`.** The prop is
+`cobroMode`; the template gains one `v-if` branch that renders the SAME child
+components with the SAME bindings, arranged in the artboard's three columns.
+`<script setup>` is otherwise byte-identical — one `defineProps` entry, and
+nothing else: no new computed, no new method, no new emit, no `defineExpose`.
+
+The alternative — a `CobroView.vue` that mounts `Payments.vue` and re-homes its
+sections by `<Teleport>` — was tried on paper first and fails on the one thing
+the screen has to do. **The keypad has to write into a payment row.** The only
+sanctioned way to do that is the contract `PaymentMethods` already has:
+`v-bind="paymentMethodsProps"` / `v-on="paymentMethodsHandlers"`, whose
+`update-amount`, `set-full-amount` and `set-denomination` land on
+`handlePaymentAmountChange`, `set_full_amount` and `setPaymentToDenomination`.
+Those two objects are internal to `Payments.vue`'s setup scope, and
+`<script setup>` exposes NOTHING to a parent without `defineExpose`. So a
+teleport arrangement buys the layout at the price of either a new expose
+surface or a new emit — a money-path seam invented for a layout — while
+option one gets the layout with the pad as an ordinary child, wired to the
+handlers that already exist. The chrome is new; not one peso changes hands
+through a path that was written today.
+
+`Payments.vue` grows by template only, and the new chrome lives in four files
+of its own so nothing here goes near the 3,126-line engine's script.
+
+### Where the number and the action live
+
+`CobroSurface.vue` (shell side) mounts `<Payments cobro-mode />`, computes
+`resolveBandState({ kind: "tender", total, received })` from the invoice
+document, and emits it upward. `Pos.vue` adopts it — `HOSTED_BAND_KINDS` gains
+`change` and `shortfall` — and answers `sale.collectAndClose` by emitting
+`queue_submit_payment_shortcut`, which is the bus event the payment chord
+already uses to reach `submit(null, false, print)`: the same function, with the
+same arguments, that the dialog's Submit button calls. No new call site into
+the money path.
+
+**The change card and the band agree because they read the same thing.** The
+mobile Cobro moves its figure under the cashier's thumb as they key, because
+there is no band beside it. On the desktop the band is 134 px below the card,
+and a card that previewed an amount the band had not adopted would be the
+two-numbers defect §11 spent a wave removing. So the pad's buffer is a
+DISPLAY until `Aplicar` commits it, and from that moment the card, the band
+and `invoice_doc.payments` are one figure. `Exacto` and the tender chips
+commit immediately, because they are already a commitment.
+
+### What is drawn, and what is deliberately not
+
+Sourced and drawn: the sale summary and the wallet (`PaymentSaleSummary`,
+`walletSummary.ts` — which already refuses to render an accrual it cannot
+source), Subtotal/IVA/Total (`InvoiceTotals`), the tender chips
+(`tenderChips.ts` + `armedTender.ts`, the same pick armed on the sale screen),
+the received amount and `Exacto` (`set_full_amount`), the preset chips
+(`getVisibleDenominations` → `getSmartTenderSuggestions`, which is where the
+artboard's `$1,150 · $1,200 · $1,500 · $2,000` actually comes from), the pad
+(`PayKeypad`), applied payments and `Falta por cubrir` (`invoice_doc.payments`,
+`diff_payment`), the change and its notes (`ChangeToHand`, `changeBreakdown`
+over the corte's own denomination table), the piece count, the print format
+and the salesperson (`PaymentSelectionFields`), the customer's RFC
+(`customer_info.tax_id`, masked).
+
+Not drawn, each with the absence commented where the figure would have gone:
+
+- **`Garantía que se imprime` · `30 días` · `7 días`.** No doctype carries a
+  per-category warranty. §14.3 said so and it is still true.
+- **`Timbres disponibles 137` · `Del paquete de 200` · `Facturación de hoy`.**
+  `cfdiStore.ts` holds catalogs, a search and a stamp state machine. It has no
+  quota and no daily counters, and the endpoints behind it do not return any.
+- **`CFDI 4.0 al cerrar` · `Uso G03` · `Régimen 626` · `Forma 01` ·
+  `Método PUE`.** The bigger finding, and it is not a missing figure: **the
+  register does not stamp at close.** `Payments.vue` contains no CFDI call at
+  all; stamping is `FacturacionDialog` against an invoice that has already been
+  submitted. Drawing a Facturar column that promises a stamp this button will
+  not fire would be the worst kind of wrong figure — one the cashier repeats to
+  a customer. The column carries what the paper path really is.
+- **`Envía por WhatsApp` · `Enviar el comprobante` · `55 •••• 6390`.** No send
+  path exists on the payment screen; there is nothing to send from.
+- **`Imprime ticket` as an "al cerrar" promise.** Printing is not automatic —
+  it is the explicit `Submit & Print`. So the checklist does not claim it; the
+  paper column offers `Charge and print`, which is that same submit with
+  `print = true`, rendered outlined because it is a paper choice and not a
+  second primary.
+- **`Abona al monedero $29.20`.** `customerWallet.accrual` is `null` on
+  purpose — `collection_factor` never reaches the client.
+- **`F6 divide el pago`.** R8: render the bound chord, never the mock's. No
+  split flow exists in `usePaymentMethods` — `splitIsAvailable` is a predicate
+  the unwired mobile screen asks and nobody answers — so the hint is not drawn
+  and the pad is passed `:split-enabled="false"`.
+- **`Saldo $1,240` in the header.** The saldo balance is not on the payment
+  screen's inputs.
+
+### The pad's fourth column
+
+`PayKeypad` is reused whole, and its layout module puts `Dividir pago` where
+the desktop artboard draws `Aplicar`. Editing `KEYPAD_LAYOUT` would move the
+phone's most-tapped surface to serve a desktop mock, and `movilCobroKeypad`
+pins that grid. So the pad renders as it does on the phone with its split key
+disabled, and `Aplicar` is a button of its own beside the amount. A deviation
+from the artboard, recorded rather than papered over.
+
 ## 2026-08-22 · Six desktop views, six mobile views, and the scan that maintains itself
 
 **337 spec files / 3,261 tests, `vue-tsc` exit 0, build clean, deployed** with
