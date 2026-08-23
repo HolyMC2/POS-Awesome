@@ -155,8 +155,11 @@ const ring = ref<HTMLElement | null>(null);
  */
 const gridStyle = computed(() => ({
 	gridTemplateColumns: props.columns.cashier
-		? "104px 56px minmax(0, 1fr) 96px 112px 132px"
-		: "104px 56px minmax(0, 1fr) 112px 132px",
+		// 176px: the artboard's `B-04812` is six characters, the register's
+		// real folio (`ACC-SINV-2026-03331`) is nineteen, and a ticket id that
+		// wraps onto two lines reads as two tickets (drafts.png, 2026-08-22).
+		? "176px 56px minmax(0, 1fr) 96px 112px 132px"
+		: "176px 56px minmax(0, 1fr) 112px 132px",
 }));
 
 const rowId = (index: number) => `ledger-row-${index}`;

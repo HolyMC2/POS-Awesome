@@ -181,6 +181,26 @@ const refusalBody = computed(() => {
 	overflow: hidden;
 }
 
+/* A hosted SHEET fills the surface. The flows dialogs were written as centred
+ * modals — `max-width`, `margin: 24px`, a card capped at 92vh — and with
+ * `contained` those rules still centred a floating card inside the host, with
+ * the surface's grey showing around it (invoices.png, 2026-08-22). Beside the
+ * rail the sheet IS the screen, so the overlay content and its card take the
+ * whole host; the band and the rail stay because the host stays. */
+.destination-host :deep(.v-overlay--contained .v-overlay__content) {
+	width: 100%;
+	max-width: none;
+	height: 100%;
+	max-height: none;
+	margin: 0;
+}
+
+.destination-host :deep(.v-overlay--contained .v-overlay__content > .v-card) {
+	height: 100%;
+	max-height: none;
+	border-radius: 0;
+}
+
 /* A hosted PAGE keeps its own height (PayView sizes itself to the viewport,
  * the dashboard stacks cards) and the host becomes its scrollport. The sheet
  * discipline — one inner scrollport, the host clips — stays for the flows. */

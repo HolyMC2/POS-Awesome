@@ -8,7 +8,7 @@
     "railWidth": 96,
     "bandPresent": true,
     "overflowLeft": 0,
-    "overflowRight": 526,
+    "overflowRight": 558,
     "widestElement": 1440,
     "viewportWidth": 1440,
     "docScrollWidth": 1440,
@@ -33,7 +33,7 @@
     "railWidth": 96,
     "bandPresent": true,
     "overflowLeft": 0,
-    "overflowRight": 526,
+    "overflowRight": 558,
     "widestElement": 1440,
     "viewportWidth": 1440,
     "docScrollWidth": 1440,
@@ -96,7 +96,7 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": "Invoice ManagementTrack recent sales, collect unpaid balance",
+    "hostText": "Today 0Pending invoices 11Drafts 66Returns 11By ticket By cu",
     "overflowSample": [
       "div.v-row @84..1452"
     ]
@@ -118,7 +118,7 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": "Invoice ManagementTrack recent sales, collect unpaid balance",
+    "hostText": "Today 0Pending invoices 11Drafts 66Returns 11By ticket By cu",
     "overflowSample": [
       "div.v-row @84..1452"
     ]
@@ -277,7 +277,7 @@
     "hostedState": "ready",
     "hostLeft": 96,
     "hostWidth": 1344,
-    "hostText": "Closing POS ShiftReconcile payment methods and close shift02",
+    "hostText": "",
     "overflowSample": []
   }
 ]
