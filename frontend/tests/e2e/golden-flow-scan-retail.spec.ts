@@ -95,7 +95,14 @@ async function addItem(page: Page, term: string, rowText: string) {
 	await box.click();
 	await box.fill(term);
 	await page.waitForTimeout(1_500);
-	await page.getByText(rowText, { exact: false }).first().click();
+	// Typing opens the catalogue drawer on the matches (a82e74b31) and the
+	// rail layout renders the CART before the drawer in DOM order — so a
+	// page-wide first() lands on the just-added cart row's name, which
+	// expands the row editor over the register and wedges the flow. Pick
+	// the match inside the drawer panel, like a cashier does.
+	const drawer = page.locator('[data-testid="catalog-drawer-panel"]');
+	const scope = (await drawer.isVisible().catch(() => false)) ? drawer : page;
+	await scope.getByText(rowText, { exact: false }).first().click();
 	await page.waitForTimeout(800);
 	await box.fill("");
 }
