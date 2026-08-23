@@ -50,8 +50,13 @@
 			@close="closeOpeningDialog"
 			@register="handleRegisterPosData"
 		></OpeningDialog>
+		<!-- The payment DIALOG survives only where there is no rail to host the
+		     surface beside: 992–1099px, which has the dialog breakpoint but not
+		     the rail's. Above 1100 Cobro is a destination-style surface in the
+		     shell's content area (build plan §14.2); below 992 the payment
+		     panel replaces the selector column, unchanged. -->
 		<v-dialog
-			v-if="usePaymentDialog"
+			v-if="usePaymentDialog && !railVisible"
 			v-model="paymentDialogOpen"
 			:retain-focus="false"
 			width="96vw"
@@ -91,8 +96,15 @@
 				     the whole content area. The sale underneath is kept mounted
 				     (v-show, not v-if) so a cashier who glances at Facturas and
 				     comes back has the same cart, scroll position and focus. -->
+				<!-- Cobro. Same slot, same treatment as a destination: the sale
+				     underneath stays mounted (v-show) so backing out returns the
+				     cashier to the cart they left, with its scroll and its focus.
+				     It publishes its own band upward exactly as a hosted sheet
+				     does, and the shell answers `sale.collectAndClose` below. -->
+				<CobroSurface v-if="cobroHosted" @band="onHostedBand" />
+
 				<DestinationHost
-					v-if="hostedDestinationId"
+					v-else-if="hostedDestinationId"
 					:destination-id="hostedDestinationId"
 					:refusal="destinationRefusal"
 					:t="verticalT"
@@ -114,10 +126,10 @@
 					scan field would count every barcode twice. Teleport moves the one
 					header's nodes and leaves its owner mounted.
 				-->
-				<div v-show="!hostedDestinationId" id="register-scan-bar"></div>
+				<div v-show="!hostedDestinationId && !cobroHosted" id="register-scan-bar"></div>
 
 				<v-row
-					v-show="!hostedDestinationId"
+					v-show="!hostedDestinationId && !cobroHosted"
 					dense
 					class="ma-0 dynamic-main-row"
 					:class="{
@@ -256,7 +268,7 @@
 				<!-- "Se suele llevar junto". Above the band on purpose: it is an
 				     offer, and the band is the commitment. -->
 				<ComboSuggestionStrip
-					v-if="!hostedDestinationId && comboSuggestions.length"
+					v-if="!hostedDestinationId && !cobroHosted && comboSuggestions.length"
 					:suggestions="comboSuggestions"
 					:format-currency="formatCurrency"
 					@add="addComboSuggestion"
@@ -429,6 +441,7 @@ import RegisterRail from "./rail/RegisterRail.vue";
 import CatalogDrawer from "./drawer/CatalogDrawer.vue";
 import ActionBand from "./band/ActionBand.vue";
 import DestinationHost from "./destinations/DestinationHost.vue";
+import CobroSurface from "./cobro/CobroSurface.vue";
 import MobileOfflineOverlay from "./mobile/MobileOfflineOverlay.vue";
 import ComboSuggestionStrip from "../combos/ComboSuggestionStrip.vue";
 import { useCatalogDrawer } from "../../../composables/pos/shell/useCatalogDrawer";
@@ -941,19 +954,33 @@ export default {
 			["drafts", "invoices"].includes(hostedDestinationId.value),
 		);
 
+		// Cobro is hosted beside the rail rather than raised over it (build
+		// plan §14.2). One condition, used by the surface, by the sale it
+		// covers and by the band: `paymentDialogOpen` is still the flag the
+		// whole register raises to ask for the payment screen — only WHERE it
+		// lands changed, and only on the layout that has a rail to land beside.
+		const cobroHosted = computed(() => railVisible.value && paymentDialogOpen.value);
+
 		// A hosted surface may publish its own band state (DestinationHost
-		// relays `band`). The shell adopts it ONLY for kinds it can act on:
-		// `recharge` is the one whose primary action the shell answers today
-		// (`recharge.submit` → bus → RecargasDestination). The corte also
-		// publishes one and keeps its own Submit; adopting it here without an
-		// action behind `shift.close` would show a button that does nothing.
+		// relays `band`; CobroSurface emits it directly). The shell adopts it
+		// ONLY for kinds it can act on: `recharge` (`recharge.submit` → bus →
+		// RecargasDestination) and Cobro's `change`/`shortfall`, whose
+		// `sale.collectAndClose` is answered below. The corte also publishes
+		// one and keeps its own Submit; adopting it here without an action
+		// behind `shift.close` would show a button that does nothing.
 		const hostedBandState = ref(null);
-		const HOSTED_BAND_KINDS = ["recharge"];
+		const HOSTED_BAND_KINDS = ["recharge", "change", "shortfall"];
 		const onHostedBand = (state) => {
 			hostedBandState.value =
 				state && HOSTED_BAND_KINDS.includes(state.kind) ? state : null;
 		};
 		watch(hostedDestinationId, () => {
+			hostedBandState.value = null;
+		});
+		// The tender band belongs to the surface that published it. Left
+		// standing after Cobro closes it would put `COBRAR Y CERRAR` under a
+		// cart nobody is paying for.
+		watch(cobroHosted, () => {
 			hostedBandState.value = null;
 		});
 
@@ -1089,6 +1116,17 @@ export default {
 		const onBandPrimary = (actionId) => {
 			if (actionId === "sale.pay") {
 				triggerInvoicePay();
+				return;
+			}
+			if (actionId === "sale.collectAndClose") {
+				// The SAME submit the payment screen's own button calls.
+				// `queue_submit_payment_shortcut` is the bus event the payment
+				// chord already uses: Payments.vue answers it with
+				// `submit(null, false, print)`, behind its own in-flight and
+				// visibility guards. Reaching into the component for a second
+				// entry point would have put a new call site on the money path
+				// in exchange for a layout.
+				eventBus.emit("queue_submit_payment_shortcut", { print: false });
 				return;
 			}
 			if (actionId === "recharge.submit") {
@@ -1534,6 +1572,7 @@ export default {
 			floorEnabled,
 			// Riel y Cajón
 			railVisible,
+			cobroHosted,
 			railContext,
 			catalogDrawer,
 			drawerAnchoredOpen,
@@ -1606,6 +1645,7 @@ export default {
 		CatalogDrawer,
 		ActionBand,
 		DestinationHost,
+		CobroSurface,
 		MobileOfflineOverlay,
 		ComboSuggestionStrip,
 		OpeningDialog,
