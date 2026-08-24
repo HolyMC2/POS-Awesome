@@ -110,6 +110,10 @@ const shiftSpan = computed(() => {
 	 * shift facts and the × onto their own lines. The corte's height belongs
 	 * to the count and the tables, not to its own title. */
 	padding: 10px 16px !important;
+	/* v-card-title wraps by default; wrapped, the × landed on its own line
+	 * under the title. One row means one row. */
+	flex-wrap: nowrap !important;
+	white-space: normal;
 }
 
 .header-content {
