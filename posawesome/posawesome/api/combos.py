@@ -135,11 +135,70 @@ def _item_meta(item_codes):
     return {row["name"]: row for row in rows}
 
 
+def _effective_price_list(profile, customer=None):
+    """The price list and currency the CART would use for this customer.
+
+    The register's own list is only the FALLBACK. A Customer carrying
+    ``default_price_list`` — or, failing that, their Customer Group — is
+    repriced onto that list the moment they are selected, so a combo priced
+    against the profile's list advertises a saving the cart never charges,
+    for exactly the wholesale customers where the number matters most.
+
+    The precedence is mirrored, not invented: the cart resolves it in
+    ``frontend/src/posapp/components/pos/invoice_utils/customer.ts:64-66``
+    as ``customer_price_list || customer_group_price_list ||
+    pos_profile.selling_price_list``, over the two fields
+    ``customers.py:230`` and ``customers.py:243-245`` put on the wire.
+
+    Currency follows the same rule the cart applies (``customers.py:247-251``
+    feeding ``customer.ts:74-81``): a list supplied by the customer or their
+    group is read in ITS currency, while the profile's own list keeps the
+    profile currency. Without this the fetcher's ``currency = %(currency)s``
+    filter would match nothing and every rate would degrade to zero.
+    """
+    profile_list = profile.get("selling_price_list")
+    profile_currency = profile.get("currency")
+    if not customer:
+        return profile_list, profile_currency
+
+    row = (
+        frappe.db.get_value(
+            "Customer",
+            customer,
+            ["default_price_list", "customer_group"],
+            as_dict=True,
+        )
+        or {}
+    )
+    price_list = row.get("default_price_list")
+    if not price_list and row.get("customer_group"):
+        price_list = frappe.db.get_value(
+            "Customer Group", row.get("customer_group"), "default_price_list"
+        )
+
+    if not price_list or price_list == profile_list:
+        return profile_list, profile_currency
+
+    currency = frappe.db.get_value("Price List", price_list, "currency") or profile_currency
+    return price_list, currency
+
+
 def _price_map(item_codes, price_list, currency, customer=None):
-    """Selling rates from the register's price list, keyed by item_code.
+    """Selling rates from the effective price list, keyed by item_code then UOM.
 
     Uses the cached fetcher the item catalogue already uses, so a combo and the
-    same item in the grid can never quote two different numbers.
+    same item in the grid can never quote two different numbers — and resolves
+    *among* the rows it returns the same way, so they cannot disagree about
+    which of several Item Prices applies.
+
+    ``item_fetchers._fetch_item_prices`` orders by
+    ``IFNULL(customer, '') ASC, valid_from ASC, valid_upto DESC``: the generic
+    rows (``''``) come FIRST and the requested customer's rows LAST, latest
+    ``valid_from`` last inside each bucket. The catalogue's ``_prepare_lookup``
+    (``item_fetchers.py:837-839``) then assigns unconditionally into
+    ``price_map[item_code][uom]`` — so the LAST row wins. Keeping the first, as
+    this did, kept the generic row and discarded the customer-specific one,
+    which is why passing ``customer`` could not move a single number.
     """
     if not item_codes or not price_list:
         return {}
@@ -157,10 +216,31 @@ def _price_map(item_codes, price_list, currency, customer=None):
     prices = {}
     for row in rows:
         code = row.get("item_code")
-        # Rows arrive newest-first per the fetcher's ordering; keep the first.
-        if code and code not in prices:
-            prices[code] = flt(row.get("price_list_rate"))
+        if not code:
+            continue
+        # Last row wins, per item_fetchers.py:838-839.
+        prices.setdefault(code, {})[row.get("uom") or "None"] = flt(row.get("price_list_rate"))
     return prices
+
+
+def _rate_for(prices, item_code, uom=None, stock_uom=None):
+    """The rate the cart would quote for this line's UOM.
+
+    Mirrors ``item_fetchers._select_price`` (``item_fetchers.py:563-583``):
+    the line's UOM, then the item's stock UOM, then a UOM-less Item Price,
+    then whatever is left. A code with no price degrades to ``0.0``, which is
+    what the surfaces already treat as "no saving to advertise".
+    """
+    rows = prices.get(item_code) or {}
+    if not rows:
+        return 0.0
+    if uom and uom in rows:
+        return rows[uom]
+    if stock_uom and stock_uom in rows:
+        return rows[stock_uom]
+    if "None" in rows:
+        return rows["None"]
+    return next(iter(rows.values()), 0.0)
 
 
 def _stock_map(item_codes, warehouse):
@@ -186,10 +266,16 @@ def _stock_map(item_codes, warehouse):
 def get_combos(pos_profile=None, bundles=None, customer=None):
     """Combos sellable on this register, with components priced and counted.
 
-    Read-only by construction: it reads Product Bundle, Item, Item Price and
-    Bin, and writes nothing. ``bundles`` narrows the answer to specific parent
-    item codes (the cart asking about what it already holds); omitting it
-    returns every combo the register offers.
+    Read-only by construction: it reads Product Bundle, Item, Item Price, Bin
+    and — to resolve the customer's price list — Customer, Customer Group and
+    Price List, and writes nothing. ``bundles`` narrows the answer to specific
+    parent item codes (the cart asking about what it already holds); omitting
+    it returns every combo the register offers.
+
+    ``customer`` is not decoration: it selects both the price LIST (a
+    wholesale customer's own list beats the register's) and the ROW inside it
+    (a customer-specific Item Price beats the generic one), so the advertised
+    saving matches what that customer is actually charged.
 
     Returns a list of::
 
@@ -201,8 +287,10 @@ def get_combos(pos_profile=None, bundles=None, customer=None):
     """
     profile, _profile_json = _ensure_pos_profile(pos_profile)
 
-    price_list = profile.get("selling_price_list")
-    currency = profile.get("currency")
+    # Both the bundle's own rate and its components' list prices come from the
+    # SAME effective list: quoting the parent from one and the parts from
+    # another would manufacture a saving out of the gap between two price lists.
+    price_list, currency = _effective_price_list(profile, customer)
     warehouse = profile.get("warehouse")
 
     overlay = _pos_combo_overlay()
@@ -246,7 +334,7 @@ def get_combos(pos_profile=None, bundles=None, customer=None):
                     "item_code": code,
                     "item_name": line_meta.get("item_name") or code,
                     "qty": flt(line.get("qty")) or 1,
-                    "rate": flt(prices.get(code)),
+                    "rate": _rate_for(prices, code, line.get("uom"), line_meta.get("stock_uom")),
                     "uom": line.get("uom") or line_meta.get("stock_uom"),
                     "actual_qty": flt(stock.get(code)),
                     # Carried so the availability rule, when it lands, can
@@ -260,7 +348,7 @@ def get_combos(pos_profile=None, bundles=None, customer=None):
             {
                 "item_code": parent_code,
                 "item_name": parent_meta.get("item_name") or parent_code,
-                "rate": flt(prices.get(parent_code)),
+                "rate": _rate_for(prices, parent_code, None, parent_meta.get("stock_uom")),
                 "image": parent_meta.get("image"),
                 "priority": settings.get("priority", 0),
                 "targets": settings.get("targets", []),
