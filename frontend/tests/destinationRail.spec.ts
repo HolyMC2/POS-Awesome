@@ -242,11 +242,17 @@ async function assertRailSurvives(id: string): Promise<void> {
 		// this runtime-only mount cannot open), and while it is the active
 		// destination that pill WEARS it — the rail says where the operator is
 		// without a pill per tool. That pill is the tool's rail item.
-		if (getRailDestination(id)?.group === "tools") {
+		//
+		// A destination with NO rail entry at all (`browse` since 2026-08-24 —
+		// vocabulary-only: the URL, Alt+B and the header button reach it, the
+		// rail draws no second door into the register) has nothing further to
+		// assert: the rail surviving above IS its whole contract.
+		const railEntry = getRailDestination(id);
+		if (railEntry?.group === "tools") {
 			if (!fixture.wrapper.find(`[data-rail-tools][data-active-tool="${id}"]`).exists()) {
 				throw new Error(`tool "${id}" is active but the "More" pill does not show it`);
 			}
-		} else if (!fixture.wrapper.find(`[data-rail-destination="${id}"]`).exists()) {
+		} else if (railEntry && !fixture.wrapper.find(`[data-rail-destination="${id}"]`).exists()) {
 			throw new Error(`destination "${id}" is on the rail but its own rail item is gone`);
 		}
 	} finally {

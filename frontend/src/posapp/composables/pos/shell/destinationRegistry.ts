@@ -161,7 +161,31 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 		panelView: "items",
 	},
 	{
+		id: "payments",
+		// «Cobranza». The id and the path are unchanged on purpose (§3): the
+		// deep link, the chord and Facturas' «Agregar pago» all resolve against
+		// them, and the surface behind it is what changed. PROMOTED to the
+		// second slot 2026-08-24 (owner: "it's that important") — collecting
+		// what is owed comes right after selling.
+		labelKey: "Receivables",
+		kind: "sheet",
+		path: "/payments",
+		capability: null,
+		profileFlag: null,
+		offline: "online_required",
+		shortcutActionId: null,
+		badgeSource: "receivablesOverdueCount",
+		// Still `page`, because the destination hosts PayView on its capture
+		// step and PayView sizes its own cards to the viewport. Under the sheet
+		// discipline (one inner scrollport, the host clips) the bottom of the
+		// capture form would be cut off.
+		surface: "page",
+	},
+	{
 		id: "browse",
+		// No rail item since 2026-08-24 (owner: "basically the same as sale")
+		// — this def survives for the deep link, the header's «Browse
+		// catalogue» button and Alt+B, which all resolve through it.
 		labelKey: "Browse",
 		kind: "panel",
 		path: "/pos/browse",
@@ -295,25 +319,9 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 	// Each of these had a hand-written route that mounted the page ALONE —
 	// no rail, no band, the browser's Back as the only way out — which is the
 	// exact trap `route` kind describes above. They keep their paths.
-	{
-		id: "payments",
-		// «Cobranza». The id and the path are unchanged on purpose (§3): the
-		// deep link, the chord and Facturas' «Agregar pago» all resolve against
-		// them, and the surface behind it is what changed.
-		labelKey: "Receivables",
-		kind: "sheet",
-		path: "/payments",
-		capability: null,
-		profileFlag: null,
-		offline: "online_required",
-		shortcutActionId: null,
-		badgeSource: "receivablesOverdueCount",
-		// Still `page`, because the destination hosts PayView on its capture
-		// step and PayView sizes its own cards to the viewport. Under the sheet
-		// discipline (one inner scrollport, the host clips) the bottom of the
-		// capture form would be cut off.
-		surface: "page",
-	},
+	// (`payments` graduated out of this group 2026-08-24 — second slot, up
+	// top with `sale` — its def moved with it because this tuple's order IS
+	// the rail's.)
 	{
 		id: "purchase",
 		labelKey: "Purchase Orders",

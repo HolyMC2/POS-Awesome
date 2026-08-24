@@ -182,7 +182,8 @@ describe("RegisterRail — roving tabindex", () => {
 	it("moves the tab stop with the arrow keys", async () => {
 		const { wrapper } = mountRail();
 		await wrapper.get("nav").trigger("keydown", { key: "ArrowDown" });
-		expect(button(wrapper, "browse").attributes("tabindex")).toBe("0");
+		// One step below Sale sits Receivables — the 2026-08-24 promotion.
+		expect(button(wrapper, "payments").attributes("tabindex")).toBe("0");
 		expect(button(wrapper, "sale").attributes("tabindex")).toBe("-1");
 	});
 
@@ -196,7 +197,7 @@ describe("RegisterRail — roving tabindex", () => {
 		const { wrapper, navigate } = mountRail();
 		await wrapper.get("nav").trigger("keydown", { key: "ArrowDown" });
 		await wrapper.get("nav").trigger("keydown", { key: "Enter" });
-		expect(navigate).toHaveBeenCalledWith("browse");
+		expect(navigate).toHaveBeenCalledWith("payments");
 	});
 
 	it("follows a click with the tab stop, so the two agree", async () => {
@@ -260,7 +261,12 @@ describe("RegisterRail — state hooks for the evidence lane and wave-3 audit", 
 		const { wrapper } = mountRail();
 		expect(button(wrapper, "sale").attributes("data-offline")).toBe("available");
 		expect(button(wrapper, "expense").attributes("data-offline")).toBe("queued");
-		expect(button(wrapper, "browse").attributes("data-offline")).toBe("cachedReadOnly");
+		// `browse` (the rail's one cachedReadOnly pill) left the rail
+		// 2026-08-24; `payments` — the item in its slot — needs the server to
+		// tell the truth about balances. `barcode` still declares
+		// cachedReadOnly, but it lives in the More flyout this mount cannot
+		// open.
+		expect(button(wrapper, "payments").attributes("data-offline")).toBe("blocked");
 		expect(button(wrapper, "invoices").attributes("data-offline")).toBe("blocked");
 	});
 

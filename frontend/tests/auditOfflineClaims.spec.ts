@@ -79,17 +79,19 @@ describe("R4 — corrected claims, with their evidence", () => {
 		expect(backingFor("closing")).toBeNull();
 	});
 
-	it("`expense` queues, `browse` reads cache, `sale` stays available", () => {
+	it("`expense` queues, `barcode` reads cache, `sale` stays available", () => {
 		const cash = read(offlineFile("cash_movements.ts"));
 		expect(cash).toContain("saveOfflineCashMovement");
 		expect(cash).toContain("syncOfflineCashMovements");
 		expect(claimFor("expense")).toBe("queued");
 		expect(backingFor("expense")).toBe("src/offline/cash_movements.ts");
 
+		// `browse` carried this claim until it left the rail (2026-08-24);
+		// `barcode` reads the same cached catalogue to lay out labels.
 		const cache = read(offlineFile("cache.ts"));
 		expect(cache).toContain("searchStoredItems");
-		expect(claimFor("browse")).toBe("cachedReadOnly");
-		expect(backingFor("browse")).toBe("src/offline/cache.ts");
+		expect(claimFor("barcode")).toBe("cachedReadOnly");
+		expect(backingFor("barcode")).toBe("src/offline/cache.ts");
 
 		// The sale queues at SUBMIT, not at the destination, which is why it
 		// is `available` with no backing module of its own.

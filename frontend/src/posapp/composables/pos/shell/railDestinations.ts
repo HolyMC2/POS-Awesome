@@ -23,14 +23,26 @@
  * Every destination the rail knows how to draw, in render order.
  *
  * The order is the artboard's and is not alphabetical or grouped by
- * frequency: it walks the sale forward (sell, find, service) and then
+ * frequency: it walks the sale forward (sell, collect, service) and then
  * backward (money out, unfinished, finished, reversed), which is the order a
- * cashier reaches for them. `floor` sits after `browse` because on a
- * cafetería preset — the only preset that grants it — Salón is where the
- * operator goes straight after the menu.
+ * cashier reaches for them.
+ *
+ * `browse` LEFT the rail 2026-08-24 (owner direction: "basically the same as
+ * sale") — the destination itself survives in `destinationRegistry` for the
+ * URL, the header's «Browse catalogue» button and Alt+B; the rail just stops
+ * drawing a second door into the register it is already standing in.
+ * `payments` took its slot, promoted out of the tools flyout: what is owed
+ * comes second only to selling ("it's that important"), and its overdue badge
+ * is the reminder the panel exists to be.
  */
 export const RAIL_DESTINATION_IDS = [
 	"sale",
+	"payments",
+	// Id vocabulary ONLY — the rail draws no `browse` item (no entry in
+	// RAIL_DESTINATIONS below). It stays in this tuple because the union IS
+	// the app's destination namespace: `destinationRegistry` still routes
+	// `/pos/browse`, the header's «Browse catalogue» button and Alt+B still
+	// open the drawer, and the mobile dock still has a browse tab.
 	"browse",
 	"floor",
 	"serviceOrder",
@@ -47,7 +59,6 @@ export const RAIL_DESTINATION_IDS = [
 	// The tools group (§17.7 addendum 2026-08-22): the pages the hamburger
 	// drawer used to hold. They render behind ONE rail item, "More", because
 	// sixteen 66px items do not fit a 900px register — see `RailGroup`.
-	"payments",
 	"purchase",
 	"barcode",
 	"giftCards",
@@ -210,17 +221,30 @@ export const RAIL_DESTINATIONS: readonly RailDestination[] = [
 		group: "primary",
 	},
 	{
-		id: "browse",
-		label: "Browse",
-		vocabulary: true,
-		icon: "mdi-view-grid-outline",
-		badgeSource: null,
+		id: "payments",
+		// RENAMED 2026-08-24 with the destination itself: this stopped being a
+		// payment-capture tool and became the collections panel that CONTAINS
+		// it (COBRANZA_GOLDEN_FLOW). The id stays `payments` — §3 says so, and
+		// `/payments`, the chord and the evidence lane all resolve against it.
+		//
+		// PROMOTED to the rail's second slot the same day (owner direction:
+		// "it's that important") — it took `browse`'s place, which left the
+		// rail entirely: what is owed comes second only to selling, and the
+		// overdue badge below is the reminder the panel exists to be.
+		label: "Receivables",
+		icon: "mdi-credit-card-outline",
+		// The overdue count. This is what turns the destination into an ops
+		// panel rather than a page: the register reminds the cashier BEFORE
+		// anyone opens it, which is the whole owner ask («a reminder or list
+		// would be great»).
+		badgeSource: "receivablesOverdueCount",
 		gate: null,
-		shortcutActionId: "items.focusSearch",
-		// The catalogue is served from Dexie; what it cannot do offline is
-		// reach past the cache for an item nobody has loaded yet.
-		offlineAvailability: "cachedReadOnly",
-		backedBy: "src/offline/cache.ts",
+		shortcutActionId: null,
+		// Receiving a payment against an outstanding invoice needs the
+		// invoice's live balance; there is nothing local to settle against, and
+		// the worklist itself is a server read with no cache behind it.
+		offlineAvailability: "blocked",
+		backedBy: null,
 		group: "primary",
 	},
 	{
@@ -358,29 +382,6 @@ export const RAIL_DESTINATIONS: readonly RailDestination[] = [
 		// Primary, not footer: the artboard's spacer sits BELOW Recarga.
 		// Selling air time is selling; only the session controls go bottom.
 		group: "primary",
-	},
-	{
-		id: "payments",
-		// RENAMED 2026-08-24 with the destination itself: this stopped being a
-		// payment-capture tool and became the collections panel that CONTAINS
-		// it (COBRANZA_GOLDEN_FLOW). The id stays `payments` — §3 says so, and
-		// `/payments`, the chord and the evidence lane all resolve against it.
-		label: "Receivables",
-		icon: "mdi-credit-card-outline",
-		// The overdue count. This is what turns the destination into an ops
-		// panel rather than a page: the register reminds the cashier BEFORE
-		// anyone opens it, which is the whole owner ask («a reminder or list
-		// would be great»).
-		badgeSource: "receivablesOverdueCount",
-		gate: null,
-		shortcutActionId: null,
-		// Receiving a payment against an outstanding invoice needs the
-		// invoice's live balance; there is nothing local to settle against, and
-		// the worklist itself is a server read with no cache behind it.
-		offlineAvailability: "blocked",
-		backedBy: null,
-		group: "tools",
-		hint: "What is owed, and collecting it",
 	},
 	{
 		id: "purchase",

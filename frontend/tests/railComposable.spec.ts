@@ -55,7 +55,8 @@ const byId = (items: readonly { id: string }[], id: string) => items.find((i) =>
 describe("useRegisterRail — labels", () => {
 	it("routes renamed nouns through the preset resolver and the rest through __()", () => {
 		const { rail } = makeContext();
-		expect(byId(rail.items.value, "browse").label).toBe("Menú");
+		// `floor` carries the vocabulary flag now that `browse` (the other
+		// renamed noun, "Menú") left the rail 2026-08-24.
 		expect(byId(rail.items.value, "floor").label).toBe("Salón");
 		// Plain __() — a preset renaming "Drafts" would be a translation, not
 		// vocabulary.
@@ -200,7 +201,7 @@ describe("useRegisterRail — keyboard", () => {
 
 		press(rail, "ArrowDown");
 		expect(press(rail, " ")).toBe(true);
-		expect(navigate).toHaveBeenCalledWith("browse");
+		expect(navigate).toHaveBeenCalledWith("payments");
 	});
 
 	it("ignores keys it does not own, so typing still reaches the shell", () => {
@@ -256,11 +257,12 @@ describe("useRegisterRail — groups", () => {
 			navigate: () => {},
 		});
 		expect(rail.activeTool.value).toBeNull();
-		active.value = "payments";
-		expect(rail.activeTool.value?.id).toBe("payments");
-		expect(rail.activeTool.value?.hint).toBe("What is owed, and collecting it");
+		// `payments` graduated to a primary pill 2026-08-24, so a tool wearing
+		// the More pill is exercised with `purchase` now.
+		active.value = "purchase";
+		expect(rail.activeTool.value?.id).toBe("purchase");
+		expect(rail.activeTool.value?.hint).toBe("Orders to suppliers");
 		expect(rail.toolsItems.value.map((item) => item.id)).toEqual([
-			"payments",
 			"purchase",
 			"barcode",
 			"giftCards",

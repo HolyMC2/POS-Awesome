@@ -50,9 +50,12 @@ describe("rail destination registry", () => {
 	});
 
 	it("renders the artboard's order for a fully-capable register", () => {
+		// 2026-08-24: `browse` left the rail (owner: "basically the same as
+		// sale") and `payments` took the second slot, promoted out of the
+		// tools flyout ("it's that important").
 		expect(idsOf(visibleRailDestinations(gates()))).toEqual([
 			"sale",
-			"browse",
+			"payments",
 			"floor",
 			"serviceOrder",
 			"expense",
@@ -62,9 +65,8 @@ describe("rail destination registry", () => {
 			"invoices",
 			"return",
 			"recharge",
-			// The tools group — one "More" pill on the rail, five entries in
+			// The tools group — one "More" pill on the rail, four entries in
 			// its flyout (canvas «Riel con herramientas»).
-			"payments",
 			"purchase",
 			"barcode",
 			"giftCards",
@@ -74,7 +76,12 @@ describe("rail destination registry", () => {
 	});
 
 	it("exposes every declared id, with no duplicates", () => {
-		expect(idsOf(RAIL_DESTINATIONS)).toEqual([...RAIL_DESTINATION_IDS]);
+		// `browse` is the one vocabulary-only id: in the union (the registry
+		// routes it, the dock draws it, Alt+B reaches it) but with no rail
+		// entry. Everything the rail DOES draw must be in the union, in the
+		// union's order.
+		const drawable = [...RAIL_DESTINATION_IDS].filter((id) => id !== "browse");
+		expect(idsOf(RAIL_DESTINATIONS)).toEqual(drawable);
 		expect(new Set(RAIL_DESTINATION_IDS).size).toBe(RAIL_DESTINATION_IDS.length);
 	});
 
@@ -103,9 +110,9 @@ describe("rail capability gating", () => {
 		const cafeteria = visibleRailDestinations(gates({ saldo: false }));
 		expect(idsOf(cafeteria)).toContain("floor");
 		expect(idsOf(cafeteria)).not.toContain("recharge");
-		// Salón sits directly after Explorar/Menú — where the operator goes
-		// next on a table-service preset.
-		expect(idsOf(cafeteria).slice(0, 3)).toEqual(["sale", "browse", "floor"]);
+		// Salón sits right after Cobranza — with Menú off the rail, a
+		// table-service operator reaches the floor two steps from the top.
+		expect(idsOf(cafeteria).slice(0, 3)).toEqual(["sale", "payments", "floor"]);
 	});
 
 	it("removes a gated destination entirely rather than disabling it", () => {
@@ -163,12 +170,11 @@ describe("rail capability gating", () => {
 		});
 		expect(idsOf(none)).toEqual([
 			"sale",
-			"browse",
+			"payments",
 			"expense",
 			"drafts",
 			"invoices",
 			"return",
-			"payments",
 			"purchase",
 			"barcode",
 		]);
@@ -224,9 +230,10 @@ describe("rail offline contract", () => {
 	});
 
 	it("keeps the hamburger's pages in the tools group, absent when gated", () => {
+		// `payments` is not among them since 2026-08-24 — it graduated to the
+		// rail's second pill.
 		const visible = visibleRailDestinations(gates());
 		expect(idsOf(railDestinationsInGroup(visible, "tools"))).toEqual([
-			"payments",
 			"purchase",
 			"barcode",
 			"giftCards",
@@ -236,7 +243,6 @@ describe("rail offline contract", () => {
 		// profile without gift cards never sees Monedero.
 		const cashier = visibleRailDestinations(gates({ dashboard: false, giftCards: false }));
 		expect(idsOf(railDestinationsInGroup(cashier, "tools"))).toEqual([
-			"payments",
 			"purchase",
 			"barcode",
 		]);
@@ -250,7 +256,9 @@ describe("rail offline contract", () => {
 	});
 
 	it("keeps queued and cached surfaces reachable", () => {
-		for (const id of ["expense", "floor", "browse", "sale"] as const) {
+		// `barcode` carries the rail's cachedReadOnly claim now that `browse`
+		// (the other one) has no rail entry.
+		for (const id of ["expense", "floor", "barcode", "sale"] as const) {
 			expect(isOfflineBlocked(getRailDestination(id)!)).toBe(false);
 		}
 	});
@@ -287,7 +295,6 @@ describe("rail shortcut binding", () => {
 		);
 		expect(bound).toMatchObject({
 			sale: "invoice.showInvoicePanel",
-			browse: "items.focusSearch",
 			serviceOrder: "charges.openRequests",
 			expense: "cash.openMovement",
 			// Reused, not re-minted: these two shipped with the engine.
@@ -317,7 +324,9 @@ describe("rail vocabulary", () => {
 		// A noun every giro calls the same thing must not go through t(), or
 		// the preset label map becomes a second translation layer.
 		const vocabulary = RAIL_DESTINATIONS.filter((d) => d.vocabulary).map((d) => d.id);
-		expect(vocabulary.sort()).toEqual(["browse", "floor"]);
+		// `browse` ("Menú") left the rail; `floor` ("Salón") is the one
+		// renamed noun still drawn.
+		expect(vocabulary.sort()).toEqual(["floor"]);
 	});
 });
 
