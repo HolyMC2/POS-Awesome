@@ -16,23 +16,27 @@ import importlib.util
 import pathlib
 import unittest
 
-try:
-    import frappe  # noqa: F401
-except ImportError:
-    raise unittest.SkipTest("needs frappe - skipped under the standalone stub runner")
+# Loaded through `test_support/isolated_module`, which stubs the subject's
+# module-level imports and RESTORES `sys.modules` afterwards. Read its header
+# before changing this: two earlier shapes — importing through the package, and
+# repairing the real `frappe` in place — each broke a different part of the
+# suite, and it records which and why.
+_HELPER = pathlib.Path(__file__).with_name("test_support") / "isolated_module.py"
+_spec = importlib.util.spec_from_file_location("posawesome_isolated_module", _HELPER)
+assert _spec and _spec.loader
+_isolated = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_isolated)
 
-
-def _load(module_name: str, filename: str):
-    """Load a sibling by path — the api package's `__init__` needs a site."""
-    path = pathlib.Path(__file__).with_name(filename)
-    spec = importlib.util.spec_from_file_location(module_name, path)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-story = _load("posawesome_customer_story", "customer_story.py")
+# `customer_story` reuses `order_story`'s `event`, `assemble_story` and
+# `payment_events` — a package import, which is exactly what the isolated
+# loader is avoiding. So the sibling is loaded in isolation FIRST and handed
+# in under its package name, and both come back with the same `event` object.
+_order_story = _isolated.load_api_module("posawesome_order_story_for_customer", "order_story.py")
+story = _isolated.load_api_module(
+    "posawesome_customer_story",
+    "customer_story.py",
+    extra={"posawesome.posawesome.api.order_story": _order_story},
+)
 
 
 class WindowTests(unittest.TestCase):

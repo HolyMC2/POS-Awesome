@@ -123,12 +123,18 @@ doc_events = {
     "Sales Invoice": {
         "validate": "posawesome.posawesome.api.invoice.validate",
         "before_submit": "posawesome.posawesome.api.invoice.before_submit",
+        # Queues a CRM note about the sale and returns — it never writes on the
+        # submit path. Absent a CRM it is one `installed_apps` check and out;
+        # see `crm_bridge.on_sales_invoice_submit` for why after_commit and why
+        # it never creates a record.
+        "on_submit": "posawesome.posawesome.api.crm_bridge.on_sales_invoice_submit",
         "before_cancel": "posawesome.posawesome.api.invoice.before_cancel",
         "on_cancel": "posawesome.posawesome.api.invoice.on_cancel",
     },
     "POS Invoice": {
         "validate": "posawesome.posawesome.api.invoice.validate",
         "before_submit": "posawesome.posawesome.api.invoice.before_submit",
+        "on_submit": "posawesome.posawesome.api.crm_bridge.on_sales_invoice_submit",
         "before_cancel": "posawesome.posawesome.api.invoice.before_cancel",
         "on_cancel": "posawesome.posawesome.api.invoice.on_cancel",
     },

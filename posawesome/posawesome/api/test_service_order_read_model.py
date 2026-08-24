@@ -14,23 +14,18 @@ import importlib.util
 import pathlib
 import unittest
 
-# `flt`/`cint` come from frappe.utils; without a frappe there is nothing to
-# test. Skipped rather than failed when the standalone stub runner finds this.
-try:
-    import frappe  # noqa: F401
-except ImportError:
-    raise unittest.SkipTest("needs frappe - skipped under the standalone stub runner")
-
-# Loaded BY PATH, not as `posawesome.posawesome.api.charge_request_read_model`.
-# That package's `__init__` imports the whole API surface — customers, items,
-# invoices — which needs an initialised site, so a package import turns this
-# pure-function suite into an integration test that fails at collection time in
-# `unittest discover`. The module itself depends on nothing but frappe.utils.
-_MODULE_PATH = pathlib.Path(__file__).with_name("charge_request_read_model.py")
-_spec = importlib.util.spec_from_file_location("posawesome_charge_request_read_model", _MODULE_PATH)
+# Loaded through `test_support/isolated_module`, which stubs the subject's
+# module-level imports and RESTORES `sys.modules` afterwards. Read its header
+# before changing this: two earlier shapes — importing through the package, and
+# repairing the real `frappe` in place — each broke a different part of the
+# suite, and it records which and why.
+_HELPER = pathlib.Path(__file__).with_name("test_support") / "isolated_module.py"
+_spec = importlib.util.spec_from_file_location("posawesome_isolated_module", _HELPER)
 assert _spec and _spec.loader
-read_model = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(read_model)
+_isolated = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_isolated)
+
+read_model = _isolated.load_api_module("posawesome_charge_request_read_model", "charge_request_read_model.py")
 
 
 class ServiceOrderTitleTests(unittest.TestCase):

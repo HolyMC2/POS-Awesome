@@ -18,6 +18,9 @@ import { SHEET_COMPONENTS } from "../src/posapp/composables/pos/shell/destinatio
 const SRC = resolve(__dirname, "../src/posapp");
 const read = (path: string) => readFileSync(resolve(SRC, path), "utf8");
 
+const SERVER = resolve(__dirname, "../../posawesome/posawesome");
+const readServer = (path: string) => readFileSync(resolve(SERVER, path), "utf8");
+
 describe("what the rail opens", () => {
 	it("is the designed surface, not the navbar dialog", () => {
 		expect(String(SHEET_COMPONENTS.serviceOrder)).toContain("orden/OrdenSurface.vue");
@@ -137,5 +140,67 @@ describe("the client view reuses the timeline instead of copying it", () => {
 		const strip = read("components/pos/customer/CustomerStrip.vue");
 		expect(strip).toContain('defineAsyncComponent(() => import("./CustomerStory.vue"))');
 		expect(strip).toContain('v-if="historyMounted"');
+	});
+});
+
+describe("the CRM wiring stays passive except where a person presses", () => {
+	it("gates the strip on a probe rather than on a failing request", () => {
+		// The floors/tables lesson: a client that keeps calling an endpoint
+		// which keeps refusing. The gate is a capability the SERVER states.
+		const service = read("services/crmService.ts");
+		expect(service).toContain("crm_bridge.crm_context");
+		expect(service).toContain("crmIsUnavailable");
+
+		const strip = read("components/pos/customer/CustomerCrmStrip.vue");
+		expect(strip).toContain('v-if="context"');
+	});
+
+	it("shows no error where the strip could not load", () => {
+		// A context strip failing is not something a cashier can act on with a
+		// customer waiting, and a toast about it is noise over a live ticket.
+		const strip = read("components/pos/customer/CustomerCrmStrip.vue");
+		const load = strip.slice(strip.indexOf("async function load"), strip.indexOf("async function askForFollowUp"));
+		expect(load).not.toContain("useToastStore");
+	});
+
+	it("writes exactly once, from the button", () => {
+		const strip = read("components/pos/customer/CustomerCrmStrip.vue");
+		expect(strip.match(/createSeguimiento/g)).toHaveLength(2); // import + call
+		expect(strip).toContain('data-testid="crm-strip-seguimiento"');
+	});
+
+	it("puts no saturated fill on the follow-up affordance", () => {
+		// One accent per screen, and it belongs to the band's primary.
+		const strip = read("components/pos/customer/CustomerCrmStrip.vue");
+		expect(strip).not.toContain("<v-btn");
+		expect(strip).toContain("crm-strip__action");
+	});
+});
+
+describe("the auto-log never writes on the submit path", () => {
+	const bridge = readServer("api/crm_bridge.py");
+	const hooks = readServer("../hooks.py");
+
+	it("is wired as an on_submit that enqueues", () => {
+		expect(hooks).toContain(
+			'"on_submit": "posawesome.posawesome.api.crm_bridge.on_sales_invoice_submit"',
+		);
+	});
+
+	it("defers the job until the transaction has committed", () => {
+		// Otherwise a rolled-back submit still logs a sale that never happened.
+		expect(bridge).toContain("enqueue_after_commit=True");
+	});
+
+	it("has no bare whitelist and never opens an endpoint to guests", () => {
+		expect(bridge).not.toMatch(/@frappe\.whitelist\(\s*\)/);
+		expect(bridge).not.toContain("allow_guest");
+		expect(bridge).toContain('@frappe.whitelist(methods=["POST"])');
+	});
+
+	it("imports nothing from the crm app", () => {
+		// posawesome installs on tenants that have no CRM at all; every doctype
+		// here is reached by name behind a probe.
+		expect(bridge).not.toMatch(/^\s*(from|import)\s+crm\b/m);
 	});
 });

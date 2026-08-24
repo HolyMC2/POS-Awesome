@@ -21,18 +21,18 @@ import importlib.util
 import pathlib
 import unittest
 
-try:
-    import frappe  # noqa: F401
-except ImportError:
-    raise unittest.SkipTest("needs frappe - skipped under the standalone stub runner")
-
-# Loaded by path for the reason `test_service_order_read_model` gives: the api
-# package's `__init__` pulls in the whole surface and needs an initialised site.
-_MODULE_PATH = pathlib.Path(__file__).with_name("order_story.py")
-_spec = importlib.util.spec_from_file_location("posawesome_order_story", _MODULE_PATH)
+# Loaded through `test_support/isolated_module`, which stubs the subject's
+# module-level imports and RESTORES `sys.modules` afterwards. Read its header
+# before changing this: two earlier shapes — importing through the package, and
+# repairing the real `frappe` in place — each broke a different part of the
+# suite, and it records which and why.
+_HELPER = pathlib.Path(__file__).with_name("test_support") / "isolated_module.py"
+_spec = importlib.util.spec_from_file_location("posawesome_isolated_module", _HELPER)
 assert _spec and _spec.loader
-story = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(story)
+_isolated = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_isolated)
+
+story = _isolated.load_api_module("posawesome_order_story", "order_story.py")
 
 
 class EventShapeTests(unittest.TestCase):

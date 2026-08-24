@@ -2713,3 +2713,12 @@ Last {0} days · up to {1} events,Últimos {0} días · hasta {1} movimientos
 Choose a customer on the ticket first.,Elige primero un cliente en el ticket.
 Could not read this customer's history.,No se pudo leer el historial de este cliente.
 Nothing in this window.,Nada en este periodo.
+Lead · {0},Prospecto · {0}
+Not in the CRM,Sin registro en el CRM
+Last activity {0},Última actividad {0}
+Follow up,seguimiento
+Asking…,pidiendo…
+Follow-up asked for,Seguimiento solicitado
+"Today's request was updated — the back office sees one, not two.","Se actualizó la solicitud de hoy — la oficina ve una, no dos."
+The back office will pick it up.,La oficina lo tomará desde ahí.
+Could not ask for a follow-up,No se pudo pedir el seguimiento

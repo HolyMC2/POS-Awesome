@@ -45,6 +45,11 @@
 				{{ chip.label }}
 			</span>
 		</div>
+
+		<!-- The back office's own facts about this customer, when there IS a
+		     back office. The strip gates itself on a session probe and renders
+		     nothing at all otherwise — see `CustomerCrmStrip.vue`. -->
+		<CustomerCrmStrip v-if="customerName" />
 	</div>
 </template>
 
@@ -54,6 +59,10 @@ import { computed, defineAsyncComponent, ref, watch } from "vue";
 // Async and behind `historyMounted`: the strip renders on every sale and the
 // history is opened on a few of them.
 const CustomerStory = defineAsyncComponent(() => import("./CustomerStory.vue"));
+// Async too, but mounted with the strip: it has to ASK before it can know
+// whether to draw anything, and the probe disables itself for the session on
+// the first "not installed".
+const CustomerCrmStrip = defineAsyncComponent(() => import("./CustomerCrmStrip.vue"));
 
 const props = defineProps({
 	customerName: { type: String, default: "" },
