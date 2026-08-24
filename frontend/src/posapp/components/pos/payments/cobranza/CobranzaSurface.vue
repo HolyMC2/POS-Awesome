@@ -164,6 +164,18 @@
 									<span class="cobranza__chip" :data-tone="estadoChip(row).tone">
 										{{ __(estadoChip(row).label) }}
 									</span>
+									<!-- The ladder's position, where somebody has climbed it.
+									     Compact (`R2`) because the row has no room for the
+									     level's name — the title carries it. -->
+									<span
+										v-if="reminderChip(row)"
+										class="cobranza__chip cobranza__chip--reminder"
+										:data-tone="reminderChip(row)!.tone"
+										:title="__(reminderChip(row)!.levelLabel)"
+										:data-testid="`cobranza-reminder-chip-${row.name}`"
+									>
+										{{ reminderChip(row)!.label }}
+									</span>
 								</span>
 							</button>
 						</template>
@@ -185,6 +197,7 @@
 					:contact="detail?.contact ?? null"
 					:lines="detail?.lines ?? []"
 					:payments="detail?.payments ?? []"
+					:reminders="detail?.reminders ?? []"
 					:line-count="detailLineCount"
 					:store-credit="detail?.store_credit ?? null"
 					:loading-detail="loadingDetail"
@@ -253,6 +266,8 @@ import {
 	matchesCollectedQuery,
 	matchesQuery,
 	nextIndex,
+	reminderChip,
+	reminderLevelLabel,
 	describeTabs,
 	type CollectedRow,
 	type ReceivableCounts,
@@ -270,6 +285,7 @@ import {
 	fetchReceivableDetail,
 	fetchReceivables,
 	invalidateReceivablesBadge,
+	logReminder,
 } from "../../../../services/receivablesService";
 import { useToastStore } from "../../../../stores/toastStore";
 import { useUIStore } from "../../../../stores/uiStore";
@@ -565,6 +581,40 @@ async function fileReminder(row: ReceivableRow) {
 			reference_doctype: row.doctype,
 			reference_name: row.name,
 		});
+
+		// The ladder steps AFTER the seguimiento stands: the log records
+		// chases that actually reached the back office. The server owns the
+		// arithmetic (min(count+1, 3), one step per day) and answers with the
+		// state the chip should now show — mirrored onto the row in place so
+		// the worklist updates without a reload.
+		let filed: Awaited<ReturnType<typeof logReminder>> | null = null;
+		try {
+			filed = await logReminder(profile, row.name, row.doctype, { channel: "CRM" });
+			const target = rows.value.find((candidate) => candidate.name === row.name);
+			if (target) {
+				target.reminders = {
+					count: filed.count,
+					last_level: filed.level,
+					last_on: filed.already_today
+						? (target.reminders?.last_on ?? null)
+						: new Date().toISOString(),
+					last_channel: "CRM",
+					next_level: filed.next_level,
+				};
+			}
+			// Re-read the panel so the history section shows the new receipt.
+			if (selectedName.value === row.name) void openDetail(row.name);
+		} catch (logError) {
+			// The seguimiento stood — the reminder DID reach the back office —
+			// so this is a warning about the ladder, not a failure of the press.
+			console.error("Reminder filed but the escalation log write failed", logError);
+			toastStore.show({
+				title: __("Reminder filed"),
+				message: __("The escalation log could not be updated — the ladder may show one step behind."),
+				color: "warning",
+			});
+		}
+
 		reminderState.value = "filed";
 		toastStore.show({
 			// `updated` is the CRM round's idempotence showing through: pressed
@@ -575,7 +625,13 @@ async function fileReminder(row: ReceivableRow) {
 				result?.action === "updated"
 					? __("Reminder updated")
 					: __("Reminder filed"),
-			message: __("The back office sees {0} and what is pending on it.", [row.name]),
+			message:
+				filed && !filed.already_today
+					? __("Filed as {0}. The back office sees {1} and what is pending on it.", [
+							__(reminderLevelLabel(filed.level)),
+							row.name,
+						])
+					: __("The back office sees {0} and what is pending on it.", [row.name]),
 			color: "success",
 		});
 	} catch (error) {
@@ -806,7 +862,11 @@ onBeforeUnmount(() => {
    reason a ticket id once painted over the row beneath it. */
 .cobranza__row {
 	display: grid;
-	grid-template-columns: 16% 25% 15% 14% 16% 14%;
+	/* Status carries TWO chips now (estado + the escalation R-chip) — 19%
+	   is what keeps «Overdue invoice · R3» un-clipped; Due and Total gave
+	   up the width because "118 days ago" and a five-digit total never
+	   filled theirs. */
+	grid-template-columns: 16% 24% 13% 13% 15% 19%;
 	gap: 12px;
 	padding: 10px 14px;
 	align-items: baseline;
@@ -879,6 +939,20 @@ onBeforeUnmount(() => {
 	padding: 3px 9px;
 	font-size: 11.5px;
 	font-weight: 700;
+}
+
+/* The escalation chip rides beside the estado in the same cell — flex, so
+   the two pills share the track without the text baseline dance. A chased
+   row must LOOK chased; the widened status track above is what makes the
+   pair fit un-clipped. */
+.cobranza__row--item > span:last-child {
+	display: inline-flex;
+	gap: 4px;
+	align-items: center;
+}
+
+.cobranza__chip--reminder {
+	flex-shrink: 0;
 }
 
 .cobranza__chip[data-tone="good"],

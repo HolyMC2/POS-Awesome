@@ -67,6 +67,34 @@ export const isReceivableTabId = (value: unknown): value is ReceivableTabId =>
 export const getReceivableTab = (id: ReceivableTabId): ReceivableTab =>
 	RECEIVABLE_TABS.find((tab) => tab.id === id) ?? ALL_TAB;
 
+/**
+ * The escalation ladder's position for one row — DERIVED server-side from the
+ * reminder log (`receivables._reminder_summaries`), never stored, so the chip
+ * and the history cannot disagree. `next_level` is what one press of the
+ * Reminder button files; the server recomputes it rather than trusting this
+ * echo.
+ */
+export interface ReminderSummary {
+	count: number;
+	/** `null` until somebody has actually reminded. */
+	last_level: number | null;
+	last_on: string | null;
+	last_channel: string | null;
+	next_level: number;
+}
+
+/** One row of the reminder log, as the detail panel prints it. */
+export interface ReminderEntry {
+	name: string;
+	level: number;
+	channel: string | null;
+	note: string | null;
+	/** What was owed when the reminder went out — history stays honest after partials. */
+	outstanding_at_send: number;
+	owner: string;
+	creation: string;
+}
+
 /** One worklist row, exactly as `get_receivables` returns it. */
 export interface ReceivableRow {
 	name: string;
@@ -86,6 +114,8 @@ export interface ReceivableRow {
 	days_until_due: number | null;
 	/** The chip: an aging, or `apartado` when part of it is already paid. */
 	estado: ReceivableAging | "apartado";
+	/** Optional: an old server without the ladder simply grows no chips. */
+	reminders?: ReminderSummary;
 }
 
 /** The counts behind the first three tabs. `all` is the whole set. */
@@ -160,6 +190,8 @@ export interface ReceivableDetail {
 	contact: ReceivableContact;
 	/** `null` — never `0` — when the customer has no credit. See §2. */
 	store_credit: number | null;
+	/** The ladder's receipts, latest first. Optional like `row.reminders`. */
+	reminders?: ReminderEntry[];
 	currency: string | null;
 	company: string;
 }
@@ -254,6 +286,50 @@ const ESTADO_CHIPS: Record<ReceivableRow["estado"], EstadoChip> = {
 
 export const estadoChip = (row: Pick<ReceivableRow, "estado">): EstadoChip =>
 	ESTADO_CHIPS[row.estado] ?? ESTADO_CHIPS.upcoming;
+
+/**
+ * The ladder's names, by level. English source; `es.csv` renders the register's
+ * own words («Recordatorio amable» · «Recordatorio firme» · «Aviso final»).
+ * The ladder caps at 3 server-side (`receivables.MAX_REMINDER_LEVEL`), so an
+ * out-of-range level reads as the final notice rather than as a blank.
+ */
+export const REMINDER_LEVEL_LABELS: Record<number, string> = {
+	1: "Gentle reminder",
+	2: "Firm reminder",
+	3: "Final notice",
+};
+
+export const reminderLevelLabel = (level: number): string =>
+	REMINDER_LEVEL_LABELS[level] ?? "Final notice";
+
+/**
+ * The worklist's escalation chip: `R1`/`R2`/`R3` beside the estado, toned by
+ * how far up the ladder the customer already is. `null` when nobody has
+ * reminded — absence renders as absence, the same honesty rule the monedero
+ * chip follows.
+ */
+export interface ReminderChip {
+	/** `R{level}` — compact, the row has no room for the level's name. */
+	label: string;
+	/** The level's full name, for the title/aria of the compact chip. */
+	levelLabel: string;
+	tone: Tone;
+}
+
+const REMINDER_TONES: Record<number, Tone> = { 1: "muted", 2: "warn", 3: "bad" };
+
+export const reminderChip = (
+	row: Pick<ReceivableRow, "reminders">,
+): ReminderChip | null => {
+	const summary = row.reminders;
+	if (!summary || !summary.count || !summary.last_level) return null;
+	const level = summary.last_level;
+	return {
+		label: `R${Math.min(level, 3)}`,
+		levelLabel: reminderLevelLabel(level),
+		tone: REMINDER_TONES[Math.min(level, 3)] ?? "bad",
+	};
+};
 
 /**
  * Where the panel lands when it opens: Vencidas when it has rows, «Todas»

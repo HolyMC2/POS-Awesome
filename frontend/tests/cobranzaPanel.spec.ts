@@ -13,6 +13,7 @@ import {
 	estadoChip,
 	matchesCollectedQuery,
 	matchesQuery,
+	reminderChip,
 	type CollectedRow,
 	type ReceivableRow,
 } from "../src/posapp/components/pos/payments/cobranza/receivablesModel";
@@ -359,6 +360,65 @@ describe("the monedero chip", () => {
 		expect(mountDetail({ storeCredit: 0 }).find('[data-testid="cobranza-store-credit"]').exists()).toBe(
 			false,
 		);
+	});
+});
+
+describe("the escalation ladder", () => {
+	const entry = (overrides: Record<string, any> = {}) => ({
+		name: "POS-REM-26-00001",
+		level: 1,
+		channel: "CRM",
+		note: null,
+		outstanding_at_send: 450,
+		owner: "cashier@lab",
+		creation: "2026-08-22 10:00:00",
+		...overrides,
+	});
+
+	it("prints the history latest-first shape the server sends, day + rung + amount", () => {
+		const wrapper = mountDetail({
+			reminders: [entry({ name: "POS-REM-26-00002", level: 2, creation: "2026-08-23 09:00:00" }), entry()],
+		});
+		const rows = wrapper.findAll('[data-testid^="cobranza-reminder-log-"]');
+		expect(rows).toHaveLength(2);
+		expect(rows[0].text()).toContain("2026-08-23");
+		expect(rows[0].text()).toContain("R2");
+		expect(rows[0].text()).toContain("Firm reminder");
+		expect(rows[0].text()).toContain("$450.00");
+	});
+
+	it("says nobody has reminded, rather than leaving a blank under the heading", () => {
+		const wrapper = mountDetail({ reminders: [] });
+		expect(wrapper.find('[data-testid="cobranza-no-reminders"]').text()).toContain(
+			"Nobody has reminded this customer yet.",
+		);
+	});
+
+	it("announces the rung the NEXT press files on the button itself", () => {
+		const row = {
+			...detailProps().row,
+			reminders: { count: 2, last_level: 2, last_on: "2026-08-23", last_channel: "CRM", next_level: 3 },
+		};
+		const wrapper = mountDetail({ row });
+		expect(wrapper.find('[data-testid="cobranza-reminder"]').text()).toContain("Final notice");
+	});
+
+	it("keeps the bare label for the first rung — «Recordatorio» promises gently", () => {
+		const wrapper = mountDetail({});
+		expect(wrapper.find('[data-testid="cobranza-reminder"]').text().trim()).toBe("Reminder");
+	});
+
+	it("the worklist chip derives from the summary and caps its tone at the final notice", () => {
+		expect(reminderChip({ reminders: undefined })).toBeNull();
+		expect(
+			reminderChip({
+				reminders: { count: 0, last_level: null, last_on: null, last_channel: null, next_level: 1 },
+			}),
+		).toBeNull();
+		const chip = reminderChip({
+			reminders: { count: 5, last_level: 3, last_on: "2026-08-23", last_channel: "CRM", next_level: 3 },
+		});
+		expect(chip).toEqual({ label: "R3", levelLabel: "Final notice", tone: "bad" });
 	});
 });
 

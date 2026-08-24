@@ -269,5 +269,41 @@ class DaysUntilTests(unittest.TestCase):
         self.assertEqual(receivables.days_until("2026-08-25 14:03:00", TODAY), 1)
 
 
+class ReminderLadderTests(unittest.TestCase):
+    """`attach_reminder_state` — the pure half of the escalation ladder.
+
+    The derivation rule (state = fold of the log, never stored) lives in
+    `_reminder_summaries` + this function; the write endpoint recomputes the
+    same arithmetic server-side. What is worth pinning without a site: the
+    cap, and the honesty of absence.
+    """
+
+    def test_a_row_nobody_reminded_starts_the_ladder_at_one(self):
+        row = shaped()
+        receivables.attach_reminder_state([row], {})
+        self.assertEqual(row["reminders"]["count"], 0)
+        self.assertIsNone(row["reminders"]["last_level"])
+        self.assertEqual(row["reminders"]["next_level"], 1)
+
+    def test_the_ladder_steps_with_the_count(self):
+        row = shaped()
+        receivables.attach_reminder_state(
+            [row],
+            {row["name"]: {"count": 1, "last_level": 1, "last_on": "2026-08-20", "last_channel": "CRM"}},
+        )
+        self.assertEqual(row["reminders"]["next_level"], 2)
+
+    def test_the_ladder_caps_at_the_final_notice(self):
+        # A customer at level 3 gets ANOTHER level 3 — the letterhead has no
+        # level 4, and a count of nine must not imply one.
+        row = shaped()
+        receivables.attach_reminder_state(
+            [row],
+            {row["name"]: {"count": 9, "last_level": 3, "last_on": "2026-08-20", "last_channel": "CRM"}},
+        )
+        self.assertEqual(row["reminders"]["next_level"], receivables.MAX_REMINDER_LEVEL)
+        self.assertEqual(row["reminders"]["last_level"], 3)
+
+
 if __name__ == "__main__":
     unittest.main()

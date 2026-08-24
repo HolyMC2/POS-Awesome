@@ -88,6 +88,37 @@
 				</div>
 			</template>
 
+			<!-- The ladder's receipts: who was chased, when, at what level, and
+			     what they owed at the time. Latest first — the cashier's question
+			     is "when did we LAST chase this". -->
+			<div class="cobranza-detail__label">{{ __("Reminders") }}</div>
+			<div
+				v-if="!reminderEntries.length"
+				class="cobranza-detail__muted"
+				data-testid="cobranza-no-reminders"
+			>
+				{{ __("Nobody has reminded this customer yet.") }}
+			</div>
+			<template v-else>
+				<div
+					v-for="entry in reminderEntries"
+					:key="entry.name"
+					class="cobranza-detail__figure"
+					:data-testid="`cobranza-reminder-log-${entry.name}`"
+				>
+					<span>
+						{{ shortDate(entry.creation) }} ·
+						<span class="cobranza-detail__rlevel" :data-tone="reminderTone(entry.level)">
+							R{{ entry.level }} · {{ __(reminderLevelLabel(entry.level)) }}
+						</span>
+						<template v-if="entry.channel && entry.channel !== 'CRM'">
+							· {{ entry.channel }}</template
+						>
+					</span>
+					<span class="mono">{{ formatCurrency(entry.outstanding_at_send) }}</span>
+				</div>
+			</template>
+
 			<!-- Absence, not zeros: the chip renders only where there is credit to
 			     spend, so a cashier who sees it can trust it. -->
 			<div
@@ -123,7 +154,11 @@
 					data-testid="cobranza-reminder"
 					@click="$emit('reminder', row)"
 				>
-					{{ reminderState === "filed" ? __("Reminder filed") : __("Reminder") }}
+					<!-- The button says which rung it will file — «Recordatorio ·
+					     Aviso final» is a different promise from a bare
+					     «Recordatorio», and the cashier deserves to know before
+					     pressing. -->
+					{{ reminderButtonLabel }}
 				</v-btn>
 				<!-- A stub that SAYS it is a stub. The artboard draws «Estado de
 				     cuenta» beside «Recordatorio»; the print format behind it does
@@ -141,6 +176,7 @@
 
 			<div class="cobranza-detail__footnote">
 				{{ __("The reminder is filed as a CRM follow-up, with the folio and the balance.") }}
+				{{ __("Each press steps the ladder — at most one step per day.") }}
 			</div>
 		</template>
 	</div>
@@ -165,10 +201,13 @@ import { computed } from "vue";
 
 import {
 	describeDue,
+	reminderLevelLabel,
 	type ReceivableContact,
 	type ReceivableLine,
 	type ReceivablePayment,
 	type ReceivableRow,
+	type ReminderEntry,
+	type Tone,
 } from "./receivablesModel";
 
 const props = defineProps<{
@@ -179,6 +218,10 @@ const props = defineProps<{
 	/** Total lines on the invoice, so the panel can own up to a truncation. */
 	lineCount: number;
 	storeCredit: number | null;
+	/** The ladder's receipts, latest first, from `get_receivable_detail`.
+	 *  Optional so an older mount (and every existing spec) reads as an
+	 *  empty history rather than a crash. */
+	reminders?: ReminderEntry[];
 	loadingDetail: boolean;
 	collecting: boolean;
 	offline: boolean;
@@ -208,6 +251,27 @@ const dueText = computed(() => {
 });
 
 const moreLines = computed(() => Math.max(props.lineCount - props.lines.length, 0));
+
+const reminderEntries = computed(() => props.reminders ?? []);
+
+/** `creation` arrives as "YYYY-MM-DD HH:MM:SS"; the history reads the day. */
+const shortDate = (creation: string): string => String(creation || "").slice(0, 10);
+
+const REMINDER_TONES: Record<number, Tone> = { 1: "muted", 2: "warn", 3: "bad" };
+const reminderTone = (level: number): Tone => REMINDER_TONES[Math.min(level, 3)] ?? "bad";
+
+/**
+ * The button announces the rung the NEXT press files — the server derives it
+ * (`min(count+1, 3)`), this only reads the summary back. `filed` still wins:
+ * after a press the button reports what happened, not what a further press
+ * would do.
+ */
+const reminderButtonLabel = computed(() => {
+	if (props.reminderState === "filed") return __("Reminder filed");
+	const next = props.row?.reminders?.next_level;
+	if (!next || next <= 1) return __("Reminder");
+	return `${__("Reminder")} · ${__(reminderLevelLabel(next))}`;
+});
 </script>
 
 <style scoped>
@@ -340,6 +404,31 @@ const moreLines = computed(() => Math.max(props.lineCount - props.lines.length, 
 .cobranza-detail__muted {
 	font-size: 11.5px;
 	color: var(--pos-text-secondary, #9aa2ae);
+}
+
+/* The ladder's rung in the history — same tone palette the worklist chips
+   use, restated here because scoped styles do not cross components. */
+.cobranza-detail__rlevel {
+	display: inline-flex;
+	border-radius: 999px;
+	padding: 1px 8px;
+	font-size: 11px;
+	font-weight: 700;
+}
+
+.cobranza-detail__rlevel[data-tone="muted"] {
+	color: var(--reg-muted-ink, #667085);
+	background: var(--reg-muted-soft, #f2f4f7);
+}
+
+.cobranza-detail__rlevel[data-tone="warn"] {
+	color: var(--reg-warn-ink, #a15200);
+	background: var(--reg-warn-soft, #fff3e0);
+}
+
+.cobranza-detail__rlevel[data-tone="bad"] {
+	color: var(--reg-bad-ink, #b42318);
+	background: var(--reg-bad-soft, #fdeaea);
 }
 
 .cobranza-detail__credit {

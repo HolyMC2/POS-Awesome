@@ -2962,6 +2962,14 @@ Has {0} in store credit,Tiene {0} en su monedero
 can be applied when collecting,se puede aplicar al cobrar
 COLLECT {0},COBRAR {0}
 Reminder,Recordatorio
+Reminders,Recordatorios
+Gentle reminder,Recordatorio amable
+Firm reminder,Recordatorio firme
+Final notice,Aviso final
+Nobody has reminded this customer yet.,Todavía nadie le ha recordado a este cliente.
+Each press steps the ladder — at most one step per day.,Cada pulsación sube la escalera — máximo un escalón por día.
+Filed as {0}. The back office sees {1} and what is pending on it.,"Quedó como {0}. La oficina ve {1} y lo que queda pendiente."
+The escalation log could not be updated — the ladder may show one step behind.,No se pudo actualizar la bitácora de escalamiento — la escalera puede ir un paso atrás.
 Reminder filed,Recordatorio enviado
 Reminder updated,Recordatorio actualizado
 Statement,Estado de cuenta

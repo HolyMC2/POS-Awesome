@@ -6,6 +6,11 @@ feature rests on (§3): capture stays the one existing, validated path
 module exists so a cashier can find the invoice to capture against WITHOUT
 searching for it first.
 
+The one write the panel does own — filing a reminder, a LOG row and never
+money — lives in `receivables_reminders.py` so this header stays literally
+true. This module reads that log back (escalation chips on the worklist, the
+history in the detail), which is still a read.
+
 Shaped like `quotation_read_model.py` + `quotations.py`, deliberately:
 
 * the arithmetic is pure (dicts in, dicts out) so the bucket rules can be
@@ -59,6 +64,18 @@ MAX_LIMIT = 500
 #: company is a much smaller set than a year of open invoices.
 DEFAULT_PAYMENT_LIMIT = 200
 MAX_PAYMENT_LIMIT = 500
+
+#: The escalation ladder's ceiling — 1 gentle, 2 firm, 3 final notice. A
+#: fourth press repeats the final notice; it never invents a level 4. The
+#: WRITE that steps the ladder lives in `receivables_reminders.py` (this
+#: module stays reads-only per its header); the ladder itself is derived
+#: from the log rows, never stored, so a chip and its history cannot
+#: disagree.
+MAX_REMINDER_LEVEL = 3
+
+#: How many log rows the detail panel prints. Three levels × a few repeats
+#: is the realistic whole history; the cap is a guard, not a pager.
+DETAIL_REMINDER_LIMIT = 20
 
 
 # ---------------------------------------------------------------------------
@@ -360,6 +377,60 @@ def _within_customer_scope(rows, pos_profile):
 # ---------------------------------------------------------------------------
 
 
+def _reminder_summaries(rows):
+    """Escalation state per worklist row, derived from the reminder log.
+
+    One read for the whole page (the worklist is capped at MAX_LIMIT), folded
+    in Python — an aggregate in `fields=` is the 417 trap the module header
+    names. Absence is honest: a row nobody has reminded gets `count 0` and
+    `last_level None`, and the chip simply does not render.
+    """
+    names = [row.get("name") for row in rows if row.get("name")]
+    if not names:
+        return {}
+    entries = frappe.get_all(
+        "POS Collection Reminder",
+        filters={"invoice": ["in", names]},
+        fields=["invoice", "level", "channel", "creation"],
+        order_by="creation asc",
+        limit_page_length=0,
+        ignore_permissions=True,
+    )
+    summaries = {}
+    for entry in entries:
+        summary = summaries.setdefault(
+            entry.get("invoice"),
+            {"count": 0, "last_level": None, "last_on": None, "last_channel": None},
+        )
+        summary["count"] += 1
+        level = cint(entry.get("level"))
+        if level >= cint(summary["last_level"] or 0):
+            summary["last_level"] = level
+        summary["last_on"] = str(entry.get("creation"))
+        summary["last_channel"] = entry.get("channel")
+    return summaries
+
+
+def attach_reminder_state(rows, summaries):
+    """Stamp each row with its ladder position and the level a press files.
+
+    Pure on purpose (summaries in, rows mutated, nothing read) so
+    `test_receivables.py`'s standalone lane can exercise the cap without a
+    site: `next_level` is where `min(count + 1, MAX)` lives, and the write
+    endpoint recomputes it server-side rather than trusting this echo.
+    """
+    for row in rows:
+        summary = summaries.get(row.get("name")) or {
+            "count": 0,
+            "last_level": None,
+            "last_on": None,
+            "last_channel": None,
+        }
+        row["reminders"] = dict(summary)
+        row["reminders"]["next_level"] = min(cint(summary["count"]) + 1, MAX_REMINDER_LEVEL)
+    return rows
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def get_receivables(pos_profile, bucket=None, search=None, limit=None):
     """The Cobranza worklist: rows, tab counts and the stats row.
@@ -390,6 +461,9 @@ def get_receivables(pos_profile, bucket=None, search=None, limit=None):
         chosen = "all"
     visible = [row for row in rows if in_bucket(row, chosen)]
     visible = [row for row in visible if matches_search(row, search)]
+    # Only the rows going out on the wire — the whole set feeds counts and
+    # totals, but nobody renders a chip on a row the bucket filtered away.
+    attach_reminder_state(visible, _reminder_summaries(visible))
 
     return {
         "rows": visible,
@@ -698,6 +772,7 @@ def get_receivable_detail(pos_profile, invoice, doctype="Sales Invoice"):
     assert_customer_in_profile(frappe.session.user, source.get("customer"), pos_profile)
 
     row = shape_row(dict(source), nowdate(), doctype)
+    attach_reminder_state([row], _reminder_summaries([row]))
 
     lines = frappe.get_all(
         f"{doctype} Item",
@@ -705,6 +780,26 @@ def get_receivable_detail(pos_profile, invoice, doctype="Sales Invoice"):
         fields=["item_code", "item_name", "qty", "uom", "rate", "amount"],
         order_by="idx asc",
         limit_page_length=DETAIL_LINE_LIMIT,
+    )
+
+    # The ladder's receipts: who pressed what, when, and what was owed at the
+    # time. Latest first — the cashier's question is "when did we LAST chase
+    # this", not how it began.
+    reminder_log = frappe.get_all(
+        "POS Collection Reminder",
+        filters={"invoice": invoice, "invoice_doctype": doctype},
+        fields=[
+            "name",
+            "level",
+            "channel",
+            "note",
+            "outstanding_at_send",
+            "owner",
+            "creation",
+        ],
+        order_by="creation desc",
+        limit_page_length=DETAIL_REMINDER_LIMIT,
+        ignore_permissions=True,
     )
 
     contact = (
@@ -729,6 +824,18 @@ def get_receivable_detail(pos_profile, invoice, doctype="Sales Invoice"):
             "email": (str(contact.get("email_id") or "").strip() or None),
         },
         "store_credit": _store_credit(source.get("customer"), company),
+        "reminders": [
+            {
+                "name": entry.get("name"),
+                "level": cint(entry.get("level")),
+                "channel": entry.get("channel"),
+                "note": entry.get("note"),
+                "outstanding_at_send": flt(entry.get("outstanding_at_send")),
+                "owner": entry.get("owner"),
+                "creation": str(entry.get("creation")),
+            }
+            for entry in reminder_log
+        ],
         "currency": row["currency"],
         "company": company,
     }

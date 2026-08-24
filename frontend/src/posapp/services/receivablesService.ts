@@ -4,16 +4,19 @@ import type {
 	CollectedPayload,
 	ReceivableDetail,
 	ReceivablesPayload,
+	ReminderSummary,
 } from "../components/pos/payments/cobranza/receivablesModel";
 
 /**
  * The Cobranza panel, from the SPA's side (COBRANZA_GOLDEN_FLOW §2).
  *
- * Three reads and nothing else. There is no `collect()` here and there must
- * never be one: capture stays `payment_entry.process_pos_payment`, reached
- * through `PayView`, which is the path that has the idempotency key, the
- * offline queue and the reconciliation behind it. A second money-write seam
- * would be a second place for a double charge to be invented.
+ * Reads, plus ONE write that is never money: `logReminder` files a row of the
+ * reminder log (`receivables_reminders.file_reminder`), which is the panel
+ * recording that a customer was chased. There is no `collect()` here and
+ * there must never be one: capture stays `payment_entry.process_pos_payment`,
+ * reached through `PayView`, which is the path that has the idempotency key,
+ * the offline queue and the reconciliation behind it. A second money-write
+ * seam would be a second place for a double charge to be invented.
  *
  * The badge read is deliberately separate from the worklist read even though
  * the server computes both the same way. The rail asks for it on a register
@@ -79,6 +82,38 @@ export function fetchReceivablesBadge(posProfile: string): Promise<ReceivablesBa
 	return api.call<ReceivablesBadge>(`${MODULE}.get_receivables_badge`, {
 		pos_profile: posProfile,
 	});
+}
+
+/** What `file_reminder` answers: the invoice's refreshed ladder position. */
+export interface ReminderFiled extends Pick<ReminderSummary, "count" | "next_level"> {
+	/** True when today already stepped the ladder — no new row was written. */
+	already_today: boolean;
+	/** The log row this press wrote (or, when `already_today`, today's). */
+	reminder: string;
+	level: number;
+}
+
+/**
+ * Step the escalation ladder for one invoice — the server owns the arithmetic
+ * (next = min(count+1, 3), at most one step per day) and answers with the
+ * state the chips should now show, so the surface needs no second read.
+ */
+export function logReminder(
+	posProfile: string,
+	invoice: string,
+	doctype: string,
+	options: { channel?: string | null; note?: string | null } = {},
+): Promise<ReminderFiled> {
+	return api.call<ReminderFiled>(
+		"posawesome.posawesome.api.receivables_reminders.file_reminder",
+		{
+			pos_profile: posProfile,
+			invoice,
+			doctype,
+			channel: options.channel ?? null,
+			note: options.note ?? null,
+		},
+	);
 }
 
 /**
