@@ -189,7 +189,7 @@ Decrease quantity,Disminuir cantidad
 Default,Predeterminado
 Delete,Eliminar
 Delete Draft,Eliminar Borrador
-Deposit,Deposito
+Deposit,Depósito
 Detecting formats:,Detectando formatos:
 Device Memory:,Memoria del Dispositivo:
 Difference:,Diferencia:
@@ -1395,7 +1395,6 @@ Sales Invoice Reference,Referencia de Factura de Venta
 Sales Manager,Gerente de Ventas
 Sales Master Manager,Gerente Maestro de Ventas
 Sales User,Usuario de Ventas
-Scale Barcode Start With,Código de Barras de Balanza Comienza Con
 Search by Serial Number,Buscar por Número Serial
 Secure context (HTTPS) required for camera access.,Se requiere contexto seguro (HTTPS) para acceso a cámara.
 Send invoice to submit after printing,Enviar factura para enviar después de imprimir
@@ -1949,7 +1948,6 @@ POS Shift Closed,Turno POS cerrado
 Customer Credit Redeemed,Crédito de Cliente Canjeado
 Customer Credit Used,Crédito de Cliente Usado
 Remaining Customer Credit Balance,Saldo Restante de Crédito del Cliente
-Invoices,Facturas
 Silent print failed — using browser print,Impresión silenciosa falló — usando navegador
 QZ Tray unreachable,QZ Tray inaccesible
 Printer Type,Tipo de Impresora
@@ -2120,12 +2118,43 @@ Not sent to the server yet,Aún no se envía al servidor
 Every table is busy,Todas las mesas están ocupadas
 Nothing waiting to be bussed,Nada por limpiar
 Tap a table to open it · outline = free · filled = occupied · red number = waiting for the kitchen,Toca una mesa para abrirla · contorno = libre · rellena = ocupada · número rojo = pendiente de cocina
-No open tabs — start one with a name on the cup,Sin cuentas abiertas — abre una con el nombre del cliente
+No tabs without a table — start one with a name on the cup,Sin cuentas sin mesa — abre una con el nombre del cliente
 No tables yet — edit your floor plan to add some,Aún no hay mesas — edita el plano para agregarlas
 No floors configured for this register,Esta caja no tiene pisos configurados
 "Add a floor in the register's setup, then lay out its tables here.","Agrega un piso en la configuración de la caja y acomoda aquí sus mesas."
 Nobody seated yet — tap a free table to start a ticket,Sin mesas ocupadas — toca una mesa libre para abrir cuenta
 Pick a free table for,Elige una mesa libre para
+Add a round,Agregar ronda
+Transfer table,Traspasar mesa
+Release table,Liberar mesa
+Accounts on this table,Cuentas en esta mesa
+With the selected account,Con la cuenta seleccionada
+This table has more than one account.,Esta mesa tiene más de una cuenta.
+They are charged separately — pick the one you mean.,Se cobran por separado — elige de cuál cobrar.
+not sent to the kitchen,sin mandar a cocina
+Not sent to the kitchen,Sin mandar a cocina
+Queued on this device,En cola en este equipo
+Waiting to be charged,En espera de cobro
+Only once the table is empty,Sólo si está desocupada
+Floor now,Salón ahora
+Open accounts,Cuentas abiertas
+Open in the floor,Abierto en el salón
+separate,aparte
+informational,informativo
+Saved,Guardado
+Saving…,Guardando…
+Not saved,Sin guardar
+Back to the floor,Volver al salón
+Tab,Cuenta
+Discard cart changes,Descartar cambios
+Open account · {0},Cuenta abierta · {0}
+No account selected,Ninguna cuenta seleccionada
+CHARGE ACCOUNT,COBRAR CUENTA
+{0} · {1} lines,{0} · {1} partidas
+Table account · {0} lines,Cuenta de mesa · {0} partidas
+SAVE · BACK TO FLOOR,GUARDAR · VOLVER AL SALÓN
+SEND TO KITCHEN,ENVIAR A COCINA
+CHARGE,COBRAR
 Cash In (Change Fund),Entrada de Efectivo (Fondo de Cambio)
 Submit Cash In,Enviar Entrada de Efectivo
 Cash In is disabled for this POS Profile.,La entrada de efectivo está deshabilitada para este perfil POS.
@@ -2725,3 +2754,176 @@ Follow-up asked for,Seguimiento solicitado
 "Today's request was updated — the back office sees one, not two.","Se actualizó la solicitud de hoy — la oficina ve una, no dos."
 The back office will pick it up.,La oficina lo tomará desde ahí.
 Could not ask for a follow-up,No se pudo pedir el seguimiento
+Estimated margin,Margen estimado
+Cost incomplete,Costo incompleto
+Cost,Costo
+{0}'s wallet,Monedero de {0}
+Cashback {0}%,Cashback {0} %
+{0} deposited · {1} earned,{0} depositados · {1} de cashback
+Make a deposit,Depositar
+Print card,Imprimir tarjeta
+Card printing is not built yet.,La impresión de tarjeta todavía no existe.
+Spent at checkout as a means of payment.,Se usa en Cobro como forma de pago.
+The deposit lands in this register's count.,El depósito entra al corte de esta caja.
+Not on the cashback programme.,Sin programa de cashback.
+Activate card,Activar tarjeta
+The card is active.,La tarjeta quedó activa.
+The card was not activated.,No se activó la tarjeta.
+On the next purchase,En la próxima compra
+Can pay up to,Puede pagar hasta
+Would earn on a {0} purchase,Acumularía en una compra de {0}
+Last {0},últimos {0}
+No movements yet,Sin movimientos
+Paid with the wallet,Pago con monedero
+Cashback,Cashback
+Cashback spent,Cashback usado
+Credit note,Nota de crédito
+Deposit to the wallet,Depositar al monedero
+Enter an amount greater than zero.,Escribe un monto mayor a cero.
+Choose how the customer is paying.,Elige con qué está pagando el cliente.
+The wallet has the deposit.,El monedero ya tiene el depósito.
+The deposit did not go through.,No se registró el depósito.
+Edit details,Editar datos
+Customer since {0},cliente desde {0}
+Active card,Tarjeta activa
+No card,Sin tarjeta
+The walk-in customer is not a contact.,Público en General no es un contacto.
+Story with the shop,Historia con la tienda
+{0} purchases,{0} compras
+{0} in total,{0} total
+last {0},última {0}
+"Last {0} days · the fiscal side lives in Invoices, this is the relationship","Últimos {0} días · lo fiscal vive en Facturas, esto es la relación"
+Gift card code,Código de tarjeta
+"Scan, type or paste the code · Enter looks it up","Escanea, teclea o pega el código · Enter consulta"
+Check,Consultar
+Issue new,Emitir nueva
+Supervisor,Supervisor
+Issue a gift card,Emitir tarjeta de regalo
+Leave empty to generate one,Déjalo vacío y generamos uno
+Initial amount,Monto inicial
+Issue,Emitir
+"Scan a printed card to use its own code, or leave it empty and we generate one.","Escanea una tarjeta impresa para usar su código, o déjalo vacío y generamos uno."
+Available balance,Saldo disponible
+Top up amount,Monto a recargar
+Top up,Recargar
+Issuing and topping up need a supervisor · checking does not,Emitir y recargar piden supervisor · consultar no
+Paying with this card?,¿Cobrar con esta tarjeta?
+In Cobro · as a payment method,En Cobro · forma de pago
+Issue a card with this code,Emitir tarjeta con este código
+Movements of {0},Movimientos de {0}
+last {0} · the shift count reconciles against this list,últimos {0} · el corte cuadra contra esta lista
+Movement,Movimiento
+"The balance lives on the card, not on a customer — whoever brings it, uses it. For value with a name and cashback: customer card.","El saldo vive en la tarjeta, no en un cliente — quien la trae, la usa. Para saldo con nombre y cashback: Tarjeta de cliente."
+We could not find card {0},No encontramos la tarjeta {0}
+Scan or type a code to see the card,Escanea o teclea un código para ver la tarjeta
+issued {0},emitida {0}
+by {0},por {0}
+Expires {0},Vence {0}
+last used {0},último uso {0}
+today,hoy
+Gift cards need a connection. Reconnect and try again.,Las tarjetas de regalo necesitan conexión. Reconecta e intenta de nuevo.
+Gift card {0} issued,Tarjeta {0} emitida
+Gift card {0} topped up,Tarjeta {0} recargada
+Welcome,Bienvenido
+Your items and total appear here,Aquí aparecen tus artículos y tu total
+Not linked to a register,Sin conexión con la caja
+Your basket,Tu compra
+Your purchase,Tu compra
+Total to pay,Total a pagar
+{0} items,{0} artículos
+Saving,Ahorro
+you save {0},ahorras {0}
+Your change,Tu cambio
+Remember your change,No olvides tu cambio
+Thank you,Gracias
+Thank you for your visit,Gracias por tu visita
+This purchase earns you,Con esta compra acumulas
+Your card · balance will be {0},Tu tarjeta · tu saldo quedará en {0}
+Weigh or set amount,Pesar o poner importe
+Type weight,Teclear peso
+$ Amount,$ Importe
+Net weight on the scale,Peso neto en la báscula
+Tray tare,Tara charola
+Amount the customer asked for,Importe que pidió el cliente
+Add to sale,Agregar a la venta
+The tare is heavier than what is on the scale.,La tara pesa más que lo que hay en la báscula.
+Nothing left after the tare.,No queda nada después de la tara.
+A tare cannot be negative.,La tara no puede ser negativa.
+Less than the smallest quantity this register can sell.,Menos de la cantidad mínima que esta caja puede vender.
+tare {0},tara {0}
+Weighed {0} · gross {1} · {2},Pesado {0} · bruto {1} · {2}
+This item has no price on this register.,Este artículo no tiene precio en esta caja.
+That amount buys less than the smallest quantity this register can sell.,Ese importe compra menos de la cantidad mínima que esta caja puede vender.
+For {0},Por {0}
+charged {0},se cobran {0}
+Unreadable scale label,Etiqueta de báscula ilegible
+"The scale label did not verify — it was read wrong or printed damaged. Scan it again, or weigh the item again.","La etiqueta de báscula no verificó: se leyó mal o se imprimió dañada. Pásala otra vez, o vuelve a pesar el artículo."
+The scale label names no item. Re-print it from the scale.,La etiqueta de báscula no nombra ningún artículo. Vuelve a imprimirla desde la báscula.
+The scale label carries no weight or price. Weigh the item again.,La etiqueta de báscula no trae peso ni precio. Vuelve a pesar el artículo.
+"This item has no price on this register, so the amount on the label cannot be turned into a quantity.","Este artículo no tiene precio en esta caja, así que el importe de la etiqueta no se puede convertir en cantidad."
+The label's amount is smaller than the smallest quantity this register can sell.,El importe de la etiqueta es menor que la cantidad mínima que esta caja puede vender.
+"No item carries the code {0} that this scale label names. Register the label on the item, or check the scale's item number.","Ningún artículo lleva el código {0} que nombra esta etiqueta de báscula. Registra la etiqueta en el artículo, o revisa el número de artículo en la báscula."
+{0} is not sold by weight,{0} no se vende por peso
+"Its unit ({0}) only takes whole numbers, so a scale label cannot set its quantity.","Su unidad ({0}) solo acepta números enteros, así que una etiqueta de báscula no puede fijar su cantidad."
+unit,unidad
+This scale label cannot be read as a quantity,Esta etiqueta de báscula no se puede leer como cantidad
+Scale label · {0},Etiqueta de báscula · {0}
+Scale label · {0} · {1},Etiqueta de báscula · {0} · {1}
+Quotations,Cotizaciones
+Valid,Vigente
+Expiring,Por vencer
+Expired quote,Vencida
+Converted,Convertida
+Folio,Folio
+Due,Vence
+Note,Nota
+Quoted total,Total cotizado
+LOAD INTO THE SALE,CARGAR A LA VENTA
+Print / PDF,Imprimir / PDF
+Extend validity,Extender vigencia
+Folio or customer…,Folio o cliente…
+Loading quotations…,Cargando cotizaciones…
+Reading the quotation…,Leyendo la cotización…
+No quotations in this list.,No hay cotizaciones en esta lista.
+Choose a quotation to see what was promised.,Elige una cotización para ver qué se prometió.
+quoted price,precio cotizado
+list today {0},lista hoy {0}
+Already sold,Ya se vendió
+Already sold on,Ya se vendió en
+"Quotation {0} was billed on {1}.","La cotización {0} se facturó en {1}."
+Quotation loaded,Cotización cargada
+Quoted prices kept; charge it like any sale.,Se conservan los precios cotizados; cóbrala como cualquier venta.
+Priced at today's rates — the quotation had expired.,Con precios de hoy — la cotización estaba vencida.
+This quotation expired. It was quoted at,Esta cotización venció. Se cotizó en
+and today's prices make it,y con precios de hoy queda en
+"This quotation expired. Today's prices are the same, so the total is unchanged at","Esta cotización venció. Los precios de hoy son los mismos, así que el total no cambia:"
+↑↓ moves · Enter opens · the quoted price holds while the quotation is valid,↑↓ recorre · Enter abre · se conserva el precio cotizado mientras la cotización esté vigente
+Could not load the quotations.,No se pudieron cargar las cotizaciones.
+Could not open this quotation.,No se pudo abrir esta cotización.
+Could not load this quotation into the sale.,No se pudo cargar esta cotización a la venta.
+Could not print this quotation.,No se pudo imprimir esta cotización.
+Not built yet,Aún no está hecho
+Extending a quotation's validity is not built yet — save a new one instead.,Extender la vigencia aún no está hecho — guarda una cotización nueva.
+{0} days left,{0} días
+expires today,vence hoy
+tomorrow,mañana
+expired {0} days ago,venció hace {0} días
+Save quotation,Guardar cotización
+File this cart as a quotation,Guarda este carrito como cotización
+Valid for (days),Vigencia (días)
+Note (optional),Nota (opcional)
+Quotation saved,Cotización guardada
+valid until,vigente hasta
+Add at least one item before saving a quotation.,Agrega al menos un artículo antes de guardar una cotización.
+Choose a customer first — a quotation is a promise to someone.,Elige primero un cliente — una cotización es una promesa a alguien.
+The counter customer cannot hold a quotation. Choose a real customer — a quotation is a promise to someone who can come back for it.,El cliente de mostrador no puede tener una cotización. Elige un cliente real — una cotización es una promesa a alguien que puede volver por ella.
+Could not save the quotation.,No se pudo guardar la cotización.
+Refund as,Devolver como
+The money goes back the way it came in,El dinero regresa por donde entró
+"Credited to the customer's balance, spendable on any purchase","Se abona al monedero del cliente, se usa en cualquier compra"
+"Credit needs an owner — set a real customer on the sale, or refund in cash.","El saldo necesita dueño — pon un cliente real en la venta, o devuelve en efectivo."
+Refund as credit note,Devolver con nota de crédito
+"Credited to {0}'s balance — usable on any purchase. Note {1}.","Se abona al monedero de {0} — se usa en cualquier compra. Nota {1}."
+Server returned no credit note.,El servidor no devolvió ninguna nota de crédito.
+Could not issue the credit note,No se pudo emitir la nota de crédito
+"{0}, kept apart · {1} · {2} points","{0}, aparte · {1} · {2} puntos"
