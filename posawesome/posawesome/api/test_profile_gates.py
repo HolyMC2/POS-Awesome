@@ -123,6 +123,61 @@ class TestProfileGates(IntegrationTestCase):
 			r = self._submit(self._payload("pd-today", posting_date=today()))
 			self.assertEqual(r["docstatus"], 1)
 
+	def test_stale_draft_date_is_not_a_change(self):
+		"""Overnight shift: the draft's stored date went stale, not tampered.
+
+		A draft created yesterday carries yesterday's posting_date because the
+		server stamped it when it WAS today. The close-shift replay (and a
+		cashier submitting yesterday's draft) resend that stored date
+		verbatim — the gate must read that as unchanged, not as a manual
+		backdate (bug: «Could not close shift: Changing the posting date is
+		not enabled in POS Profile» on every shift left open past midnight).
+		"""
+		with _FlagPatch("posa_allow_change_posting_date", 0):
+			payload = self._payload("pd-stale")
+			created = creation.update_invoice(json.dumps(payload))
+			name = created.get("name")
+			self._created.append(("Sales Invoice", name))
+			stale = add_days(today(), -1)
+			# Simulate the calendar rolling over an open shift: the stored
+			# draft now holds a date that is no longer today.
+			frappe.db.set_value(
+				"Sales Invoice", name, "posting_date", stale, update_modified=False
+			)
+			payload["name"] = name
+			payload["posting_date"] = str(stale)
+			r = creation.submit_invoice(
+				json.dumps(payload), json.dumps(self._data()), submit_in_background=0
+			)
+			self.assertEqual(r["docstatus"], 1)
+			self.assertEqual(
+				str(frappe.db.get_value("Sales Invoice", r["name"], "posting_date")),
+				str(stale),
+			)
+
+	def test_stale_draft_still_rejects_a_date_that_differs_from_stored(self):
+		with _FlagPatch("posa_allow_change_posting_date", 0):
+			payload = self._payload("pd-stale-tamper")
+			created = creation.update_invoice(json.dumps(payload))
+			name = created.get("name")
+			self._created.append(("Sales Invoice", name))
+			frappe.db.set_value(
+				"Sales Invoice",
+				name,
+				"posting_date",
+				add_days(today(), -1),
+				update_modified=False,
+			)
+			payload["name"] = name
+			# The payload claims a DIFFERENT past date than the stored row:
+			# that is the tamper P0-1 exists for, stale draft or not.
+			payload["posting_date"] = str(add_days(today(), -30))
+			with self.assertRaises(frappe.ValidationError) as ctx:
+				creation.submit_invoice(
+					json.dumps(payload), json.dumps(self._data()), submit_in_background=0
+				)
+			self.assertIn("posting date", str(ctx.exception).lower())
+
 	# ---------- returns ----------
 
 	def test_return_rejected_when_flag_off(self):

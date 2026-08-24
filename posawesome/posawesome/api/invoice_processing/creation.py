@@ -699,6 +699,32 @@ def _sanitize_delivery_dates(payload):
             item["posa_delivery_date"] = _safe_date_string(item.get("posa_delivery_date"))
 
 
+def _stored_posting_state(payload):
+    """The server's own record of an existing draft's posting fields.
+
+    Trusting the payload's ``name`` here is fine: this only decides whether
+    the P0-1 gate treats the date as *changed*. Whoever names a row still has
+    to get past the draft owner/supervisor gates downstream to touch it, so
+    pointing at someone else's backdated draft buys nothing.
+    """
+    name = payload.get("name")
+    if not name:
+        return None
+    claimed = payload.get("doctype")
+    doctypes = (
+        [claimed]
+        if claimed in ("Sales Invoice", "POS Invoice")
+        else ["Sales Invoice", "POS Invoice"]
+    )
+    for doctype in doctypes:
+        stored = frappe.db.get_value(
+            doctype, name, ["posting_date", "set_posting_time"], as_dict=True
+        )
+        if stored:
+            return stored
+    return None
+
+
 def _apply_manual_posting_controls(payload):
     if not isinstance(payload, dict):
         return
@@ -718,6 +744,27 @@ def _apply_manual_posting_controls(payload):
         cint(payload.get("set_posting_time"))
         or (posting_date and today and posting_date != today)
     )
+    if wants_manual_posting:
+        # A stale date is not a CHANGED date. A draft printed during an
+        # overnight shift legitimately carries yesterday's posting_date —
+        # set by the server at creation, when it WAS today — and both the
+        # close-shift replay (`_submit_printed_invoice` sends
+        # `invoice_doc.as_dict()`) and a cashier submitting yesterday's
+        # draft resend it verbatim. Comparing against *today* rejected
+        # those; the tamper this gate exists for is a payload date that
+        # differs from what the server already stored (or a brand-new
+        # payload born backdated, where there is nothing stored to match).
+        stored = _stored_posting_state(payload)
+        if stored:
+            stored_date = _safe_date_string(stored.get("posting_date"))
+            date_unchanged = bool(
+                posting_date and stored_date and posting_date == stored_date
+            )
+            set_time_unchanged = not cint(payload.get("set_posting_time")) or cint(
+                stored.get("set_posting_time")
+            )
+            if date_unchanged and set_time_unchanged:
+                wants_manual_posting = False
     if wants_manual_posting:
         profile = payload.get("pos_profile")
         if profile and not cint(
