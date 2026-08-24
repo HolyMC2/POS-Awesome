@@ -27,11 +27,20 @@
 					     nothing at all: `.posa-cart-table th` centres every
 					     header, so `Stock` sat centred over a right-aligned
 					     figure. Never restate an alignment here. -->
+					<!-- The px width comes from the measured budget in
+					     `useItemsTableResponsive.ts`, not from the stylesheet.
+					     Under `table-layout: fixed` the FIRST row decides every
+					     column, so one honest set of numbers on the header row
+					     settles the whole table; the percentages in
+					     `items-table-styles.css` stay as the fallback for the
+					     one case with no header row (breakpoint-xs, where the
+					     rows are grid cards and column widths are moot). -->
 					<th
 						v-for="column in finalVisibleColumns"
 						:key="(column as any).key || (column as any).value || column.title"
 						class="posa-cart-th"
 						:class="[(column as any).cellClass || null, cartAlignClass(column)]"
+						:style="cartColumnStyle(column)"
 						:data-column-key="(column as any).key || (column as any).value"
 						:data-column-align="(column as any).align"
 						:title="column.title || undefined"
@@ -221,7 +230,10 @@ import { cartAlignClass, resolveCartColumnAlign } from "./cartColumnAlign";
 import { useItemsTableSearch } from "../../../composables/pos/items/useItemsTableSearch";
 import { useItemsTableDragDrop } from "../../../composables/pos/items/useItemsTableDragDrop";
 import {
+	CART_STRUCTURAL_COLUMNS,
 	DATA_TABLE_EXPAND_COLUMN,
+	planCartColumnWidths,
+	planCartColumns,
 	shouldShowColumnHeaders,
 	useItemsTableResponsive,
 } from "../../../composables/pos/items/useItemsTableResponsive";
@@ -360,6 +372,7 @@ const memoizedIsNegative = computed(() => {
 
 const {
 	breakpoint,
+	containerWidth,
 	responsiveHeaders,
 	containerStyles,
 	containerClasses,
@@ -367,6 +380,35 @@ const {
 	expandedContentClasses,
 	tableDensity,
 } = responsive;
+
+/**
+ * Which columns the cart's measured width can afford, and how wide each one is.
+ *
+ * Planned from `props.headers` — the operator's registry — plus the two columns
+ * this component injects itself (`stock`, the expander). The plan has to see
+ * the full set or it budgets a table 124px narrower than the one that renders,
+ * which is how the name ended up with 5% of the row (see the block comment in
+ * `useItemsTableResponsive.ts`).
+ */
+const cartColumnPlan = computed(() =>
+	planCartColumns(
+		[...(props.headers || []).map((header: any) => header?.key), ...CART_STRUCTURAL_COLUMNS],
+		containerWidth.value,
+	),
+);
+
+const cartColumnWidths = computed(() =>
+	planCartColumnWidths(cartColumnPlan.value.visible, containerWidth.value),
+);
+
+/**
+ * The header cell's own width. Absent (width 0, before the observer's first
+ * report) the stylesheet's percentages take over rather than a guessed number.
+ */
+const cartColumnStyle = (column: any) => {
+	const width = cartColumnWidths.value[column?.key || column?.value];
+	return width ? { width: `${width}px` } : undefined;
+};
 
 /**
  * The cart's column anatomy, from `Main.dc.html` nodes 32–36:
@@ -405,17 +447,18 @@ const CART_COLUMN_ORDER = [
 	"actions",
 ];
 
-// Plain numbers, deliberately. `calculateColumnWidth` scales these against the
-// container; a `max()` expression here is silently dropped under the table's
-// fixed layout and every column collapses to equal width.
+// Plain numbers, deliberately. A `max()` expression here is silently dropped
+// under the table's fixed layout and every column collapses to equal width.
+// The px figures are the budget's, so the column object and the header cell
+// cannot disagree (`CART_COLUMN_MIN_WIDTH.stock`).
 const STOCK_COLUMN = {
 	title: __("Stock"),
 	key: "stock",
 	align: "end" as const,
 	required: true,
 	sortable: false,
-	width: 96,
-	minWidth: 72,
+	width: 104,
+	minWidth: 84,
 };
 
 const finalVisibleColumns = computed(() => {
@@ -423,9 +466,17 @@ const finalVisibleColumns = computed(() => {
 
 	// Only alongside the description — at the narrowest breakpoints the
 	// responsive filter drops down to a couple of columns, and a stock figure
-	// beside nothing to identify it by is noise.
+	// beside nothing to identify it by is noise. And only while the width
+	// budget can still pay for it: `stock` is the last entry in the collapse
+	// order, so a cart narrow enough to drop it has already given up the
+	// discount columns.
 	const hasName = columns.some((column: any) => (column?.key || column?.value) === "item_name");
-	if (hasName && !columns.some((column: any) => (column?.key || column?.value) === "stock")) {
+	const affordsStock = cartColumnPlan.value.visible.includes("stock");
+	if (
+		hasName &&
+		affordsStock &&
+		!columns.some((column: any) => (column?.key || column?.value) === "stock")
+	) {
 		columns.push(STOCK_COLUMN);
 	}
 

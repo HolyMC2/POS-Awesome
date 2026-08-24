@@ -175,7 +175,12 @@ describe("cart UOM stepper on touch", () => {
 			getResponsiveVisibleHeaders(headers, width).map((header) => header.key);
 
 		expect(keysAt(420)).not.toContain("uom");
-		expect(keysAt(600)).toContain("uom");
+		// 900, not 600. The column budget (`useItemsTableResponsive.ts`) now
+		// prices UOM at its real 76px and refuses to buy it out of the item
+		// name's readable width: at 600px a cart cannot hold two arrows, a unit
+		// AND a name, so UOM leaves the row grid there too. 900px is the first
+		// width where every column in this set is affordable at once.
+		expect(keysAt(900)).toContain("uom");
 	});
 
 	it("lets a tap on any editor pill reach the 44px floor", () => {

@@ -1,15 +1,24 @@
 // @vitest-environment jsdom
 
 /**
- * How wide the anchored cajón is, and why it is not one number.
+ * How wide the anchored cajón is, and why it is now ONE number.
  *
- * `Cajon.dc.html` draws a 400px drawer, and that is the right answer for the
- * register it draws: a phone-repair counter whose catalogue is an accessory
+ * It used to be two. `Cajon.dc.html` draws a 400px drawer, the right answer for
+ * the register it draws: a phone-repair counter whose catalogue is an accessory
  * drawer two cards wide. `Cafeteria.dc.html` draws the case the 400px cannot
- * serve — a card MENU is the surface the cashier works from, and no cafetería
- * picks a drink out of a two-column column. So the anchored width follows what
- * the panel is SHOWING, and only that: `fitsAnchored` stays pure geometry, and
- * the overlay and inline presentations are untouched.
+ * serve — a card MENU is the surface the cashier works from — so CARD anchored
+ * wider than LIST, and the anchored width followed what the panel was SHOWING.
+ *
+ * Golden flow §5 collapses the branch: both views take the floating card
+ * panel's footprint, `min(62%, 720px)`. What broke the old reasoning ("a list
+ * packs at any width, so widening it takes room off the ticket for nothing")
+ * was measuring what the ticket did with the room. At 1718x1023 on the
+ * cafetería demo, with 1572px of cart, the item-name column rendered 39.3px
+ * wide and its own header truncated. The width was going to eight columns
+ * fighting, not to the ticket. §4's collapse ladder is what pays for this.
+ *
+ * `fitsAnchored` stays pure geometry, and the overlay and inline presentations
+ * are untouched.
  *
  * Half of this is a source scan on purpose. The width lives in CSS — a
  * percentage of the content row is a layout fact the stylesheet can state and
@@ -27,10 +36,11 @@ import drawerSource from "../src/posapp/components/pos/shell/drawer/CatalogDrawe
 import shellSource from "../src/posapp/components/pos/shell/Pos.vue?raw";
 import selectorSource from "../src/posapp/components/pos/items/ItemsSelector.vue?raw";
 import {
-	CATALOG_DRAWER_CARD_MAX_WIDTH,
-	CATALOG_DRAWER_CARD_WIDTH_SHARE,
-	CATALOG_DRAWER_WIDTH,
+	CATALOG_DRAWER_MAX_WIDTH,
+	CATALOG_DRAWER_WIDTH_SHARE,
 } from "../src/posapp/composables/pos/shell/useCatalogDrawer";
+
+const ANCHORED_WIDTH = `width: min(${Math.round(CATALOG_DRAWER_WIDTH_SHARE * 100)}%, ${CATALOG_DRAWER_MAX_WIDTH}px)`;
 
 const STYLE_BLOCK = drawerSource.slice(
 	drawerSource.indexOf("<style"),
@@ -55,54 +65,56 @@ describe("the anchored width follows the items view", () => {
 		wrapper.unmount();
 	});
 
-	it("leaves the list on the artboard's width", () => {
+	it("gives the list the same footprint as the cards", () => {
 		const wrapper = mountDrawer({ itemsView: "list" });
 		expect(wrapper.classes()).not.toContain("catalog-drawer-layer--cards");
-		expect(rule(".catalog-drawer-layer--anchored")).toContain(
-			`width: ${CATALOG_DRAWER_WIDTH}px`,
-		);
+		// The un-marked layer IS the list presentation, so this rule is what a
+		// LIST drawer resolves to. Both views naming the same figures is the
+		// whole point of §5 — a menu is a menu in either drawing.
+		expect(rule(".catalog-drawer-layer--anchored")).toContain(ANCHORED_WIDTH);
 		wrapper.unmount();
 	});
 
-	it("defaults to the list width, so a caller that says nothing takes no room", () => {
-		// A drawer that guessed "card" would take ~160px off the ticket on every
-		// register that never told it otherwise.
+	it("still marks the layer, so the branch is retired rather than lost", () => {
 		const wrapper = mountDrawer();
 		expect(wrapper.classes()).not.toContain("catalog-drawer-layer--cards");
 		wrapper.unmount();
+		expect(STYLE_BLOCK).toContain(".catalog-drawer-layer--anchored.catalog-drawer-layer--cards");
 	});
 
-	it("sizes the card view as a share of the row, capped, exactly as the module says", () => {
-		const cards = rule(".catalog-drawer-layer--anchored.catalog-drawer-layer--cards");
-		const share = `${Math.round(CATALOG_DRAWER_CARD_WIDTH_SHARE * 100)}%`;
-		expect(cards).toContain(`width: min(${share}, ${CATALOG_DRAWER_CARD_MAX_WIDTH}px)`);
+	it("sizes both anchored views as a share of the row, capped, exactly as the module says", () => {
+		expect(rule(".catalog-drawer-layer--anchored")).toContain(ANCHORED_WIDTH);
+		expect(rule(".catalog-drawer-layer--anchored.catalog-drawer-layer--cards")).toContain(
+			ANCHORED_WIDTH,
+		);
 	});
 
-	it("keeps the cart the larger half at every width the drawer can anchor at", () => {
-		// The share is the guarantee: whatever the row measures, the ticket keeps
-		// 55% of it. A pixel width could not promise that at 1100 and at 1920.
-		expect(CATALOG_DRAWER_CARD_WIDTH_SHARE).toBeLessThan(0.5);
-		// And the cap has to be an increase over the list, or the branch is noise.
-		expect(CATALOG_DRAWER_CARD_MAX_WIDTH).toBeGreaterThan(CATALOG_DRAWER_WIDTH);
+	it("keeps the anchored footprint a share of the row rather than a pixel promise", () => {
+		// A share, so the split tracks the row at 1100 and at 1920 alike. It is
+		// deliberately past half now: the ticket's own §4 ladder is what makes
+		// the smaller half readable, and below a 500px cart the rows reflow into
+		// cards (items-table-styles.css, PHONE CARD MODE).
+		expect(CATALOG_DRAWER_WIDTH_SHARE).toBeGreaterThan(0.5);
+		expect(CATALOG_DRAWER_WIDTH_SHARE).toBeLessThan(0.7);
+		// The ceiling has to bind on a wide register or the share is unbounded:
+		// 62% of a 1920px row is ~1190px of catalogue, which is wallpaper.
+		expect(CATALOG_DRAWER_MAX_WIDTH).toBeLessThan(1920 * CATALOG_DRAWER_WIDTH_SHARE);
 	});
 
-	it("leaves inline alone, and floats the overlay WIDER than its anchored twin", () => {
+	it("leaves inline and the overlay exactly as they were", () => {
 		expect(
 			rule(".catalog-drawer-layer--inline"),
 			"inline must not size itself off the items view",
 		).not.toContain("min(");
-		// Un-anchoring exists so a wide register can give the catalogue MORE
-		// room — a floating panel the same 400px as the anchored column was
-		// nothing but a dimmed register (Marco, 08-23).
+		// The overlay is untouched by §5 — it was already the footprint the
+		// anchored presentation has now adopted, and its card rule is where the
+		// 62%/720px pair came from in the first place.
 		expect(rule(".catalog-drawer-layer--overlay .catalog-drawer")).toContain(
 			"width: min(52%, 560px)",
 		);
 		expect(
 			rule(".catalog-drawer-layer--overlay.catalog-drawer-layer--cards .catalog-drawer"),
-		).toContain("width: min(62%, 720px)");
-		expect(STYLE_BLOCK).toContain(
-			".catalog-drawer-layer--anchored.catalog-drawer-layer--cards",
-		);
+		).toContain(ANCHORED_WIDTH);
 	});
 
 	it("keeps the floating panel ABOVE its scrim", () => {

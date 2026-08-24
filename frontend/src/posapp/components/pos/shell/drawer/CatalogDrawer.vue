@@ -405,35 +405,48 @@ defineExpose({ focusableChildren });
  * deliberately NOT positioned — the band below is full width and the drawer
  * "never reaches it" (Cajon.dc.html), which is only true while the drawer
  * stays inside the row's flow.
+ *
+ * ONE WIDTH FOR BOTH VIEWS: `min(62%, 720px)`, the footprint the floating card
+ * panel already had and the one Marco approved (golden flow §5). It used to be
+ * 400px for LIST and `min(45%, 560px)` for CARD, on the argument that a list
+ * packs at any width so widening it would take room off the ticket for nothing.
+ * The cafetería round retired that argument from the other end: what the extra
+ * 320px was actually paying for on the ticket side was eight columns fighting
+ * over it, with the item name down to 39px (see the width-budget note in
+ * `useItemsTableResponsive.ts`). With the cart's collapse ladder in place the
+ * ticket needs less width to read WELL than it was being handed to read badly,
+ * and a menu is a menu in either view.
+ *
+ * A `min()` rather than a measured width: the cart's share stays a layout fact
+ * instead of a number two files have to keep agreeing on, and the percentage
+ * resolves against the content row, because an anchored layer is a flex sibling
+ * of the ticket inside that row. `useCatalogDrawer.ts` names the same two
+ * figures for the composable's consumers; `catalogDrawerWidth.spec.ts` fails if
+ * they drift apart.
+ *
+ * Consequence, stated rather than hidden: at the narrow end of the anchoring
+ * range (1100-1300px) the ticket is now the SMALLER half of the row and lands
+ * under 500px, where `items-table-styles.css` reflows it into card rows. That
+ * is the designed treatment for a cart that narrow, not a fallback.
+ *
+ * NOT animated, and it must not become animated: `width` is the layout
+ * property this file's animation contract exists to keep out of transitions.
  */
 .catalog-drawer-layer--anchored {
 	position: relative;
-	width: 400px;
+	width: min(62%, 720px);
 	flex: none;
 	display: flex;
 	min-height: 0;
 }
 
 /*
- * CARD view takes more of the row; LIST view keeps the artboard's 400px.
- *
- * `Cajon.dc.html` draws the drawer at 400px for a phone-repair register, where
- * the catalogue is an accessory drawer two cards wide. `Cafeteria.dc.html`
- * draws the case this rule exists for — a card MENU is the surface the cashier
- * works from — and the register cannot show that menu two cards at a time.
- *
- * A `min()` rather than a measured width: the cart's share stays a layout fact
- * instead of a number two files have to keep agreeing on, and the percentage
- * resolves against the content row, which is exactly "45% of the register"
- * because an anchored layer is a flex sibling of the ticket inside that row.
- * `useCatalogDrawer.ts` names the same two figures for the composable's
- * consumers; `catalogDrawerWidth.spec.ts` fails if they drift apart.
- *
- * NOT animated, and it must not become animated: `width` is the layout
- * property this file's animation contract exists to keep out of transitions.
+ * The CARD marker still lands on the layer — the selector below is what
+ * `catalogDrawerWidth.spec.ts` reads to prove the two views now share a
+ * footprint rather than having quietly lost the branch.
  */
 .catalog-drawer-layer--anchored.catalog-drawer-layer--cards {
-	width: min(45%, 560px);
+	width: min(62%, 720px);
 }
 
 /*

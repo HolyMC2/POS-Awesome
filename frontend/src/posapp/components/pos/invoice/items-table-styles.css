@@ -114,17 +114,34 @@ table.posa-cart-table--native {
 	white-space: nowrap;
 }
 
-/* Cart column widths. Name is deliberately LEFT UNSIZED: under
-   `table-layout: fixed` the used table width is
-   max(declared width, SUM of the column widths), so the old
-   `width: 42%` on Name pushed the table past the cart panel — the
-   table painted wider than its container, which is what made the qty
-   stepper spill into the next column and left the mobile empty state
-   centred on the overflow width instead of the visible width.
-   Unsized, Name is the elastic column: it absorbs whatever the sized
-   columns leave over.
-   Use both <th data-column-key> and <td data-column-key> so the
-   fixed layout reads the width from either header or first body row. */
+/* Cart column widths — THE FALLBACK, not the answer.
+ *
+ * The answer is a measured px budget emitted onto the header row by
+ * `ItemsTable.vue` (`planCartColumnWidths`, `useItemsTableResponsive.ts`).
+ * Under `table-layout: fixed` the FIRST row decides every column, so those
+ * inline widths win wherever a header row renders — which is everywhere except
+ * breakpoint-xs, where the rows reflow into grid cards and column widths stop
+ * meaning anything. What is left here is the frame before the ResizeObserver
+ * reports, and it must be survivable rather than merely present.
+ *
+ * Name is deliberately LEFT UNSIZED: under `table-layout: fixed` the used table
+ * width is max(declared width, SUM of the column widths), so the old
+ * `width: 42%` on Name pushed the table past the cart panel — the table painted
+ * wider than its container, which is what made the qty stepper spill into the
+ * next column and left the mobile empty state centred on the overflow width
+ * instead of the visible width. Unsized, Name is the elastic column: it absorbs
+ * whatever the sized columns leave over.
+ *
+ * WHICH IS WHY THESE NUMBERS CHANGED. They used to add up to 95% for the
+ * cafetería's column set, leaving Name and Stock — both unsized — to split the
+ * remaining 5%. Measured on the demo at 1718x1023 on 2026-08-23 with a 1572px
+ * cart: Name 39.3px against a header needing 50.5px, Stock the same, while Rate
+ * and Amount took 251px each. That is the «one letter» name and the truncated
+ * «Tasa de List» / «Descuer» / «Accione» headers, in one sum. They now add up to
+ * 77% for that set, so even the fallback frame leaves Name ~23%.
+ *
+ * Use both <th data-column-key> and <td data-column-key> so the fixed layout
+ * reads the width from either header or first body row. */
 .posa-cart-table [data-column-key="item_name"] {
 	/* no width on purpose — elastic column */
 	min-width: 0;
@@ -139,51 +156,49 @@ table.posa-cart-table--native {
    much room as the item name while Rate and Amount truncated to "MX$ 80…"
    on a real prod cart. Percentages are honoured, so percentages it is; the
    narrow case is handled by dropping columns (useItemsTableResponsive.ts),
-   which is what actually shipped anyway.
-   The split favours money: at a 800px cart Rate and Amount get ~128px each,
-   which the measured need table (12,345.00 -> 124px incl. pill chrome and
-   gutters) says is enough for a five-figure line. */
+   which is what actually shipped anyway. */
 .posa-cart-table [data-column-key="qty"] {
 	/* 96px of stepper (2 x 24px buttons + gaps + the 32px display)
-	   plus the cell's own side padding. */
-	width: 15%;
+	   plus the cell's own side padding — 11% clears that from ~950px up,
+	   and the px budget covers every width below it. */
+	width: 11%;
 }
 .posa-cart-table [data-column-key="uom"] {
-	width: 8%;
+	width: 6%;
 }
-/* Money columns get the same px floor idiom as the widget columns above,
-   which they were missing: a percentage alone clipped them at every cart
-   width we ship. Measured in the browser (1440px viewport, 0.9rem tabular
-   figures) the cell needs, INCLUDING the pill chrome and the cell gutters:
-   45.00 -> 97px · 450.00 -> 105px · 1,250.00 -> 116px · 12,345.00 -> 124px.
-   At 11% the cell was 88px, so even a two-digit price lost its last
-   characters — the reported "el precio sale cortado". 124px covers a
-   five-figure line item, which is a phone or a screen at Doco prices. The
-   percentage still governs wide carts, where 11% already exceeds the floor,
-   so a cashier tablet does not hand money columns width it cannot use. */
-.posa-cart-table [data-column-key="price_list_rate"] {
-	width: 13%;
-}
-.posa-cart-table [data-column-key="discount_percentage"] {
-	width: 9%;
-}
-.posa-cart-table [data-column-key="discount_amount"] {
-	width: 13%;
-}
-.posa-cart-table [data-column-key="rate"] {
-	width: 16%;
-}
-.posa-cart-table [data-column-key="amount"] {
-	width: 16%;
-}
-.posa-cart-table [data-column-key="posa_is_offer"] {
+.posa-cart-table [data-column-key="stock"] {
+	/* Sized at last. Unsized it was the second half of the elastic pair, so
+	   it split the leftover 5% with Name instead of taking a share of its
+	   own — «quedan 12» rendered in 39px. */
 	width: 7%;
 }
+/* Money columns. Measured in the browser (1440px viewport, 0.9rem tabular
+   figures) the cell needs, INCLUDING the pill chrome and the cell gutters:
+   45.00 -> 97px · 450.00 -> 105px · 1,250.00 -> 116px · 12,345.00 -> 124px.
+   The px budget is what guarantees those floors now; the shares below only
+   have to be proportionate. */
+.posa-cart-table [data-column-key="price_list_rate"] {
+	width: 10%;
+}
+.posa-cart-table [data-column-key="discount_percentage"] {
+	width: 7%;
+}
+.posa-cart-table [data-column-key="discount_amount"] {
+	width: 10%;
+}
+.posa-cart-table [data-column-key="rate"] {
+	width: 11%;
+}
+.posa-cart-table [data-column-key="amount"] {
+	width: 11%;
+}
+.posa-cart-table [data-column-key="posa_is_offer"] {
+	width: 6%;
+}
 .posa-cart-table [data-column-key="actions"] {
-	/* 8%, not 6%: at 6% the column was narrower than its own "Actions"
-	   header, which then broke mid-word to "Actio / ns". Still a third of
-	   the 133px it used to take from the money columns. */
-	width: 8%;
+	/* 6%, never less: below it the column is narrower than its own "Actions"
+	   header, which then breaks mid-word to "Actio / ns". */
+	width: 6%;
 }
 /* Expand-arrow column on the right; the SPA passes it last via
    DATA_TABLE_EXPAND_COLUMN, which renders WITH a data-column-key —
@@ -191,7 +206,7 @@ table.posa-cart-table--native {
    it, so the column stayed unsized and competed with Name for the
    leftover space. */
 .posa-cart-table [data-column-key="data-table-expand"] {
-	width: 5%;
+	width: 4%;
 }
 
 /* Delete + expand hold a single icon each; trim their gutters and the

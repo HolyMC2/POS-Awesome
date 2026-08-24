@@ -39,8 +39,13 @@ describe("items table final visible columns", () => {
 	});
 
 	it("keeps selected optional columns visible in normal POS pane widths", () => {
-		const responsive = getResponsiveVisibleHeaders(headers, 600);
-		const finalColumns = buildFinalVisibleColumns(headers, 600);
+		// 1200, not 600: the budget prices every column at what it actually
+		// needs, and this eleven-column set (the injected `stock` and the
+		// expander included) costs 966px of floors before the item name gets a
+		// pixel. A 600px cart affording all of them was the old bug, not the
+		// old feature — it was doing it by giving the name 5% of the row.
+		const responsive = getResponsiveVisibleHeaders(headers, 1200);
+		const finalColumns = buildFinalVisibleColumns(headers, 1200);
 
 		expect(responsive.map((column) => column.key)).toEqual([
 			"item_name",

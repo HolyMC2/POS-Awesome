@@ -8,16 +8,17 @@
  *     "drawer: anchored by default, pushes, never covers"
  *     "total band: full width, the drawer never reaches it"
  *
- * So the drawn state is an ANCHORED panel — a 400px flex sibling of the cart,
- * inside the content row, above a band it never overlaps. Two consequences
- * that this module exists to keep straight:
+ * So the drawn state is an ANCHORED panel — a flex sibling of the cart sized
+ * against the row (`min(62%, 720px)`, see below), inside the content row, above
+ * a band it never overlaps. Two consequences that this module exists to keep
+ * straight:
  *
  * 1. An anchored panel is NOT a modal. It must not trap focus, must not lock
  *    body scroll and must not lay a scrim over the register: the cashier keeps
  *    working the cart with the catalogue open beside it. Trapping focus there
  *    would be an accessibility defect, not a nicety.
- * 2. Below the two-column boundary an anchored 400px panel cannot fit (1024px
- *    tablet leaves ~536px of cart after the rail; 390px phone leaves nothing),
+ * 2. Below the two-column boundary an anchored panel cannot fit beside a cart
+ *    at all (1024px tablet leaves ~304px after the rail; 390px phone nothing),
  *    so narrow viewports fall back to an OVERLAY, which IS modal. The design
  *    does not draw that state because it only draws the desktop register, but
  *    geometry forces it.
@@ -45,31 +46,41 @@ import { computed, ref, type ComputedRef, type Ref } from "vue";
 /** Registered by the lead in `shortcuts/actions.ts`; bound to F4 per the artboard. */
 export const CATALOG_DRAWER_ACTION_ID = "catalog.toggleDrawer";
 
-/** Drawn width of the anchored panel (`Cajon.dc.html`: `width: 400px; flex: none`). */
-export const CATALOG_DRAWER_WIDTH = 400;
-
 /**
- * Anchored width in CARD view: a share of the content row, and a ceiling.
+ * Anchored width: a share of the content row, and a ceiling. ONE pair of
+ * figures, for both views.
  *
- * `Cajon.dc.html` draws 400px because it draws a phone-repair register, whose
- * catalogue is a drawer of accessories two cards wide. `Cafeteria.dc.html`
- * draws the other end of the same trade-off: there the card MENU is the
- * surface the cashier works from and it takes four columns of the main area.
- * So the width follows what the panel is SHOWING. A list packs at any width
- * (`itemSelectorLayout.ts`), and widening it would take room off the ticket
- * for nothing; a grid of cards buys a column with every ~190px.
+ * It used to be two answers. `Cajon.dc.html` draws 400px because it draws a
+ * phone-repair register, whose catalogue is a drawer of accessories two cards
+ * wide, so LIST anchored at a flat 400px; `Cafeteria.dc.html` draws the other
+ * end of the same trade-off — there the card MENU is the surface the cashier
+ * works from — so CARD anchored at `min(45%, 560px)`. The reasoning for keeping
+ * LIST narrow was that a list packs at any width (`itemSelectorLayout.ts`), so
+ * widening it would take room off the ticket for nothing.
  *
- * A share rather than a pixel width so the cart keeps the majority of the row
- * at every width the drawer can anchor at — 45% of the narrowest anchoring row
- * is ~445px, which still leaves the ticket more than it takes. The ceiling
- * exists because past ~three columns the cards stop being a menu and start
- * being wallpaper (`CARD_MAX_COLUMNS` makes the same argument).
+ * What that reasoning never checked was whether the ticket was SPENDING the
+ * room. Measured on the cafetería demo at 1718x1023 on 2026-08-23: with 1572px
+ * of cart, the item-name column rendered 39.3px wide and its own header
+ * truncated, because the sized columns claimed 95% of the table and the name
+ * took a share of the 5% left. The extra width was going to eight columns
+ * fighting, not to the ticket reading well. Golden flow §5 settles it at the
+ * floating card panel's footprint for both views, and §4's collapse ladder is
+ * what makes the narrower cart legible.
+ *
+ * A share rather than a pixel width so the split tracks the row instead of
+ * being a number two files have to keep agreeing on. The ceiling exists because
+ * past ~three columns the cards stop being a menu and start being wallpaper
+ * (`CARD_MAX_COLUMNS` makes the same argument).
+ *
+ * Note the share is now past half: between 1100px (the anchoring floor) and
+ * ~1300px the ticket is the smaller half and reflows into card rows, which is
+ * `items-table-styles.css`'s designed treatment below a 500px cart.
  *
  * `CatalogDrawer.vue` states these two figures in CSS; the stylesheet cannot
  * read a module, so `catalogDrawerWidth.spec.ts` checks the pair still agree.
  */
-export const CATALOG_DRAWER_CARD_WIDTH_SHARE = 0.45;
-export const CATALOG_DRAWER_CARD_MAX_WIDTH = 560;
+export const CATALOG_DRAWER_WIDTH_SHARE = 0.62;
+export const CATALOG_DRAWER_MAX_WIDTH = 720;
 
 /**
  * What the slotted selector is drawing. The drawer never asks a store for it —
@@ -244,7 +255,7 @@ export function useCatalogDrawer(options: UseCatalogDrawerOptions) {
 	/**
 	 * Explicit un-anchor (the "Anclado" chip in the artboard header). Only ever
 	 * relaxes the presentation: a wide register may choose to float the drawer,
-	 * but a narrow one cannot choose to anchor 400px it does not have.
+	 * but a narrow one cannot choose to anchor a column it does not have.
 	 */
 	const anchorOptOut = ref(false);
 
@@ -256,7 +267,7 @@ export function useCatalogDrawer(options: UseCatalogDrawerOptions) {
 
 	const presentation = computed<CatalogDrawerPresentation>(() => {
 		// Compact wins over geometry: a lean vertical preset shows one panel at
-		// a time on a 1440px screen too, and anchoring 400px beside a cart that
+		// a time on a 1440px screen too, and anchoring a column beside a cart that
 		// is not on screen would leave the register drawing half a layout.
 		if (compact?.value === true) {
 			return "inline";
