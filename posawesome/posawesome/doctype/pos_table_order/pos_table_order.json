@@ -235,6 +235,10 @@
    "read": 1,
    "role": "POS User",
    "write": 1
+  },
+  {
+   "read": 1,
+   "role": "POS Awesome Supervisor"
   }
  ],
  "sort_field": "modified",
