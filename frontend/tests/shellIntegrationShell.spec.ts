@@ -221,6 +221,10 @@ describe("shell integration — Riel y Cajón", () => {
 		expect(Object.keys(ctx.counts).sort()).toEqual([
 			"draftInvoicesCount",
 			"floorOpenOrdersCount",
+			// Cobranza's overdue count. The rail advertises it before anyone
+			// opens the panel, which is the whole difference between an ops
+			// panel and a page.
+			"receivablesOverdueCount",
 			"serviceOrderOpenCount",
 		]);
 		// The rail is inert until the shift opens (§5.1).

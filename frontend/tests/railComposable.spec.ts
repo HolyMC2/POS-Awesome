@@ -258,7 +258,7 @@ describe("useRegisterRail — groups", () => {
 		expect(rail.activeTool.value).toBeNull();
 		active.value = "payments";
 		expect(rail.activeTool.value?.id).toBe("payments");
-		expect(rail.activeTool.value?.hint).toBe("Collect against open invoices");
+		expect(rail.activeTool.value?.hint).toBe("What is owed, and collecting it");
 		expect(rail.toolsItems.value.map((item) => item.id)).toEqual([
 			"payments",
 			"purchase",

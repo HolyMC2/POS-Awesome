@@ -179,6 +179,22 @@ export type Events = {
 
 	// ---- payments -----------------------------------------------------------
 	queue_submit_payment_shortcut: { print?: boolean };
+	/**
+	 * A payment was CAPTURED against a party's open invoices — i.e. `PayView`'s
+	 * Payment Entry path finished, not the cart's. Distinct from
+	 * `invoice_submitted`, which announces a SALE: the two ride different
+	 * submission composables and mean different things to a listener.
+	 *
+	 * Emitted once per `finalizeSubmission` in `usePosPaySubmission`, which is
+	 * reached only after the server accepted the capture or the offline queue
+	 * took it — see the emit site in `PayView.vue` for why that callback is the
+	 * honest seam and `processPayment()` resolving is not.
+	 *
+	 * `queued` distinguishes the two: an offline capture is accepted by the
+	 * REGISTER, not by the server, so a listener that re-reads receivables would
+	 * be reading a balance nothing has moved yet.
+	 */
+	payment_captured: { customer?: string; queued?: boolean };
 
 	// ---- restaurant floor ---------------------------------------------------
 	/**

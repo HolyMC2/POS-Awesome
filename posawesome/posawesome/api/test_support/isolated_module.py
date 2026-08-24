@@ -34,6 +34,8 @@ import importlib.util
 import pathlib
 import sys
 import types
+from datetime import date as _date
+from datetime import datetime as _datetime
 from typing import Any
 
 API_DIR = pathlib.Path(__file__).resolve().parent.parent
@@ -106,7 +108,21 @@ def _frappe_utils_stub() -> types.ModuleType:
     module.nowdate = lambda: "2026-08-23"
     module.add_days = lambda date, days: f"{date}+{days}"
     module.get_datetime = lambda value: value
+    # Real, not a pass-through. `getdate` is the one helper in this stub whose
+    # RESULT is arithmetic — subjects subtract two of them to age a document —
+    # so `lambda value: value` would fail inside the subject and look like the
+    # subject's bug. Parsing the leading ISO date is exactly what the real one
+    # does with the strings the DB returns, and it still reads no clock.
+    module.getdate = _getdate
     return module
+
+
+def _getdate(value=None):
+    if isinstance(value, _date):
+        return value
+    if isinstance(value, _datetime):
+        return value.date()
+    return _date.fromisoformat(str(value)[:10])
 
 
 def _scope_stub() -> types.ModuleType:
@@ -123,6 +139,10 @@ def _scope_stub() -> types.ModuleType:
     module.assert_customer_in_profile = lambda *args, **kwargs: None
     module.assert_customers_in_profile = lambda *args, **kwargs: None
     module.get_allowed_companies = lambda *args, **kwargs: set()
+    # An empty set is `_scope`'s own "no group restriction" answer, so a subject
+    # that FILTERS by customer group (rather than asserting one) behaves here
+    # exactly as it does on a legacy profile: unrestricted.
+    module._get_profile_customer_groups = lambda *args, **kwargs: set()
     return module
 
 

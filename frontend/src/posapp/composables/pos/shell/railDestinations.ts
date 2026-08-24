@@ -86,7 +86,9 @@ export type RailGateMap = Readonly<Record<RailGate, boolean>>;
 export type RailBadgeSource =
 	| "serviceOrderOpenCount"
 	| "floorOpenOrdersCount"
-	| "draftInvoicesCount";
+	| "draftInvoicesCount"
+	/** Overdue invoices on this register's company — `receivables.py`'s count. */
+	| "receivablesOverdueCount";
 
 /**
  * What this destination is worth while the register is offline (roadmap §7:
@@ -359,17 +361,26 @@ export const RAIL_DESTINATIONS: readonly RailDestination[] = [
 	},
 	{
 		id: "payments",
-		label: "Payments",
+		// RENAMED 2026-08-24 with the destination itself: this stopped being a
+		// payment-capture tool and became the collections panel that CONTAINS
+		// it (COBRANZA_GOLDEN_FLOW). The id stays `payments` — §3 says so, and
+		// `/payments`, the chord and the evidence lane all resolve against it.
+		label: "Receivables",
 		icon: "mdi-credit-card-outline",
-		badgeSource: null,
+		// The overdue count. This is what turns the destination into an ops
+		// panel rather than a page: the register reminds the cashier BEFORE
+		// anyone opens it, which is the whole owner ask («a reminder or list
+		// would be great»).
+		badgeSource: "receivablesOverdueCount",
 		gate: null,
 		shortcutActionId: null,
 		// Receiving a payment against an outstanding invoice needs the
-		// invoice's live balance; there is nothing local to settle against.
+		// invoice's live balance; there is nothing local to settle against, and
+		// the worklist itself is a server read with no cache behind it.
 		offlineAvailability: "blocked",
 		backedBy: null,
 		group: "tools",
-		hint: "Collect against open invoices",
+		hint: "What is owed, and collecting it",
 	},
 	{
 		id: "purchase",

@@ -510,6 +510,10 @@ import {
 	getServiceOrderCountsCached,
 	invalidateServiceOrderCounts,
 } from "../../../services/serviceOrderService";
+import {
+	getReceivablesBadgeCached,
+	invalidateReceivablesBadge,
+} from "../../../services/receivablesService";
 import { buildCombosCategory, buildSuggestions } from "../../../composables/pos/combos/comboCatalog";
 import { useComboOffers } from "../../../composables/pos/combos/useComboOffers";
 import { useOnlineStatus } from "../../../composables/core/useOnlineStatus";
@@ -1025,6 +1029,58 @@ export default {
 			{ immediate: true },
 		);
 
+		// Cobranza's overdue count (COBRANZA_GOLDEN_FLOW §2). The panel is an OPS
+		// panel because this number appears before anyone opens it — «a reminder
+		// or list would be great» was the ask, and a rail that only tells you
+		// after you go looking is the tool that already existed.
+		//
+		// Universal, unlike Órdenes de servicio: Cobranza has no gate (any
+		// register can be owed money), so there is no capability to check before
+		// asking. It IS skipped while offline — the read is `online_required` and
+		// a guaranteed failure per interval is traffic that buys nothing.
+		const receivablesOverdueCount = ref(0);
+		const refreshReceivablesBadge = (force = false) => {
+			const profile = posProfile.value?.name;
+			if (!profile || !isOnline.value) {
+				return;
+			}
+			getReceivablesBadgeCached(profile, force)
+				.then((badge) => {
+					receivablesOverdueCount.value = Number(badge?.overdue) || 0;
+				})
+				.catch(() => {
+					// Offline, or a profile the user is no longer on. No badge is
+					// the honest answer; a stale one would send a cashier chasing
+					// invoices somebody already collected.
+					receivablesOverdueCount.value = 0;
+				});
+		};
+
+		watch(
+			() => posProfile.value?.name,
+			() => {
+				invalidateReceivablesBadge();
+				refreshReceivablesBadge(true);
+			},
+			{ immediate: true },
+		);
+
+		// A capture landed — the overdue count may be one shorter. The event is
+		// PayView's, published once the server accepted the payment, so this
+		// never fires on the offline queue's behalf.
+		const onPaymentCaptured = (payload) => {
+			if (payload?.queued) return;
+			refreshReceivablesBadge(true);
+		};
+
+		// `useRegisterFacts`' cadence, reused rather than picked: one minute is
+		// already the register's answer to "how stale may a background number
+		// be", and a second number refreshing on a different clock is a second
+		// thing to reason about. Silent on failure by construction — the
+		// refresher swallows and zeroes.
+		const RECEIVABLES_BADGE_MS = 60_000;
+		let receivablesBadgeTimer = null;
+
 		const railGates = computed(() => ({
 			floor: floorEnabled.value,
 			externalDocumentCheckout: Boolean(vertical.externalDocumentCheckout),
@@ -1163,7 +1219,16 @@ export default {
 			// Same question the navbar menu asks of the same flag, so the two
 			// menus cannot offer different printer entries on one register.
 			silentPrint: computed(() => parseBooleanSetting(posProfile.value?.posa_silent_print)),
-			counts: { serviceOrderOpenCount, floorOpenOrdersCount, draftInvoicesCount },
+			// One entry per `RailBadgeSource` the registry names. A source with no
+			// count here silently reads 0 forever, and this file is plain JS —
+			// `shellIntegrationShell.spec.ts` pins the key set for exactly that
+			// reason.
+			counts: {
+				serviceOrderOpenCount,
+				floorOpenOrdersCount,
+				draftInvoicesCount,
+				receivablesOverdueCount,
+			},
 			navigate: (id) => {
 				destinationRouting.activate(id, "rail");
 			},
@@ -1782,7 +1847,14 @@ export default {
 				eventBus.on("show_change_due", handleShowChangeDue);
 				eventBus.on("floor_order_opened", handleFloorOrderOpened);
 				eventBus.on("floor_return_to_salon", handleReturnToSalon);
+				eventBus.on("payment_captured", onPaymentCaptured);
 			}
+			// The rail's overdue count, kept warm on `useRegisterFacts`' clock.
+			// Started here rather than in the panel: the whole point of the badge
+			// is that it is right on a register where nobody opened Cobranza.
+			receivablesBadgeTimer = setInterval(() => {
+				refreshReceivablesBadge(true);
+			}, RECEIVABLES_BADGE_MS);
 			nextTick(() => {
 				updateBottomDockHeight();
 				if (mobileDockObserver && mobileDock.value) {
@@ -1827,6 +1899,11 @@ export default {
 				eventBus.off("show_change_due", handleShowChangeDue);
 				eventBus.off("floor_order_opened", handleFloorOrderOpened);
 				eventBus.off("floor_return_to_salon", handleReturnToSalon);
+				eventBus.off("payment_captured", onPaymentCaptured);
+			}
+			if (receivablesBadgeTimer !== null) {
+				clearInterval(receivablesBadgeTimer);
+				receivablesBadgeTimer = null;
 			}
 			stopQzPrewarm();
 		});

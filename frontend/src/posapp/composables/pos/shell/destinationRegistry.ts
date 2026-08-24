@@ -297,14 +297,21 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 	// exact trap `route` kind describes above. They keep their paths.
 	{
 		id: "payments",
-		labelKey: "Payments",
+		// «Cobranza». The id and the path are unchanged on purpose (§3): the
+		// deep link, the chord and Facturas' «Agregar pago» all resolve against
+		// them, and the surface behind it is what changed.
+		labelKey: "Receivables",
 		kind: "sheet",
 		path: "/payments",
 		capability: null,
 		profileFlag: null,
 		offline: "online_required",
 		shortcutActionId: null,
-		badgeSource: null,
+		badgeSource: "receivablesOverdueCount",
+		// Still `page`, because the destination hosts PayView on its capture
+		// step and PayView sizes its own cards to the viewport. Under the sheet
+		// discipline (one inner scrollport, the host clips) the bottom of the
+		// capture form would be cut off.
 		surface: "page",
 	},
 	{
@@ -465,7 +472,10 @@ export const SHEET_COMPONENTS: Record<string, () => Promise<unknown>> = {
 	expense: () => import("../../../components/pos/cash/CashMovementView.vue"),
 	closing: () => import("../../../components/pos/shell/ClosingDialog.vue"),
 	// Tools: plain views, rendered straight into a scrolling page surface.
-	payments: () => import("../../../components/pos/shell/PayView.vue"),
+	// Cobranza WRAPS PayView rather than replacing it — the worklist is the
+	// surface, and COBRAR mounts the same capture tool this entry used to point
+	// at, armed through `uiStore.paymentRouteTarget`. See the surface's header.
+	payments: () => import("../../../components/pos/payments/cobranza/CobranzaSurface.vue"),
 	purchase: () => import("../../../components/pos/purchase/PurchaseOrders.vue"),
 	barcode: () => import("../../../components/pos/shell/BarcodePrinting.vue"),
 	giftCards: () => import("../../../components/pos/wallet/GiftCardsView.vue"),

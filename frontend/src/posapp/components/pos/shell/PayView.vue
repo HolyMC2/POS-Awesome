@@ -659,7 +659,7 @@ export default {
 			resetPaymentMethodAmounts,
 			load_print_page,
 			eventBus: proxy?.eventBus,
-			get_outstanding_invoices: refreshOutstandingInvoices,
+			get_outstanding_invoices: announceCapture,
 			get_unallocated_payments,
 			get_draft_mpesa_payments_register,
 			set_mpesa_search_params,
@@ -962,6 +962,31 @@ export default {
 		};
 		function refreshOutstandingInvoices() {
 			return get_outstanding_invoices(pos_profile_search.value || null);
+		}
+		/**
+		 * A capture LANDED — announce it, then refresh this view's own list.
+		 *
+		 * `usePosPaySubmission` calls its `get_outstanding_invoices` callback from
+		 * exactly one place, `finalizeSubmission()`, and `finalizeSubmission()`
+		 * runs only after the server accepted the payment or the offline queue
+		 * took it. That makes this callback the one seam in the Payment Entry path
+		 * that knows a capture succeeded, which is why the emit lives here rather
+		 * than around `submit()`: `processPayment()` resolves `undefined` both on
+		 * success AND on its `!response.message` early return, so anything hung
+		 * off awaiting it would announce settlements that never happened.
+		 *
+		 * The Cobranza panel listens for this to re-read the row it just
+		 * collected against; nothing else in the app polls for it.
+		 */
+		function announceCapture() {
+			proxy?.eventBus?.emit("payment_captured", {
+				customer: customer_name.value || undefined,
+				// An offline capture is accepted by the REGISTER, not the server:
+				// no balance has moved yet, and a listener re-reading receivables
+				// on it would show the debt unchanged and look broken.
+				queued: isOffline(),
+			});
+			return refreshOutstandingInvoices();
 		}
 		function handleInvoiceSelection(item) {
 			toggleInvoiceSelection(item, customer_name, (cust) => {

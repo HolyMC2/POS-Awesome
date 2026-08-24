@@ -322,7 +322,8 @@ export default {
 			item: 0,
 			baseItems: [
 				{ text: "POS", icon: "mdi-network-pos", to: "/pos" },
-				{ text: "Payments", icon: "mdi-credit-card", to: "/payments" },
+				// «Cobranza» — same path, renamed with the surface behind it.
+				{ text: "Receivables", icon: "mdi-credit-card", to: "/payments" },
 				{ text: "Purchase Order", icon: "mdi-cart-plus", to: "/orders" },
 				{ text: "Barcode Printing", icon: "mdi-barcode", to: "/barcode" },
 			],

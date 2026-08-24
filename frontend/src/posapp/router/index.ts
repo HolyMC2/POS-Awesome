@@ -152,7 +152,10 @@ const LEGACY_DESTINATION_ROUTE_META: Record<
 	expense: { title: "Cash Movement", loadingMessage: "Loading cash movement..." },
 	closing: { title: "Close Shift", loadingMessage: "Loading close shift..." },
 	// The tools group (2026-08-22): five more pages that used to mount alone.
-	payments: { title: "Payments", loadingMessage: "Loading payments..." },
+	// Renamed with the surface (COBRANZA_GOLDEN_FLOW): `/payments` opens the
+	// collections panel now, and a document title still reading "Payments"
+	// would be the one place in the register using the old word.
+	payments: { title: "Receivables", loadingMessage: "Loading receivables..." },
 	purchase: { title: "Orders", loadingMessage: "Loading orders..." },
 	barcode: { title: "Barcode Printing", loadingMessage: "Loading barcode printing..." },
 	giftCards: { title: "Gift Cards", loadingMessage: "Loading gift cards..." },
