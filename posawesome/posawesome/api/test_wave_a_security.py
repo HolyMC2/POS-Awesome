@@ -208,9 +208,14 @@ class TestWaveASecurity(IntegrationTestCase):
             self.skipTest("no discount_account mandatory Property Setter on this site")
         if not frappe.get_cached_value("Company", self.company, "default_discount_account"):
             self.skipTest("no company default_discount_account")
-        # list 100, 30 off, net 70, pay 70 — a genuinely discounted sale
+        # list 10, 1 off, net 9, pay 9 — a genuinely discounted sale, and the
+        # declared base is the one setUp actually pinned. It used to declare a
+        # base of 100 against that same price of 10, which only went unnoticed
+        # while the rate band was disabled for rate-edit-enabled profiles; the
+        # restored band reads a declared base that far from the master as a
+        # rate edit and refuses it.
         payload = self._payload(
-            self._crid("disc-acct"), rate=70, price_list_rate=100, pay=70, discount_amount=30
+            self._crid("disc-acct"), rate=9, price_list_rate=10, pay=9, discount_amount=1
         )
         r = self._submit(payload)
         self.assertEqual(r["docstatus"], 1)

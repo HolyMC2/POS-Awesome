@@ -77,67 +77,102 @@ Setter", "Workspace Link-link_type-options")`.
 
 ---
 
-## Rate-band cap
+## Rate-band cap ✅ DONE 2026-08-23
 
-**Status:** disabled 2026-05-25 in `_reprice.py:261` after blocking a
-legit prod flow.
+**Status:** re-enabled. The ±band cap guards rate-edit-enabled registers
+again, with the opt-out moved from the whole register to the SKU.
 
-**Background.** `assert_rates_within_band` (PR-1 security hardening,
+**History.** `assert_rates_within_band` (PR-1 security hardening,
 REVIEW2/03 §2.3 §10) enforced a ±20% deviation cap on cart line rates
-against the Item Price for the profile's price list. Throws
-`PermissionError` → HTTP 403 on submit when exceeded.
+against the Item Price for the profile's price list. On 2026-05-25
+(23ca94e6) it was switched off wholesale whenever
+`posa_allow_user_to_edit_rate=1`, because Tere's "cambiar pantalla"
+flow legitimately quotes MX$400 against a MX$150 price-list entry (the
+customer brings their own display and the labour varies per phone model)
+and submit was 403'ing. That made the profile flag a full bypass and lost
+the fraud/typo cap — 4000 typed for 400 sailed through.
 
-**Why it broke prod.** Tere's flow: "cambiar pantalla" service item
-priced at MX$150 in the price list (labor estimate) but actual quote
-is MX$400 because the customer brings their own display and the labor
-varies per phone model + repair difficulty. Submit blocked, operator
-stuck. `posa_allow_user_to_edit_rate` was ON for the profile (so the
-UI let her type the new rate) but the server band still rejected.
+**What shipped.**
+1. `posa_skip_rate_band` (Check) on **Item** AND on **Item Group** —
+   `add_rate_band_controls` patch, `after_migrate`, exported via the
+   hooks.py fixture list. Flagging a group covers a whole category
+   ("Servicio Técnico") in one row. The patch also flags `PROPINA`,
+   whose rate is by definition whatever the customer left — the
+   restaurant/tips.py NOTE asking that no Item Price ever exist for it
+   was one price import away from failing.
+2. `posa_max_rate_change_pct` (Percent, default 20) on **POS Profile**,
+   same patch. Precedence: explicit `band_pct` argument → profile field
+   → hardcoded 20. **0 means "not configured" and falls back to 20**,
+   not "no deviation allowed": the patch default does reach existing
+   rows, but the column is NOT NULL DEFAULT 0, so 0 is what a cleared
+   or meta-bypassing write leaves behind, and reading it as a
+   zero-width band would 403 every rate edit on that till. A
+   **negative** value is the deliberate per-register kill switch.
+3. `_reprice.assert_rates_within_band` enforces the band on
+   rate-edit-enabled registers for items without the flag. It judges the
+   PRE-discount price the line asserts, so a declared discount (offers,
+   pricing rules) passes — discount size stays `enforce_discount_limit`'s
+   job and double-gating it would 403 every offer line. Zero/comp lines
+   remain the operator's prerogative, unchanged. The rate-edit-OFF branch
+   is untouched. An unreadable opt-out flag (code deployed ahead of the
+   patch) fails open, because enforcing a band whose exemption cannot be
+   read re-creates the May outage.
+4. Refusal message names the item, the typed rate, the allowed range, the
+   price-list rate and the band — the operator reads it at a till.
 
-**Current state.** When `posa_allow_user_to_edit_rate=1`, the band
-check is skipped entirely. Operator judgment rules. Profile flag is
-effectively a full bypass.
+**Verified 2026-08-23** on doco-mirror over HTTP, same register
+("Doco Ventas", rate edit ON, band 20), same item, same payload, flag the
+only difference: unflagged → HTTP 403 carrying the message; flagged →
+past the band entirely. Flagged `ST00007` submitted green at 400 against
+its 150 list price. Unit suite `api/test_reprice.py` 38 → 56 tests.
 
-**Why this is fine for now.**
-- Profile flag is still gating: profiles with `posa_allow_user_to_edit_rate=0`
-  still require exact price-list match (master_rate equality branch
-  untouched).
-- Only trusted POS users have edit-enabled profiles.
+**Backfill is per-site and still open.** The flag is deliberately NOT
+backfilled by the patch — which SKUs are variable-price is tenant
+knowledge, not ours. Per site, flag the labour category rather than the
+items:
 
-**Why this is not the right long-term shape.**
-- All-or-nothing per profile. Can't combine "cashier can tweak ±5% on
-  retail SKUs" + "cashier can set any rate on labor SKUs" on the same
-  profile.
-- Loses the fraud-cap intent of the original guard (catch typos like
-  4000 instead of 400).
+```
+bench --site <site> execute frappe.client.set_value --kwargs \
+  "{'doctype':'Item Group','name':'Servicio Técnico','fieldname':'posa_skip_rate_band','value':1}"
+```
 
-**Cleaner fix (do this when time allows):**
-1. Add `posa_skip_rate_band` checkbox on **Item** doctype (or Item
-   Group, if you'd rather flag categories like "Mano de Obra").
-2. `assert_rates_within_band` skips items with the flag set; band
-   still applies to everything else.
-3. Optionally promote `DEFAULT_RATE_BAND_PCT` (currently hardcoded
-   20%) to a POS Profile field so the cap is tunable per location
-   without code changes.
-4. Backfill the flag on the variable-price SKUs (cambiar pantalla,
-   mano de obra, otros servicios).
-5. Restore the band enforcement branch in `_reprice.py:261` —
-   re-enable for items WITHOUT the skip flag.
+`Recargas` needs the same treatment: an airtime top-up is sold at the
+amount the customer asked for, not at a list rate, and on the mirror
+TEL010 sold 35 times at 14 against a list 10 (40% over) — it would 403.
 
-**Files to touch:**
-- `posawesome/posawesome/api/_reprice.py:261` — re-add band check
-  guarded by the per-item / per-group flag.
-- `posawesome/posawesome/doctype/item/` (or fixtures) — custom field
-  `posa_skip_rate_band`.
-- `posawesome/posawesome/doctype/pos_profile/pos_profile.json` — add
-  `posa_max_rate_change_pct` (optional, default 20).
-- `posawesome/tests/test_reprice.py` — add cases for flagged item
-  bypass + per-profile cap override.
+Then check what a rate-edit register would now refuse before anyone is
+standing at it — anything the band would have blocked in the last 90 days
+is a candidate for the flag or for a corrected price list. Read the
+result by category: a labour/recharge group means "flag it", a retail
+group means "the price list is wrong, fix the price list". On the mirror
+the 30 hits split 13 Servicio Técnico + 1 Recargas (flagged) against 12
+retail SKUs across Celulares / Pantallas / Cargadores / Fundas / Micas /
+Activaciones — those last are stale list prices, e.g. MOD00013 listed at
+5300 and sold between 500 and 1500.
 
-**Acceptance:**
-- Cambiar pantalla item with flag → any rate accepted at submit.
-- Regular retail item → submit at 2× price-list still 403s with
-  current error message (already routed through new toast surfacing
-  fix; operator sees the actual reason).
-- POS Profile with `posa_allow_user_to_edit_rate=0` → still requires
-  exact match (unchanged).
+```
+select ii.item_code, i.item_group, count(*) n, min(ii.rate), max(ii.rate), ip.price_list_rate
+from `tabSales Invoice Item` ii
+join `tabSales Invoice` si on si.name = ii.parent and si.docstatus = 1
+join `tabItem` i on i.name = ii.item_code
+join `tabItem Price` ip on ip.item_code = ii.item_code and ip.price_list = si.selling_price_list
+where si.posting_date >= date_sub(curdate(), interval 90 day)
+  and ip.price_list_rate > 0
+  and abs(ii.rate - ip.price_list_rate) > ip.price_list_rate * 0.20
+group by ii.item_code, i.item_group, ip.price_list_rate
+order by n desc;
+```
+
+**Open: the band is only as good as the price list it compares against.**
+ERPNext's `insert_item_price` (stock/get_item_details.py) rewrites the
+Item Price from the transaction rate when Stock Settings
+`auto_insert_price_list_rate_if_missing` is on and the acting user can
+write Item Price. On doco-mirror that setting is ON with
+`update_price_list_based_on = Rate`, `update_existing_price_list_rate =
+1`, and three of four cashiers on Doco Ventas hold **Sales Master
+Manager** — so `update_invoice` moves the price list to whatever they
+typed, and the band at submit then compares against the new number and
+passes. Two levers, both Marco's call and both outside this change:
+drop `Sales Master Manager` from cashier roles, or turn off
+`auto_insert_price_list_rate_if_missing`. Verify the same three values on
+prod before assuming the band bites there.

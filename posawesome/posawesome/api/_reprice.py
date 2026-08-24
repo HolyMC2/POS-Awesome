@@ -27,8 +27,10 @@ This module provides three invariants called from ``update_invoice`` /
       every line's declared pre-discount ``price_list_rate`` must match
       the Item Price for the profile's price list, and ``rate`` must be
       exactly that price with the line's declared discount applied
-      (offers/pricing rules are not rate edits). If ON, any rate passes
-      (band cap disabled — see docs/TODO.md).
+      (offers/pricing rules are not rate edits). If ON, the typed price
+      must stay within ±``posa_max_rate_change_pct`` of the Item Price,
+      unless the item (or its Item Group) carries
+      ``posa_skip_rate_band``.
 
 Full re-fetch + recompute (``reprice_invoice_items``) is intentionally
 deferred to a follow-up commit gated by ``posa_server_side_reprice``
@@ -50,8 +52,14 @@ from frappe.utils import flt
 # ---------------------------------------------------------------------------
 
 # Default rate-band when posa_allow_user_to_edit_rate is on. ±20% covers
-# manager-approved discounts without letting cashiers zero-rate items.
+# manager-approved price adjustments without letting a fat-fingered 4000
+# through where 400 was meant. Per-register override lives on the POS
+# Profile as ``posa_max_rate_change_pct``.
 DEFAULT_RATE_BAND_PCT = 20.0
+
+# Currency-unit slack on the band edges so a rate that lands exactly on
+# the boundary is not rejected by float noise.
+RATE_BAND_TOLERANCE = 0.01
 
 # Tolerance for payment-total comparison. We use 0.01 for currencies with
 # 2 decimal places. Currencies with more precision (e.g. BTC) would need
@@ -376,6 +384,70 @@ def assert_payments_match_grand_total(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_band_pct(profile_doc: Any, band_pct: float | None) -> float:
+    """Band half-width, in percent, for a rate-edit-enabled register.
+
+    Precedence: explicit argument → POS Profile
+    ``posa_max_rate_change_pct`` → ``DEFAULT_RATE_BAND_PCT``.
+
+    **Zero means "not configured", never "no deviation allowed."** The
+    patch's ``default: 20`` does reach existing rows (verified on
+    doco-mirror), but the column underneath is ``NOT NULL DEFAULT 0``, so
+    0 is what a profile reads when the field is cleared by hand, added
+    without a default, or written by anything that bypasses the meta.
+    Reading that as a zero-width band would refuse every rate edit on
+    that register — a silent till outage produced by an absent value — so
+    0 falls through to the 20% default instead. The deliberate
+    per-register kill switch is a NEGATIVE value (set -1 to turn the band
+    off for that till), which no column default can produce by accident.
+    """
+    raw = (
+        band_pct
+        if band_pct is not None
+        else _profile_value(profile_doc, "posa_max_rate_change_pct")
+    )
+    if raw is None:
+        return DEFAULT_RATE_BAND_PCT
+    raw = flt(raw)
+    if raw < 0:
+        return raw
+    return raw or DEFAULT_RATE_BAND_PCT
+
+
+def _skips_rate_band(item_code: str, cache: dict) -> bool:
+    """True when this item — or its Item Group — is flagged variable-price.
+
+    ``posa_skip_rate_band`` is the per-SKU opt-out that lets "cambiar
+    pantalla" quote 400 against a 150 price-list entry while the band
+    still guards ordinary retail lines. The Item Group flag exists so a
+    whole category ("Servicio Técnico") can be opted out in one place.
+
+    A lookup failure counts as flagged. The likeliest cause is a site
+    running this code before ``add_rate_band_controls`` created the
+    field, and enforcing a band whose opt-out cannot be read would block
+    exactly the counter flow the flag exists to unblock.
+    """
+    if item_code in cache:
+        return cache[item_code]
+    try:
+        skipped = bool(
+            flt(frappe.db.get_value("Item", item_code, "posa_skip_rate_band") or 0)
+        )
+        if not skipped:
+            group = frappe.db.get_value("Item", item_code, "item_group")
+            skipped = bool(group) and bool(
+                flt(
+                    frappe.db.get_value("Item Group", group, "posa_skip_rate_band")
+                    or 0
+                )
+            )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "POSAwesome rate-band opt-out lookup")
+        skipped = True
+    cache[item_code] = skipped
+    return skipped
+
+
 def assert_rates_within_band(
     invoice_doc: Any,
     profile_doc: Any | None = None,
@@ -388,8 +460,11 @@ def assert_rates_within_band(
         ``price_list_rate`` must match Item Price (within rounding) and
         ``rate`` must equal it with the line's declared discount applied
         — offer/pricing-rule discounts are not rate edits.
-      * Profile allows rate edits → any rate passes (±band cap disabled;
-        see docs/TODO.md → "Rate-band cap").
+      * Profile allows rate edits → the typed pre-discount price must
+        stay within ±``posa_max_rate_change_pct`` (default 20) of the
+        Item Price. Items and Item Groups carrying
+        ``posa_skip_rate_band`` are exempt: that flag, not the profile
+        flag, is what lets a variable-price SKU quote any figure.
       * No Item Price found for the item × price-list combo → skip
         validation for that line (legacy items without price master).
 
@@ -417,10 +492,8 @@ def assert_rates_within_band(
         # against; skipping is safer than failing legitimate flows.
         return
 
-    # `band_pct` retained for ABI compatibility; rate-band enforcement
-    # is currently disabled when posa_allow_user_to_edit_rate=1.
-    # See docs/TODO.md → "Rate-band cap".
-    del band_pct
+    band = _resolve_band_pct(profile_doc, band_pct)
+    skip_cache: dict = {}
 
     for line in _iter_lines(invoice_doc):
         item_code = _line_value(line, "item_code")
@@ -541,13 +614,55 @@ def assert_rates_within_band(
                 )
             continue
 
-        # Editable rate — band cap disabled. The ±band% guard blocked
-        # legitimate variable-price items (e.g. "cambiar pantalla" — labor
-        # charged per device model, customer brings the display) where
-        # the cart rate intentionally exceeds the price-list rate by far
-        # more than ±20%. `posa_allow_user_to_edit_rate` already gates
-        # whether ANY edit is allowed; once on, operator judgment rules.
-        # Cleaner per-item / per-item-group opt-out is tracked in
-        # docs/TODO.md → "Rate-band cap". Until then, profile edit-flag
-        # is a full bypass.
-        continue
+        # Editable rate. The profile flag says WHETHER the operator may
+        # retype a price; the band says HOW FAR from the price list that
+        # price may land. The two were never wired together, which is why
+        # the band was switched off wholesale in 23ca94e6 after it blocked
+        # "cambiar pantalla" (labor charged per device model, customer
+        # brings the display). The opt-out now lives on the SKU, so the
+        # fraud/typo cap can come back for everything else.
+        if band <= 0:
+            # Negative band = this register's kill switch (see
+            # _resolve_band_pct); restores the 23ca94e6 full bypass.
+            continue
+        if _skips_rate_band(item_code, skip_cache):
+            continue
+
+        # Compare the PRE-DISCOUNT price the line asserts. A declared
+        # discount lowers `rate` legitimately and its size is
+        # enforce_discount_limit's job — gating it here as well would 403
+        # every offer line on a rate-edit register. With no discount
+        # declared, `rate` IS the asserted price.
+        declared_plr = flt(_line_value(line, "price_list_rate") or 0)
+        has_discount = bool(
+            flt(_line_value(line, "discount_percentage") or 0)
+            or flt(_line_value(line, "discount_amount") or 0)
+        )
+        subject = declared_plr if (has_discount and declared_plr > 0) else client_rate
+        if subject <= 0:
+            # Comp / warranty / zero lines stay the operator's prerogative
+            # on a rate-edit register, unchanged since 23ca94e6.
+            continue
+
+        low = master_rate * (1 - band / 100.0)
+        high = master_rate * (1 + band / 100.0)
+        if subject < low - RATE_BAND_TOLERANCE or subject > high + RATE_BAND_TOLERANCE:
+            # Read at a till by whoever is standing there: name the item,
+            # what they typed, what the list says, and what would pass.
+            frappe.throw(
+                _(
+                    "Line {0} ({1}): the rate {2} is outside the allowed "
+                    "{3} – {4} for this register (price list {5}, ±{6}%). "
+                    "Correct the rate, update the price list, or have the "
+                    "item marked as variable-price."
+                ).format(
+                    _line_value(line, "idx") or "?",
+                    item_code,
+                    subject,
+                    round(low, 2),
+                    round(high, 2),
+                    master_rate,
+                    band,
+                ),
+                frappe.PermissionError,
+            )

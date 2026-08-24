@@ -28,6 +28,11 @@ Mitigated-by-design (no action): rate/discount edit flags (server rate band
 ±20% + `posa_max_discount_allowed` cap + write_off_limit clamp back them),
 print/display prefs, offline flags (server re-validates at sync).
 
+That rate-band claim was false between 23ca94e6 (2026-05-25) and the entry
+below: the band was disabled outright whenever the profile allowed rate
+edits, so `posa_allow_user_to_edit_rate` was a full bypass rather than a
+mitigated flag. It is true again as of 2026-08-23.
+
 ## P1 — DEAD fields ✅ REMOVED 2026-07-11 (remove_dead_pos_profile_fields patch)
 
 `posa_allow_supervisor_manage_gift_cards` (superseded by role gate),
@@ -75,6 +80,46 @@ shift's name in `Payment Entry.reference_no`, which is the key
 `closing_processing/data.get_payments_entries` filters on — that, and only
 that, is what puts a cash deposit into the shift's expected cash.
 
+## Added 2026-08-23 — rate band
+
+One field, added by `add_rate_band_controls` (after_migrate, beside
+`posa_allow_user_to_edit_rate`). It reopens the ±band cap that 23ca94e6
+switched off, and it only means anything on a register that allows rate
+edits at all — hence the `depends_on`.
+
+| field | type | gate it performs |
+|---|---|---|
+| `posa_max_rate_change_pct` | Percent | Half-width of the band `_reprice.assert_rates_within_band` enforces on a rate-edit-enabled register: the pre-discount price a line asserts must land within ±this much of the Item Price, or submit throws `PermissionError` → HTTP 403. |
+
+Semantics worth knowing before you touch the number:
+
+- **Blank or 0 means "not configured" and falls back to 20**, not "no
+  deviation allowed". The patch's `default: 20` does reach existing rows
+  (verified on doco-mirror), but the column underneath is `NOT NULL
+  DEFAULT 0`, so 0 is what you read when the field is cleared by hand or
+  written around the meta. Treating that as a zero-width band would
+  refuse every rate edit on that till — a silent outage produced by an
+  absent value.
+- **A negative value (-1) is the per-register kill switch** and restores
+  the 23ca94e6 full-bypass behaviour for that register alone. No column
+  default can reach a negative by accident, which is why the escape
+  hatch lives there rather than on 0.
+- The band never touches a register whose `posa_allow_user_to_edit_rate`
+  is OFF — that branch still demands an exact price-list match, and a
+  wide band must not become a licence to retype prices.
+
+The per-SKU escape hatch is NOT on the profile: `posa_skip_rate_band` on
+**Item** and on **Item Group** (same patch) exempts variable-price
+SKUs — labour quoted per job, "cambiar pantalla" at 400 against a 150
+list entry — which is what broke prod in May and forced the blunt
+profile-wide disable. Flagging an Item Group covers a whole category
+("Servicio Técnico") in one row. The patch also flags the `PROPINA` tip
+item, whose rate is by definition whatever the customer left.
+
+Discount size is deliberately NOT re-gated here: a line's declared
+discount is `enforce_discount_limit`'s business, so the band judges the
+pre-discount price and an offer-discounted line passes on its merits.
+
 ## Full field tables
 
 ### First half (create_pos_invoice… → posa_decimal_precision)
@@ -118,7 +163,7 @@ that, is what puts a cash deposit into the shift's expected cash.
 | posa_allow_supervisor_manage_gift_cards | **DEAD** | — | role gate superseded |
 | posa_allow_user_to_edit_additional_discount | CLIENT-ONLY (mitigated) | Pos.vue:138 | discount cap backs it |
 | posa_allow_user_to_edit_item_discount | CLIENT-ONLY (mitigated) | CartItemRow.vue:537 | |
-| posa_allow_user_to_edit_rate | WIRED | _reprice.py:223 | rate band |
+| posa_allow_user_to_edit_rate | WIRED | _reprice.py:assert_rates_within_band | gates rate editing; width is posa_max_rate_change_pct |
 | posa_allow_write_off_change | CLIENT-ONLY (mitigated) | PaymentOptions.vue:18 | write_off_limit clamps |
 | posa_allow_zero_rated_items | **DEAD** | — | |
 | posa_apply_customer_discount | **DEAD** | — | |
@@ -160,6 +205,7 @@ that, is what puts a cash deposit into the shift's expected cash.
 | posa_language | WIRED | shifts.py:187 | |
 | posa_local_storage | CLIENT-ONLY✓ | useOffers.ts | |
 | posa_max_discount_allowed | WIRED | _reprice.py | server money cap ✓ |
+| posa_max_rate_change_pct | WIRED | _reprice.py:assert_rates_within_band | band half-width; 0 = default 20, negative = off |
 | posa_new_line | CLIENT-ONLY✓ | ItemsSelector.vue | |
 | posa_open_print_in_new_tab | CLIENT-ONLY✓ | usePaymentPrinting.ts | |
 | posa_print_format_rules | CLIENT-ONLY✓ | paymentPrintFormat.ts | |

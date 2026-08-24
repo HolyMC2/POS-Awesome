@@ -91,6 +91,7 @@ after_migrate = [
     "posawesome.patches.reorganize_pos_profile_sections.execute",
     "posawesome.patches.add_gift_card_pos_profile_settings.execute",
     "posawesome.patches.add_customer_card_pos_profile_settings.execute",
+    "posawesome.patches.add_rate_band_controls.execute",
     "posawesome.patches.add_gift_card_invoice_redemption_fields.execute",
     "posawesome.patches.add_gift_card_to_workspace.execute",
     "posawesome.patches.add_submission_ledger_to_workspace.execute",
@@ -292,6 +293,12 @@ fixtures = [
                     "POS Profile-posa_section_cash_movement",
                     "POS Profile-posa_allow_delete",
                     "POS Profile-posa_allow_user_to_edit_rate",
+                    # Rate-band controls (add_rate_band_controls): how far a
+                    # typed rate may stray, and the per-SKU / per-category
+                    # opt-out for items priced per job.
+                    "POS Profile-posa_max_rate_change_pct",
+                    "Item-posa_skip_rate_band",
+                    "Item Group-posa_skip_rate_band",
                     "POS Profile-posa_allow_user_to_edit_additional_discount",
                     "POS Profile-posa_allow_user_to_edit_item_discount",
                     "POS Profile-posa_display_items_in_stock",
