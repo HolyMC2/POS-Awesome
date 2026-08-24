@@ -1005,12 +1005,20 @@ export const useItemsStore = defineStore("items", () => {
 
 		if (searchTerm.value) {
 			await searchItems(searchTerm.value);
+		} else if (limitSearchEnabled.value) {
+			// Limit-search profiles never mass-load the catalogue — the
+			// in-memory list is just the last server page — so "filter the
+			// current items" showed a near-empty grid for any group the
+			// loaded page happened not to contain (doco-mirror 2026-08-24:
+			// «Audio» → "No items found" beside four visible Bocinas; a
+			// reload "fixed" it because boot refetches with the group
+			// already set). Ask the server for the group's own first page,
+			// the same read a typed search performs.
+			await loadItems({ forceServer: true, groupFilter: group });
+		} else if (cachedPagination.value.enabled && shouldUseIndexedSearch()) {
+			await resetCachedItemsForGroup(group);
 		} else {
-			if (cachedPagination.value.enabled && shouldUseIndexedSearch()) {
-				await resetCachedItemsForGroup(group);
-			} else {
-				filteredItems.value = filterItemsByGroup(items.value, group);
-			}
+			filteredItems.value = filterItemsByGroup(items.value, group);
 		}
 	};
 
