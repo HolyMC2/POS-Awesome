@@ -154,12 +154,28 @@ const ring = ref<HTMLElement | null>(null);
  * classic way an optional column ships crooked.
  */
 const gridStyle = computed(() => ({
+	// TICKET 176 -> 192px and HORA 56 -> 60px, paid for by CAJERO 96 -> 84 and
+	// ESTADO 132 -> 124, so the fixed tracks still total 572px and CLIENTE — the
+	// only elastic one — keeps every pixel it had (measured: 548px on the
+	// 1202px drafts surface at 1718x1023, 110px at 1280x900).
+	//
+	// The artboard's `B-04812` is six characters; the register's real folio
+	// (`ACC-SINV-2026-00192`) is nineteen and measures 168.4px at the shipped
+	// weight — inside the old 176px track by 7.6px, i.e. 4%. One font fallback,
+	// one longer prefix or one wider glyph and it wrapped onto a second line,
+	// which reads as two tickets because a wrapped 50px row paints over the row
+	// below, and `.ledger-row__ticket` carried no `nowrap` to stop it (Marco,
+	// drafts surface, 2026-08-23). The same 4% is why HORA clipped to «19:…»:
+	// 56px against 39.8px of digits plus its own header.
+	//
+	// Both tracks now clear their content by ~14%, AND the cells truncate on one
+	// line below, so the next long id degrades into an ellipsis instead of into
+	// the neighbouring row. The two trimmed tracks keep their own margins:
+	// «Cafetería» is 53px in 84, and the longest status chip («Nota de crédito
+	// emitida», 117px) still fits 124.
 	gridTemplateColumns: props.columns.cashier
-		// 176px: the artboard's `B-04812` is six characters, the register's
-		// real folio (`ACC-SINV-2026-03331`) is nineteen, and a ticket id that
-		// wraps onto two lines reads as two tickets (drafts.png, 2026-08-22).
-		? "176px 56px minmax(0, 1fr) 96px 112px 132px"
-		: "176px 56px minmax(0, 1fr) 112px 132px",
+		? "192px 60px minmax(0, 1fr) 84px 112px 124px"
+		: "192px 60px minmax(0, 1fr) 112px 124px",
 }));
 
 const rowId = (index: number) => `ledger-row-${index}`;
@@ -292,6 +308,34 @@ defineExpose({ focusRing: () => ring.value?.focus() });
 .ledger-row--on .ledger-row__ticket,
 .ledger-row--on .ledger-row__amount {
 	color: var(--reg-on-accent-soft, #00646f);
+}
+
+/* Every cell on this row is one line, or it is a bug.
+ *
+ * The grid tracks are fixed, so a cell that outgrows its track WRAPS, and a
+ * wrapped 50px row paints its second line over the row below — which is how a
+ * ticket id came to sit in the neighbouring row's lines. Stated over every cell
+ * rather than over the ticket: `ledger-row__ticket` and `ledger-row__amount`
+ * were the two carrying no `white-space` at all, and a rule that named only the
+ * reported one would leave the other a long currency away from the same defect.
+ *
+ * `min-width: 0` is the half that is easy to miss. A grid item's automatic
+ * minimum size is its CONTENT, so without it a long id widens its own track and
+ * shoves the row sideways instead of truncating — every cell needs it,
+ * including the status one. */
+.ledger-row > * {
+	min-width: 0;
+}
+
+/* The status cell is excluded from the truncation, not forgotten by it: it is a
+ * flex box with `justify-content: flex-end` holding a chip that is already
+ * `nowrap`, so it cannot wrap — and clipping a flex-end box hides the START of
+ * its content, which would turn a long label («Nota de crédito emitida») into a
+ * chip missing its first word rather than its last. */
+.ledger-row > *:not(.ledger-row__status) {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .ledger-row__ticket {
