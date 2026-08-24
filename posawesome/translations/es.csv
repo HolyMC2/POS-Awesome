@@ -2938,3 +2938,53 @@ Shift since {0},Turno desde {0}
 Open shift,Turno abierto
 To upload · {0},Por subir · {0}
 Cash count,Conteo de caja
+Receivables,Cobranza
+To collect,Por cobrar
+Collected today,Cobrado hoy
+Overdue invoices,Vencidas
+Due soon,Por vencer
+All receivables,Todas
+Layaway,Apartado
+"What is owed, and collecting it","Lo que deben, y cobrarlo"
+{0} invoices,{0} facturas
+{0} payments,{0} pagos
+oldest {0} days,la más vieja {0} días
+Invoice total,Total de la factura
+On this invoice,En esta factura
+and {0} more,y {0} más
+Payments received,Pagos recibidos
+at the counter,al comprar
+Nothing has been paid against this invoice yet.,Todavía no se ha pagado nada de esta factura.
+Reading the invoice…,Leyendo la factura…
+Has {0} in store credit,Tiene {0} en su monedero
+can be applied when collecting,se puede aplicar al cobrar
+COLLECT {0},COBRAR {0}
+Reminder,Recordatorio
+Reminder filed,Recordatorio enviado
+Reminder updated,Recordatorio actualizado
+Statement,Estado de cuenta
+"The reminder is filed as a CRM follow-up, with the folio and the balance.","El recordatorio queda como seguimiento en el CRM, con folio y pendiente."
+Choose an invoice and collect against it — no searching required.,Elige una factura y cóbrala — no hay que buscar nada.
+Back to the list,Volver a la lista
+Loading…,Cargando…
+Showing the first {0} — narrow the list to reach the rest.,Mostrando las primeras {0} — filtra la lista para llegar al resto.
+"↑↓ moves · Enter collects · searching refines the list, it is never the way in","↑↓ recorre · Enter cobra · buscar refina la lista, nunca es la puerta de entrada"
+Could not read what is owed to this register.,No se pudo leer lo que le deben a esta caja.
+Could not open this invoice.,No se pudo abrir esta factura.
+Could not file the reminder.,No se pudo enviar el recordatorio.
+This invoice has no customer to collect from.,Esta factura no tiene cliente a quién cobrarle.
+No CRM on this site,No hay CRM en este sitio
+"There is nowhere to file a follow-up, so nothing was recorded.","No hay dónde dejar un seguimiento, así que no se registró nada."
+Collection reminder · {0} · {1} pending,Recordatorio de cobro · {0} · {1} pendiente
+The back office sees {0} and what is pending on it.,La oficina ve {0} y lo que queda pendiente.
+Printing a customer statement is not built yet — this list is the customer's open items.,Imprimir el estado de cuenta todavía no existe — esta lista son las facturas abiertas del cliente.
+{0} days ago,hace {0} días
+due today,vence hoy
+in {0} days,en {0} días
+Nothing is overdue. Every invoice on this register is still inside its term.,Nada vencido. Todas las facturas de esta caja están dentro de su plazo.
+Nothing falls due in the next 7 days.,Nada vence en los próximos 7 días.
+No payments received yet today.,Todavía no se ha cobrado nada hoy.
+Nothing is pending payment on this register.,No hay nada por cobrar en esta caja.
+Nothing in this list matches what you typed.,Nada en esta lista coincide con lo que escribiste.
+Loading receivables...,Cargando cobranza...
+{0} has no such value as {1}.,{0} no tiene ningún valor «{1}».
