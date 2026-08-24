@@ -41,13 +41,13 @@ def _build_frappe_module(scenario: dict) -> types.ModuleType:
         def get_value(self, doctype, filters, fieldname=None, order_by=None):
             if doctype == "Item" and fieldname == "max_discount":
                 return scenario.get("item_max_discount", {}).get(filters)
-            if doctype == "Item" and fieldname == "posa_skip_rate_band":
+            if doctype == "Item" and fieldname == "posa_px_skip_rate_band":
                 if scenario.get("skip_flag_unreadable"):
-                    raise RuntimeError("Unknown column 'posa_skip_rate_band'")
+                    raise RuntimeError("Unknown column 'posa_px_skip_rate_band'")
                 return scenario.get("item_skip_band", {}).get(filters)
             if doctype == "Item" and fieldname == "item_group":
                 return scenario.get("item_group", {}).get(filters)
-            if doctype == "Item Group" and fieldname == "posa_skip_rate_band":
+            if doctype == "Item Group" and fieldname == "posa_px_skip_rate_band":
                 return scenario.get("group_skip_band", {}).get(filters)
             if doctype == "Item Price":
                 if isinstance(filters, dict):
@@ -546,7 +546,7 @@ class RateBandTests(unittest.TestCase):
         profile = {
             "posa_allow_user_to_edit_rate": 1,
             "selling_price_list": "Doco",
-            "posa_max_rate_change_pct": 5,
+            "posa_px_max_rate_change_pct": 5,
         }
         rp.assert_rates_within_band(invoice, profile, band_pct=50)  # 140 ∈ 50..150
 
@@ -559,8 +559,8 @@ class RateBandTests(unittest.TestCase):
 @unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class RateBandOnEditableProfileTests(unittest.TestCase):
     """The band is back for editable registers: `posa_allow_user_to_edit_rate`
-    says WHETHER an operator may retype a price, `posa_skip_rate_band` says
-    which SKUs may land anywhere, and `posa_max_rate_change_pct` says how wide
+    says WHETHER an operator may retype a price, `posa_px_skip_rate_band` says
+    which SKUs may land anywhere, and `posa_px_max_rate_change_pct` says how wide
     the band is for the rest. See docs/TODO.md → "Rate-band cap"."""
 
     EDIT_PROFILE = {"posa_allow_user_to_edit_rate": 1, "selling_price_list": "Doco"}
@@ -630,14 +630,14 @@ class RateBandOnEditableProfileTests(unittest.TestCase):
 
     def test_profile_pct_narrows_the_band(self):
         rp = _import_reprice(_basic_scenario())
-        profile = dict(self.EDIT_PROFILE, posa_max_rate_change_pct=5)
+        profile = dict(self.EDIT_PROFILE, posa_px_max_rate_change_pct=5)
         rp.assert_rates_within_band(self._line(104.00), profile)  # ∈ 95..105
         with self.assertRaises(_PermissionError):
             rp.assert_rates_within_band(self._line(110.00), profile)
 
     def test_profile_pct_widens_the_band(self):
         rp = _import_reprice(_basic_scenario())
-        profile = dict(self.EDIT_PROFILE, posa_max_rate_change_pct=200)
+        profile = dict(self.EDIT_PROFILE, posa_px_max_rate_change_pct=200)
         rp.assert_rates_within_band(self._line(290.00), profile)  # ∈ -100..300
         with self.assertRaises(_PermissionError):
             rp.assert_rates_within_band(self._line(310.00), profile)
@@ -648,7 +648,7 @@ class RateBandOnEditableProfileTests(unittest.TestCase):
         allowed" would refuse every rate edit the morning after a migrate —
         0 therefore falls back to the 20% default."""
         rp = _import_reprice(_basic_scenario())
-        profile = dict(self.EDIT_PROFILE, posa_max_rate_change_pct=0)
+        profile = dict(self.EDIT_PROFILE, posa_px_max_rate_change_pct=0)
         rp.assert_rates_within_band(self._line(110.00), profile)  # 20% default
         with self.assertRaises(_PermissionError):
             rp.assert_rates_within_band(self._line(200.00), profile)
@@ -662,7 +662,7 @@ class RateBandOnEditableProfileTests(unittest.TestCase):
     def test_negative_pct_is_the_per_register_kill_switch(self):
         # The escape hatch a column default cannot reach by accident.
         rp = _import_reprice(_basic_scenario())
-        profile = dict(self.EDIT_PROFILE, posa_max_rate_change_pct=-1)
+        profile = dict(self.EDIT_PROFILE, posa_px_max_rate_change_pct=-1)
         rp.assert_rates_within_band(self._line(4000.00), profile)
 
     # ---- discounts and comps are other gates' business --------------------
@@ -704,7 +704,7 @@ class RateBandOnEditableProfileTests(unittest.TestCase):
         profile = {
             "posa_allow_user_to_edit_rate": 0,
             "selling_price_list": "Doco",
-            "posa_max_rate_change_pct": 200,
+            "posa_px_max_rate_change_pct": 200,
         }
         invoice = {"items": [{"idx": 1, "item_code": "IT-1", "rate": 110.00}]}
         with self.assertRaises(_PermissionError):
@@ -713,7 +713,7 @@ class RateBandOnEditableProfileTests(unittest.TestCase):
         rp.assert_rates_within_band(invoice, profile)
 
     def test_skip_flag_does_not_open_the_no_edit_branch(self):
-        """posa_skip_rate_band widens a band; it does not grant rate editing
+        """posa_px_skip_rate_band widens a band; it does not grant rate editing
         on a register whose profile forbids it."""
         scenario = _basic_scenario()
         scenario["item_skip_band"] = {"IT-1": 1}

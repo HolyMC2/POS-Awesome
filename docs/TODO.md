@@ -93,14 +93,14 @@ and submit was 403'ing. That made the profile flag a full bypass and lost
 the fraud/typo cap — 4000 typed for 400 sailed through.
 
 **What shipped.**
-1. `posa_skip_rate_band` (Check) on **Item** AND on **Item Group** —
+1. `posa_px_skip_rate_band` (Check) on **Item** AND on **Item Group** —
    `add_rate_band_controls` patch, `after_migrate`, exported via the
    hooks.py fixture list. Flagging a group covers a whole category
    ("Servicio Técnico") in one row. The patch also flags `PROPINA`,
    whose rate is by definition whatever the customer left — the
    restaurant/tips.py NOTE asking that no Item Price ever exist for it
    was one price import away from failing.
-2. `posa_max_rate_change_pct` (Percent, default 20) on **POS Profile**,
+2. `posa_px_max_rate_change_pct` (Percent, default 20) on **POS Profile**,
    same patch. Precedence: explicit `band_pct` argument → profile field
    → hardcoded 20. **0 means "not configured" and falls back to 20**,
    not "no deviation allowed": the patch default does reach existing
@@ -133,7 +133,7 @@ items:
 
 ```
 bench --site <site> execute frappe.client.set_value --kwargs \
-  "{'doctype':'Item Group','name':'Servicio Técnico','fieldname':'posa_skip_rate_band','value':1}"
+  "{'doctype':'Item Group','name':'Servicio Técnico','fieldname':'posa_px_skip_rate_band','value':1}"
 ```
 
 `Recargas` needs the same treatment: an airtime top-up is sold at the

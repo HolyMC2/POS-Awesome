@@ -89,7 +89,7 @@ edits at all — hence the `depends_on`.
 
 | field | type | gate it performs |
 |---|---|---|
-| `posa_max_rate_change_pct` | Percent | Half-width of the band `_reprice.assert_rates_within_band` enforces on a rate-edit-enabled register: the pre-discount price a line asserts must land within ±this much of the Item Price, or submit throws `PermissionError` → HTTP 403. |
+| `posa_px_max_rate_change_pct` | Percent | Half-width of the band `_reprice.assert_rates_within_band` enforces on a rate-edit-enabled register: the pre-discount price a line asserts must land within ±this much of the Item Price, or submit throws `PermissionError` → HTTP 403. |
 
 Semantics worth knowing before you touch the number:
 
@@ -108,7 +108,7 @@ Semantics worth knowing before you touch the number:
   is OFF — that branch still demands an exact price-list match, and a
   wide band must not become a licence to retype prices.
 
-The per-SKU escape hatch is NOT on the profile: `posa_skip_rate_band` on
+The per-SKU escape hatch is NOT on the profile: `posa_px_skip_rate_band` on
 **Item** and on **Item Group** (same patch) exempts variable-price
 SKUs — labour quoted per job, "cambiar pantalla" at 400 against a 150
 list entry — which is what broke prod in May and forced the blunt
@@ -119,6 +119,16 @@ item, whose rate is by definition whatever the customer left.
 Discount size is deliberately NOT re-gated here: a line's declared
 discount is `enforce_discount_limit`'s business, so the band judges the
 pre-discount price and an offer-discounted line passes on its merits.
+
+**Both fields carry the `posa_px_` prefix** — the pricing-controls space
+registered in `scripts/check_fixture_coverage.py`, alongside `posa_ux_`
+for the operator-experience knobs. Custom Fields are keyed
+`{dt}-{fieldname}` and globally unique per site with the last writer
+winning silently, and `posa_skip_rate_band` on **Item** — a doctype the
+lab tenant shares with six-plus apps — is exactly the generic name that
+gets overwritten without a word. The 2026-08-23 build shipped the
+unprefixed names to lab sites; `add_rate_band_controls` renames those
+rows and their columns in place, so a tenant's flags survive the move.
 
 ## Added 2026-08-23 — venta fraccionada (labelling-scale labels)
 
@@ -213,7 +223,7 @@ keep.
 | posa_allow_supervisor_manage_gift_cards | **DEAD** | — | role gate superseded |
 | posa_allow_user_to_edit_additional_discount | CLIENT-ONLY (mitigated) | Pos.vue:138 | discount cap backs it |
 | posa_allow_user_to_edit_item_discount | CLIENT-ONLY (mitigated) | CartItemRow.vue:537 | |
-| posa_allow_user_to_edit_rate | WIRED | _reprice.py:assert_rates_within_band | gates rate editing; width is posa_max_rate_change_pct |
+| posa_allow_user_to_edit_rate | WIRED | _reprice.py:assert_rates_within_band | gates rate editing; width is posa_px_max_rate_change_pct |
 | posa_allow_write_off_change | CLIENT-ONLY (mitigated) | PaymentOptions.vue:18 | write_off_limit clamps |
 | posa_allow_zero_rated_items | **DEAD** | — | |
 | posa_apply_customer_discount | **DEAD** | — | |
@@ -255,10 +265,10 @@ keep.
 | posa_language | WIRED | shifts.py:187 | |
 | posa_local_storage | CLIENT-ONLY✓ | useOffers.ts | |
 | posa_max_discount_allowed | WIRED | _reprice.py | server money cap ✓ |
-| posa_max_rate_change_pct | WIRED | _reprice.py:assert_rates_within_band | band half-width; 0 = default 20, negative = off |
 | posa_new_line | CLIENT-ONLY✓ | ItemsSelector.vue | |
 | posa_open_print_in_new_tab | CLIENT-ONLY✓ | usePaymentPrinting.ts | |
 | posa_print_format_rules | CLIENT-ONLY✓ | paymentPrintFormat.ts | |
+| posa_px_max_rate_change_pct | WIRED | _reprice.py:assert_rates_within_band | band half-width; 0 = default 20, negative = off |
 | posa_require_cash_movement_remarks | WIRED | cash_movement | |
 | posa_return_validity_days | WIRED | invoice_processing/utils.py | |
 | posa_sales_persons | WIRED | api/utils.py | |

@@ -25,7 +25,9 @@ Four invariants, all statically checkable — no site, no frappe import:
    51 fields from six-plus apps. A generic `posa_table` is precisely what
    a future app overwrites without a word. The 174 fieldnames that shipped
    before this rule are grandfathered by name below; anything new must
-   match VERTICAL_PREFIXES.
+   match VERTICAL_PREFIXES, or name itself in PREFIX_EXEMPT_FIELD_NAMES —
+   an exact {dt}-{fieldname} escape for a field already live whose name a
+   rename cannot reach, each with its reason.
 
 Run: python scripts/check_fixture_coverage.py   (exits 1 on violation)
 """
@@ -67,7 +69,43 @@ VERTICAL_PREFIXES: tuple[str, ...] = (
 	"posa_gr_",  # granel — the giros that WEIGH: abarrotes, carnicería,
 	# ferretería a granel. Venta fraccionada's register config lives here
 	# (labelling-scale label scheme); a phone shop never carries these.
+	"posa_px_",  # pricing controls — the same cross-vertical substrate as
+	# posa_ux_, for the knobs that decide what a line may COST: the rate
+	# band's width and its per-SKU opt-out. Every giro carries these.
+	"posa_combo_",  # combos — bundle provenance on the invoice line. A
+	# feature-space, not a vertical (abarrotes and cafetería both sell
+	# combos), but "components"/"broken" are exactly the generic words a
+	# second app would reach for on the same child doctype.
 )
+
+# Full Custom Field names ({dt}-{fieldname}) accepted without a prefix.
+#
+# Keyed on the WHOLE record name, not the fieldname, because {dt}-{fieldname}
+# is what actually collides: exempting `Quotation-posa_note` says nothing
+# about a future `Sales Invoice-posa_note`, which stays a violation.
+#
+# A prefix is still the right answer for anything not yet shipped. This set is
+# for fields already live whose names are read from code a rename cannot reach
+# from here — and every entry carries the reason it could not take one.
+PREFIX_EXEMPT_FIELD_NAMES: frozenset[str] = frozenset({
+	# add_quotation_conversion_fields.py — the cotización↔venta link. Shipped
+	# 2026-08-24 and read by api/quotation_conversion.py, quotations.py,
+	# quotation_read_model.py, sales_orders.py and CotizacionesSurface.vue.
+	# One meaning each on their own doctype: a Quotation has exactly one
+	# originating register and one cashier's note.
+	"Sales Invoice-posa_quotation",
+	"POS Invoice-posa_quotation",
+	"Quotation-posa_converted_invoice",
+	"Quotation-posa_converted_invoice_doctype",
+	"Quotation-posa_pos_profile",
+	"Quotation-posa_note",
+	"POS Profile-posa_quotation_validity_days",
+	# add_customer_card_pos_profile_settings.py — the monedero gate and the
+	# Loyalty Program it enrols into. Shipped 2026-08-23, read server-side by
+	# api/stored_value.py and by five frontend modules.
+	"POS Profile-posa_use_customer_cards",
+	"POS Profile-posa_customer_card_program",
+})
 
 # Fieldnames that shipped BEFORE the prefix rule existed. Frozen on purpose:
 # derive this from hooks at runtime and the check can never fail. Do not add
@@ -204,21 +242,25 @@ def patch_created_fieldnames() -> dict[str, list[str]]:
 	return out
 
 
-def unprefixed_fieldnames(hooks_names: set[str], fixture_names: set[str]) -> list[str]:
-	"""New fieldnames that carry no per-vertical prefix.
+def unprefixed_field_names(hooks_names: set[str], fixture_names: set[str]) -> list[str]:
+	"""Custom Field names whose fieldname carries no per-vertical prefix.
 
 	Both sides are checked: hooks is where a field is DECLARED for delivery,
 	the fixture file is what actually ships. A name added to only one of them
 	is caught by invariants 2/3, but it must not dodge the prefix rule on the
 	way through.
+
+	Reported as the full {dt}-{fieldname}, which is the key that collides.
 	"""
-	candidates = {name.split("-", 1)[1] for name in hooks_names | fixture_names if "-" in name}
-	return sorted(
-		fieldname
-		for fieldname in candidates
-		if fieldname not in GRANDFATHERED_FIELDNAMES
-		and not fieldname.startswith(VERTICAL_PREFIXES)
-	)
+	offenders = []
+	for name in hooks_names | fixture_names:
+		if "-" not in name or name in PREFIX_EXEMPT_FIELD_NAMES:
+			continue
+		fieldname = name.split("-", 1)[1]
+		if fieldname in GRANDFATHERED_FIELDNAMES or fieldname.startswith(VERTICAL_PREFIXES):
+			continue
+		offenders.append(name)
+	return sorted(offenders)
 
 
 def main() -> int:
@@ -251,14 +293,16 @@ def main() -> int:
 			+ "\n  ".join(unlisted_in_hooks)
 		)
 
-	unprefixed = unprefixed_fieldnames(hooks_names, fixture_names)
+	unprefixed = unprefixed_field_names(hooks_names, fixture_names)
 	if unprefixed:
 		errors.append(
-			f"Custom Field fieldname(s) with no per-vertical prefix ({len(unprefixed)}) — "
+			f"Custom Field(s) with no per-vertical prefix ({len(unprefixed)}) — "
 			"Custom Fields are globally unique per site as {dt}-{fieldname} and the "
 			"last writer wins SILENTLY, so a generic name is a cross-app overwrite "
 			f"waiting to happen (C8). Rename to one of {', '.join(VERTICAL_PREFIXES)}*, "
-			"or add a new prefix to VERTICAL_PREFIXES if this is a new vertical:\n  "
+			"add a new prefix to VERTICAL_PREFIXES if this is a new vertical, or — "
+			"only for a field already shipped whose name a rename cannot reach — add "
+			"the full {dt}-{fieldname} to PREFIX_EXEMPT_FIELD_NAMES with its reason:\n  "
 			+ "\n  ".join(unprefixed)
 		)
 

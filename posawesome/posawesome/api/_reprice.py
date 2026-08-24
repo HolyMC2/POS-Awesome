@@ -28,9 +28,9 @@ This module provides three invariants called from ``update_invoice`` /
       the Item Price for the profile's price list, and ``rate`` must be
       exactly that price with the line's declared discount applied
       (offers/pricing rules are not rate edits). If ON, the typed price
-      must stay within ±``posa_max_rate_change_pct`` of the Item Price,
+      must stay within ±``posa_px_max_rate_change_pct`` of the Item Price,
       unless the item (or its Item Group) carries
-      ``posa_skip_rate_band``.
+      ``posa_px_skip_rate_band``.
 
 Full re-fetch + recompute (``reprice_invoice_items``) is intentionally
 deferred to a follow-up commit gated by ``posa_server_side_reprice``
@@ -54,7 +54,7 @@ from frappe.utils import flt
 # Default rate-band when posa_allow_user_to_edit_rate is on. ±20% covers
 # manager-approved price adjustments without letting a fat-fingered 4000
 # through where 400 was meant. Per-register override lives on the POS
-# Profile as ``posa_max_rate_change_pct``.
+# Profile as ``posa_px_max_rate_change_pct``.
 DEFAULT_RATE_BAND_PCT = 20.0
 
 # Currency-unit slack on the band edges so a rate that lands exactly on
@@ -388,7 +388,7 @@ def _resolve_band_pct(profile_doc: Any, band_pct: float | None) -> float:
     """Band half-width, in percent, for a rate-edit-enabled register.
 
     Precedence: explicit argument → POS Profile
-    ``posa_max_rate_change_pct`` → ``DEFAULT_RATE_BAND_PCT``.
+    ``posa_px_max_rate_change_pct`` → ``DEFAULT_RATE_BAND_PCT``.
 
     **Zero means "not configured", never "no deviation allowed."** The
     patch's ``default: 20`` does reach existing rows (verified on
@@ -404,7 +404,7 @@ def _resolve_band_pct(profile_doc: Any, band_pct: float | None) -> float:
     raw = (
         band_pct
         if band_pct is not None
-        else _profile_value(profile_doc, "posa_max_rate_change_pct")
+        else _profile_value(profile_doc, "posa_px_max_rate_change_pct")
     )
     if raw is None:
         return DEFAULT_RATE_BAND_PCT
@@ -417,7 +417,7 @@ def _resolve_band_pct(profile_doc: Any, band_pct: float | None) -> float:
 def _skips_rate_band(item_code: str, cache: dict) -> bool:
     """True when this item — or its Item Group — is flagged variable-price.
 
-    ``posa_skip_rate_band`` is the per-SKU opt-out that lets "cambiar
+    ``posa_px_skip_rate_band`` is the per-SKU opt-out that lets "cambiar
     pantalla" quote 400 against a 150 price-list entry while the band
     still guards ordinary retail lines. The Item Group flag exists so a
     whole category ("Servicio Técnico") can be opted out in one place.
@@ -431,13 +431,13 @@ def _skips_rate_band(item_code: str, cache: dict) -> bool:
         return cache[item_code]
     try:
         skipped = bool(
-            flt(frappe.db.get_value("Item", item_code, "posa_skip_rate_band") or 0)
+            flt(frappe.db.get_value("Item", item_code, "posa_px_skip_rate_band") or 0)
         )
         if not skipped:
             group = frappe.db.get_value("Item", item_code, "item_group")
             skipped = bool(group) and bool(
                 flt(
-                    frappe.db.get_value("Item Group", group, "posa_skip_rate_band")
+                    frappe.db.get_value("Item Group", group, "posa_px_skip_rate_band")
                     or 0
                 )
             )
@@ -461,9 +461,9 @@ def assert_rates_within_band(
         ``rate`` must equal it with the line's declared discount applied
         — offer/pricing-rule discounts are not rate edits.
       * Profile allows rate edits → the typed pre-discount price must
-        stay within ±``posa_max_rate_change_pct`` (default 20) of the
+        stay within ±``posa_px_max_rate_change_pct`` (default 20) of the
         Item Price. Items and Item Groups carrying
-        ``posa_skip_rate_band`` are exempt: that flag, not the profile
+        ``posa_px_skip_rate_band`` are exempt: that flag, not the profile
         flag, is what lets a variable-price SKU quote any figure.
       * No Item Price found for the item × price-list combo → skip
         validation for that line (legacy items without price master).

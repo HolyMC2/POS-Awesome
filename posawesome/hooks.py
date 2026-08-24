@@ -303,10 +303,12 @@ fixtures = [
                     "POS Profile-posa_allow_user_to_edit_rate",
                     # Rate-band controls (add_rate_band_controls): how far a
                     # typed rate may stray, and the per-SKU / per-category
-                    # opt-out for items priced per job.
-                    "POS Profile-posa_max_rate_change_pct",
-                    "Item-posa_skip_rate_band",
-                    "Item Group-posa_skip_rate_band",
+                    # opt-out for items priced per job. posa_px_ is the
+                    # pricing-controls space; the patch renames the unprefixed
+                    # names an earlier build put on lab sites.
+                    "POS Profile-posa_px_max_rate_change_pct",
+                    "Item-posa_px_skip_rate_band",
+                    "Item Group-posa_px_skip_rate_band",
                     "POS Profile-posa_allow_user_to_edit_additional_discount",
                     "POS Profile-posa_allow_user_to_edit_item_discount",
                     "POS Profile-posa_display_items_in_stock",
@@ -490,6 +492,29 @@ fixtures = [
                     "POS Invoice-posa_remaining_customer_credit_balance",
                     "Sales Invoice-posa_redeemed_customer_credit",
                     "Sales Invoice-posa_remaining_customer_credit_balance",
+                    # Combo provenance on the invoice line: which bundle a line
+                    # came from, and whether a partial return has broken it.
+                    # No patch creates these — they ship as fixtures only, so
+                    # the export is the ONLY delivery path they have.
+                    "POS Invoice Item-posa_combo_components",
+                    "POS Invoice Item-posa_combo_broken",
+                    # Cotización → venta (add_quotation_conversion_fields):
+                    # the invoice names the promise it honours, the quotation
+                    # names the sale that closed it, and the register keeps the
+                    # cashier's note. Unprefixed by exception — see
+                    # PREFIX_EXEMPT_FIELD_NAMES in the coverage guard.
+                    "Sales Invoice-posa_quotation",
+                    "POS Invoice-posa_quotation",
+                    "Quotation-posa_converted_invoice",
+                    "Quotation-posa_converted_invoice_doctype",
+                    "Quotation-posa_pos_profile",
+                    "Quotation-posa_note",
+                    "POS Profile-posa_quotation_validity_days",
+                    # Tarjeta de cliente (add_customer_card_pos_profile_settings):
+                    # the monedero gate read server-side by stored_value.py,
+                    # and the Loyalty Program «Activar» enrols into.
+                    "POS Profile-posa_use_customer_cards",
+                    "POS Profile-posa_customer_card_program",
                     # Merged from a former SECOND "Custom Field" fixtures
                     # entry: frappe writes one file per doctype, so a second
                     # entry for the same doctype OVERWRITES the first's
