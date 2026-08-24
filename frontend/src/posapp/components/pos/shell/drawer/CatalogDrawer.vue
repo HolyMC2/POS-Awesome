@@ -424,17 +424,35 @@ defineExpose({ focusableChildren });
  * figures for the composable's consumers; `catalogDrawerWidth.spec.ts` fails if
  * they drift apart.
  *
- * Consequence, stated rather than hidden: at the narrow end of the anchoring
- * range (1100-1300px) the ticket is now the SMALLER half of the row and lands
- * under 500px, where `items-table-styles.css` reflows it into card rows. That
- * is the designed treatment for a cart that narrow, not a fallback.
+ * THE `max-width` IS THE TICKET'S FLOOR, and it is load-bearing. 62% of a
+ * narrow row takes the cart under 500px, which is where
+ * `items-table-styles.css` abandons the table formatting context and reflows
+ * every row into a phone card — a desktop register should not get the phone
+ * treatment because a drawer is open. `calc(100% - 640px)` leaves the ticket
+ * 640px of the row, which the Vuetify gutters and the invoice card turn into
+ * 594px of measured cart: comfortably over the 500px threshold and over the
+ * item name's own 150px floor. The 640 is measured, not derived — see
+ * `CATALOG_DRAWER_MIN_TICKET_WIDTH` in `useCatalogDrawer.ts` for the padding
+ * chain that makes the obvious 544 miss by two pixels.
  *
- * NOT animated, and it must not become animated: `width` is the layout
- * property this file's animation contract exists to keep out of transitions.
+ * Which of the two binds is a property of the register, not a mode:
+ *
+ *     1718px viewport (row 1622)  62% = 1006 -> the 720px CEILING binds, cart 854
+ *     1280px viewport (row 1184)  62% =  734 -> the 640px FLOOR   binds, cart 594
+ *     1100px viewport (row 1004)  62% =  622 -> the FLOOR binds hard, drawer 364
+ *
+ * At the anchoring floor the ticket takes the row and the catalogue keeps a
+ * column; un-anchoring is the way to give the catalogue the space back, and the
+ * overlay is governed by its own widths below.
+ *
+ * NOT animated, and it must not become animated: `width` and `max-width` are
+ * the layout properties this file's animation contract keeps out of
+ * transitions.
  */
 .catalog-drawer-layer--anchored {
 	position: relative;
 	width: min(62%, 720px);
+	max-width: calc(100% - 640px);
 	flex: none;
 	display: flex;
 	min-height: 0;
@@ -444,6 +462,11 @@ defineExpose({ focusableChildren });
  * The CARD marker still lands on the layer — the selector below is what
  * `catalogDrawerWidth.spec.ts` reads to prove the two views now share a
  * footprint rather than having quietly lost the branch.
+ *
+ * WIDTH ONLY. This compound out-specifies the rule above, so a `max-width`
+ * restated here would be a second copy of the ticket's floor that a later edit
+ * could drift — and a `max-width: none` here would silently delete the floor
+ * for card view alone. Inheriting it from the single-class rule is the point.
  */
 .catalog-drawer-layer--anchored.catalog-drawer-layer--cards {
 	width: min(62%, 720px);

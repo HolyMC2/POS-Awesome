@@ -72,15 +72,52 @@ export const CATALOG_DRAWER_ACTION_ID = "catalog.toggleDrawer";
  * past ~three columns the cards stop being a menu and start being wallpaper
  * (`CARD_MAX_COLUMNS` makes the same argument).
  *
- * Note the share is now past half: between 1100px (the anchoring floor) and
- * ~1300px the ticket is the smaller half and reflows into card rows, which is
- * `items-table-styles.css`'s designed treatment below a 500px cart.
+ * The share is past half, so on a narrow register it would take the ticket
+ * below the width at which the cart is a table at all — hence the floor below.
  *
- * `CatalogDrawer.vue` states these two figures in CSS; the stylesheet cannot
- * read a module, so `catalogDrawerWidth.spec.ts` checks the pair still agree.
+ * `CatalogDrawer.vue` states these figures in CSS; the stylesheet cannot read a
+ * module, so `catalogDrawerWidth.spec.ts` checks they still agree.
  */
 export const CATALOG_DRAWER_WIDTH_SHARE = 0.62;
 export const CATALOG_DRAWER_MAX_WIDTH = 720;
+
+/**
+ * The ticket's floor: how much of the content row the drawer must leave behind,
+ * applied as `max-width: calc(100% - Npx)` on the anchored layer.
+ *
+ * Without it, `min(62%, 720px)` left a 420px cart at a 1280px viewport — under
+ * the 500px where `items-table-styles.css` abandons the table formatting
+ * context and reflows each row into a phone card. A desktop register should not
+ * get the phone treatment because a drawer is open.
+ *
+ * ## Why 640 and not 544
+ *
+ * 544 is the arithmetic answer and it is wrong by the padding chain. This number
+ * is an allowance out of the CONTENT ROW, but the cart's breakpoint is decided
+ * by the ResizeObserver on `.posa-items-table-container`, which reports that
+ * element's CONTENT box — and between the two sit the Vuetify column's 9px
+ * gutters, the invoice card, and the container's own 1px borders. Measured in
+ * the browser on the cafetería demo at 1280x900 (content row 1184px) that chain
+ * costs 46px:
+ *
+ *     allowance 544 -> drawer 640 -> cart content 498 -> breakpoint-xs, CARD ROWS
+ *     allowance 600 -> drawer 584 -> cart content 554 -> breakpoint-sm, name 128
+ *     allowance 620 -> drawer 564 -> cart content 574 -> breakpoint-sm, name 148
+ *     allowance 640 -> drawer 544 -> cart content 594 -> breakpoint-sm, name 168
+ *
+ * 544 misses the threshold it exists to clear by two pixels. 620 clears it but
+ * leaves the item name under its own 150px floor (`CART_NAME_MIN_WIDTH`) — the
+ * same kind of boundary this rule exists to stop being fragile about. 640 is the
+ * first round number where the table AND the name have real margin, and it costs
+ * the catalogue almost nothing that was ever on offer: 544px of drawer at 1280,
+ * within 3% of the 560px the anchored CARD view had before this round.
+ *
+ * At the 1100px anchoring floor the allowance binds hard — drawer 364px, cart
+ * content 598px — so the narrowest anchoring register gives the ticket the row
+ * and the catalogue a column. Un-anchoring is the way out; the overlay is
+ * governed by its own widths and ignores this entirely.
+ */
+export const CATALOG_DRAWER_MIN_TICKET_WIDTH = 640;
 
 /**
  * What the slotted selector is drawing. The drawer never asks a store for it —
