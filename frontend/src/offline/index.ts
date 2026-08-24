@@ -41,6 +41,7 @@ export * from "./restaurantOrders";
 export * from "./restaurantQueue";
 export * from "./restaurantDispatch";
 export * from "./catalogVisibility";
+export * from "./comboOffers";
 export * from "./cache";
 export * from "./sync/types";
 export * from "./sync/resourceRegistry";

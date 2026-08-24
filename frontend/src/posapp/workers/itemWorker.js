@@ -203,6 +203,7 @@ const KEY_TABLE_MAP = {
 	stored_value_snapshot_cache: "cache",
 	gift_card_snapshot_cache: "cache",
 	delivery_charges_cache: "cache",
+	combo_offers_cache: "cache",
 	currency_options_cache: "cache",
 	exchange_rate_cache: "cache",
 	price_list_meta_cache: "cache",

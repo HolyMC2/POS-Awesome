@@ -86,6 +86,7 @@ export const KEY_TABLE_MAP: Record<string, string> = {
 	stored_value_snapshot_cache: "cache",
 	gift_card_snapshot_cache: "cache",
 	delivery_charges_cache: "cache",
+	combo_offers_cache: "cache",
 	currency_options_cache: "cache",
 	exchange_rate_cache: "cache",
 	price_list_meta_cache: "cache",
@@ -277,6 +278,11 @@ const MEMORY_DEFAULTS: AnyRecord = {
 	stored_value_snapshot_cache: {},
 	gift_card_snapshot_cache: {},
 	delivery_charges_cache: {},
+	// The register's combo read model, keyed by pricing context — see
+	// `offline/comboOffers.ts`. Declared here so boot hydrates it from IndexedDB
+	// like every other cache; a slot missing from this literal is never read
+	// back, which is a cache that is always cold.
+	combo_offers_cache: {},
 	currency_options_cache: {},
 	exchange_rate_cache: {},
 	price_list_meta_cache: {},

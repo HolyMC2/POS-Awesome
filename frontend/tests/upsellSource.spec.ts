@@ -25,6 +25,7 @@ import {
 	normalizeComboOffer,
 	useComboOffers,
 } from "../src/posapp/composables/pos/combos/useComboOffers";
+import { clearCachedComboOffers } from "../src/offline/comboOffers";
 
 const PROFILE = { name: "Caja 2", selling_price_list: "Mostrador", warehouse: "Tienda - DM" };
 
@@ -71,6 +72,11 @@ const call = vi.fn();
 
 beforeEach(() => {
 	clearComboOffersCache();
+	// The DURABLE cache too. A successful fetch now records its answer for the
+	// offline register (`offline/comboOffers.ts`), so a test that does not wipe
+	// it inherits the previous test's combos through the failure fallback — and
+	// then passes or fails for a reason that has nothing to do with it.
+	clearCachedComboOffers();
 	call.mockReset();
 	(globalThis as any).frappe = { call };
 });
@@ -197,13 +203,32 @@ describe("one fetch per register, never one per cart change", () => {
 });
 
 describe("failure is an empty strip, never a broken sale", () => {
-	it("returns nothing when the call rejects", async () => {
+	it("returns nothing when the call rejects and the register has never been told", async () => {
 		call.mockRejectedValue(new Error("network"));
 		const errors = vi.spyOn(console, "error").mockImplementation(() => {});
 		const { load, offers } = useComboOffers();
 
+		// A cold durable cache is the honest empty: no strip, no chip, no stub.
 		await expect(load({ pos_profile: PROFILE })).resolves.toEqual([]);
 		expect(offers.value).toEqual([]);
+		errors.mockRestore();
+	});
+
+	it("falls back to the last good answer rather than blanking a warmed register", async () => {
+		// Golden flow §1: the durable cache is what a failure degrades TO. The
+		// shop's combos do not disappear because one request timed out — and
+		// the sale path never waited on either outcome.
+		call.mockResolvedValue({ message: [HONOR_COMBO_PAYLOAD] });
+		await useComboOffers().load({ pos_profile: PROFILE });
+		clearComboOffersCache();
+
+		const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+		call.mockRejectedValue(new Error("network"));
+		const { load, offers } = useComboOffers();
+		const result = await load({ pos_profile: PROFILE });
+
+		expect(result).toHaveLength(1);
+		expect(offers.value[0]?.item_code).toBe("COMBO-X8A");
 		errors.mockRestore();
 	});
 

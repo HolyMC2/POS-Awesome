@@ -511,6 +511,7 @@ import {
 	invalidateServiceOrderCounts,
 } from "../../../services/serviceOrderService";
 import { buildCombosCategory, buildSuggestions } from "../../../composables/pos/combos/comboCatalog";
+import { useComboOffers } from "../../../composables/pos/combos/useComboOffers";
 import { useOnlineStatus } from "../../../composables/core/useOnlineStatus";
 import OpeningDialog from "../shift/OpeningDialog.vue";
 import PosOffers from "../offers/PosOffers.vue";
@@ -1178,16 +1179,29 @@ export default {
 			eventBus.emit("run_menu_action", { id });
 		};
 
-		// Combos are not fetched yet — the read model lands with the doctype.
-		// An empty list means the drawer draws no chip row and the strip does not
-		// render at all, which is the honest state rather than a stub offer.
-		const comboOffers = ref([]);
+		// The register's combos. `useComboOffers` owns the whole schedule — fetch
+		// on activation, refresh when the catalogue syncs, refetch when the
+		// pricing context moves, serve the offline cache when there is no
+		// connection — so the shell gains this call and nothing else. An empty
+		// list means the drawer draws no chip row and the strip does not render
+		// at all, which is the honest state rather than a stub offer.
+		const { offers: comboOffers } = useComboOffers({
+			posProfile,
+			customer: selectedCustomer,
+			eventBus,
+		});
 		const catalogCategories = computed(() => {
-			const category = buildCombosCategory(comboOffers.value);
+			const category = buildCombosCategory(comboOffers.value, __);
 			return category ? [category] : [];
 		});
+		// Named, not positional: the cart's LINES used to be passed where
+		// `accessories` goes, which — had a combo ever loaded — would have
+		// offered the cashier the four items they had just scanned.
 		const comboSuggestions = computed(() =>
-			buildSuggestions(comboOffers.value, invoiceDoc.value?.items || []),
+			buildSuggestions({
+				combos: comboOffers.value,
+				cart: invoiceDoc.value?.items || [],
+			}),
 		);
 		const addComboSuggestion = (suggestion) => {
 			eventBus.emit("add_item", { item_code: suggestion.item_code });
