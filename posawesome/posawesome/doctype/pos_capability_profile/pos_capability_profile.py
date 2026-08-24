@@ -99,6 +99,20 @@ class POSCapabilityProfile(Document):
                 f"Valid: {', '.join(KNOWN_CAPABILITIES)}"
             )
 
+        # Fail at edit time on malformed vocabulary JSON — a parse error at
+        # boot would strand the label map and the SPA would show raw keys.
+        if self.labels and self.labels.strip():
+            try:
+                parsed = json.loads(self.labels)
+            except (ValueError, TypeError):
+                frappe.throw("Label Overrides must be valid JSON.")
+                return
+            if not isinstance(parsed, dict):
+                frappe.throw("Label Overrides must be a JSON object of key → label.")
+
+        # LAST, and after every throw above: this one only warns, so a preset
+        # that is also malformed must fail on the malformation rather than
+        # msgprint a tip about a record that is not going to save.
         self._warn_tables_without_record_only()
 
     def _warn_tables_without_record_only(self):
@@ -131,17 +145,6 @@ class POSCapabilityProfile(Document):
             title="Table service needs Record Only",
             indicator="orange",
         )
-
-        # Fail at edit time on malformed vocabulary JSON — a parse error at
-        # boot would strand the label map and the SPA would show raw keys.
-        if self.labels and self.labels.strip():
-            try:
-                parsed = json.loads(self.labels)
-            except (ValueError, TypeError):
-                frappe.throw("Label Overrides must be valid JSON.")
-                return
-            if not isinstance(parsed, dict):
-                frappe.throw("Label Overrides must be a JSON object of key → label.")
 
     def as_frontend_payload(self):
         """The shape verticalStore consumes.

@@ -239,6 +239,145 @@ class TestCapabilityResolution(IntegrationTestCase):
         self.assertEqual(doc.name, self.PRESET)
 
 
+class TestCapabilityProfileValidate(IntegrationTestCase):
+    """`validate()` on POS Capability Profile — the throws and the one warning.
+
+    Deliberately its own class with no `POS Profile` in it. The resolution
+    tests above bind to a real profile on the site; these are about the
+    doctype's own validation, so they need nothing but the doctype and run on
+    any site the app is installed on.
+    """
+
+    PRESET = "test-capability-validate"
+
+    def tearDown(self):
+        if frappe.db.exists("POS Capability Profile", self.PRESET):
+            frappe.delete_doc("POS Capability Profile", self.PRESET, force=True)
+
+    # ---- Label Overrides JSON -------------------------------------------
+    #
+    # These three exist because that block was ONCE lost: extracting the
+    # tables/Record-Only warning below into its own method left the labels
+    # check indented inside it, behind an early `return` taken by every preset
+    # without the `tables` capability. Nothing failed — `validate()` simply
+    # stopped validating, a malformed blob saved clean, and the SPA's label map
+    # stranded at boot with raw keys on screen. A silent loss of validation is
+    # exactly what a test has to hold down, so each branch is named.
+
+    def test_malformed_labels_rejected_on_a_preset_with_no_tables(self):
+        with self.assertRaises(frappe.ValidationError):
+            frappe.get_doc(
+                {
+                    "doctype": "POS Capability Profile",
+                    "profile_name": self.PRESET,
+                    "capabilities": "tab_identity",
+                    "labels": "{not json",
+                }
+            ).insert()
+
+    def test_malformed_labels_rejected_on_a_correct_table_preset(self):
+        # The other early return: `tables` WITH Record Only.
+        with self.assertRaises(frappe.ValidationError):
+            frappe.get_doc(
+                {
+                    "doctype": "POS Capability Profile",
+                    "profile_name": self.PRESET,
+                    "capabilities": "tables",
+                    "invoice_mode": "Record Only",
+                    "labels": "{not json",
+                }
+            ).insert()
+
+    def test_labels_must_be_an_object_not_an_array(self):
+        with self.assertRaises(frappe.ValidationError):
+            frappe.get_doc(
+                {
+                    "doctype": "POS Capability Profile",
+                    "profile_name": self.PRESET,
+                    "labels": '["Comensales"]',
+                }
+            ).insert()
+
+    def test_well_formed_labels_still_reach_the_payload(self):
+        doc = frappe.get_doc(
+            {
+                "doctype": "POS Capability Profile",
+                "profile_name": self.PRESET,
+                "labels": '{"Guests": "Comensales"}',
+            }
+        ).insert()
+
+        self.assertEqual(doc.as_frontend_payload()["labels"]["Guests"], "Comensales")
+
+    # ---- tables without Record Only (CAFETERIA_GOLDEN_FLOW.md §1) --------
+
+    def _messages(self):
+        """Whatever this Frappe spells the msgprint buffer."""
+        log = getattr(frappe, "get_message_log", None)
+        return log() if callable(log) else (frappe.local.message_log or [])
+
+    def _warned_about_record_only(self):
+        return any("Record Only" in str(entry) for entry in self._messages())
+
+    def test_tables_without_record_only_warns_but_still_saves(self):
+        # A WARNING, never a throw: registers already saved in this shape have
+        # to keep opening, and the manager fixing it needs the record editable
+        # while they read the reason.
+        frappe.clear_messages()
+        doc = frappe.get_doc(
+            {
+                "doctype": "POS Capability Profile",
+                "profile_name": self.PRESET,
+                "capabilities": "tables",
+                "invoice_mode": "Sales Invoice",
+            }
+        ).insert()
+
+        self.assertEqual(doc.name, self.PRESET)
+        self.assertTrue(self._warned_about_record_only())
+
+    def test_a_blank_invoice_mode_with_tables_is_warned_about_too(self):
+        # Blank is the common misconfiguration — the field simply never set.
+        frappe.clear_messages()
+        frappe.get_doc(
+            {
+                "doctype": "POS Capability Profile",
+                "profile_name": self.PRESET,
+                "capabilities": "tables",
+            }
+        ).insert()
+
+        self.assertTrue(self._warned_about_record_only())
+
+    def test_tables_with_record_only_says_nothing(self):
+        frappe.clear_messages()
+        frappe.get_doc(
+            {
+                "doctype": "POS Capability Profile",
+                "profile_name": self.PRESET,
+                "capabilities": "tables",
+                "invoice_mode": "Record Only",
+            }
+        ).insert()
+
+        self.assertFalse(self._warned_about_record_only())
+
+    def test_a_register_without_tables_is_never_warned_about_invoice_mode(self):
+        # Sales Invoice is CORRECT for a counter cafetería; the warning is
+        # about table service specifically and must not nag every retail preset.
+        frappe.clear_messages()
+        frappe.get_doc(
+            {
+                "doctype": "POS Capability Profile",
+                "profile_name": self.PRESET,
+                "capabilities": "tab_identity",
+                "invoice_mode": "Sales Invoice",
+            }
+        ).insert()
+
+        self.assertFalse(self._warned_about_record_only())
+
+
 class TestOverrideAllowlistAndProvenance(IntegrationTestCase):
     """Typed per-register override layer + provenance (roadmap F1)."""
 
