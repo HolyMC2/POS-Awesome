@@ -16,15 +16,19 @@
 				{{ formatCurrency(wallet.balance) }}
 			</p>
 
-			<!-- Provenance, not a second total. The balance is one spendable
-			     figure; this line says which half was paid in and which half was
-			     earned, and it renders only for the halves the server named. -->
+			<!-- KEPT APART, NOT ADDED. The figure above is the monedero — what
+			     this person can hand over at the till today. Cashback is a
+			     second promise that has to be redeemed through the programme,
+			     so it gets its own line and is never folded into the headline:
+			     someone with $200 of monedero and $14 of cashback cannot pay
+			     with $214, and telling them otherwise at a counter is the exact
+			     thing §4's guardrail forbids. -->
 			<p
-				v-if="provenance"
-				class="cliente-wallet__provenance"
-				data-testid="cliente-wallet-provenance"
+				v-if="cashbackLine"
+				class="cliente-wallet__cashback"
+				data-testid="cliente-wallet-cashback"
 			>
-				{{ provenance }}
+				{{ cashbackLine }}
 			</p>
 
 			<div class="cliente-wallet__actions">
@@ -130,6 +134,14 @@
  * on it (artboard `Cliente.dc.html`, left column). The ledger beneath it is
  * `ClienteMovements`, which needs nothing but rows.
  *
+ * THE HEADLINE IS THE MONEDERO AND IT IS NOT A SUM. `balance` is what this
+ * person can hand over at the till today; `cashbackValue` is what their points
+ * are worth once redeemed through the programme. They are printed on separate
+ * lines and never added — a card that showed $214 to someone holding $200 of
+ * credit and $14 of cashback would promise money at a counter that the tender
+ * cannot take. Both `customerCard.ts` rule 1 and the endpoint itself say the
+ * same thing, and each of the three has a test.
+ *
  * PRESENTATIONAL ABOUT THE BALANCE, ACTIVE ABOUT THE ACTS. The wallet is
  * fetched by `ClienteView` and handed down, because the header's card-state
  * chip reads the same object and two fetchers would let the chip and the card
@@ -198,18 +210,20 @@ const accrualLabel = computed(() =>
 );
 
 /**
- * «$390 depositados · $28 de cashback acumulado».
+ * «Cashback, aparte · $14.00 · 7 puntos».
  *
- * Both halves or neither: a line that named only the deposited half beside a
- * larger balance would read as an arithmetic error rather than as a partial
- * answer, and the server sends both or sends neither.
+ * The word «aparte» is doing real work and is not padding: without it the line
+ * sits directly under a big number and reads as its breakdown. It renders only
+ * when there is cashback to name — a customer on the programme who has earned
+ * nothing yet gets silence, not «$0.00», because a zero here reads as a
+ * programme that does not pay.
  */
-const provenance = computed(() => {
-	const { deposited, cashbackValue } = props.wallet;
-	if (deposited === null || cashbackValue === null) return "";
-	return __("{0} deposited · {1} earned")
-		.replace("{0}", props.formatCurrency(deposited))
-		.replace("{1}", props.formatCurrency(cashbackValue));
+const cashbackLine = computed(() => {
+	const { enrolled, cashbackValue, points } = props.wallet;
+	if (!enrolled || !(cashbackValue > 0)) return "";
+	return __("Cashback, kept apart · {0} · {1} points")
+		.replace("{0}", props.formatCurrency(cashbackValue))
+		.replace("{1}", String(points));
 });
 
 async function activate() {
@@ -293,7 +307,7 @@ watch(
 	color: var(--reg-text-primary, #212121);
 }
 
-.cliente-wallet__provenance {
+.cliente-wallet__cashback {
 	margin: 6px 0 0;
 	font-size: 0.72rem;
 	color: var(--reg-text-muted, #667085);

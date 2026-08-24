@@ -210,27 +210,61 @@ const EMPTY_STORY = { events: [], truncated: false, cap: 50, days: 90 };
  * The mock stands in for the transport and nothing else: `normalizeWallet` is
  * where a wire key becomes a row, and a fixture that skipped it would let the
  * view be tested against a shape the server never sends — the exact class of
- * defect a mock is famous for hiding. So the fixture is written the way the
- * endpoint answers (unsigned amounts, `cashback_value`, timestamps with a
- * time) and normalized here.
+ * defect a mock is famous for hiding. So the fixture is written the way
+ * `stored_value.get_customer_wallet` actually answers, grouped objects and
+ * server-side labels included, and normalized here.
+ *
+ * $200 of monedero and $14 of cashback: the pair that must never appear as
+ * $214 anywhere on this surface.
  */
 const WALLET = normalizeWallet({
-	balance: 418,
-	deposited: 390,
-	cashback_value: 28,
+	customer: "FINRECON Cliente",
+	company: "Doco",
+	balance: 200.0,
+	deposited: 200.0,
+	cashback_value: 14.0,
 	enrolled: true,
-	program: "CASHBACK-DOCO",
+	program: "Cashback Doco",
 	program_name: "Cashback Doco",
-	cashback_percent: 3,
-	cap: 15,
+	cashback_percent: 10.0,
+	points: 7,
+	cap: 40,
+	truncated: false,
 	movements: [
-		{ ts: "2026-08-18 11:00:00", kind: "deposit", amount: 200, detail: "Cash" },
-		{ ts: "2026-08-18 12:00:00", kind: "redemption", amount: 120, reference: "00214" },
+		{
+			kind: "deposit",
+			label: "Deposit",
+			detail: "Deposit",
+			amount: 200.0,
+			ts: "2026-08-18 11:04:22.113000",
+			posting_date: "2026-08-18",
+			reference: "ACC-PAY-2026-00031",
+			mode_of_payment: "Efectivo",
+		},
+		{
+			kind: "redemption",
+			label: "Paid with wallet",
+			detail: "Paid with wallet",
+			amount: -60.0,
+			ts: "2026-08-18 12:40:02.900000",
+			posting_date: "2026-08-18",
+			reference: "ACC-SINV-2026-00214",
+		},
 	],
+	stored_value: { balance: 200.0, source_count: 1, sources: [] },
+	cashback: { enrolled: true, program: "Cashback Doco", points: 7, value: 14.0, percent: 10.0 },
 })!;
 
 /** The same wallet on a customer who is not on the programme yet. */
-const UNENROLLED = { ...WALLET, enrolled: false, program: null, programName: null };
+const UNENROLLED = {
+	...WALLET,
+	enrolled: false,
+	program: null,
+	programName: null,
+	cashbackValue: 0,
+	points: 0,
+	cashbackPercent: null,
+};
 
 /** Put a real customer on the ticket, on a card-enabled register. */
 function seed(options: { customer?: string; profile?: Record<string, unknown> } = {}) {
@@ -244,6 +278,8 @@ function seed(options: { customer?: string; profile?: Record<string, unknown> } 
 		customer_name: "Sofía Ramírez Peña",
 		mobile_no: "669 112 8734",
 		territory: "Escuinapa",
+		// `get_customer_info` carries this since the tarjetas round.
+		creation: "2025-03-14 09:12:44.201000",
 	};
 	return { customers, ui };
 }
@@ -387,7 +423,7 @@ describe("every wallet element degrades to absence", () => {
 
 		expect(view.find('[data-testid="cliente-wallet-next"]').exists()).toBe(true);
 		expect(view.find('[data-testid="cliente-wallet-accrual"]').exists()).toBe(false);
-		expect(view.find('[data-testid="cliente-wallet-balance"]').text()).toBe("$418.00");
+		expect(view.find('[data-testid="cliente-wallet-balance"]').text()).toBe("$200.00");
 	});
 
 	it("keeps the wallet card when the STORY endpoint is the one that fails", async () => {
@@ -410,19 +446,49 @@ describe("the wallet card, once there is a wallet", () => {
 		fetchCashbackPreview.mockResolvedValue({ points: 15, value: 15 });
 	});
 
-	it("says which half was paid in and which half was earned", async () => {
+	it("prints the monedero as the headline and the cashback apart from it", async () => {
 		seed();
 		const view = mountView();
 		await flushPromises();
 
-		expect(view.find('[data-testid="cliente-wallet-provenance"]').text()).toBe(
-			"$390.00 deposited · $28.00 earned",
+		expect(view.find('[data-testid="cliente-wallet-balance"]').text()).toBe("$200.00");
+		expect(view.find('[data-testid="cliente-wallet-cashback"]').text()).toBe(
+			"Cashback, kept apart · $14.00 · 7 points",
 		);
-		expect(view.find('[data-testid="cliente-wallet-rate"]').text()).toBe("Cashback 3%");
+		expect(view.find('[data-testid="cliente-wallet-rate"]').text()).toBe("Cashback 10%");
 		expect(view.find('[data-testid="cliente-view-card-chip"]').text()).toBe("Active card");
 	});
 
-	it("draws the ledger with the signs the movements carry", async () => {
+	it("never shows the two as one figure, anywhere on the surface", async () => {
+		// THE guardrail (`CUSTOMER_CARDS_GOLDEN_FLOW.md` §4). $200 of monedero
+		// plus $14 of cashback is not $214 of anything: the cashback has to be
+		// redeemed through the programme, and a counter that read $214 off this
+		// screen would promise money the tender cannot take.
+		seed();
+		const view = mountView();
+		await flushPromises();
+
+		// Matched as a FIGURE, not as digits: a bare "214" also occurs inside
+		// the invoice folio ACC-SINV-2026-00214, and an assertion that cried
+		// wolf on a document number would be muted within a week.
+		expect(view.text()).not.toContain("$214");
+		// And what the customer can actually hand over is the monedero alone.
+		expect(view.find('[data-testid="cliente-wallet-next"]').text()).toContain("$200.00");
+	});
+
+	it("stays silent about cashback a customer has not earned yet", async () => {
+		// An enrolled customer with nothing accrued: «$0.00 de cashback» reads
+		// as a programme that does not pay, which is worse than saying nothing.
+		fetchCustomerWallet.mockResolvedValue({ ...WALLET, cashbackValue: 0, points: 0 });
+		seed();
+		const view = mountView();
+		await flushPromises();
+
+		expect(view.find('[data-testid="cliente-wallet-cashback"]').exists()).toBe(false);
+		expect(view.find('[data-testid="cliente-wallet-balance"]').text()).toBe("$200.00");
+	});
+
+	it("draws the ledger with the signs the server sent", async () => {
 		seed();
 		const view = mountView();
 		await flushPromises();
@@ -430,8 +496,19 @@ describe("the wallet card, once there is a wallet", () => {
 		const rows = view.findAll('[data-testid="cliente-wallet-movement"]');
 		expect(rows).toHaveLength(2);
 		expect(rows[0]?.text()).toContain("+$200.00");
-		// A redemption arrives unsigned and still points out of the wallet.
-		expect(rows[1]?.text()).toContain("−$120.00");
+		expect(rows[0]?.text()).toContain("Efectivo");
+		expect(rows[1]?.text()).toContain("−$60.00");
+	});
+
+	it("says what happened once, not twice", async () => {
+		// The server labels every row too («Deposit», already translated).
+		// Rendering both its label and ours would print the same words twice.
+		seed();
+		const view = mountView();
+		await flushPromises();
+
+		const deposit = view.findAll('[data-testid="cliente-wallet-movement"]')[0]!;
+		expect(deposit.text().match(/Deposit/g) ?? []).toHaveLength(1);
 	});
 
 	it("states the cap on screen, the way the story does", async () => {
@@ -439,7 +516,17 @@ describe("the wallet card, once there is a wallet", () => {
 		const view = mountView();
 		await flushPromises();
 
-		expect(view.find('[data-testid="cliente-wallet-cap"]').text()).toBe("Last 15");
+		expect(view.find('[data-testid="cliente-wallet-cap"]').text()).toBe("Last 40");
+	});
+
+	it("names when this person became a customer, to the month", async () => {
+		seed();
+		const view = mountView();
+		await flushPromises();
+
+		expect(view.find('[data-testid="cliente-view-subline"]').text()).toBe(
+			"Customer since mar 2025 · Escuinapa",
+		);
 	});
 });
 

@@ -6,72 +6,82 @@
  * counter reads, and the mapping can be checked without a server, a clock or a
  * mount.
  *
+ * THE WIRE IS SETTLED. This file used to accept several spellings of every
+ * field while `api/stored_value.py` was being written beside it. It no longer
+ * does: the endpoint emits one canonical shape, verified over real HTTP, and a
+ * fallback chain kept past that point is worse than none — it hides a rename
+ * behind a silent second-choice read, which is the failure mode the chain was
+ * built to survive in the first place. One key, one meaning.
+ *
  * THREE RULES THAT LOOK LIKE STYLE AND ARE NOT:
  *
- * 1. **TWO WALLETS, NOT ONE** — `walletSummary.ts`'s standing rule, restated
- *    here because this surface is where both promises finally appear together.
- *    Monedero (pesos already paid in) and cashback (pesos earned) are shown as
- *    a balance and its PROVENANCE, never merged into a figure whose parts
- *    nobody can name. `deposited` and `cashbackValue` exist precisely so the
- *    subline can say which half is which.
+ * 1. **`balance` IS NOT A SUM, AND NOTHING HERE MAY MAKE IT ONE.** The wallet
+ *    carries two different promises: `balance` is the monedero — pesos already
+ *    paid in, redeemable at the till today — and `cashback_value` is what the
+ *    customer's loyalty points are worth, which has to be redeemed through the
+ *    programme. Somebody holding $200 of monedero and $14 of cashback CANNOT
+ *    hand over $214, and §4's guardrail ("bearer and customer value never
+ *    merge into one figure") is about exactly this. The server keeps them
+ *    apart, this module keeps them apart, and the card prints them on separate
+ *    lines. There is deliberately no `total` here for a caller to reach for.
  *
- * 2. **THE SIGN IS DERIVED FROM THE KIND, AND THE SERVER'S SIGN WINS.** A
- *    ledger row is either money in or money out, and that is a property of
- *    what happened, not of how the endpoint chose to spell it. A server that
- *    sends `-120` for a redemption and one that sends `120` produce the same
- *    row here. Guessing the other way round — deriving the kind from the sign
- *    — is what turns a credit note into a deposit.
+ * 2. **THE SERVER'S SIGN IS THE TRUTH.** `amount` is signed: negative is value
+ *    leaving the wallet (redemption, cashback spent), positive is value
+ *    arriving (deposit, credit note, cashback earned). This module used to
+ *    re-derive the sign from the kind as a safety net; that net became a
+ *    hazard the moment the convention was settled, because a legitimately
+ *    positive `redemption` — a reversal — would have been flipped into a debit
+ *    by a client second-guessing the ledger.
  *
  * 3. **AN UNKNOWN KIND STILL RENDERS.** Same reasoning as `orderStory.ts` rule
- *    1: the ledger is assembled from three ERPNext sources and a shop can add
- *    a fourth. A row this module has never seen falls back to the server's own
- *    `detail`, because dropping it would hide exactly the movement somebody
- *    cared enough to record.
+ *    1: the ledger is assembled from four ERPNext sources and a shop can add a
+ *    fifth. A row this module has never seen keeps its amount, its date and
+ *    its reference, and falls back to a generic label — dropping it would hide
+ *    exactly the movement somebody cared enough to record.
  */
 
 import { describeDay } from "../flows/orden/orderStory";
 
 /**
- * Kinds the ledger knows how to name. Spelled as the union the server's own
- * vocabulary uses plus the aliases seen in the wild — `redeem`/`redemption`,
- * `cashback`/`cashback_earned` — resolved in one place so no caller has to
- * know there were ever two spellings.
+ * The ledger's vocabulary, spelled exactly as `stored_value._movement` emits
+ * it. Not translated into a second internal set of names: two vocabularies for
+ * one concept is a drift waiting to happen, and the server already sends the
+ * same string twice (`kind` and `type`) for that very reason.
  */
 export type WalletMovementKind =
 	| "deposit"
 	| "redemption"
-	| "cashback_earned"
+	| "cashback"
 	| "cashback_spent"
 	| "credit_note"
 	| "adjustment";
 
-/** Movements that take money OUT of the wallet. See rule 2. */
-const DEBIT_KINDS = new Set<WalletMovementKind>(["redemption", "cashback_spent"]);
-
-/** Wire spelling → the kind this module reasons about. */
-const KIND_ALIASES: ReadonlyArray<{ match: RegExp; kind: WalletMovementKind }> = [
-	{ match: /^(deposit|top_?up|advance)$/i, kind: "deposit" },
-	{ match: /^(redemption|redeem|redeemed|wallet_payment|credit_used)$/i, kind: "redemption" },
-	{ match: /^(cashback|cashback_earned|points_earned|loyalty_earned)$/i, kind: "cashback_earned" },
-	{
-		match: /^(cashback_spent|points_redeemed|loyalty_redeemed|points_used)$/i,
-		kind: "cashback_spent",
-	},
-	{ match: /^(credit_note|return|returned)$/i, kind: "credit_note" },
-	{ match: /^(adjustment|correction)$/i, kind: "adjustment" },
-];
+const KNOWN_KINDS: ReadonlySet<string> = new Set<WalletMovementKind>([
+	"deposit",
+	"redemption",
+	"cashback",
+	"cashback_spent",
+	"credit_note",
+	"adjustment",
+]);
 
 /**
- * `kind` → what happened, in register language. A LIST rather than a keyed
- * record for the reason `orderStory.ts` states: `registerShellTranslations`
- * sees a `labelKey` property and demands Spanish for every one, and a record
- * keyed by `deposit:` would hide the whole vocabulary from the only thing that
- * would notice it has none.
+ * `kind` → what happened, in register language.
+ *
+ * The server sends its own `label` beside every row and this module ignores
+ * it. Not duplication for its own sake: `registerShellTranslations` can see a
+ * `labelKey` here and demand Spanish for it, while a string built inside a
+ * Python `frappe._()` is invisible to that scan — and the row would otherwise
+ * print the same words twice, once from `label` and once from here.
+ *
+ * A LIST rather than a keyed record for the reason `orderStory.ts` states: a
+ * record keyed by `deposit:` would hide the whole vocabulary from the only
+ * thing that would notice it has none.
  */
 const MOVEMENT_LABELS: ReadonlyArray<{ kind: WalletMovementKind; labelKey: string }> = [
 	{ kind: "deposit", labelKey: "Deposit" },
 	{ kind: "redemption", labelKey: "Paid with the wallet" },
-	{ kind: "cashback_earned", labelKey: "Cashback" },
+	{ kind: "cashback", labelKey: "Cashback" },
 	{ kind: "cashback_spent", labelKey: "Cashback spent" },
 	{ kind: "credit_note", labelKey: "Credit note" },
 	{ kind: "adjustment", labelKey: "Adjustment" },
@@ -81,29 +91,31 @@ const MOVEMENT_LABELS: ReadonlyArray<{ kind: WalletMovementKind; labelKey: strin
 export interface WalletMovement {
 	/** Stable `v-for` key — timestamps repeat, the index does not. */
 	key: string;
-	/** `YYYY-MM-DD`; the time, when the source knew one, is not shown here. */
+	/** `YYYY-MM-DD`, read off `ts` — see `dayOf`. */
 	day: string;
 	kind: WalletMovementKind | null;
 	/** English source string; the view wraps it in `__()`. */
 	labelKey: string;
-	/** The document's own words — a mode of payment, a programme name. */
+	/** The tender a deposit came in on. Absent on every other kind. */
 	detail: string | null;
 	/** The invoice or payment this row belongs to, printed as a folio. */
 	reference: string | null;
-	/** Signed: negative takes money out of the wallet. See rule 2. */
+	/** Signed by the server: negative takes value out of the wallet. Rule 2. */
 	amount: number;
 }
 
-/** What the contact view knows about the customer's card. */
+/**
+ * What the contact view knows about the customer's card.
+ *
+ * Note what is NOT here: a combined figure. See rule 1.
+ */
 export interface CustomerWallet {
-	/** Pesos on the wallet today — monedero plus cashback, as ONE spendable. */
+	/** The monedero — pesos paid in, redeemable at the till today. */
 	balance: number;
-	/** Of that balance, what was paid in. `null` when the server did not say. */
-	deposited: number | null;
-	/** Of that balance, what was earned. `null` when the server did not say. */
-	cashbackValue: number | null;
-	/** Loyalty points behind `cashbackValue`, when the server reports them. */
-	points: number | null;
+	/** What the customer's points are worth. NOT part of `balance`. */
+	cashbackValue: number;
+	/** The points behind `cashbackValue`. */
+	points: number;
 	enrolled: boolean;
 	/** Loyalty Program id, and the name a cashier would recognise. */
 	program: string | null;
@@ -116,36 +128,25 @@ export interface CustomerWallet {
 	truncated: boolean;
 }
 
-const toFiniteNumber = (value: unknown): number | null => {
+const num = (value: unknown): number | null => {
 	if (value === null || value === undefined || value === "") return null;
+	// An OBJECT is never a figure. The payload carries `stored_value` and
+	// `cashback` as grouped objects beside the flat keys, and `Number({})` is
+	// `NaN` rather than a throw — so a misread would surface as a blank card
+	// rather than as an error anybody could trace.
+	if (typeof value === "object") return null;
 	const parsed = typeof value === "number" ? value : Number.parseFloat(String(value));
 	return Number.isFinite(parsed) ? parsed : null;
 };
 
-const toText = (value: unknown): string | null => {
-	const text = typeof value === "string" ? value.trim() : "";
-	return text ? text : null;
-};
-
-/**
- * First present key wins. The wallet payload is being written in a sibling
- * task against the same spec, and a reader that accepts the two obvious
- * spellings of a field costs four lines and removes a whole class of "the card
- * renders but every figure is zero" failure — the one shape a mock can never
- * catch, because a mock is written from the same guess as the reader.
- */
-const pick = (source: Record<string, unknown>, ...keys: string[]): unknown => {
-	for (const name of keys) {
-		const value = source[name];
-		if (value !== undefined && value !== null && value !== "") return value;
-	}
-	return undefined;
+const text = (value: unknown): string | null => {
+	const value_ = typeof value === "string" ? value.trim() : "";
+	return value_ ? value_ : null;
 };
 
 export const resolveMovementKind = (raw: unknown): WalletMovementKind | null => {
-	const text = String(raw ?? "").trim();
-	if (!text) return null;
-	return KIND_ALIASES.find((entry) => entry.match.test(text))?.kind ?? null;
+	const value = String(raw ?? "").trim();
+	return KNOWN_KINDS.has(value) ? (value as WalletMovementKind) : null;
 };
 
 export const movementLabelKey = (kind: WalletMovementKind | null): string =>
@@ -153,6 +154,10 @@ export const movementLabelKey = (kind: WalletMovementKind | null): string =>
 
 /**
  * Read the day off a timestamp STRING.
+ *
+ * `ts` is the instant the movement was recorded and is what a screen prints;
+ * `posting_date` is the accounting date it belongs to, which differs only on a
+ * back-dated entry and is not the question a counter is asking.
  *
  * Never `new Date(...)`: `new Date("2026-08-19")` is parsed as UTC midnight and
  * renders as the 18th in every timezone west of Greenwich, which is all of
@@ -174,14 +179,9 @@ export const todayKey = (now: Date = new Date()): string => {
  * «hoy» or «18 ago», for a ledger column and a totals row that must agree.
  *
  * A FACTORY taking the translator rather than reaching for `window.__`, so the
- * mapping stays pure and both callers — the movements ledger and the story's
- * «última» — render a date the same way. Two copies of a date formatter is
- * exactly the drift that puts «hoy» in one column and `2026-08-23` in the one
- * beside it.
- *
- * Read off the STRING, never through `new Date(day)`: `orderStory.ts` states
- * the trap in full — a bare `YYYY-MM-DD` parses as UTC midnight and renders as
- * the previous day everywhere west of Greenwich, which is all of Mexico.
+ * mapping stays pure and every caller renders a date the same way. Two copies
+ * of a date formatter is exactly the drift that puts «hoy» in one column and
+ * `2026-08-23` in the one beside it.
  */
 export const makeDayLabel =
 	(t: (key: string) => string, now: () => Date = () => new Date()) =>
@@ -193,47 +193,41 @@ export const makeDayLabel =
 		return `${parts.dayNumber} ${t(parts.monthKey)}`;
 	};
 
-/** See rule 2: the server's sign wins, and a bare figure is signed by kind. */
-export const signedAmount = (kind: WalletMovementKind | null, amount: number): number => {
-	if (amount < 0) return amount;
-	return kind && DEBIT_KINDS.has(kind) ? -amount : amount;
-};
+/**
+ * «mar 2025» — a month and a year, for «cliente desde …».
+ *
+ * The day is deliberately dropped: nobody asks which Tuesday somebody became a
+ * customer, and a full date in a header line reads as a transaction rather
+ * than as a relationship. Same string-reading rule as `makeDayLabel`.
+ */
+export const makeMonthYearLabel =
+	(t: (key: string) => string) =>
+	(stamp: string): string => {
+		const parts = describeDay(dayOf(stamp));
+		if (!parts) return "";
+		return `${t(parts.monthKey)} ${parts.year}`;
+	};
 
 const normalizeMovement = (raw: unknown, index: number): WalletMovement | null => {
 	if (!raw || typeof raw !== "object") return null;
 	const row = raw as Record<string, unknown>;
-	const amount = toFiniteNumber(pick(row, "amount", "value", "credit", "total"));
+	const amount = num(row.amount);
 	// A movement with no figure is not a movement anybody can read; the ledger
 	// is a column of amounts and a blank one reads as a rendering fault.
 	if (amount === null) return null;
-	const kind = resolveMovementKind(pick(row, "kind", "type", "movement_type"));
+	const kind = resolveMovementKind(row.kind);
 	return {
 		key: `${index}`,
-		day: dayOf(pick(row, "ts", "date", "posting_date", "creation")),
+		day: dayOf(row.ts),
 		kind,
 		labelKey: movementLabelKey(kind),
-		detail: toText(pick(row, "detail", "description", "mode_of_payment", "remark")),
-		reference: toText(pick(row, "reference", "reference_name", "invoice", "name")),
-		amount: signedAmount(kind, amount),
+		// The tender, and only the tender. The server's `detail` is a copy of
+		// its own `label`, which this row already says in the register's
+		// language — printing both gives «Depósito · Depósito».
+		detail: text(row.mode_of_payment),
+		reference: text(row.reference),
+		amount,
 	};
-};
-
-/**
- * Cashback rate, as a percent ready to print.
- *
- * A programme's collection rule reaches the wire as either `3` (percent) or
- * `0.03` (a fraction), and the two are indistinguishable from the number alone
- * ONCE — at exactly 1. The explicit percent key is read first for that reason;
- * the fraction reading is the fallback, and a 1 % programme that only sends
- * `cashback_rate: 1` prints 1 %, which is the reading that is right far more
- * often than "100 %" would be.
- */
-export const cashbackPercentOf = (source: Record<string, unknown>): number | null => {
-	const explicit = toFiniteNumber(pick(source, "cashback_percent", "percent"));
-	if (explicit !== null) return explicit > 0 ? explicit : null;
-	const rate = toFiniteNumber(pick(source, "cashback_rate", "rate"));
-	if (rate === null || rate <= 0) return null;
-	return rate < 1 ? rate * 100 : rate;
 };
 
 /**
@@ -245,48 +239,52 @@ export const cashbackPercentOf = (source: Record<string, unknown>): number | nul
 export const normalizeWallet = (raw: unknown): CustomerWallet | null => {
 	if (!raw || typeof raw !== "object") return null;
 	const source = raw as Record<string, unknown>;
-	const balance = toFiniteNumber(pick(source, "balance", "available_amount", "total"));
+	const balance = num(source.balance);
 	if (balance === null) return null;
 
-	const rawMovements = pick(source, "movements", "ledger", "rows");
-	const movements = Array.isArray(rawMovements)
-		? rawMovements
+	const movements = Array.isArray(source.movements)
+		? source.movements
 				.map((row, index) => normalizeMovement(row, index))
 				.filter((row): row is WalletMovement => row !== null)
 		: [];
 
-	const enrolledFlag = pick(source, "enrolled", "is_enrolled");
-	const program = toText(pick(source, "program", "loyalty_program"));
+	const percent = num(source.cashback_percent);
 
 	return {
 		balance,
-		deposited: toFiniteNumber(pick(source, "deposited", "deposits", "stored_value")),
-		cashbackValue: toFiniteNumber(pick(source, "cashback_value", "loyalty_value", "cashback")),
-		points: toFiniteNumber(pick(source, "points", "loyalty_points")),
-		// The flag is authoritative when the server sends one; a programme name
-		// on its own is the same claim said differently.
-		enrolled: enrolledFlag === undefined ? Boolean(program) : Boolean(enrolledFlag),
-		program,
-		programName: toText(pick(source, "program_name", "loyalty_program_name")) ?? program,
-		cashbackPercent: cashbackPercentOf(source),
+		cashbackValue: num(source.cashback_value) ?? 0,
+		points: num(source.points) ?? 0,
+		enrolled: Boolean(source.enrolled),
+		program: text(source.program),
+		programName: text(source.program_name) ?? text(source.program),
+		// A programme with no collection factor sends `null`, and `null` draws
+		// no chip. Never "0 %", which reads as a programme that pays nothing.
+		cashbackPercent: percent !== null && percent > 0 ? percent : null,
 		movements,
-		cap: toFiniteNumber(pick(source, "cap", "limit")),
-		truncated: Boolean(pick(source, "truncated")),
+		cap: num(source.cap),
+		truncated: Boolean(source.truncated),
 	};
 };
 
 /** `{points, value}` — the accrual, computed with ERPNext's own rounding. */
 export interface CashbackPreview {
-	points: number | null;
+	points: number;
 	value: number;
 }
 
+/**
+ * An unenrolled customer gets `{enrolled: false, points: 0, value: 0}` rather
+ * than a refusal, so "no accrual" and "no answer" arrive as the same `null`
+ * here — which is what the caller wants, because both mean the line is absent.
+ * A line saying «acumula $0.00» reads as a broken programme rather than as a
+ * purchase too small to earn.
+ */
 export const normalizeCashbackPreview = (raw: unknown): CashbackPreview | null => {
 	if (!raw || typeof raw !== "object") return null;
 	const source = raw as Record<string, unknown>;
-	const value = toFiniteNumber(pick(source, "value", "amount"));
+	const value = num(source.value);
 	if (value === null || value <= 0) return null;
-	return { points: toFiniteNumber(pick(source, "points")), value };
+	return { points: num(source.points) ?? 0, value };
 };
 
 /**
@@ -342,9 +340,8 @@ export const storyTotals = (events: ReadonlyArray<Record<string, unknown>>): Sto
 	for (const raw of events ?? []) {
 		if (String(raw?.kind ?? "") !== "billing") continue;
 		if (String(raw?.topic ?? "") !== "invoiced") continue;
-		const amount = toFiniteNumber(raw?.amount) ?? 0;
 		purchases += 1;
-		total += amount;
+		total += num(raw?.amount) ?? 0;
 		const day = dayOf(raw?.ts);
 		if (day > lastDay) lastDay = day;
 	}

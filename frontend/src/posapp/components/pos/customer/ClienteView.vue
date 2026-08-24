@@ -143,7 +143,7 @@ import { useCustomersStore } from "../../../stores/customersStore";
 import { useUIStore } from "../../../stores/uiStore";
 import ClienteStory from "./ClienteStory.vue";
 import ClienteWallet from "./ClienteWallet.vue";
-import { isContactableCustomer, type CustomerWallet } from "./customerCard";
+import { isContactableCustomer, makeMonthYearLabel, type CustomerWallet } from "./customerCard";
 import { fetchCustomerWallet } from "./customerCardService";
 import { updateCustomerHasHost } from "./updateCustomerHost";
 
@@ -198,18 +198,22 @@ const contactable = computed(() =>
 /**
  * «cliente desde mar 2025 · Escuinapa».
  *
- * The territory is on the payload; the SINCE half is not — `get_customer_info`
- * has never returned `Customer.creation`, and inventing a date on a screen
- * whose whole job is to be trusted about this person would be the same defect
- * `CustomerStrip` refuses for its own purchase provenance. So the half that
- * exists renders and the half that does not is absent, and the moment
- * `customers.py` adds `creation` this line grows the phrase with no change
- * here. The one-line server change is in this task's report.
+ * A month and a year, never a full date: nobody asks which Tuesday somebody
+ * became a customer, and a `2025-03-14` in a header line reads as a
+ * transaction rather than as a relationship.
+ *
+ * Each half renders only if the payload carries it. `creation` arrived on
+ * `get_customer_info` in the same round as the wallet endpoints; on a tenant
+ * whose server is older the phrase is simply absent rather than invented,
+ * which is the rule `CustomerStrip` already states for its own purchase
+ * provenance.
  */
+const monthYear = makeMonthYearLabel(__);
+
 const subline = computed(() => {
 	const parts: string[] = [];
-	const since = text("creation");
-	if (since) parts.push(__("Customer since {0}").replace("{0}", since.split(" ")[0] ?? since));
+	const since = monthYear(text("creation"));
+	if (since) parts.push(__("Customer since {0}").replace("{0}", since));
 	const territory = text("territory");
 	if (territory) parts.push(territory);
 	return parts.join(" · ");
