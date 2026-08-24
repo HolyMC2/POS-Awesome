@@ -316,13 +316,18 @@ def get_service_order_counts(pos_profile):
     assert_company(frappe.session.user, company)
 
     def _count(status: str) -> int:
+        # Dict syntax, not "count(name) as total": the HTTP API path runs
+        # get_all with string-SQL-function validation ON and 417s the whole
+        # probe (bench console does not, which is how this shipped green).
+        # The alias frappe mints for a dict COUNT is version-detail — read
+        # the row's single value instead of naming it.
         rows = frappe.get_all(
             CHARGE_REQUEST_DOCTYPE,
             filters={"status": status, "company": company},
             or_filters=_profile_or_filters(pos_profile),
-            fields=["count(name) as total"],
+            fields=[{"COUNT": "name"}],
         )
-        return cint(rows[0].get("total")) if rows else 0
+        return cint(next(iter(rows[0].values()))) if rows else 0
 
     return {
         "ready": _count("Open"),
