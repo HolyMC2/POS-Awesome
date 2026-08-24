@@ -79,7 +79,7 @@
 						:pos-profile="profileName"
 						:tenders="tenders"
 						:format-currency="formatCurrency"
-						@refresh="loadWallet"
+						@refresh="onWalletChanged"
 					/>
 				</aside>
 
@@ -250,6 +250,28 @@ async function loadWallet() {
 		return;
 	}
 	wallet.value = await fetchCustomerWallet(customerId.value, company.value);
+}
+
+/**
+ * An ACT on the wallet — activating the card, taking a deposit — changed two
+ * things, and this view only knows about one of them.
+ *
+ * The card above re-reads through `loadWallet`. The SALE does not: it reads
+ * `loyalty_program` and `stored_value_balance` off `customerInfo`, fetched
+ * when the customer was chosen, so a customer enrolled from this dialog kept
+ * selling as an unenrolled one until somebody reselected them — no wallet line
+ * at Cobro, no accrual asked for.
+ *
+ * `requestCustomerRefresh` is the store's existing token for exactly this:
+ * `Invoice.vue` and `PayView.vue` both watch it and re-run
+ * `fetch_customer_details`, which re-publishes `customerInfo`. It had no
+ * caller. Bumped here rather than in `loadWallet`, which also runs on every
+ * open of this view: opening a file to look at it is not a reason to re-fetch
+ * the sale's customer.
+ */
+function onWalletChanged() {
+	void loadWallet();
+	customersStore.requestCustomerRefresh();
 }
 
 /**

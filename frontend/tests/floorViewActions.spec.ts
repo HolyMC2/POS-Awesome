@@ -39,6 +39,7 @@ const floorStore = reactive({
 	activeOrder: null as any,
 	transferOrder: null as any,
 	isOccupied: vi.fn(() => true),
+	ordersForTable: vi.fn((_name: string) => [order]),
 	setActiveFloor: vi.fn(),
 	setViewMode: vi.fn(),
 	setEditorMode: vi.fn(),
@@ -106,6 +107,7 @@ vi.mock("../src/posapp/components/floor/TableActionSheet.vue", async () => {
 					h("button", { "data-test": "sheet-add", onClick: () => emit("action", "add-items", props.table) }),
 					h("button", { "data-test": "sheet-view", onClick: () => emit("action", "view", props.table) }),
 					h("button", { "data-test": "sheet-charge", onClick: () => emit("action", "charge", props.table) }),
+					h("button", { "data-test": "sheet-release", onClick: () => emit("action", "release", props.table) }),
 					h("button", { "data-test": "sheet-order", onClick: () => emit("order", {
 						order_uid: "ord-a", table: "tbl-4", tab_name: "Familia A", total: 120,
 						items_count: 2, unsent_count: 0, modified: "2026-08-13 11:45:00",
@@ -160,6 +162,9 @@ function mountFloor() {
 beforeEach(() => {
 	vi.clearAllMocks();
 	floorStore.activeOrder = null;
+	// `clearAllMocks` clears calls, not implementations — restore the default
+	// the release cases override per test.
+	floorStore.ordersForTable.mockReturnValue([order]);
 	class ResizeObserverStub {
 		observe() {}
 		disconnect() {}
@@ -222,6 +227,103 @@ describe("FloorView action routing", () => {
 			"pos:floor-action",
 			expect.any(Number),
 		);
+	});
+
+	// «Liberar mesa» from the modal sheet — the stray-cuenta verb that had no
+	// entry point outside the stage sheet and the ticket panel.
+	describe("Release table", () => {
+		const emptyOrder = { ...order, order_uid: "ord-empty", total: 0, items_count: 0 };
+		const release = async (wrapper: any) => {
+			await wrapper.find("[data-test='plan-table']").trigger("click");
+			await wrapper.find("[data-test='sheet-release']").trigger("click");
+			await flushPromises();
+		};
+
+		it("cancels an EMPTY stray, and does not send the operator anywhere", async () => {
+			floorStore.ordersForTable.mockReturnValue([emptyOrder]);
+			const { wrapper, eventBus } = mountFloor();
+			await release(wrapper);
+
+			expect(floorStore.cancelOrder).toHaveBeenCalledWith(
+				expect.objectContaining({ order_uid: "ord-empty" }),
+			);
+			// The other sheet verbs land the operator in the cart or the item
+			// list; clearing a stray leaves them on the room.
+			expect(floorStore.openOrCreate).not.toHaveBeenCalled();
+			expect(eventBus.emit).not.toHaveBeenCalledWith("set_selector_view", "items");
+			expect(eventBus.emit).not.toHaveBeenCalledWith(
+				"floor_order_opened",
+				expect.anything(),
+			);
+		});
+
+		it("never adopts the cuenta it is about to cancel", async () => {
+			// Hydrating would put a ticket the cashier did not ask for into their
+			// cart, and the ticket strip it mounts races the sheet's own closing
+			// transition — a `parentNode` TypeError on demo.lab on every release.
+			floorStore.ordersForTable.mockReturnValue([emptyOrder]);
+			const { wrapper } = mountFloor();
+			await release(wrapper);
+
+			expect(floorStore.resumeOrder).not.toHaveBeenCalled();
+		});
+
+		it("re-reads the board before it trusts the line count", async () => {
+			// The row the button was drawn from carries a count from the last
+			// snapshot, and another waiter may have typed into that ticket since.
+			floorStore.ordersForTable.mockReturnValue([emptyOrder]);
+			const { wrapper } = mountFloor();
+			await release(wrapper);
+
+			expect(floorStore.refresh).toHaveBeenCalledWith({ silent: true });
+			expect(floorStore.refresh.mock.invocationCallOrder[0]).toBeLessThan(
+				floorStore.cancelOrder.mock.invocationCallOrder[0],
+			);
+		});
+
+		it("REFUSES a cuenta that has lines, even when the verb reaches it", async () => {
+			floorStore.ordersForTable.mockReturnValue([order]);
+			const { wrapper } = mountFloor();
+			await release(wrapper);
+
+			expect(floorStore.cancelOrder).not.toHaveBeenCalled();
+		});
+
+		it("REFUSES when the re-read is the thing that finds the lines", async () => {
+			// Empty on the board, occupied on the server: the refresh is what
+			// catches it, and the row the sheet rendered from is never used.
+			floorStore.ordersForTable
+				.mockReturnValueOnce([emptyOrder])
+				.mockReturnValue([{ ...emptyOrder, items_count: 3 }]);
+			const { wrapper } = mountFloor();
+			await release(wrapper);
+
+			expect(floorStore.refresh).toHaveBeenCalled();
+			expect(floorStore.cancelOrder).not.toHaveBeenCalled();
+		});
+
+		it("goes through the flushing path when it IS this register's open cuenta", async () => {
+			// That one can have lines the cart-sync debounce has not written yet,
+			// so it keeps `release()`'s flush-then-recheck.
+			floorStore.ordersForTable.mockReturnValue([emptyOrder]);
+			floorStore.activeOrder = emptyOrder;
+			const { wrapper } = mountFloor();
+			await release(wrapper);
+
+			expect(floorStore.flushCartSync).toHaveBeenCalled();
+			expect(floorStore.cancelOrder).toHaveBeenCalledWith(
+				expect.objectContaining({ order_uid: "ord-empty" }),
+			);
+		});
+
+		it("does nothing on a table with no cuenta at all", async () => {
+			floorStore.ordersForTable.mockReturnValue([]);
+			const { wrapper } = mountFloor();
+			await release(wrapper);
+
+			expect(floorStore.resumeOrder).not.toHaveBeenCalled();
+			expect(floorStore.cancelOrder).not.toHaveBeenCalled();
+		});
 	});
 
 	it("does not emit the mark when the verb fails to open an order", async () => {

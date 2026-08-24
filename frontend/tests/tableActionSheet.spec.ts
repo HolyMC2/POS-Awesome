@@ -116,10 +116,66 @@ describe("TableActionSheet", () => {
 			{ order_uid: "ord-empty", total: 0, items_count: 0, unsent_count: 0, modified: "2026-08-13 11:45:00" },
 		];
 
+		expect(actionIds(mountSheet(table()))).not.toContain("table-sheet-charge");
+	});
+
+	it("offers «Liberar mesa» on an EMPTY cuenta, so a stray can leave the board", () => {
+		// The stray: an Open order with 0 partidas — an abandoned open, or a
+		// cuenta whose lines went elsewhere — holding a mesa with an espera clock
+		// running. `cancelOrder` has always existed in the store; until now this
+		// modal was the one presentation with no way to reach it, so a cashier
+		// could see the stray and not clear it.
+		orders.value = [
+			{ order_uid: "ord-empty", total: 0, items_count: 0, unsent_count: 0, modified: "2026-08-13 11:45:00" },
+		];
+
 		expect(actionIds(mountSheet(table()))).toEqual([
 			"table-sheet-add-items",
 			"table-sheet-view",
+			"table-sheet-release",
 		]);
+	});
+
+	it("REFUSES to offer it the moment the cuenta has lines", () => {
+		// Releasing is cancelling, and cancelling a ticket with food on it is the
+		// one thing this verb must never do. Gone, not greyed out — and
+		// `FloorView.release()` re-checks after flushing the cart, so a line typed
+		// in the last second is caught even if the row said zero.
+		orders.value = [
+			{ order_uid: "ord-1", total: 120, items_count: 2, unsent_count: 1, modified: "2026-08-13 11:45:00" },
+		];
+
+		expect(actionIds(mountSheet(table()))).not.toContain("table-sheet-release");
+	});
+
+	it("never offers it on a free table, which has no cuenta to cancel", () => {
+		orders.value = [];
+		expect(actionIds(mountSheet(table()))).not.toContain("table-sheet-release");
+		expect(actionIds(mountSheet(table({ needs_cleaning: 1 })))).not.toContain(
+			"table-sheet-release",
+		);
+	});
+
+	it("reports «release» upward with its table", async () => {
+		orders.value = [
+			{ order_uid: "ord-empty", total: 0, items_count: 0, unsent_count: 0, modified: "2026-08-13 11:45:00" },
+		];
+		const row = table();
+		const picked: Array<[string, any]> = [];
+		const Harness = defineComponent({
+			components: { TableActionSheet },
+			setup: () => ({ row, picked }),
+			template: `<TableActionSheet :model-value="true" :table="row"
+				@action="(a, t) => picked.push([a, t])" />`,
+		});
+		const wrapper = mount(Harness, {
+			global: { components: { VDialog: PassThrough, VCard: PassThrough, VIcon: IconStub } },
+		});
+
+		(wrapper.find("[data-test='table-sheet-release']").element as HTMLElement).click();
+		await wrapper.vm.$nextTick();
+
+		expect(picked).toEqual([["release", row]]);
 	});
 
 	it("makes the operator choose a specific account when a table has split bills", async () => {

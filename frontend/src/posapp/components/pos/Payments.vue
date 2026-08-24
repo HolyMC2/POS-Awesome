@@ -762,7 +762,20 @@ const loading = ref(false);
 const show_change_dialog = ref(false);
 const sales_person = ref("");
 const is_credit_return = ref(false);
-const customer_info = ref("");
+// SEEDED FROM THE STORE, not left empty for a watcher that will never fire.
+//
+// The customer is chosen in the CART, and `get_customer_info` lands in
+// `customersStore` there — long before this panel exists. Every mount of this
+// component is a `v-if`: Cobro (`CobroSurface`), the payment dialog and the
+// anchored panel all appear only once the cashier asks to be paid. So the
+// watcher below, which is the ref's only other writer, has nothing left to
+// observe: the value it was waiting for arrived before it was registered.
+//
+// Empty here meant `loyalty_program` and `stored_value_balance` were both
+// undefined for the whole payment, which is why the wallet card was dark for
+// an enrolled customer AND why `useRedemptionLogic` never even asked the
+// server for the accrual — `cashbackAsksTheServer` reads this same ref.
+const customer_info = ref(customerInfo.value || "");
 const print_format = ref("");
 const print_formats = ref([]);
 const paid_change_rules = ref([]);

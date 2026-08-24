@@ -24,18 +24,30 @@ beforeEach(() => {
 });
 
 describe("which wallet the card describes", () => {
-	it("shows the loyalty value when the customer is enrolled", () => {
+	it("names the MONEDERO even when the customer is also enrolled", () => {
+		// The ordering this replaces put loyalty first whenever there was a
+		// programme, which on demo.lab drew «Puntos del cliente $0.00» over a
+		// customer holding $200 of spendable monedero — the one number the
+		// cashier cannot act on, in place of the one they can. The contact view
+		// and `get_customer_wallet` have always called the monedero the headline.
 		const wallet = resolveWalletSummary({
-			loyaltyProgram: "Puntos Doco",
-			loyaltyValue: 418,
-			storedValueBalance: 999,
+			loyaltyProgram: "Cashback Demo",
+			loyaltyValue: 0,
+			storedValueBalance: 200,
 		});
-		expect(wallet).toMatchObject({ visible: true, kind: "loyalty", balance: 418 });
+		expect(wallet).toMatchObject({ visible: true, kind: "stored-value", balance: 200 });
 	});
 
 	it("shows stored value when there is no programme", () => {
 		const wallet = resolveWalletSummary({ storedValueBalance: 418 });
 		expect(wallet).toMatchObject({ visible: true, kind: "stored-value", balance: 418 });
+	});
+
+	it("falls back to the points when they are the only wallet there is", () => {
+		// A register with a points programme and no stored-value ledger is a real
+		// configuration, and there the points ARE the wallet.
+		const wallet = resolveWalletSummary({ loyaltyProgram: "Puntos Doco", loyaltyValue: 418 });
+		expect(wallet).toMatchObject({ visible: true, kind: "loyalty", balance: 418 });
 	});
 
 	it("keeps an enrolled customer's card at zero, because zero points is a fact", () => {
@@ -83,11 +95,27 @@ describe("the accrual is only ever a read value", () => {
 		).toBe(29.2);
 	});
 
-	it("refuses to attach an accrual to a stored-value wallet", () => {
-		// Stored value is topped up deliberately at the counter; it does not
-		// accrue from a purchase. "Acumula" beside it would be a lie with a
+	it("refuses an accrual for a customer who is not enrolled", () => {
+		// The accrual is a claim about the customer's CARD, and an unenrolled
+		// customer has none — `get_cashback_preview` gates on `enrolled` and
+		// answers nothing else. A number arriving here for a walk-in is a fault
+		// upstream, and «Acumula» beside their monedero would be a lie with a
 		// number on it.
 		expect(resolveWalletSummary({ storedValueBalance: 418, accrual: 29.2 }).accrual).toBeNull();
+	});
+
+	it("carries the accrual under the MONEDERO for an enrolled customer", () => {
+		// The card the artboard draws, and the one demo.lab now renders: the
+		// balance the till can take, and on its own line what this sale earns.
+		// Two lines, never one sum.
+		expect(
+			resolveWalletSummary({
+				loyaltyProgram: "Cashback Demo",
+				loyaltyValue: 0,
+				storedValueBalance: 200,
+				accrual: 40,
+			}),
+		).toMatchObject({ visible: true, kind: "stored-value", balance: 200, accrual: 40 });
 	});
 
 	it("refuses a negative or unparseable accrual", () => {
@@ -119,5 +147,24 @@ describe("what the card actually draws", () => {
 
 	it("draws no wallet card at all for a customer without one", () => {
 		expect(mountSummary(null).find('[data-testid="pay-summary-wallet"]').exists()).toBe(false);
+	});
+
+	it("draws BOTH artboard lines for an enrolled customer with a monedero", () => {
+		// `Cobro.dc.html` nodes 50–54, and the demo.lab case that opened this:
+		// Ana Sofía Torres, «Cashback Demo», $200 paid in, 0 points, $40 on a
+		// $405 basket. The title is the monedero's, not the points'.
+		const wrapper = mountSummary({
+			loyaltyProgram: "Cashback Demo",
+			loyaltyValue: 0,
+			storedValueBalance: 200,
+			accrual: 40,
+		});
+		const card = wrapper.find('[data-testid="pay-summary-wallet"]');
+		expect(card.text()).toContain("Customer wallet");
+		expect(card.text()).not.toContain("Customer points");
+		expect(card.find('[data-money-role="wallet"]').text()).toBe("¤200.00");
+		expect(wrapper.find('[data-testid="pay-summary-wallet-accrual"]').text()).toContain(
+			"¤40.00",
+		);
 	});
 });

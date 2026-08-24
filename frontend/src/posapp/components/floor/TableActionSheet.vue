@@ -61,7 +61,7 @@
  * because `<script setup>` may not carry ES exports — the parent needs the
  * union to type its handler.
  */
-export type TableSheetAction = "open" | "view" | "add-items" | "charge" | "clean";
+export type TableSheetAction = "open" | "view" | "add-items" | "charge" | "clean" | "release";
 </script>
 
 <script setup lang="ts">
@@ -191,6 +191,25 @@ const actions = computed<ActionRow[]>(() => {
 		});
 		if (lines.value > 0) {
 			rows.push({ id: "charge", icon: "mdi-cash-register", label: verticalStore.t("Charge") });
+		} else {
+			// Spec §3: releasing a table is cancelling its EMPTY order — the
+			// abandoned open, or a cuenta whose lines went elsewhere, that would
+			// otherwise hold the mesa with an espera clock running and no way off
+			// the board. `MesaSheet` and `TableTicketPanel` have offered this
+			// since the stage landed; this modal is the presentation a tap raises
+			// wherever there is no room for the stage sheet, and it was the one
+			// place a cashier could see the stray and not clear it.
+			//
+			// Mutually exclusive with «Cobrar» on purpose: with nothing to lose it
+			// never needs a confirm, and the moment a line exists the verb is gone
+			// rather than greyed out. `FloorView.release()` re-checks after
+			// flushing the cart anyway, so a line typed in the last second refuses
+			// the cancel instead of eating it.
+			rows.push({
+				id: "release",
+				icon: "mdi-close-circle-outline",
+				label: verticalStore.t("Release table"),
+			});
 		}
 	} else {
 		rows.push({

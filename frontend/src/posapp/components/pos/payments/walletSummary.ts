@@ -20,8 +20,11 @@
  *    purchase, worth `points × conversion_factor` in pesos when redeemed.
  *
  * They are different promises and this module never merges them into one
- * figure. Which one the card describes is decided here, once, so no caller can
- * label a stored-value balance with a loyalty accrual it will never earn.
+ * figure — the card carries a balance and, on its own line, what the purchase
+ * earns. Which balance is named is decided here, once, so no caller has to
+ * choose: the monedero when the customer has one, because that is the money
+ * this till can take today; the points when it is the only wallet there is.
+ * See the guard for why that ordering changed.
  *
  * Pure: no Vue, no store, no `__()`.
  */
@@ -90,16 +93,37 @@ const toFiniteNumber = (value: unknown): number | null => {
 /**
  * THE GUARD. What the wallet card is allowed to say.
  *
- * Order matters and is not arbitrary: loyalty wins when the customer is
- * enrolled, because loyalty is the wallet that can carry an accrual, and a
- * card that showed a stored-value balance beside "acumula" would attach the
- * accrual to the wrong ledger.
+ * THE HEADLINE IS THE MONEDERO. Whatever the customer has already paid in is
+ * the money they can hand over at THIS till, on THIS sale, and it is the one
+ * figure the cashier standing at Cobro can act on. `get_customer_wallet` says
+ * the same thing in its own docstring, `ClienteWallet.vue` draws the contact
+ * view that way, and `Cobro.dc.html` nodes 50–54 write it out: «Monedero del
+ * cliente $418.00».
  *
- * An enrolled customer whose points are worth nothing yet still gets the card
- * — `$0.00` on a loyalty wallet is a fact, and it is the fact that makes the
- * accrual line worth reading. An UNKNOWN balance is not: `null` renders
- * nothing, because a zero we invented is indistinguishable from a zero we
- * read, and the customer is standing there.
+ * This module used to put loyalty first whenever the customer was enrolled,
+ * reasoning that loyalty is the wallet that carries the accrual. That ordering
+ * hid real money: a customer enrolled in a cashback programme with $200 of
+ * monedero and no points yet got «Puntos del cliente $0.00» — the $0.00 they
+ * cannot spend, in place of the $200 they can — while the contact view one
+ * screen away showed the $200. Two screens disagreeing about one person's
+ * wallet is worse than either ordering.
+ *
+ * Loyalty still gets the card when it is the ONLY wallet: a register with a
+ * points programme and no stored-value ledger is a real configuration, and
+ * `$0.00` of points is a fact worth printing there — it is what makes the
+ * accrual line beneath it worth reading.
+ *
+ * THE ACCRUAL BELONGS TO ENROLMENT, NOT TO THE HEADLINE. It is a claim about
+ * what this purchase does — the server answers it from
+ * `stored_value.get_cashback_preview`, which gates on `enrolled` and nothing
+ * else. So an enrolled customer may carry the accrual line under either
+ * balance, and an UNENROLLED one never carries it, whatever number is handed
+ * in. What this module still refuses, and always will, is ADDING the two: they
+ * are separate promises and the card prints them on separate lines.
+ *
+ * An UNKNOWN balance renders nothing: `null` is not zero, because a zero we
+ * invented is indistinguishable from a zero we read, and the customer is
+ * standing there.
  */
 export const resolveWalletSummary = (
 	input: WalletSummaryInput | null | undefined,
@@ -108,40 +132,28 @@ export const resolveWalletSummary = (
 		return ABSENT;
 	}
 
-	const accrual = toFiniteNumber(input.accrual);
-
 	const enrolled = String(input.loyaltyProgram ?? "").trim() !== "";
+	const supplied = toFiniteNumber(input.accrual);
+	// A negative accrual is not a thing a purchase does; it would be a sign
+	// error somewhere upstream, and printing it would tell the customer their
+	// wallet is about to shrink.
+	const accrual = enrolled && supplied !== null && supplied > 0 ? supplied : null;
+
+	const stored = toFiniteNumber(input.storedValueBalance);
+	if (stored !== null && stored > 0) {
+		return { visible: true, kind: "stored-value", balance: stored, accrual };
+	}
+
 	if (enrolled) {
 		const balance = toFiniteNumber(input.loyaltyValue);
 		if (balance === null) {
 			return ABSENT;
 		}
-		return {
-			visible: true,
-			kind: "loyalty",
-			balance,
-			// A negative accrual is not a thing a purchase does; it would be a
-			// sign error somewhere upstream, and printing it would tell the
-			// customer their wallet is about to shrink.
-			accrual: accrual !== null && accrual > 0 ? accrual : null,
-		};
+		return { visible: true, kind: "loyalty", balance, accrual };
 	}
 
-	const stored = toFiniteNumber(input.storedValueBalance);
 	// A customer with no stored value and no programme has no wallet, and an
 	// empty card that says "$0.00" on every anonymous walk-in teaches the
 	// cashier to stop reading that corner of the screen.
-	if (stored === null || stored <= 0) {
-		return ABSENT;
-	}
-	return {
-		visible: true,
-		kind: "stored-value",
-		balance: stored,
-		// Stored value does not accrue from a purchase. Even handed one, this
-		// card refuses to make that promise — it is topped up deliberately, at
-		// the counter, and "acumula" beside it would be a lie with a number on
-		// it.
-		accrual: null,
-	};
+	return ABSENT;
 };

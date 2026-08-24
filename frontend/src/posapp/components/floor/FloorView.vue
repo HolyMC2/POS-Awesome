@@ -804,6 +804,45 @@ async function onSheetAction(action: TableSheetAction, table: TableRow) {
 		floorActionEnd(startedAt);
 		return;
 	}
+	// «Liberar mesa» from the modal.
+	//
+	// Unlike every other sheet verb this one does NOT hydrate first. Adopting a
+	// cuenta just to cancel it would load a ticket the cashier never asked for
+	// into their cart — and the ticket strip that mount raises then unmounts
+	// again a moment later, while the sheet's own dialog is still leaving,
+	// which threw a `parentNode` TypeError on demo.lab on every release. It is
+	// also the wrong gesture: clearing a table is not taking over its bill.
+	//
+	// What each case can trust about the line count differs, so the check does
+	// too. The cuenta THIS register is holding may have lines the cart-sync
+	// debounce has not written yet — that is `release()`'s flush-then-recheck,
+	// unchanged. A stray this device does not hold has no local cart state at
+	// all; what can be stale there is the BOARD, whose rows carry counts from
+	// the last snapshot, so it is the board that gets re-read before the
+	// cancel. Same rule either way: never trust the row the button was drawn
+	// from.
+	if (action === "release") {
+		const [row] = floorStore.ordersForTable(table.name);
+		if (!row) return;
+		if (floorStore.activeOrder?.order_uid === row.order_uid) {
+			await release();
+			return;
+		}
+		releasing.value = true;
+		const startedAt = floorActionStart();
+		try {
+			await floorStore.refresh({ silent: true });
+			const current = floorStore
+				.ordersForTable(table.name)
+				.find((candidate) => candidate.order_uid === row.order_uid);
+			if (!current || current.items_count) return;
+			await floorStore.cancelOrder(current);
+			floorActionEnd(startedAt);
+		} finally {
+			releasing.value = false;
+		}
+		return;
+	}
 	// openTable carries its own mark — every other entry point (plan tile,
 	// jump pad, tabs rail) funnels through it too.
 	const opened = await openTable(table, action === "view" ? "cart" : "items");
