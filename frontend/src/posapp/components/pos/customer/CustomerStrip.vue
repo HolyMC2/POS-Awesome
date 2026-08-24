@@ -1,7 +1,22 @@
 <template>
 	<div class="customer-strip" data-testid="customer-strip">
 		<div class="customer-strip__identity">
-			<span class="customer-strip__name" data-testid="customer-strip-name">{{ customerName }}</span>
+			<!-- The name IS the way in to the person's file. Tapping who you are
+			     selling to is the gesture a counter already makes, and it costs
+			     the strip no width — the alternative was a third text link
+			     beside «cambiar» and «historial» on the densest row in the
+			     product. The refusal for the walk-in identity lives inside the
+			     view, where it can say what to do instead. -->
+			<button
+				type="button"
+				class="customer-strip__name"
+				data-testid="customer-strip-name"
+				:aria-label="__('Customer')"
+				@click="openContact"
+			>
+				{{ customerName }}
+			</button>
+
 			<button
 				type="button"
 				class="customer-strip__change"
@@ -29,6 +44,10 @@
 		<!-- Mounted only once asked for: the timeline pulls a chunk and a round
 		     trip, and neither belongs on the sale's first paint. -->
 		<CustomerStory v-if="historyMounted" v-model="historyOpen" />
+
+		<!-- Same bargain for the person's file, which is a bigger chunk still:
+		     it carries the wallet card and its ledger. -->
+		<ClienteView v-if="contactMounted" v-model="contactOpen" />
 
 		<!-- Facts, not controls. Each chip is rendered only when the register
 		     actually has the value: an absent price list is silence, never
@@ -59,6 +78,9 @@ import { computed, defineAsyncComponent, ref, watch } from "vue";
 // Async and behind `historyMounted`: the strip renders on every sale and the
 // history is opened on a few of them.
 const CustomerStory = defineAsyncComponent(() => import("./CustomerStory.vue"));
+// Same bargain for the contact view — a bigger chunk still, since it carries
+// the wallet card and its ledger.
+const ClienteView = defineAsyncComponent(() => import("./ClienteView.vue"));
 // Async too, but mounted with the strip: it has to ASK before it can know
 // whether to draw anything, and the probe disables itself for the session on
 // the first "not installed".
@@ -85,6 +107,23 @@ const historyMounted = ref(false);
 watch(historyOpen, (open) => {
 	if (open) historyMounted.value = true;
 });
+
+const contactOpen = ref(false);
+const contactMounted = ref(false);
+watch(contactOpen, (open) => {
+	if (open) contactMounted.value = true;
+});
+
+/**
+ * «Cliente» — the person's file, opened over the sale.
+ *
+ * It opens even for the walk-in identity, on purpose: the view refuses there
+ * with a sentence naming the next act, which is a better answer than a name
+ * that silently does nothing. See `customerCard.isContactableCustomer`.
+ */
+function openContact() {
+	contactOpen.value = true;
+}
 
 /**
  * The artboard's strip also carries purchase provenance — "Cliente frecuente ·
@@ -136,7 +175,16 @@ const chips = computed(() => {
 	min-width: 0;
 }
 
+/* A button that looks like the heading it replaced. The name gained an act —
+ * it opens the person's file — and none of the weight, colour or truncation
+ * changed with it, because the strip's density budget did not move either. */
 .customer-strip__name {
+	border: 0;
+	background: none;
+	padding: 0;
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
 	font-size: 1.05rem;
 	font-weight: 700;
 	color: var(--pos-text-primary);
@@ -144,6 +192,11 @@ const chips = computed(() => {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	min-width: 0;
+}
+
+.customer-strip__name:hover,
+.customer-strip__name:focus-visible {
+	text-decoration: underline;
 }
 
 /* A text affordance, not a button: it competes with nothing, and the accent

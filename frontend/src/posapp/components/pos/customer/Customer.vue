@@ -291,6 +291,7 @@ import { useOnlineStatus } from "../../../composables/core/useOnlineStatus";
 import { useToastStore } from "../../../stores/toastStore";
 import { useUIStore } from "../../../stores/uiStore";
 import { ensureCustomersReady } from "../../../modules/customers/customerLoadingCoordinator";
+import { registerUpdateCustomerHost } from "./updateCustomerHost";
 
 export default {
 	props: {
@@ -603,6 +604,15 @@ export default {
 				busHandlers.push({ event, handler });
 			}
 		};
+
+		// This component is the app's HOST for the update-customer dialog — the
+		// `<UpdateCustomer>` at the bottom of the template. Declaring it lets a
+		// caller that needs the dialog (the contact view's «Editar datos») know
+		// whether to mount its own copy or simply raise the store flag, instead
+		// of guessing and getting either two dialogs or none. Registered in
+		// setup rather than in `onMounted`, which is async here and would leave
+		// a window where the host exists but has not said so.
+		onBeforeUnmount(registerUpdateCustomerHost());
 
 		onMounted(async () => {
 			await customersStore.searchCustomers("");

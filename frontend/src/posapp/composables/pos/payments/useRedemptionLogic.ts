@@ -111,6 +111,15 @@ export function useRedemptionLogic(options: RedemptionLogicOptions) {
 			return;
 		}
 
+		// Unlike every other call in this file, this one fires from a TIMER
+		// rather than from a gesture, so a mount without the desk global would
+		// throw asynchronously — an unhandled rejection with no stack worth
+		// reading. Absence is the right answer here anyway.
+		if (typeof frappe === "undefined" || typeof frappe?.call !== "function") {
+			cashback_accrual.value = null;
+			return;
+		}
+
 		const doc = unref(invoiceDoc);
 		const profile = unref(posProfile);
 		const call = frappe.call("posawesome.posawesome.api.stored_value.get_cashback_preview", {
