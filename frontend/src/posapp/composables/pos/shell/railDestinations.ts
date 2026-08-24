@@ -69,6 +69,8 @@ export type RailGate =
 	| "externalDocumentCheckout"
 	| "saldo"
 	| "closingShift"
+	/** `custom_allow_create_quotation` on the POS Profile. */
+	| "quotations"
 	/** `posa_use_gift_cards` on the POS Profile. */
 	| "giftCards"
 	/** Supervisor access — the same probe the dashboard route already asks. */
@@ -277,15 +279,14 @@ export const RAIL_DESTINATIONS: readonly RailDestination[] = [
 		label: "Quotations",
 		icon: "mdi-file-document-edit-outline",
 		badgeSource: null,
-		// NOT gated, and that is a deliberate deviation from the POS Profile
-		// flag `custom_allow_create_quotation` which hides the old Drafts
-		// «Quote» tab. A `RailGate` is answered by `Pos.vue`'s `railGates`
-		// literal, and a gate the shell does not answer reads `undefined` —
-		// i.e. the destination vanishes from every register. Adding the gate
-		// and the shell's answer has to land in one commit; until it does, a
-		// universal entry that refuses server-side (`_assert_quotation_flow_allowed`
-		// on all four endpoints) is honest, while a hidden one would be dead.
-		gate: null,
+		// Gated on `custom_allow_create_quotation`, the same POS Profile flag
+		// that hides the old Drafts «Quote» tab and that all four quotation
+		// endpoints assert server-side (`_assert_quotation_flow_allowed`). The
+		// gate and `Pos.vue`'s answer for it landed together, which is the only
+		// way this can be done: a gate the shell does not answer reads
+		// `undefined` and the destination vanishes from EVERY register, and
+		// `Pos.vue`'s `<script>` is plain JS, so nothing would have caught it.
+		gate: "quotations",
 		// Unbound, like `floor`. An action id here would have to be bound in
 		// `MUELLE_DEFAULT` *and* implemented in `invoiceShortcuts.ts`, which
 		// `shortcutsEngine.spec.ts` checks by name — see the report's note on

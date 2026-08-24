@@ -441,14 +441,18 @@ export function useCustomerDisplayPublisher({
 
 	/**
 	 * The sale closed. This is the ONLY thing that puts «Gracias» on the
-	 * screen, and it is a submit-success fact: `usePaymentSubmission` calls it
-	 * with the change the server booked as a Payment Entry, so the figure and
-	 * the GL always agree.
+	 * screen, and it is always a submit-success fact — both of its callers are
+	 * events `usePaymentSubmission` emits after the server's verdict, so the
+	 * figures and the GL always agree. Nothing infers it from an emptied cart.
+	 *
+	 * `change` is the change the server booked as a Payment Entry, or null when
+	 * the sale was settled exactly; the field is omitted rather than published
+	 * as a zero.
 	 *
 	 * Published immediately rather than debounced — the invoice is cleared a
 	 * few statements later and the 80 ms would land after it.
 	 */
-	const handleChangeDue = (payload: any = {}) => {
+	const declareDone = (change: number | null) => {
 		const snapshot = buildSaleSnapshot();
 		snapshot.stage = "done";
 
@@ -456,7 +460,6 @@ export function useCustomerDisplayPublisher({
 		if (received !== null && received > TOLERANCE) {
 			snapshot.received_amount = received;
 		}
-		const change = toFiniteOrNull(payload?.amount);
 		if (change !== null && change > TOLERANCE) {
 			snapshot.change_amount = change;
 		}
@@ -472,6 +475,35 @@ export function useCustomerDisplayPublisher({
 		}, DONE_DWELL_MS);
 
 		publishSnapshot();
+	};
+
+	const handleChangeDue = (payload: any = {}) =>
+		declareDone(toFiniteOrNull(payload?.amount));
+
+	/**
+	 * The other way a sale closes — and the only way an exactly-paid one does.
+	 *
+	 * `show_change_due` fires only when there is money to hand back, so a card
+	 * sale or a transfer settled to the peso reached the end of the submit
+	 * routine with the display still showing the basket, and the screen went
+	 * from the sale straight to the greeting without ever saying «Gracias».
+	 * `invoice_submitted` is emitted on every successful online submit, so it
+	 * covers that case and the toast-fallback register where nothing wires
+	 * `onChangeDue` at all.
+	 *
+	 * Two refusals:
+	 *
+	 *  - A DONE TABLEAU ALREADY STANDING wins. On a change sale both events
+	 *    arrive, `show_change_due` first and carrying the server-booked figure;
+	 *    letting this one through would re-arm the dwell and give the customer
+	 *    a second, longer thank-you for one sale.
+	 *  - A RETURN says nothing. The register's «Gracias» tableau prices the
+	 *    basket as a purchase, and the display has no refund state to draw
+	 *    instead — the same reason `show_change_due` excludes returns.
+	 */
+	const handleInvoiceSubmitted = (payload: any = {}) => {
+		if (payload?.is_return || doneTableau) return;
+		declareDone(toFiniteOrNull(payload?.change_amount));
 	};
 
 	/**
@@ -556,6 +588,7 @@ export function useCustomerDisplayPublisher({
 		if (eventBus?.on) {
 			eventBus.on("open_customer_display", handleOpenRequest);
 			eventBus.on("show_change_due", handleChangeDue);
+			eventBus.on("invoice_submitted", handleInvoiceSubmitted);
 			eventBus.on("clear_invoice", handleClearInvoice);
 		}
 		tryAutoOpen();
@@ -566,6 +599,7 @@ export function useCustomerDisplayPublisher({
 		if (eventBus?.off) {
 			eventBus.off("open_customer_display", handleOpenRequest);
 			eventBus.off("show_change_due", handleChangeDue);
+			eventBus.off("invoice_submitted", handleInvoiceSubmitted);
 			eventBus.off("clear_invoice", handleClearInvoice);
 		}
 		if (publishTimer) {

@@ -82,6 +82,15 @@ export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
 
 	// ── documents ───────────────────────────────────────────────────────
 	{ id: "invoice.saveAndClear", label: "Save draft and clear", category: "documents" },
+	{
+		id: "invoice.saveQuotation",
+		label: "Save quotation",
+		category: "documents",
+		// The dialog's own subtitle, word for word: the cheat sheet and the
+		// dialog it opens should not describe the gesture two different ways —
+		// and the row is already in es.csv, so this adds no new string.
+		hint: "File this cart as a quotation",
+	},
 	{ id: "invoice.openDrafts", label: "Open draft invoices", category: "documents" },
 	{ id: "orders.openDrafts", label: "Open draft orders", category: "documents" },
 	{ id: "returns.open", label: "Open returns", category: "documents" },

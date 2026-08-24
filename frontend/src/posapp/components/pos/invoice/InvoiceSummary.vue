@@ -436,8 +436,9 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, inject, nextTick, onMounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
+import { bus as importedBus } from "../../../bus";
 import { loadItemSelectorSettings } from "../../../utils/itemSelectorSettings";
 import { useResponsive } from "../../../composables/core/useResponsive";
 import { useUIStore } from "../../../stores/uiStore";
@@ -570,6 +571,9 @@ const responsive = useResponsive();
 const uiStore = useUIStore();
 const verticalStore = useVerticalStore();
 const invoiceStore = useInvoiceStore();
+// The bus the SHELL listens on, by injection; the module import is the fallback
+// for specs that mount this card with no app installed.
+const eventBus = inject("eventBus", importedBus);
 
 // Counts at the strip's left, the way `Main.dc.html` opens that line
 // ("6 líneas · 9 piezas"). Sourced from the store rather than recounted, so it
@@ -668,6 +672,13 @@ const actionStripProps = computed(() => ({
 // `emit("save-and-clear")` looks for `onSaveAndClear` first.
 const actionStripHandlers = {
 	saveAndClear: handleSaveAndClear,
+	// Onto the bus rather than up through an emit: every other chip here has a
+	// handler already living in `Invoice.vue`, and this one's does not — the
+	// dialog belongs to `NavbarMenu.vue`, which owns the `open_save_quotation`
+	// listener and reads the cart from the invoice store itself. Injected the
+	// way `MesaContextStrip.vue` does it, with the module import as the fallback
+	// for a mount that has no app.
+	saveQuotation: () => eventBus.emit("open_save_quotation"),
 	loadDrafts: handleLoadDrafts,
 	selectOrder: handleSelectOrder,
 	cancelSale: handleCancelSale,

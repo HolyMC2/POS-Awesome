@@ -1033,6 +1033,7 @@ export default {
 			// here; the rail must not offer a door that is bricked up.
 			closingShift: !parseBooleanSetting(posProfile.value?.posa_hide_closing_shift),
 			giftCards: parseBooleanSetting(posProfile.value?.posa_use_gift_cards),
+			quotations: parseBooleanSetting(posProfile.value?.custom_allow_create_quotation),
 			dashboard: supervisorAccess.value,
 		}));
 

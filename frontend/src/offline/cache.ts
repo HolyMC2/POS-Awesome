@@ -62,6 +62,9 @@ import {
 	type CatalogVisibilityFlags,
 } from "./catalogVisibility";
 import { memory, persist, db, checkDbHealth } from "./db";
+// The module, not `./index` — the barrel is stubbed by half the suite, and a
+// cache-clear that silently no-ops under a stub is worse than none.
+import { clearCachedComboOffers } from "./comboOffers";
 import { emitBootstrapSnapshotUpdated } from "../posapp/utils/bootstrapRuntimeEvents";
 
 const normalizeScope = (scope: unknown): string => String(scope || "");
@@ -1154,6 +1157,9 @@ export function reduceCacheUsage() {
 	persist("stock_cache_ready");
 	persist("coupons_cache");
 	persist("item_groups_cache");
+	// Owned by `offline/comboOffers.ts` (its own slot, its own key derivation),
+	// so it is cleared through that module rather than by name from here.
+	clearCachedComboOffers();
 }
 
 // --- Sync watermarks (memory + IndexedDB) ------------------------------------

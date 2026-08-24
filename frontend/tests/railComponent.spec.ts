@@ -11,12 +11,18 @@ import {
 	type RailGateMap,
 } from "../src/posapp/composables/pos/shell/railDestinations";
 
-const ALL_GATES: RailGateMap = {
+// Deliberately not every gate: `giftCards` and `dashboard` are left unanswered
+// so the tools flyout renders its three universal entries. Cotizaciones IS
+// answered, because it is gated now — drop the key and the twelve-pill counts
+// below become eleven, which is exactly what an unanswered gate does to a real
+// register.
+const ALL_GATES = {
 	floor: true,
 	externalDocumentCheckout: true,
 	saldo: true,
 	closingShift: true,
-};
+	quotations: true,
+} as RailGateMap;
 
 /**
  * Render-function stub, not a `template:` one: these specs run against the

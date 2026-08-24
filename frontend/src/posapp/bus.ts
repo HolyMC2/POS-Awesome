@@ -64,6 +64,31 @@ export type Events = {
 	reset_invoice_type_to_invoice: void;
 	send_invoice_doc_payment: InvoiceDoc;
 	invoice_submission_failed: { invoice?: string; reason?: string; timestamp?: number };
+	/**
+	 * The server accepted a submission: the document exists, it is submitted,
+	 * and — for a sale — it is paid. Emitted once per successful ONLINE submit
+	 * from `usePaymentSubmission`, whatever the change came to.
+	 *
+	 * Its reason for existing is the case `show_change_due` cannot report.
+	 * That event fires only when there is change to hand back, so a sale
+	 * settled to the peso — every card sale, most transfers — closed without
+	 * the register ever saying so, and the customer's screen never reached its
+	 * «Gracias» state.
+	 *
+	 * NOT emitted for an offline or queued sale. Those are accepted by the
+	 * REGISTER, not by the server: nothing is booked yet and nothing has been
+	 * paid, so announcing a completed sale on one would be a claim about the
+	 * customer's money that is not true. `is_return` rides along so a listener
+	 * that has nothing to say about a refund can stay silent without re-reading
+	 * the invoice.
+	 */
+	invoice_submitted: {
+		invoice?: string;
+		currency?: string;
+		/** The change the server booked as a Payment Entry; absent when none. */
+		change_amount?: number;
+		is_return?: boolean;
+	};
 	recalculate_return_discount: { defer?: boolean };
 
 	// ---- shell → invoice panel requests (CartView contract) -----------------

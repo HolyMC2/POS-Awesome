@@ -204,6 +204,13 @@ export const INVOICE_SHORTCUT_EFFECTS: Record<string, ShortcutEffect> = {
 		this.eventBus.emit("open_destination", "closing");
 	},
 
+	"invoice.saveQuotation"(event) {
+		consumeEvent(event);
+		// The dialog reads the cart from the invoice store, so there is nothing
+		// to hand over. `NavbarMenu.vue` owns the listener and the dialog.
+		this.eventBus.emit("open_save_quotation");
+	},
+
 	"catalog.toggleDrawer"(event) {
 		consumeEvent(event);
 		this.eventBus.emit("toggle_catalog_drawer");

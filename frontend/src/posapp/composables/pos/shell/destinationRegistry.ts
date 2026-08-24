@@ -227,12 +227,13 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 		labelKey: "Quotations",
 		kind: "sheet",
 		path: "/pos/quotations",
-		// Universal for the same reason the rail entry is — see its note. The
-		// gate that matters is server-side: every quotation endpoint asserts
-		// profile membership AND `custom_allow_create_quotation` before it
-		// reads or writes anything.
+		// Same flag the rail gate reads, so the URL cannot resolve to a surface
+		// the rail refuses to show. The server asserts it too — every quotation
+		// endpoint checks profile membership AND `custom_allow_create_quotation`
+		// before it reads or writes anything — so this is the courtesy, not the
+		// enforcement.
 		capability: null,
-		profileFlag: null,
+		profileFlag: "custom_allow_create_quotation",
 		// The list, the estado and the conversion link are all server facts,
 		// and the load MINTS a draft invoice. There is nothing to do here
 		// without a connection.

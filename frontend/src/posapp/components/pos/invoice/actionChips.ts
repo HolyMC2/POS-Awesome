@@ -58,6 +58,14 @@ export const ACTION_CHIPS: readonly ActionChipDef[] = [
 		scope: "sale",
 	},
 	{
+		id: "save-quotation",
+		actionId: "invoice.saveQuotation",
+		label: "Save quotation",
+		icon: "mdi-file-document-edit-outline",
+		scope: "sale",
+		profileFlag: "custom_allow_create_quotation",
+	},
+	{
 		id: "select-order",
 		actionId: "orders.openDrafts",
 		label: "Select S.O",

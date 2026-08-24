@@ -38,6 +38,7 @@ import {
 	useCustomerDisplayPublisher,
 } from "../src/posapp/composables/pos/shared/useCustomerDisplayPublisher";
 import { resolveDisplayView } from "../src/posapp/components/customer_display/displayModel";
+import submissionSource from "../src/posapp/composables/pos/payments/usePaymentSubmission.ts?raw";
 import { useInvoiceStore } from "../src/posapp/stores/invoiceStore";
 import { useCustomersStore } from "../src/posapp/stores/customersStore";
 import { useUIStore } from "../src/posapp/stores/uiStore";
@@ -388,6 +389,146 @@ describe("done is declared by the register, never inferred from an empty cart", 
 		const snapshot = published()!;
 		expect(snapshot).not.toHaveProperty("stage");
 		expect(snapshot.items[0]!.item_name).toBe("Cable USB-C");
+	});
+});
+
+/**
+ * The exact-payment gap.
+ *
+ * `show_change_due` fires only when there is change to hand back, so until
+ * `invoice_submitted` existed a sale settled to the peso — every card sale,
+ * most transfers — closed with the basket still on the screen and went from
+ * the sale straight to the greeting. The customer was never thanked.
+ */
+describe("a sale settled to the peso still says «gracias»", () => {
+	it("reaches done on an exact payment, with no change row", async () => {
+		mountPublisher();
+		useInvoiceStore().setItems([plainLine()]);
+		armTender(348, 348);
+		await settle();
+
+		// A card sale: the server booked no change Payment Entry, so
+		// `show_change_due` never fires and this is the only thing that arrives.
+		bus.emit("invoice_submitted", {
+			invoice: "ACC-SINV-2026-03341",
+			currency: "MXN",
+			is_return: false,
+		});
+
+		const snapshot = published()!;
+		expect(snapshot.stage).toBe("done");
+		expect(snapshot.received_amount).toBe(348);
+		// Absence, not a zero: there is no change, so there is no change row.
+		expect(snapshot).not.toHaveProperty("change_amount");
+		expect(resolveDisplayView(snapshot).state).toBe("done");
+	});
+
+	it("leaves the change sale's thank-you exactly as it was", async () => {
+		mountPublisher();
+		const invoiceStore = useInvoiceStore();
+		invoiceStore.setItems([plainLine()]);
+		armTender(500, 348);
+		await settle();
+
+		// Both arrive on a change sale, in the order the submit routine emits
+		// them. The first one wins the tableau and owns the dwell.
+		bus.emit("show_change_due", { amount: 152, currency: "MXN" });
+		bus.emit("invoice_submitted", {
+			invoice: "ACC-SINV-2026-03342",
+			currency: "MXN",
+			change_amount: 152,
+			is_return: false,
+		});
+
+		const snapshot = published()!;
+		expect(snapshot.stage).toBe("done");
+		expect(snapshot.change_amount).toBe(152);
+		expect(snapshot.received_amount).toBe(500);
+
+		// The rest of the completion, in the order the register runs it.
+		useUIStore().closePaymentDialog();
+		invoiceStore.clear();
+		invoiceStore.setInvoiceDoc(null);
+		bus.emit("clear_invoice");
+		await settle();
+		expect(published()!.stage).toBe("done");
+
+		// One sale, one dwell. A second `declareDone` would have re-armed the
+		// 12 s timer here and left «Gracias» up past the next customer's arrival.
+		vi.advanceTimersByTime(12000);
+		await nextTick();
+		expect(published()!.stage).toBe("idle");
+	});
+
+	it("says nothing about a refund", async () => {
+		mountPublisher();
+		const invoiceStore = useInvoiceStore();
+		invoiceStore.setItems([plainLine()]);
+		await settle();
+
+		// The done tableau prices the basket as a purchase and the display has
+		// no refund state to draw instead, so a return keeps its silence — the
+		// same reason `show_change_due` excludes them.
+		bus.emit("invoice_submitted", {
+			invoice: "ACC-SINV-2026-03344",
+			currency: "MXN",
+			is_return: true,
+		});
+		await settle();
+
+		expect(published()!).not.toHaveProperty("stage");
+	});
+
+	it("stays quiet on a sale the register only queued", async () => {
+		mountPublisher();
+		const invoiceStore = useInvoiceStore();
+		invoiceStore.setItems([plainLine()]);
+		armTender(348, 348);
+		await settle();
+
+		// An offline or Record-Only-queued sale returns from the submit routine
+		// before the emit — it was accepted by this register, not by the server,
+		// and nothing is paid yet. The screen must not thank anyone for it, so
+		// the only thing that reaches the publisher is the clear that follows.
+		invoiceStore.clear();
+		invoiceStore.setInvoiceDoc(null);
+		bus.emit("clear_invoice");
+		await settle();
+
+		const snapshot = published()!;
+		expect(snapshot.stage).toBe("idle");
+		expect(snapshot).not.toHaveProperty("received_amount");
+	});
+});
+
+/**
+ * The emit site itself. The tests above prove the publisher's half; this one
+ * proves the half that no mount can reach — that `usePaymentSubmission` emits
+ * on the server's verdict and nowhere else, so a queued sale cannot reach
+ * `done` through a route the spec above never exercises.
+ */
+describe("the register announces a completed sale only once the server has spoken", () => {
+	it("emits invoice_submitted exactly once, on the online success path", () => {
+		const emits = submissionSource.match(/bus\.emit\("invoice_submitted"/g) || [];
+		expect(emits).toHaveLength(1);
+	});
+
+	it("emits it after show_change_due, so the server's figure lands first", () => {
+		const changeDue = submissionSource.indexOf("if (pChange > 0 && !doc.is_return)");
+		const submitted = submissionSource.indexOf('bus.emit("invoice_submitted"');
+		expect(changeDue).toBeGreaterThan(-1);
+		expect(submitted).toBeGreaterThan(changeDue);
+	});
+
+	it("never emits it from the offline or queued branches", () => {
+		// Both return before the emit. Reading the source is the only way to
+		// pin that: the branches need an IndexedDB write and a floor store to
+		// reach, and a spec that mocked both would prove the mock's shape.
+		const submitted = submissionSource.indexOf('bus.emit("invoice_submitted"');
+		expect(submissionSource.indexOf("return { offline: true };")).toBeLessThan(submitted);
+		expect(submissionSource.indexOf("return { queued: true, orderUid: queuedOrderUid };")).toBeLessThan(
+			submitted,
+		);
 	});
 });
 

@@ -41,7 +41,10 @@ export const MUELLE_DEFAULT: Keymap = {
 	// whole contract is that a trained cashier's fingers keep working. The
 	// catalogue gets alt+b instead, and the mock's chip is the thing that is
 	// wrong.
-	version: 3,
+	// v4 (2026-08-24): + alt+z «Guardar cotización». The operator's word is
+	// cotización and c/o/t are already taken (price check, orden, tiempo aire),
+	// so the mnemonic falls to the remaining letter in the word.
+	version: 4,
 	label: "Muelle POS (default)",
 	bindings: {
 		// navigation
@@ -78,6 +81,7 @@ export const MUELLE_DEFAULT: Keymap = {
 
 		// documents
 		"invoice.saveAndClear": ["alt+s"],
+		"invoice.saveQuotation": ["alt+z"],
 		"invoice.openDrafts": ["alt+l"],
 		"orders.openDrafts": ["alt+7"],
 		"returns.open": ["alt+8"],

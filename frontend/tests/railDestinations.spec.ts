@@ -20,6 +20,7 @@ const ALL_GATES: RailGateMap = {
 	externalDocumentCheckout: true,
 	saldo: true,
 	closingShift: true,
+	quotations: true,
 	giftCards: true,
 	dashboard: true,
 };
@@ -116,12 +117,47 @@ describe("rail capability gating", () => {
 		expect(idsOf(visibleRailDestinations(gates({ closingShift: false })))).not.toContain("closing");
 	});
 
+	it("hides Cotizaciones on a register that does not quote", () => {
+		expect(idsOf(visibleRailDestinations(gates({ quotations: false })))).not.toContain("quotations");
+		expect(idsOf(visibleRailDestinations(gates()))).toContain("quotations");
+	});
+
+	/**
+	 * The one failure this registry cannot report on its own.
+	 *
+	 * A `RailGate` is answered by the `railGates` literal inside `Pos.vue`, and
+	 * that file's `<script>` is plain JS with `checkJs` off — so a gate declared
+	 * here and never answered there reads `undefined`, i.e. falsy, i.e. the
+	 * destination silently disappears from EVERY register. `pnpm type-check`
+	 * cannot see it and no mount spec would either, because the shell's own
+	 * mounts pass their gates in by hand. Reading the shell's source is the only
+	 * place the two halves meet.
+	 */
+	it("has an answer in Pos.vue for every gate a destination declares", () => {
+		const shell = readFileSync(
+			resolve(process.cwd(), "src/posapp/components/pos/shell/Pos.vue"),
+			"utf8",
+		);
+		const literal = shell.match(/const railGates = computed\(\(\) => \(\{([\s\S]*?)\}\)\);/);
+		expect(literal, "Pos.vue no longer declares a `railGates` computed").toBeTruthy();
+		const answered = [...literal![1].matchAll(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*:/gm)].map((m) => m[1]);
+		const declared = [...new Set(RAIL_DESTINATIONS.map((d) => d.gate).filter(Boolean))];
+		expect(declared.length).toBeGreaterThan(0);
+		for (const gate of declared) {
+			expect(
+				answered,
+				`Pos.vue's railGates never answers "${gate}" — that destination would vanish from every register`,
+			).toContain(gate);
+		}
+	});
+
 	it("never removes an ungated destination", () => {
 		const none = visibleRailDestinations({
 			floor: false,
 			externalDocumentCheckout: false,
 			saldo: false,
 			closingShift: false,
+			quotations: false,
 			giftCards: false,
 			dashboard: false,
 		});
@@ -129,7 +165,6 @@ describe("rail capability gating", () => {
 			"sale",
 			"browse",
 			"expense",
-			"quotations",
 			"drafts",
 			"invoices",
 			"return",

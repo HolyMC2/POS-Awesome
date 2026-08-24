@@ -1,4 +1,5 @@
 import { unref, type Ref, type ComputedRef } from "vue";
+import { bus } from "../../../bus";
 import invoiceService from "../../../services/invoiceService";
 import { isApiEnvelopeError, unwrapApiResult } from "../../../services/api";
 import { pinia } from "../../../stores";
@@ -1314,6 +1315,27 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 					});
 				}
 			}
+
+			// The sale closed, and this says so whatever the change came to.
+			// `show_change_due` above cannot: it only fires when there is money
+			// to hand back, so an exact-paid sale — every card sale, most
+			// transfers — closed without the register announcing it and the
+			// customer's screen never reached «Gracias».
+			//
+			// Here and not in the offline or queued branches above: both of
+			// those return before this line, and deliberately. A queued sale has
+			// been accepted by this register, not by the server; nothing is
+			// booked and nothing is paid, so thanking the customer for it would
+			// claim a payment that has not happened.
+			//
+			// Emitted AFTER `show_change_due` so that on a change sale the
+			// server-booked figure is the one that reaches any listener first.
+			bus.emit("invoice_submitted", {
+				invoice: responseInvoiceName,
+				currency: doc.currency,
+				...(pChange > 0 && !doc.is_return ? { change_amount: pChange } : {}),
+				is_return: Boolean(doc.is_return),
+			});
 
 			const submittedItems = Array.isArray(submittedDocument.items)
 				? submittedDocument.items

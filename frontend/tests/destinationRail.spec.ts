@@ -92,6 +92,7 @@ const ALL_GATES: RailGateMap = {
 	externalDocumentCheckout: true,
 	saldo: true,
 	closingShift: true,
+	quotations: true,
 	giftCards: true,
 	dashboard: true,
 };

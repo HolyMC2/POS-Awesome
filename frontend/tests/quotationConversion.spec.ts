@@ -67,24 +67,31 @@ describe("the destination is reachable", () => {
 		expect(isOfflineBlocked(rail!)).toBe(true);
 	});
 
-	it("appears on every register, because nothing gates it client-side", () => {
-		// Deliberate: a `RailGate` is answered by the shell's own literal, and a
-		// gate nobody answers reads `undefined` — i.e. the destination would
-		// vanish everywhere. The real gate is server-side on all four endpoints.
+	it("is hidden on a register that does not quote, on BOTH registries", () => {
+		// The rail's gate and the router's `profileFlag` read the same POS
+		// Profile flag on purpose: gate it in one place only and the pill
+		// disappears while the URL still resolves — or the reverse, a lit pill
+		// onto a surface the guard refuses. The server asserts the same flag on
+		// all four endpoints, so this pair is the courtesy, not the enforcement.
 		const rail = getRailDestination("quotations");
-		expect(rail?.gate).toBeNull();
+		expect(rail?.gate).toBe("quotations");
 		const def = DESTINATIONS.find((entry) => entry.id === "quotations");
 		expect(def?.capability).toBeNull();
-		expect(def?.profileFlag).toBeNull();
-		const visible = visibleRailDestinations({
+		expect(def?.profileFlag).toBe("custom_allow_create_quotation");
+
+		const gates = {
 			floor: false,
 			externalDocumentCheckout: false,
 			saldo: false,
 			closingShift: false,
+			quotations: false,
 			giftCards: false,
 			dashboard: false,
-		});
-		expect(visible.map((entry) => entry.id)).toContain("quotations");
+		};
+		expect(visibleRailDestinations(gates).map((entry) => entry.id)).not.toContain("quotations");
+		expect(
+			visibleRailDestinations({ ...gates, quotations: true }).map((entry) => entry.id),
+		).toContain("quotations");
 	});
 });
 

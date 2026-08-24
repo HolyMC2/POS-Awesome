@@ -96,9 +96,21 @@ describe("legacy binding parity", () => {
 			"alt+b", // catalogue drawer
 			"f9", // close shift — joins f7 details / f8 lock
 		];
+		// Cotizaciones (docs/DOCUMENTOS_GOLDEN_FLOW.md). Same rule as the rail
+		// chords: the mnemonic follows the operator's word, cotización — and c,
+		// o and t are already spent on the price check, the orden and the tiempo
+		// aire, so it falls to the remaining letter in the word.
+		const DOCUMENT_CHORDS = [
+			"alt+z", // save the cart as a quotation
+		];
 		const boundChords = [...new Set(resolved.bindings.map((b) => b.chord.id))].sort();
 		expect(boundChords).toEqual(
-			[...LEGACY_CHORD_IDS, ...ENGINE_ADDED_CHORDS, ...RAIL_DESTINATION_CHORDS].sort(),
+			[
+				...LEGACY_CHORD_IDS,
+				...ENGINE_ADDED_CHORDS,
+				...RAIL_DESTINATION_CHORDS,
+				...DOCUMENT_CHORDS,
+			].sort(),
 		);
 	});
 
