@@ -57,7 +57,11 @@ defineProps({
  */
 .insight-strip {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+	/* 150px, not 190: at 190 the mirror's eleven tiles wrapped to TWO rows on
+	 * a 1622px surface and the count/detail row below got ~135px — «really
+	 * small tables» (Marco, 08-23). At 150 they pack one row wherever ~1650px
+	 * exists and the columns keep the height the corte exists to give them. */
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 	gap: 8px;
 }
 

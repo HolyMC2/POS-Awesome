@@ -128,7 +128,7 @@
 
 				<div v-else class="menu-panel menu-panel--settings">
 					<div
-						v-for="section in settingsSections"
+						v-for="section in visibleSettingsSections"
 						:key="section.id"
 						class="settings-section"
 						:data-test="`settings-section-${section.id}`"
@@ -164,7 +164,7 @@
 					</div>
 
 					<div
-						v-for="section in supervisorSections"
+						v-for="section in visibleSupervisorSections"
 						:key="section.id"
 						class="settings-section settings-section--restricted"
 						:data-test="`settings-section-${section.id}`"
@@ -325,6 +325,7 @@ import {
 import { useUpdateStore } from "../../stores/updateStore";
 import { useEmployeeStore } from "../../stores/employeeStore";
 import { useVerticalStore } from "../../stores/verticalStore";
+import { useUIStore } from "../../stores/uiStore";
 import { storeToRefs } from "pinia";
 import QzTrayDialog from "./QzTrayDialog.vue";
 import QzTestPrintDialog from "../settings/QzTestPrintDialog.vue";
@@ -356,6 +357,7 @@ export default {
 		// owns the boot refresh and the 10-min re-check for it.
 		const navPrintHealth = usePrintHealthShared();
 		const verticalStore = useVerticalStore();
+		const uiStore = useUIStore();
 		return {
 			printLastInvoice,
 			updateStore,
@@ -364,6 +366,7 @@ export default {
 			currentCashierDisplay,
 			navPrintHealth,
 			verticalStore,
+			uiStore,
 		};
 	},
 	data() {
@@ -465,6 +468,29 @@ export default {
 				? __("Grouped controls for terminal, UI, and session settings.")
 				: __("Fast cashier actions for active shifts.");
 		},
+		/**
+		 * What the RAIL already offers, said once. With the rail on screen its
+		 * «Más» flyout carries the settings group and the tools, and the rail
+		 * itself carries Service Order and Close Shift — so this menu showing
+		 * them again was the duplicate list Marco flagged (08-23). The menu
+		 * keeps only what the rail does NOT have (cashier switch, lock, theme,
+		 * print tools, sync, logout). The ids stay in the action REGISTRY
+		 * either way: the rail's own entries invoke them through
+		 * `run_menu_action`, so the lookup must keep answering even for an
+		 * entry this list hides.
+		 */
+		railCarriedIds() {
+			if (!this.uiStore.railLayout) return new Set();
+			return new Set([
+				"charge-requests",
+				"close-shift",
+				"language",
+				"qz-tray-setup",
+				"check-for-updates",
+				"about",
+				"awesome-dashboard",
+			]);
+		},
 		quickActions() {
 			const actions = [
 				{
@@ -536,7 +562,29 @@ export default {
 			return actions.filter(Boolean);
 		},
 		quickActionRows() {
-			return this.quickActions.map((action) => [action]);
+			// The VISIBLE list. `quickActions` itself stays unfiltered because
+			// `menuActions` — the id registry the rail's own entries call
+			// through — is built from it; filtering there would disconnect the
+			// very entries the rail carries.
+			return this.quickActions
+				.filter((action) => !this.railCarriedIds.has(action.id))
+				.map((action) => [action]);
+		},
+		visibleSettingsSections() {
+			return this.settingsSections
+				.map((section) => ({
+					...section,
+					actions: section.actions.filter((action) => !this.railCarriedIds.has(action.id)),
+				}))
+				.filter((section) => section.actions.length);
+		},
+		visibleSupervisorSections() {
+			return this.supervisorSections
+				.map((section) => ({
+					...section,
+					actions: section.actions.filter((action) => !this.railCarriedIds.has(action.id)),
+				}))
+				.filter((section) => section.actions.length);
 		},
 		settingsSections() {
 			return [
@@ -699,8 +747,8 @@ export default {
 		},
 		settingsActionCount() {
 			const count =
-				this.settingsSections.reduce((total, section) => total + section.actions.length, 0) +
-				this.supervisorSections.reduce((total, section) => total + section.actions.length, 0);
+				this.visibleSettingsSections.reduce((total, section) => total + section.actions.length, 0) +
+				this.visibleSupervisorSections.reduce((total, section) => total + section.actions.length, 0);
 			return `${count} ${this.__("options")}`;
 		},
 		// Display name for mobile menu

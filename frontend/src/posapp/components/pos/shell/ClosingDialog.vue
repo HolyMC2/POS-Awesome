@@ -652,7 +652,12 @@ export default {
 .closing-layout {
 	display: grid;
 	grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
-	grid-template-rows: auto minmax(0, 1fr);
+	/* 280px floor on the columns row: the tiles and the header spend first,
+	 * and on the hosted surface what was LEFT for the count and the tables
+	 * could be ~135px — unusable. Under the floor the body (overflow auto)
+	 * scrolls instead; the difference band and the actions live outside the
+	 * scrollport either way. */
+	grid-template-rows: auto minmax(280px, 1fr);
 	grid-template-areas:
 		"tiles tiles"
 		"count detail";

@@ -165,13 +165,14 @@ describe("three regions, not one column", () => {
 		expect((areas as RegExpExecArray)[1]).not.toContain("count");
 	});
 
-	it("gives the columns the height the tiles leave, rather than their content's", () => {
-		// `auto` for the tiles, `fr` for the columns: the row that holds the
-		// scrolling regions has to be bounded, or the grid grows to the tallest
-		// table and the whole corte scrolls again.
+	it("gives the columns the height the tiles leave — but never less than a working table", () => {
+		// `auto` for the tiles, `fr` for the columns, and a FLOOR on the fr:
+		// hosted beside the rail, header + tiles could spend the surface down
+		// to ~135px of columns (Marco, 08-23) — a count you cannot read. Under
+		// the floor the body scrolls; above it the columns divide what is left.
 		const rows = /grid-template-rows:([^;]+);/.exec(rule(".closing-layout"));
 		expect(rows).not.toBeNull();
-		expect((rows as RegExpExecArray)[1].trim()).toBe("auto minmax(0, 1fr)");
+		expect((rows as RegExpExecArray)[1].trim()).toBe("auto minmax(280px, 1fr)");
 	});
 });
 
@@ -217,7 +218,9 @@ describe("the tiles answer to the width they are given", () => {
 		// They used to be `cols="6" md="3"`, and Vuetify breakpoints read the
 		// WINDOW — while this strip is 1100px wide in a dialog on a 1920 screen
 		// and full-bleed inside the destination host.
-		expect(tilesSource).toMatch(/grid-template-columns: repeat\(auto-fit, minmax\(190px, 1fr\)\)/);
+		// 150px min: eleven tiles must pack ONE row on a ~1650px surface —
+		// at 190 they wrapped to two and starved the columns below.
+		expect(tilesSource).toMatch(/grid-template-columns: repeat\(auto-fit, minmax\(150px, 1fr\)\)/);
 		expect(tilesSource).not.toContain("<v-col");
 		expect(tilesSource).not.toContain("<v-row");
 	});
