@@ -1,3 +1,4 @@
+import { isFlagOn } from "../../../../../offline/catalogVisibility";
 import { debugLog } from "../../../../utils/debug";
 
 declare const __: (_text: string, _args?: any[]) => string;
@@ -265,14 +266,21 @@ export function useItemCreation() {
 				if (res.message) {
 					variants = res.message.variants || res.message;
 					attrsMeta = res.message.attributes_meta || {};
-					// Add variants to the main items list so they are cached
-					// context.items should be the reactive array
-					if (Array.isArray(items)) {
+					// Warm the catalogue with what the picker just fetched, so a
+					// second open of the same template costs no round trip.
+					//
+					// NOT when the profile hides variants. `get_item_variants`
+					// ignores `posa_hide_variants_items` on purpose — the picker
+					// IS where the sizes live — but this array is the register's
+					// shared catalogue, and `useScanProcessor` persists it
+					// wholesale to the offline `items` table. So one open of the
+					// picker used to write variant rows into IndexedDB for good:
+					// 11 of them on the cafetería demo, on a profile whose hide
+					// flag is 1, read back into `items` and `filteredItems` on
+					// every boot afterwards. The picker keeps its own copy in
+					// `variants` either way; only the shared array is spared.
+					if (Array.isArray(items) && !isFlagOn(pos_profile?.posa_hide_variants_items)) {
 						items.push(...variants);
-					} else if (context.itemsStore) {
-						// If context provided store, maybe add them?
-						// But usually ItemsSelector manages the list.
-						// We'll leave it to the caller to manage hydration if items is not array
 					}
 				}
 			} catch (e) {

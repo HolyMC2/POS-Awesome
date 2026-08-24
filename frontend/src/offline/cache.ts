@@ -56,6 +56,11 @@
  */
 
 import { refreshBootstrapSnapshotFromCaches } from "./bootstrapSnapshot";
+import {
+	catalogVisibilityFilters,
+	isCatalogItemVisible,
+	type CatalogVisibilityFlags,
+} from "./catalogVisibility";
 import { memory, persist, db, checkDbHealth } from "./db";
 import { emitBootstrapSnapshotUpdated } from "../posapp/utils/bootstrapRuntimeEvents";
 
@@ -260,12 +265,21 @@ export async function getStoredItems() {
 	}
 }
 
+/**
+ * @param visibility POS Profile template/variant rules, from
+ *   `readCatalogVisibility(posProfile)`. Omitted or `null` means "no profile to
+ *   ask" and lets every row through — the same read this had before. Applied
+ *   INSIDE the Dexie chain, above `.offset()/.limit()`, so the pager still
+ *   counts rows the register can actually see. See `catalogVisibility.ts` for
+ *   what leaked without it.
+ */
 export async function searchStoredItems({
 	search = "",
 	itemGroup = "",
 	limit = 100,
 	offset = 0,
 	scope = "",
+	visibility = null as CatalogVisibilityFlags | null,
 } = {}) {
 	try {
 		await checkDbHealth();
@@ -279,6 +293,9 @@ export async function searchStoredItems({
 				.equalsIgnoreCase(normalizedGroup);
 		}
 		collection = filterByScope(collection, scope);
+		if (catalogVisibilityFilters(visibility)) {
+			collection = collection.filter((it) => isCatalogItemVisible(it, visibility));
+		}
 		const normalizedSearch =
 			typeof search === "string" ? search.trim() : "";
 		if (normalizedSearch) {
@@ -335,7 +352,11 @@ export async function getStoredItemsCountByScope(scope = "") {
 	}
 }
 
-export async function getAllStoredItems(scope = "") {
+/** @param visibility see `searchStoredItems`. */
+export async function getAllStoredItems(
+	scope = "",
+	visibility: CatalogVisibilityFlags | null = null,
+) {
 	if (!hasScope(scope)) {
 		console.warn(
 			"getAllStoredItems called without scope; returning all items (deprecated behavior).",
@@ -345,7 +366,11 @@ export async function getAllStoredItems(scope = "") {
 	try {
 		await checkDbHealth();
 		if (!db.isOpen()) await db.open();
-		return await filterByScope(db.table("items"), scope).toArray();
+		let collection = filterByScope(db.table("items"), scope);
+		if (catalogVisibilityFilters(visibility)) {
+			collection = collection.filter((it) => isCatalogItemVisible(it, visibility));
+		}
+		return await collection.toArray();
 	} catch (e) {
 		console.error("Failed to read scoped stored items", e);
 		return [];

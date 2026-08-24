@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { isFlagOn } from "../../../../offline/catalogVisibility";
 import { perfMarkStart, perfMarkEnd } from "../../../utils/perf.js";
 
 declare const frappe: any;
@@ -220,6 +221,13 @@ export function useItemSearch() {
 	) => {
 		if (!items || !items.length) return [];
 
+		// The caller reads this straight off the POS Profile, where a Check
+		// field is `1` — but a profile that has round-tripped through a cache
+		// can carry the STRING "0", which is truthy and would silently invert
+		// the flag. `isFlagOn` is the same reading the offline catalogue read
+		// uses (`offline/catalogVisibility.ts`), so the two cannot disagree.
+		const dropVariants = isFlagOn(hideVariants);
+
 		const term = (searchTerm || "").trim().toLowerCase();
 		const needsLocalSearch = term && term.length >= 3;
 
@@ -227,7 +235,7 @@ export function useItemSearch() {
 		if (
 			!needsLocalSearch &&
 			!hideZeroRate &&
-			!hideVariants &&
+			!dropVariants &&
 			!onlyBarcode &&
 			!hideSaldo
 		) {
@@ -289,7 +297,7 @@ export function useItemSearch() {
 			}
 
 			// 3. Variant Filter
-			if (hideVariants) {
+			if (dropVariants) {
 				if (item.variant_of) continue;
 			}
 

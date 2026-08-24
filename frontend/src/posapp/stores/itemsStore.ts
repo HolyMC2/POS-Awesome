@@ -7,6 +7,11 @@ import { defineStore } from "pinia";
 import { ref, shallowRef, triggerRef, markRaw, computed, watch } from "vue";
 import type { Item, POSProfile } from "../types/models";
 import itemService from "../services/itemService";
+// Straight from the module, not through the `offline/index` barrel: these two
+// are pure rules rather than storage calls, and half the suite replaces that
+// barrel with a four-function stub. A rule that disappears whenever a test
+// mocks the I/O layer is a rule that is not enforced.
+import { filterCatalogItems, readCatalogVisibility } from "../../offline/catalogVisibility";
 import { refreshBootstrapSnapshotFromCacheState } from "../../offline/index";
 
 // Composables
@@ -66,10 +71,26 @@ export const useItemsStore = defineStore("items", () => {
 		return 0;
 	};
 
+	/**
+	 * The profile's template/variant rules, for every cache read below.
+	 *
+	 * The offline `items` table is written from server payloads AND from the
+	 * in-memory catalogue (`useScanProcessor` persists `items.value` wholesale),
+	 * so a single open of the variant picker used to leave variant rows in
+	 * IndexedDB for good — 11 of them on the cafetería demo, on a profile whose
+	 * `posa_hide_variants_items` is 1. The server read has always applied both
+	 * flags; this is what makes the cache read agree with it, and it is applied
+	 * on READ so an already-contaminated cache heals on the next boot rather
+	 * than needing a migration in every browser. See
+	 * `offline/catalogVisibility.ts`.
+	 */
+	const catalogVisibility = () =>
+		readCatalogVisibility(posProfile.value as Record<string, unknown> | null);
+
 	const getAllStoredItemsCompat = async (scope = "") => {
 		const scopedGetAllFn = await getOfflineFn("getAllStoredItems");
 		if (typeof scopedGetAllFn === "function") {
-			return await scopedGetAllFn(scope);
+			return await scopedGetAllFn(scope, catalogVisibility());
 		}
 
 		const legacyGetAllFn = await getOfflineFn("getStoredItems");
@@ -77,7 +98,7 @@ export const useItemsStore = defineStore("items", () => {
 			console.warn(
 				"offline/index.js missing getAllStoredItems; using legacy getStoredItems fallback.",
 			);
-			return await legacyGetAllFn();
+			return filterCatalogItems(await legacyGetAllFn(), catalogVisibility());
 		}
 
 		return [];
@@ -88,7 +109,7 @@ export const useItemsStore = defineStore("items", () => {
 		if (typeof searchFn !== "function") {
 			return [];
 		}
-		return await searchFn(args);
+		return await searchFn({ visibility: catalogVisibility(), ...args });
 	};
 
 	const getCachedPriceListItemsCompat = async (priceList: string) => {
