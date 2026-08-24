@@ -82,16 +82,34 @@ describe("the payment screen mounts what §12 item B built for it", () => {
 	});
 
 	it("sources the wallet from a ledger the register actually reads", () => {
-		// `walletSummary.ts` refuses to claim an accrual because
-		// `collection_factor` never reaches the client. The binding must not
-		// quietly invent one — an accrual is a promise printed on a ticket.
+		// An accrual is a promise printed on a ticket, so the binding must
+		// SOURCE one and never derive it. It used to be pinned at `null`
+		// because no read model existed; `stored_value.get_cashback_preview`
+		// is that read model now, reaching here through
+		// `useRedemptionLogic.cashback_accrual`. What has not changed is the
+		// rule the old assertion was really protecting: `collection_factor` is
+		// a TIER value chosen from spend the client does not have, so a figure
+		// computed in this file would agree with the posted accrual only until
+		// a customer crossed a tier.
 		const text = source();
 		const wallet = /const customerWallet = computed\(\(\) => \(\{[\s\S]*?\}\)\);/.exec(text)?.[0] ?? "";
 		expect(wallet, "customerWallet must exist").not.toBe("");
 		expect(wallet).toMatch(/loyaltyProgram:/);
 		expect(wallet).toMatch(/storedValueBalance:/);
-		expect(wallet, "the accrual has no read model; it stays null").toMatch(/accrual: null/);
+		// The whole expression, not a substring: anything doing arithmetic here
+		// would have to replace this line, and matching it exactly is what
+		// catches that. (Matching the factor NAMES instead would fail on the
+		// comment above the binding that explains why they may not be used —
+		// an assertion that forbids explaining the rule.)
+		const accrual = /^\s*accrual: .*$/m.exec(wallet)?.[0]?.trim() ?? "";
+		expect(accrual, "the accrual is read from the server, never invented here").toBe(
+			"accrual: cashback_accrual.value,",
+		);
 		expect(wallet, "a refund does not accrue").toMatch(/isReturn:/);
+		const destructure = /const \{[\s\S]*?\} = useRedemptionLogic\(\{/.exec(text)?.[0] ?? "";
+		expect(destructure, "and it comes from the composable that calls the server").toContain(
+			"cashback_accrual",
+		);
 	});
 
 	it("feeds the readiness header from the print-health singleton", () => {
