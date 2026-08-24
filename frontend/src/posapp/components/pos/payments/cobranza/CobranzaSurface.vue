@@ -17,7 +17,7 @@
 					<span v-if="captureTarget?.customerName"> · {{ captureTarget.customerName }}</span>
 				</div>
 			</header>
-			<PayView class="cobranza__capture" />
+			<PayView class="cobranza__capture" :locked-party="captureTarget ?? undefined" />
 		</template>
 
 		<template v-else>
@@ -271,7 +271,6 @@ import {
 	fetchReceivables,
 	invalidateReceivablesBadge,
 } from "../../../../services/receivablesService";
-import { useCustomersStore } from "../../../../stores/customersStore.js";
 import { useToastStore } from "../../../../stores/toastStore";
 import { useUIStore } from "../../../../stores/uiStore";
 
@@ -283,7 +282,6 @@ defineEmits<{ close: [] }>();
 
 const uiStore = useUIStore();
 const toastStore = useToastStore();
-const customersStore = useCustomersStore();
 const { posProfile, paymentRouteTarget } = storeToRefs(uiStore);
 const { formatCurrency } = useFormat();
 const { isOnline } = useOnlineStatus();
@@ -501,7 +499,11 @@ async function collect(row: ReceivableRow) {
 	}
 	collecting.value = true;
 	try {
-		customersStore.setSelectedCustomer(row.customer);
+		// The route target carries the customer; PayView drives its own
+		// context from it. Setting `customersStore.selectedCustomer` here —
+		// the first wiring — handed the pick to a ref the LIVE sale register
+		// also owns: the register re-asserted its customer, PayView loaded
+		// the wrong invoice list, and the capture arrived un-filled.
 		uiStore.setPaymentRouteTarget({
 			invoiceName: row.name,
 			customer: row.customer,

@@ -124,12 +124,19 @@ describe("the destination is the panel, and the panel contains the tool", () => 
 
 describe("the COBRAR handoff", () => {
 	it("drives the seam PayView already consumes, and sends no amount", () => {
-		// `InvoiceManagement.openAddPayment` has always done exactly this, minus
-		// the `router.push`. PayView's own auto-allocation fills the amount from
-		// the invoice it selects — which is why this panel must not send one.
-		expect(SURFACE).toContain("customersStore.setSelectedCustomer(row.customer)");
+		// PayView's own auto-allocation fills the amount from the invoice it
+		// selects — which is why this panel must not send one. And the target
+		// alone carries the customer: the first wiring ALSO wrote
+		// `customersStore.selectedCustomer`, a ref the live sale register owns,
+		// and the register re-asserted its own customer over the pick — the
+		// capture arrived un-filled («it doesn't autofill», 2026-08-24).
+		expect(SURFACE).not.toContain("customersStore.setSelectedCustomer");
 		expect(SURFACE).toContain("uiStore.setPaymentRouteTarget({");
 		expect(SURFACE).not.toMatch(/setPaymentRouteTarget\([\s\S]{0,200}amount/);
+		// The consuming half: PayView syncs the routed customer itself, and
+		// its store-driven syncs stand down while a target is pending.
+		expect(PAY_VIEW).toContain("void syncCustomerPaymentContext(target.customer)");
+		expect(PAY_VIEW).toMatch(/paymentRouteTarget\.value\?\.invoiceName[\s\S]{0,40}\breturn;/);
 	});
 
 	it("hands over the same three fields PayView reads back", () => {

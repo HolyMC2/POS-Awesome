@@ -58,7 +58,17 @@
 							:md="pos_profile?.posa_allow_change_posting_date ? 9 : 12"
 							class="pb-0"
 						>
-							<Customer v-if="isCustomerPartyType"></Customer>
+							<v-text-field
+								v-if="lockedParty"
+								:model-value="lockedParty.customerName || customer_name"
+								:label="frappe._('Customer')"
+								density="compact"
+								variant="solo"
+								hide-details
+								readonly
+								data-testid="pay-locked-party"
+							/>
+							<Customer v-else-if="isCustomerPartyType"></Customer>
 							<PayPartySelector
 								v-else
 								v-model="customer_name"
@@ -268,6 +278,18 @@ const formatDisplayDate = (date) => {
 
 export default {
 	mixins: [format],
+	props: {
+		/**
+		 * A routed capture's fixed party (`{ invoiceName, customerName }`).
+		 * The shared `<Customer>` picker binds the SALE register's customer
+		 * store — in a cobranza capture that showed the register's customer
+		 * beside another customer's pre-selected invoice. When the party is
+		 * fixed by the routed row, render it as a plain read-only field:
+		 * changing customers there means going back to the worklist, not
+		 * repointing the sale's picker.
+		 */
+		lockedParty: { type: Object, default: null },
+	},
 	components: {
 		Customer,
 		VueDatePicker,
@@ -1043,6 +1065,24 @@ export default {
 				return;
 			}
 
+			// The target names its OWN customer; drive the context from it
+			// directly. Routing it through `customersStore.selectedCustomer`
+			// (the cobranza panel's first wiring) put the handoff on a ref the
+			// LIVE sale register also owns — the register re-asserted its own
+			// customer over the pick, this view loaded the wrong customer's
+			// invoices, and the match below never fired: capture arrived
+			// un-filled («it doesn't autofill», 2026-08-24). Company arrives
+			// async via check_opening_entry, and syncing before it lands
+			// no-ops the invoice fetch — the `company` leg of the watch below
+			// re-enters here once it resolves.
+			if (target.customer && customer_name.value !== target.customer) {
+				if (!company.value) {
+					return;
+				}
+				void syncCustomerPaymentContext(target.customer);
+				return; // the invoices arriving re-fire the watch → match below
+			}
+
 			const matchedInvoice = outstanding_invoices.value.find(
 				(invoice) => invoice?.voucher_no === target.invoiceName,
 			);
@@ -1086,6 +1126,13 @@ export default {
 				if (isPaymentRouteLocked.value || !isCustomerPartyType.value) {
 					return;
 				}
+				// A pending route target OWNS the customer context until it is
+				// consumed — the store's selection is the sale register's, and
+				// letting it through here is what overwrote a routed capture's
+				// customer with the register's default.
+				if (paymentRouteTarget.value?.invoiceName) {
+					return;
+				}
 				await syncCustomerPaymentContext(normalized);
 			},
 			{ immediate: true },
@@ -1111,6 +1158,13 @@ export default {
 			isPaymentRouteLocked,
 			(locked) => {
 				if (locked) return;
+				// Same rule as the selectedCustomer watch: while a route target
+				// is pending, the unlock force-sync must not clobber the routed
+				// customer with the store's (the sale register's) selection.
+				if (paymentRouteTarget.value?.invoiceName) {
+					applyPaymentRouteTarget();
+					return;
+				}
 				void syncCustomerPaymentContext(selectedCustomer.value || customer_name.value || "", {
 					forceReload: true,
 				});
@@ -1177,7 +1231,9 @@ export default {
 		watch(invoiceTotalCurrency, fetchExchangeRate, { immediate: true });
 		watch(companyCurrency, fetchExchangeRate, { immediate: true });
 		watch(postingDate, fetchExchangeRate, { immediate: true });
-		watch([paymentRouteTarget, outstanding_invoices], () => {
+		// `company` is a leg on purpose: it lands async (check_opening_entry),
+		// and the target's customer-sync no-ops without it.
+		watch([paymentRouteTarget, outstanding_invoices, company], () => {
 			applyPaymentRouteTarget();
 		});
 
