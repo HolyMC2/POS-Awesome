@@ -1219,6 +1219,11 @@ defineExpose({
 }
 
 .summary-tab-name {
+	/* Explicit, not the d-flex utility: in this cascade the scoped rule
+	 * computed `block` and the two fields stacked full-width again. */
+	display: flex;
+	align-items: center;
+	gap: 8px;
 	flex: 1 1 auto;
 	min-width: 0;
 }
