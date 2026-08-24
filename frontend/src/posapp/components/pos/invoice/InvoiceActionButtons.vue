@@ -159,6 +159,7 @@ const props = defineProps({
 
 defineEmits([
 	"save-and-clear",
+	"save-quotation",
 	"load-drafts",
 	"select-order",
 	"cancel-sale",
