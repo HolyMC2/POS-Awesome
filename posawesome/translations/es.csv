@@ -2643,3 +2643,34 @@ Partly paid invoice,Parcial
 Credit note issued,Nota de crédito
 Unpaid invoice,Pendiente
 Recent,Recientes
+Ready to charge,Listas
+In progress,En trabajo
+Handed over,Entregadas
+Order ready,Lista
+It cannot be charged twice,No se puede cobrar dos veces
+No charge,Sin cargo
+No charge · {0} d,Sin cargo · {0} d
+Warranty,Garantía
+Advance,Anticipo
+No advance,Sin anticipo
+from stock,surtida de almacén
+ordered in,pedida al proveedor
+Find a service order,Buscar una orden de servicio
+Service orders are created and worked in Taller. The register only charges them.,Las órdenes se crean y trabajan en Taller. La caja sólo cobra.
+Nothing has been handed over yet today.,Todavía no se ha entregado nada hoy.
+No service order matches that.,Ninguna orden coincide con eso.
+No service order is ready to charge.,No hay órdenes listas por cobrar.
+Choose a service order to see what is on it.,Elige una orden para ver qué lleva.
+Tech. {0},Téc. {0}
+This order carries no lines yet.,Esta orden todavía no lleva conceptos.
+{0} h {1} m,{0} h {1} m
+{0} m,{0} m
+Invoiced {0},Facturada {0}
+IMEI {0},IMEI {0}
+Could not count the service orders.,No se pudieron contar las órdenes de servicio.
+Could not load the service orders.,No se pudieron cargar las órdenes de servicio.
+Could not open this service order.,No se pudo abrir esta orden de servicio.
+Server returned no invoice for this order.,El servidor no devolvió factura para esta orden.
+Service order loaded,Orden cargada
+charge it like any sale; the order completes on payment.,cóbrala como cualquier venta; la orden se completa al pagar.
+Could not load this service order into the sale.,No se pudo cargar esta orden en la venta.

@@ -414,7 +414,14 @@ export function destinationForPath(path: string): DestinationDef | undefined {
  * imported by a plain node test without a bundler.
  */
 export const SHEET_COMPONENTS: Record<string, () => Promise<unknown>> = {
-	serviceOrder: () => import("../../../components/navbar/ChargeRequestsDialog.vue"),
+	// The designed destination (`Orden.dc.html`), not the navbar dialog. The
+	// dialog is a 640px list of source labels and amounts; hosted, it filled a
+	// 1,440px surface with a modal card and answered none of the questions a
+	// counter actually asks — what is wrong with the device, who worked on it,
+	// which part came from the customer, and whether it has been billed once
+	// already. `ChargeRequestsDialog` stays exactly as it is for the navbar on
+	// layouts with no rail; only what the rail opens changed.
+	serviceOrder: () => import("../../../components/pos/flows/orden/OrdenSurface.vue"),
 	// Borradores and Facturas are ONE component on two tabs. `Drafts.vue` was
 	// never a surface: its only act on opening is to close itself and open
 	// Invoice Management on the drafts tab, so hosting it put a redirect on

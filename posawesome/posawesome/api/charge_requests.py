@@ -21,6 +21,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from posawesome.posawesome.api import charge_request_read_model as read_model
 from posawesome.posawesome.api._scope import assert_company, assert_profile
 from posawesome.posawesome.api.vertical import shift_effective_capability_payload
 
@@ -274,3 +275,179 @@ def mark_charge_request_charged(name, pos_profile, invoice_doctype, invoice_name
 
     request.mark_charged(invoice_doctype, invoice_name)
     return {"name": request.name, "status": request.status, "invoice": invoice_name}
+
+
+# --------------------------------------------------------------------------
+# Read model for the Orden de servicio surface (artboard `Orden.dc.html`).
+#
+# Shaping lives in `charge_request_read_model`; these three stay thin, and
+# every one of them re-asks `_assert_feature` — a read is still a read of
+# another tenant's repair queue if the gate is skipped.
+# --------------------------------------------------------------------------
+
+# How many requests one bucket may return. A register's open queue is small by
+# nature (a charged request leaves the list), and the surface narrows by search
+# over what it has been given rather than round-tripping per keystroke.
+QUEUE_PAGE_LENGTH = 120
+
+
+def _profile_or_filters(pos_profile: str) -> list:
+    """Unpinned requests, or ones pinned to exactly this profile.
+
+    The same rule `get_open_charge_requests` has always applied, written once
+    now that three readers need it.
+    """
+    return [["pos_profile", "is", "not set"], ["pos_profile", "=", pos_profile]]
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_service_order_counts(pos_profile):
+    """The three numbers over the queue column, and the rail's badge.
+
+    Deliberately cheap: two COUNTs and (with taller installed) a third. The
+    shell probes this once per session for `serviceOrderOpenCount`, so it sits
+    on the hottest path in the product and must never grow a join.
+
+    `working` is None on a tenant without taller and the chip is not drawn —
+    see `working_repair_count` for why that is not zero.
+    """
+    _assert_feature(pos_profile)
+    company = frappe.db.get_value("POS Profile", pos_profile, "company")
+    assert_company(frappe.session.user, company)
+
+    def _count(status: str) -> int:
+        rows = frappe.get_all(
+            CHARGE_REQUEST_DOCTYPE,
+            filters={"status": status, "company": company},
+            or_filters=_profile_or_filters(pos_profile),
+            fields=["count(name) as total"],
+        )
+        return cint(rows[0].get("total")) if rows else 0
+
+    return {
+        "ready": _count("Open"),
+        "working": read_model.working_repair_count(),
+        "delivered": _count("Charged"),
+    }
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_service_order_queue(pos_profile, bucket="ready"):
+    """One bucket of the queue column, as cards.
+
+    `working` is not served here on purpose. Those orders are not billable —
+    the workshop still has them — and returning them would put a card on a
+    surface whose only verb is COBRAR Y ENTREGAR. The chip shows the count;
+    the work itself lives in Taller, which is where it is done.
+    """
+    _assert_feature(pos_profile)
+    bucket = str(bucket or "ready")
+    if bucket not in ("ready", "delivered"):
+        frappe.throw(_("Unknown service order bucket {0}.").format(bucket))
+    company = frappe.db.get_value("POS Profile", pos_profile, "company")
+    assert_company(frappe.session.user, company)
+
+    status = "Open" if bucket == "ready" else "Charged"
+    rows = frappe.get_all(
+        CHARGE_REQUEST_DOCTYPE,
+        filters={"status": status, "company": company},
+        or_filters=_profile_or_filters(pos_profile),
+        fields=[
+            "name",
+            "customer",
+            "source_label",
+            "amount_total",
+            "status",
+            "reference_doctype",
+            "reference_name",
+            "invoice",
+            "creation",
+            "charged_at",
+        ],
+        # Ready oldest-first (the customer has been waiting); delivered
+        # newest-first (the cashier is looking for what just left).
+        order_by="creation asc" if bucket == "ready" else "charged_at desc",
+        limit_page_length=QUEUE_PAGE_LENGTH,
+    )
+
+    customers = {
+        row.customer: frappe.db.get_value(
+            "Customer", row.customer, ["customer_name", "mobile_no"], as_dict=True
+        )
+        for row in rows
+        if row.customer
+    }
+    repair_names = [
+        row.reference_name
+        for row in rows
+        if row.reference_name and row.reference_doctype == read_model.REPAIR_ORDER_DOCTYPE
+    ]
+    repairs = read_model.fetch_repair_cards(repair_names)
+    serials = read_model.fetch_repair_serials(repair_names)
+
+    cards = []
+    for row in rows:
+        contact = customers.get(row.customer) or {}
+        row["customer_name"] = contact.get("customer_name") or row.customer
+        row["customer_phone"] = contact.get("mobile_no")
+        cards.append(
+            read_model.describe_order_card(
+                row,
+                repairs.get(row.reference_name),
+                serials.get(row.reference_name),
+            )
+        )
+    return cards
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_service_order_detail(pos_profile, name):
+    """Everything the detail panel and the band need for ONE order.
+
+    Money is echoed, never recomputed: `amount_total` is the charge request's
+    own figure — the same one `prepare_charge_request_invoice` prices the
+    invoice from — and `advance` is taller's persisted `advance_amount`. A
+    read model that added its own arithmetic would be a second opinion about
+    what the customer owes, and the band would show whichever one loaded last.
+    """
+    _assert_feature(pos_profile)
+    request = frappe.get_doc(CHARGE_REQUEST_DOCTYPE, name)
+    assert_company(frappe.session.user, request.company)
+    _assert_request_profile(request, pos_profile)
+
+    row = request.as_dict()
+    contact = (
+        frappe.db.get_value(
+            "Customer", request.customer, ["customer_name", "mobile_no"], as_dict=True
+        )
+        or {}
+    )
+    row["customer_name"] = contact.get("customer_name") or request.customer
+    row["customer_phone"] = contact.get("mobile_no")
+    repair = None
+    serials: list[str] = []
+    if request.reference_doctype == read_model.REPAIR_ORDER_DOCTYPE and request.reference_name:
+        repair = read_model.fetch_repair_cards([request.reference_name]).get(
+            request.reference_name
+        )
+        serials = read_model.fetch_repair_serials([request.reference_name]).get(
+            request.reference_name, []
+        )
+
+    card = read_model.describe_order_card(row, repair, serials)
+    parts = read_model.fetch_repair_parts((repair or {}).get("name") or "")
+    card.update(
+        {
+            "technician": (repair or {}).get("technician") or (repair or {}).get("received_by"),
+            "received_on": (repair or {}).get("work_started_on"),
+            "finished_on": (repair or {}).get("work_finished_on"),
+            "worked_minutes": read_model.worked_minutes(
+                (repair or {}).get("work_started_on"), (repair or {}).get("work_finished_on")
+            ),
+            "warranty_expires_on": (repair or {}).get("warranty_expires_on"),
+            "lines": read_model.describe_order_lines(
+                request.get_items(), parts, read_model.resolve_labor_item()
+            ),
+        }
+    )
+    return card

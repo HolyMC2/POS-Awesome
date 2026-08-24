@@ -457,6 +457,10 @@ import { resolveBandState } from "../../../composables/pos/shell/bandState";
 import { useDestinationRouting } from "../../../composables/pos/shell/useDestinationRouting";
 import { useEmployeeStore } from "../../../stores/employeeStore";
 import { getDashboardAccessCached } from "../../../services/dashboardService";
+import {
+	getServiceOrderCountsCached,
+	invalidateServiceOrderCounts,
+} from "../../../services/serviceOrderService";
 import { buildCombosCategory, buildSuggestions } from "../../../composables/pos/combos/comboCatalog";
 import { useOnlineStatus } from "../../../composables/core/useOnlineStatus";
 import OpeningDialog from "../shift/OpeningDialog.vue";
@@ -879,13 +883,36 @@ export default {
 		watch(railVisible, (visible) => uiStore.setRailLayout(visible), { immediate: true });
 		onBeforeUnmount(() => uiStore.setRailLayout(false));
 
-		// Badge counts with no source yet. Deliberately refs at 0 rather than a
-		// fetch invented here: `resolveBadge` renders nothing for 0, so the rail
-		// shows no badge instead of a wrong one, and adding a shell-level poll
-		// for a number nobody has asked for would be new traffic on the hottest
-		// path in the product. Both need a real read model — see the handover.
-		const serviceOrderOpenCount = ref(0);
+		// Borradores still has no read model: `resolveBadge` renders nothing for
+		// 0, so the rail shows no badge rather than a wrong one, and inventing a
+		// shell-level poll for it would be new traffic on the hottest path in
+		// the product.
 		const draftInvoicesCount = ref(0);
+
+		// Órdenes de servicio does. One probe per session, cached in the
+		// service and shared with the surface, exactly as the dashboard access
+		// probe is shared by the router guard, the navbar and the view. It is
+		// asked ONLY where the destination exists — a register with no taller
+		// seam has no Orden rail item to badge, and probing anyway would put a
+		// guaranteed 403 on every retail register's boot.
+		const serviceOrderOpenCount = ref(0);
+		const refreshServiceOrderCount = () => {
+			const profile = posProfile.value?.name;
+			if (!profile || !vertical.externalDocumentCheckout) {
+				serviceOrderOpenCount.value = 0;
+				return;
+			}
+			getServiceOrderCountsCached(profile)
+				.then((counts) => {
+					serviceOrderOpenCount.value = Number(counts?.ready) || 0;
+				})
+				.catch(() => {
+					// Offline, or the profile does not really have the gate. No
+					// badge is the honest answer; a stale one would send a
+					// cashier to an empty queue.
+					serviceOrderOpenCount.value = 0;
+				});
+		};
 
 		// Supervisor access for the dashboard: the cashier flag answers at once,
 		// the server probe (the same one the dashboard route asks) corrects it.
@@ -905,6 +932,17 @@ export default {
 			.catch(() => {
 				// Probe unreachable (offline): the cashier flag stands.
 			});
+
+		// The badge follows the two things that can change what it means: which
+		// register this is, and whether that register still has the taller seam.
+		watch(
+			() => [posProfile.value?.name, vertical.externalDocumentCheckout],
+			() => {
+				invalidateServiceOrderCounts();
+				refreshServiceOrderCount();
+			},
+			{ immediate: true },
+		);
 
 		const railGates = computed(() => ({
 			floor: floorEnabled.value,
@@ -972,12 +1010,13 @@ export default {
 		// A hosted surface may publish its own band state (DestinationHost
 		// relays `band`; CobroSurface emits it directly). The shell adopts it
 		// ONLY for kinds it can act on: `recharge` (`recharge.submit` → bus →
-		// RecargasDestination) and Cobro's `change`/`shortfall`, whose
+		// RecargasDestination), `balanceDue` (`order.collectAndDeliver` → bus →
+		// OrdenSurface) and Cobro's `change`/`shortfall`, whose
 		// `sale.collectAndClose` is answered below. The corte also publishes
 		// one and keeps its own Submit; adopting it here without an action
 		// behind `shift.close` would show a button that does nothing.
 		const hostedBandState = ref(null);
-		const HOSTED_BAND_KINDS = ["recharge", "change", "shortfall"];
+		const HOSTED_BAND_KINDS = ["recharge", "balanceDue", "change", "shortfall"];
 		const onHostedBand = (state) => {
 			hostedBandState.value =
 				state && HOSTED_BAND_KINDS.includes(state.kind) ? state : null;
@@ -1216,6 +1255,14 @@ export default {
 			if (actionId === "recharge.submit") {
 				// The destination owns the intent; the press travels down.
 				eventBus.emit("recharge:submit");
+				return;
+			}
+			if (actionId === "order.collectAndDeliver") {
+				// Same shape as the recharge press: the surface holds the
+				// selected order and owns the call, so the shell sends the
+				// intent rather than reaching into it for a second entry point
+				// onto the money path.
+				eventBus.emit("orden:collect");
 			}
 		};
 

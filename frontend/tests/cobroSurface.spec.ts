@@ -106,9 +106,14 @@ describe("the surface is hosted beside the rail, not raised over it", () => {
 	});
 
 	it("adopts the tender band and drops it when the surface goes", () => {
-		expect(shellSource).toContain(
-			'const HOSTED_BAND_KINDS = ["recharge", "change", "shortfall"];',
-		);
+		// The tender kinds by NAME rather than the whole array: other hosted
+		// surfaces publish their own kinds (Órdenes publishes `balanceDue`), and
+		// an exact-list assertion here fails for their reasons rather than for
+		// Cobro's. What this test owns is that `change` and `shortfall` reach
+		// the band and that they leave with the surface.
+		const kinds = /const HOSTED_BAND_KINDS = \[([^\]]*)\]/.exec(shellSource)?.[1] ?? "";
+		expect(kinds).toContain('"change"');
+		expect(kinds).toContain('"shortfall"');
 		expect(shellSource).toMatch(/watch\(cobroHosted, \(\) => \{\s*hostedBandState\.value = null;/);
 	});
 });
