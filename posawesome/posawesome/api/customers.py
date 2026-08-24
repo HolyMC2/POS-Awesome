@@ -237,6 +237,9 @@ def get_customer_info(customer=None, company=None):
     res["posa_discount"] = customer.posa_discount
     res["name"] = customer.name
     res["customer_name"] = customer.customer_name
+    # «Cliente desde …» on the contact view. The field was always on the doc
+    # and never on the wire.
+    res["creation"] = customer.creation
     res["customer_group_price_list"] = frappe.get_value(
         "Customer Group", customer.customer_group, "default_price_list"
     )

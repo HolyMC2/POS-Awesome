@@ -700,12 +700,54 @@ class TestCustomerWallet(StoredValueTestCase):
         # Nothing anywhere adds 200 and 14 into one figure.
         self.assertNotIn("total", wallet)
 
+    def test_the_headline_balance_is_the_monedero_and_never_a_sum(self):
+        # The contact view reads top-level `balance` and hides the whole card
+        # without it. It must be the spendable-at-the-till figure, NOT
+        # monedero + cashback: they are different promises, and a customer
+        # told 214 cannot hand over 214.
+        self.state["customers"]["CUST-0001"]["loyalty_program"] = "Puntos Doco"
+        self.state["loyalty_details"] = {"loyalty_points": 7, "conversion_factor": 2}
+
+        wallet = self._wallet()
+
+        self.assertEqual(wallet["balance"], 200.0)
+        self.assertEqual(wallet["deposited"], 200.0)
+        self.assertEqual(wallet["cashback_value"], 14.0)
+        self.assertNotEqual(wallet["balance"], 214.0)
+
+    def test_the_cashback_rate_is_a_percent_not_a_fraction(self):
+        # A programme paying 1 peso for every 10 spent is 10 %. Sending a
+        # fraction would be ambiguous at exactly 1, where 1 % and 100 % look
+        # identical.
+        self.state["customers"]["CUST-0001"]["loyalty_program"] = "Puntos Doco"
+        self.state["loyalty_details"] = {
+            "loyalty_points": 7,
+            "conversion_factor": 1,
+            "collection_factor": 10,
+            "loyalty_program_name": "Cashback Doco",
+        }
+
+        wallet = self._wallet()
+
+        self.assertEqual(wallet["cashback_percent"], 10.0)
+        self.assertEqual(wallet["program"], "Puntos Doco")
+        self.assertEqual(wallet["program_name"], "Cashback Doco")
+
+    def test_the_rate_is_absent_rather_than_zero_when_it_cannot_be_computed(self):
+        self.state["customers"]["CUST-0001"]["loyalty_program"] = "Puntos Doco"
+        self.state["loyalty_details"] = {"loyalty_points": 7, "conversion_factor": 1}
+
+        self.assertIsNone(self._wallet()["cashback_percent"])
+
     def test_an_unenrolled_customer_has_a_monedero_and_no_cashback(self):
         wallet = self._wallet()
 
         self.assertEqual(wallet["stored_value"]["balance"], 200.0)
+        self.assertEqual(wallet["balance"], 200.0)
+        self.assertFalse(wallet["enrolled"])
         self.assertFalse(wallet["cashback"]["enrolled"])
         self.assertIsNone(wallet["cashback"]["program"])
+        self.assertIsNone(wallet["cashback_percent"])
         self.assertEqual(wallet["cashback"]["points"], 0)
 
     def test_movements_carry_every_source_signed_and_newest_first(self):
@@ -713,21 +755,30 @@ class TestCustomerWallet(StoredValueTestCase):
         self.state["loyalty_details"] = {"loyalty_points": 7, "conversion_factor": 2}
 
         movements = self._wallet()["movements"]
-        by_type = {row["type"]: row for row in movements}
+        by_kind = {row["kind"]: row for row in movements}
 
-        self.assertIn("deposit", by_type)
-        self.assertIn("credit_note", by_type)
-        self.assertIn("monedero_payment", by_type)
-        self.assertIn("cashback_earned", by_type)
-        self.assertIn("cashback_spent", by_type)
+        # The vocabulary the contact view maps. Anything outside this set
+        # renders degraded on that screen, so it is pinned here.
+        self.assertEqual(
+            set(by_kind),
+            {"deposit", "credit_note", "redemption", "cashback", "cashback_spent"},
+        )
+        # One value, two key names, so the two screens cannot drift.
+        for row in movements:
+            self.assertEqual(row["kind"], row["type"])
 
-        self.assertEqual(by_type["deposit"]["amount"], 200.0)
-        self.assertEqual(by_type["deposit"]["reference_name"], "ACC-PAY-0001")
-        self.assertEqual(by_type["credit_note"]["amount"], 80.0)
-        # Spending is negative so one column can carry the whole ledger.
-        self.assertEqual(by_type["monedero_payment"]["amount"], -60.0)
-        self.assertEqual(by_type["cashback_earned"]["amount"], 24.0)
-        self.assertEqual(by_type["cashback_spent"]["amount"], -10.0)
+        self.assertEqual(by_kind["deposit"]["amount"], 200.0)
+        self.assertEqual(by_kind["deposit"]["reference"], "ACC-PAY-0001")
+        self.assertEqual(by_kind["deposit"]["reference_name"], "ACC-PAY-0001")
+        self.assertEqual(by_kind["deposit"]["ts"], "2026-08-20 10:00:00")
+        self.assertTrue(by_kind["deposit"]["detail"])
+        self.assertEqual(by_kind["credit_note"]["amount"], 80.0)
+        # Spending is negative so one column can carry the whole ledger, and
+        # the sign convention is never mixed within a payload.
+        self.assertEqual(by_kind["redemption"]["amount"], -60.0)
+        self.assertEqual(by_kind["cashback"]["amount"], 24.0)
+        self.assertEqual(by_kind["cashback"]["points"], 12)
+        self.assertEqual(by_kind["cashback_spent"]["amount"], -10.0)
 
         dates = [row["posting_date"] for row in movements]
         self.assertEqual(dates, sorted(dates, reverse=True))
@@ -737,7 +788,7 @@ class TestCustomerWallet(StoredValueTestCase):
         names = [
             row["reference_name"]
             for row in self._wallet()["movements"]
-            if row["type"] == "deposit"
+            if row["kind"] == "deposit"
         ]
         self.assertEqual(names, ["ACC-PAY-0001"])
 
@@ -746,17 +797,19 @@ class TestCustomerWallet(StoredValueTestCase):
             customer="CUST-0001", company="Test Company", limit=2
         )
 
+        self.assertEqual(wallet["cap"], 2)
         self.assertEqual(wallet["movements_limit"], 2)
         self.assertEqual(len(wallet["movements"]), 2)
+        self.assertTrue(wallet["truncated"])
         self.assertTrue(wallet["movements_truncated"])
 
     def test_a_site_without_the_credit_columns_contributes_no_redemption_rows(self):
         self.state["columns"] = {}
 
-        types_seen = {row["type"] for row in self._wallet()["movements"]}
+        kinds_seen = {row["kind"] for row in self._wallet()["movements"]}
 
-        self.assertNotIn("monedero_payment", types_seen)
-        self.assertIn("deposit", types_seen)
+        self.assertNotIn("redemption", kinds_seen)
+        self.assertIn("deposit", kinds_seen)
 
 
 if __name__ == "__main__":

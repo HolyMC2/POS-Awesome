@@ -482,6 +482,38 @@ def enroll_customer_card(pos_profile=None, customer=None):
 # ---------------------------------------------------------------------------
 
 
+def _movement(kind, label, amount, row, reference_doctype, reference_name, **extra):
+    """One ledger row, in the shape the contact view reads.
+
+    `kind` is the canonical vocabulary agreed with the Cliente 360 surface:
+    deposit · redemption · cashback · cashback_spent · credit_note ·
+    adjustment. `type` carries the same string rather than a second spelling
+    — one value, two key names, so the two screens can never drift.
+
+    `amount` is SIGNED: negative is value leaving the wallet. `ts` is the
+    instant the movement was recorded (full precision, and what a screen
+    should print); `posting_date` is the accounting date it belongs to, which
+    is the same day for anything a register does and can differ on a
+    back-dated entry.
+    """
+    movement = {
+        "kind": kind,
+        "type": kind,
+        "label": label,
+        "detail": label,
+        "amount": _normalize_amount(amount),
+        "ts": row.get("creation"),
+        "posting_date": row.get("posting_date"),
+        "creation": row.get("creation"),
+        "reference": reference_name,
+        "reference_doctype": reference_doctype,
+        "reference_name": reference_name,
+        "cashier": row.get("owner"),
+    }
+    movement.update(extra)
+    return movement
+
+
 def _movement_sort_key(row):
     return (
         _text(row.get("posting_date")),
@@ -544,17 +576,15 @@ def _deposit_movements(customer, company, limit):
         if flt(amount) <= 0:
             continue
         movements.append(
-            {
-                "type": "deposit",
-                "label": frappe._("Deposit"),
-                "amount": amount,
-                "posting_date": row.get("posting_date"),
-                "creation": row.get("creation"),
-                "reference_doctype": "Payment Entry",
-                "reference_name": name,
-                "mode_of_payment": row.get("mode_of_payment"),
-                "cashier": row.get("owner"),
-            }
+            _movement(
+                "deposit",
+                frappe._("Deposit"),
+                amount,
+                row,
+                "Payment Entry",
+                name,
+                mode_of_payment=row.get("mode_of_payment"),
+            )
         )
     return movements
 
@@ -578,16 +608,14 @@ def _credit_note_movements(customer, company, limit):
         if amount <= 0:
             continue
         movements.append(
-            {
-                "type": "credit_note",
-                "label": frappe._("Credit note"),
-                "amount": amount,
-                "posting_date": row.get("posting_date"),
-                "creation": row.get("creation"),
-                "reference_doctype": "Sales Invoice",
-                "reference_name": row.get("name"),
-                "cashier": row.get("owner"),
-            }
+            _movement(
+                "credit_note",
+                frappe._("Credit note"),
+                amount,
+                row,
+                "Sales Invoice",
+                row.get("name"),
+            )
         )
     return movements
 
@@ -628,16 +656,14 @@ def _redemption_movements(customer, company, limit):
             if amount <= 0:
                 continue
             movements.append(
-                {
-                    "type": "monedero_payment",
-                    "label": frappe._("Paid with wallet"),
-                    "amount": -amount,
-                    "posting_date": row.get("posting_date"),
-                    "creation": row.get("creation"),
-                    "reference_doctype": doctype,
-                    "reference_name": row.get("name"),
-                    "cashier": row.get("owner"),
-                }
+                _movement(
+                    "redemption",
+                    frappe._("Paid with wallet"),
+                    -amount,
+                    row,
+                    doctype,
+                    row.get("name"),
+                )
             )
     return movements
 
@@ -675,19 +701,17 @@ def _cashback_movements(customer, company, loyalty_program, conversion_factor, l
             continue
         spent = points < 0
         movements.append(
-            {
-                "type": "cashback_spent" if spent else "cashback_earned",
-                "label": frappe._("Cashback used") if spent else frappe._("Cashback earned"),
+            _movement(
+                "cashback_spent" if spent else "cashback",
+                frappe._("Cashback used") if spent else frappe._("Cashback earned"),
                 # Pesos, so one column can carry every row; the points are
                 # alongside for the screens that name them.
-                "amount": _normalize_amount(points * conversion_factor),
-                "points": points,
-                "posting_date": row.get("posting_date"),
-                "creation": row.get("creation"),
-                "reference_doctype": _text(row.get("invoice_type")) or "Loyalty Point Entry",
-                "reference_name": _text(row.get("invoice")) or _text(row.get("name")),
-                "cashier": row.get("owner"),
-            }
+                points * conversion_factor,
+                row,
+                _text(row.get("invoice_type")) or "Loyalty Point Entry",
+                _text(row.get("invoice")) or _text(row.get("name")),
+                points=points,
+            )
         )
     return movements
 
@@ -715,10 +739,22 @@ def get_customer_wallet(customer=None, company=None, limit=None):
     loyalty_program = _customer_loyalty_program(customer)
     points = 0
     conversion_factor = 0.0
+    cashback_percent = None
+    program_name = None
     if loyalty_program:
         details = _loyalty_details(customer, company, loyalty_program)
         points = _to_int(details.get("loyalty_points"))
         conversion_factor = float(details.get("conversion_factor") or 0)
+        program_name = _text(details.get("loyalty_program_name")) or loyalty_program
+        # The «Cashback 3 %» chip, as a PERCENT — never a fraction, because a
+        # 1 % programme sending 1 is indistinguishable from a fraction of 1.
+        # A programme pays `conversion_factor` pesos for every
+        # `collection_factor` pesos spent, so the headline rate is their
+        # ratio; the posted accrual then truncates (see get_cashback_preview),
+        # which is why this is the rate and not a promise about one sale.
+        collection_factor = float(details.get("collection_factor") or 0)
+        if collection_factor > 0 and conversion_factor > 0:
+            cashback_percent = round(conversion_factor / collection_factor * 100, 2)
 
     movements = []
     movements.extend(_deposit_movements(customer, company, cap))
@@ -731,11 +767,33 @@ def get_customer_wallet(customer=None, company=None, limit=None):
     truncated = len(movements) > cap
     movements = movements[:cap]
 
+    monedero = _normalize_amount(summary.get("available_amount", 0))
+    cashback_value = _normalize_amount(points * conversion_factor)
+
     return {
         "customer": customer,
         "company": company,
+        # THE HEADLINE IS THE MONEDERO, AND IT IS NOT A SUM. `balance` and
+        # `cashback_value` are two different promises — pesos already paid in
+        # versus points that must be redeemed — and adding them would tell a
+        # customer they can spend points at the till today. `deposited` is the
+        # same figure as `balance`, named for the breakdown row that sits
+        # beside the cashback one.
+        "balance": monedero,
+        "deposited": monedero,
+        "cashback_value": cashback_value,
+        "enrolled": bool(loyalty_program),
+        "program": loyalty_program or None,
+        "program_name": program_name,
+        "cashback_percent": cashback_percent,
+        "points": points,
+        "movements": movements,
+        "cap": cap,
+        "truncated": truncated,
+        # The same three facts, grouped. `stored_value` is an OBJECT here, so
+        # it must never be read as a number.
         "stored_value": {
-            "balance": summary.get("available_amount", 0),
+            "balance": monedero,
             "source_count": summary.get("source_count", 0),
             "sources": summary.get("sources", []),
         },
@@ -743,10 +801,10 @@ def get_customer_wallet(customer=None, company=None, limit=None):
             "enrolled": bool(loyalty_program),
             "program": loyalty_program or None,
             "points": points,
-            "value": _normalize_amount(points * conversion_factor),
+            "value": cashback_value,
             "conversion_factor": conversion_factor,
+            "percent": cashback_percent,
         },
-        "movements": movements,
         "movements_limit": cap,
         "movements_truncated": truncated,
     }
