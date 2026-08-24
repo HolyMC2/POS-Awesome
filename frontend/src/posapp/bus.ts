@@ -113,6 +113,13 @@ export type Events = {
 
 	// ---- dialogs / shell ----------------------------------------------------
 	open_returns: string; // company
+	/**
+	 * «Guardar cotización» — raise the save dialog over whatever is on screen.
+	 * Carries nothing: the dialog reads the cart from the invoice store, so any
+	 * surface can ask for it without owning the lines (see
+	 * `flows/cotizaciones/SaveQuotationDialog.vue`).
+	 */
+	open_save_quotation: void;
 	open_new_address: string; // customer
 	open_customer_display: void;
 	open_employee_switch: void;

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 
 import ReturnFinder from "../src/posapp/components/pos/flows/returns/ReturnFinder.vue";
+import { describeRefundMethods } from "../src/posapp/components/pos/flows/returns/refundMethods";
 import { describeFindMethods } from "../src/posapp/components/pos/flows/returns/findMethods";
 import { defaultSelection } from "../src/posapp/components/pos/flows/returns/returnLines";
 import { resolveWarrantyWindow } from "../src/posapp/components/pos/flows/returns/warrantyWindow";
@@ -69,6 +70,14 @@ const mountFinder = (props: Record<string, unknown> = {}, listeners: Record<stri
 				signatureTaken: false,
 				reason: null,
 			},
+			// The refund choice (documentos round): resolved by the dialog and
+			// passed down, so this view stays free of the rule about who may
+			// hold credit — that lives in `refundMethods.ts`.
+			refundMethods: describeRefundMethods({
+				customer: "CUST-9",
+				walkInCustomer: "General",
+			}),
+			refundMethod: "cash",
 			formatCurrency: (value: number) => `¤${value.toFixed(2)}`,
 			formatDate: (value: string) => value,
 			...props,

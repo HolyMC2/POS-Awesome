@@ -1,7 +1,15 @@
 import json
 
 import frappe
-from frappe.utils import getdate
+from frappe import _
+from frappe.utils import cint, getdate, nowdate
+
+from posawesome.posawesome.api.quotation_read_model import (
+    QUOTATION_BUCKETS,
+    bucket_counts,
+    matches_search,
+    shape_row,
+)
 
 
 def _map_delivery_dates(data):
@@ -174,3 +182,175 @@ def submit_quotation(order, pos_profile=None):
         doc.submit()
 
     return {"name": doc.name, "status": doc.docstatus}
+
+
+# ---------------------------------------------------------------------------
+# The register's Cotizaciones lane (DOCUMENTOS_GOLDEN_FLOW §1)
+# ---------------------------------------------------------------------------
+#
+# `search_quotations` above serves the old Drafts «Quote» tab: company +
+# currency, both docstatuses, no estado at all. The lane the artboard draws
+# needs the opposite shape — submitted quotes only (a draft has no folio to
+# hand a customer), bucketed by validity, and carrying the conversion link —
+# so it is a second read rather than a flag on the first.
+
+
+#: Register-scoped columns the lane reads. Split out because a site that has
+#: not run `add_quotation_conversion_fields` has none of them, and a `get_all`
+#: naming a missing column raises rather than returning empty.
+_QUOTATION_POSA_FIELDS = (
+    "posa_converted_invoice",
+    "posa_converted_invoice_doctype",
+    "posa_pos_profile",
+    "posa_note",
+)
+
+
+def _available_posa_fields():
+    return [
+        field
+        for field in _QUOTATION_POSA_FIELDS
+        if frappe.db.has_column("Quotation", field)
+    ]
+
+
+def profile_company(pos_profile):
+    """The company a register belongs to — never taken from the client.
+
+    Every endpoint on this lane is scoped by THIS value, not by a `company`
+    argument, so a cashier cannot widen their own scope by editing a request.
+    """
+    company = frappe.db.get_value("POS Profile", pos_profile, "company")
+    if not company:
+        frappe.throw(_("POS Profile {0} has no company.").format(pos_profile))
+    return company
+
+
+def require_open_shift(pos_profile):
+    """The acting cashier's own open shift on THIS register.
+
+    A cotización is a promise the register makes and a nota de crédito is money
+    leaving it; both belong to a shift, and a shift is what the corte reads.
+    The filters repeat `check_opening_shift`'s rather than importing it,
+    because that function returns a whole payload and this needs one name —
+    the same reasoning `stored_value._require_open_shift` records.
+    """
+    user = frappe.session.user
+    rows = frappe.get_all(
+        "POS Opening Shift",
+        filters={
+            "user": user,
+            "pos_closing_shift": ["is", "not set"],
+            "docstatus": 1,
+            "status": "Open",
+        },
+        fields=["name", "pos_profile"],
+        order_by="period_start_date desc",
+        limit_page_length=1,
+    )
+    if not rows:
+        frappe.throw(_("Open a shift on this register before saving a quotation."))
+    shift = rows[0]
+    if shift.get("pos_profile") != pos_profile:
+        frappe.throw(
+            _(
+                "Your open shift belongs to POS Profile {0}. Close it before "
+                "working on {1}."
+            ).format(shift.get("pos_profile"), pos_profile)
+        )
+    return shift.get("name")
+
+
+def assert_not_walk_in(pos_profile, customer):
+    """A quote is a promise to SOMEBODY.
+
+    The register's default customer is the anonymous counter sale; naming it on
+    a document that is meant to be recalled by folio a week later produces a
+    promise nobody can be identified as holding — and, on the credit-note side,
+    a balance nobody can ever spend.
+    """
+    if not customer:
+        frappe.throw(_("Choose a customer first — a quotation is a promise to someone."))
+    walk_in = frappe.db.get_value("POS Profile", pos_profile, "customer")
+    if walk_in and customer == walk_in:
+        frappe.throw(
+            _(
+                "«{0}» is the counter customer. Choose a real customer — a "
+                "quotation is a promise to someone who can come back for it."
+            ).format(customer)
+        )
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_quotations(pos_profile, status_bucket=None, search=None, limit=200):
+    """The Cotizaciones lane's list, bucketed and counted.
+
+    Counts come from the WHOLE company-scoped set, the filtered rows from the
+    chosen bucket: a tab reading «Vencidas 9» while the list under it shows the
+    two that matched a search is the header contradicting the list. So the
+    filter is applied after the count, never before it.
+    """
+    _assert_quotation_flow_allowed(pos_profile)
+    company = profile_company(pos_profile)
+
+    fields = [
+        "name",
+        "party_name",
+        "customer_name",
+        "transaction_date",
+        "valid_till",
+        "grand_total",
+        "currency",
+        "owner",
+    ] + _available_posa_fields()
+
+    sources = frappe.get_all(
+        "Quotation",
+        filters={
+            "company": company,
+            "quotation_to": "Customer",
+            # Submitted only: a draft quotation has no folio the customer could
+            # be holding, and the lane exists to answer «I have this paper».
+            "docstatus": 1,
+        },
+        fields=fields,
+        order_by="transaction_date desc, creation desc",
+        limit_page_length=cint(limit) or 200,
+    )
+
+    today = nowdate()
+    rows = [shape_row(dict(source), today) for source in sources]
+    _attach_item_counts(rows)
+    counts = bucket_counts(rows)
+
+    bucket = str(status_bucket or "").strip()
+    if bucket and bucket in QUOTATION_BUCKETS:
+        rows = [row for row in rows if row["estado"] == bucket]
+    rows = [row for row in rows if matches_search(row, search)]
+
+    return {"rows": rows, "counts": counts, "today": today, "company": company}
+
+
+def _attach_item_counts(rows):
+    """One extra query for every row's line count, not one per row.
+
+    Deliberately NOT `get_all(fields=["count(name) as n"])`: an aggregate in
+    `fields` is rejected as unsafe over HTTP (417) even though it works in the
+    bench console, which is exactly the trap that makes a read model pass its
+    tests and fail on the register.
+    """
+    names = [row["name"] for row in rows if row.get("name")]
+    if not names:
+        return
+    lines = frappe.get_all(
+        "Quotation Item",
+        filters={"parent": ["in", names]},
+        fields=["parent"],
+        limit_page_length=0,
+    )
+    tally = {}
+    for line in lines:
+        parent = line.get("parent")
+        tally[parent] = tally.get(parent, 0) + 1
+    for row in rows:
+        row["items_count"] = tally.get(row["name"], 0)

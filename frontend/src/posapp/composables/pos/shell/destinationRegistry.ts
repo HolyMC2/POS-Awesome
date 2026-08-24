@@ -223,6 +223,24 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 		badgeSource: null,
 	},
 	{
+		id: "quotations",
+		labelKey: "Quotations",
+		kind: "sheet",
+		path: "/pos/quotations",
+		// Universal for the same reason the rail entry is — see its note. The
+		// gate that matters is server-side: every quotation endpoint asserts
+		// profile membership AND `custom_allow_create_quotation` before it
+		// reads or writes anything.
+		capability: null,
+		profileFlag: null,
+		// The list, the estado and the conversion link are all server facts,
+		// and the load MINTS a draft invoice. There is nothing to do here
+		// without a connection.
+		offline: "online_required",
+		shortcutActionId: null,
+		badgeSource: null,
+	},
+	{
 		id: "drafts",
 		labelKey: "Drafts",
 		kind: "sheet",
@@ -430,6 +448,9 @@ export const SHEET_COMPONENTS: Record<string, () => Promise<unknown>> = {
 	// `destinationId` picks the tab (see `useHostedSheet` in InvoiceManagement).
 	drafts: () => import("../../../components/pos/flows/InvoiceManagement.vue"),
 	invoices: () => import("../../../components/pos/flows/InvoiceManagement.vue"),
+	// A view, not a hosted dialog — it has no `v-dialog` and no store flag, so
+	// it renders straight into the host the way `OrdenSurface` does.
+	quotations: () => import("../../../components/pos/flows/cotizaciones/CotizacionesSurface.vue"),
 	"return": () => import("../../../components/pos/flows/Returns.vue"),
 	// The designed destination (§12 F), not the catalogue picker. The picker
 	// is a two-step modal the cart still opens below the two-column boundary;

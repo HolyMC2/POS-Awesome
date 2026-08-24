@@ -35,6 +35,11 @@ export const RAIL_DESTINATION_IDS = [
 	"floor",
 	"serviceOrder",
 	"expense",
+	// Cotizaciones sits with Borradores and Facturas, and BEFORE them, exactly
+	// as `Cotizacion.dc.html` draws its rail: the three documents a counter
+	// reaches for are ordered by how finished they are — a promise, an
+	// unfinished sale, a finished one.
+	"quotations",
 	"drafts",
 	"invoices",
 	"return",
@@ -265,6 +270,32 @@ export const RAIL_DESTINATIONS: readonly RailDestination[] = [
 		// drawer, so it can be taken now and reconciled later.
 		offlineAvailability: "queued",
 		backedBy: "src/offline/cash_movements.ts",
+		group: "primary",
+	},
+	{
+		id: "quotations",
+		label: "Quotations",
+		icon: "mdi-file-document-edit-outline",
+		badgeSource: null,
+		// NOT gated, and that is a deliberate deviation from the POS Profile
+		// flag `custom_allow_create_quotation` which hides the old Drafts
+		// «Quote» tab. A `RailGate` is answered by `Pos.vue`'s `railGates`
+		// literal, and a gate the shell does not answer reads `undefined` —
+		// i.e. the destination vanishes from every register. Adding the gate
+		// and the shell's answer has to land in one commit; until it does, a
+		// universal entry that refuses server-side (`_assert_quotation_flow_allowed`
+		// on all four endpoints) is honest, while a hidden one would be dead.
+		gate: null,
+		// Unbound, like `floor`. An action id here would have to be bound in
+		// `MUELLE_DEFAULT` *and* implemented in `invoiceShortcuts.ts`, which
+		// `shortcutsEngine.spec.ts` checks by name — see the report's note on
+		// `invoice.saveQuotation`.
+		shortcutActionId: null,
+		// A folio is a server fact: the list, the estado and the conversion
+		// link all come from it, and a cached copy would show a quotation as
+		// Vigente after someone else billed it.
+		offlineAvailability: "blocked",
+		backedBy: null,
 		group: "primary",
 	},
 	{

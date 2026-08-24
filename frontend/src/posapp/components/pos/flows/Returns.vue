@@ -41,12 +41,15 @@
 						:selection="returnSelection"
 						:authorisers="authorisers"
 						:no-ticket="noTicketView"
+						:refund-methods="refundMethods"
+						:refund-method="refundMethod"
 						:format-currency="formatReturnCurrency"
 						:format-date="formatSaleDate"
 						@update:active-method="setFindMethod"
 						@update:term="setFindTerm"
 						@update:selection="setReturnSelection"
 						@update:no-ticket="patchNoTicket"
+						@update:refund-method="setRefundMethod"
 						@search="search_invoices"
 						@select-sale="selectSale"
 						@proceed="proceed"
@@ -151,7 +154,14 @@ import ReturnFinder from "./returns/ReturnFinder.vue";
 import { defaultFindMethod, describeFindMethods } from "./returns/findMethods";
 import { fetchSaleCashier, runFind } from "./returns/findOriginalSale";
 import { buildNoTicketRecord, evaluateNoTicketReturn } from "./returns/noTicketGate";
+import {
+	CREDIT_NOTE_MINTED_KEY,
+	defaultRefundMethod,
+	describeRefundMethods,
+	resolveRefundMethod,
+} from "./returns/refundMethods";
 import { defaultSelection, planReturnLines, selectedSourceItems } from "./returns/returnLines";
+import { printInvoiceByName } from "../../../utils/printInvoiceByName";
 import { resolveWarrantyWindow } from "./returns/warrantyWindow";
 
 /**
@@ -245,6 +255,13 @@ export default {
 		returnLines: [],
 		returnSelection: {},
 
+		// How the money goes back (DOCUMENTOS_GOLDEN_FLOW §2). Cash by default
+		// and always — a refund that defaulted to credit would hand the customer
+		// a balance nobody asked for, past a cashier who only reads the one big
+		// button.
+		refundMethod: defaultRefundMethod(),
+		mintingCreditNote: false,
+
 		noTicketState: emptyNoTicketState(),
 	}),
 	computed: {
@@ -261,6 +278,20 @@ export default {
 			// (R8). Today that resolves to no chips at all, which is the honest
 			// answer until the three-file change registers the actions.
 			return describeFindMethods(this.findGates, getActiveKeymap());
+		},
+		/**
+		 * The two refund chips, resolved against the SELECTED sale.
+		 *
+		 * `return_doc` first: it is the server's own answer about the original,
+		 * so its customer is the one the credit note would actually be written
+		 * against. The list row is the fallback for the moment between choosing
+		 * a sale and the detail arriving.
+		 */
+		refundMethods() {
+			return describeRefundMethods({
+				customer: this.return_doc?.customer || this.selectedSale?.customer || null,
+				walkInCustomer: this.pos_profile?.customer || null,
+			});
 		},
 		authorisers() {
 			return this.employeeStore?.terminalEmployees || [];
@@ -600,6 +631,12 @@ export default {
 			// the lesser evil of two — a register with a skewed clock reads the
 			// window a day out; a register with no date at all cannot say whether
 			// the return needs a supervisor.
+			// The original's customer decides whether a credit note is even
+			// legal, and the original just changed — see `setRefundMethod`.
+			this.refundMethod = resolveRefundMethod(this.refundMethod, {
+				customer: return_doc.customer || row.customer || null,
+				walkInCustomer: this.pos_profile?.customer || null,
+			});
 			this.warranty = resolveWarrantyWindow(
 				return_doc,
 				frappe?.datetime?.nowdate?.() || new Date().toISOString().slice(0, 10),
@@ -617,7 +654,101 @@ export default {
 				this.return_without_invoice();
 				return;
 			}
+			if (this.refundMethod === "credit_note") {
+				this.submit_credit_note();
+				return;
+			}
 			this.submit_dialog();
+		},
+		/**
+		 * The chosen refund method, re-checked against the current sale.
+		 *
+		 * A cashier who picks Nota de crédito on a named customer and then
+		 * changes their mind about WHICH sale must not carry the choice onto a
+		 * counter ticket, where the server would refuse it after the press.
+		 */
+		setRefundMethod(method) {
+			this.refundMethod = resolveRefundMethod(method, {
+				customer: this.return_doc?.customer || this.selectedSale?.customer || null,
+				walkInCustomer: this.pos_profile?.customer || null,
+			});
+		},
+		/**
+		 * «Nota de crédito» — minted server-side, printed, and that is the
+		 * whole act. It never reaches the cart or the tender screen: a credit
+		 * note is a submitted return with no payments, and Cobro has no way to
+		 * express paying a refund with nothing.
+		 */
+		async submit_credit_note() {
+			const return_doc = this.return_doc;
+			const chosen = selectedSourceItems(return_doc?.items, this.returnPlan);
+			if (!return_doc || !chosen.length) {
+				this.toastStore.show({
+					title: __("Choose at least one item to return"),
+					color: "warning",
+				});
+				return;
+			}
+			if (this.mintingCreditNote) return;
+			this.mintingCreditNote = true;
+			try {
+				const { message } = await frappe.call({
+					method:
+						"posawesome.posawesome.api.invoice_processing.credit_note.create_credit_note_return",
+					args: {
+						pos_profile: this.pos_profile?.name,
+						invoice_name: return_doc.name,
+						items: chosen.map((item) => ({
+							item_code: item.item_code,
+							qty: Math.abs(Number(item.qty) || 0),
+						})),
+						doctype: return_doc.doctype || "Sales Invoice",
+					},
+				});
+				if (!message?.name) {
+					throw new Error(__("Server returned no credit note."));
+				}
+				this.toastStore.show({
+					title: __("Credit note issued"),
+					message: __(CREDIT_NOTE_MINTED_KEY, [
+						message.customer_name || message.customer,
+						message.name,
+					]),
+					color: "success",
+				});
+				// Printed here rather than left to the operator: the folio IS the
+				// customer's claim on the balance, and a credit note nobody
+				// printed is a balance nobody can present.
+				await printInvoiceByName(
+					{ ...(this.pos_profile || {}), print_format: message.print_format },
+					message.doctype,
+					message.name,
+				);
+				this.invoicesDialog = false;
+			} catch (error) {
+				console.error("Error issuing credit note:", error);
+				this.toastStore.show({
+					title: this.serverMessage(error) || __("Could not issue the credit note"),
+					color: "error",
+				});
+			} finally {
+				this.mintingCreditNote = false;
+			}
+		},
+		/**
+		 * Frappe throws carry their text in `_server_messages`, never in
+		 * `message` — so a bare `error.message` on a refusal shows the generic
+		 * fallback and hides the sentence the server wrote for the cashier.
+		 */
+		serverMessage(error) {
+			try {
+				const parsed = JSON.parse(error?._server_messages || "[]");
+				const first = parsed.length ? JSON.parse(parsed[0]) : null;
+				const text = first?.message || "";
+				return frappe?.utils?.strip_html ? frappe.utils.strip_html(text) : text;
+			} catch {
+				return "";
+			}
 		},
 		noTicketRequest() {
 			return {

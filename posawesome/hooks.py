@@ -99,6 +99,8 @@ after_migrate = [
     "posawesome.patches.add_customer_card_pos_profile_settings.execute",
     "posawesome.patches.add_rate_band_controls.execute",
     "posawesome.patches.add_gift_card_invoice_redemption_fields.execute",
+    "posawesome.patches.add_quotation_conversion_fields.execute",
+    "posawesome.patches.add_credit_note_print_format.execute",
     "posawesome.patches.add_gift_card_to_workspace.execute",
     "posawesome.patches.add_submission_ledger_to_workspace.execute",
     "posawesome.patches.migrate_pos_supervisor_to_role.execute",

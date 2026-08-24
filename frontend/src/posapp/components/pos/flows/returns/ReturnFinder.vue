@@ -289,6 +289,38 @@
 
 				<div class="return-finder__spacer"></div>
 
+				<!-- How the money goes back. An explicit choice rather than a
+				     silent default, because the two branches end in different
+				     places: cash in the customer's hand, or a balance with their
+				     name on it. Both chips always render — one that is simply
+				     absent on a counter sale teaches nothing. -->
+				<h4 class="return-finder__label">{{ __("Refund as") }}</h4>
+				<div class="return-finder__refunds" data-testid="return-refund-methods">
+					<button
+						v-for="method in refundMethods"
+						:key="method.id"
+						type="button"
+						class="return-finder__refund"
+						:class="{ 'return-finder__refund--on': method.id === refundMethod }"
+						:disabled="!method.available"
+						:aria-pressed="method.id === refundMethod"
+						:title="method.blockedReason ? __(method.blockedReason) : __(method.hint)"
+						:data-testid="`return-refund-${method.id}`"
+						:data-available="method.available ? '1' : '0'"
+						@click="emit('update:refundMethod', method.id)"
+					>
+						<v-icon size="16" :icon="method.icon" />
+						<span class="return-finder__refund-label">{{ __(method.label) }}</span>
+					</button>
+				</div>
+				<p
+					v-if="blockedRefundReason"
+					class="return-finder__refund-note"
+					data-testid="return-refund-blocked"
+				>
+					{{ __(blockedRefundReason) }}
+				</p>
+
 				<v-btn
 					block
 					size="large"
@@ -297,10 +329,11 @@
 					:disabled="!canProceed"
 					data-testid="return-proceed"
 					:data-can-proceed="canProceed ? '1' : '0'"
+					:data-refund-method="refundMethod"
 					@click="emit('proceed')"
 				>
 					<v-icon start icon="mdi-backup-restore" />
-					{{ __("Continue the return") }}
+					{{ __(refundActionKey(refundMethod)) }}
 				</v-btn>
 			</section>
 		</div>
@@ -336,6 +369,11 @@ import {
 import type { OriginalSaleRow } from "./findOriginalSale";
 import type { ResolvedFindMethod, ReturnFindMethodId } from "./findMethods";
 import {
+	refundActionKey,
+	type RefundMethod,
+	type RefundMethodId,
+} from "./refundMethods";
+import {
 	clampReturnQty,
 	planReturnLines,
 	type ReturnableLine,
@@ -368,6 +406,9 @@ const props = defineProps<{
 	selection: ReturnSelection;
 	authorisers: readonly ReturnAuthoriser[];
 	noTicket: Pick<NoTicketRequest, "allowedByProfile" | "authoriserUser" | "signatureTaken" | "reason">;
+	/** Resolved by `describeRefundMethods` in the dialog — see refundMethods.ts. */
+	refundMethods: readonly RefundMethod[];
+	refundMethod: RefundMethodId;
 	formatCurrency: (value: number) => string;
 	/** The dialog's own date formatter — same output the results table had. */
 	formatDate: (value: string) => string;
@@ -378,10 +419,22 @@ const emit = defineEmits<{
 	"update:term": [string];
 	"update:selection": [Record<string, number>];
 	"update:noTicket": [Partial<NoTicketRequest>];
+	"update:refundMethod": [RefundMethodId];
 	search: [];
 	"select-sale": [OriginalSaleRow];
 	proceed: [];
 }>();
+
+/**
+ * The reason the credit-note chip is unavailable, or null.
+ *
+ * Rendered once, under the pair, rather than as a tooltip only: a disabled chip
+ * whose explanation lives in a `title` attribute is an explanation a cashier at
+ * a touchscreen never sees.
+ */
+const blockedRefundReason = computed(
+	() => props.refundMethods.find((method) => !method.available)?.blockedReason ?? null,
+);
 
 const activeDef = computed(() => props.methods.find((method) => method.id === props.activeMethod) ?? null);
 const activeIsSearch = computed(() => activeDef.value?.kind === "search");
@@ -853,5 +906,55 @@ const onQtyInput = (line: { name: string; returnableQty: number }, event: Event)
 	background: var(--reg-accent, #0097a7);
 	color: var(--reg-on-accent, #fff);
 	font-weight: 700;
+}
+
+.return-finder__refunds {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 7px;
+	margin-bottom: 8px;
+}
+
+/* Two selectors for the chosen state, not one: a single-class override
+   compounds with the presentation classes above it and loses to whichever
+   happens to be declared later. */
+.return-finder__refund {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 8px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--reg-border, #e6e9ee);
+	background: var(--reg-surface, #fff);
+	font: inherit;
+	font-size: 12.5px;
+	color: var(--reg-text-secondary, #4a5260);
+	cursor: pointer;
+}
+
+.return-finder__refund:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.return-finder__refund.return-finder__refund--on {
+	background: var(--reg-accent-soft, #e0f7fa);
+	border-color: var(--reg-accent-edge, #9fdde6);
+	color: var(--reg-accent-ink, #00646f);
+	font-weight: 700;
+}
+
+.return-finder__refund-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.return-finder__refund-note {
+	margin: 0 0 8px;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--reg-text-secondary, #7b838f);
 }
 </style>

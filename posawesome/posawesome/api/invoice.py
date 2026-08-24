@@ -58,6 +58,7 @@ def before_submit(doc, method):
     add_loyalty_point(doc)
     create_sales_order(doc)
     update_coupon(doc, "used")
+    mark_quotation_converted(doc)
 
 
 def before_cancel(doc, method):
@@ -68,6 +69,31 @@ def on_cancel(doc, method):
     cancel_posawesome_credit_journal_entries(doc)
     restore_posawesome_gift_card_redemptions(doc)
     delete_invoice_submission_ledger_entries(doc)
+    clear_quotation_conversion(doc)
+
+
+def mark_quotation_converted(doc):
+    """Flip the quotation this sale honours to Convertida, exactly once.
+
+    Here rather than in a `doc_events` entry of its own because the claim has
+    to land inside the SAME transaction as the submit: a sale that rolls back
+    must not leave a quotation marked as billed. Imported lazily so the
+    quotation lane's module graph is not pulled into every invoice save.
+    """
+    from posawesome.posawesome.api.quotation_conversion import (
+        mark_quotation_converted as _mark,
+    )
+
+    _mark(doc)
+
+
+def clear_quotation_conversion(doc):
+    """Release the quotation when its sale is cancelled — see `_clear`'s note."""
+    from posawesome.posawesome.api.quotation_conversion import (
+        clear_quotation_conversion as _clear,
+    )
+
+    _clear(doc)
 
 
 def delete_invoice_submission_ledger_entries(doc):

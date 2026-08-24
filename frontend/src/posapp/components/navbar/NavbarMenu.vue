@@ -291,6 +291,18 @@
 	<QzTestPrintDialog v-model="showQzTestPrintDialog" />
 	<ChargeRequestsDialog v-model="showChargeRequestsDialog" :pos-profile="posProfile" />
 	<FacturacionDialog v-model="showFacturacionDialog" :pos-profile="posProfile" />
+	<!-- «Guardar cotización». Behind `v-if`, not `v-model` alone: the dialog
+	     reads the CART, so its setup builds the invoice store, and mounting it
+	     on every navbar render did that work in every layout — including ones
+	     that never quote. The navbar keeps the listener (it is always on
+	     screen) and the dialog exists only while it is open, so the artboard's
+	     own placement in the sale's summary strip still needs nothing but the
+	     `open_save_quotation` emit. -->
+	<SaveQuotationDialog
+		v-if="showSaveQuotationDialog"
+		v-model="showSaveQuotationDialog"
+		:event-bus="eventBus"
+	/>
 
 	<!-- Notification Snackbars -->
 	<v-snackbar
@@ -331,6 +343,7 @@ import QzTrayDialog from "./QzTrayDialog.vue";
 import QzTestPrintDialog from "../settings/QzTestPrintDialog.vue";
 import ChargeRequestsDialog from "./ChargeRequestsDialog.vue";
 import FacturacionDialog from "../pos/cfdi/FacturacionDialog.vue";
+import SaveQuotationDialog from "../pos/flows/cotizaciones/SaveQuotationDialog.vue";
 
 export default {
 	name: "NavbarMenu",
@@ -339,6 +352,7 @@ export default {
 		QzTestPrintDialog,
 		ChargeRequestsDialog,
 		FacturacionDialog,
+		SaveQuotationDialog,
 	},
 	props: {
 		posProfile: { type: Object, default: () => ({}) },
@@ -380,6 +394,8 @@ export default {
 			printHealthWizardOffered: false,
 			printHealthToasted: false,
 			showChargeRequestsDialog: false,
+			showSaveQuotationDialog: false,
+			saveQuotationHandler: null,
 			showFacturacionDialog: false,
 			selectedLanguage: "en",
 			currentLanguage: "en",
@@ -405,6 +421,10 @@ export default {
 		if (this.menuActionHandler) {
 			this.eventBus?.off?.("run_menu_action", this.menuActionHandler);
 			this.menuActionHandler = null;
+		}
+		if (this.saveQuotationHandler) {
+			this.eventBus?.off?.("open_save_quotation", this.saveQuotationHandler);
+			this.saveQuotationHandler = null;
 		}
 		stopPrintHealthMonitor();
 	},
@@ -535,6 +555,20 @@ export default {
 							icon: "mdi-cash-register",
 							tone: "warning",
 							handler: "openChargeRequests",
+						}
+					: null,
+				// «Guardar cotización» — the cart, filed as a promise with a
+				// folio. Gated by the same POS Profile flag the server asserts
+				// (`custom_allow_create_quotation`), so a register that does not
+				// quote never sees the entry.
+				this.isEnabledSetting(this.posProfile?.custom_allow_create_quotation)
+					? {
+							id: "save-quotation",
+							label: __("Save quotation"),
+							subtitle: __("File this cart as a quotation"),
+							icon: "mdi-file-document-edit-outline",
+							tone: "info",
+							handler: "openSaveQuotation",
 						}
 					: null,
 				this.isEnabledSetting(this.posProfile?.posa_cfdi_enable_stamping)
@@ -781,6 +815,13 @@ export default {
 		// trip that would otherwise swallow it.
 		this.menuActionHandler = (payload) => this.runMenuAction(payload);
 		this.eventBus?.on?.("run_menu_action", this.menuActionHandler);
+		// «Guardar cotización» — the navbar holds the listener because it is on
+		// screen in every layout; the dialog itself exists only while the flag
+		// is up (see the `v-if` above).
+		this.saveQuotationHandler = () => {
+			this.showSaveQuotationDialog = true;
+		};
+		this.eventBus?.on?.("open_save_quotation", this.saveQuotationHandler);
 		await this.initializeLanguage();
 		this.initializeWesternNumerals();
 	},
@@ -881,6 +922,14 @@ export default {
 				case "openFacturacion":
 					this.closeMenu();
 					this.showFacturacionDialog = true;
+					break;
+				case "openSaveQuotation":
+					this.closeMenu();
+					// Through the bus rather than the flag, so the artboard's own
+					// button in the summary strip reaches the same dialog with
+					// one emit and no prop chain — this menu just listens like
+					// everybody else.
+					this.eventBus?.emit?.("open_save_quotation");
 					break;
 				case "openLanguageDialog":
 					this.closeMenu();

@@ -132,6 +132,7 @@ describe("useRegisterRail — offline", () => {
 			"invoices",
 			"payments",
 			"purchase",
+			"quotations",
 			"recharge",
 			"return",
 			"serviceOrder",
