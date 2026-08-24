@@ -57,6 +57,24 @@ Removal = fixture churn + patch; batch them in one cleanup commit.
   before gating: select-SO ON everywhere (no behavior change), quotation
   OFF everywhere (UI already hid it).
 
+## Added 2026-08-23 — tarjeta de cliente
+
+Two fields, added by `add_customer_card_pos_profile_settings` (after_migrate,
+beside the gift-card pair). They are WIRED from the first commit — the P0-3
+lesson applied before it could be repeated, not after.
+
+| field | type | gate it performs |
+|---|---|---|
+| `posa_use_customer_cards` | Check | `stored_value._require_customer_cards_enabled` refuses `deposit_stored_value` and `enroll_customer_card` when off. The SPA hides the wallet card and the Cobro accrual line on the same flag, but the server never trusts that. |
+| `posa_customer_card_program` | Link → Loyalty Program | The programme `enroll_customer_card` writes to `Customer.loyalty_program`. Empty ⇒ enrolment refuses and says so; a programme whose `company` differs from the profile's is refused at enrolment rather than at Cobro, where ERPNext would throw "The Loyalty Program isn't valid for the selected company". |
+
+Neither gate is bypassed by a System Manager the way `_scope`'s tenant
+asserts are: flag, register roster (`_ensure_terminal_user`) and an OPEN
+shift are checked for every acting user. A deposit also carries the open
+shift's name in `Payment Entry.reference_no`, which is the key
+`closing_processing/data.get_payments_entries` filters on — that, and only
+that, is what puts a cash deposit into the shift's expected cash.
+
 ## Full field tables
 
 ### First half (create_pos_invoice… → posa_decimal_precision)
@@ -158,6 +176,8 @@ Removal = fixture churn + patch; batch them in one cleanup commit.
 | posa_silent_print | CLIENT-ONLY✓ | print pipeline ×8 | |
 | posa_smart_reload_mode | **DEAD** | — | |
 | posa_tax_inclusive | WIRED | utilities.py + creation.py | prod-verified |
+| posa_customer_card_program | WIRED | stored_value.py:enroll_customer_card | Link → Loyalty Program; the register's cashback programme |
+| posa_use_customer_cards | WIRED | stored_value.py ×3 gates | gate for deposit/enrol/wallet, server-side from day one |
 | posa_use_delivery_charges | CLIENT-ONLY⚠ | DeliveryCharges.vue | P0-7 |
 | posa_use_gift_cards | **CLIENT-ONLY⚠** | Navbar.vue, Payments.vue | P0-3 |
 | posa_use_percentage_discount | CLIENT-ONLY (mitigated) | ×25 | cap backs it |

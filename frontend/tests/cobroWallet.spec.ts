@@ -68,10 +68,12 @@ describe("which wallet the card describes", () => {
 });
 
 describe("the accrual is only ever a read value", () => {
-	it("is null when nothing supplied one — which is every register today", () => {
-		// `collection_factor` is computed server-side and never copied into the
-		// payload `get_customer_info` returns, so no client can compute the
-		// accrual. See the task report for the exact server change.
+	it("is null when nothing supplied one", () => {
+		// The read model exists now (`stored_value.get_cashback_preview`, wired
+		// through `useRedemptionLogic.cashback_accrual`), but this module has
+		// not changed its mind: it draws what it is handed and invents nothing.
+		// Registers with customer cards off, unenrolled customers and offline
+		// sales all still arrive here with no accrual at all.
 		expect(resolveWalletSummary({ loyaltyProgram: "P", loyaltyValue: 418 }).accrual).toBeNull();
 	});
 

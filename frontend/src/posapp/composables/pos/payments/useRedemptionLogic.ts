@@ -54,6 +54,92 @@ export function useRedemptionLogic(options: RedemptionLogicOptions) {
 		return amount;
 	});
 
+	/**
+	 * «Acumula $Y con esta compra» — the socket `walletSummary.ts` left null.
+	 *
+	 * `null` still means NOT AVAILABLE, and it stays null for every register
+	 * that has not switched customer cards on, for every unenrolled customer
+	 * and for every offline sale. What changed is that an enrolled customer on
+	 * a card-enabled register now has an answer, and it comes from the SERVER —
+	 * `stored_value.get_cashback_preview`, which computes the accrual with
+	 * ERPNext's own `cint(eligible / collection_factor)` truncation.
+	 *
+	 * It is not derived here even though `conversion_factor` is already in
+	 * `customer_info`: `collection_factor` is a TIER value, chosen from the
+	 * customer's total spend WITH this sale folded in, and the client has
+	 * neither the tiers nor the spend. A locally computed figure would agree
+	 * with the posted accrual right up until a customer crossed a tier.
+	 */
+	const cashback_accrual = ref<number | null>(null);
+
+	/** ERPNext: `flt(grand_total) - cint(loyalty_amount)` on a fresh sale. */
+	const cashbackEligibleAmount = computed(() => {
+		const doc = unref(invoiceDoc);
+		if (!doc || doc.is_return) return null;
+		const total = normalizeFloat(doc.grand_total ?? doc.rounded_total ?? 0);
+		const loyaltyCovered = Math.trunc(normalizeFloat(unref(loyalty_amount) || 0));
+		const eligible = normalizeFloat(total - loyaltyCovered);
+		return eligible > 0 ? eligible : 0;
+	});
+
+	const cashbackAsksTheServer = computed(() => {
+		const profile = unref(posProfile);
+		const info = unref(customerInfo) || {};
+		return Boolean(
+			profile?.posa_use_customer_cards &&
+				profile?.company &&
+				String(info.loyalty_program ?? "").trim() &&
+				String(unref(invoiceDoc)?.customer ?? "").trim(),
+		);
+	});
+
+	let accrualTimer: ReturnType<typeof setTimeout> | null = null;
+	// A cart changes faster than a round trip; only the newest answer may be
+	// drawn, or a deleted line leaves its accrual on screen.
+	let accrualRequest = 0;
+
+	const requestCashbackPreview = () => {
+		const token = ++accrualRequest;
+		if (!cashbackAsksTheServer.value || isOffline()) {
+			cashback_accrual.value = null;
+			return;
+		}
+
+		const eligible = cashbackEligibleAmount.value;
+		if (eligible === null || eligible <= 0) {
+			cashback_accrual.value = null;
+			return;
+		}
+
+		const doc = unref(invoiceDoc);
+		const profile = unref(posProfile);
+		const call = frappe.call("posawesome.posawesome.api.stored_value.get_cashback_preview", {
+			customer: doc?.customer,
+			company: profile?.company,
+			eligible_amount: eligible,
+		});
+		if (!call || typeof call.then !== "function") return;
+
+		call
+			.then((response: any) => {
+				if (token !== accrualRequest) return;
+				const preview = response?.message;
+				const value = normalizeFloat(preview?.value ?? 0);
+				cashback_accrual.value = preview?.enrolled && value > 0 ? value : null;
+			})
+			.catch(() => {
+				if (token !== accrualRequest) return;
+				// A refusal is not a zero. Absent, like every other unknown on
+				// this card.
+				cashback_accrual.value = null;
+			});
+	};
+
+	const scheduleCashbackPreview = () => {
+		if (accrualTimer) clearTimeout(accrualTimer);
+		accrualTimer = setTimeout(requestCashbackPreview, 250);
+	};
+
 	const getMaxRedeemableCustomerCredit = () => {
 		const doc = unref(invoiceDoc);
 		if (!doc) {
@@ -199,6 +285,23 @@ export function useRedemptionLogic(options: RedemptionLogicOptions) {
 		normalizeCustomerCreditAllocations();
 	});
 
+	watch(
+		() => [cashbackAsksTheServer.value, cashbackEligibleAmount.value] as const,
+		([asks, eligible], previous) => {
+			if (!asks || eligible === null || eligible <= 0) {
+				// Cancel anything in flight: its answer would be about a cart
+				// that no longer exists.
+				accrualRequest += 1;
+				if (accrualTimer) clearTimeout(accrualTimer);
+				cashback_accrual.value = null;
+				return;
+			}
+			if (previous && previous[0] === asks && previous[1] === eligible) return;
+			scheduleCashbackPreview();
+		},
+		{ immediate: true },
+	);
+
 	// Kept for backward compatibility with previous interface.
 	const get_loyalty_points = () => {
 		return unref(available_points_amount);
@@ -210,6 +313,7 @@ export function useRedemptionLogic(options: RedemptionLogicOptions) {
 		customer_credit_dict,
 		available_customer_credit,
 		available_points_amount,
+		cashback_accrual,
 		get_available_credit,
 		get_loyalty_points,
 	};

@@ -5,9 +5,11 @@
  *     Monedero del cliente                              $418.00
  *     Acumula $29.20 con esta compra
  *
- * Two claims, and only one of them exists in this product today. The balance
- * is read from a real ledger. **The accrual has no read model**, and this
- * module renders nothing rather than guessing one — see `accrual` below.
+ * Two claims, and both are now READ rather than guessed. The balance comes
+ * from a real ledger; the accrual comes from `stored_value.get_cashback_preview`
+ * (2026-08-23), which computes it with ERPNext's own truncation instead of
+ * re-deriving it here — see `accrual` below. What has not changed is the rule:
+ * an accrual this module was not handed renders nothing at all.
  *
  * TWO WALLETS, NOT ONE. A register can carry either, both or neither:
  *
@@ -47,15 +49,19 @@ export interface WalletSummaryInput {
 	/**
 	 * What THIS purchase will add to the wallet, in pesos.
 	 *
-	 * `null` — and it is null for every register today — means NOT AVAILABLE.
-	 * The accrual is `cint(eligible_amount / collection_factor) ×
-	 * conversion_factor`, and `collection_factor` is computed server-side in
-	 * `get_loyalty_program_details_with_points` but never copied into the
-	 * payload `api/customers.py:get_customer_info` returns. Nothing on the
-	 * client can compute it, so nothing on the client may claim it. The exact
-	 * server change is in this task's report; until it lands the line is
-	 * absent, which is the same treatment `registerStatusLine` gives
+	 * `null` still means NOT AVAILABLE, and it is null for every register with
+	 * `posa_use_customer_cards` off, every unenrolled customer and every
+	 * offline sale — absent, the same treatment `registerStatusLine` gives
 	 * `ticketsToday`.
+	 *
+	 * When it IS a number it was read from the server, never derived here. The
+	 * accrual is `cint(eligible_amount / collection_factor) ×
+	 * conversion_factor`, and `collection_factor` is a TIER value picked from
+	 * the customer's total spend with this sale folded in — the client has
+	 * neither the tiers nor the spend, so a local figure would agree with the
+	 * posted accrual only until a customer crossed a tier.
+	 * `useRedemptionLogic.cashback_accrual` fills this from
+	 * `stored_value.get_cashback_preview`.
 	 */
 	accrual?: number | null;
 	/** A refund does not accrue, and its wallet card is not this screen's job. */

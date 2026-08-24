@@ -408,7 +408,16 @@ class TestGiftCardApi(unittest.TestCase):
 
         self.assertEqual(result, 300)
         self.assertEqual(existing.current_balance, 500)
-        self.assertEqual(len(existing.transactions), 0)
+        # The card's OWN ledger records the redemption. It used to record only
+        # issue and top-up, so the panel showed a balance that its own history
+        # could not explain (TarjetaRegalo.dc.html, «Movimientos de GC-…»).
+        self.assertEqual(len(existing.transactions), 1)
+        self.assertEqual(existing.transactions[0]["transaction_type"], "Redeem")
+        self.assertEqual(existing.transactions[0]["amount"], -300)
+        self.assertEqual(existing.transactions[0]["balance_after"], 500)
+        self.assertEqual(existing.transactions[0]["reference_doctype"], "Sales Invoice")
+        self.assertEqual(existing.transactions[0]["reference_name"], "ACC-SINV-0001")
+        self.assertEqual(existing.transactions[0]["cashier"], "cashier@example.com")
         self.assertEqual(len(self.state["journal_entries"]), 0)
         self.assertEqual(len(invoice_doc.gift_card_redemptions), 1)
         self.assertEqual(invoice_doc.gift_card_redemptions[0]["gift_card_code"], "GC-0002")
@@ -484,6 +493,12 @@ class TestGiftCardApi(unittest.TestCase):
         self.assertEqual(restored, 300)
         self.assertEqual(existing.current_balance, 800)
         self.assertEqual(invoice_doc.gift_card_redemptions[0]["status"], "Cancelled")
+        # Append-only: the money coming back is a row, not the erasure of the
+        # row that took it, so every peso the balance moved still has a line.
+        self.assertEqual(len(existing.transactions), 1)
+        self.assertEqual(existing.transactions[0]["transaction_type"], "Adjust")
+        self.assertEqual(existing.transactions[0]["amount"], 300)
+        self.assertEqual(existing.transactions[0]["balance_after"], 800)
 
     def test_restore_uses_compensating_delta_after_later_redemption(self):
         existing = FakeGiftCard(code="GC-RESTORE", balance=100, status="Active")
@@ -578,6 +593,82 @@ class TestGiftCardApi(unittest.TestCase):
             self.state["journal_entries"][0].accounts[1]["account"],
             "2190 - Gift Card Liability - TC",
         )
+
+    def test_check_gift_card_balance_keeps_its_lean_payload_by_default(self):
+        existing = FakeGiftCard(code="GC-LOOKUP", balance=350, status="Active")
+        existing.transactions = [
+            {"transaction_type": "Issue", "amount": 300, "balance_after": 300},
+        ]
+        self.state["cards"][existing.gift_card_code] = existing
+
+        card = self.module.check_gift_card_balance(gift_card_code="GC-LOOKUP")
+
+        # Cobro's redemption path only wants a balance; it keeps the payload it
+        # has always had.
+        self.assertNotIn("transactions", card)
+        self.assertEqual(card["current_balance"], 350)
+
+    def test_check_gift_card_balance_returns_the_ledger_newest_first_when_asked(self):
+        existing = FakeGiftCard(code="GC-LEDGER", balance=350, status="Active")
+        existing.issued_by = "supervisor@example.com"
+        existing.transactions = [
+            {
+                "transaction_type": "Issue",
+                "amount": 300,
+                "balance_after": 300,
+                "cashier": "supervisor@example.com",
+                "posting_datetime": "2026-08-12 09:00:00",
+            },
+            {
+                "transaction_type": "Top Up",
+                "amount": 200,
+                "balance_after": 500,
+                "cashier": "supervisor@example.com",
+                "posting_datetime": "2026-08-20 11:00:00",
+            },
+            {
+                "transaction_type": "Redeem",
+                "amount": -150,
+                "balance_after": 350,
+                "cashier": "cashier@example.com",
+                "posting_datetime": "2026-08-23 10:22:00",
+                "reference_doctype": "Sales Invoice",
+                "reference_name": "ACC-SINV-2026-00212",
+            },
+        ]
+        self.state["cards"][existing.gift_card_code] = existing
+
+        card = self.module.check_gift_card_balance(
+            gift_card_code="GC-LEDGER", include_transactions=1
+        )
+
+        rows = card["transactions"]
+        self.assertEqual([row["transaction_type"] for row in rows], ["Redeem", "Top Up", "Issue"])
+        self.assertEqual(rows[0]["amount"], -150)
+        self.assertEqual(rows[0]["balance_after"], 350)
+        self.assertEqual(rows[0]["reference_name"], "ACC-SINV-2026-00212")
+        self.assertEqual(card["transactions_limit"], self.module.GIFT_CARD_TRANSACTIONS_LIMIT)
+        # The panel's identity line — both were on the doctype and neither ever
+        # reached a caller.
+        self.assertEqual(card["issued_by"], "supervisor@example.com")
+        self.assertIn("last_redeemed_on", card)
+
+    def test_the_ledger_is_capped_and_says_so(self):
+        existing = FakeGiftCard(code="GC-LONG", balance=0, status="Active")
+        existing.transactions = [
+            {"transaction_type": "Top Up", "amount": 1, "balance_after": index}
+            for index in range(50)
+        ]
+        self.state["cards"][existing.gift_card_code] = existing
+
+        card = self.module.check_gift_card_balance(
+            gift_card_code="GC-LONG", include_transactions=1, transactions_limit=5
+        )
+
+        self.assertEqual(len(card["transactions"]), 5)
+        self.assertEqual(card["transactions_limit"], 5)
+        # The cap takes the RECENT end, not the first five rows ever written.
+        self.assertEqual(card["transactions"][0]["balance_after"], 49)
 
 
 if __name__ == "__main__":

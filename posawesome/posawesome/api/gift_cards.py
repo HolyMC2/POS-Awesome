@@ -313,6 +313,19 @@ def apply_invoice_gift_card_redemptions(invoice_doc, rows=None):
         next_balance = _to_float(current_balance - redeem_amount)
         gift_card_doc.current_balance = next_balance
         gift_card_doc.last_redeemed_on = _now_datetime()
+        # The card's own ledger is what the counter reads back to a customer
+        # («Movimientos de GC-…», TarjetaRegalo.dc.html), and issue/top-up were
+        # the only verbs that ever wrote to it — a redeemed card showed a
+        # balance nothing in its own history explained.
+        _append_transaction(
+            gift_card_doc,
+            "Redeem",
+            -redeem_amount,
+            next_balance,
+            cashier=cashier,
+            reference_doctype=_doc_value(invoice_doc, "doctype"),
+            reference_name=_doc_value(invoice_doc, "name"),
+        )
         gift_card_doc.flags.ignore_permissions = True
         gift_card_doc.save(ignore_permissions=True)
 
@@ -357,6 +370,18 @@ def restore_invoice_gift_card_redemptions(invoice_doc):
         restore_balance = _to_float(_doc_value(gift_card_doc, "current_balance") + redeemed_amount)
 
         gift_card_doc.current_balance = restore_balance
+        # Append-only, like every other row: the ledger records that the money
+        # came back rather than erasing the redemption that took it, so the
+        # balance a corte reads still has a line for every peso that moved.
+        _append_transaction(
+            gift_card_doc,
+            "Adjust",
+            redeemed_amount,
+            restore_balance,
+            cashier=_doc_value(row, "cashier"),
+            reference_doctype=_doc_value(invoice_doc, "doctype"),
+            reference_name=_doc_value(invoice_doc, "name"),
+        )
         gift_card_doc.flags.ignore_permissions = True
         gift_card_doc.save(ignore_permissions=True)
 
@@ -370,6 +395,12 @@ def restore_invoice_gift_card_redemptions(invoice_doc):
     return _to_float(total_restored)
 
 
+# The panel reads a card, not an archive. Callers are told the cap in the
+# payload so a screen can say «últimos 20» rather than implying it drew
+# everything (the OrderStory convention).
+GIFT_CARD_TRANSACTIONS_LIMIT = 20
+
+
 def _serialize_gift_card(gift_card_doc):
     return {
         "name": getattr(gift_card_doc, "name", None),
@@ -379,7 +410,39 @@ def _serialize_gift_card(gift_card_doc):
         "current_balance": _to_float(getattr(gift_card_doc, "current_balance", 0)),
         "status": getattr(gift_card_doc, "status", None),
         "expiry_date": getattr(gift_card_doc, "expiry_date", None),
+        # «emitida 12 ago 2026 · por Vanessa» and «último uso hace 3 días» are
+        # the panel's identity line; both were already on the doctype and
+        # neither ever reached a caller.
+        "issued_by": getattr(gift_card_doc, "issued_by", None),
+        "issued_on": getattr(gift_card_doc, "creation", None),
+        "last_redeemed_on": getattr(gift_card_doc, "last_redeemed_on", None),
     }
+
+
+def _serialize_gift_card_transactions(gift_card_doc, limit=None):
+    """The card's own ledger, newest first.
+
+    Rows are appended in chronological order by every verb that moves the
+    balance, so the tail is the recent history and reversing it is the whole
+    sort — `posting_datetime` is written by `_now_datetime()` and can be blank
+    on rows created before a site had a clock stub, which is why it is not the
+    sort key.
+    """
+    cap = int(limit or GIFT_CARD_TRANSACTIONS_LIMIT)
+    rows = list(_doc_value(gift_card_doc, "transactions") or [])
+    recent = rows[-cap:] if cap > 0 else []
+    return [
+        {
+            "transaction_type": _doc_value(row, "transaction_type"),
+            "amount": _to_float(_doc_value(row, "amount")),
+            "balance_after": _to_float(_doc_value(row, "balance_after")),
+            "posting_datetime": _doc_value(row, "posting_datetime"),
+            "cashier": _doc_value(row, "cashier"),
+            "reference_doctype": _doc_value(row, "reference_doctype"),
+            "reference_name": _doc_value(row, "reference_name"),
+        }
+        for row in reversed(recent)
+    ]
 
 
 def _create_issue_or_top_up_entry(profile_doc, company, amount, reference_doctype, reference_name, cashier):
@@ -563,8 +626,28 @@ def top_up_gift_card(pos_profile=None, cashier=None, gift_card_code=None, amount
 
 
 @frappe.whitelist(methods=["GET", "POST"])
-def check_gift_card_balance(gift_card_code=None, company=None):
+def check_gift_card_balance(
+    gift_card_code=None,
+    company=None,
+    include_transactions=0,
+    transactions_limit=None,
+):
+    """Look a card up. Gate semantics unchanged — consulting is not supervised.
+
+    `include_transactions` is opt-in so the redemption path in Cobro, which
+    only wants a balance, keeps the payload it has always had; the gift-card
+    surface asks for the ledger because it draws one.
+    """
+    from frappe.utils import cint
+
     gift_card_doc = _get_gift_card(gift_card_code)
     if company and getattr(gift_card_doc, "company", None) != company:
         frappe.throw(frappe._("Gift card does not belong to company {0}.").format(company))
-    return _serialize_gift_card(gift_card_doc)
+
+    card = _serialize_gift_card(gift_card_doc)
+    if cint(include_transactions):
+        cap = cint(transactions_limit) or GIFT_CARD_TRANSACTIONS_LIMIT
+        cap = max(1, min(cap, GIFT_CARD_TRANSACTIONS_LIMIT))
+        card["transactions"] = _serialize_gift_card_transactions(gift_card_doc, cap)
+        card["transactions_limit"] = cap
+    return card
