@@ -49,10 +49,12 @@
 					</div>
 
 					<!-- The evidence: the other tenders reconciled first, because
-					     that is the other thing the cashier has to TYPE, and the
-					     shift's tables under them. This is the one region that
-					     genuinely overflows, so this is the one region that
-					     scrolls. -->
+					     that is the other thing the cashier has to TYPE. The
+					     shift's seven tables fold behind one disclosure — open,
+					     they are the reason the body scrolls; closed (the
+					     default), the whole corte fits and NOTHING scrolls.
+					     `v-show`, so an inspection in progress survives the
+					     fold. -->
 					<div class="closing-layout__detail">
 						<PaymentReconciliation
 							:payments="dialog_data.payment_reconciliation"
@@ -62,7 +64,20 @@
 							:format-currency="formatCurrency"
 							:format-float="formatFloat"
 						/>
+						<button
+							type="button"
+							class="closing-overview-toggle"
+							data-testid="closing-overview-toggle"
+							:aria-expanded="overviewOpen ? 'true' : 'false'"
+							@click="overviewOpen = !overviewOpen"
+						>
+							<v-icon size="16">{{
+								overviewOpen ? "mdi-chevron-down" : "mdi-chevron-right"
+							}}</v-icon>
+							{{ __("Shift movements and evidence") }}
+						</button>
 						<ShiftOverview
+							v-show="overviewOpen"
 							:loading="overviewLoading"
 							:multi-currency-totals="multiCurrencyTotals"
 							:credit-invoices-by-currency="creditInvoicesByCurrency"
@@ -249,6 +264,11 @@ export default {
 		const uiStore = useUIStore();
 		const eventBus = inject("eventBus");
 		const __ = window.__ || ((t) => t);
+
+		// The seven overview tables, folded by default: open, they are the one
+		// reason this surface scrolls; closed, the corte fits whole. Resets
+		// with the component, not the shift — an inspection is a moment.
+		const overviewOpen = ref(false);
 
 		// Fullscreen on phones — a 900px card at 390px was a floating sheet
 		// scrolling in two axes over a wall of stat cards + a wide recon
@@ -555,6 +575,7 @@ export default {
 			closingDialog,
 			dialog_data,
 			overview,
+			overviewOpen,
 			overviewLoading,
 			pos_profile,
 			closeDialog,
@@ -652,12 +673,13 @@ export default {
 .closing-layout {
 	display: grid;
 	grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
-	/* 280px floor on the columns row: the tiles and the header spend first,
-	 * and on the hosted surface what was LEFT for the count and the tables
-	 * could be ~135px — unusable. Under the floor the body (overflow auto)
-	 * scrolls instead; the difference band and the actions live outside the
-	 * scrollport either way. */
-	grid-template-rows: auto minmax(280px, 1fr);
+	/* `auto auto`, not fr rows with per-column scrollports: three scrollbars
+	 * on one corte was the report (Marco, 08-23). The columns size to their
+	 * content — the count never scrolls, the reconciliation never scrolls —
+	 * and with the overview folded (its default) the whole corte fits with
+	 * NO scrollbar. Open the disclosure and the BODY scrolls: one scroll,
+	 * with the difference band and the actions pinned outside it. */
+	grid-template-rows: auto auto;
 	grid-template-areas:
 		"tiles tiles"
 		"count detail";
@@ -683,23 +705,37 @@ export default {
 	grid-area: tiles;
 }
 
-/* The count holds still. It is what the difference band below is counting
-   against, and a figure you have to scroll back to is a figure you retype. */
+/* The count holds still AND whole: every denomination row visible, no
+   scrollport of its own — a figure you have to scroll back to is a figure
+   you retype. */
 .closing-layout__count {
 	grid-area: count;
-	min-height: 0;
-	overflow-y: auto;
 }
 
-/* The one region that genuinely overflows, and therefore the only one that
-   scrolls: the other tenders, then the shift's evidence tables. */
+/* Content-sized like the count. Its tall half — the seven overview tables —
+   sits behind the disclosure, so this column only grows when the cashier
+   asks it to, and the growth is what the body's one scroll carries. */
 .closing-layout__detail {
 	grid-area: detail;
 	display: flex;
 	flex-direction: column;
-	gap: 24px;
-	min-height: 0;
-	overflow-y: auto;
+	gap: 16px;
+	min-width: 0;
+}
+
+.closing-overview-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	align-self: flex-start;
+	padding: 6px 12px;
+	border: 1px solid var(--reg-tone-neutral-divider, #eceff3);
+	border-radius: 999px;
+	background: var(--reg-surface-muted, #f7f8fa);
+	color: var(--reg-text-muted, #667085);
+	font-size: 12.5px;
+	font-weight: 600;
+	cursor: pointer;
 }
 
 /*

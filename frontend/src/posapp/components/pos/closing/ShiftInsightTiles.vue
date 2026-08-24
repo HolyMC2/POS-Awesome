@@ -1,5 +1,5 @@
 <template>
-	<div v-if="primaryInsights.length || secondaryInsights.length" class="insight-strip">
+	<div v-if="visiblePrimary.length || visibleSecondary.length" class="insight-strip">
 		<!--
 			The corte's headline figures, as a strip rather than a row of
 			Vuetify columns. This comment lives INSIDE the root on purpose: a
@@ -17,7 +17,7 @@
 			arrays are empty then, and an empty strip with padding reads as a
 			layout bug rather than as waiting.
 		-->
-		<div v-for="card in primaryInsights" :key="card.key" class="insight-card">
+		<div v-for="card in visiblePrimary" :key="card.key" class="insight-card">
 			<div class="insight-icon" :class="card.color">
 				<v-icon size="22">{{ card.icon }}</v-icon>
 			</div>
@@ -27,7 +27,7 @@
 				<div class="insight-caption">{{ card.caption }}</div>
 			</div>
 		</div>
-		<div v-for="card in secondaryInsights" :key="card.key" class="insight-card compact">
+		<div v-for="card in visibleSecondary" :key="card.key" class="insight-card compact">
 			<div class="insight-icon" :class="card.color">
 				<v-icon size="20">{{ card.icon }}</v-icon>
 			</div>
@@ -41,10 +41,24 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from "vue";
+
+const props = defineProps({
 	primaryInsights: { type: Array, default: () => [] },
 	secondaryInsights: { type: Array, default: () => [] },
 });
+
+/**
+ * A tile that says MX$ 0 is not an insight, it is padding — eleven of them
+ * wrapped to two rows and starved the count below (Marco, 08-23). The summary
+ * marks each tile `zero` from the RAW figure (never parsed back out of the
+ * formatted string) and `pinned` on the two anchors that must stay whatever
+ * they read: Total Invoices (an empty shift is a fact worth one tile) and
+ * Expected Cash (the figure the whole count is checked against).
+ */
+const showTile = (card) => card.pinned || !card.zero;
+const visiblePrimary = computed(() => props.primaryInsights.filter(showTile));
+const visibleSecondary = computed(() => props.secondaryInsights.filter(showTile));
 </script>
 
 <style scoped>

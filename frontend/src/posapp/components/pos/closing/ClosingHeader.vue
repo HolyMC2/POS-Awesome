@@ -1,8 +1,8 @@
 <template>
-	<v-card-title class="closing-header pa-6 d-flex align-center">
+	<v-card-title class="closing-header d-flex align-center">
 		<div class="header-content">
 			<div class="header-icon-wrapper">
-				<v-icon class="header-icon" size="40">mdi-store-clock-outline</v-icon>
+				<v-icon class="header-icon" size="24">mdi-store-clock-outline</v-icon>
 			</div>
 			<div class="header-text">
 				<h3 class="header-title">{{ __("Closing POS Shift") }}</h3>
@@ -104,20 +104,25 @@ const shiftSpan = computed(() => {
 <style scoped>
 .closing-header {
 	border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-	padding: 24px !important;
+	/* One compact row. 24px padding + a 72px icon plate spent ~170px of a
+	 * surface whose columns were starving below (Marco, 08-23) — and
+	 * `width: 100%` on the content block defeated the spacer, wrapping the
+	 * shift facts and the × onto their own lines. The corte's height belongs
+	 * to the count and the tables, not to its own title. */
+	padding: 10px 16px !important;
 }
 
 .header-content {
 	display: flex;
 	align-items: center;
-	gap: 20px;
-	width: 100%;
+	gap: 12px;
+	min-width: 0;
 }
 
 .header-icon-wrapper {
 	background: rgba(var(--v-theme-primary), 0.1);
-	padding: 16px;
-	border-radius: 16px;
+	padding: 8px;
+	border-radius: 10px;
 }
 
 .header-icon {
@@ -127,13 +132,13 @@ const shiftSpan = computed(() => {
 .header-text {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 2px;
 }
 
 .header-title {
-	font-size: 1.5rem;
+	font-size: 1.1rem;
 	font-weight: 700;
-	letter-spacing: -0.5px;
+	letter-spacing: -0.3px;
 	margin: 0;
 	line-height: 1.2;
 }

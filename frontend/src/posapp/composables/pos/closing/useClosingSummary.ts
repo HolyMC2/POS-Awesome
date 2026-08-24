@@ -303,6 +303,7 @@ export function useClosingSummary(
 		return [
 			{
 				key: "total-invoices",
+				pinned: true,
 				label: __("Total Invoices"),
 				value: formatCount(unref(overview)?.total_invoices || 0),
 				caption: `${__("Sales processed")}: ${formatCount(salesSummary.value.sale_invoices_count || 0)}`,
@@ -311,6 +312,7 @@ export function useClosingSummary(
 			},
 			{
 				key: "net-sales",
+				zero: !Number(salesSummary.value.net_company_currency_total),
 				label: __("Net Sales"),
 				value: netSales,
 				caption: `${__("After returns")}: ${formatCurrencyWithSymbol(salesSummary.value.net_company_currency_total, overviewCompanyCurrency.value)}`,
@@ -319,6 +321,7 @@ export function useClosingSummary(
 			},
 			{
 				key: "gross-sales",
+				zero: !Number(salesSummary.value.gross_company_currency_total),
 				label: __("Gross Sales"),
 				value: grossSales,
 				caption: `${__("Before returns")}`,
@@ -327,6 +330,7 @@ export function useClosingSummary(
 			},
 			{
 				key: "average-ticket",
+				zero: !Number(salesSummary.value.average_invoice_value),
 				label: __("Average Ticket"),
 				value: avgInvoice,
 				caption: `${__("Across")}: ${formatCount(salesSummary.value.sale_invoices_count || 0)} ${__("sales")}`,
@@ -361,6 +365,7 @@ export function useClosingSummary(
 		return [
 			{
 				key: "credit-sales",
+				zero: !Number(creditInvoices.value.company_currency_total) && !Number(creditInvoices.value.count),
 				label: __("Credit Outstanding"),
 				value: creditValue,
 				caption: `${__("Open invoices")}: ${formatCount(creditInvoices.value.count || 0)}`,
@@ -369,6 +374,7 @@ export function useClosingSummary(
 			},
 			{
 				key: "customer-credit-redeemed",
+				zero: !Number(customerCreditRedeemed.value.company_currency_total) && !Number(customerCreditRedeemed.value.count),
 				label: __("Customer Credit Redeemed"),
 				value: formatCurrencyWithSymbol(
 					customerCreditRedeemed.value.company_currency_total,
@@ -380,6 +386,7 @@ export function useClosingSummary(
 			},
 			{
 				key: "returns",
+				zero: !Number(returnsSummary.value.company_currency_total) && !Number(returnsSummary.value.count),
 				label: __("Returns"),
 				value: returnsValue,
 				caption: `${__("Return count")}: ${formatCount(returnsSummary.value.count || 0)}`,
@@ -388,6 +395,7 @@ export function useClosingSummary(
 			},
 			{
 				key: "change-returned",
+				zero: !Number(changeReturnedSummary.value.company_currency_total),
 				label: __("Change Returned"),
 				value: changeValue,
 				caption: `${__("Cash back to customers")}`,
@@ -396,6 +404,7 @@ export function useClosingSummary(
 			},
 			{
 				key: "cash-movements",
+				zero: !Number(cashMovementSummary.value.company_currency_total) && !Number(cashMovementSummary.value.count),
 				label: __("Cash Movements"),
 				value: cashMovementValue,
 				caption: `${__("Submitted entries")}: ${formatCount(cashMovementSummary.value.count || 0)}`,
@@ -404,6 +413,7 @@ export function useClosingSummary(
 			},
 			{
 				key: "cash-expected",
+				pinned: true,
 				label: __("Expected Cash"),
 				value: cashValue,
 				caption:
@@ -417,6 +427,7 @@ export function useClosingSummary(
 			},
 			{
 				key: "draft-invoices",
+				zero: !Number(unref(overview)?.draft_invoices?.count || 0),
 				label: __("Draft Invoices"),
 				value: formatCount(unref(overview)?.draft_invoices?.count || 0),
 				caption: (unref(overview)?.draft_invoices?.count || 0) > 0

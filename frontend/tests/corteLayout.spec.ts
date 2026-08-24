@@ -165,32 +165,39 @@ describe("three regions, not one column", () => {
 		expect((areas as RegExpExecArray)[1]).not.toContain("count");
 	});
 
-	it("gives the columns the height the tiles leave — but never less than a working table", () => {
-		// `auto` for the tiles, `fr` for the columns, and a FLOOR on the fr:
-		// hosted beside the rail, header + tiles could spend the surface down
-		// to ~135px of columns (Marco, 08-23) — a count you cannot read. Under
-		// the floor the body scrolls; above it the columns divide what is left.
+	it("sizes both rows to their content — the scroll model owns overflow, not the grid", () => {
+		// fr rows + per-column scrollports drew THREE scrollbars on one corte
+		// (Marco, 08-23). Content-sized rows mean the count and the
+		// reconciliation always stand whole; the overview disclosure is the
+		// only thing that can outgrow the surface, and the body's single
+		// scroll carries it.
 		const rows = /grid-template-rows:([^;]+);/.exec(rule(".closing-layout"));
 		expect(rows).not.toBeNull();
-		expect((rows as RegExpExecArray)[1].trim()).toBe("auto minmax(280px, 1fr)");
+		expect((rows as RegExpExecArray)[1].trim()).toBe("auto auto");
 	});
 });
 
-describe("only the evidence scrolls", () => {
-	it("hands the scroll to the two columns instead of to the card's body", () => {
-		// `min-height: 0` is the load-bearing half — a flex child defaults to
-		// `min-height: auto` and would refuse to shrink below seven tables,
-		// which is how the card's own scrollport came to own the whole corte.
-		const body = rule(".closing-body");
-		expect(body).toContain("display: flex");
-		expect(body).toContain("min-height: 0");
-		expect(body).not.toContain("overflow-y: auto");
-
+describe("one scroll at most, and only when the cashier asks for it", () => {
+	it("gives no column a scrollport of its own", () => {
+		// Three scrollbars on one corte was the report. The count and the
+		// detail size to content; overflow belongs to the body's single
+		// scroll (Vuetify's own `scrollable` chain), and only the opened
+		// overview can create any.
 		for (const column of [".closing-layout__count", ".closing-layout__detail"]) {
-			const region = rule(column);
-			expect(region, `${column} must own its scrollport`).toContain("overflow-y: auto");
-			expect(region).toContain("min-height: 0");
+			expect(
+				rule(column),
+				`${column} must not own a scrollport`,
+			).not.toContain("overflow-y: auto");
 		}
+		expect(rule(".closing-body")).not.toContain("overflow-y: auto");
+	});
+
+	it("folds the overview behind a disclosure, closed by default, v-show not v-if", () => {
+		// Closed, the corte fits whole with NO scrollbar; v-show so an
+		// inspection in progress survives the fold.
+		expect(corteSource).toContain('data-testid="closing-overview-toggle"');
+		expect(corteSource).toMatch(/<ShiftOverview\s+v-show="overviewOpen"/);
+		expect(corteSource).toContain("const overviewOpen = ref(false);");
 	});
 
 	it("keeps the difference and the close action outside the scrolling body", async () => {
@@ -225,11 +232,15 @@ describe("the tiles answer to the width they are given", () => {
 		expect(tilesSource).not.toContain("<v-row");
 	});
 
-	it("renders nothing at all until the overview has landed", () => {
-		// An empty strip with padding reads as a layout bug, not as loading.
+	it("renders nothing at all until the overview has landed, and no zero padding after", () => {
+		// An empty strip with padding reads as a layout bug, not as loading —
+		// and a tile that says MX$ 0 is padding too. The gate reads the
+		// VISIBLE lists (zero tiles hidden, `pinned` anchors kept), so the
+		// two facts share one rule.
 		expect(tilesSource).toContain(
-			'v-if="primaryInsights.length || secondaryInsights.length"',
+			'v-if="visiblePrimary.length || visibleSecondary.length"',
 		);
+		expect(tilesSource).toContain("card.pinned || !card.zero");
 	});
 
 	it("leaves the overview holding only the evidence it no longer has to pin", () => {
