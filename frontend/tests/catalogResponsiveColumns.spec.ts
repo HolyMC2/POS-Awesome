@@ -56,7 +56,9 @@ describe("catalog responsive columns", () => {
 				),
 			);
 
-		expect(nameWidth(760)).toBe(38);
+		// 48% at full width — QTY and UOM are one short number/word each,
+		// the name is the read target (owner direction 2026-08-24).
+		expect(nameWidth(760)).toBe(48);
 		expect(nameWidth(600)).toBeGreaterThan(nameWidth(760));
 		expect(nameWidth(430)).toBeGreaterThan(nameWidth(600));
 		expect(nameWidth(330)).toBeGreaterThan(nameWidth(430));

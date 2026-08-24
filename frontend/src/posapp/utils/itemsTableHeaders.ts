@@ -51,24 +51,28 @@ export function getItemsTableHeaders(context: "pos" | "purchase" | string, posPr
             // Item names are the primary read target; squeezing them
             // into 1/5 of the row leaves operators staring at
             // "Bocina Auricula…". Give Name the lion's share so long
-            // names like "Bocina Auricular para iPhone XR" fit.
-            width: "38%",
+            // names like "Audifonos alambricos Deep Bass 3.5MM" fit —
+            // QTY and UOM are one short number/word each and read fine
+            // narrow (owner direction 2026-08-24). Plain % only: this
+            // table is `table-layout: fixed`, where `max()` silently
+            // collapses every column to equal width.
+            width: "48%",
         },
         {
             title: __("Code"),
             align: "start",
             sortable: true,
             key: "item_code",
-            width: "18%",
+            width: "16%",
         },
-        { title: __("Rate"), key: "rate", align: "start", width: "18%" },
+        { title: __("Rate"), key: "rate", align: "start", width: "16%" },
         {
             title: __("Available QTY"),
             key: "actual_qty",
             align: "start",
-            width: "14%",
+            width: "11%",
         },
-        { title: __("UOM"), key: "stock_uom", align: "start", width: "12%" },
+        { title: __("UOM"), key: "stock_uom", align: "start", width: "9%" },
     ];
 
     // Remove item code column if configured
