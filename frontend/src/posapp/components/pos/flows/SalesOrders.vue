@@ -114,6 +114,23 @@
 								</v-data-table>
 							</v-col>
 						</v-row>
+						<!-- The picked order's history, in the same timeline the
+						     service-order surface uses. A cashier pulling an order
+						     into a sale is usually answering "has this been paid
+						     for, has any of it gone out already" — questions the
+						     list cannot answer and a second screen would lose the
+						     picker to. -->
+						<v-row v-if="selectedOrderName" no-gutters>
+							<v-col cols="12" class="pa-1">
+								<OrderStory
+									doctype="Sales Order"
+									:name="selectedOrderName"
+									:title="__('What happened')"
+									empty-key="Nothing has happened on this order yet."
+									:format-currency="formatCurrency"
+								/>
+							</v-col>
+						</v-row>
 					</v-container>
 				</v-card-text>
 				<v-card-actions class="sales-orders-card__footer">
@@ -145,6 +162,7 @@ import { storeToRefs } from "pinia";
 import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import { useTheme } from "../../../composables/core/useTheme";
 import { loadDocumentSourceRecord } from "../../../utils/documentSources";
+import OrderStory from "./orden/OrderStory.vue";
 import {
 	extractServerErrorMessage,
 	showServerErrorToast,
@@ -226,7 +244,19 @@ export default {
 			},
 		],
 	}),
-	computed: {},
+	computed: {
+		/**
+		 * The one order the picker has selected, by name.
+		 *
+		 * `selected` is an array because the data table's `show-select` writes
+		 * one, but `select-strategy="single"` means it holds at most one entry —
+		 * so this is the picked order, not a first-of-many.
+		 */
+		selectedOrderName() {
+			return (Array.isArray(this.selected) ? this.selected[0]?.name : null) || null;
+		},
+	},
+	components: { OrderStory },
 	methods: {
 		isSelectedOrder(item) {
 			return Array.isArray(this.selected) && this.selected.some((entry) => entry?.name === item?.name);

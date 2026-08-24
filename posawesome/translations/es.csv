@@ -2674,3 +2674,36 @@ Server returned no invoice for this order.,El servidor no devolvió factura para
 Service order loaded,Orden cargada
 charge it like any sale; the order completes on payment.,cóbrala como cualquier venta; la orden se completa al pagar.
 Could not load this service order into the sale.,No se pudo cargar esta orden en la venta.
+jan,ene
+feb,feb
+mar,mar
+apr,abr
+may,may
+jun,jun
+jul,jul
+aug,ago
+sep,sep
+oct,oct
+nov,nov
+dec,dic
+Device received,Equipo recibido
+Order placed,Pedido levantado
+Advance paid,Anticipo pagado
+Payment received,Pago recibido
+Part fitted from stock,Refacción surtida de almacén
+"Part fitted, ordered in",Refacción pedida al proveedor
+Customer's own part fitted,Se instaló la pieza del cliente
+Part fitted,Refacción instalada
+Work started,Empezó el trabajo
+Work finished,Terminó el trabajo
+Workshop note,Nota del taller
+Invoiced,Facturada
+Opened,Abierta
+Recorded,Registrado
+Showing the {0} most recent events,Mostrando los {0} movimientos más recientes
+Reading what happened…,Leyendo lo que pasó…
+Could not read what happened here.,No se pudo leer lo que pasó aquí.
+Nothing has happened on this document yet.,Todavía no pasa nada en este documento.
+Nothing has been recorded on this order yet.,Todavía no se registra nada en esta orden.
+Nothing has happened on this order yet.,Todavía no pasa nada en este pedido.
+What happened,Lo que pasó

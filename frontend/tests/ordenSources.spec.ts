@@ -78,3 +78,29 @@ describe("the shell answers the band it adopted", () => {
 		expect(shell).toContain("getServiceOrderCountsCached");
 	});
 });
+
+describe("the story is recycled, not re-implemented", () => {
+	it("is the same component on the repair order and on the sales order", () => {
+		expect(read("components/pos/flows/orden/OrdenSurface.vue")).toContain(
+			'doctype="Repair Order"',
+		);
+		expect(read("components/pos/flows/SalesOrders.vue")).toContain('doctype="Sales Order"');
+		expect(read("components/pos/flows/SalesOrders.vue")).toContain(
+			'import OrderStory from "./orden/OrderStory.vue"',
+		);
+	});
+
+	it("draws the repair leg only where the request points at a repair order", () => {
+		// Not gated on a capability flag: a charge request from another
+		// vertical has no bench log regardless of what the tenant installed.
+		const surface = read("components/pos/flows/orden/OrdenSurface.vue");
+		expect(surface).toContain('reference_doctype === "Repair Order"');
+		expect(surface).toContain('v-if="repairName"');
+	});
+
+	it("asks one endpoint for both legs", () => {
+		const service = read("services/serviceOrderService.ts");
+		expect(service).toContain("order_story.get_order_story");
+		expect(service.match(/get_order_story/g)).toHaveLength(1);
+	});
+});

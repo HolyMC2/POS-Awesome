@@ -1,5 +1,7 @@
 import api from "./api";
 
+import type { OrderStoryPayload } from "../components/pos/flows/orden/orderStory";
+
 /**
  * The Orden de servicio read model, from the SPA's side.
  *
@@ -80,6 +82,18 @@ export function fetchServiceOrderQueue(posProfile: string, bucket: "ready" | "de
 export function fetchServiceOrderDetail(posProfile: string, name: string) {
 	return api.call<ServiceOrderDetail>(`${BASE}.get_service_order_detail`, {
 		pos_profile: posProfile,
+		name,
+	});
+}
+
+/**
+ * One document's timeline. `doctype` is "Repair Order" or "Sales Order" — the
+ * server refuses anything else, because "the events of a document" is not a
+ * generic question and an open-ended argument would be a read of anything.
+ */
+export function fetchOrderStory(doctype: string, name: string) {
+	return api.call<OrderStoryPayload>("posawesome.posawesome.api.order_story.get_order_story", {
+		doctype,
 		name,
 	});
 }

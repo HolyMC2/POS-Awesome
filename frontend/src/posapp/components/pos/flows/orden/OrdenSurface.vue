@@ -31,6 +31,23 @@
 				:format-currency="formatCurrency"
 				:format-float="formatFloat"
 			/>
+
+			<!-- The artboard's third column is «Equipo y candados» — evidence
+			     chips this round builds no read model for. The story goes where
+			     it would have stood, because it answers the same question the
+			     chips were there to answer («can I hand this over, and what
+			     happened to it») with facts the server can actually source.
+			     Absent entirely when the request is not a repair: a counter
+			     ticket from another vertical has no bench log to tell. -->
+			<OrderStory
+				v-if="repairName"
+				class="orden-surface__story"
+				doctype="Repair Order"
+				:name="repairName"
+				:title="__('What happened')"
+				:empty-key="'Nothing has been recorded on this order yet.'"
+				:format-currency="formatCurrency"
+			/>
 		</div>
 	</section>
 </template>
@@ -68,6 +85,7 @@ import { storeToRefs } from "pinia";
 
 import OrdenDetail from "./OrdenDetail.vue";
 import OrdenQueue from "./OrdenQueue.vue";
+import OrderStory from "./OrderStory.vue";
 import { describeBuckets, matchesQuery, ordenBandInput, type OrdenBucketId } from "./ordenModel";
 import { resolveBandState, type BandState } from "../../../../composables/pos/shell/bandState";
 import { useFormat } from "../../../../format";
@@ -127,6 +145,20 @@ const visibleCards = computed(() => cards.value.filter((card) => matchesQuery(ca
  */
 const selectedCard = computed(
 	() => visibleCards.value.find((card) => card.name === selectedName.value) ?? null,
+);
+
+/**
+ * The Repair Order behind the selected request, or null.
+ *
+ * Read off the card rather than off `detail` so the story starts loading in
+ * the same breath as the bill, and taken from `reference_doctype` rather than
+ * from a taller capability flag: a request that does not POINT at a repair
+ * order has no repair story regardless of what the tenant has installed.
+ */
+const repairName = computed(() =>
+	selectedCard.value?.reference_doctype === "Repair Order"
+		? (selectedCard.value.reference_name ?? null)
+		: null,
 );
 
 const reportFailure = (error: unknown, fallback: string) => {
@@ -296,6 +328,17 @@ onBeforeUnmount(() => {
 	min-height: 0;
 }
 
+/* The artboard's third column, at the artboard's width. */
+.orden-surface__story {
+	width: 330px;
+	flex: none;
+	min-height: 0;
+	padding: var(--reg-space-lg, 14px) 16px;
+	background: var(--reg-surface, #fff);
+	border: 1px solid var(--reg-border-light, rgba(0, 0, 0, 0.06));
+	border-radius: var(--reg-radius-md, 14px);
+}
+
 /* Below the artboard's width the queue stops being a column and becomes the
    top third: a 330px queue beside a four-column bill leaves neither readable
    on a 1,024px register. Same boundary the ledger surface uses. */
@@ -307,6 +350,11 @@ onBeforeUnmount(() => {
 	.orden-surface__body :deep(.orden-queue) {
 		width: auto;
 		max-height: 40%;
+	}
+
+	.orden-surface__story {
+		width: auto;
+		max-height: 30%;
 	}
 }
 </style>

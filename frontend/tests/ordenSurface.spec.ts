@@ -5,6 +5,7 @@ import { mount } from "@vue/test-utils";
 
 import OrdenDetail from "../src/posapp/components/pos/flows/orden/OrdenDetail.vue";
 import OrdenQueue from "../src/posapp/components/pos/flows/orden/OrdenQueue.vue";
+import OrderStory from "../src/posapp/components/pos/flows/orden/OrderStory.vue";
 import { describeBuckets } from "../src/posapp/components/pos/flows/orden/ordenModel";
 import type {
 	ServiceOrderCard,
@@ -221,5 +222,105 @@ describe("the detail panel", () => {
 	it("names the invoice once the order has been billed", () => {
 		const panel = mountDetail(detail({ invoiced: true, invoice: "ACC-SINV-2026-00214" }));
 		expect(panel.text()).toContain("ACC-SINV-2026-00214");
+	});
+});
+
+/**
+ * The timeline, mounted with a payload rather than a fetch.
+ *
+ * `payload` is the seam the customer view uses in earnest — it holds a story
+ * from a different endpoint — and it is also what lets this be asserted with
+ * no server, no store and no clock.
+ */
+const STORY = {
+	doctype: "Repair Order",
+	name: "RO-00048",
+	cap: 120,
+	truncated: false,
+	events: [
+		{
+			ts: "2026-08-22 11:05:00",
+			kind: "billing",
+			topic: "invoiced",
+			amount: 1310,
+			actor: "jenni@doco.mx",
+			detail: null,
+			doctype: "Sales Invoice",
+			name: "ACC-SINV-2026-00214",
+		},
+		{
+			ts: "2026-08-20 09:41:00",
+			kind: "consumption",
+			topic: "stock",
+			amount: null,
+			actor: "ivan@doco.mx",
+			detail: "Pantalla OLED Samsung A54",
+			doctype: "Stock Entry",
+			name: "MAT-STE-2026-00091",
+		},
+		{
+			ts: "2026-08-19 14:22:00",
+			kind: "payment",
+			topic: "advance",
+			amount: 600,
+			actor: "jenni@doco.mx",
+			detail: "Efectivo",
+			doctype: "Payment Entry",
+			name: "ACC-PAY-2026-00031",
+		},
+	],
+};
+
+const mountStory = (payload: unknown) =>
+	mount(OrderStory, { props: { payload, formatCurrency: currency } as never });
+
+describe("the recyclable timeline", () => {
+	it("groups the rows under the day they happened", () => {
+		const story = mountStory(STORY);
+		expect(story.findAll(".order-story__day")).toHaveLength(3);
+	});
+
+	it("prints the day in the tenant's month names, not the browser's", () => {
+		expect(mountStory(STORY).text()).toContain("22 aug 2026");
+	});
+
+	it("says what happened in register language", () => {
+		const text = mountStory(STORY).text();
+		expect(text).toContain("Advance paid");
+		expect(text).toContain("Part fitted from stock");
+		expect(text).toContain("Invoiced");
+	});
+
+	it("keeps the document's own words beside the label", () => {
+		expect(mountStory(STORY).text()).toContain("Efectivo");
+		expect(mountStory(STORY).text()).toContain("ACC-SINV-2026-00214");
+	});
+
+	it("shows money only on the rows that are about money", () => {
+		const story = mountStory(STORY);
+		const amounts = story.findAll(".order-story__amount");
+		expect(amounts).toHaveLength(2);
+	});
+
+	it("says nothing rather than lying about an empty document", () => {
+		const story = mountStory({ ...STORY, events: [] });
+		expect(story.find('[data-testid="order-story-empty"]').exists()).toBe(true);
+	});
+
+	it("says out loud when it was cut short", () => {
+		const story = mountStory({ ...STORY, truncated: true });
+		expect(story.find('[data-testid="order-story-cap"]').text()).toContain("120");
+	});
+
+	it("stays quiet about the cap when the whole story fits", () => {
+		expect(mountStory(STORY).find('[data-testid="order-story-cap"]').exists()).toBe(false);
+	});
+
+	it("offers nothing to click, so a curiosity cannot cost the sale", () => {
+		// It is read mid-ticket, with a customer waiting. A link that navigates
+		// away is the one thing this must not have.
+		const story = mountStory(STORY);
+		expect(story.findAll("a")).toHaveLength(0);
+		expect(story.findAll("button")).toHaveLength(0);
 	});
 });
