@@ -2380,6 +2380,7 @@ No warehouse and no price list on this register,Esta caja no tiene almacén ni l
 This register has no warehouse,Esta caja no tiene almacén
 This register has no price list,Esta caja no tiene lista de precios
 {0} · {1} · priced items not counted,{0} · {1} · artículos con precio sin contar
+"{0} cannot sell · it is a group, disabled or another company's","{0} no puede vender · es grupo, está deshabilitado o es de otra empresa"
 {0} · {1} · {2} items with a price,{0} · {1} · {2} artículos con precio
 Fiscal posture,Postura fiscal
 The register's fiscal configuration is not loaded yet,La configuración fiscal de la caja todavía no carga
@@ -2397,6 +2398,7 @@ This register offers no payment method,Esta caja no ofrece ninguna forma de pago
 Ticket and document formats,Formatos de ticket y documentos
 The register's print formats are not loaded yet,Los formatos de impresión de la caja todavía no cargan
 This register has no ticket format,Esta caja no tiene formato de ticket
+The ticket format {0} no longer exists,El formato de ticket {0} ya no existe
 {0} · {1} · CFDI PDF,{0} · {1} · CFDI PDF
 {0} · CFDI PDF,{0} · CFDI PDF
 "Scanner, printer, drawer, terminal and display","Escáner, impresora, cajón, terminal y pantalla"

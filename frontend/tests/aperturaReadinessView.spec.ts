@@ -29,6 +29,19 @@ vi.mock("../src/posapp/components/pos/shift/readinessSnapshot", () => ({
 		),
 }));
 
+/**
+ * The server probe is mocked away here and answers NOTHING, so every case
+ * below is exactly the input the collector was handed. What the probe itself
+ * does — one call per register, never retried on refusal, never landing
+ * register A's answer under register B — is `aperturaReadinessProbe.spec.ts`'s
+ * subject, and left unmocked this suite would be making real `frappe.call`s
+ * that only happen to fail.
+ */
+vi.mock("../src/posapp/services/openingReadinessService", () => ({
+	fetchOpeningReadiness: vi.fn(async () => null),
+	serverReadinessInput: () => null,
+}));
+
 import OpeningReadiness from "../src/posapp/components/pos/shift/OpeningReadiness.vue";
 
 const HEALTHY: ReadinessInput = {

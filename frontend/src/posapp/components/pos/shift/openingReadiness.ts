@@ -101,13 +101,23 @@ export interface ReadinessCatalogue {
 	warehouse?: string | null;
 	priceList?: string | null;
 	/**
-	 * Items cached WITH a price on this price list. `null` = not counted.
+	 * Whether the named warehouse can actually be sold from — not a group
+	 * node, not disabled, and this company's.
 	 *
-	 * Zero is deliberately not a failure. An empty cache is a fact about this
-	 * device on its first boot, not a fault in the register's configuration,
-	 * and this check is REQUIRED — failing it would wall a correctly
-	 * configured shop out of its own till. Cache state belongs to the offline
-	 * point, which is optional, and that is where an empty catalogue is felt.
+	 * `null` = nobody judged it, which is what any payload the browser holds
+	 * can say: three broken warehouses and a working one are the same string.
+	 * `get_opening_readiness` is the source that CAN judge, and it is the
+	 * reason this field exists rather than being inferred from a name.
+	 */
+	warehouseSells?: boolean | null;
+	/**
+	 * Items with a price on this price list. `null` = not counted.
+	 *
+	 * Zero is deliberately not a failure. An empty count is a fact about the
+	 * catalogue, not a fault in the register's configuration, and this check
+	 * is REQUIRED — failing it would wall a correctly configured shop out of
+	 * its own till. Cache state belongs to the offline point, which is
+	 * optional, and that is where an empty catalogue is felt.
 	 */
 	pricedItems?: number | null;
 }
@@ -156,6 +166,14 @@ export interface ReadinessTenders {
 export interface ReadinessFormats {
 	/** POS Profile `print_format` / `print_format_for_online`. */
 	ticketFormat?: string | null;
+	/**
+	 * Whether that format still exists. `null` = nobody looked.
+	 *
+	 * A dangling link and an unconfigured register both hand the cashier no
+	 * ticket, and they are repaired differently — one by picking a format, the
+	 * other by restoring the one that was deleted — so the check says which.
+	 */
+	ticketFormatExists?: boolean | null;
 	/** A `posa_print_format_rules` row for returns, when one exists. */
 	returnNoteFormat?: string | null;
 	/** Whether the register can hand over a CFDI PDF. */
@@ -423,7 +441,17 @@ export const READINESS_CHECKS: readonly ReadinessCheckDefinition[] = [
 			// — not a group node, not disabled, belonging to the company — is a
 			// server-side judgement no opening payload carries, and inventing it
 			// from a name would be the exact green tick this view exists to
-			// refuse. Reported as the field to add.
+			// refuse. `get_opening_readiness` judges it and hands the answer in;
+			// when nobody judged, `warehouseSells` is null and this check goes on
+			// claiming presence alone, exactly as it did before the field existed.
+			if (resolved.warehouseSells === false) {
+				return {
+					state: "fail",
+					detailKey: "{0} cannot sell · it is a group, disabled or another company's",
+					detailParams: [warehouse],
+					subjects: [warehouse],
+				};
+			}
 			const priced = count(resolved.pricedItems);
 			if (priced === null) {
 				return {
@@ -581,6 +609,17 @@ export const READINESS_CHECKS: readonly ReadinessCheckDefinition[] = [
 				return {
 					state: "fail",
 					detailKey: "This register has no ticket format",
+				};
+			}
+			// A NAMED format that no longer exists hands the cashier the same
+			// nothing, and only a source that can look up the document knows the
+			// difference. `null` — nobody looked — leaves the check where it was.
+			if (resolved.ticketFormatExists === false) {
+				return {
+					state: "fail",
+					detailKey: "The ticket format {0} no longer exists",
+					detailParams: [ticket],
+					subjects: [ticket],
 				};
 			}
 			const extras: string[] = [];

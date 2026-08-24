@@ -103,6 +103,13 @@
  * answered, because a checklist that grows as data arrives reads as a loading
  * spinner rather than as a checklist. Rows begin unverified and become
  * verified; they never appear out of nowhere.
+ *
+ * One round trip is now made, and only one: `get_opening_readiness` answers
+ * the seven points the browser cannot — chief among them the accounting
+ * account behind each mode of payment, which lives in a doctype no opening
+ * payload carries. That call is the panel's, not the snapshot's, so the
+ * assembler stays a pure function of what it is handed and this file owns the
+ * probe rule: once per register, never retried on refusal.
  */
 import { computed, onMounted, ref, watch } from "vue";
 import {
@@ -110,6 +117,10 @@ import {
 	type ReadinessVerdict,
 } from "./openingReadiness";
 import { collectReadinessInput } from "./readinessSnapshot";
+import {
+	fetchOpeningReadiness,
+	type OpeningReadinessPayload,
+} from "../../../services/openingReadinessService";
 
 defineOptions({ name: "OpeningReadiness" });
 
@@ -161,6 +172,79 @@ const blockedReasons = computed(() =>
  */
 let collectToken = 0;
 
+/**
+ * One server answer per register, for the life of this panel.
+ *
+ * `refresh()` runs on mount and again on every prop that settles — the company
+ * resolves, the profile auto-selects, the payment rows arrive — so an
+ * unguarded fetch would be three or four calls to open one till. The PROMISE
+ * is cached, not the value, so two refreshes that race share the one request.
+ *
+ * A refusal is cached exactly like an answer, and that is the rule this
+ * follows rather than an oversight: a register whose user is not assigned to
+ * it, or a server too old to carry this endpoint, will refuse every time, and
+ * asking again on each prop change is the floors/tables 403 loop wearing a new
+ * hat. The panel already has an honest answer for "no server said anything" —
+ * the points stay unverified — so there is nothing a retry could win.
+ */
+const serverAnswers = new Map<string, Promise<OpeningReadinessPayload | null>>();
+
+/** What the server said about the register on screen. `null` = nothing yet. */
+const serverAnswer = ref<OpeningReadinessPayload | null>(null);
+
+const currentProfile = (): string =>
+	typeof props.posProfile === "string" ? props.posProfile.trim() : "";
+
+function serverAnswerFor(profile: string): Promise<OpeningReadinessPayload | null> {
+	if (!profile) return Promise.resolve(null);
+	let pending = serverAnswers.get(profile);
+	if (!pending) {
+		pending = fetchOpeningReadiness(profile).catch(() => null);
+		serverAnswers.set(profile, pending);
+	}
+	return pending;
+}
+
+/**
+ * The answer belongs to the register it was asked about.
+ *
+ * `pos_profile` comes back on the payload for exactly this: a cashier who
+ * switches register while a call is out must not read register A's accounts
+ * under register B's name. The same rule `readinessSnapshot` applies to the
+ * cached opening payload, and for the same reason — it is the failure that
+ * would put a green tick on the wrong till.
+ */
+const answerForCurrentRegister = (): OpeningReadinessPayload | null => {
+	const answer = serverAnswer.value;
+	const profile = currentProfile();
+	if (!answer || !profile) return null;
+	const asked = typeof answer.pos_profile === "string" ? answer.pos_profile.trim() : "";
+	return asked === profile ? answer : null;
+};
+
+/**
+ * Ask, then re-check — never the other way round.
+ *
+ * `refresh()` deliberately does NOT await this. The panel paints what the
+ * register already knows the moment it opens, and the server's answer lands
+ * over it, because a checklist that waits on the network is a checklist a
+ * cashier watches instead of reads. Until it lands the rows say what they say
+ * today: not verified.
+ *
+ * A refusal costs nothing further — it does not even re-evaluate, because
+ * nothing changed. The identity check does the same for a repeat probe, so the
+ * three prop changes that settle while one till is being opened cost one call
+ * and one extra verdict between them.
+ */
+async function probeServer() {
+	const profile = currentProfile();
+	if (!profile) return;
+	const answer = await serverAnswerFor(profile);
+	if (!answer || serverAnswer.value === answer || profile !== currentProfile()) return;
+	serverAnswer.value = answer;
+	await refresh();
+}
+
 async function refresh() {
 	const token = ++collectToken;
 	let next: ReadinessVerdict;
@@ -170,6 +254,7 @@ async function refresh() {
 				company: props.company ?? null,
 				posProfile: props.posProfile ?? null,
 				paymentRows: props.paymentRows ?? null,
+				server: answerForCurrentRegister(),
 			}),
 		);
 	} catch {
@@ -182,8 +267,14 @@ async function refresh() {
 	emit("verdict", next);
 }
 
-watch(() => [props.company, props.posProfile, props.paymentRows], () => void refresh());
-onMounted(() => void refresh());
+watch(() => [props.company, props.posProfile, props.paymentRows], () => {
+	void probeServer();
+	void refresh();
+});
+onMounted(() => {
+	void probeServer();
+	void refresh();
+});
 </script>
 
 <style scoped>

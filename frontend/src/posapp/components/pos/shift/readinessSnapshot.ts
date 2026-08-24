@@ -39,6 +39,10 @@ import type {
 	ReadinessInput,
 	ReadinessTender,
 } from "./openingReadiness";
+import {
+	serverReadinessInput,
+	type OpeningReadinessPayload,
+} from "../../../services/openingReadinessService";
 
 declare const frappe: any;
 
@@ -50,6 +54,16 @@ export interface ReadinessSources {
 	posProfile?: string | null;
 	/** `get_opening_dialog_data().payments_method`, unfiltered. */
 	paymentRows?: readonly any[] | null;
+	/**
+	 * `get_opening_readiness`'s answer for this register, when there is one.
+	 *
+	 * Handed IN, never fetched here: the panel owns the probe (one call per
+	 * register, no retry on refusal) and this module stays a pure assembler of
+	 * whatever its caller managed to collect. Absent — offline, refused, not
+	 * yet returned — and every group below degrades exactly as it did before
+	 * the endpoint existed.
+	 */
+	server?: OpeningReadinessPayload | null;
 }
 
 const text = (value: unknown): string =>
@@ -228,6 +242,60 @@ const highestTaxRate = (template: any): number | null => {
 	return best;
 };
 
+/* ------------------------------------------------------ the server's answer */
+
+/**
+ * Lays `get_opening_readiness`'s answer OVER what the register found on its
+ * own, and the direction is the whole point.
+ *
+ * The cache reads above describe whichever register opened here LAST — which
+ * at a first opening is nothing at all, since the opening payload is written
+ * when a shift opens. The server describes the register the cashier is about
+ * to open, now. So the server wins, field by field, wherever it answered.
+ *
+ * It wins even when it answers `null`. A server that says this register has no
+ * warehouse has looked; letting a stale cached name from last week's shift
+ * paper over that would put a tick beside a check the evidence just failed.
+ *
+ * What it does NOT carry, it does not touch: CFDI version, régimen and timbres
+ * are emc's and stay whatever another source found, and points 6, 9 and 10 —
+ * devices, the offline cache, the floor — are the browser's own facts and are
+ * never in the payload. And when the server did not answer at all, this
+ * returns the snapshot unchanged, which is what keeps an offline apertura
+ * behaving exactly as it does today.
+ */
+const layerServerAnswer = (
+	input: ReadinessInput,
+	payload: OpeningReadinessPayload | null | undefined,
+): ReadinessInput => {
+	const server = attempt(() => serverReadinessInput(payload), null);
+	if (!server) return input;
+
+	const merged: ReadinessInput = { ...input };
+	if (server.contract) {
+		merged.contract = { ...(input.contract || {}), ...server.contract };
+	}
+	if (server.catalogue) {
+		merged.catalogue = { ...(input.catalogue || {}), ...server.catalogue };
+	}
+	if (server.fiscal) {
+		merged.fiscal = { ...(input.fiscal || {}), ...server.fiscal };
+	}
+	if (server.formats) {
+		merged.formats = { ...(input.formats || {}), ...server.formats };
+	}
+	if (server.people) {
+		merged.people = { ...(input.people || {}), ...server.people };
+	}
+	// Tenders and the test sale replace WHOLESALE rather than merging. A rows
+	// array half from one source and half from another is the exact shape the
+	// check refuses to trust — see `accountsReported` — and the server's is the
+	// only one that ever carries accounts.
+	if (server.tenders) merged.tenders = server.tenders;
+	if (server.testSale) merged.testSale = server.testSale;
+	return merged;
+};
+
 /* ------------------------------------------------------------- the snapshot */
 
 export const collectReadinessInput = async (
@@ -382,5 +450,5 @@ export const collectReadinessInput = async (
 		),
 	};
 
-	return input;
+	return layerServerAnswer(input, sources.server);
 };
