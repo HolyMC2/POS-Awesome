@@ -58,7 +58,7 @@ fixture). The July verdict tables remain accurate for the surviving fields.
 | posa_qz_density | `qzTray.ts` | hardware | → terminal hardware profile. |
 | posa_qz_interpolation | `qzTray.ts` | hardware | → terminal hardware profile. |
 | posa_qz_cut_after_print | `qzTray.ts` | hardware | → terminal hardware profile. |
-| posa_scale_barcode_start | **none** (hooks/fixture only; `item_processing/barcode.py` reads its own settings doc) | **DEAD** | removal patch candidate (batch with next fixture cleanup). |
+| ~~posa_scale_barcode_start~~ | — | **REMOVED 2026-08-23** | `add_embedded_barcode_scheme` deletes the Custom Field, the fixture record and the hooks entry. `posa_gr_embedded_barcode_scheme` (Select: blank / weight / price) is what now answers the question this Int appeared to ask; the 20–25 prefix range is fixed by GS1 and is not configuration. |
 
 Site-config (not profile) money kill-switches, for completeness:
 `posa_mpesa_enabled` (`api/m_pesa.py`, `frappe.conf`). Class server-policy.
@@ -146,7 +146,9 @@ Feeding the F1 typed override allowlist:
 4. **Never overridable (server-policy):** every money/authz field — the July
    WIRED set plus the new cash-movement/safe-transfer/dashboard/cfdi/stale-shift
    groups. Client roles/flags remain presentation hints (§11).
-5. **Removal patch:** `posa_scale_barcode_start` (DEAD on arrival).
+5. ~~**Removal patch:** `posa_scale_barcode_start` (DEAD on arrival).~~ ✅ done
+   2026-08-23 — `add_embedded_barcode_scheme` removes it and ships the field
+   that replaces it (POS-PROFILE-SPEC, «Added 2026-08-23 — venta fraccionada»).
 
 ## 6. Open F1 code work this inventory unblocks
 

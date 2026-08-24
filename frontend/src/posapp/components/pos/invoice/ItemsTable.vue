@@ -134,6 +134,7 @@
 						:isRTL="isRtl"
 						:is-expanded="isItemExpanded(item.posa_row_id)"
 						@update-qty="handleQtyUpdate"
+						@update-line-note="handleLineNoteUpdate"
 						@qty-edit-submitted="handleQtyEditSubmitted"
 						@minus-click="handleMinusClick"
 						@add-one="addOne"
@@ -577,6 +578,19 @@ const handleMinusClick = (item: any) => {
 const handleQtyUpdate = (item: any, newQty: any) => {
 	props.setFormatedQty(item, "qty", null, false, newQty);
 	eventBus?.emit("recalculate_return_discount", { defer: true });
+};
+
+/**
+ * The weighing pad's provenance line («Weighed 0.475 kg · gross 0.495 · tare
+ * 0.020»). Written straight onto the row rather than through a dialog: it is a
+ * record of where a number came from, and a prompt asking the operator to
+ * confirm it would only teach them to dismiss it.
+ */
+const handleLineNoteUpdate = (item: any, note: string) => {
+	const index = getItemIndex(item);
+	const row = index < 0 ? null : items.value[index];
+	if (!row) return;
+	row.posa_notes = note;
 };
 
 const getItemIndex = (item: any) => {

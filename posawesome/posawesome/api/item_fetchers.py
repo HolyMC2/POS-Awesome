@@ -283,6 +283,31 @@ def get_uoms(item_codes: Sequence[str], ttl: Optional[int] = None):
     return _cached_fetch("uom", ttl, _fetch_uoms, (tuple(item_codes),))
 
 
+def _fetch_whole_number_uoms():
+    """UOM names that refuse a fractional qty."""
+
+    rows = frappe.get_all("UOM", filters={"must_be_whole_number": 1}, pluck="name")
+    return sorted(rows or [])
+
+
+def get_whole_number_uoms(ttl: Optional[int] = None) -> frozenset:
+    """Which UOMs must be whole — the fraction-eligibility fact, cached.
+
+    Venta fraccionada's affordances (the decimal pad, the «$ Importe» mode)
+    turn on this and nothing else, and the SPA had no way to know it: nowhere
+    in the app did `must_be_whole_number` cross the wire, so the client either
+    had to guess or ask per item on the hottest path in the product.
+
+    A shop has a few dozen UOMs and they change roughly never, so the whole
+    set rides one cached query rather than a join per item. It is the SAME
+    fact ERPNext enforces at save (`validate_uom_is_integer`) — shipping it
+    forward means the counter refuses a half-piece where the cashier can still
+    fix it, instead of at Pay where they cannot.
+    """
+
+    return frozenset(_cached_fetch("uom_whole", ttl, _fetch_whole_number_uoms, ()))
+
+
 def _normalize_warehouses(warehouse: Optional[str]) -> Tuple[str, ...]:
     """Return a tuple of concrete warehouses for the provided warehouse or group."""
 
@@ -527,6 +552,12 @@ class ItemLookupData:
     batch_map: Dict[str, List[Dict[str, Any]]]
     serial_map: Dict[str, List[Dict[str, Any]]]
     bom_map: Dict[str, Dict[str, Any]]
+    # Defaulted so the positional constructors keep working: an empty set means
+    # "no UOM is whole-number", which is the shape every caller had before this
+    # field existed. `isFractionEligible` on the client reads an ABSENT fact as
+    # ineligible, so an old payload hides the affordance rather than misplacing
+    # it — the failure direction that costs nobody money.
+    whole_number_uoms: frozenset = frozenset()
 
 
 def _select_price(
@@ -552,13 +583,34 @@ def _select_price(
     return next(iter(price_rows.values()), frappe._dict())
 
 
-def _ensure_stock_uom(uoms: List[Dict[str, Any]], stock_uom: Optional[str]) -> List[Dict[str, Any]]:
-    """Make sure the stock UOM is always present in the UOM listing."""
+def _ensure_stock_uom(
+    uoms: List[Dict[str, Any]],
+    stock_uom: Optional[str],
+    whole_number_uoms: Optional[frozenset] = None,
+) -> List[Dict[str, Any]]:
+    """Make sure the stock UOM is always present in the UOM listing.
 
-    uoms = list(uoms or [])
-    if stock_uom and not any(u.get("uom") == stock_uom for u in uoms):
-        uoms.append({"uom": stock_uom, "conversion_factor": 1.0})
-    return uoms
+    Every row is REBUILT rather than annotated in place: the source list comes
+    out of the redis fetch cache, and stamping a key onto those dicts would
+    write through to every later reader of the same cached object.
+    """
+
+    whole = whole_number_uoms or frozenset()
+    rebuilt: List[Dict[str, Any]] = []
+    seen = False
+    for row in uoms or []:
+        uom = row.get("uom")
+        seen = seen or uom == stock_uom
+        rebuilt.append({**row, "must_be_whole_number": 1 if uom in whole else 0})
+    if stock_uom and not seen:
+        rebuilt.append(
+            {
+                "uom": stock_uom,
+                "conversion_factor": 1.0,
+                "must_be_whole_number": 1 if stock_uom in whole else 0,
+            }
+        )
+    return rebuilt
 
 
 # Roles allowed to receive item COST (valuation_rate) in their payload. The
@@ -602,7 +654,11 @@ def merge_item_row(
         return dict(item)
 
     meta = lookup_data.meta_map.get(item_code, frappe._dict())
-    uoms = _ensure_stock_uom(lookup_data.uom_map.get(item_code, []), meta.get("stock_uom"))
+    uoms = _ensure_stock_uom(
+        lookup_data.uom_map.get(item_code, []),
+        meta.get("stock_uom"),
+        lookup_data.whole_number_uoms,
+    )
     price_row = _select_price(
         lookup_data.price_map.get(item_code, {}), item.get("uom"), meta.get("stock_uom")
     )
@@ -623,6 +679,13 @@ def merge_item_row(
             "has_serial_no": meta.get("has_serial_no"),
             "allow_negative_stock": meta.get("allow_negative_stock"),
             "purchase_uom": meta.get("purchase_uom"),
+            # Fraction eligibility for the UOM this row is priced in. Also on
+            # every `item_uoms` entry, because a line sold by `Caja` is a
+            # whole-number line while that UOM is selected even when the item's
+            # stock UOM is Kg — the cart asks per LINE, not per item.
+            "must_be_whole_number": 1
+            if (item.get("uom") or meta.get("stock_uom")) in lookup_data.whole_number_uoms
+            else 0,
             "standard_rate": meta.get("standard_rate"),
             # valuation_rate (cost) is written to the shared get_items cache
             # here, then stripped per-request for non-supervisors on the way
@@ -819,6 +882,9 @@ class ItemDetailAggregator:
             batch_map=batch_map,
             serial_map=serial_map,
             bom_map=bom_map,
+            whole_number_uoms=get_whole_number_uoms(
+                self.pos_profile.get("posa_server_cache_duration") if use_cache else None
+            ),
         )
 
     def build_details(self, items_data: Sequence[Dict[str, object]]) -> List[Dict[str, object]]:
@@ -854,6 +920,7 @@ __all__ = [
     "get_item_meta",
     "get_barcodes",
     "get_uoms",
+    "get_whole_number_uoms",
     "get_batches",
     "get_serials",
     "get_bom_costs",

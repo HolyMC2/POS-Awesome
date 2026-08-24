@@ -1,6 +1,10 @@
 import frappe
 from frappe.utils import cint, nowdate
-from posawesome.posawesome.api.item_fetchers import ItemDetailAggregator, get_batches
+from posawesome.posawesome.api.item_fetchers import (
+    ItemDetailAggregator,
+    get_batches,
+    get_whole_number_uoms,
+)
 from posawesome.posawesome.api.item_processing.stock import get_stock_availability
 from posawesome.posawesome.api.utils import _ensure_pos_profile, log_perf_event
 from frappe import _, as_json
@@ -193,7 +197,18 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
         if not stock_uom_exists:
             uoms.append({"uom": stock_uom, "conversion_factor": 1.0})
 
+    # Fraction eligibility, on the single-item path too. `get_item_detail` is
+    # what a scan resolves through and what the cart re-reads after a UOM
+    # change, so an answer only on the bulk path would make the decimal pad
+    # appear on browse and vanish on scan.
+    whole_number_uoms = get_whole_number_uoms()
+    for uom_data in uoms:
+        uom_data["must_be_whole_number"] = 1 if uom_data.get("uom") in whole_number_uoms else 0
+
     res["item_uoms"] = uoms
+    res["must_be_whole_number"] = (
+        1 if (res.get("uom") or stock_uom) in whole_number_uoms else 0
+    )
 
     return res
 

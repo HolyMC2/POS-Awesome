@@ -107,6 +107,7 @@ ORDERED_CHAIN = [
     "posa_display_item_code",
     "posa_enable_camera_scanning",
     "posa_camera_scan_type",
+    "posa_gr_embedded_barcode_scheme",
     "posa_show_template_items",
     "posa_hide_variants_items",
     "posa_auto_set_batch",

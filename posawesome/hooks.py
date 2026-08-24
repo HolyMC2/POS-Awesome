@@ -88,6 +88,12 @@ after_migrate = [
     "posawesome.patches.add_customer_display_settings.execute",
     "posawesome.patches.add_dashboard_settings.execute",
     "posawesome.patches.add_dashboard_global_settings.execute",
+    # BEFORE the reorganizer: posa_gr_embedded_barcode_scheme is a member of its
+    # ORDERED_CHAIN, and _set_insert_after silently skips a field that does not
+    # exist yet — so creating it afterwards would leave the knob unanchored
+    # until the NEXT migrate. On a fresh install that is the only migrate the
+    # shop gets before someone opens the profile looking for it.
+    "posawesome.patches.add_embedded_barcode_scheme.execute",
     "posawesome.patches.reorganize_pos_profile_sections.execute",
     "posawesome.patches.add_gift_card_pos_profile_settings.execute",
     "posawesome.patches.add_customer_card_pos_profile_settings.execute",
@@ -472,7 +478,12 @@ fixtures = [
                     "POS Profile-posa_qz_density",
                     "POS Profile-posa_qz_interpolation",
                     "POS Profile-posa_qz_cut_after_print",
-                    "POS Profile-posa_scale_barcode_start",
+                    # Replaces POS Profile-posa_scale_barcode_start, deleted by
+                    # add_embedded_barcode_scheme: that Int had no reader on
+                    # either side of the wire, this Select is what the scan
+                    # pipeline actually asks before treating a 20-25 code as a
+                    # labelling-scale label.
+                    "POS Profile-posa_gr_embedded_barcode_scheme",
                     "POS Invoice-posa_redeemed_customer_credit",
                     "POS Invoice-posa_remaining_customer_credit_balance",
                     "Sales Invoice-posa_redeemed_customer_credit",

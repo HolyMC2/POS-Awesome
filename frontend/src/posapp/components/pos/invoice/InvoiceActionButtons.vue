@@ -45,6 +45,43 @@
 
 		<div class="pos-action-strip__spacer"></div>
 
+		<!-- «Margen estimado · Costo» (`Main.dc.html` nodes 113–116), at the
+		     right end of this strip where the artboard draws it. Its amounts are
+		     deliberately not quoted here — a cost literal in shipped markup is a
+		     cost literal in every cashier's page source.
+
+		     Three states and no fourth: absent for anyone who is not the acting
+		     supervisor, a plain sentence when the cart is only partly costed,
+		     and the two figures when every line carries one. The decision is
+		     `cartMargin.ts`'s; this renders it.
+
+		     TEXT, never a fill. Green here is the same state green the status
+		     line spends on «En línea · sincronizado» and amber the same warning
+		     — §17.7 invariant 2 keeps the screen's one saturated colour on the
+		     primary action, and a margin figure is not that. -->
+		<span
+			v-if="cartMargin.state === 'incomplete'"
+			class="pos-action-strip__margin"
+			data-testid="cart-margin-incomplete"
+		>
+			{{ __("Cost incomplete") }}
+		</span>
+		<template v-else-if="cartMargin.state === 'ready'">
+			<span class="pos-action-strip__margin" data-testid="cart-margin">
+				{{ __("Estimated margin") }}
+				<span
+					class="pos-action-strip__margin-value mono"
+					:class="{ 'pos-action-strip__margin-value--negative': cartMargin.negative }"
+					:data-margin-sign="cartMargin.negative ? 'negative' : 'positive'"
+					>{{ cartMargin.margin }}</span
+				>
+			</span>
+			<span class="pos-action-strip__margin" data-testid="cart-cost">
+				{{ __("Cost") }}
+				<span class="pos-action-strip__cost-value mono">{{ cartMargin.cost }}</span>
+			</span>
+		</template>
+
 		<!-- Phone and lean-vertical only: no band mounts there, so this stays
 		     the only PAY there is, and it is the ONE accent on the screen. It
 		     was `success` + a green gradient; green is STATE in this register
@@ -87,6 +124,19 @@ const props = defineProps({
 	customerDisplayLoading: Boolean,
 	/** Lines/pieces summary rendered at the strip's left, as the artboard does. */
 	lineSummary: { type: String, default: "" },
+	/**
+	 * Margin and cost for the right end of the strip, already resolved and
+	 * already formatted by the summary — `{ state, margin, cost, negative }`.
+	 *
+	 * Defaulting to `hidden` matters: every mount that does not pass this (a
+	 * phone, a unit test, any caller written before the row existed) renders no
+	 * cost, which is the correct answer for a component that cannot tell who is
+	 * standing at the till.
+	 */
+	cartMargin: {
+		type: Object,
+		default: () => ({ state: "hidden", margin: "", cost: "", negative: false }),
+	},
 	/**
 	 * True when the shell's ActionBand is mounted and carrying the primary
 	 * action. It is also the signal that a RAIL is mounted, since Pos.vue
@@ -213,6 +263,36 @@ defineExpose({ ACTION_CHIPS });
 	background: var(--pos-surface, #fff);
 	color: var(--pos-text-muted, #667085);
 	box-shadow: inset 0 0 0 1px var(--pos-border-light, rgba(0, 0, 0, 0.08));
+}
+
+/* The margin pair reads at counts weight — it is context for the total, not a
+   figure competing with it. `Main.dc.html` sets both at 12px/#667085 with only
+   the margin VALUE lifted. */
+.pos-action-strip__margin {
+	font-size: 12px;
+	color: var(--pos-text-muted, #667085);
+	white-space: nowrap;
+}
+
+.pos-action-strip__margin-value {
+	font-weight: 700;
+	color: var(--pos-button-success-text, #1b5e20);
+}
+
+/* Below cost. Amber is this register's warning tone (the status line's
+   «Sin conexión» spends the same token), and it carries its own dark-mode
+   pair — a literal green/red here would have needed a second palette. */
+.pos-action-strip__margin-value--negative {
+	color: var(--pos-button-warning-text, #e65100);
+}
+
+.pos-action-strip__cost-value {
+	color: var(--pos-text-primary, #212121);
+}
+
+.pos-action-strip__margin .mono {
+	font-family: "Roboto Mono", ui-monospace, monospace;
+	font-variant-numeric: tabular-nums;
 }
 
 .pos-action-strip__pay {

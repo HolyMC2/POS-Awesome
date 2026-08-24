@@ -120,6 +120,56 @@ Discount size is deliberately NOT re-gated here: a line's declared
 discount is `enforce_discount_limit`'s business, so the band judges the
 pre-discount price and an offer-discounted line passes on its merits.
 
+## Added 2026-08-23 — venta fraccionada (labelling-scale labels)
+
+One field, added by `add_embedded_barcode_scheme` (after_migrate, ordered
+BEFORE `reorganize_pos_profile_sections` so the reorganizer can anchor it —
+`_set_insert_after` silently skips a field that does not exist yet, which on a
+fresh install would leave the knob unanchored until the next migrate).
+
+| field | type | what it decides |
+|---|---|---|
+| `posa_gr_embedded_barcode_scheme` | Select (blank / `weight` / `price`) | What the five measurement digits on an EAN-13 prefix 20–25 label MEAN. `weight` reads them as grams (`00312` = 0.312 kg); `price` reads them as centavos (`04992` = $49.92) and derives the qty against the item's rate. Blank = this register has no labelling scale, and a 20–25 code stays an ordinary barcode. |
+
+Things worth knowing before you touch it:
+
+- **The prefix range 20–25 is FIXED and deliberately not configurable.** It is
+  GS1's reserved band for restricted circulation inside one company, which is
+  the only reason a scale may mint thousands of these codes. A scale printing
+  outside it is colliding with real GS1 assignments, and the fix is the scale's
+  settings, not a POS Profile knob.
+- **There is no auto-detect and there must not be.** `00312` is 0.312 kg under
+  one scheme and $3.12 under the other; a register that sniffed would mis-charge
+  by two orders of magnitude on a label it read perfectly.
+- **The field is a prefixed name (`posa_gr_`, granel).**
+  `scripts/check_fixture_coverage.py` requires a per-vertical prefix on every new
+  Custom Field, and this round added `posa_gr_` to its `VERTICAL_PREFIXES` — the
+  giros that weigh (abarrotes, carnicería, ferretería a granel).
+- **It replaces `posa_scale_barcode_start`**, which the same patch DELETES. That
+  Int shipped in the 2020 upstream fixture and never had a reader on either side
+  of the wire — an operator could type any number into it and change nothing.
+  (LEGACY-FIELD-INVENTORY §5.5 slated it; this closes it.)
+
+The `fractional` capability token is a separate gate and governs the CART
+affordances (the decimal pad, «$ Importe», tara) rather than the scan path. A
+register may declare a scheme without the token: its scale labels resolve, its
+cashiers simply do not get the pad.
+
+### The precision precondition, which is not optional
+
+`Sales Invoice Item.qty` is a plain Float with no field-level precision, so it
+is stored at **System Settings → float_precision**. On the doco mirror that is
+**2**, and a line saved as 0.312 kg comes back 0.31 kg charging $49.60 — not the
+$49.92 the golden flow quotes. Verified live, pinned by
+`test_fractional_backstop.test_the_site_keeps_only_float_precision_decimals_of_qty`.
+
+So gram-precision selling needs `float_precision` (or the register's
+`posa_decimal_precision`) set to **3**. Where it is not, nothing breaks: the pad,
+the «se cobran» sentence and the scan path all derive from the register's
+effective precision and quote 0.31, so the ticket and the invoice agree. What
+must never happen is the register promising a third decimal the books will not
+keep.
+
 ## Full field tables
 
 ### First half (create_pos_invoice… → posa_decimal_precision)

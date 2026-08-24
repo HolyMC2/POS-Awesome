@@ -266,6 +266,9 @@ import { usePrintHealthShared } from "../../composables/core/usePrintHealthShare
 import posLogo from "../pos/pos.png";
 import NavbarInfoGadgets from "./NavbarInfoGadgets.vue";
 import RegisterStatusLine from "./RegisterStatusLine.vue";
+import { useRegisterFacts } from "./useRegisterFacts";
+import { useVerticalStore } from "../../stores/verticalStore";
+import { useFormat } from "../../format";
 import { BRAND } from "../../../brand";
 
 /** Display only shows HH:mm, so a minute is the tightest useful tick. */
@@ -329,7 +332,39 @@ export default {
 		}, CLOCK_TICK_MS);
 		onBeforeUnmount(() => clearInterval(clockTimer));
 
+		// The two facts the strip was drawn with and used to pass `null` for.
+		// Same try/catch discipline as the stores above: `useFormat` and
+		// `useVerticalStore` are both absent when a spec mounts this bar, and
+		// the register facts must then simply be the `null` they already were.
+		let registerFacts = null;
+		try {
+			const { formatCurrency, currencySymbol } = useFormat();
+			let verticalStore = null;
+			try {
+				verticalStore = useVerticalStore();
+			} catch {
+				verticalStore = null;
+			}
+			registerFacts = useRegisterFacts({
+				openingShift: () => uiStore?.posOpeningShift?.name || null,
+				posProfile: () => uiStore?.posProfile || null,
+				hasCapability: (capability) => Boolean(verticalStore?.has?.(capability)),
+				formatMoney: (value) =>
+					`${currencySymbol(uiStore?.posProfile?.currency)}${formatCurrency(value)}`,
+				// `Balance` already resolves to «Saldo», which is the artboard's
+				// own word for this chip — so the chip reads right in Spanish
+				// without a new translation row.
+				saldoWord: () => (typeof __ === "function" ? __("Balance") : "Saldo"),
+			});
+			registerFacts.start();
+			onBeforeUnmount(() => registerFacts?.stop?.());
+		} catch {
+			registerFacts = null;
+		}
+
 		return {
+			navTicketsToday: registerFacts?.ticketsToday ?? ref(null),
+			navSaldoLabel: registerFacts?.saldoLabel ?? ref(null),
 			isRtl,
 			rtlStyles,
 			rtlClasses,
@@ -450,18 +485,29 @@ export default {
 				shiftStart: shift?.period_start_date || null,
 				now: this.navNow,
 				locale: this.statusLocale,
-				// No read model. `null` omits the chip; a `0` would be a claim.
-				ticketsToday: null,
+			// Counted for this register's shift AND today's posting date, through
+				// Frappe's own permission-checked COUNT — see `useRegisterFacts`.
+				// `null` still omits the chip whenever the read has not landed or
+				// could not be made; a `0` would be a claim about the day's trade.
+				ticketsToday: this.navTicketsToday ?? null,
 				printerStatus: this.navPrintHealth?.rollup?.value || "unknown",
 				usesSilentPrint: Boolean(profile?.posa_silent_print),
 				online: this.navOnlineStatus?.isOnline?.value !== false,
 				pendingCount: this.navSyncStore?.pendingInvoicesCount || 0,
-				// The saldo app owns its own badge in the actions row; the
-				// strip does not duplicate a value it cannot source.
-				saldoLabel: null,
+			// The pouch balance, and ONLY on a register that sells airtime
+				// and whose manager has left the balance visible. Both gates live
+				// in `useRegisterFacts`; a register without recargas never even
+				// asks the server for it.
+				saldoLabel: this.navSaldoLabel ?? null,
 				// Below the rail's breakpoint the strip sheds the clock, the
 				// day's count and the printer, matching the mobile artboards.
 				compact: this.windowWidth < 1100,
+				// 1359 is where the CSS ladder drops the day's count, and where
+				// a long profile name starts pushing the chips out of their own
+				// box (measured). The identity gives up its own least essential
+				// word at the same point rather than being exempt from the
+				// ladder the chips obey.
+				narrow: this.windowWidth < 1360,
 			};
 		},
 

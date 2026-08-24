@@ -42,6 +42,9 @@ def _install_dependency_stubs():
     item_fetchers_module = types.ModuleType("posawesome.posawesome.api.item_fetchers")
     item_fetchers_module.ItemDetailAggregator = object
     item_fetchers_module.get_batches = lambda *args, **kwargs: []
+    # Venta fraccionada's eligibility fact. Empty here, which is the answer for
+    # a site where no UOM is whole-number — every UOM then reports 0.
+    item_fetchers_module.get_whole_number_uoms = lambda *args, **kwargs: frozenset()
     sys.modules["posawesome.posawesome.api.item_fetchers"] = item_fetchers_module
 
     stock_module = types.ModuleType("posawesome.posawesome.api.item_processing.stock")
@@ -134,7 +137,14 @@ class TestGetItemDetailNormalization(unittest.TestCase):
                 company="Test Company",
             )
 
-        self.assertEqual(result["item_uoms"], [{"uom": "Nos", "conversion_factor": 1.0}])
+        # `must_be_whole_number` rides every UOM row (venta fraccionada): the
+        # cart asks per LINE whether it may carry a decimal, so the answer has
+        # to travel with each option rather than with the item.
+        self.assertEqual(
+            result["item_uoms"],
+            [{"uom": "Nos", "conversion_factor": 1.0, "must_be_whole_number": 0}],
+        )
+        self.assertEqual(result["must_be_whole_number"], 0)
         self.assertIsInstance(captured["item"], self.frappe._dict)
         self.assertIsInstance(captured["doc"], self.frappe._dict)
         self.assertEqual(captured["item"]["item_code"], "ITEM-001")

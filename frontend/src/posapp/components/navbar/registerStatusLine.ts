@@ -104,6 +104,33 @@ export interface RegisterStatusInput {
 	saldoLabel?: string | null;
 	/** Below the rail's breakpoint the strip sheds everything but identity. */
 	compact?: boolean;
+	/**
+	 * The bar is narrow enough that a LONG identity would cost the chips room.
+	 *
+	 * The chips have a drop ladder; the identity did not, and it is
+	 * `flex: 0 0 auto` — so a tenant with a long profile name («Docomexico
+	 * Sucursal Centro Mostrador») pushed the chips clean out of their own box
+	 * and under the actions cluster. Measured at 1280: the row stayed ONE row,
+	 * as designed, and overflowed sideways instead.
+	 *
+	 * This flag does NOT drop anything by itself, which is the whole point of
+	 * its being separate from `compact`. Measuring the real bar at 1100–1440
+	 * put the overflow threshold at roughly a 49-character subtitle, and an
+	 * ordinary one («Doco Ventas · Caja 2 · turno desde 09:02») is 40 — so on
+	 * almost every register the identity is stated in full at every width, and
+	 * a width-only rule would have deleted a fact nobody was short of room for.
+	 * The profile name goes only when the identity ACTUALLY overruns
+	 * `NARROW_IDENTITY_BUDGET`.
+	 *
+	 * The profile name is what gives way because it is the most static thing on
+	 * the line — the cashier knows which shop they are standing in. The
+	 * register and the shift start are the specific facts and they stay.
+	 *
+	 * Ellipsing was the other option and is still refused: cutting the end of
+	 * this subtitle severs the shift start, which is how «turno desde 0…»
+	 * shipped once. Dropping a whole word says less; a severed one says wrong.
+	 */
+	narrow?: boolean;
 }
 
 const text = (value: unknown): string => String(value ?? "").trim();
@@ -171,9 +198,9 @@ export function formatShiftStart(value: string | null | undefined, locale?: stri
  * gap or as "undefined". A register that has not answered its bootstrap yet
  * is a normal state at 8am, not an error worth showing the cashier.
  */
-function identitySegments(input: RegisterStatusInput): string[] {
+function identitySegments(input: RegisterStatusInput, keepProfile: boolean): string[] {
 	const segments: string[] = [];
-	if (!input.compact) {
+	if (keepProfile) {
 		const profile = text(input.profileName);
 		if (profile) segments.push(profile);
 	}
@@ -183,6 +210,24 @@ function identitySegments(input: RegisterStatusInput): string[] {
 	// chip states it, and it states it as a control rather than as prose.
 	return segments;
 }
+
+/**
+ * How long the joined identity may be on a narrow bar before the profile name
+ * has to go.
+ *
+ * A measured number, not a guessed one. Rendering the real strip at 1100–1440
+ * and lengthening the subtitle until the chips left their box put the break at
+ * roughly 49 characters of subtitle; the shift clause («· turno desde 09:02»)
+ * accounts for about twenty of those, which leaves this. An ordinary identity
+ * («Doco Ventas · Caja 2» — 20) is nowhere near it, and that is deliberate:
+ * the budget exists to catch the tenant who named a profile «Docomexico
+ * Sucursal Centro Mostrador», not to shorten everyone else's bar.
+ *
+ * Characters rather than pixels because this module is pure and has no font to
+ * measure against. It is a proxy, so it is set with room to spare, and the
+ * direction it errs in is keeping a fact rather than dropping one.
+ */
+export const NARROW_IDENTITY_BUDGET = 28;
 
 /**
  * The connection chip, and the only one here that can lie about money.
@@ -243,7 +288,13 @@ export function resolveRegisterStatusLine(
 	input: RegisterStatusInput = {},
 ): RegisterStatusLine {
 	const context: RegisterContext = input.context ?? "sale";
-	const segments = identitySegments(input);
+	// A compact (phone) bar never carries the profile name. A narrow desktop
+	// one carries it unless the identity it produces is genuinely too long —
+	// see `narrow` and `NARROW_IDENTITY_BUDGET`.
+	let segments = input.compact ? identitySegments(input, false) : identitySegments(input, true);
+	if (input.narrow && !input.compact && segments.join(" · ").length > NARROW_IDENTITY_BUDGET) {
+		segments = identitySegments(input, false);
+	}
 	const shiftStart = formatShiftStart(input.shiftStart, input.locale);
 
 	// Title. The artboard names the ACTION when there is no sale to name, and

@@ -110,14 +110,16 @@
 						:class="{
 							'negative-number': isNegative(item.qty),
 							'large-number': qtyLength > 6,
+							'posa-cart-item-row__qty--weighable': offersFractionalPad,
 						}"
 						:data-length="qtyLength"
+						:data-weighable="offersFractionalPad ? 'true' : undefined"
 						:title="formatFloat(item.qty, hideQtyDecimals ? 0 : undefined)"
 						@click.stop="openQtyEdit"
 						tabindex="0"
 						data-pos-keyboard-target="cart-qty"
 						role="button"
-						:aria-label="__('Edit quantity')"
+						:aria-label="offersFractionalPad ? __('Weigh or set amount') : __('Edit quantity')"
 						@keydown.enter.prevent="openQtyEdit"
 						@keydown.space.prevent="openQtyEdit"
 					>
@@ -448,6 +450,18 @@
 				</v-btn>
 			</td>
 		</template>
+		<FractionalQtyPad
+			v-if="offersFractionalPad"
+			v-model="fractionalPadOpen"
+			:item="item"
+			:uom-facts="uomFacts"
+			:display-currency="displayCurrency"
+			:currency-precision="registerPrecision"
+			:format-float="formatFloat"
+			:format-currency="formatCurrency"
+			:currency-symbol="currencySymbol"
+			@confirm="applyFractionalQty"
+		/>
 	</tr>
 </template>
 
@@ -456,6 +470,9 @@ import { computed, nextTick, ref } from "vue";
 import { debugLog } from "../../../utils/debug";
 import { describeLineStock, describeLineIdentity } from "./cartLineStock";
 import { cartAlignClass, cartJustifyClass } from "./cartColumnAlign";
+import FractionalQtyPad from "./FractionalQtyPad.vue";
+import { isFractionEligible } from "../../../utils/fractionalMath";
+import { useVerticalStore } from "../../../stores/verticalStore";
 
 defineOptions({
 	name: "CartItemRow",
@@ -498,6 +515,7 @@ const emit = defineEmits([
 	"update-discount-percent",
 	"update-discount-amount",
 	"qty-edit-submitted",
+	"update-line-note",
 	"discount-percent-edit-submitted",
 	"toggle-offer",
 	"toggle-expand",
@@ -527,7 +545,10 @@ const handleDeleteClick = () => {
 	}, 2500);
 };
 
+const verticalStore = useVerticalStore();
+
 const isEditingQty = ref(false);
+const fractionalPadOpen = ref(false);
 const editingQtyValue = ref("");
 const isEditingUom = ref(false);
 const isEditingRate = ref(false);
@@ -582,6 +603,12 @@ const memoDeps = computed(() => {
 		props.item.conversion_factor,
 		props.item.item_code,
 		props.item.item_group,
+		// The pad's open state, for the same reason as deleteArmed: it
+		// teleports to the body, but the flag that opens it lives in this
+		// row's scope. `must_be_whole_number` rides along because a UOM change
+		// flips whether the row offers a pad at all.
+		fractionalPadOpen.value,
+		props.item.must_be_whole_number,
 	];
 	debugLog(`[CartItemRow] memoDeps updated for ${props.item.item_code}`, {
 		uom: props.item.uom,
@@ -607,6 +634,32 @@ const lineStock = computed(() =>
 );
 
 const lineIdentity = computed(() => describeLineIdentity(props.item));
+
+/**
+ * Does this line get the weighing affordances?
+ *
+ * Two independent gates, and both must hold. The REGISTER has to be one that
+ * weighs (`fractional`) — a phone shop never grows a grams pad, whatever its
+ * catalogue happens to contain. And the LINE's own UOM has to accept decimals,
+ * which is ERPNext's answer (`UOM.must_be_whole_number`), not ours: the server
+ * refuses a fractional piece at save, so an affordance that disagreed would
+ * only build carts the shop cannot invoice.
+ *
+ * The fact arrives on the item payload — `must_be_whole_number`, added to the
+ * items wire for exactly this. When it is ABSENT (an offline row cached before
+ * the field shipped, a draft resumed from an older build) `isFractionEligible`
+ * answers no, and the row keeps the plain qty field it has always had.
+ */
+const registerPrecision = computed(() => {
+	const declared = Number.parseInt(String(props.posProfile?.posa_decimal_precision ?? ""), 10);
+	return Number.isInteger(declared) && declared >= 0 ? declared : 2;
+});
+
+const uomFacts = computed(() => ({
+	uom: props.item.uom || props.item.stock_uom,
+	mustBeWholeNumber: props.item.must_be_whole_number,
+	precision: registerPrecision.value,
+}));
 
 const qtyLength = computed(() => String(Math.abs(props.item.qty || 0)).replace(".", "").length);
 
@@ -640,6 +693,12 @@ const disableInput = computed(
 		(props.item.is_free_item || props.item.posa_is_offer || props.item.posa_is_replace),
 );
 
+// Declared after `disableInput` on purpose: a returned free line already has no
+// editable qty, and it must not gain one by weighing.
+const offersFractionalPad = computed(
+	() => verticalStore.has("fractional") && isFractionEligible(uomFacts.value) && !disableInput.value,
+);
+
 const disableUomEdit = computed(() => !!props.item.posa_is_replace);
 
 const disableRateEdit = computed(
@@ -665,11 +724,33 @@ function focusInput(r) {
 
 function openQtyEdit() {
 	if (disableInput.value) return;
+	// A weighable line opens the pad; everything else keeps the inline number
+	// field it has always had, down to the focus behaviour.
+	if (offersFractionalPad.value) {
+		fractionalPadOpen.value = true;
+		return;
+	}
 	isEditingQty.value = true;
 	editingQtyValue.value = "";
 	nextTick(() => {
 		focusInput(qtyInput);
 	});
+}
+
+/**
+ * The pad resolved a weight or an amount into a quantity; the line takes it the
+ * same way it takes a typed one. `update-qty` is the SAME event the inline
+ * field emits — no second write path for weighed lines, so every clamp,
+ * pricing pass and stock check downstream sees one kind of quantity change.
+ */
+function applyFractionalQty(payload) {
+	const qty = Number(payload?.qty);
+	if (!Number.isFinite(qty) || qty <= 0) return;
+	emit("update-qty", props.item, qty);
+	const note = String(payload?.note || "").trim();
+	if (note && !String(props.item.posa_notes || "").trim()) {
+		emit("update-line-note", props.item, note);
+	}
 }
 
 function openUomEdit() {
@@ -841,6 +922,16 @@ function cancelDiscountAmountEdit() {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+/* A weighable line's quantity opens a pad, not a text box, so it is drawn as
+   something you press: a dotted underline, the one hint that fits inside a cell
+   already carrying two buttons and a figure. Deliberately not a colour — amber
+   is state and the single saturated accent belongs to the primary button. */
+.posa-cart-item-row__qty--weighable {
+	text-decoration: underline dotted;
+	text-underline-offset: 3px;
+	cursor: pointer;
 }
 
 .posa-cart-item-row__stock {

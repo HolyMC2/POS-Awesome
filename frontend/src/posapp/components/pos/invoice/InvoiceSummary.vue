@@ -444,6 +444,9 @@ import { useUIStore } from "../../../stores/uiStore";
 import DiscountDialog from "./DiscountDialog.vue";
 import { useVerticalStore } from "../../../stores/verticalStore";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
+import { useEmployeeStore } from "../../../stores/employeeStore";
+import { parseBooleanSetting } from "../../../utils/stock";
+import { resolveCartMargin } from "./cartMargin";
 import {
 	getAvailableDocumentSources,
 	getDefaultDocumentSource,
@@ -587,6 +590,56 @@ const lineSummary = computed(() => {
 });
 const { parkedOrders, draftSource, paymentDialogOpen } = storeToRefs(uiStore);
 
+// ---- margin and cost, for supervisors only -------------------------------
+// `Main.dc.html` nodes 113–116 put «Margen estimado · Costo» at the right end
+// of this same strip. Everything that could be wrong about it lives in
+// `cartMargin.ts`; this card supplies the three facts that module needs and
+// formats what comes back.
+//
+// The ACTING cashier, not the logged-in user. A supervisor who opened the
+// terminal and handed it to the counter is no longer the person reading the
+// screen, and `currentCashier` is the register's own answer to who that is —
+// the same one `GiftCardsView` gates issuing on. `parseBooleanSetting` because
+// the flag has round-tripped through a cache by the time it gets here and a
+// string "0" is truthy.
+const employeeStore = useEmployeeStore();
+const { currentCashier } = storeToRefs(employeeStore);
+const isPosSupervisor = computed(() =>
+	parseBooleanSetting(currentCashier.value?.is_supervisor),
+);
+
+const cartMargin = computed(() =>
+	resolveCartMargin({
+		lines: invoiceStore.items,
+		// The pre-tax figure the breakdown prints, not the band's total — see
+		// the divergence note in cartMargin.ts.
+		netRevenue: netSubtotal.value,
+		isSupervisor: isPosSupervisor.value,
+	}),
+);
+
+/**
+ * The strip renders text, so the money is formatted here where the currency
+ * helpers are, and the STATE travels with it so the strip never has to infer
+ * "incomplete" from a missing string.
+ */
+const cartMarginDisplay = computed(() => {
+	const resolved = cartMargin.value;
+	if (resolved.state !== "ready") {
+		return { state: resolved.state, margin: "", cost: "", negative: false };
+	}
+	const symbol = props.currencySymbol?.(props.displayCurrency) ?? "";
+	const money = (value) => `${symbol}${props.formatCurrency?.(value) ?? value}`;
+	return {
+		state: "ready",
+		margin: money(resolved.margin),
+		cost: money(resolved.cost),
+		// A ticket priced below its own cost is a thing to notice, not a
+		// smaller green number.
+		negative: Number(resolved.margin) < 0,
+	};
+});
+
 // ---- the action strip, bound once and positioned twice --------------------
 // The strip renders ABOVE the money where the band below carries PAGAR, and
 // BELOW it where no band mounts and the strip carries PAY itself — so the
@@ -600,6 +653,7 @@ const actionStripProps = computed(() => ({
 	// every `const` in this block has initialised.
 	labelOverrides: actionChipLabels.value,
 	lineSummary: lineSummary.value,
+	cartMargin: cartMarginDisplay.value,
 	saveLoading: saveLoading.value,
 	loadDraftsLoading: loadDraftsLoading.value,
 	selectOrderLoading: selectOrderLoading.value,

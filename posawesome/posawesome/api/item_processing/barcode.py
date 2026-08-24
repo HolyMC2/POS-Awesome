@@ -38,6 +38,22 @@ def _get_scale_settings_metadata(settings) -> Dict[str, Any]:
     return metadata
 
 
+def _uom_must_be_whole_number(uom: Optional[str]) -> int:
+    """Does this UOM refuse a fractional qty? (venta fraccionada eligibility)
+
+    An UNKNOWN answer is reported as 0 rather than 1. The client reads an
+    absent-or-zero flag as "no decimal pad", so a failed lookup hides an
+    affordance instead of promising one the server would refuse at save.
+    """
+
+    if not uom:
+        return 0
+    try:
+        return 1 if cint(frappe.get_cached_value("UOM", uom, "must_be_whole_number")) else 0
+    except Exception:
+        return 0
+
+
 def _get_barcode_row_uom(row) -> str:
     """Return ERPNext's standard Item Barcode UOM."""
 
@@ -440,16 +456,23 @@ def get_items_from_barcode(selling_price_list, currency, barcode):
             "price_list_rate",
         )
 
+    resolved_uom = item_uom or item_doc.stock_uom
     return {
         "item_code": item_doc.name,
         "item_name": item_doc.item_name,
         "barcode": barcode,
         "rate": rate or 0,
         "price_list_rate": rate or 0,
-        "uom": item_uom or item_doc.stock_uom,
+        "uom": resolved_uom,
         "currency": currency,
         "scale_qty": scale_qty,
         "scale_price": scale_price,
+        # A scanned line lands in the cart with the same affordances a browsed
+        # one gets; without this the qty control would offer a decimal pad on
+        # one and not the other for the same item. Read per-UOM rather than
+        # through the bulk set: this endpoint resolves exactly one item, and
+        # `get_cached_value` is the same call ERPNext makes to enforce it.
+        "must_be_whole_number": _uom_must_be_whole_number(resolved_uom),
     }
 
 

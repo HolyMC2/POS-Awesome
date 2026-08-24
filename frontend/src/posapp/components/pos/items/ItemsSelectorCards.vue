@@ -72,12 +72,18 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { RecycleScroller } from "vue-virtual-scroller";
 import "vue-virtual-scroller/dist/vue-virtual-scroller.css";
 import ItemCard from "./ItemCard.vue";
 import Skeleton from "../../ui/Skeleton.vue";
-import { isCompactCard } from "../../../utils/itemSelectorLayout.js";
+// Extensionless on purpose. The module is `itemSelectorLayout.ts`, and this
+// script block is plain JS — so a `.js` specifier only resolves where the
+// bundler happens to rewrite it. Vitest's resolver does not, which meant no
+// spec could ever MOUNT this component: every test of the card view had to
+// read the file `?raw` or stub it out, and the card path therefore shipped
+// with no behavioural coverage at all.
+import { isCompactCard } from "../../../utils/itemSelectorLayout";
 
 const props = defineProps({
 	displayedItems: { type: Array, default: () => [] },
@@ -151,6 +157,75 @@ const getScrollerElement = () => {
 	const ref = scrollerRef.value;
 	return ref?.$el || ref;
 };
+
+/**
+ * Keep the scrollport inside the content whenever the list changes.
+ *
+ * THE BUG THIS FIXES: browse the grid, scroll down, type «jugo» — and every
+ * tile from before the search stays on screen while the two matches never
+ * appear. The list view filtered correctly the whole time, which is what made
+ * it look like a card-view rendering quirk rather than a scroll one.
+ *
+ * RecycleScroller reuses a pool of views and prunes the stale ones ONLY when
+ * the new visible range overlaps the old (`continuous` in the library).
+ * Filtering 200 items down to 2 while parked at scrollTop 2400 makes the two
+ * ranges disjoint: the prune is skipped, so every old view keeps `used: true`
+ * at its old offset, and the assignment loop — `for (i = startIndex;
+ * i < endIndex)` with a startIndex derived from the stale scroll position and
+ * an endIndex clamped to the new count — never runs at all. The grid is then
+ * showing rows that are no longer in the list, and nothing else.
+ *
+ * The clamp runs BEFORE the scroller recomputes: this component owns the
+ * scroller, so its watcher is scheduled ahead of the child's `items` watcher,
+ * and `updateVisibleItems` reads the scroll position fresh when it runs. The
+ * ranges are then continuous again and the library prunes normally.
+ *
+ * It is a clamp and not a "scroll to top on every change" on purpose. Items
+ * arrive from background sync too, and yanking a browsing operator back to the
+ * first row because the catalogue refreshed underneath them would trade one
+ * visible fault for a subtler one.
+ */
+const clampScrollIntoContent = (count) => {
+	const el = getScrollerElement();
+	if (!el || !el.scrollTop) {
+		return;
+	}
+	const rowHeight = Number(props.cardSlotHeight) || 0;
+	const columns = Number(props.cardColumns) || 1;
+	if (rowHeight <= 0) {
+		// No geometry to reason with. A shorter list can still strand the
+		// viewport past its end, and the top is the only position we know is
+		// inside every non-empty list.
+		el.scrollTop = 0;
+		return;
+	}
+	const contentHeight = Math.ceil(count / columns) * rowHeight;
+	const maxScroll = Math.max(0, contentHeight - (el.clientHeight || 0));
+	if (el.scrollTop > maxScroll) {
+		el.scrollTop = maxScroll;
+	}
+};
+
+watch(
+	() => props.displayedItems,
+	async (next, previous) => {
+		const count = Array.isArray(next) ? next.length : 0;
+		const before = Array.isArray(previous) ? previous.length : 0;
+		// Only a list that got shorter can leave the viewport past its end.
+		if (count < before) {
+			clampScrollIntoContent(count);
+		}
+		// The settle pass, and the half of the fix that actually clears the
+		// stale tiles. The scroller compares each new range against the
+		// PREVIOUS one and prunes only when they overlap, so the very update
+		// that jumps the range can never tidy up after itself — it leaves the
+		// old views `used` at their old offsets. Running it once more, after
+		// the jump has been recorded, makes the two ranges identical and
+		// therefore continuous, and the prune finally happens.
+		await nextTick();
+		scrollerRef.value?.updateVisibleItems?.(true);
+	},
+);
 
 defineExpose({ scrollToItem, getScrollerElement, scrollerRef });
 </script>

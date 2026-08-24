@@ -64,6 +64,9 @@ VERTICAL_PREFIXES: tuple[str, ...] = (
 	"posa_ux_",  # cross-vertical operator-experience substrate (keymaps,
 	# shortcuts and their kin) — not a vertical, but the same collision
 	# risk: every giro carries these fields, so they need one owned space.
+	"posa_gr_",  # granel — the giros that WEIGH: abarrotes, carnicería,
+	# ferretería a granel. Venta fraccionada's register config lives here
+	# (labelling-scale label scheme); a phone shop never carries these.
 )
 
 # Fieldnames that shipped BEFORE the prefix rule existed. Frozen on purpose:
@@ -137,7 +140,7 @@ GRANDFATHERED_FIELDNAMES: frozenset[str] = frozenset({
 	"posa_require_cash_movement_remarks", "posa_return_valid_upto",
 	"posa_return_validity_days", "posa_row_id",
 	"posa_safe_transfer_max_amount", "posa_sales_persons",
-	"posa_scale_barcode_start", "posa_search_batch_no", "posa_search_limit",
+	"posa_search_batch_no", "posa_search_limit",
 	"posa_search_serial_no", "posa_section_awesome_dashboard",
 	"posa_section_cash_movement", "posa_section_customer_display",
 	"posa_section_dashboard", "posa_section_inventory_controls",

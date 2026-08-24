@@ -14,6 +14,16 @@ import {
 	emptyScanAssignment,
 	type ScanAssignment,
 } from "./scanProcessor/scanAssignment";
+import {
+	embeddedLookupCodes,
+	parseEmbeddedBarcode,
+	qtyFromEmbeddedLabel,
+	readEmbeddedScheme,
+	type EmbeddedInvalid,
+	type EmbeddedParsed,
+	type LabelQtyRefusal,
+} from "../../../utils/embeddedBarcode";
+import { isFractionEligible, qtyPrecisionForUom } from "../../../utils/fractionalMath";
 // @ts-ignore
 import placeholderImage from "../../../components/pos/placeholder-image.png";
 
@@ -160,6 +170,37 @@ export function useScanProcessor(context: ScanProcessorContext) {
 
 	type ScanMeta = {
 		isScaleBarcode?: boolean;
+		/** «etiqueta de báscula …» — written onto the line's note. */
+		labelProvenance?: string;
+	};
+
+	/**
+	 * Why a labelling-scale label was refused, in a sentence a cashier can act
+	 * on. Every one of these names the label, not the software: the operator's
+	 * next move is to look at the sticker, re-print it, or weigh again.
+	 */
+	const describeLabelRefusal = (reason: EmbeddedInvalid["reason"]): string => {
+		if (reason === "check_digit") {
+			return __(
+				"The scale label did not verify — it was read wrong or printed damaged. Scan it again, or weigh the item again.",
+			);
+		}
+		if (reason === "empty_short_code") {
+			return __("The scale label names no item. Re-print it from the scale.");
+		}
+		return __("The scale label carries no weight or price. Weigh the item again.");
+	};
+
+	const describeLabelQtyRefusal = (reason: LabelQtyRefusal): string => {
+		if (reason === "no_rate") {
+			return __(
+				"This item has no price on this register, so the amount on the label cannot be turned into a quantity.",
+			);
+		}
+		if (reason === "below_minimum_qty") {
+			return __("The label's amount is smaller than the smallest quantity this register can sell.");
+		}
+		return __("The scale label carries no weight or price. Weigh the item again.");
 	};
 
 	const addScannedItemToInvoice = async (
@@ -188,6 +229,14 @@ export function useScanProcessor(context: ScanProcessorContext) {
 			if (!String(newItem.barcode || "").trim()) {
 				newItem.barcode = scannedCode;
 			}
+		}
+		// Provenance on the LINE, not just in the console: a weighed line's
+		// quantity came from a sticker rather than from anybody's hands, and
+		// when a customer disputes the weight an hour later that is the only
+		// record of where the number came from. Never overwrites a note the
+		// operator (or the kitchen) already put there.
+		if (scanMeta?.labelProvenance && !String(newItem.posa_notes || "").trim()) {
+			newItem.posa_notes = scanMeta.labelProvenance;
 		}
 
 		// If the scanned barcode has a specific UOM, apply it
@@ -440,10 +489,172 @@ export function useScanProcessor(context: ScanProcessorContext) {
 		}
 	};
 
+	/**
+	 * Find the item a scale label names.
+	 *
+	 * The printed value changes with every package, so the code on the sticker
+	 * is almost never the code registered on the Item. `embeddedLookupCodes`
+	 * offers the exact label first (in case it is), then the zero-valued
+	 * template a shop actually registers, then the bare short code — and only
+	 * then does it cost a round trip.
+	 */
+	const resolveEmbeddedItem = async (parsedLabel: EmbeddedParsed) => {
+		const codes = embeddedLookupCodes(parsedLabel);
+		barcodeIndex.ensureBarcodeIndex();
+
+		for (const code of codes) {
+			const hit = barcodeIndex.lookupItemByBarcode(code);
+			if (hit) return hit;
+		}
+		const localHit = items.value.find((item: any) =>
+			codes.some(
+				(code) =>
+					item.item_code === code ||
+					item.barcode === code ||
+					(Array.isArray(item.item_barcode) &&
+						item.item_barcode.some((b: any) => b.barcode === code)),
+			),
+		);
+		if (localHit) return localHit;
+
+		for (const code of codes) {
+			try {
+				const res = await frappe.call({
+					method: "posawesome.posawesome.api.items.get_items",
+					args: {
+						pos_profile: pos_profile.value,
+						price_list: active_price_list.value,
+						search_value: code,
+					},
+				});
+				if (res?.message?.length) return res.message[0];
+			} catch (error) {
+				console.error("Failed to resolve scale label on server:", error);
+			}
+		}
+		return null;
+	};
+
+	/**
+	 * A labelling scale's label, from sticker to cart line.
+	 *
+	 * Everything that can go wrong here is a refusal with a sentence, never a
+	 * silent fallback to the ordinary lookup: the prefix already said this is a
+	 * label, and a label that resolves to the wrong item or the wrong quantity
+	 * is a mis-charge the cashier has no way to notice.
+	 */
+	const processEmbeddedLabel = async (parsedLabel: EmbeddedParsed, scannedCode: string) => {
+		logScanFlow("Scale label parsed", {
+			scannedCode,
+			scheme: parsedLabel.scheme,
+			shortCode: parsedLabel.shortCode,
+		});
+
+		const foundItem = await resolveEmbeddedItem(parsedLabel);
+		if (!foundItem) {
+			if (context.onItemNotFound) context.onItemNotFound(scannedCode);
+			showScanError({
+				message: `${__("Item not found")}: ${parsedLabel.shortCode}`,
+				code: scannedCode,
+				details: __(
+					"No item carries the code {0} that this scale label names. Register the label on the item, or check the scale's item number.",
+					[parsedLabel.shortCode],
+				),
+			});
+			return;
+		}
+
+		// A weight label on an item sold by the piece is the scale and the
+		// catalogue disagreeing about what this product IS. Adding 0.312 of it
+		// would be refused by the server at save anyway; saying so here costs
+		// the cashier one sentence instead of a failed Pay.
+		const uomFacts = {
+			uom: foundItem.uom || foundItem.stock_uom,
+			mustBeWholeNumber: foundItem.must_be_whole_number,
+			precision: float_precision.value,
+		};
+		if (!isFractionEligible(uomFacts)) {
+			showScanError({
+				message: __("{0} is not sold by weight", [
+					foundItem.item_name || foundItem.item_code || parsedLabel.shortCode,
+				]),
+				code: scannedCode,
+				details: __(
+					"Its unit ({0}) only takes whole numbers, so a scale label cannot set its quantity.",
+					[uomFacts.uom || __("unit")],
+				),
+			});
+			return;
+		}
+
+		const labelQty = qtyFromEmbeddedLabel({
+			parsed: parsedLabel,
+			rate: foundItem.rate ?? foundItem.price_list_rate,
+			qtyPrecision: qtyPrecisionForUom(uomFacts),
+			currencyPrecision: context.currency_precision.value,
+		});
+		if (!labelQty.ok) {
+			showScanError({
+				message: __("This scale label cannot be read as a quantity"),
+				code: scannedCode,
+				details: describeLabelQtyRefusal(labelQty.reason),
+			});
+			return;
+		}
+
+		const provenance =
+			parsedLabel.scheme === "weight"
+				? __("Scale label · {0}", [scannedCode])
+				: __("Scale label · {0} · {1}", [
+						scannedCode,
+						format_currency(
+							labelQty.charged ?? 0,
+							pos_profile.value?.currency,
+							context.currency_precision.value,
+						),
+					]);
+
+		const scanAssignment = extractScanAssignmentFromItem(foundItem, scannedCode);
+		await addScannedItemToInvoice(foundItem, scannedCode, labelQty.qty, null, scanAssignment, {
+			isScaleBarcode: true,
+			labelProvenance: provenance,
+		});
+	};
+
 	const processScannedItem = async (scannedCode: string) => {
 		const mark = perfMarkStart("pos:scan-process");
 		logScanFlow("Start processing scan", { scannedCode });
 		pendingScanCode.value = scannedCode;
+
+		// Labelling-scale labels are settled BEFORE the legacy scale round trip
+		// and before the ordinary lookup. A register that declares no scheme
+		// gets `not_embedded` on the first line and falls through to exactly
+		// the path it had yesterday — including for 20-25 codes, which without
+		// a declared scheme are just barcodes.
+		const embedded = parseEmbeddedBarcode(
+			scannedCode,
+			readEmbeddedScheme(pos_profile.value?.posa_gr_embedded_barcode_scheme),
+		);
+		if (embedded.kind === "invalid") {
+			logScanFlow("Scale label refused", { scannedCode, reason: embedded.reason });
+			if (context.onItemNotFound) context.onItemNotFound(scannedCode);
+			showScanError({
+				message: __("Unreadable scale label"),
+				code: scannedCode,
+				details: describeLabelRefusal(embedded.reason),
+			});
+			perfMarkEnd("pos:scan-process", mark);
+			return;
+		}
+		if (embedded.kind === "parsed") {
+			try {
+				await processEmbeddedLabel(embedded, scannedCode);
+			} finally {
+				perfMarkEnd("pos:scan-process", mark);
+			}
+			return;
+		}
+
 		if (typeof scannerInput.ensureScaleBarcodeSettings === "function") {
 			await scannerInput.ensureScaleBarcodeSettings();
 		}

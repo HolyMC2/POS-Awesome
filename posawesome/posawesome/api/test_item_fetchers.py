@@ -180,5 +180,128 @@ class TestItemFetchers(unittest.TestCase):
         self.assertNotIn("posa_uom", calls[0][1]["fields"])
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class TestFractionEligibilityFacts(unittest.TestCase):
+    """`must_be_whole_number` on the way to the SPA (venta fraccionada).
+
+    Before this, the fact existed nowhere on the client — the whole app had no
+    reference to it — so the cart could not tell a kilo from a piece without
+    asking the server per line.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        _install_stubs()
+        cls.module = _load_module()
+
+    def test_get_whole_number_uoms_asks_for_the_checked_ones(self):
+        calls = []
+
+        def fake_get_all(doctype, filters=None, **kwargs):
+            calls.append((doctype, filters, kwargs))
+            return ["Nos", "Box"]
+
+        self.module.frappe.get_all = fake_get_all
+
+        result = self.module.get_whole_number_uoms()
+
+        self.assertEqual(result, frozenset({"Nos", "Box"}))
+        self.assertEqual(calls[0][0], "UOM")
+        self.assertEqual(calls[0][1], {"must_be_whole_number": 1})
+
+    def test_ensure_stock_uom_flags_every_row(self):
+        rows = self.module._ensure_stock_uom(
+            [{"uom": "Kg", "conversion_factor": 1.0}, {"uom": "Box", "conversion_factor": 12.0}],
+            "Kg",
+            frozenset({"Box"}),
+        )
+
+        self.assertEqual(
+            rows,
+            [
+                {"uom": "Kg", "conversion_factor": 1.0, "must_be_whole_number": 0},
+                {"uom": "Box", "conversion_factor": 12.0, "must_be_whole_number": 1},
+            ],
+        )
+
+    def test_ensure_stock_uom_flags_the_appended_stock_uom(self):
+        rows = self.module._ensure_stock_uom([], "Nos", frozenset({"Nos"}))
+
+        self.assertEqual(
+            rows, [{"uom": "Nos", "conversion_factor": 1.0, "must_be_whole_number": 1}]
+        )
+
+    def test_ensure_stock_uom_does_not_write_into_the_cached_rows(self):
+        # The source list comes out of the redis fetch cache. Annotating in
+        # place would stamp the flag onto every later reader of the same
+        # object, including one resolved against a different UOM set.
+        cached = [{"uom": "Kg", "conversion_factor": 1.0}]
+
+        self.module._ensure_stock_uom(cached, "Kg", frozenset({"Kg"}))
+
+        self.assertEqual(cached, [{"uom": "Kg", "conversion_factor": 1.0}])
+
+    def test_ensure_stock_uom_defaults_to_no_whole_number_uoms(self):
+        rows = self.module._ensure_stock_uom([{"uom": "Kg", "conversion_factor": 1.0}], "Kg")
+
+        self.assertEqual(rows[0]["must_be_whole_number"], 0)
+
+    def test_merge_item_row_answers_for_the_LINE_uom_not_the_stock_uom(self):
+        # A kilo item sold by the box is a whole-number LINE while that UOM is
+        # selected — the cart asks per line, so the row-level answer must
+        # follow `uom`, not `stock_uom`.
+        lookup = self.module.ItemLookupData(
+            price_map={},
+            stock_map={},
+            meta_map={"ITEM-KG": AttrDict({"name": "ITEM-KG", "stock_uom": "Kg"})},
+            uom_map={"ITEM-KG": [{"uom": "Kg", "conversion_factor": 1.0}]},
+            barcode_map={},
+            batch_map={},
+            serial_map={},
+            bom_map={},
+            whole_number_uoms=frozenset({"Box"}),
+        )
+
+        by_kg = self.module.merge_item_row({"item_code": "ITEM-KG"}, lookup, "MXN", 1)
+        by_box = self.module.merge_item_row(
+            {"item_code": "ITEM-KG", "uom": "Box"}, lookup, "MXN", 1
+        )
+
+        self.assertEqual(by_kg["must_be_whole_number"], 0)
+        self.assertEqual(by_box["must_be_whole_number"], 1)
+
+    def test_merge_item_row_flags_every_uom_option(self):
+        lookup = self.module.ItemLookupData(
+            price_map={},
+            stock_map={},
+            meta_map={"ITEM-KG": AttrDict({"name": "ITEM-KG", "stock_uom": "Kg"})},
+            uom_map={
+                "ITEM-KG": [
+                    {"uom": "Kg", "conversion_factor": 1.0},
+                    {"uom": "Box", "conversion_factor": 10.0},
+                ]
+            },
+            barcode_map={},
+            batch_map={},
+            serial_map={},
+            bom_map={},
+            whole_number_uoms=frozenset({"Box"}),
+        )
+
+        row = self.module.merge_item_row({"item_code": "ITEM-KG"}, lookup, "MXN", 1)
+
+        self.assertEqual(
+            {u["uom"]: u["must_be_whole_number"] for u in row["item_uoms"]},
+            {"Kg": 0, "Box": 1},
+        )
+
+    def test_lookup_data_without_the_field_reads_as_nothing_whole(self):
+        # The eight-positional constructor predates the field; an old caller
+        # must keep working and must not accidentally mark everything whole.
+        lookup = self.module.ItemLookupData({}, {}, {}, {}, {}, {}, {}, {})
+
+        self.assertEqual(lookup.whole_number_uoms, frozenset())
+
+
 if __name__ == "__main__":
     unittest.main()

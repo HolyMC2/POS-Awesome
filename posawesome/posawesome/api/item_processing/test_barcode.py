@@ -99,6 +99,46 @@ class TestBarcodeProcessing(unittest.TestCase):
         self.assertEqual(result["uom"], "Box")
         self.assertIn("uom", calls[0][2])
 
+    def test_get_items_from_barcode_carries_fraction_eligibility(self):
+        """A scanned line must arrive knowing whether it may hold a decimal.
+
+        Without it the cart would offer the weighing pad on a browsed row and
+        withhold it on the scanned row for the very same item.
+        """
+
+        class Db:
+            def get_value(self, doctype, filters, fields=None, as_dict=False):
+                if doctype == "Item Barcode":
+                    return AttrDict({"item_code": "ITEM-KG", "uom": "Kg"})
+                if doctype == "Item Price":
+                    return 160
+                return None
+
+        self.module.frappe.db = Db()
+        self.module.frappe.get_cached_doc = lambda doctype, name: AttrDict(
+            {"name": name, "item_name": "Jamon", "stock_uom": "Kg"}
+        )
+        self.module.frappe.get_cached_value = lambda doctype, name, field: (
+            1 if name == "Nos" else 0
+        )
+        self.module._parse_scale_barcode_data = lambda barcode: None
+
+        result = self.module.get_items_from_barcode("Standard Selling", "MXN", "KG-001")
+
+        self.assertEqual(result["must_be_whole_number"], 0)
+
+    def test_fraction_eligibility_falls_back_to_zero_when_unknown(self):
+        # A lookup that throws must hide the affordance, never promise one the
+        # server would refuse at save.
+        def boom(*args, **kwargs):
+            raise RuntimeError("no UOM table here")
+
+        self.module.frappe.get_cached_value = boom
+
+        self.assertEqual(self.module._uom_must_be_whole_number("Kg"), 0)
+        self.assertEqual(self.module._uom_must_be_whole_number(None), 0)
+        self.assertEqual(self.module._uom_must_be_whole_number(""), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
