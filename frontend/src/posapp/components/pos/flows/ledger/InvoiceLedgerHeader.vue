@@ -22,6 +22,31 @@
 			</button>
 		</div>
 
+		<!-- WHICH document family Borradores is listing. Absent unless the
+		     segment is showing and the register offers more than one source —
+		     a register with sales orders switched off has a single kind of
+		     draft and a one-button switch is a button that answers nothing. -->
+		<div
+			v-if="showSourceSwitch"
+			class="ledger-source"
+			role="group"
+			:aria-label="__('Draft source')"
+			data-testid="ledger-source"
+		>
+			<button
+				v-for="source in sources"
+				:key="source.key"
+				type="button"
+				class="ledger-source__item"
+				:class="{ 'ledger-source__item--on': source.key === activeSource }"
+				:aria-pressed="source.key === activeSource"
+				:data-testid="`ledger-source-${source.key}`"
+				@click="$emit('source', source.key)"
+			>
+				{{ __(source.label) }}
+			</button>
+		</div>
+
 		<div class="ledger-head__spacer" />
 
 		<!-- One search box, four modes (artboard `Buscador.dc.html`). The chips
@@ -146,25 +171,36 @@ import type {
 import { getFindMode } from "./ledgerModel";
 import { translate as __ } from "./ledgerText";
 
-const props = defineProps<{
-	segments: readonly LedgerSegment[];
-	activeSegment: LedgerSegmentId;
-	/** Loaded collection size per segment; `null` until it has loaded. */
-	counts: Readonly<Record<string, number | null>>;
-	modes: readonly ResolvedLedgerFindMode[];
-	activeMode: LedgerFindModeId;
-	query: string;
-	dateFrom: string;
-	dateTo: string;
-}>();
+const props = withDefaults(
+	defineProps<{
+		segments: readonly LedgerSegment[];
+		activeSegment: LedgerSegmentId;
+		/** Loaded collection size per segment; `null` until it has loaded. */
+		counts: Readonly<Record<string, number | null>>;
+		modes: readonly ResolvedLedgerFindMode[];
+		activeMode: LedgerFindModeId;
+		query: string;
+		dateFrom: string;
+		dateTo: string;
+		/** `getAvailableCommercialDocumentSources(posProfile)`, English labels. */
+		sources?: ReadonlyArray<{ key: string; label: string }>;
+		activeSource?: string;
+	}>(),
+	{ sources: () => [], activeSource: "invoice" },
+);
 
 defineEmits<{
 	segment: [LedgerSegmentId];
 	mode: [LedgerFindModeId];
+	source: [string];
 	"update:query": [string];
 	"update:dateFrom": [string];
 	"update:dateTo": [string];
 }>();
+
+const showSourceSwitch = computed(
+	() => props.activeSegment === "drafts" && props.sources.length > 1,
+);
 
 const queryInput = ref<HTMLInputElement | null>(null);
 
@@ -239,6 +275,44 @@ defineExpose({ focusQuery: () => queryInput.value?.focus() });
 .ledger-seg__count {
 	font-weight: 600;
 	opacity: 0.75;
+}
+
+/* ---- source switch ---------------------------------------------------- */
+
+/* Deliberately the finder's chip treatment rather than the segment's raised
+   pill: the segment picks WHAT LIST, this picks what the list is OF, and two
+   controls with the same shape sitting side by side would read as one row of
+   eight tabs. */
+.ledger-source {
+	display: flex;
+	gap: 2px;
+}
+
+.ledger-source__item {
+	display: inline-flex;
+	align-items: center;
+	height: 32px;
+	padding: 0 10px;
+	border: 1px solid var(--reg-border-soft, #e6e9ee);
+	border-radius: var(--reg-radius-sm, 10px);
+	background: var(--reg-surface, #fff);
+	color: var(--reg-text-secondary, #56606e);
+	font: inherit;
+	font-size: 12.5px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.ledger-source__item:focus-visible {
+	outline: 2px solid var(--reg-accent, #0097a7);
+	outline-offset: 1px;
+}
+
+.ledger-source__item--on {
+	background: var(--reg-accent-soft, #e0f7fa);
+	border-color: var(--reg-accent, #0097a7);
+	color: var(--reg-on-accent-soft, #00646f);
+	font-weight: 700;
 }
 
 /* ---- finder ----------------------------------------------------------- */

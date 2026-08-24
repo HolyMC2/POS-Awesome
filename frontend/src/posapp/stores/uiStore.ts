@@ -103,10 +103,23 @@ export const useUIStore = defineStore("ui", () => {
     invoiceManagementDialog.value = true;
   };
 
+  /**
+   * The document source SURVIVES the close; the tab does not.
+   *
+   * `Pos.vue` turns a legacy open into a rail destination by closing this sheet
+   * and activating the destination, so the close sits BETWEEN the request and
+   * the mount that serves it. Resetting the source here erased «Select S.O»'s
+   * `"order"` on the way past, and the hosted sheet re-opened on draft
+   * invoices — the register's Borradores list, which is not what the chip asks
+   * for.
+   *
+   * Leaving it is also what the rest of the surface already assumes:
+   * `loadDrafts` and `updateDraftSource` write this ref on every load and every
+   * switch, i.e. it is the drafts surface's remembered source, not a one-shot.
+   */
   const closeInvoiceManagement = () => {
     invoiceManagementDialog.value = false;
     invoiceManagementTargetTab.value = "history";
-    invoiceManagementDraftSource.value = "invoice";
   };
 
   // Opening the payment screen is a server round-trip (update_invoice), ~1s on

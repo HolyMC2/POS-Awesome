@@ -10,8 +10,11 @@
 			:query="query"
 			:date-from="dateFrom"
 			:date-to="dateTo"
+			:sources="draftSources"
+			:active-source="draftSource"
 			@segment="chooseSegment"
 			@mode="chooseMode"
+			@source="chooseSource"
 			@update:query="setQuery"
 			@update:date-from="publishFilters($event, dateTo)"
 			@update:date-to="publishFilters(dateFrom, $event)"
@@ -137,6 +140,14 @@ const props = withDefaults(
 		isRepairCandidate: (invoice: LedgerRowSource) => boolean;
 		draftActionsFor: (invoice: LedgerRowSource) => string[];
 		draftActionLabel: (action: string) => string;
+		/**
+		 * The document families Borradores can list — `availableDraftSources`
+		 * and `currentDraftSource` on the engine. Sales orders are one of them
+		 * («Select S.O» asks for exactly this), so the segment is not always
+		 * showing draft invoices and the header has to say which it is showing.
+		 */
+		draftSources?: ReadonlyArray<{ key: string; label: string }>;
+		draftSource?: string;
 		canDeleteDraft?: boolean;
 		repairBusy?: boolean;
 		offline?: boolean;
@@ -149,6 +160,8 @@ const props = withDefaults(
 		employees: () => [],
 		currentCashier: null,
 		currencySymbol: "",
+		draftSources: () => [],
+		draftSource: "invoice",
 		canDeleteDraft: false,
 		repairBusy: false,
 		offline: false,
@@ -162,6 +175,8 @@ const emit = defineEmits<{
 	/** Every filter field this surface writes, in one shape. */
 	filters: [{ search: string; from: string; to: string }];
 	page: [{ tab: string; page: number }];
+	/** The document family Borradores should list. */
+	draftSource: [string];
 	open: [LedgerRowSource];
 	print: [LedgerRowSource];
 	return: [LedgerRowSource];
@@ -303,6 +318,17 @@ const chooseSegment = (id: LedgerSegmentId) => {
 	const intent = segmentIntent(id, today.value);
 	emit("tab", intent.tab);
 	publishFilters(intent.from, intent.to);
+};
+
+/**
+ * Switching the source replaces every row on the segment, so the selection
+ * goes with them: a panel still showing the sales order the operator was
+ * reading, beside a list of draft invoices, offers actions for a document that
+ * is no longer on screen.
+ */
+const chooseSource = (key: string) => {
+	selectedName.value = null;
+	emit("draftSource", key);
 };
 
 const chooseMode = (id: LedgerFindModeId) => {

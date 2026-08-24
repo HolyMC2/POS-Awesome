@@ -81,7 +81,18 @@ export const describeStatus = (
 	today: string,
 	isDraft = false,
 ): LedgerStatus => {
-	if (isDraft) return { key: "draft", label: "Draft invoice", tone: "neutral" };
+	if (isDraft) {
+		// Borradores lists whichever document family the header is switched to —
+		// «Select S.O» switches it to sales orders — so the chip cannot say
+		// "Borrador" over every row on the segment. A submitted, part-billed
+		// sales order is not a draft invoice, and only the record knows which it
+		// is. Unrecognised source, or none: the old label, unchanged.
+		const source = String(row?.source || "invoice").toLowerCase();
+		if (source !== "invoice") {
+			return { key: source, label: String(row?.status || "Submitted"), tone: "neutral" };
+		}
+		return { key: "draft", label: "Draft invoice", tone: "neutral" };
+	}
 	if (isReturnRow(row)) return { key: "returned", label: "Returned invoice", tone: "returned" };
 	if (isRowOverdue(row, today)) return { key: "overdue", label: "Overdue invoice", tone: "negative" };
 

@@ -38,6 +38,8 @@
 					:is-repair-candidate="isRepairCandidate"
 					:draft-actions-for="draftActions"
 					:draft-action-label="draftActionLabel"
+					:draft-sources="availableDraftSources"
+					:draft-source="currentDraftSource"
 					:can-delete-draft="canDeleteActiveDraftSource"
 					:repair-busy="repairChangeLoading"
 					:offline="isOffline()"
@@ -87,6 +89,7 @@
 						returnDateTo = $event.to
 					"
 					@page="setTabPage($event.tab, $event.page)"
+					@draft-source="updateDraftSource($event)"
 					@open="viewInvoice($event)"
 					@print="printInvoice($event)"
 					@return="runLedgerReturn($event)"
@@ -1570,11 +1573,18 @@ export default {
 		// the tab is set THROUGH the store's own open call so the
 		// `invoiceManagementDialog` watcher below reads the target exactly as it
 		// does for the navbar button — one open path, not two.
+		//
+		// The source re-opened with is THIS sheet's own (`invoiceManagementDraftSource`).
+		// It used to read `uiStore.draftSource`, which belongs to the legacy
+		// floating drafts dialog `openDrafts` raises — a different surface with a
+		// different ref, permanently "invoice" here. «Select S.O» asks for
+		// `"order"` and the rail hand-off remounts this sheet, so reading the
+		// wrong ref threw the request away and landed the cashier on Borradores.
 		const hosted = useHostedSheet({
 			open: invoiceManagementDialog,
 			openSheet: () => {
 				const tab = hosted.destinationId?.value === "drafts" ? "drafts" : "history";
-				uiStore.openInvoiceManagement(tab, uiStore.draftSource || "invoice");
+				uiStore.openInvoiceManagement(tab, uiStore.invoiceManagementDraftSource || "invoice");
 			},
 			closeSheet: () => uiStore.closeInvoiceManagement(),
 			emit,

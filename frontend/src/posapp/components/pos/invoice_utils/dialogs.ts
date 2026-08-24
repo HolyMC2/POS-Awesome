@@ -261,9 +261,18 @@ export async function get_draft_invoices(
 	}
 }
 
+/**
+ * «Select S.O» — the drafts surface, showing SALES ORDERS.
+ *
+ * The source is set through `open_invoice_management_with_source` rather than
+ * passed to `openInvoiceManagement` alone: that helper writes the store's
+ * `invoiceManagementDraftSource` FIRST, so the request is already standing if
+ * the shell answers the open by closing this sheet and handing the destination
+ * to the rail (`Pos.vue`) instead of raising the floating modal.
+ */
 export async function get_draft_orders(context: any) {
 	try {
-		context.uiStore?.openInvoiceManagement?.("drafts", "order");
+		open_invoice_management_with_source(context, "drafts", "order");
 	} catch (error) {
 		console.error("Error fetching draft orders:", error);
 		context.toastStore.show({
