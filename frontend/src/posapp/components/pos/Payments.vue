@@ -629,6 +629,7 @@ import { useVerticalStore } from "../../stores/verticalStore";
 // Composables
 import { usePaymentCalculations } from "../../composables/pos/payments/usePaymentCalculations";
 import { usePaymentSubmission } from "../../composables/pos/payments/usePaymentSubmission";
+import { setCustomerDisplayCashbackPreview } from "../../composables/pos/shared/useCustomerDisplayPublisher";
 import { useRedemptionLogic } from "../../composables/pos/payments/useRedemptionLogic";
 import { usePaymentPrinting } from "../../composables/pos/payments/usePaymentPrinting";
 import {
@@ -1070,6 +1071,14 @@ const {
 	formatFloat: (val, prec) => flt(val, prec),
 	stores: { toastStore },
 	onClearAmounts: () => {},
+});
+
+// The customer's screen shows «Con esta compra acumulas» in its Done state
+// (PANTALLA_CLIENTE_GOLDEN_FLOW.md §1). The preview is read from the server
+// here and nowhere else, so this is the only place that can hand it over.
+// `null` — cards off, unenrolled, offline — leaves the card absent.
+watch(cashback_accrual, (value) => setCustomerDisplayCashbackPreview(value), {
+	immediate: true,
 });
 
 const { loadPrintPage, printOfflineInvoice } = usePaymentPrinting({
