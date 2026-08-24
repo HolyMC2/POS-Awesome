@@ -771,7 +771,12 @@ class TestCustomerWallet(StoredValueTestCase):
         self.assertEqual(by_kind["deposit"]["reference"], "ACC-PAY-0001")
         self.assertEqual(by_kind["deposit"]["reference_name"], "ACC-PAY-0001")
         self.assertEqual(by_kind["deposit"]["ts"], "2026-08-20 10:00:00")
-        self.assertTrue(by_kind["deposit"]["detail"])
+        # `detail` is the SECONDARY fact, never a copy of `label` — a reader
+        # that printed both would render «Depósito · Depósito».
+        self.assertEqual(by_kind["deposit"]["label"], "Deposit")
+        self.assertEqual(by_kind["deposit"]["detail"], "Cash")
+        self.assertEqual(by_kind["cashback"]["detail"], "Puntos Doco")
+        self.assertIsNone(by_kind["credit_note"]["detail"])
         self.assertEqual(by_kind["credit_note"]["amount"], 80.0)
         # Spending is negative so one column can carry the whole ledger, and
         # the sign convention is never mixed within a payload.

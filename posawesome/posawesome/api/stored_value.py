@@ -482,7 +482,9 @@ def enroll_customer_card(pos_profile=None, customer=None):
 # ---------------------------------------------------------------------------
 
 
-def _movement(kind, label, amount, row, reference_doctype, reference_name, **extra):
+def _movement(
+    kind, label, amount, row, reference_doctype, reference_name, detail=None, **extra
+):
     """One ledger row, in the shape the contact view reads.
 
     `kind` is the canonical vocabulary agreed with the Cliente 360 surface:
@@ -495,12 +497,20 @@ def _movement(kind, label, amount, row, reference_doctype, reference_name, **ext
     should print); `posting_date` is the accounting date it belongs to, which
     is the same day for anything a register does and can differ on a
     back-dated entry.
+
+    `label` and `detail` are two different things and neither is a copy of the
+    other: `label` names WHAT happened («Depósito») and `detail` adds the one
+    secondary fact worth a second line («Efectivo», the programme name), or is
+    None when there isn't one. A client with its own label keys should prefer
+    them — a string built inside `frappe._()` is invisible to the frontend's
+    translation lane, so `label` exists for readers that have no key table of
+    their own (reports, print formats) rather than for the register.
     """
     movement = {
         "kind": kind,
         "type": kind,
         "label": label,
-        "detail": label,
+        "detail": detail,
         "amount": _normalize_amount(amount),
         "ts": row.get("creation"),
         "posting_date": row.get("posting_date"),
@@ -583,6 +593,7 @@ def _deposit_movements(customer, company, limit):
                 row,
                 "Payment Entry",
                 name,
+                detail=row.get("mode_of_payment"),
                 mode_of_payment=row.get("mode_of_payment"),
             )
         )
@@ -710,6 +721,7 @@ def _cashback_movements(customer, company, loyalty_program, conversion_factor, l
                 row,
                 _text(row.get("invoice_type")) or "Loyalty Point Entry",
                 _text(row.get("invoice")) or _text(row.get("name")),
+                detail=loyalty_program,
                 points=points,
             )
         )
