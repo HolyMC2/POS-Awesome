@@ -19,6 +19,10 @@ export interface CustomerDisplayLineItem {
 	rate: number;
 	amount: number;
 	uom: string;
+	/** Short qualifier the display prints after the name — "combo protección". */
+	note?: string | null;
+	/** Pesos saved on this line, from combos.get_combo_components. */
+	saving?: number | null;
 }
 
 export interface CustomerDisplaySnapshot {
@@ -29,6 +33,23 @@ export interface CustomerDisplaySnapshot {
 	total_qty: number;
 	total_amount: number;
 	updated_at: string;
+	// The states `docs/PANTALLA_CLIENTE_GOLDEN_FLOW.md` §1 names and the screen
+	// was built to render. All optional, and the publisher OMITS rather than
+	// zeroes: absence is what tells the display it may not speak about the
+	// customer's money. `| null` is here because the consumer
+	// (`components/customer_display/displayModel.ts`) declares its own read of
+	// each field as nullable and reads them defensively off an envelope that
+	// may have been written by an older register — it is a tolerance on the
+	// reading side, never a value this publisher sends.
+	/** "sale" | "tender" | "done" — the register's own word for where the sale is. */
+	stage?: string | null;
+	/** Cash handed over, and change owed back. */
+	received_amount?: number | null;
+	change_amount?: number | null;
+	/** Pesos this purchase adds to the customer's card, read from
+	 *  stored_value.get_cashback_preview — never derived client-side. */
+	cashback_earned?: number | null;
+	cashback_balance_after?: number | null;
 }
 
 type SnapshotEnvelope = {

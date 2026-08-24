@@ -53,10 +53,41 @@ describe("the customer display's template binds none of the refused fields", () 
 });
 
 describe("the snapshot contract has not widened underneath the screen", () => {
-	// `utils/customerDisplay.ts` is not this component's to change. This
-	// asserts nothing has ADDED one of the fields the design refused: they
-	// cross a window into a screen a stranger can read, and the decision about
-	// whether they belong there has to be made before anything renders them.
+	/**
+	 * `utils/customerDisplay.ts` is the TRANSPORT, and what it carries is a
+	 * privacy decision, not a data-modelling one: every field crosses a window
+	 * into a screen a stranger standing behind the customer can read.
+	 *
+	 * ## The accrual was argued and admitted — 2026-08-23
+	 *
+	 * This block used to read as a blanket refusal, written when the display
+	 * had no artboard and the transport carried only a basket. It is not one
+	 * any more. `docs/PANTALLA_CLIENTE_GOLDEN_FLOW.md` §1 is the acceptance
+	 * contract for this screen and it names the accrual outright — "Done →
+	 * «Gracias» + change reminder + cashback earned («Acumulaste $15.00 · saldo
+	 * $433.00») when the customer is enrolled" — with the standing condition
+	 * attached: "only for enrolled customers on card-enabled registers —
+	 * absence, not zeros". So `cashback_earned` and `cashback_balance_after`
+	 * cross the window with an owner's sanction behind them, and the tender
+	 * figures (§1's «Recibido $500 · Cambio $152») with them.
+	 *
+	 * What did NOT change is why the refused fields are refused, and the guard
+	 * below is deliberately not satisfied by renaming:
+	 *
+	 *  - A *figure about* the customer's card is a number the customer is
+	 *    standing there to read. A *wallet or loyalty record* is an account
+	 *    identifier and a history, and the queue behind them has no business
+	 *    with either. `Cobro.dc.html` puts the wallet on the CASHIER's screen —
+	 *    a different privacy context, one the customer is not facing.
+	 *  - The customer's NAME still never renders. §1's own wording («Monedero
+	 *    de Sofía») was departed from on purpose: the customer knows whose card
+	 *    it is, and the person next in the queue does not need telling. The
+	 *    snapshot still carries `customer_name` for the register's own use and
+	 *    the template still refuses to bind it — the two halves above.
+	 *
+	 * Anything beyond §1's list needs the same treatment this got: an argument
+	 * in the golden flow first, then this spec, then a field.
+	 */
 	const interfaceBlock = (() => {
 		const transport = readFileSync(resolve(SRC, "utils/customerDisplay.ts"), "utf8");
 		const match = /export interface CustomerDisplaySnapshot \{([\s\S]*?)\}/.exec(transport);
@@ -67,6 +98,22 @@ describe("the snapshot contract has not widened underneath the screen", () => {
 	it("still carries the fields the screen does use", () => {
 		expect(interfaceBlock).toContain("total_amount");
 		expect(interfaceBlock).toContain("items");
+	});
+
+	it.each([
+		["stage", "which of §1's four states the register is in"],
+		["received_amount", "«Recibido», §1's tender line"],
+		["change_amount", "«Cambio», the figure the customer is owed back"],
+		["cashback_earned", "«Acumulaste», §1's Done state, enrolled customers only"],
+		["cashback_balance_after", "«saldo $433.00», the same line's second half"],
+	])("carries %s, which §1 sanctions", (field) => {
+		expect(
+			interfaceBlock.includes(field),
+			`the snapshot no longer carries \`${field}\`. ` +
+				`PANTALLA_CLIENTE_GOLDEN_FLOW.md §1 asks the screen to render it, ` +
+				`and the display's model reads it optionally — removing it here ` +
+				`goes dark on that state without failing anything else.`,
+		).toBe(true);
 	});
 
 	it.each([
@@ -83,7 +130,27 @@ describe("the snapshot contract has not widened underneath the screen", () => {
 			`the snapshot now carries \`${field}\`. \`Cobro.dc.html\` shows the ` +
 				`wallet on the CASHIER's screen, which is a different privacy ` +
 				`context — decide whether it belongs on the customer's before it ` +
-				`crosses the window.`,
+				`crosses the window. §1 sanctioned an ACCRUAL FIGURE ` +
+				`(\`cashback_earned\` / \`cashback_balance_after\`); it did not ` +
+				`sanction the account behind it.`,
 		).toBe(false);
+	});
+});
+
+describe("the screen renders the accrual without naming anyone", () => {
+	// The sanction and the departure from it, pinned together: §1 draws the
+	// card as «Monedero de Sofía · saldo quedará en $435.94» and this screen
+	// renders «Your card · balance will be …». Both halves have to hold — a
+	// card that stopped rendering would make the widened transport pointless,
+	// and a card that started naming people would undo the reason it was
+	// allowed to render at all.
+	it("draws the accrual card", () => {
+		expect(TEMPLATE).toContain('data-testid="customer-display-accrual"');
+		expect(TEMPLATE).toContain('data-money-role="accrual"');
+	});
+
+	it("labels the balance line with the card, not with a person", () => {
+		expect(TEMPLATE).toContain("Your card · balance will be {0}");
+		expect(TEMPLATE).not.toContain("customer_name");
 	});
 });
