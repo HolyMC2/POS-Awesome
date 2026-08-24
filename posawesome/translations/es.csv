@@ -2707,3 +2707,9 @@ Nothing has happened on this document yet.,Todavía no pasa nada en este documen
 Nothing has been recorded on this order yet.,Todavía no se registra nada en esta orden.
 Nothing has happened on this order yet.,Todavía no pasa nada en este pedido.
 What happened,Lo que pasó
+history,historial
+Close history,Cerrar historial
+Last {0} days · up to {1} events,Últimos {0} días · hasta {1} movimientos
+Choose a customer on the ticket first.,Elige primero un cliente en el ticket.
+Could not read this customer's history.,No se pudo leer el historial de este cliente.
+Nothing in this window.,Nada en este periodo.

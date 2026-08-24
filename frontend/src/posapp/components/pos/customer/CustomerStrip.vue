@@ -10,7 +10,25 @@
 			>
 				{{ __("change") }}
 			</button>
+			<!-- «Historial» sits beside «change» because it answers the other
+			     question a name raises at a counter: not "is this the right
+			     person" but "what have we done with them". It opens over the
+			     ticket and leaves again — see `CustomerStory.vue` for why it is
+			     not a destination. -->
+			<button
+				v-if="customerName"
+				type="button"
+				class="customer-strip__change"
+				data-testid="customer-strip-history"
+				@click="historyOpen = true"
+			>
+				{{ __("history") }}
+			</button>
 		</div>
+
+		<!-- Mounted only once asked for: the timeline pulls a chunk and a round
+		     trip, and neither belongs on the sale's first paint. -->
+		<CustomerStory v-if="historyMounted" v-model="historyOpen" />
 
 		<!-- Facts, not controls. Each chip is rendered only when the register
 		     actually has the value: an absent price list is silence, never
@@ -31,7 +49,11 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, defineAsyncComponent, ref, watch } from "vue";
+
+// Async and behind `historyMounted`: the strip renders on every sale and the
+// history is opened on a few of them.
+const CustomerStory = defineAsyncComponent(() => import("./CustomerStory.vue"));
 
 const props = defineProps({
 	customerName: { type: String, default: "" },
@@ -47,6 +69,13 @@ const props = defineProps({
 defineEmits(["change"]);
 
 const __ = window.__ || ((value) => value);
+
+const historyOpen = ref(false);
+// Once opened it stays mounted, so re-opening does not re-import the chunk.
+const historyMounted = ref(false);
+watch(historyOpen, (open) => {
+	if (open) historyMounted.value = true;
+});
 
 /**
  * The artboard's strip also carries purchase provenance — "Cliente frecuente ·

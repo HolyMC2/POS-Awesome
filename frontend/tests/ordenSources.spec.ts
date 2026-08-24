@@ -104,3 +104,38 @@ describe("the story is recycled, not re-implemented", () => {
 		expect(service.match(/get_order_story/g)).toHaveLength(1);
 	});
 });
+
+describe("the client view reuses the timeline instead of copying it", () => {
+	it("feeds OrderStory its own payload rather than re-rendering the rows", () => {
+		// `payload` is the seam that exists so a caller with a DIFFERENT
+		// endpoint does not have to re-implement the timeline.
+		const view = read("components/pos/customer/CustomerStory.vue");
+		expect(view).toContain('import OrderStory from "../flows/orden/OrderStory.vue"');
+		expect(view).toContain(":payload=");
+		expect(view).toContain("fetchCustomerStory");
+	});
+
+	it("states the window and the cap the server actually applied", () => {
+		// Ninety days is a scope, not a complete account, and a history that
+		// quietly stops looks like a customer who quietly stopped buying.
+		const view = read("components/pos/customer/CustomerStory.vue");
+		expect(view).toContain("Last {0} days · up to {1} events");
+		expect(view).toContain("story.value?.days");
+	});
+
+	it("opens over the ticket rather than becoming a destination", () => {
+		// The question is asked with the customer standing there and the sale
+		// open. A destination would navigate away from a cart mid-sale.
+		const view = read("components/pos/customer/CustomerStory.vue");
+		expect(view).toContain("v-dialog");
+
+		const registry = read("composables/pos/shell/destinationRegistry.ts");
+		expect(registry).not.toContain("CustomerStory");
+	});
+
+	it("costs the sale nothing until somebody asks for it", () => {
+		const strip = read("components/pos/customer/CustomerStrip.vue");
+		expect(strip).toContain('defineAsyncComponent(() => import("./CustomerStory.vue"))');
+		expect(strip).toContain('v-if="historyMounted"');
+	});
+});

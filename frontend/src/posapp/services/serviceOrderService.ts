@@ -2,6 +2,9 @@ import api from "./api";
 
 import type { OrderStoryPayload } from "../components/pos/flows/orden/orderStory";
 
+// Re-exported so a caller needs one import to both fetch a story and type it.
+export type { OrderStoryPayload };
+
 /**
  * The Orden de servicio read model, from the SPA's side.
  *
@@ -96,6 +99,24 @@ export function fetchOrderStory(doctype: string, name: string) {
 		doctype,
 		name,
 	});
+}
+
+export interface CustomerStoryPayload extends OrderStoryPayload {
+	customer_name?: string;
+	/** The window the server actually looked at, so the UI can state it. */
+	days?: number;
+}
+
+/**
+ * A customer's recent history. `pos_profile` is required — not decoration:
+ * `_scope.assert_customer_in_profile` is this fork's rule for reading a
+ * customer at all, and a story is a bigger disclosure than a name.
+ */
+export function fetchCustomerStory(customer: string, posProfile: string) {
+	return api.call<CustomerStoryPayload>(
+		"posawesome.posawesome.api.customer_story.get_customer_story",
+		{ customer, pos_profile: posProfile },
+	);
 }
 
 let countsPromise: Promise<ServiceOrderCounts> | null = null;
