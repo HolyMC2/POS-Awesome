@@ -140,6 +140,13 @@ bench --site <site> execute frappe.client.set_value --kwargs \
 amount the customer asked for, not at a list rate, and on the mirror
 TEL010 sold 35 times at 14 against a list 10 (40% over) — it would 403.
 
+Flagging categories is not enough on its own. The item the taller app
+bills labour through is named by `Taller App Settings.labor_item_code`,
+not by its group — on the mirror that is `MANO-OBRA-TEST`, sitting in
+`WHP Child` rather than under Servicio Técnico, so the category flag
+missed it and `charge_request_read_model`'s quoted rates would have been
+refused. Read that setting per site and flag the item it names.
+
 Then check what a rate-edit register would now refuse before anyone is
 standing at it — anything the band would have blocked in the last 90 days
 is a candidate for the flag or for a corrected price list. Read the
