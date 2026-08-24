@@ -914,7 +914,13 @@ export default {
 		};
 
 		const paymentRowClass = (item) => (item?.is_credit_note ? "credit-note-row" : "");
-		const isSelected = (item) => (isInvoiceSelected(item) ? "selected-row bg-primary bg-lighten-4" : "");
+		// Just the custom class. It used to append Vuetify's `bg-primary`
+		// (+ a Vuetify-2 relic `bg-lighten-4` that resolves to nothing),
+		// and `bg-primary` drags `color: on-primary` — WHITE text — along
+		// with it while `.selected-row`'s pale-blue `!important` background
+		// wins underneath: a selected row went white-on-white under the
+		// hover overlay. One class, background and ink paired in one place.
+		const isSelected = (item) => (isInvoiceSelected(item) ? "selected-row" : "");
 		const searchSuppliers = async (searchText = "") => {
 			partySearchLoading.value = true;
 			try {
@@ -1346,6 +1352,15 @@ export default {
 <style>
 .selected-row {
 	background-color: #e3f2fd !important;
+	/* Paired ink, per the dark-mode-pairs rule: a background stated with
+	   !important must state its text color too, or whatever utility/theme
+	   class rides along decides it — that is exactly how this row once went
+	   white-on-pale-blue. */
+	color: #1f2937 !important;
+}
+
+.selected-row td {
+	color: #1f2937 !important;
 }
 
 .credit-note-row {
