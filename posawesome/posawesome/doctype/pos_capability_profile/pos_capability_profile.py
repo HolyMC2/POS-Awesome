@@ -42,6 +42,10 @@ KNOWN_CAPABILITIES = (
     "external_document_checkout",
     "tables",
     "tips",
+    # Venta fraccionada (VENTA_FRACCIONADA_GOLDEN_FLOW.md): decimal-qty pads,
+    # sell-by-importe and labeling-scale barcodes. Item eligibility is the
+    # UOM's, this only turns the register affordances on.
+    "fractional",
 )
 
 # How the open ticket is backed. Blank = the shipped retail behaviour (a draft

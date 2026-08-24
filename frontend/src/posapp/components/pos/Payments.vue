@@ -1060,6 +1060,7 @@ const {
 	customer_credit_dict,
 	available_customer_credit,
 	available_points_amount,
+	cashback_accrual,
 	get_available_credit,
 } = useRedemptionLogic({
 	invoiceDoc: computed(() => invoiceStore.invoiceDoc),
@@ -1250,9 +1251,11 @@ const customerWallet = computed(() => ({
 	// stays absent rather than promising an empty wallet.
 	loyaltyValue: invoice_doc.value ? available_points_amount.value : null,
 	storedValueBalance: customer_info.value?.stored_value_balance ?? null,
-	// No read model: `collection_factor` never reaches the client. The line is
-	// absent, not guessed — see `walletSummary.ts`.
-	accrual: null,
+	// Read, never derived: `collection_factor` is a tier value picked from
+	// spend the client does not have. `useRedemptionLogic` fills this from
+	// `stored_value.get_cashback_preview`; it stays null for registers with
+	// cards off, unenrolled customers and offline sales.
+	accrual: cashback_accrual.value,
 	isReturn: Boolean(invoice_doc.value?.is_return),
 }));
 
