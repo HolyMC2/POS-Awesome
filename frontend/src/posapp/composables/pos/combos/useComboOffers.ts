@@ -167,6 +167,21 @@ export const normalizeComboOffer = (raw: any): ComboOffer => ({
 	rate: toNumber(raw?.rate),
 	image: raw?.image ?? null,
 	targets: Array.isArray(raw?.targets) ? raw.targets.map((t: unknown) => String(t)) : [],
+	// The device-model leg. Both halves are carried, because the matcher needs
+	// the attribute NAME to know the values are answers to the question this
+	// register is asking — an offline payload can outlive the storefront config
+	// that produced it. Absent stays absent (`null` / `[]`), and a combo with
+	// neither is universal exactly as before.
+	target_attribute: raw?.target_attribute ? String(raw.target_attribute) : null,
+	// Filtered AFTER trimming and never by `String(v)` alone: `String(null)` is
+	// the four-character string "null", which is truthy and would sit in the
+	// target set as a value no attribute has — matching nothing, but pretending
+	// the combo is targeted.
+	target_attribute_values: Array.isArray(raw?.target_attribute_values)
+		? raw.target_attribute_values
+				.map((v: unknown) => (v === null || v === undefined ? "" : String(v).trim()))
+				.filter(Boolean)
+		: [],
 	priority: toNumber(raw?.priority),
 	components: Array.isArray(raw?.components) ? raw.components.map(normalizeComboComponent) : [],
 });

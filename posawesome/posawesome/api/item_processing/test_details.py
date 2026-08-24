@@ -14,6 +14,11 @@ class AttrDict(dict):
     __setattr__ = dict.__setitem__
 
 
+#: What the entry-attribute stub answers. The default — no attribute, no
+#: values — is a tenant running no storefront, which is most of them.
+ENTRY = {"attribute": None, "values": {}}
+
+
 def _install_framework_stubs():
     frappe_module = types.ModuleType("frappe")
     frappe_utils = types.ModuleType("frappe.utils")
@@ -58,6 +63,18 @@ def _install_dependency_stubs():
     utils_module._ensure_pos_profile = lambda pos_profile: (pos_profile, pos_profile)
     utils_module.log_perf_event = lambda *args, **kwargs: None
     sys.modules["posawesome.posawesome.api.utils"] = utils_module
+
+    # Which phone an item is for. Another module's business, with its own suite
+    # (`api/test_entry_attribute`); here it is a dial — `ENTRY` says what the
+    # shop has configured, so a test can name a device without standing up a
+    # Storefront Profile.
+    entry_attribute_module = types.ModuleType("posawesome.posawesome.api.entry_attribute")
+    entry_attribute_module.ENTRY_ATTRIBUTE_VALUE_FIELD = "entry_attribute_value"
+    entry_attribute_module.entry_attribute_value_map = lambda codes, company=None: (
+        ENTRY.get("attribute"),
+        {code: ENTRY["values"][code] for code in codes if code in ENTRY["values"]},
+    )
+    sys.modules["posawesome.posawesome.api.entry_attribute"] = entry_attribute_module
 
     erpnext_stock_module = types.ModuleType("erpnext.stock.get_item_details")
     erpnext_stock_module.get_item_details = lambda *args, **kwargs: {}
@@ -256,6 +273,64 @@ class TestGetItemDetailNormalization(unittest.TestCase):
         res = run(db_is_stock_item=1, client_flag=0)
         self.assertEqual(res["is_stock_item"], 1)
         self.assertEqual(res["actual_qty"], 7)
+
+    def test_the_payload_carries_the_device_the_item_is_for(self):
+        """`get_item_detail` is what a scan resolves through and what the cart
+        re-reads after a UOM change. If the compatibility fact were only on the
+        bulk path, a line the cashier scanned would lose the phone it is for the
+        moment its UOM changed, and the up-sell strip would go quiet mid-sale.
+        """
+
+        def run():
+            with (
+                patch.object(self.details, "get_stock_availability", return_value=0),
+                patch.object(self.details, "get_batches", return_value=[]),
+                patch.object(self.details.frappe, "get_all", return_value=[]),
+                patch.object(
+                    self.details.frappe.db,
+                    "get_value",
+                    side_effect=lambda doctype, name, field, as_dict=False: (
+                        {
+                            "max_discount": 0,
+                            "allow_negative_stock": 0,
+                            "stock_uom": "Nos",
+                            "is_stock_item": 1,
+                        }
+                        if doctype == "Item" and as_dict
+                        else "MXN"
+                    ),
+                ),
+                patch.dict(
+                    sys.modules,
+                    {
+                        "erpnext.stock.get_item_details": types.SimpleNamespace(
+                            get_item_details=lambda *a, **k: {}
+                        )
+                    },
+                ),
+            ):
+                return self.details.get_item_detail(
+                    {"item_code": "IPN000130"},
+                    doc=self.frappe._dict({"customer": "Test Customer"}),
+                    warehouse="WH-001",
+                    company="Grupo Doco",
+                )
+
+        ENTRY["attribute"] = "Modelos Celulares"
+        ENTRY["values"] = {"IPN000130": "Samsung A01"}
+        try:
+            self.assertEqual(run()["entry_attribute_value"], "Samsung A01")
+
+            # An untagged item on a configured shop, and the same call on a
+            # shop with no storefront, are the same answer: `None`, present,
+            # never a blank string that would read as a device.
+            ENTRY["values"] = {}
+            self.assertIsNone(run()["entry_attribute_value"])
+            ENTRY["attribute"] = None
+            self.assertIsNone(run()["entry_attribute_value"])
+        finally:
+            ENTRY["attribute"] = None
+            ENTRY["values"] = {}
 
 
 if __name__ == "__main__":

@@ -73,6 +73,22 @@ def _install_stubs():
     erpnext_utils.get_exchange_rate = lambda *args, **kwargs: 1
     sys.modules["erpnext.setup.utils"] = erpnext_utils
 
+    # Which phone each item is for. Stubbed rather than imported: it reads
+    # another app's `Storefront Profile`, it has its own suite
+    # (`api/test_entry_attribute`), and importing it for real would drag in
+    # `posawesome/api/__init__.py`, which needs a site. `ENTRY` is the dial.
+    entry_attribute_module = types.ModuleType("posawesome.posawesome.api.entry_attribute")
+    entry_attribute_module.ENTRY_ATTRIBUTE_VALUE_FIELD = "entry_attribute_value"
+    entry_attribute_module.entry_attribute_value_map = lambda codes, company=None: (
+        ENTRY.get("attribute"),
+        {code: ENTRY["values"][code] for code in codes if code in ENTRY["values"]},
+    )
+    sys.modules["posawesome.posawesome.api.entry_attribute"] = entry_attribute_module
+
+
+#: What the entry-attribute stub answers. Default: a tenant with no storefront.
+ENTRY = {"attribute": None, "values": {}}
+
 
 def _load_module():
     module_name = "test_item_fetchers_target"
@@ -390,6 +406,110 @@ class TestFractionEligibilityFacts(unittest.TestCase):
         lookup = self.module.ItemLookupData({}, {}, {}, {}, {}, {}, {}, {})
 
         self.assertEqual(lookup.whole_number_uoms, frozenset())
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class TestEntryAttributeOnTheItemWire(unittest.TestCase):
+    """Which phone each item is for, on the bulk catalogue path.
+
+    This is the fact the combos matcher joins on: a combo declares «Samsung
+    A01» and a cart line has to be able to say whether it IS one. The register
+    fetches the catalogue in pages, so the answer has to ride the row rather
+    than cost a round trip per line — the same argument `must_be_whole_number`
+    made, for the same hot path.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        _install_stubs()
+        cls.module = _load_module()
+
+    def setUp(self):
+        ENTRY["attribute"] = None
+        ENTRY["values"] = {}
+
+    def _lookup(self, values):
+        return self.module.ItemLookupData(
+            price_map={},
+            stock_map={},
+            meta_map={"IPN000130": AttrDict({"name": "IPN000130", "stock_uom": "Nos"})},
+            uom_map={},
+            barcode_map={},
+            batch_map={},
+            serial_map={},
+            bom_map={},
+            entry_attribute_values=values,
+        )
+
+    def test_the_row_carries_the_value_the_variant_declares(self):
+        row = self.module.merge_item_row(
+            {"item_code": "IPN000130"}, self._lookup({"IPN000130": "Samsung A01"}), "MXN", 1
+        )
+
+        self.assertEqual(row["entry_attribute_value"], "Samsung A01")
+
+    def test_an_untagged_item_reads_as_None_rather_than_blank(self):
+        # `None` is "we do not know"; "" would sit in the cart as a device.
+        row = self.module.merge_item_row({"item_code": "IPN000130"}, self._lookup({}), "MXN", 1)
+
+        self.assertIn("entry_attribute_value", row)
+        self.assertIsNone(row["entry_attribute_value"])
+
+    def test_the_source_row_is_not_written_into(self):
+        # `merge_item_row` output is written to the shared get_items cache, and
+        # its input comes out of the fetch caches. Stamping the incoming dict
+        # would reach every later reader of the same object.
+        source = {"item_code": "IPN000130"}
+
+        self.module.merge_item_row(source, self._lookup({"IPN000130": "Samsung A01"}), "MXN", 1)
+
+        self.assertEqual(source, {"item_code": "IPN000130"})
+
+    def test_lookup_data_without_the_field_reads_as_no_devices(self):
+        lookup = self.module.ItemLookupData({}, {}, {}, {}, {}, {}, {}, {})
+
+        self.assertEqual(lookup.entry_attribute_values, {})
+
+    def test_prepare_lookup_asks_the_resolver_with_the_registers_company(self):
+        # Borrowing another company's entry attribute would offer one tenant's
+        # accessories against another tenant's device list.
+        asked = []
+        # Patched on the SUBJECT, not on the stub module: `item_fetchers` binds
+        # the function by `from … import` at load, so replacing the module's
+        # attribute afterwards would leave the subject holding the old one.
+        original = self.module.entry_attribute_value_map
+
+        def spy(codes, company=None):
+            asked.append((tuple(codes), company))
+            return "Modelos Celulares", {"IPN000130": "Samsung A01"}
+
+        self.module.entry_attribute_value_map = spy
+        try:
+            aggregator = self.module.ItemDetailAggregator(
+                {"name": "Doco Ventas", "company": "Grupo Doco", "currency": "MXN"}
+            )
+            lookup = aggregator._prepare_lookup(["IPN000130"])
+        finally:
+            self.module.entry_attribute_value_map = original
+
+        self.assertEqual(asked, [(("IPN000130",), "Grupo Doco")])
+        self.assertEqual(lookup.entry_attribute_values, {"IPN000130": "Samsung A01"})
+
+    def test_no_item_codes_short_circuits_before_the_resolver(self):
+        original = self.module.entry_attribute_value_map
+        calls = []
+        self.module.entry_attribute_value_map = lambda codes, company=None: (
+            calls.append(1),
+            (None, {}),
+        )[1]
+        try:
+            aggregator = self.module.ItemDetailAggregator({"name": "P", "currency": "MXN"})
+            lookup = aggregator._prepare_lookup([])
+        finally:
+            self.module.entry_attribute_value_map = original
+
+        self.assertEqual(calls, [])
+        self.assertEqual(lookup.entry_attribute_values, {})
 
 
 if __name__ == "__main__":

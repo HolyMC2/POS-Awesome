@@ -2,6 +2,11 @@ import frappe
 from frappe.utils import cint, cstr, flt
 from typing import Any, Dict, Optional
 
+from posawesome.posawesome.api.entry_attribute import (
+    ENTRY_ATTRIBUTE_VALUE_FIELD,
+    entry_attribute_value_map,
+)
+
 
 def _get_scale_barcode_settings():
     """Return the Scale Barcode Settings single document if it exists."""
@@ -473,6 +478,14 @@ def get_items_from_barcode(selling_price_list, currency, barcode):
         # through the bulk set: this endpoint resolves exactly one item, and
         # `get_cached_value` is the same call ERPNext makes to enforce it.
         "must_be_whole_number": _uom_must_be_whole_number(resolved_uom),
+        # Which phone this item is for, so a barcode-added line carries the
+        # same compatibility fact a browsed one does. Resolved without a
+        # company because this endpoint takes none — a price list and a
+        # barcode is all it is given. On a single-company tenant, which is
+        # every tenant running a storefront today, that is the same answer.
+        ENTRY_ATTRIBUTE_VALUE_FIELD: entry_attribute_value_map([item_doc.name])[1].get(
+            item_doc.name
+        ),
     }
 
 

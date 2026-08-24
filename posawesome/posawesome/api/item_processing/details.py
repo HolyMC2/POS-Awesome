@@ -1,5 +1,9 @@
 import frappe
 from frappe.utils import cint, nowdate
+from posawesome.posawesome.api.entry_attribute import (
+    ENTRY_ATTRIBUTE_VALUE_FIELD,
+    entry_attribute_value_map,
+)
 from posawesome.posawesome.api.item_fetchers import (
     ItemDetailAggregator,
     get_batches,
@@ -213,6 +217,14 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
         1 if (res.get("uom") or stock_uom) in whole_number_uoms else 0
     )
     res["sub_unit"] = sub_units.get(res.get("uom") or stock_uom)
+
+    # Which phone this item is for. On the single-item path too, for the same
+    # reason `must_be_whole_number` is: a scanned line and a browsed line must
+    # reach the cart carrying the same facts, or the up-sell strip would offer
+    # the compatible combo for one and not the other on the same item.
+    res[ENTRY_ATTRIBUTE_VALUE_FIELD] = entry_attribute_value_map([item_code], company)[1].get(
+        item_code
+    )
 
     return res
 

@@ -24,6 +24,17 @@ that decides which bundles a register shows as combos and which device each
 one targets. When a tenant has created none, every enabled bundle is offered,
 so the feature degrades to "all bundles" rather than to nothing.
 
+A device is nameable two ways and this module puts both on the wire. By ITEM
+(``targets``) — exact, and the right size for a shelf of a dozen handsets. Or
+by the shop's ENTRY ATTRIBUTE (``target_attribute`` / ``target_attribute_values``)
+— the Item Attribute its ``Storefront Profile`` already points at, so one row
+saying «Samsung A01» reaches every accessory the merchant has tagged with that
+model rather than requiring 3 526 item codes. The storefront has answered
+"which phone is this for?" from that attribute since §32; this is the register
+asking the same question of the same data. A tenant with no storefront
+resolves ``target_attribute`` to ``None`` and the register behaves exactly as
+it did before — item targets only.
+
 AVAILABILITY IS NOT ANSWERED HERE. §17.6 leaves ``min(components)`` as an open
 back-end decision, and the frontend's ``comboAvailability.ts`` refuses to
 guess it. This module returns per-component ``actual_qty`` so the rule can be
@@ -37,6 +48,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, nowdate
 
+from posawesome.posawesome.api.entry_attribute import entry_attribute
 from posawesome.posawesome.api.utils import _ensure_pos_profile
 
 
@@ -88,9 +100,10 @@ def _pos_combo_overlay():
         return {}
 
     # `targets` is a child table, so it cannot ride along on the parent query.
+    names = [r["name"] for r in rows]
     target_rows = frappe.get_all(
         "POS Combo Target",
-        filters={"parent": ["in", [r["name"] for r in rows]]},
+        filters={"parent": ["in", names]},
         fields=["parent", "item_code"],
         order_by="parent asc, idx asc",
     )
@@ -98,11 +111,28 @@ def _pos_combo_overlay():
     for row in target_rows:
         targets_by_parent.setdefault(row["parent"], []).append(row["item_code"])
 
+    # Device targets — the same question asked by attribute value instead of by
+    # item code. Guarded on the child doctype existing so a site mid-migration,
+    # or one whose posawesome predates this table, answers with item targets
+    # rather than with a SQL error on the register's first call.
+    attribute_targets_by_parent = {}
+    if frappe.db.exists("DocType", "POS Combo Attribute Target"):
+        for row in frappe.get_all(
+            "POS Combo Attribute Target",
+            filters={"parent": ["in", names]},
+            fields=["parent", "attribute_value"],
+            order_by="parent asc, idx asc",
+        ):
+            value = (row.get("attribute_value") or "").strip()
+            if value:
+                attribute_targets_by_parent.setdefault(row["parent"], []).append(value)
+
     overlay = {}
     for row in rows:
         overlay[row.get("product_bundle")] = {
             "priority": flt(row.get("priority")),
             "targets": targets_by_parent.get(row["name"], []),
+            "attribute_targets": attribute_targets_by_parent.get(row["name"], []),
         }
     return overlay
 
@@ -280,8 +310,19 @@ def get_combos(pos_profile=None, bundles=None, customer=None):
     Returns a list of::
 
         {item_code, item_name, rate, image, priority, targets,
+         target_attribute, target_attribute_values,
          components: [{item_code, item_name, qty, rate, uom,
                        actual_qty, is_stock_item}]}
+
+    ``target_attribute`` is the shop's entry attribute — the Item Attribute its
+    ``Storefront Profile`` names for this company (``api/entry_attribute.py``),
+    or ``None`` when it runs no storefront. ``target_attribute_values`` are the
+    device models the combo declares, and they ride the payload EVEN WHEN the
+    attribute does not resolve: a combo that declares any targeting is not
+    universal, and dropping the values would promote a device-specific combo
+    onto every ticket — the loudest possible failure for a missing optional
+    config. Unresolvable simply means the attribute leg cannot match; the
+    combo then lives or dies by its item ``targets``.
 
     No combo-level availability: see the module docstring.
     """
@@ -294,6 +335,9 @@ def get_combos(pos_profile=None, bundles=None, customer=None):
     warehouse = profile.get("warehouse")
 
     overlay = _pos_combo_overlay()
+    # Resolved ONCE per call, not per combo: it is a profile lookup, and every
+    # combo in the answer shares the same shop.
+    target_attribute = entry_attribute(profile.get("company"))
     wanted = _as_list(bundles)
     rows = _bundle_rows(wanted)
 
@@ -352,6 +396,8 @@ def get_combos(pos_profile=None, bundles=None, customer=None):
                 "image": parent_meta.get("image"),
                 "priority": settings.get("priority", 0),
                 "targets": settings.get("targets", []),
+                "target_attribute": target_attribute,
+                "target_attribute_values": settings.get("attribute_targets", []),
                 "components": components,
             }
         )

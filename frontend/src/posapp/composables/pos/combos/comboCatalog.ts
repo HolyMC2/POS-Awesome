@@ -18,13 +18,16 @@ import {
 	type CartLineStockSource,
 } from "../../../components/pos/invoice/cartLineStock";
 import type { CatalogCategory } from "../shell/useCatalogDrawer";
-import type { ComboAvailabilityContext } from "./comboAvailability";
+import type {
+	ComboAvailabilityComponent,
+	ComboAvailabilityContext,
+} from "./comboAvailability";
 import {
 	availabilityForLine,
 	describeAvailability,
 	type ComboAvailabilityDisplay,
 } from "./comboAvailabilityDisplay";
-import { priceCombo, type ComboComponent } from "./comboPricing";
+import { priceCombo } from "./comboPricing";
 
 /** A sellable combo, as the POS read model delivers it. */
 export interface ComboOffer {
@@ -33,16 +36,64 @@ export interface ComboOffer {
 	item_name: string;
 	/** Price of the combo itself, from the active price list. */
 	rate: number;
-	components: ComboComponent[];
+	/**
+	 * `is_stock_item` rides every component (`combos.py` always sends it) and
+	 * the availability rule is the only thing that reads it, so the widened
+	 * shape is the honest one here — `normalizeComboOffer` has always produced
+	 * it.
+	 */
+	components: ComboAvailabilityComponent[];
 	image?: string | null;
 	/**
 	 * Item codes this combo is FOR — the phone a case+mica+instalación
-	 * protects. Empty means universal (a charger combo fits anything).
+	 * protects. Empty means universal (a charger combo fits anything), UNLESS
+	 * `target_attribute_values` is set: see {@link eligibilityFor}.
 	 */
 	targets?: string[];
+	/**
+	 * The shop's entry attribute — the Item Attribute its Storefront Profile
+	 * names, which is how the storefront has answered "which phone is this
+	 * for?" since §32 («Modelos Celulares» on docomexico).
+	 *
+	 * `null`/absent means the tenant runs no storefront, so the register has
+	 * no attribute facts on its cart lines either and this leg of the matcher
+	 * is inert. It is carried rather than assumed because an OFFLINE cached
+	 * payload can outlive the config that produced it.
+	 */
+	target_attribute?: string | null;
+	/**
+	 * Values of that attribute this combo is FOR — «Samsung A01», «iPhone 13».
+	 *
+	 * One value reaches every accessory the merchant tagged with it, which is
+	 * why this exists beside `targets`: docomexico's catalogue carries 3 526
+	 * cases and 622 micas already tagged by model, and naming them by code is
+	 * a list that goes stale on the next colour.
+	 */
+	target_attribute_values?: string[];
 	/** Ordering hint from `POS Combo`; lower sorts first. */
 	priority?: number;
 }
+
+/**
+ * A ticket line as the matcher needs to see it.
+ *
+ * `entry_attribute_value` rides every item row the register fetches
+ * (`api/entry_attribute.py` writes it on all three item wire paths), so a cart
+ * line built from the catalogue carries it without the shell doing anything.
+ * Absent means the register does not know which device this item is for —
+ * a tenant with no storefront, an untagged item, a template, or a line
+ * restored from a cache written before the field shipped. All four are treated
+ * as NO MATCH rather than as a wildcard, for the reason
+ * `comboAvailability.ts` gives about unknowns: the loud failure is the safe one
+ * and a wildcard would offer the wrong phone's case.
+ */
+export interface CartEntryLike {
+	item_code?: unknown;
+	entry_attribute_value?: unknown;
+}
+
+/** The ticket, as lines or as bare item codes. Both are accepted everywhere. */
+export type CartEntry = string | CartEntryLike;
 
 /** One tile in the "se suele llevar junto" strip. */
 export interface ComboSuggestion {
@@ -112,37 +163,118 @@ export const COMBOS_CATEGORY_TESTID = `catalog-drawer-category-${COMBOS_CATEGORY
 export const buildCombosCategory = (
 	combos: readonly ComboOffer[],
 	translate: (_text: string) => string = (text) => text,
+	cart: readonly CartEntry[] = [],
 ): CatalogCategory | null => {
-	const count = (combos ?? []).length;
-	if (!count) return null;
+	const total = (combos ?? []).length;
+	if (!total) return null;
+	// The count follows the customer's device, with two floors — and both of
+	// them are about the chip continuing to EXIST:
+	//
+	//   - An EMPTY ticket is not a filter. There is no device to narrow by, and
+	//     a fresh ticket is precisely who `featured` exists for: the cashier
+	//     opening the drawer on a new sale should see the whole shelf of
+	//     bundles, not the universal remainder.
+	//   - A ticket that matches NOTHING keeps the whole shelf too. The count is
+	//     a hint; the chip is the way in. This id is a REMEMBERED category, so
+	//     a chip that vanished mid-ticket would strand a cashier who had left
+	//     the drawer on Combos — on a register whose combos are all
+	//     device-specific and whose cart happens to hold a charger, which is
+	//     the exact ticket the 2026-08-23 report was written about.
+	const narrowed = cartCodes(cart).length ? combosForCart(combos, cart).length : 0;
 	return {
 		id: COMBOS_CATEGORY_ID,
 		label: translate("Combos"),
-		count,
+		count: narrowed || total,
 		featured: true,
 	};
 };
 
 /**
+ * Why a combo is relevant to this ticket, or `null` for "it is not".
+ *
+ * ONE rule, in one place, because two surfaces used to ask it separately:
+ * `combosForCart` filtered and `buildSuggestions` re-derived the same `.some()`
+ * to label the tile. Two spellings of one rule is how a matcher and its own
+ * explanation drift apart.
+ *
+ * The rule, in order:
+ *
+ *   1. A combo already on the ticket is never suggested back.
+ *   2. A combo that declares NO targeting of either kind is universal — a
+ *      charger combo fits anything — and is always eligible.
+ *   3. Otherwise it must be FOR something in the cart, matched either by item
+ *      code (`targets`) or by the shop's entry attribute
+ *      (`target_attribute_values` against each line's `entry_attribute_value`).
+ *      The two legs are an OR and neither outranks the other: a merchant who
+ *      names both a handset and a model has said the same thing twice.
+ *
+ * Point 2 is what makes the attribute leg safe to add. A combo carrying only
+ * attribute targets on a register that cannot resolve the attribute stays
+ * TARGETED — it simply never matches — rather than falling back to universal
+ * and appearing on every ticket in the shop. Silence is recoverable; offering
+ * an iPhone bundle to someone buying eggs is not.
+ */
+export type ComboEligibility = "targets-cart-item" | "universal";
+
+const eligibilityFor = (
+	combo: ComboOffer,
+	inCart: ReadonlySet<string>,
+	deviceValues: ReadonlySet<string>,
+): ComboEligibility | null => {
+	if (inCart.has(String(combo?.item_code ?? ""))) return null;
+
+	const targets = combo?.targets ?? [];
+	const attributeTargets = combo?.target_attribute_values ?? [];
+	if (!targets.length && !attributeTargets.length) return "universal";
+
+	if (targets.some((code) => inCart.has(String(code)))) return "targets-cart-item";
+	// Guarded on the attribute NAME, not just on the values: an offline payload
+	// cached while a storefront was configured can outlive it, and matching its
+	// stale values against a cart whose lines carry none would be comparing two
+	// different questions' answers.
+	if (
+		combo?.target_attribute &&
+		attributeTargets.some((value) => deviceValues.has(String(value)))
+	) {
+		return "targets-cart-item";
+	}
+	return null;
+};
+
+/**
+ * The device values on this ticket — which phones the customer is buying for.
+ *
+ * Blank and absent entries are dropped rather than kept as `""`, so a combo
+ * that somehow declared an empty target value cannot match an untagged line.
+ */
+const cartDeviceValues = (cart: readonly CartEntry[]): Set<string> => {
+	const values = new Set<string>();
+	for (const entry of cart ?? []) {
+		if (typeof entry === "string") continue;
+		const value = String(entry?.entry_attribute_value ?? "").trim();
+		if (value) values.add(value);
+	}
+	return values;
+};
+
+/**
  * Combos relevant to what is already on the ticket.
  *
- * A combo `targets` the device it protects. If the cart holds an Honor X8A
- * case, the Honor protection combo is relevant and the iPhone one is not —
- * this is the "filtered by the customer's device" rule §17.6 records for the
- * design. Combos with no targets are universal and always eligible.
+ * If the cart holds an Honor X8A case, the Honor protection combo is relevant
+ * and the iPhone one is not — the "filtered by the customer's device" rule
+ * §17.6 records for the design. See {@link eligibilityFor} for the whole rule.
+ *
+ * Accepts the ticket as lines or as bare item codes. Bare codes carry no
+ * device value, so a caller that passes them gets code matching only — which
+ * is exactly right for the specs and callers that only have codes to give.
  */
 export const combosForCart = (
 	combos: readonly ComboOffer[],
-	cartItemCodes: readonly string[],
+	cart: readonly CartEntry[],
 ): ComboOffer[] => {
-	const inCart = new Set((cartItemCodes ?? []).map(String));
-	return (combos ?? []).filter((combo) => {
-		// Never suggest what is already on the ticket.
-		if (inCart.has(String(combo?.item_code ?? ""))) return false;
-		const targets = combo?.targets ?? [];
-		if (!targets.length) return true;
-		return targets.some((code) => inCart.has(String(code)));
-	});
+	const inCart = new Set(cartCodes(cart));
+	const deviceValues = cartDeviceValues(cart);
+	return (combos ?? []).filter((combo) => eligibilityFor(combo, inCart, deviceValues) !== null);
 };
 
 /**
@@ -219,7 +351,7 @@ export interface BuildSuggestionsInput {
 	/** Loose accessories. See `SuggestionAccessory` — nothing supplies these. */
 	accessories?: readonly SuggestionAccessory[];
 	/** The ticket, as lines or as bare item codes. Both are accepted. */
-	cart?: readonly (string | { item_code?: unknown })[];
+	cart?: readonly CartEntry[];
 	limit?: number;
 	availabilityContext?: ComboAvailabilityContext;
 	lowStockThreshold?: number;
@@ -233,7 +365,7 @@ export interface BuildSuggestionsInput {
  * mapping at the call site and getting it wrong. Blank entries are dropped so
  * a half-built line cannot match a combo whose `targets` is also blank.
  */
-const cartCodes = (cart: readonly (string | { item_code?: unknown })[]): string[] =>
+const cartCodes = (cart: readonly CartEntry[]): string[] =>
 	(cart ?? [])
 		.map((entry) => String((typeof entry === "string" ? entry : entry?.item_code) ?? "").trim())
 		.filter(Boolean);
@@ -260,9 +392,16 @@ export const buildSuggestions = (input: BuildSuggestionsInput): ComboSuggestion[
 	} = input ?? {};
 	const options = { availabilityContext, lowStockThreshold };
 
-	const cartItemCodes = cartCodes(cart);
-	const inCart = new Set(cartItemCodes);
-	const eligible = combosForCart(combos, cartItemCodes);
+	const inCart = new Set(cartCodes(cart));
+	const deviceValues = cartDeviceValues(cart);
+	// Kept WITH its reason rather than re-deriving the reason per tile: the
+	// label the strip reports and the rule that let the combo through are the
+	// same decision, made once.
+	const eligible = (combos ?? [])
+		.map((combo) => ({ combo, reason: eligibilityFor(combo, inCart, deviceValues) }))
+		.filter((entry): entry is { combo: ComboOffer; reason: ComboEligibility } =>
+			entry.reason !== null,
+		);
 
 	const comboTiles: ComboSuggestion[] = eligible
 		// A combo the shelves cannot cover even once is not a suggestion, it is
@@ -270,16 +409,14 @@ export const buildSuggestions = (input: BuildSuggestionsInput): ComboSuggestion[
 		// unsellable leader costs the cashier the primary keyboard action.
 		// Only a KNOWN, bounded zero is dropped: unknown and unbounded stay,
 		// because absence of a reading is not absence of stock.
-		.filter((combo) => {
+		.filter(({ combo }) => {
 			const display = describeAvailability(
 				availabilityForLine(null, combo.components ?? [], options.availabilityContext),
 				{ lowStockThreshold: options.lowStockThreshold },
 			);
 			return !(display.show && display.value === 0);
 		})
-		.map((combo) => {
-		const targeted = (combo.targets ?? []).some((code) => inCart.has(String(code)));
-		return {
+		.map(({ combo, reason }) => ({
 			item_code: combo.item_code,
 			item_name: combo.item_name,
 			rate: toNumber(combo.rate),
@@ -290,10 +427,9 @@ export const buildSuggestions = (input: BuildSuggestionsInput): ComboSuggestion[
 				{ lowStockThreshold: options.lowStockThreshold },
 			),
 			kind: "combo" as const,
-			reason: targeted ? ("targets-cart-item" as const) : ("universal" as const),
+			reason,
 			priority: toNumber(combo.priority),
-		};
-	})
+		}))
 		.sort((a, b) => {
 			if (a.reason !== b.reason) return a.reason === "targets-cart-item" ? -1 : 1;
 			if (a.priority !== b.priority) return a.priority - b.priority;

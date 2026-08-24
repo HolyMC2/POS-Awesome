@@ -54,10 +54,20 @@ _utils_stub = types.ModuleType("posawesome.posawesome.api.utils")
 _utils_stub.__file__ = "<stub>"
 _utils_stub._ensure_pos_profile = lambda profile: (profile or {}, "{}")
 
+# The entry-attribute resolver reads another app's `Storefront Profile`. It has
+# its own suite (`test_entry_attribute`); here it is a dial, so a combos test
+# can say "this shop runs a storefront" in one line instead of building one.
+_entry_stub = types.ModuleType("posawesome.posawesome.api.entry_attribute")
+_entry_stub.__file__ = "<stub>"
+_entry_stub.entry_attribute = lambda company=None: None
+
 combos = _isolated.load_api_module(
     "posawesome_combos",
     "combos.py",
-    extra={"posawesome.posawesome.api.utils": _utils_stub},
+    extra={
+        "posawesome.posawesome.api.utils": _utils_stub,
+        "posawesome.posawesome.api.entry_attribute": _entry_stub,
+    },
 )
 
 PROFILE = {
@@ -71,16 +81,18 @@ PROFILE = {
 class _Db:
     """`frappe.db` for the three lookups the price-list resolution makes."""
 
-    def __init__(self, customers=None, groups=None, price_lists=None):
+    def __init__(self, customers=None, groups=None, price_lists=None, doctypes=()):
         self.customers = customers or {}
         self.groups = groups or {}
         self.price_lists = price_lists or {}
+        self.doctypes = set(doctypes)
         self.calls = []
 
     def exists(self, doctype, name=None):
-        # No `POS Combo` doctype → no overlay → every enabled bundle is
-        # offered, which is the shape these pricing tests care about.
-        return False
+        # No `POS Combo` doctype by default → no overlay → every enabled bundle
+        # is offered, which is the shape the pricing tests care about. The
+        # targeting tests hand in the doctypes they need.
+        return doctype == "DocType" and name in self.doctypes
 
     def get_value(self, doctype, name, fieldname=None, as_dict=False, **kwargs):
         self.calls.append((doctype, name, fieldname))
@@ -96,12 +108,13 @@ class _Db:
         return None
 
 
-def _fake_frappe(db):
+def _fake_frappe(db, rows=None):
     module = types.SimpleNamespace()
     module.db = db
+    table = {**_ROWS, **(rows or {})}
 
     def get_all(doctype, filters=None, fields=None, order_by=None, **kwargs):
-        return _ROWS.get(doctype, [])
+        return table.get(doctype, [])
 
     module.get_all = get_all
     module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
@@ -129,11 +142,15 @@ _ROWS = {
 
 
 @contextlib.contextmanager
-def _world(price_rows, db=None):
+def _world(price_rows, db=None, rows=None, entry_attribute=None):
     """Run `get_combos` against fixed Item Price rows, recording the fetch.
 
     `price_rows` are handed over in the order `_fetch_item_prices`' ORDER BY
     produces them — generic first, the requested customer's last.
+
+    `entry_attribute` is what the shop's Storefront Profile resolves to; `None`
+    (the default) is a tenant that runs no storefront, which is the state every
+    pricing test above assumes and the state most tenants are in.
     """
     db = db if db is not None else _Db()
     fetches = []
@@ -171,8 +188,8 @@ def _world(price_rows, db=None):
     }
 
     with mock.patch.dict(sys.modules, package_stubs), mock.patch.object(
-        combos, "frappe", _fake_frappe(db)
-    ):
+        combos, "frappe", _fake_frappe(db, rows)
+    ), mock.patch.object(combos, "entry_attribute", lambda company=None: entry_attribute):
         yield fetches, db
 
 
@@ -452,7 +469,17 @@ class ShapeTests(unittest.TestCase):
 
         self.assertEqual(
             sorted(combo),
-            ["components", "image", "item_code", "item_name", "priority", "rate", "targets"],
+            [
+                "components",
+                "image",
+                "item_code",
+                "item_name",
+                "priority",
+                "rate",
+                "target_attribute",
+                "target_attribute_values",
+                "targets",
+            ],
         )
         self.assertEqual(
             sorted(combo["components"][0]),
@@ -468,6 +495,84 @@ class ShapeTests(unittest.TestCase):
         self.assertIsInstance(combo["rate"], float)
         for component in combo["components"]:
             self.assertIsInstance(component["rate"], float)
+
+
+# The `POS Combo` overlay, as a site that has actually configured one returns
+# it. `POS Combo` autonames to its bundle, so the overlay row's name and its
+# `product_bundle` are both the Product Bundle's name.
+_OVERLAY_ROWS = {
+    "POS Combo": [{"name": "PB-001", "product_bundle": "PB-001", "priority": 10}],
+    "POS Combo Target": [{"parent": "PB-001", "item_code": "Samsung Galaxy A15"}],
+    "POS Combo Attribute Target": [
+        {"parent": "PB-001", "attribute_value": "Samsung A01"},
+        {"parent": "PB-001", "attribute_value": "  Samsung A10  "},
+        # Blank rows exist on hand-edited docs; they must not reach the client,
+        # where an empty string would sit in the target set as a value that
+        # matches nothing while still making the combo look targeted.
+        {"parent": "PB-001", "attribute_value": "   "},
+        {"parent": "PB-001", "attribute_value": None},
+    ],
+}
+
+_CONFIGURED = ("POS Combo", "POS Combo Attribute Target")
+
+
+class AttributeTargetingTests(unittest.TestCase):
+    """`target_attribute` / `target_attribute_values` — the device leg."""
+
+    def _combo(self, doctypes=_CONFIGURED, entry_attribute="Modelos Celulares", rows=_OVERLAY_ROWS):
+        with _world(GENERIC, db=_Db(doctypes=doctypes), rows=rows, entry_attribute=entry_attribute):
+            return combos.get_combos(pos_profile=PROFILE)[0]
+
+    def test_the_shops_attribute_and_the_combos_models_both_ride(self):
+        combo = self._combo()
+        self.assertEqual(combo["target_attribute"], "Modelos Celulares")
+        self.assertEqual(combo["target_attribute_values"], ["Samsung A01", "Samsung A10"])
+
+    def test_item_targets_are_untouched_beside_them(self):
+        self.assertEqual(self._combo()["targets"], ["Samsung Galaxy A15"])
+
+    def test_blank_rows_never_reach_the_client(self):
+        self.assertNotIn("", self._combo()["target_attribute_values"])
+
+    def test_a_shop_with_no_storefront_gets_a_null_attribute(self):
+        combo = self._combo(entry_attribute=None)
+        self.assertIsNone(combo["target_attribute"])
+
+    def test_but_its_declared_models_still_ride(self):
+        # If the values were dropped with the attribute, a device-specific
+        # combo would arrive at the client with no targeting of any kind — and
+        # `eligibilityFor` would read that as UNIVERSAL and offer it on every
+        # ticket in the shop. Silence is recoverable; that is not.
+        combo = self._combo(entry_attribute=None)
+        self.assertEqual(combo["target_attribute_values"], ["Samsung A01", "Samsung A10"])
+
+    def test_a_site_without_the_child_doctype_answers_with_item_targets(self):
+        # Mid-migration, or a posawesome older than this table. Asking for it
+        # would be a SQL error on the register's first call.
+        combo = self._combo(doctypes=("POS Combo",))
+        self.assertEqual(combo["target_attribute_values"], [])
+        self.assertEqual(combo["targets"], ["Samsung Galaxy A15"])
+
+    def test_no_overlay_at_all_leaves_both_legs_empty(self):
+        # The degradation the module promises: a tenant who never opened the
+        # combo settings still gets every enabled bundle, targeted at nothing.
+        combo = self._combo(doctypes=(), rows={})
+        self.assertEqual(combo["targets"], [])
+        self.assertEqual(combo["target_attribute_values"], [])
+        self.assertEqual(combo["target_attribute"], "Modelos Celulares")
+
+    def test_the_narrow_component_endpoint_still_answers_components_only(self):
+        with _world(GENERIC, db=_Db(doctypes=_CONFIGURED), rows=_OVERLAY_ROWS,
+                    entry_attribute="Modelos Celulares"):
+            answer = combos.get_combo_components(
+                bundles='["COMBO-DESAYUNO"]', pos_profile=PROFILE
+            )
+        self.assertEqual(sorted(answer), ["COMBO-DESAYUNO"])
+        self.assertEqual(
+            sorted(answer["COMBO-DESAYUNO"][0]),
+            ["actual_qty", "is_stock_item", "item_code", "item_name", "qty", "rate", "uom"],
+        )
 
 
 if __name__ == "__main__":

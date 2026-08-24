@@ -1191,8 +1191,11 @@ export default {
 			customer: selectedCustomer,
 			eventBus,
 		});
+		// The cart goes in so the chip's count follows the customer's device —
+		// the same eligibility the strip uses. The chip itself never
+		// disappears; see `buildCombosCategory`.
 		const catalogCategories = computed(() => {
-			const category = buildCombosCategory(comboOffers.value, __);
+			const category = buildCombosCategory(comboOffers.value, __, invoiceDoc.value?.items || []);
 			return category ? [category] : [];
 		});
 		// Named, not positional: the cart's LINES used to be passed where

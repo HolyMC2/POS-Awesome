@@ -13,6 +13,11 @@ from frappe.query_builder import DocType
 from frappe.query_builder.functions import Sum
 from frappe.utils import cint, flt, nowdate
 
+from posawesome.posawesome.api.entry_attribute import (
+    ENTRY_ATTRIBUTE_VALUE_FIELD,
+    entry_attribute_value_map,
+)
+
 
 def _resolve_cache_ttl(ttl: Optional[int]) -> int:
     """Return a numeric TTL value while falling back to the default window."""
@@ -598,6 +603,11 @@ class ItemLookupData:
     # ineligible, so an old payload hides the affordance rather than misplacing
     # it — the failure direction that costs nobody money.
     whole_number_uoms: frozenset = frozenset()
+    # {item_code: value} for the shop's entry attribute — which phone each
+    # accessory is for. Empty when the tenant runs no storefront, which is most
+    # of them; the client then has no attribute facts and combos fall back to
+    # item targeting, exactly as before. See `api/entry_attribute.py`.
+    entry_attribute_values: Dict[str, str] = field(default_factory=dict)
     # Sub-unit entry factors by pricing UOM. Defaulted for the same reason:
     # empty means "offer no entry chips", which is the pre-existing behaviour.
     sub_units: Dict[str, Any] = field(default_factory=dict)
@@ -743,6 +753,12 @@ def merge_item_row(
             # kilo. `None` when the UOM has no everyday sub-unit, and the pad
             # then shows no entry chips at all.
             "sub_unit": lookup_data.sub_units.get(item.get("uom") or meta.get("stock_uom")),
+            # Which phone this accessory is for, in the shop's own words. `None`
+            # for a tenant with no storefront, for a template, and for anything
+            # the merchant has not tagged — all three mean "the register does
+            # not know", and the combo matcher treats not knowing as no match
+            # rather than as a wildcard.
+            ENTRY_ATTRIBUTE_VALUE_FIELD: lookup_data.entry_attribute_values.get(item_code),
             "standard_rate": meta.get("standard_rate"),
             # valuation_rate (cost) is written to the shared get_items cache
             # here, then stripped per-request for non-supervisors on the way
@@ -942,6 +958,14 @@ class ItemDetailAggregator:
             whole_number_uoms=get_whole_number_uoms(
                 self.pos_profile.get("posa_server_cache_duration") if use_cache else None
             ),
+            # NOT routed through `_cached_fetch`: the map is per page of item
+            # codes, so a cache keyed on it would be a new entry every page and
+            # never a hit. The lookup itself is one indexed read of `Item
+            # Variant Attribute`, and it is skipped entirely — no query at all
+            # — when the shop names no entry attribute.
+            entry_attribute_values=entry_attribute_value_map(
+                item_codes_tuple, self.pos_profile.get("company")
+            )[1],
             sub_units=get_sub_unit_factors(
                 self.pos_profile.get("posa_server_cache_duration") if use_cache else None
             ),

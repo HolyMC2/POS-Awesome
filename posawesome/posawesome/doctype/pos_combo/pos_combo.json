@@ -13,7 +13,8 @@
   "presentation_section",
   "priority",
   "targeting_section",
-  "targets"
+  "targets",
+  "attribute_targets"
  ],
  "fields": [
   {
@@ -59,6 +60,13 @@
    "fieldtype": "Table",
    "label": "Targets",
    "options": "POS Combo Target"
+  },
+  {
+   "description": "Device models this combo is FOR, named by the shop's entry attribute (the Item Attribute its Storefront Profile points at — phones → «Modelos Celulares»). One row covers every accessory carrying that value, so «Samsung A01» does not have to be spelled out case by case. Counts as targeting: a combo with rows here is no longer universal.",
+   "fieldname": "attribute_targets",
+   "fieldtype": "Table",
+   "label": "Device Targets",
+   "options": "POS Combo Attribute Target"
   }
  ],
  "index_web_pages_for_search": 1,
