@@ -3,6 +3,7 @@ from frappe.utils import cint, nowdate
 from posawesome.posawesome.api.item_fetchers import (
     ItemDetailAggregator,
     get_batches,
+    get_sub_unit_factors,
     get_whole_number_uoms,
 )
 from posawesome.posawesome.api.item_processing.stock import get_stock_availability
@@ -202,13 +203,16 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
     # change, so an answer only on the bulk path would make the decimal pad
     # appear on browse and vanish on scan.
     whole_number_uoms = get_whole_number_uoms()
+    sub_units = get_sub_unit_factors()
     for uom_data in uoms:
         uom_data["must_be_whole_number"] = 1 if uom_data.get("uom") in whole_number_uoms else 0
+        uom_data["sub_unit"] = sub_units.get(uom_data.get("uom"))
 
     res["item_uoms"] = uoms
     res["must_be_whole_number"] = (
         1 if (res.get("uom") or stock_uom) in whole_number_uoms else 0
     )
+    res["sub_unit"] = sub_units.get(res.get("uom") or stock_uom)
 
     return res
 

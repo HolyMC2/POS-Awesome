@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import frappe
@@ -283,6 +283,46 @@ def get_uoms(item_codes: Sequence[str], ttl: Optional[int] = None):
     return _cached_fetch("uom", ttl, _fetch_uoms, (tuple(item_codes),))
 
 
+# The everyday smaller unit a cashier actually types in, per pricing unit.
+#
+# The PAIRING is a product decision and belongs in code: `UOM Conversion Factor`
+# will happily convert a kilo into micrograms, and a grams/micrograms chip pair
+# would be true and useless. The FACTOR is never a product decision — it is read
+# from that table below, so a shop that prices in Pound is not handed 1000 by a
+# developer who knew what a kilo was.
+SUB_UNIT_PAIRS = (
+    ("Kg", "Gram"),
+    ("Litre", "Millilitre"),
+    ("Meter", "Centimeter"),
+)
+
+
+def _fetch_sub_unit_factors():
+    """Resolve each pairing against ERPNext's conversion table, or drop it."""
+
+    factors = {}
+    for base, sub in SUB_UNIT_PAIRS:
+        value = frappe.db.get_value(
+            "UOM Conversion Factor", {"from_uom": base, "to_uom": sub}, "value"
+        )
+        # > 1 or nothing: a factor of 1 is the same unit and below 1 is a LARGER
+        # one, and either would make the entry chip multiply where it divides.
+        if value and flt(value) > 1:
+            factors[base] = {"uom": sub, "per_unit": flt(value)}
+    return factors
+
+
+def get_sub_unit_factors(ttl: Optional[int] = None) -> Dict[str, Any]:
+    """Sub-unit entry factors by pricing UOM — `{"Kg": {"uom": "Gram", "per_unit": 1000.0}}`.
+
+    A missing row simply omits the pairing, and the SPA then offers no entry
+    chip for that UOM: the register keeps the single-unit field it has today.
+    Silence is the right answer for a site whose UOM table was pruned.
+    """
+
+    return _cached_fetch("uom_sub", ttl, _fetch_sub_unit_factors, ()) or {}
+
+
 def _fetch_whole_number_uoms():
     """UOM names that refuse a fractional qty."""
 
@@ -558,6 +598,9 @@ class ItemLookupData:
     # ineligible, so an old payload hides the affordance rather than misplacing
     # it — the failure direction that costs nobody money.
     whole_number_uoms: frozenset = frozenset()
+    # Sub-unit entry factors by pricing UOM. Defaulted for the same reason:
+    # empty means "offer no entry chips", which is the pre-existing behaviour.
+    sub_units: Dict[str, Any] = field(default_factory=dict)
 
 
 def _select_price(
@@ -587,6 +630,7 @@ def _ensure_stock_uom(
     uoms: List[Dict[str, Any]],
     stock_uom: Optional[str],
     whole_number_uoms: Optional[frozenset] = None,
+    sub_units: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """Make sure the stock UOM is always present in the UOM listing.
 
@@ -596,18 +640,26 @@ def _ensure_stock_uom(
     """
 
     whole = whole_number_uoms or frozenset()
+    subs = sub_units or {}
     rebuilt: List[Dict[str, Any]] = []
     seen = False
     for row in uoms or []:
         uom = row.get("uom")
         seen = seen or uom == stock_uom
-        rebuilt.append({**row, "must_be_whole_number": 1 if uom in whole else 0})
+        rebuilt.append(
+            {
+                **row,
+                "must_be_whole_number": 1 if uom in whole else 0,
+                "sub_unit": subs.get(uom),
+            }
+        )
     if stock_uom and not seen:
         rebuilt.append(
             {
                 "uom": stock_uom,
                 "conversion_factor": 1.0,
                 "must_be_whole_number": 1 if stock_uom in whole else 0,
+                "sub_unit": subs.get(stock_uom),
             }
         )
     return rebuilt
@@ -658,6 +710,7 @@ def merge_item_row(
         lookup_data.uom_map.get(item_code, []),
         meta.get("stock_uom"),
         lookup_data.whole_number_uoms,
+        lookup_data.sub_units,
     )
     price_row = _select_price(
         lookup_data.price_map.get(item_code, {}), item.get("uom"), meta.get("stock_uom")
@@ -686,6 +739,10 @@ def merge_item_row(
             "must_be_whole_number": 1
             if (item.get("uom") or meta.get("stock_uom")) in lookup_data.whole_number_uoms
             else 0,
+            # The unit a cashier may type this line in instead — grams under a
+            # kilo. `None` when the UOM has no everyday sub-unit, and the pad
+            # then shows no entry chips at all.
+            "sub_unit": lookup_data.sub_units.get(item.get("uom") or meta.get("stock_uom")),
             "standard_rate": meta.get("standard_rate"),
             # valuation_rate (cost) is written to the shared get_items cache
             # here, then stripped per-request for non-supervisors on the way
@@ -885,6 +942,9 @@ class ItemDetailAggregator:
             whole_number_uoms=get_whole_number_uoms(
                 self.pos_profile.get("posa_server_cache_duration") if use_cache else None
             ),
+            sub_units=get_sub_unit_factors(
+                self.pos_profile.get("posa_server_cache_duration") if use_cache else None
+            ),
         )
 
     def build_details(self, items_data: Sequence[Dict[str, object]]) -> List[Dict[str, object]]:
@@ -921,6 +981,7 @@ __all__ = [
     "get_barcodes",
     "get_uoms",
     "get_whole_number_uoms",
+    "get_sub_unit_factors",
     "get_batches",
     "get_serials",
     "get_bom_costs",

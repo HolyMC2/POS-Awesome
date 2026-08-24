@@ -45,6 +45,9 @@ def _install_dependency_stubs():
     # Venta fraccionada's eligibility fact. Empty here, which is the answer for
     # a site where no UOM is whole-number — every UOM then reports 0.
     item_fetchers_module.get_whole_number_uoms = lambda *args, **kwargs: frozenset()
+    # No sub-unit pairings resolved: every UOM reports `None`, which is what a
+    # site whose UOM Conversion Factor rows are missing looks like.
+    item_fetchers_module.get_sub_unit_factors = lambda *args, **kwargs: {}
     sys.modules["posawesome.posawesome.api.item_fetchers"] = item_fetchers_module
 
     stock_module = types.ModuleType("posawesome.posawesome.api.item_processing.stock")
@@ -142,7 +145,14 @@ class TestGetItemDetailNormalization(unittest.TestCase):
         # to travel with each option rather than with the item.
         self.assertEqual(
             result["item_uoms"],
-            [{"uom": "Nos", "conversion_factor": 1.0, "must_be_whole_number": 0}],
+            [
+                {
+                    "uom": "Nos",
+                    "conversion_factor": 1.0,
+                    "must_be_whole_number": 0,
+                    "sub_unit": None,
+                }
+            ],
         )
         self.assertEqual(result["must_be_whole_number"], 0)
         self.assertIsInstance(captured["item"], self.frappe._dict)

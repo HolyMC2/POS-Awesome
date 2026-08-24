@@ -214,13 +214,24 @@ class TestFractionEligibilityFacts(unittest.TestCase):
             [{"uom": "Kg", "conversion_factor": 1.0}, {"uom": "Box", "conversion_factor": 12.0}],
             "Kg",
             frozenset({"Box"}),
+            {"Kg": {"uom": "Gram", "per_unit": 1000.0}},
         )
 
         self.assertEqual(
             rows,
             [
-                {"uom": "Kg", "conversion_factor": 1.0, "must_be_whole_number": 0},
-                {"uom": "Box", "conversion_factor": 12.0, "must_be_whole_number": 1},
+                {
+                    "uom": "Kg",
+                    "conversion_factor": 1.0,
+                    "must_be_whole_number": 0,
+                    "sub_unit": {"uom": "Gram", "per_unit": 1000.0},
+                },
+                {
+                    "uom": "Box",
+                    "conversion_factor": 12.0,
+                    "must_be_whole_number": 1,
+                    "sub_unit": None,
+                },
             ],
         )
 
@@ -228,7 +239,15 @@ class TestFractionEligibilityFacts(unittest.TestCase):
         rows = self.module._ensure_stock_uom([], "Nos", frozenset({"Nos"}))
 
         self.assertEqual(
-            rows, [{"uom": "Nos", "conversion_factor": 1.0, "must_be_whole_number": 1}]
+            rows,
+            [
+                {
+                    "uom": "Nos",
+                    "conversion_factor": 1.0,
+                    "must_be_whole_number": 1,
+                    "sub_unit": None,
+                }
+            ],
         )
 
     def test_ensure_stock_uom_does_not_write_into_the_cached_rows(self):
@@ -294,6 +313,76 @@ class TestFractionEligibilityFacts(unittest.TestCase):
             {u["uom"]: u["must_be_whole_number"] for u in row["item_uoms"]},
             {"Kg": 0, "Box": 1},
         )
+
+    def test_sub_unit_factors_come_from_the_conversion_table(self):
+        # The PAIRING is a product decision in code; the FACTOR is never one.
+        queried = []
+
+        def fake_get_value(doctype, filters, fieldname=None, **kwargs):
+            queried.append((doctype, filters, fieldname))
+            return {"Kg": 1000.0, "Litre": 1000.0, "Meter": 100.0}.get(filters.get("from_uom"))
+
+        self.module.frappe.db.get_value = fake_get_value
+
+        factors = self.module.get_sub_unit_factors()
+
+        self.assertEqual(factors["Kg"], {"uom": "Gram", "per_unit": 1000.0})
+        self.assertEqual(factors["Litre"], {"uom": "Millilitre", "per_unit": 1000.0})
+        self.assertEqual(factors["Meter"], {"uom": "Centimeter", "per_unit": 100.0})
+        self.assertEqual(queried[0][0], "UOM Conversion Factor")
+        self.assertEqual(queried[0][1], {"from_uom": "Kg", "to_uom": "Gram"})
+
+    def test_a_missing_conversion_row_drops_the_pairing_entirely(self):
+        # No row, no chip: the register keeps the single-unit field it has
+        # rather than being handed a factor nobody read out of the data.
+        self.module.frappe.db.get_value = lambda *args, **kwargs: None
+
+        self.assertEqual(self.module.get_sub_unit_factors(), {})
+
+    def test_a_factor_that_is_not_smaller_is_refused(self):
+        # 1 is the same unit and below 1 is a LARGER one; either would make the
+        # entry chip multiply where it has to divide.
+        self.module.frappe.db.get_value = lambda doctype, filters, fieldname=None, **kwargs: (
+            1.0 if filters.get("from_uom") == "Kg" else 0.001
+        )
+
+        self.assertEqual(self.module.get_sub_unit_factors(), {})
+
+    def test_ensure_stock_uom_attaches_the_sub_unit_per_row(self):
+        rows = self.module._ensure_stock_uom(
+            [{"uom": "Kg", "conversion_factor": 1.0}],
+            "Kg",
+            frozenset(),
+            {"Kg": {"uom": "Gram", "per_unit": 1000.0}},
+        )
+
+        self.assertEqual(rows[0]["sub_unit"], {"uom": "Gram", "per_unit": 1000.0})
+
+    def test_merge_item_row_answers_the_sub_unit_for_the_LINE_uom(self):
+        lookup = self.module.ItemLookupData(
+            price_map={},
+            stock_map={},
+            meta_map={"ITEM-KG": AttrDict({"name": "ITEM-KG", "stock_uom": "Kg"})},
+            uom_map={"ITEM-KG": [{"uom": "Kg", "conversion_factor": 1.0}]},
+            barcode_map={},
+            batch_map={},
+            serial_map={},
+            bom_map={},
+            sub_units={"Kg": {"uom": "Gram", "per_unit": 1000.0}},
+        )
+
+        by_kg = self.module.merge_item_row({"item_code": "ITEM-KG"}, lookup, "MXN", 1)
+        by_box = self.module.merge_item_row(
+            {"item_code": "ITEM-KG", "uom": "Box"}, lookup, "MXN", 1
+        )
+
+        self.assertEqual(by_kg["sub_unit"], {"uom": "Gram", "per_unit": 1000.0})
+        self.assertIsNone(by_box["sub_unit"])
+
+    def test_lookup_data_without_the_field_reads_as_no_sub_units(self):
+        lookup = self.module.ItemLookupData({}, {}, {}, {}, {}, {}, {}, {})
+
+        self.assertEqual(lookup.sub_units, {})
 
     def test_lookup_data_without_the_field_reads_as_nothing_whole(self):
         # The eight-positional constructor predates the field; an old caller

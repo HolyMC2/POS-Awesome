@@ -134,7 +134,7 @@ describe("weighing by hand", () => {
 		await wrapper.get('[data-testid="fracc-confirm"]').trigger("click");
 
 		expect(confirmed().qty).toBe(0.475);
-		expect(confirmed().note).toBe("Weighed 0.475 Kg · gross 0.495 · tare 0.020");
+		expect(confirmed().note).toBe("Weighed 0.475 Kg · gross 0.495 Kg · tare 0.020 Kg");
 	});
 
 	it("leaves no note when there was no tare to explain", async () => {
@@ -208,6 +208,142 @@ describe("the register's precision", () => {
 
 		await wrapper.get('[data-testid="fracc-confirm"]').trigger("click");
 		expect(confirmed().qty).toBe(0.31);
+	});
+});
+
+describe("typing in grams", () => {
+	const GRAM_FACTS = { ...KG_FACTS, subUnit: { uom: "Gram", per_unit: 1000 } };
+
+	const mountGrams = (props: Record<string, any> = {}) =>
+		mountPad({ uomFacts: GRAM_FACTS, ...props });
+
+	it("offers both units, and starts on the one the cashier reads off a scale", () => {
+		const wrapper = mountGrams();
+
+		expect(wrapper.find('[data-testid="fracc-entry-units"]').exists()).toBe(true);
+		expect(wrapper.get('[data-testid="fracc-unit-pricing"]').text()).toBe("Kg");
+		expect(wrapper.get('[data-testid="fracc-unit-sub"]').text()).toBe("Gram");
+		expect(wrapper.get('[data-testid="fracc-unit-sub"]').classes()).toContain(
+			"posa-fracc-pad__unit-chip--on",
+		);
+		expect(wrapper.get('[data-testid="fracc-gross-unit"]').text()).toBe("Gram");
+	});
+
+	it("states both units so the conversion is legible", async () => {
+		const wrapper = mountGrams();
+		await wrapper.get('[data-testid="fracc-gross"]').setValue("475");
+
+		expect(readout(wrapper)).toBe("475 Gram = 0.475 Kg · $76.00");
+	});
+
+	it("records a plain qty in the PRICING unit", async () => {
+		const wrapper = mountGrams();
+		await wrapper.get('[data-testid="fracc-gross"]').setValue("475");
+		await wrapper.get('[data-testid="fracc-confirm"]').trigger("click");
+
+		expect(confirmed().qty).toBe(0.475);
+		expect(confirmed().note).toBe("Weighed 475 Gram = 0.475 Kg");
+	});
+
+	it("takes the tare in the same unit as the weight", async () => {
+		const wrapper = mountGrams();
+		expect(wrapper.get('[data-testid="fracc-tara-unit"]').text()).toBe("Gram");
+
+		await wrapper.get('[data-testid="fracc-gross"]').setValue("495");
+		await wrapper.get('[data-testid="fracc-tara"]').setValue("20");
+
+		expect(readout(wrapper)).toBe("495 − 20 = 475 Gram = 0.475 Kg · $76.00");
+
+		await wrapper.get('[data-testid="fracc-confirm"]').trigger("click");
+		expect(confirmed().qty).toBe(0.475);
+	});
+
+	it("switches units by CONVERTING what is already typed", async () => {
+		const wrapper = mountGrams();
+		await wrapper.get('[data-testid="fracc-gross"]').setValue("475");
+		await wrapper.get('[data-testid="fracc-unit-pricing"]').trigger("click");
+
+		expect((wrapper.get('[data-testid="fracc-gross"]').element as HTMLInputElement).value).toBe(
+			"0.475",
+		);
+		expect(readout(wrapper)).toBe("0.475 Kg · $76.00");
+
+		await wrapper.get('[data-testid="fracc-unit-sub"]').trigger("click");
+		expect((wrapper.get('[data-testid="fracc-gross"]').element as HTMLInputElement).value).toBe(
+			"475",
+		);
+	});
+
+	it("converts the tare along with the weight", async () => {
+		const wrapper = mountGrams();
+		await wrapper.get('[data-testid="fracc-gross"]').setValue("495");
+		await wrapper.get('[data-testid="fracc-tara"]').setValue("20");
+		await wrapper.get('[data-testid="fracc-unit-pricing"]').trigger("click");
+
+		expect((wrapper.get('[data-testid="fracc-tara"]').element as HTMLInputElement).value).toBe(
+			"0.02",
+		);
+		expect(readout(wrapper)).toBe("0.495 − 0.020 = 0.475 Kg · $76.00");
+	});
+
+	it("floors onto a two-decimal register and shows what it will actually sell", async () => {
+		// 475 g on a float_precision-2 site is 0.47 kg. The readout says so
+		// rather than quoting a weight the invoice will not contain.
+		const wrapper = mountGrams({
+			uomFacts: { ...GRAM_FACTS, precision: 2 },
+			formatFloat: (value: any, precision?: number) =>
+				Number(value ?? 0).toFixed(precision === undefined ? 2 : precision),
+		});
+		await wrapper.get('[data-testid="fracc-gross"]').setValue("475");
+
+		expect(readout(wrapper)).toBe("475 Gram = 0.47 Kg · $75.20");
+
+		await wrapper.get('[data-testid="fracc-confirm"]').trigger("click");
+		expect(confirmed().qty).toBe(0.47);
+	});
+
+	it("refuses an entry too small for the register to hold", async () => {
+		const wrapper = mountGrams({ uomFacts: { ...GRAM_FACTS, precision: 2 } });
+		await wrapper.get('[data-testid="fracc-gross"]').setValue("5");
+
+		expect(readout(wrapper)).toBe("Less than the smallest quantity this register can sell.");
+	});
+
+	it("leaves the importe mode alone — it is priced, not weighed", async () => {
+		const wrapper = mountGrams();
+		await wrapper.get('[data-testid="fracc-mode-importe"]').trigger("click");
+
+		expect(wrapper.find('[data-testid="fracc-entry-units"]').exists()).toBe(false);
+		await wrapper.get('[data-testid="fracc-importe"]').setValue("50");
+		expect(readout(wrapper)).toBe("$50.00 → 0.312 Kg · charged $49.92");
+	});
+});
+
+describe("a line with no sub-unit", () => {
+	it("shows no chips at all and behaves exactly as before", async () => {
+		// No `UOM Conversion Factor` row → no chip. The register keeps the
+		// single-unit field it has today rather than being handed a guess.
+		const wrapper = mountPad();
+
+		expect(wrapper.find('[data-testid="fracc-entry-units"]').exists()).toBe(false);
+		expect(wrapper.get('[data-testid="fracc-gross-unit"]').text()).toBe("Kg");
+
+		await wrapper.get('[data-testid="fracc-gross"]').setValue("0.475");
+		expect(readout(wrapper)).toBe("0.475 Kg · $76.00");
+	});
+
+	it("ignores a malformed sub-unit rather than trusting it", () => {
+		const wrapper = mountPad({ uomFacts: { ...KG_FACTS, subUnit: { uom: "Gram" } } });
+
+		expect(wrapper.find('[data-testid="fracc-entry-units"]').exists()).toBe(false);
+	});
+
+	it("ignores a factor that is not smaller than the pricing unit", () => {
+		const wrapper = mountPad({
+			uomFacts: { ...KG_FACTS, subUnit: { uom: "Tonne", per_unit: 0.001 } },
+		});
+
+		expect(wrapper.find('[data-testid="fracc-entry-units"]').exists()).toBe(false);
 	});
 });
 

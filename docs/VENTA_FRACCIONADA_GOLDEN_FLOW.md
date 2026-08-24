@@ -45,6 +45,18 @@ refused today by ERPNext — keep that as the backstop and test it.
   the qty stepper offers a decimal pad («0.475») instead of ±1 for them.
 - Tara: a simple minus field in the same pad (peso bruto − tara),
   computed client-side, shown on the line note per the artboard.
+- **Sub-unit entry (added 2026-08-24).** A cashier reading a scale says «475»,
+  not «cero punto cuatro siete cinco», so the weight mode carries entry-unit
+  chips — `Kg | Gram`, `Litre | Millilitre`, `Meter | Centimeter` — and opens on
+  the sub-unit. The tara is typed in the same unit, and the readout states both
+  («475 Gram = 0.475 Kg · $76.00») because the conversion is the one step the
+  operator cannot check against a total in their head.
+  The PAIRING is a product decision in code (`SUB_UNIT_PAIRS`); the FACTOR is
+  read from ERPNext's `UOM Conversion Factor` table and never invented. **No
+  conversion row ⇒ no chip**, and the pad keeps the single-unit field it had.
+  Conversion happens BEFORE the single floor-to-precision, so a gram entry
+  quantizes on the line's own grid; grams are an input gesture exactly like the
+  importe, and the line still records plain qty in the pricing UOM.
 
 ## 4. Embedded barcode
 

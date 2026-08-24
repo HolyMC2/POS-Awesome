@@ -187,7 +187,7 @@ describe("what the pad puts on the line", () => {
 		await wrapper.get('[data-testid="fracc-tara"]').setValue("0.020");
 		await wrapper.get('[data-testid="fracc-confirm"]').trigger("click");
 
-		expect(onUpdateLineNote.mock.calls[0]?.[1]).toBe("Weighed 0.475 Kg · gross 0.495 · tare 0.020");
+		expect(onUpdateLineNote.mock.calls[0]?.[1]).toBe("Weighed 0.475 Kg · gross 0.495 Kg · tare 0.020 Kg");
 	});
 
 	it("does not overwrite a note the line already carries", async () => {

@@ -77,13 +77,51 @@ export interface UomFractionFacts {
 	mustBeWholeNumber?: unknown;
 	/** Optional per-register float precision; capped to 0–6. */
 	precision?: unknown;
+	/**
+	 * The everyday smaller unit a cashier thinks in — grams under a kilo,
+	 * millilitres under a litre. Server-supplied and NEVER inferred here; see
+	 * `readSubUnit`.
+	 */
+	subUnit?: unknown;
 }
 
+/**
+ * A smaller unit the same quantity can be typed in.
+ *
+ * `perUnit` is how many of it make ONE pricing unit — 1000 g to the kilo. The
+ * factor comes from ERPNext's `UOM Conversion Factor` table and rides the item
+ * payload; nothing in the SPA computes it. That matters more than it looks:
+ * "everyone knows a kilo is 1000 grams" is true, and it is exactly the
+ * reasoning that would later hand a pound shop a factor of 1000.
+ */
+export interface SubUnit {
+	uom: string;
+	perUnit: number;
+}
+
+/**
+ * Validate a server-supplied sub-unit, or answer null.
+ *
+ * A factor of 1 or less is not a sub-unit — it is the same unit or a LARGER
+ * one, and offering it as a sub-unit would multiply where it should divide.
+ * Absent, malformed or unnamed all answer null, and a null sub-unit simply
+ * means the line offers no entry chips: today's behaviour.
+ */
 const toFiniteOrNull = (value: unknown): number | null => {
 	if (value === null || value === undefined || value === "") return null;
 	const parsed = typeof value === "number" ? value : parseFloat(String(value));
 	return Number.isFinite(parsed) ? parsed : null;
 };
+
+export function readSubUnit(raw: unknown): SubUnit | null {
+	if (!raw || typeof raw !== "object") return null;
+	const candidate = raw as { uom?: unknown; perUnit?: unknown; per_unit?: unknown };
+	const uom = String(candidate.uom ?? "").trim();
+	if (!uom) return null;
+	const perUnit = toFiniteOrNull(candidate.perUnit ?? candidate.per_unit);
+	if (perUnit === null || !(perUnit > 1)) return null;
+	return { uom, perUnit };
+}
 
 /**
  * Frappe `Check` fields reach the SPA as 1/0, "1"/"0" or true/false depending
@@ -276,6 +314,75 @@ export function quantizeQty(qty: number, qtyPrecision: number): QuantizeResult {
 	if (!(quantized > 0)) return { ok: false, reason: "below_minimum_qty" };
 
 	return { ok: true, qty: quantized, requested, rounded: quantized !== requested };
+}
+
+/**
+ * Decimals kept while subtracting a tare in sub-units.
+ *
+ * Deliberately generous and NOT the line's precision: a cashier types whole
+ * grams, and the subtraction is an intermediate step. The floor that actually
+ * governs happens once, after the conversion, at the precision the line keeps —
+ * rounding twice is how 495 − 20 stops being 475.
+ */
+export const SUB_UNIT_ENTRY_PRECISION = 6;
+
+export interface SubUnitQtyInput {
+	/** What was typed, in the SUB-unit (475, meaning 475 g). */
+	value: number;
+	subUnit: SubUnit;
+	/** Decimals the LINE keeps, in the pricing unit. */
+	qtyPrecision?: number;
+}
+
+export interface SubUnitQtyOk {
+	ok: true;
+	/** What the line records — always in the PRICING unit. */
+	qty: number;
+	/** Echoed back for the readout: «475 g = 0.475 kg». */
+	entered: number;
+	subUnit: SubUnit;
+	/** The register's precision could not hold the exact conversion. */
+	rounded: boolean;
+}
+
+export type SubUnitQtyResult = SubUnitQtyOk | { ok: false; reason: QuantizeRefusal };
+
+/**
+ * «475 g» → 0.475 kg, in the unit the line is priced in.
+ *
+ * Grams are an INPUT GESTURE, exactly like an importe: nothing downstream ever
+ * sees them. Convert first, then floor once at the line's precision — the order
+ * matters, because flooring in grams and then converting would quantize against
+ * the wrong grid and hand back a number the line cannot hold anyway.
+ *
+ * The floor keeps the same direction everything else here does: on a register
+ * that keeps two decimals, 475 g becomes 0.47 kg rather than 0.48. The readout
+ * says both numbers so the operator can see the five grams the shop absorbed
+ * rather than discovering them on the ticket.
+ */
+export function qtyFromSubUnit(input: SubUnitQtyInput): SubUnitQtyResult {
+	const subUnit = readSubUnit(input.subUnit);
+	if (!subUnit) return { ok: false, reason: "qty_not_positive" };
+
+	const value = toFiniteOrNull(input.value);
+	if (value === null || value <= 0) return { ok: false, reason: "qty_not_positive" };
+
+	const converted = value / subUnit.perUnit;
+	const quantized = quantizeQty(converted, input.qtyPrecision ?? DEFAULT_QTY_PRECISION);
+	if (!quantized.ok) return { ok: false, reason: quantized.reason };
+
+	return {
+		ok: true,
+		qty: quantized.qty,
+		entered: value,
+		subUnit,
+		rounded: quantized.rounded,
+	};
+}
+
+/** The pricing-unit quantity shown back in sub-units, for the readout. */
+export function toSubUnit(qty: number, subUnit: SubUnit): number {
+	return roundTo(qty * subUnit.perUnit, SUB_UNIT_ENTRY_PRECISION);
 }
 
 export type TaraRefusal =

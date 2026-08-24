@@ -609,6 +609,7 @@ const memoDeps = computed(() => {
 		// flips whether the row offers a pad at all.
 		fractionalPadOpen.value,
 		props.item.must_be_whole_number,
+		props.item.sub_unit,
 	];
 	debugLog(`[CartItemRow] memoDeps updated for ${props.item.item_code}`, {
 		uom: props.item.uom,
@@ -659,6 +660,10 @@ const uomFacts = computed(() => ({
 	uom: props.item.uom || props.item.stock_uom,
 	mustBeWholeNumber: props.item.must_be_whole_number,
 	precision: registerPrecision.value,
+	// Grams under a kilo, millilitres under a litre — the factor comes from
+	// ERPNext's UOM Conversion Factor table on the item payload. Absent means
+	// the pad offers no entry chips, which is what it did before.
+	subUnit: props.item.sub_unit,
 }));
 
 const qtyLength = computed(() => String(Math.abs(props.item.qty || 0)).replace(".", "").length);

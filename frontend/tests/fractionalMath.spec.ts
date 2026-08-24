@@ -6,9 +6,12 @@ import {
 	isFractionEligible,
 	netFromTara,
 	qtyFromImporte,
+	qtyFromSubUnit,
 	qtyPrecisionForUom,
 	quantizeQty,
+	readSubUnit,
 	roundTo,
+	toSubUnit,
 } from "../src/posapp/utils/fractionalMath";
 
 describe("decimal shifting", () => {
@@ -323,6 +326,186 @@ describe("quantizing a measured qty", () => {
 		expect(quantizeQty(0.312, 99)).toMatchObject({ qty: 0.312 });
 		expect(quantizeQty(0.312, -1)).toEqual({ ok: false, reason: "below_minimum_qty" });
 		expect(quantizeQty(1.5, NaN)).toMatchObject({ qty: 1.5 });
+	});
+});
+
+describe("reading a sub-unit off the payload", () => {
+	it("accepts a real conversion in either key spelling", () => {
+		expect(readSubUnit({ uom: "Gram", perUnit: 1000 })).toEqual({ uom: "Gram", perUnit: 1000 });
+		expect(readSubUnit({ uom: "Gram", per_unit: 1000 })).toEqual({ uom: "Gram", perUnit: 1000 });
+		expect(readSubUnit({ uom: "Millilitre", per_unit: "1000" })).toEqual({
+			uom: "Millilitre",
+			perUnit: 1000,
+		});
+	});
+
+	it("refuses a factor that is not actually smaller", () => {
+		// 1 or less is the same unit or a LARGER one; offering it as a sub-unit
+		// would multiply where it must divide.
+		expect(readSubUnit({ uom: "Kg", perUnit: 1 })).toBeNull();
+		expect(readSubUnit({ uom: "Tonne", perUnit: 0.001 })).toBeNull();
+		expect(readSubUnit({ uom: "Gram", perUnit: -1000 })).toBeNull();
+	});
+
+	it("answers null for anything absent or malformed — no chip, today's entry", () => {
+		expect(readSubUnit(null)).toBeNull();
+		expect(readSubUnit(undefined)).toBeNull();
+		expect(readSubUnit({})).toBeNull();
+		expect(readSubUnit({ uom: "Gram" })).toBeNull();
+		expect(readSubUnit({ perUnit: 1000 })).toBeNull();
+		expect(readSubUnit({ uom: "  ", perUnit: 1000 })).toBeNull();
+		expect(readSubUnit({ uom: "Gram", perUnit: "many" })).toBeNull();
+		expect(readSubUnit("Gram")).toBeNull();
+	});
+});
+
+describe("typing in grams", () => {
+	const GRAM = { uom: "Gram", perUnit: 1000 };
+	const ML = { uom: "Millilitre", perUnit: 1000 };
+	const CM = { uom: "Centimeter", perUnit: 100 };
+
+	it("is the cashier's 475 g on a three-decimal register", () => {
+		expect(qtyFromSubUnit({ value: 475, subUnit: GRAM })).toEqual({
+			ok: true,
+			qty: 0.475,
+			entered: 475,
+			subUnit: GRAM,
+			rounded: false,
+		});
+	});
+
+	it("converts millilitres and centimetres by their own factors", () => {
+		expect(qtyFromSubUnit({ value: 250, subUnit: ML })).toMatchObject({ qty: 0.25 });
+		expect(qtyFromSubUnit({ value: 45, subUnit: CM })).toMatchObject({ qty: 0.45 });
+	});
+
+	it("floors onto a register that keeps two decimals, and says it rounded", () => {
+		expect(qtyFromSubUnit({ value: 475, subUnit: GRAM, qtyPrecision: 2 })).toEqual({
+			ok: true,
+			qty: 0.47,
+			entered: 475,
+			subUnit: GRAM,
+			rounded: true,
+		});
+	});
+
+	it("converts BEFORE it floors", () => {
+		// Flooring in grams first would quantize against the wrong grid: 1 g is
+		// already below a two-decimal kilo, so the line would take 0.00 rather
+		// than refuse.
+		expect(qtyFromSubUnit({ value: 1, subUnit: GRAM, qtyPrecision: 2 })).toEqual({
+			ok: false,
+			reason: "below_minimum_qty",
+		});
+		expect(qtyFromSubUnit({ value: 1, subUnit: GRAM, qtyPrecision: 3 })).toMatchObject({
+			qty: 0.001,
+		});
+	});
+
+	it("refuses an empty or nonsensical entry", () => {
+		expect(qtyFromSubUnit({ value: 0, subUnit: GRAM })).toEqual({
+			ok: false,
+			reason: "qty_not_positive",
+		});
+		expect(qtyFromSubUnit({ value: -475, subUnit: GRAM })).toEqual({
+			ok: false,
+			reason: "qty_not_positive",
+		});
+		expect(qtyFromSubUnit({ value: NaN, subUnit: GRAM })).toEqual({
+			ok: false,
+			reason: "qty_not_positive",
+		});
+	});
+
+	it("refuses when the sub-unit itself is not usable", () => {
+		expect(qtyFromSubUnit({ value: 475, subUnit: { uom: "", perUnit: 1000 } })).toEqual({
+			ok: false,
+			reason: "qty_not_positive",
+		});
+	});
+
+	it("shows a pricing-unit quantity back in sub-units without binary noise", () => {
+		expect(toSubUnit(0.475, GRAM)).toBe(475);
+		expect(toSubUnit(0.3, GRAM)).toBe(300);
+		expect(toSubUnit(1.245, GRAM)).toBe(1245);
+		expect(toSubUnit(0.25, ML)).toBe(250);
+	});
+});
+
+/**
+ * The sub-unit path is a second door onto the same line, so it is swept the
+ * same way the importe path is: whatever the cashier types in grams, the line
+ * must never end up holding MORE product than was entered.
+ */
+describe("typing in grams, swept", () => {
+	const nextSeed = (seed: number) => (seed * 1103515245 + 12345) % 2147483648;
+	const FACTORS = [
+		{ uom: "Gram", perUnit: 1000 },
+		{ uom: "Millilitre", perUnit: 1000 },
+		{ uom: "Centimeter", perUnit: 100 },
+	];
+
+	it("never converts to more product than was typed", () => {
+		let seed = 4711;
+		let refused = 0;
+		let accepted = 0;
+
+		for (const subUnit of FACTORS) {
+			for (const precision of [0, 1, 2, 3, 4]) {
+				for (let iteration = 0; iteration < 1200; iteration += 1) {
+					seed = nextSeed(seed);
+					// Whole sub-units up to 5 kg, the way a scale reads.
+					const value = 1 + (seed % 5000);
+					const result = qtyFromSubUnit({ value, subUnit, qtyPrecision: precision });
+
+					if (!result.ok) {
+						expect(result.reason).toBe("below_minimum_qty");
+						expect(value / subUnit.perUnit).toBeLessThan(Math.pow(10, -precision));
+						refused += 1;
+						continue;
+					}
+					accepted += 1;
+					// 1. Never more product than the cashier typed.
+					expect(result.qty).toBeLessThanOrEqual(value / subUnit.perUnit + 1e-9);
+					// 2. Representable at the line's precision.
+					expect(roundTo(result.qty, precision)).toBe(result.qty);
+					// 3. Tight: one more step would exceed what was typed.
+					const step = Math.pow(10, -precision);
+					expect(result.qty + step).toBeGreaterThan(value / subUnit.perUnit - 1e-9);
+					// 4. `rounded` tells the truth, so the readout can too.
+					expect(result.rounded).toBe(result.qty !== value / subUnit.perUnit);
+				}
+			}
+		}
+		expect(accepted).toBeGreaterThan(0);
+		expect(refused).toBeGreaterThan(0);
+	});
+
+	it("leaves the importe rule untouched when the same line is priced from it", () => {
+		// Grams change the ENTRY, never the money rule. A qty arrived at through
+		// grams and then priced must obey exactly the two invariants the importe
+		// path does.
+		let seed = 8191;
+		for (let iteration = 0; iteration < 4000; iteration += 1) {
+			seed = nextSeed(seed);
+			const rate = roundTo(0.5 + (seed % 40000) / 100, 2);
+			seed = nextSeed(seed);
+			const importe = roundTo(1 + (seed % 20000) / 100, 2);
+
+			const derived = qtyFromImporte({ importe, rate });
+			if (!derived.ok) continue;
+			expect(derived.charged).toBeLessThanOrEqual(derived.asked);
+			expect(derived.qty * rate).toBeLessThanOrEqual(derived.asked + 1e-9);
+
+			// And the same quantity expressed in grams round-trips to itself.
+			const grams = toSubUnit(derived.qty, { uom: "Gram", perUnit: 1000 });
+			const back = qtyFromSubUnit({
+				value: grams,
+				subUnit: { uom: "Gram", perUnit: 1000 },
+				qtyPrecision: 3,
+			});
+			if (back.ok) expect(back.qty).toBe(derived.qty);
+		}
 	});
 });
 

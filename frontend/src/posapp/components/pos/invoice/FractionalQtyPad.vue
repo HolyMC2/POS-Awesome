@@ -34,9 +34,31 @@
 			</div>
 
 			<div v-if="mode === 'weight'" class="posa-fracc-pad__body">
-				<label class="posa-fracc-pad__label" for="fracc-gross-input">
-					{{ __("Net weight on the scale") }}
-				</label>
+				<div class="posa-fracc-pad__row">
+					<label class="posa-fracc-pad__label" for="fracc-gross-input">
+						{{ __("Net weight on the scale") }}
+					</label>
+					<div v-if="subUnit" class="posa-fracc-pad__units" data-testid="fracc-entry-units">
+						<button
+							type="button"
+							class="posa-fracc-pad__unit-chip"
+							:class="{ 'posa-fracc-pad__unit-chip--on': entryUnit === 'pricing' }"
+							data-testid="fracc-unit-pricing"
+							@click="setEntryUnit('pricing')"
+						>
+							{{ uomLabel }}
+						</button>
+						<button
+							type="button"
+							class="posa-fracc-pad__unit-chip"
+							:class="{ 'posa-fracc-pad__unit-chip--on': entryUnit === 'sub' }"
+							data-testid="fracc-unit-sub"
+							@click="setEntryUnit('sub')"
+						>
+							{{ subUnit.uom }}
+						</button>
+					</div>
+				</div>
 				<div class="posa-fracc-pad__field">
 					<input
 						id="fracc-gross-input"
@@ -49,7 +71,7 @@
 						data-testid="fracc-gross"
 						@keydown.enter.prevent="confirm"
 					/>
-					<span class="posa-fracc-pad__unit">{{ uomLabel }}</span>
+					<span class="posa-fracc-pad__unit" data-testid="fracc-gross-unit">{{ entryUnitLabel }}</span>
 				</div>
 
 				<div class="posa-fracc-pad__tara">
@@ -67,7 +89,7 @@
 							data-testid="fracc-tara"
 							@keydown.enter.prevent="confirm"
 						/>
-						<span class="posa-fracc-pad__unit">{{ uomLabel }}</span>
+						<span class="posa-fracc-pad__unit" data-testid="fracc-tara-unit">{{ entryUnitLabel }}</span>
 					</div>
 				</div>
 			</div>
@@ -143,8 +165,12 @@ import { computed, ref, watch } from "vue";
 import {
 	netFromTara,
 	qtyFromImporte,
+	qtyFromSubUnit,
 	quantizeQty,
 	qtyPrecisionForUom,
+	readSubUnit,
+	SUB_UNIT_ENTRY_PRECISION,
+	toSubUnit,
 	type UomFractionFacts,
 } from "../../../utils/fractionalMath";
 
@@ -169,8 +195,11 @@ const emit = defineEmits<{
 const __ = (window as any).__ || ((text: string, args?: any[]) => text);
 
 type PadMode = "weight" | "importe";
+/** Which unit the weight fields are being typed in — kilos or grams. */
+type EntryUnit = "pricing" | "sub";
 
 const mode = ref<PadMode>("weight");
+const entryUnit = ref<EntryUnit>("pricing");
 const grossInput = ref("");
 const taraInput = ref("");
 const importeInput = ref("");
@@ -181,6 +210,19 @@ const qtyPrecision = computed(() => qtyPrecisionForUom(props.uomFacts));
 const rate = computed(() => Number(props.item?.rate ?? props.item?.price_list_rate ?? 0));
 const currencyPrecision = computed(() =>
 	Number.isFinite(props.currencyPrecision as number) ? (props.currencyPrecision as number) : 2,
+);
+
+/**
+ * The everyday smaller unit this line may be typed in, or null.
+ *
+ * Server-supplied (`UOM Conversion Factor`), never inferred: no row, no chips,
+ * and the pad keeps the single-unit field it had. A shop whose UOM table has
+ * been pruned gets today's behaviour rather than a wrong factor.
+ */
+const subUnit = computed(() => readSubUnit(props.uomFacts?.subUnit));
+
+const entryUnitLabel = computed(() =>
+	entryUnit.value === "sub" && subUnit.value ? subUnit.value.uom : uomLabel.value,
 );
 
 const rateLabel = computed(() =>
@@ -210,8 +252,16 @@ const resolved = computed<Resolved>(() => {
 		const gross = toNumber(grossInput.value);
 		if (!Number.isFinite(gross)) return { ok: false, sentence: "" };
 
+		// Everything up to the conversion happens in the unit the cashier is
+		// TYPING in — a 20 g tare is subtracted from 495 g, not from 0.495 kg —
+		// and at a precision generous enough that the subtraction is lossless.
+		// The one floor that governs comes after, at the line's own precision.
+		const typingInSub = entryUnit.value === "sub" && !!subUnit.value;
+		const entryPrecision = typingInSub ? SUB_UNIT_ENTRY_PRECISION : qtyPrecision.value;
+		const entryLabel = entryUnitLabel.value;
+
 		const tara = taraInput.value === "" ? 0 : toNumber(taraInput.value);
-		const net = netFromTara({ bruto: gross, tara, qtyPrecision: qtyPrecision.value });
+		const net = netFromTara({ bruto: gross, tara, qtyPrecision: entryPrecision });
 		if (!net.ok) {
 			if (net.reason === "tara_exceeds_bruto") {
 				return { ok: false, sentence: __("The tare is heavier than what is on the scale.") };
@@ -225,39 +275,64 @@ const resolved = computed<Resolved>(() => {
 			return { ok: false, sentence: "" };
 		}
 
-		const quantized = quantizeQty(net.neto, qtyPrecision.value);
-		if (!quantized.ok) {
-			return {
-				ok: false,
-				sentence: __("Less than the smallest quantity this register can sell."),
-			};
+		let qty: number;
+		if (typingInSub) {
+			const converted = qtyFromSubUnit({
+				value: net.neto,
+				subUnit: subUnit.value!,
+				qtyPrecision: qtyPrecision.value,
+			});
+			if (!converted.ok) {
+				return {
+					ok: false,
+					sentence: __("Less than the smallest quantity this register can sell."),
+				};
+			}
+			qty = converted.qty;
+		} else {
+			const quantized = quantizeQty(net.neto, qtyPrecision.value);
+			if (!quantized.ok) {
+				return {
+					ok: false,
+					sentence: __("Less than the smallest quantity this register can sell."),
+				};
+			}
+			qty = quantized.qty;
 		}
 
-		const weightText = `${props.formatFloat(quantized.qty, qtyPrecision.value)} ${uomLabel.value}`.trim();
+		const pricingText = `${props.formatFloat(qty, qtyPrecision.value)} ${uomLabel.value}`.trim();
 		const amountText = `${props.currencySymbol(props.displayCurrency)}${props.formatCurrency(
-			quantized.qty * rate.value,
+			qty * rate.value,
 		)}`;
+		// «475 g = 0.475 Kg» — both numbers, always, when the entry unit is not
+		// the pricing unit. The conversion is the step the operator cannot check
+		// in their head against a total, so it is the one that must be legible.
+		const entryText = typingInSub
+			? `${props.formatFloat(net.neto, 0)} ${entryLabel} = ${pricingText}`
+			: pricingText;
 		const taraText =
 			tara > 0
-				? __("tare {0}", [props.formatFloat(tara, qtyPrecision.value)])
+				? __("tare {0}", [`${props.formatFloat(tara, typingInSub ? 0 : qtyPrecision.value)} ${entryLabel}`])
 				: "";
 
 		return {
 			ok: true,
-			qty: quantized.qty,
+			qty,
 			note: taraText
 				? __("Weighed {0} · gross {1} · {2}", [
-						weightText,
-						props.formatFloat(net.bruto, qtyPrecision.value),
+						entryText,
+						`${props.formatFloat(net.bruto, typingInSub ? 0 : qtyPrecision.value)} ${entryLabel}`,
 						taraText,
 					])
-				: "",
+				: typingInSub
+					? __("Weighed {0}", [entryText])
+					: "",
 			sentence: taraText
-				? `${props.formatFloat(net.bruto, qtyPrecision.value)} − ${props.formatFloat(
+				? `${props.formatFloat(net.bruto, typingInSub ? 0 : qtyPrecision.value)} − ${props.formatFloat(
 						tara,
-						qtyPrecision.value,
-					)} = ${weightText} · ${amountText}`
-				: `${weightText} · ${amountText}`,
+						typingInSub ? 0 : qtyPrecision.value,
+					)} = ${entryText} · ${amountText}`
+				: `${entryText} · ${amountText}`,
 		};
 	}
 
@@ -306,18 +381,50 @@ const setMode = (next: PadMode) => {
 	mode.value = next;
 };
 
+/**
+ * Switching kg ⇄ g CONVERTS what is already typed rather than clearing it.
+ *
+ * A cashier who has typed 0.475 and then realises they wanted grams is telling
+ * the register the unit, not retracting the number. Clearing would make the
+ * chips feel like a trap; re-typing 475 is the thing the chip exists to avoid.
+ */
+const setEntryUnit = (next: EntryUnit) => {
+	if (next === entryUnit.value || !subUnit.value) return;
+	const convert = (raw: string) => {
+		const value = toNumber(raw);
+		if (!Number.isFinite(value)) return raw;
+		return String(
+			next === "sub"
+				? toSubUnit(value, subUnit.value!)
+				: Number((value / subUnit.value!.perUnit).toFixed(SUB_UNIT_ENTRY_PRECISION)),
+		);
+	};
+	if (grossInput.value !== "") grossInput.value = convert(grossInput.value);
+	if (taraInput.value !== "") taraInput.value = convert(taraInput.value);
+	entryUnit.value = next;
+};
+
 const reset = () => {
 	mode.value = "weight";
+	// Grams by default when the line has them: a cashier reading a scale says
+	// «475», not «cero punto cuatro siete cinco».
+	entryUnit.value = subUnit.value ? "sub" : "pricing";
 	grossInput.value = "";
 	taraInput.value = "";
 	importeInput.value = "";
 };
 
+// `immediate` so a pad that is ALREADY open when it mounts picks its default
+// entry unit. Without it the initial ref wins and a kilo line opens on kilos
+// even where the register offers grams — invisible in the app (the dialog is
+// mounted closed and flipped open) and exactly the shape of bug that only ever
+// shows up somewhere else.
 watch(
 	() => props.modelValue,
 	(open) => {
 		if (open) reset();
 	},
+	{ immediate: true },
 );
 
 const cancel = () => {
@@ -404,6 +511,40 @@ const confirm = () => {
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 	color: var(--pos-text-muted, #667085);
+}
+
+.posa-fracc-pad__row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.posa-fracc-pad__units {
+	display: flex;
+	gap: 4px;
+	flex: 0 0 auto;
+}
+
+/* The entry-unit chips are a QUIET control — the loud choice on this pad is
+   peso-vs-importe above them. Same two-declaration shape as the mode buttons,
+   for the same cascade reason. */
+.posa-fracc-pad__unit-chip {
+	min-width: 34px;
+	height: 24px;
+	padding: 0 8px;
+	border: 1px solid var(--pos-border, #e2e6ec);
+	border-radius: 12px;
+	cursor: pointer;
+	font-size: 11.5px;
+	background: transparent;
+	color: var(--pos-text-muted, #667085);
+}
+
+.posa-fracc-pad__unit-chip.posa-fracc-pad__unit-chip--on {
+	border-color: var(--pos-primary, #0097a7);
+	color: var(--pos-primary, #00646f);
+	font-weight: 700;
 }
 
 .posa-fracc-pad__field {
