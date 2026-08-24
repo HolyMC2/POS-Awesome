@@ -3,8 +3,12 @@
 		class="cards sticky-summary-card mb-0 py-2 px-3 rounded-lg pos-themed-card"
 		:class="{ 'sticky-summary-card--dock-safe': useCompactSaleDock }"
 	>
-		<!-- Tab identity (cafetería "name on the cup") — hidden unless the vertical
-		     preset enables the tab_identity capability; retail never renders this. -->
+		<!-- The counter row: tab identity («name on the cup») and service type on
+		     ONE dense line. They rendered as two full-width stacked solo fields
+		     — «too big and out of place» (Marco, 08-23) — on a card where every
+		     other control is a chip. Hidden unless the vertical preset enables
+		     the capabilities; retail never renders any of it. -->
+		<div v-if="showTabName || showServiceType" class="summary-counter-row">
 		<div
 			v-if="showTabName"
 			class="summary-tab-name d-flex ga-2"
@@ -37,8 +41,7 @@
 				hide-details
 				autocomplete="off"
 				data-test="guest-count-field"
-				style="max-width: 96px"
-				class="summary-field sleek-field pos-themed-input"
+				class="summary-field sleek-field pos-themed-input summary-guest-count"
 			/>
 		</div>
 
@@ -61,6 +64,7 @@
 				clearable
 				class="summary-field sleek-field pos-themed-input"
 			/>
+		</div>
 		</div>
 
 		<!-- THE ORDER IS THE ARTBOARD'S, read top to bottom (`Main.dc.html`
@@ -1201,9 +1205,47 @@ defineExpose({
 	}
 }
 
-.summary-tab-name,
-.summary-service-type {
+/* One dense line for the counter facts. The row owns the spacing; the two
+ * blocks inside keep their own v-ifs (and their data-test hooks) because
+ * either capability can exist without the other. The fields drop to chip
+ * height — on this card everything else is a 32px control, and two 56px
+ * solo fields stacked mid-card read as a form that wandered in. */
+.summary-counter-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
 	margin-bottom: 8px;
+	min-width: 0;
+}
+
+.summary-tab-name {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.summary-guest-count {
+	flex: 0 0 96px;
+}
+
+.summary-service-type {
+	flex: 0 1 230px;
+	min-width: 160px;
+}
+
+.summary-counter-row :deep(.v-field) {
+	min-height: 38px;
+	font-size: 0.85rem;
+	border-radius: 10px;
+}
+
+.summary-counter-row :deep(.v-field__input) {
+	min-height: 38px;
+	padding-top: 4px;
+	padding-bottom: 4px;
+}
+
+.summary-counter-row :deep(.v-field__prepend-inner .v-icon) {
+	font-size: 17px;
 }
 
 .summary-hero {
