@@ -234,11 +234,12 @@ describe("the band's presses", () => {
 		expect(eventBus.emit).toHaveBeenCalledWith("floor_charge_selected_account");
 	});
 
-	it("keeps COLLECT AND CLOSE wired — the retail golden flow ends there", () => {
+	it("keeps CHARGE AND PRINT wired — the retail golden flow ends there", () => {
 		const { wrapper, eventBus } = mountShell();
 
 		(wrapper.vm as any).onBandPrimary("sale.collectAndClose");
 
-		expect(eventBus.emit).toHaveBeenCalledWith("queue_submit_payment_shortcut", { print: false });
+		// print: true — the band's primary is the printing close.
+		expect(eventBus.emit).toHaveBeenCalledWith("queue_submit_payment_shortcut", { print: true });
 	});
 });

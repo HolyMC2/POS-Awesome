@@ -292,10 +292,11 @@ describe("settle seam route coverage", () => {
 	 * the seam-bearing `submitInvoice`.
 	 */
 	const SUBMIT_ENTRYPOINTS: Array<[string, RegExp]> = [
-		// Cobro's «Cobrar e imprimir» — the button the P1 was reproduced on.
+		// Cobro's «Cobrar sin imprimir» — the outlined paper-free close (the
+		// printing close moved to the band's primary, same seam either way).
 		[
-			"cobro charge-and-print button",
-			/data-testid="cobro-charge-and-print"[\s\S]{0,200}@click="submit\(undefined, false, true\)"/,
+			"cobro charge-no-print button",
+			/data-testid="cobro-charge-no-print"[\s\S]{0,200}@click="submit\(undefined, false, false\)"/,
 		],
 		// The hosted/compact payment sheet's own charge button.
 		[

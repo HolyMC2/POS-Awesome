@@ -193,7 +193,7 @@ export function resolveBandState(input: BandInput): BandState {
 					tone: "warning",
 					value: round2(-delta),
 					labelKey: "Still owed",
-					primaryAction: { id: "sale.collectAndClose", labelKey: "COLLECT AND CLOSE" },
+					primaryAction: { id: "sale.collectAndClose", labelKey: "CHARGE AND PRINT" },
 					primaryEnabled: false,
 				};
 			}
@@ -203,7 +203,13 @@ export function resolveBandState(input: BandInput): BandState {
 				tone: "positive",
 				value: delta,
 				labelKey: "Change to give",
-				primaryAction: { id: "sale.collectAndClose", labelKey: "COLLECT AND CLOSE" },
+				// The register's default close PRINTS (owner direction
+				// 2026-08-24): the ticket is the receipt the customer walks
+				// away with, so paper is the primary and the no-paper close
+				// is the outlined option on the Cobro column. The action id
+				// stays `sale.collectAndClose` — the shell wires the print
+				// flag, not the label.
+				primaryAction: { id: "sale.collectAndClose", labelKey: "CHARGE AND PRINT" },
 				primaryEnabled: true,
 			};
 		}

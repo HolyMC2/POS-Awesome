@@ -246,10 +246,10 @@ describe("the legacy tail folds instead of stacking", () => {
 	});
 
 	it("draws the control in the column that answers what happens at close", () => {
-		// Inside the paper section, after `Charge and print` — not a fourth
-		// column and not a second primary.
+		// Inside the paper section, after `Charge without printing` — not a
+		// fourth column and not a second primary.
 		expect(paymentsSource).toMatch(
-			/data-testid="cobro-charge-and-print"[\s\S]{0,1200}data-testid="cobro-more-options"[\s\S]{0,600}<\/section>/,
+			/data-testid="cobro-charge-no-print"[\s\S]{0,1200}data-testid="cobro-more-options"[\s\S]{0,600}<\/section>/,
 		);
 	});
 
@@ -349,8 +349,10 @@ describe("the band owns the one number and the one action", () => {
 
 	it("reaches the SAME submit the dialog's button calls, one hop at a time", () => {
 		// 1. the shell turns the press into the payment chord's own bus event…
+		//    (`print: true` — the band's primary is the printing close; the
+		//    paper-free close is Cobro's outlined column button)
 		expect(shellSource).toMatch(
-			/actionId === "sale\.collectAndClose"[\s\S]{0,600}eventBus\.emit\("queue_submit_payment_shortcut", \{ print: false \}\)/,
+			/actionId === "sale\.collectAndClose"[\s\S]{0,800}eventBus\.emit\("queue_submit_payment_shortcut", \{ print: true \}\)/,
 		);
 		// 2. …which `Payments.vue` already listens for…
 		expect(paymentsSource).toContain(
@@ -614,9 +616,11 @@ describe("the money path is untouched", () => {
 		expect(paymentsSource).toContain("defineExpose({\n\tfocusFirstPaymentTarget,\n});");
 	});
 
-	it("keeps `Charge and print` on the submit the footer always used", () => {
+	it("keeps `Charge without printing` on the submit the footer always used", () => {
+		// The band's primary took the paper (print: true), so the column's
+		// outlined button is the paper-FREE close — same submit, print off.
 		expect(paymentsSource).toMatch(
-			/data-testid="cobro-charge-and-print"[\s\S]{0,200}@click="submit\(undefined, false, true\)"/,
+			/data-testid="cobro-charge-no-print"[\s\S]{0,200}@click="submit\(undefined, false, false\)"/,
 		);
 	});
 });

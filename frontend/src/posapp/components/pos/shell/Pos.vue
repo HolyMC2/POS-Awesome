@@ -1501,7 +1501,11 @@ export default {
 				// visibility guards. Reaching into the component for a second
 				// entry point would have put a new call site on the money path
 				// in exchange for a layout.
-				eventBus.emit("queue_submit_payment_shortcut", { print: false });
+				//
+				// `print: true` — the band's primary IS the printing close
+				// (owner direction 2026-08-24); the paper-free close is the
+				// outlined button on the Cobro column.
+				eventBus.emit("queue_submit_payment_shortcut", { print: true });
 				return;
 			}
 			if (actionId === "recharge.submit") {

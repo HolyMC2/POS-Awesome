@@ -2183,6 +2183,7 @@ To recharge · {0} · {1},A recargar · {0} · {1}
 Opening float,Fondo inicial
 To upload · {0} tickets queued,Por subir · {0} tickets en cola
 COLLECT AND CLOSE,COBRAR Y CERRAR
+CHARGE AND PRINT,COBRAR E IMPRIMIR
 COLLECT AND DELIVER,COBRAR Y ENTREGAR
 REFUND {0},DEVOLVER {0}
 RECHARGE,RECARGAR
@@ -2218,6 +2219,7 @@ ticket,ticket
 tickets,tickets
 You can,Sí puedes
 Charge and print,Cobrar e imprimir
+Charge without printing,Cobrar sin imprimir
 Prices and stock,Precios y existencias
 Service orders with photos,Órdenes de servicio con fotos
 Stamp CFDI,Timbrar CFDI

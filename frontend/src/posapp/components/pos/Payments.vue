@@ -192,12 +192,13 @@
 					<!--
 						COBRO, column three — the money's PAPER.
 
-						`Charge and print` is `submit(undefined, false, true)`, the
-						same call the footer's `Submit & Print` makes; it is here
-						because the footer does not render on this surface (the
-						band owns the primary) and losing the print path would be
-						a regression dressed as a redesign. Outlined and unpainted:
-						it is a paper choice, not a second primary.
+						The band's primary prints (owner direction 2026-08-24),
+						so this column carries the OTHER paper choice: the same
+						`submit`, `print = false`. It is here because the footer
+						does not render on this surface (the band owns the
+						primary) and losing the paper-free path would be a
+						regression dressed as a redesign. Outlined and
+						unpainted: it is a paper choice, not a second primary.
 					-->
 					<section v-if="cobroMode" class="payment-section payment-section--paper">
 						<CobroChangeCard
@@ -211,12 +212,12 @@
 							block
 							variant="outlined"
 							class="payment-cobro-print"
-							data-testid="cobro-charge-and-print"
+							data-testid="cobro-charge-no-print"
 							:loading="loading"
 							:disabled="loading || validatePayment"
-							@click="submit(undefined, false, true)"
+							@click="submit(undefined, false, false)"
 						>
-							{{ __("Charge and print") }}
+							{{ __("Charge without printing") }}
 						</v-btn>
 						<!--
 							The settlement fields and the print picker are this
