@@ -82,7 +82,7 @@ beforeEach(() => {
 describe("the customer display shows nothing about the person standing at it", () => {
 	it("renders the sale at all, so the absences below mean something", async () => {
 		const wrapper = await mountWithSnapshot();
-		expect(wrapper.find('[data-testid="customer-display-hero-name"]').text()).toBe(
+		expect(wrapper.find('[data-testid="customer-display-line"]').text()).toContain(
 			"Anillo Case iPhone 15 Pro Negro",
 		);
 	});

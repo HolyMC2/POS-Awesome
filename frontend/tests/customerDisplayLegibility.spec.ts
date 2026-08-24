@@ -41,8 +41,28 @@ const scale = (() => {
 	return out;
 })();
 
-/** Largest first. This IS the hierarchy the screen claims to have. */
-const ORDER = ["total", "hero-name", "hero-figure", "line", "caption"] as const;
+/**
+ * Largest first. This IS the hierarchy the screen claims to have, and it is
+ * read off `PantallaCliente.dc.html` at its own 1280px width: the total at
+ * 88px, the change at 34, the tender figures at 26, the wordmark at 24, a
+ * basket line at 19, a qualifier at 15 and a label at 13.
+ *
+ * `total-long` is the same figure with a long string in it — `$15,000.00`
+ * does not fit the artboard's column at 88px. It sits between the headline
+ * and the change on purpose: a stepped-down total must still outrank every
+ * other number on the screen, or a big sale quietly loses the one-dominant-
+ * figure rule at the moment it matters most.
+ */
+const ORDER = [
+	"total",
+	"total-long",
+	"change",
+	"tender",
+	"mark",
+	"line",
+	"note",
+	"caption",
+] as const;
 
 describe("the type scale is a hierarchy, not five sizes", () => {
 	it("declares every step it is asserted on", () => {
@@ -143,14 +163,42 @@ describe("the display spends no accent", () => {
 		/#ff6b35/i,
 	];
 
-	it("names no accent anywhere in the component", () => {
-		const source = read(DISPLAY);
+	/**
+	 * The one exemption, and it is not a new rule — it is `singleAccent.spec.ts`'s
+	 * wash rule applied here rather than restated. A
+	 * `color-mix(in srgb, var(--pos-primary) 10%, …)` is no more a saturated
+	 * fill than `--pos-primary-container` is; the drawer and the empty cart
+	 * already paint with it, and `PantallaCliente.dc.html`'s figure column is
+	 * drawn with exactly that mix (`--ac-soft`, the brand at 10%).
+	 *
+	 * 25% is the shared ceiling. Above it the wash stops being a tint and
+	 * becomes the brand colour, which is the thing the invariant refuses.
+	 */
+	const WASH = /color-mix\([^;]*?var\(\s*--pos-primary\s*\)\s*(\d{1,3})%/g;
+
+	const withoutWashes = (source: string) => source.replace(WASH, (match, share) => {
+		if (Number(share) > 25) return match;
+		return "color-mix( <wash> ";
+	});
+
+	it("names no accent anywhere in the component, outside a wash", () => {
+		const source = withoutWashes(read(DISPLAY));
 		const hits = ACCENT.filter((pattern) => pattern.test(source)).map(String);
 		expect(
 			hits,
 			`the customer display has no primary action to mark; a saturated colour ` +
 				`here only competes with the total:\n  ${hits.join("\n  ")}`,
 		).toEqual([]);
+	});
+
+	it("keeps the component's own brand tint a wash, not a fill", () => {
+		const source = read(DISPLAY);
+		for (const match of source.matchAll(WASH)) {
+			expect(
+				Number(match[1]),
+				`a wash above 25% is just the brand colour: ${match[0]}`,
+			).toBeLessThanOrEqual(25);
+		}
 	});
 
 	it("keeps the layout's brand tint a wash, not a fill", () => {
