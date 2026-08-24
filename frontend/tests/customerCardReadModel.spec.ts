@@ -22,7 +22,8 @@ import {
  * that only shows up with a customer at the counter.
  *
  * The fixture below is `stored_value.get_customer_wallet`'s payload as it
- * actually goes over the wire, GROUPED OBJECTS INCLUDED. Those objects are the
+ * actually goes over the wire, GROUPED OBJECTS AND SERVER LABELS INCLUDED —
+ * re-mirrored after `f4ac30a9f` gave `detail` its own meaning. Those objects are the
  * point: they carry the same three facts under keys like `stored_value` and
  * `cashback`, and a reader that reached for one as a number would render a
  * blank card rather than fail. Copying the real shape is the only way that
@@ -49,7 +50,7 @@ const WIRE = {
 			kind: "deposit",
 			type: "deposit",
 			label: "Deposit",
-			detail: "Deposit",
+			detail: "Efectivo",
 			amount: 200.0,
 			ts: "2026-08-18 11:04:22.113000",
 			posting_date: "2026-08-18",
@@ -64,7 +65,7 @@ const WIRE = {
 			kind: "redemption",
 			type: "redemption",
 			label: "Paid with wallet",
-			detail: "Paid with wallet",
+			detail: null,
 			amount: -60.0,
 			ts: "2026-08-18 12:40:02.900000",
 			posting_date: "2026-08-18",
@@ -78,7 +79,7 @@ const WIRE = {
 			kind: "cashback",
 			type: "cashback",
 			label: "Cashback earned",
-			detail: "Cashback earned",
+			detail: "Cashback Doco",
 			amount: 24.0,
 			ts: "2026-08-18 12:40:03.100000",
 			posting_date: "2026-08-18",
@@ -179,7 +180,12 @@ describe("a ledger row points the way the server says it points", () => {
 		expect(rows[2]?.labelKey).toBe("Cashback");
 	});
 
-	it("keeps the tender as the row's detail, and nothing else", () => {
+	it("keeps the tender as the row's detail, and drops the programme name", () => {
+		// The server's own `detail` is a real secondary fact now: the tender on
+		// a deposit (which is what this reads anyway) and the PROGRAMME on a
+		// cashback row. The programme is dropped on purpose — it is the same
+		// word on every cashback row this customer will ever have, and the
+		// rate chip at the top of the card already names it.
 		expect(rows[0]?.detail).toBe("Efectivo");
 		expect(rows[1]?.detail).toBeNull();
 		expect(rows[2]?.detail).toBeNull();

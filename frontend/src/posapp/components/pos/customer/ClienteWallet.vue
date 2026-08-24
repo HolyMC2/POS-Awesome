@@ -210,20 +210,30 @@ const accrualLabel = computed(() =>
 );
 
 /**
- * «Cashback, aparte · $14.00 · 7 puntos».
+ * «Cashback Doco, aparte · $14.00 · 7 puntos».
  *
- * The word «aparte» is doing real work and is not padding: without it the line
- * sits directly under a big number and reads as its breakdown. It renders only
- * when there is cashback to name — a customer on the programme who has earned
- * nothing yet gets silence, not «$0.00», because a zero here reads as a
- * programme that does not pay.
+ * The three facts §3 asks for once a customer is enrolled — programme, pesos,
+ * points — and the one word that keeps the figure honest. «aparte» is not
+ * padding: without it the line sits directly under a big number and reads as
+ * that number's breakdown.
+ *
+ * The PROGRAMME NAME lives here rather than on the rate chip beside the
+ * heading, because the chip has to stay a glanceable «Cashback 10 %» and a
+ * shop's programme name is as long as it likes. It is also the only place the
+ * name appears at all: the ledger deliberately drops it from every cashback
+ * row, where it would be the same word repeated down a column.
+ *
+ * Renders only when there is cashback to name — a customer on the programme
+ * who has earned nothing yet gets silence, not «$0.00», because a zero here
+ * reads as a programme that does not pay.
  */
 const cashbackLine = computed(() => {
-	const { enrolled, cashbackValue, points } = props.wallet;
+	const { enrolled, cashbackValue, points, programName } = props.wallet;
 	if (!enrolled || !(cashbackValue > 0)) return "";
-	return __("Cashback, kept apart · {0} · {1} points")
-		.replace("{0}", props.formatCurrency(cashbackValue))
-		.replace("{1}", String(points));
+	return __("{0}, kept apart · {1} · {2} points")
+		.replace("{0}", programName || __("Cashback"))
+		.replace("{1}", props.formatCurrency(cashbackValue))
+		.replace("{2}", String(points));
 });
 
 async function activate() {

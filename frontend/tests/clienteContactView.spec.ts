@@ -234,7 +234,7 @@ const WALLET = normalizeWallet({
 		{
 			kind: "deposit",
 			label: "Deposit",
-			detail: "Deposit",
+			detail: "Efectivo",
 			amount: 200.0,
 			ts: "2026-08-18 11:04:22.113000",
 			posting_date: "2026-08-18",
@@ -244,11 +244,23 @@ const WALLET = normalizeWallet({
 		{
 			kind: "redemption",
 			label: "Paid with wallet",
-			detail: "Paid with wallet",
+			detail: null,
 			amount: -60.0,
 			ts: "2026-08-18 12:40:02.900000",
 			posting_date: "2026-08-18",
 			reference: "ACC-SINV-2026-00214",
+		},
+		{
+			kind: "cashback",
+			label: "Cashback earned",
+			// The server's own secondary fact on this kind is the PROGRAMME,
+			// which this surface deliberately drops — see the assertion below.
+			detail: "Cashback Doco",
+			amount: 14.0,
+			ts: "2026-08-18 12:40:03.100000",
+			posting_date: "2026-08-18",
+			reference: "ACC-SINV-2026-00214",
+			points: 14,
 		},
 	],
 	stored_value: { balance: 200.0, source_count: 1, sources: [] },
@@ -453,7 +465,7 @@ describe("the wallet card, once there is a wallet", () => {
 
 		expect(view.find('[data-testid="cliente-wallet-balance"]').text()).toBe("$200.00");
 		expect(view.find('[data-testid="cliente-wallet-cashback"]').text()).toBe(
-			"Cashback, kept apart · $14.00 · 7 points",
+			"Cashback Doco, kept apart · $14.00 · 7 points",
 		);
 		expect(view.find('[data-testid="cliente-wallet-rate"]').text()).toBe("Cashback 10%");
 		expect(view.find('[data-testid="cliente-view-card-chip"]').text()).toBe("Active card");
@@ -494,10 +506,27 @@ describe("the wallet card, once there is a wallet", () => {
 		await flushPromises();
 
 		const rows = view.findAll('[data-testid="cliente-wallet-movement"]');
-		expect(rows).toHaveLength(2);
+		expect(rows).toHaveLength(3);
 		expect(rows[0]?.text()).toContain("+$200.00");
 		expect(rows[0]?.text()).toContain("Efectivo");
 		expect(rows[1]?.text()).toContain("−$60.00");
+		expect(rows[2]?.text()).toContain("+$14.00");
+	});
+
+	it("names the programme once, not once per cashback row", async () => {
+		// §3 asks for the programme name on an enrolled card, and the server
+		// puts it on every cashback row's `detail`. Down a column it is the
+		// same word repeated, so it lives on the summary line instead.
+		seed();
+		const view = mountView();
+		await flushPromises();
+
+		for (const row of view.findAll('[data-testid="cliente-wallet-movement"]')) {
+			expect(row.text()).not.toContain("Cashback Doco");
+		}
+		expect(view.find('[data-testid="cliente-wallet-cashback"]').text()).toContain(
+			"Cashback Doco",
+		);
 	});
 
 	it("says what happened once, not twice", async () => {
@@ -509,6 +538,8 @@ describe("the wallet card, once there is a wallet", () => {
 
 		const deposit = view.findAll('[data-testid="cliente-wallet-movement"]')[0]!;
 		expect(deposit.text().match(/Deposit/g) ?? []).toHaveLength(1);
+		// And the server's own label for the cashback row never appears.
+		expect(view.text()).not.toContain("Cashback earned");
 	});
 
 	it("states the cap on screen, the way the story does", async () => {

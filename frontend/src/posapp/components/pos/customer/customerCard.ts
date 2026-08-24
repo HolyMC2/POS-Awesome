@@ -69,10 +69,11 @@ const KNOWN_KINDS: ReadonlySet<string> = new Set<WalletMovementKind>([
  * `kind` → what happened, in register language.
  *
  * The server sends its own `label` beside every row and this module ignores
- * it. Not duplication for its own sake: `registerShellTranslations` can see a
- * `labelKey` here and demand Spanish for it, while a string built inside a
- * Python `frappe._()` is invisible to that scan — and the row would otherwise
- * print the same words twice, once from `label` and once from here.
+ * it, by agreement rather than by oversight: `registerShellTranslations` can
+ * see a `labelKey` here and demand Spanish for it, while a string built inside
+ * a Python `frappe._()` is invisible to that scan. `label` is there for
+ * readers with no key table of their own — reports, print formats — and the
+ * endpoint's own docstring now says so.
  *
  * A LIST rather than a keyed record for the reason `orderStory.ts` states: a
  * record keyed by `deposit:` would hide the whole vocabulary from the only
@@ -221,9 +222,15 @@ const normalizeMovement = (raw: unknown, index: number): WalletMovement | null =
 		day: dayOf(row.ts),
 		kind,
 		labelKey: movementLabelKey(kind),
-		// The tender, and only the tender. The server's `detail` is a copy of
-		// its own `label`, which this row already says in the register's
-		// language — printing both gives «Depósito · Depósito».
+		// The tender, and only the tender — a DECISION, not a shortcut.
+		//
+		// The server also sends `detail`, and since `f4ac30a9f` it is a real
+		// secondary fact rather than a copy of its own label: the tender on a
+		// deposit (the same thing this line reads) and the PROGRAMME NAME on a
+		// cashback row. The programme is deliberately dropped here — it is
+		// identical on every cashback row this customer will ever have, and
+		// the rate chip at the top of the card already names it, so per-row it
+		// is a column of the same word.
 		detail: text(row.mode_of_payment),
 		reference: text(row.reference),
 		amount,
