@@ -2,8 +2,6 @@ import { unref, type Ref, type ComputedRef } from "vue";
 import { bus } from "../../../bus";
 import invoiceService from "../../../services/invoiceService";
 import { isApiEnvelopeError, unwrapApiResult } from "../../../services/api";
-import { pinia } from "../../../stores";
-import { useFloorStore } from "../../../stores/floorStore";
 import {
 	saveOfflineInvoice,
 	isOffline,
@@ -116,6 +114,39 @@ export interface PaymentSubmissionOptions {
 		uiStore?: any;
 		invoiceStore?: any;
 	};
+	/**
+	 * Resolver for the floor store — a GETTER supplied by the mounting
+	 * component, never a module-level lookup from in here.
+	 *
+	 * This composable lives in a lazily-imported chunk, and a lazy chunk's
+	 * relative import of the entry bundle is a DIFFERENT module URL from the
+	 * `?v=<build>` one the loader boots the app with. Both copies evaluate, so
+	 * `stores/index.ts` used to hand this file a second `createPinia()` whose
+	 * floor store had never seen a register: `isRecordOnly` false and
+	 * `activeOrder` null on every mesa sale, which is exactly how a charged
+	 * cuenta stayed Open. `stores/index.ts` now pins one pinia per document,
+	 * and the seam takes the component's instance regardless — the store it
+	 * settles through is the one the salón is looking at, by construction.
+	 *
+	 * Absent (unit specs, and any caller with no floor) the seam degrades to
+	 * the plain retail submit, which is what a register without a floor is.
+	 */
+	floorStore?: () => FloorStoreSeam | null | undefined;
+}
+
+/**
+ * The slice of the floor store the payment seam touches. Structural on
+ * purpose: a spec can hand in a plain object, and the seam cannot quietly
+ * grow a dependency on the rest of the store.
+ */
+export interface FloorStoreSeam {
+	isRecordOnly: boolean;
+	activeOrder: { order_uid: string } | null;
+	settleActiveOrder: (
+		_invoicePayload: Record<string, unknown>,
+		_tipAmount?: number,
+	) => Promise<any>;
+	setActiveOrder: (_order: null) => void;
 }
 
 export interface SubmissionCallbacks {
@@ -153,6 +184,39 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		formatFloat,
 		stores,
 	} = options;
+
+	/**
+	 * The floor store, or null on a register that has no floor.
+	 *
+	 * Resolved per call rather than captured: the getter reaches the same
+	 * instance the salón and the mesa strip hold, and a caller that supplies
+	 * none is a plain retail register by definition.
+	 */
+	const resolveFloorStore = (): FloorStoreSeam | null => {
+		try {
+			return options.floorStore?.() || null;
+		} catch {
+			return null;
+		}
+	};
+
+	/**
+	 * A submitted sale must never leave a cuenta attached to the register.
+	 *
+	 * Whatever clears the cart next bumps `metadata.changeVersion`, and the
+	 * floor's line sync answers a bumped version on a Record-Only register by
+	 * pushing the cart's lines at `activeOrder` — an empty cart against a
+	 * still-attached cuenta is "remove every line from Mesa 1". Detaching here
+	 * is the same ordering `settleActiveOrder`, «Guardar · Volver» and
+	 * «Cancelar venta» all take, applied to EVERY submit route: the settle path
+	 * has already dropped the order (no-op), and the paths that cannot settle —
+	 * an offline mesa sale saved to the queue, a register whose floor store the
+	 * caller did not wire — stop short of wiping a cuenta they did not settle.
+	 */
+	const detachFloorOrderFromCart = () => {
+		const floorStore = resolveFloorStore();
+		if (floorStore?.activeOrder) floorStore.setActiveOrder(null);
+	};
 
 	const formatStockErrors = (errors: any[]) => {
 		const settings = unref(stockSettings) || {};
@@ -796,10 +860,22 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		const {
 			onSuccess,
 			onPrint,
-			onFinishNavigation,
+			onFinishNavigation: finishNavigation,
 			onChangeDue,
 			onScheduleBackgroundCheck,
 		} = callbacks;
+
+		// Every «the sale is done, clear the register» exit in this function
+		// goes through this binding, so the detach above rides all of them
+		// without eight call sites having to remember it. Still undefined when
+		// the caller passed nothing — a submit with no navigation callback does
+		// not clear the cart, so it has nothing to protect the cuenta from.
+		const onFinishNavigation = finishNavigation
+			? (success: boolean) => {
+					if (success) detachFloorOrderFromCart();
+					finishNavigation(success);
+				}
+			: undefined;
 
 		if (doc.is_return) {
 			ensureReturnPaymentsAreNegative();
@@ -994,26 +1070,28 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			const submissionDoc = buildSubmissionInvoiceDoc(doc);
 			// Record-Only table service settles THROUGH the table order: the server
 			// merges the ticket's lines over this payload and routes the result into
-			// the SAME submission ledger. Inert for retail and for the counter
-			// cafetería (Sales Invoice mode), where `isRecordOnly` is false.
-			// Resolved lazily and guarded: unit specs exercise this composable
-			// without the app's pinia instance (module-cycle evaluation order
-			// leaves the `pinia` binding undefined there), and a register that
-			// cannot resolve the floor store is by definition not a Record-Only
-			// floor — degrade to the plain retail submit.
-			let floorStore: ReturnType<typeof useFloorStore> | null = null;
-			try {
-				floorStore = useFloorStore(pinia);
-			} catch {
-				floorStore = null;
-			}
+			// the SAME submission ledger. Inert for retail and for a counter
+			// register in Sales Invoice mode, where `isRecordOnly` is false.
+			// The store comes from the caller (see `options.floorStore`) — a
+			// module-level lookup here reached a second pinia and read a floor
+			// nobody was standing on, which is why this branch never taken.
+			const floorStore = resolveFloorStore();
 			let message;
 			if (floorStore?.isRecordOnly && floorStore.activeOrder) {
 				const queuedOrderUid = floorStore.activeOrder.order_uid;
+				// `settle_table_order`'s payload IS the invoice document, with
+				// the submit metadata nested under `data` — the server splits
+				// them straight back into `submit_invoice(invoice, data)`. The
+				// tendered `payments` therefore have to ride at the top level:
+				// nested under a key the server does not read, `update_invoice`
+				// re-derives the payments table from the POS Profile and zeroes
+				// it, and the submit dies on "El total pagado 0.0 no coincide
+				// con el total de la factura". Lines and provenance still come
+				// from the ORDER — the payload does not get a vote on those.
 				const settled = await floorStore.settleActiveOrder(
 					{
-						...data,
-						invoice_doc: submissionDoc,
+						...submissionDoc,
+						data,
 					},
 					unref(options.restaurantTipAmount) || 0,
 				);

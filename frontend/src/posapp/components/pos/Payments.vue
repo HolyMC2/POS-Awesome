@@ -1233,6 +1233,15 @@ const { ensureReturnPaymentsAreNegative, restoreReturnPayments, validateSubmissi
 		},
 		currencyPrecision: currency_precision,
 		restaurantTipAmount,
+		// The settle seam's floor store. Handed over rather than looked up
+		// inside the composable: this component resolved it through the app's
+		// injected pinia, and that is the instance the salón, the mesa strip
+		// and this screen's tip block all read. A lookup from inside the
+		// lazily-imported payments chunk reached a SECOND pinia (the entry
+		// bundle evaluates twice — once at `?v=<build>`, once bare) whose floor
+		// store had no register and no cuenta, so `isRecordOnly && activeOrder`
+		// was false on every mesa charge and the cuenta stayed Open.
+		floorStore: () => floorStore,
 	});
 
 // ── The artboard's payment screen (§12 item B) ───────────────────────────

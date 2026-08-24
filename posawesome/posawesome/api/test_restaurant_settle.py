@@ -367,6 +367,198 @@ class TestSettleTableOrder(RestaurantTestCase):
                 order, client_request_id=uid("tbl-req"), invoice_payload=self._payload(50)
             )
 
+    # -- the wire shape the SPA actually sends -----------------------------
+
+    def test_the_spa_payload_shape_settles_with_its_tendered_payments(self):
+        """The seam sends the invoice doc at top level with `data` nested.
+
+        It used to send the mirror image — submit metadata at top level, the
+        document under `invoice_doc` — and nobody noticed, because the guard in
+        front of it was false in every browser. The first time it ran for real
+        the settle came back "El total pagado 0.0 no coincide con el total de
+        la factura": with no `payments` where the server looks, `update_invoice`
+        re-derives the payments table from the POS Profile and zeroes it.
+        """
+        order = self._order(qty=2, rate=25)
+
+        result = settle.settle_table_order(
+            order,
+            client_request_id=uid("tbl-req"),
+            invoice_payload=json.dumps(
+                {
+                    "doctype": "Sales Invoice",
+                    "customer": self.customer,
+                    "payments": [
+                        {"mode_of_payment": self.mode_of_payment, "amount": 50}
+                    ],
+                    # The submit metadata the SPA carries beside the document.
+                    "data": {
+                        "total_change": 0,
+                        "paid_change": 0,
+                        "credit_change": 0,
+                        "is_cashback": 1,
+                    },
+                }
+            ),
+        )
+        self._tracked.insert(0, ("Sales Invoice", result["sales_invoice"]))
+
+        invoice = frappe.get_doc("Sales Invoice", result["sales_invoice"])
+        self.assertEqual(invoice.docstatus, 1)
+        self.assertEqual(len(invoice.payments), 1)
+        self.assertEqual(invoice.payments[0].amount, 50)
+        self.assertEqual(invoice.paid_amount, 50)
+        # `data` is an argument, never a field: it must not survive onto the
+        # document the way `name` and `modified` do not.
+        self.assertFalse(hasattr(invoice, "data") and isinstance(invoice.data, dict))
+
+    def test_a_serialized_draft_settles_after_being_detached_from_its_row(self):
+        """The SPA settles from the draft it saved when Cobro opened.
+
+        So the payload is a whole serialized `Sales Invoice`, audit trail and
+        child-row names included — not the lean dict the tests above hand in.
+        Popping `name` alone left `creation` on it, and Frappe refuses a fresh
+        insert that carries one: "El valor no puede ser cambiado para Creado
+        el". Every settle from a real till died there.
+        """
+        order = self._order(qty=2, rate=25)
+
+        result = settle.settle_table_order(
+            order,
+            client_request_id=uid("tbl-req"),
+            invoice_payload=json.dumps(
+                {
+                    "doctype": "Sales Invoice",
+                    "name": "ACC-SINV-DRAFT-0001",
+                    "owner": "Administrator",
+                    "creation": "2026-08-24 06:23:21.776702",
+                    "modified": "2026-08-24 06:23:22.000000",
+                    "modified_by": "Administrator",
+                    "docstatus": 0,
+                    "idx": 0,
+                    "__islocal": 0,
+                    "__unsaved": 0,
+                    "customer": self.customer,
+                    "payments": [
+                        {
+                            "doctype": "Sales Invoice Payment",
+                            "name": "row-that-belongs-to-the-draft",
+                            "creation": "2026-08-24 06:23:21.776702",
+                            "owner": "Administrator",
+                            "parent": "ACC-SINV-DRAFT-0001",
+                            "parenttype": "Sales Invoice",
+                            "parentfield": "payments",
+                            "idx": 1,
+                            "mode_of_payment": self.mode_of_payment,
+                            "amount": 50,
+                        }
+                    ],
+                    "data": {"total_change": 0, "is_cashback": 1},
+                }
+            ),
+        )
+        self._tracked.insert(0, ("Sales Invoice", result["sales_invoice"]))
+
+        self.assertEqual(result["status"], "Settled")
+        # A name that points at nothing is ignored, not honoured.
+        self.assertNotEqual(result["sales_invoice"], "ACC-SINV-DRAFT-0001")
+        invoice = frappe.get_doc("Sales Invoice", result["sales_invoice"])
+        self.assertEqual(invoice.docstatus, 1)
+        self.assertEqual(invoice.payments[0].amount, 50)
+        self.assertNotEqual(invoice.payments[0].name, "row-that-belongs-to-the-draft")
+        self.assertEqual(invoice.posa_rt_table_order, order)
+
+    # -- the till's own draft ---------------------------------------------
+
+    def _till_draft(self, amount=50):
+        """The draft the SPA saves the moment Cobro opens."""
+        draft = frappe.get_doc(
+            {
+                "doctype": "Sales Invoice",
+                "customer": self.customer,
+                "company": self.company,
+                "pos_profile": self.profile,
+                "is_pos": 1,
+                "items": [{"item_code": self.item, "qty": 1, "rate": amount}],
+                "payments": [
+                    {"mode_of_payment": self.mode_of_payment, "amount": amount}
+                ],
+            }
+        ).insert(ignore_permissions=True)
+        self._tracked.insert(0, ("Sales Invoice", draft.name))
+        return draft
+
+    def test_the_tills_own_draft_becomes_the_settled_invoice(self):
+        """No phantom draft per mesa sale.
+
+        The SPA is holding a saved draft by the time it settles. Building a
+        second document beside it left the first one stranded — one dead draft,
+        and one burnt naming-series number, for every cuenta charged.
+        """
+        order = self._order(qty=2, rate=25)
+        draft = self._till_draft()
+
+        result = settle.settle_table_order(
+            order,
+            client_request_id=uid("tbl-req"),
+            invoice_payload=json.dumps(
+                {
+                    "doctype": "Sales Invoice",
+                    "name": draft.name,
+                    "creation": str(draft.creation),
+                    "customer": self.customer,
+                    "payments": [
+                        {"mode_of_payment": self.mode_of_payment, "amount": 50}
+                    ],
+                }
+            ),
+        )
+
+        self.assertEqual(result["sales_invoice"], draft.name)
+        settled = frappe.get_doc("Sales Invoice", draft.name)
+        self.assertEqual(settled.docstatus, 1)
+        self.assertEqual(settled.posa_rt_table_order, order)
+        # Lines still come from the ORDER, never from the draft the till held.
+        self.assertEqual(len(settled.items), 1)
+        self.assertEqual(settled.items[0].qty, 2)
+
+    def test_a_draft_from_another_register_is_never_resumed(self):
+        """The name is the client's claim, so it is scope-gated like one."""
+        order = self._order()
+        draft = self._till_draft()
+        frappe.db.set_value("Sales Invoice", draft.name, "pos_profile", None)
+
+        result = settle.settle_table_order(
+            order,
+            client_request_id=uid("tbl-req"),
+            invoice_payload=json.dumps(
+                {"name": draft.name, "customer": self.customer,
+                 "payments": [{"mode_of_payment": self.mode_of_payment, "amount": 50}]}
+            ),
+        )
+        self._tracked.insert(0, ("Sales Invoice", result["sales_invoice"]))
+
+        self.assertNotEqual(result["sales_invoice"], draft.name)
+        self.assertEqual(
+            frappe.db.get_value("Sales Invoice", draft.name, "docstatus"), 0
+        )
+
+    def test_a_submitted_invoice_is_never_resumed(self):
+        order = self._order()
+        first = self._settle(self._order())
+
+        result = settle.settle_table_order(
+            order,
+            client_request_id=uid("tbl-req"),
+            invoice_payload=json.dumps(
+                {"name": first["sales_invoice"], "customer": self.customer,
+                 "payments": [{"mode_of_payment": self.mode_of_payment, "amount": 50}]}
+            ),
+        )
+        self._tracked.insert(0, ("Sales Invoice", result["sales_invoice"]))
+
+        self.assertNotEqual(result["sales_invoice"], first["sales_invoice"])
+
     def test_a_malformed_payload_throws_before_the_ledger_is_touched(self):
         order = self._order()
 

@@ -24,8 +24,26 @@
 
 import { createPinia } from "pinia";
 
-// Create and export pinia instance
-export const pinia = createPinia();
+/**
+ * ONE pinia per document, even though this module evaluates twice.
+ *
+ * The loader boots the SPA from `posawesome-<hash>.js?v=<build>`; every lazy
+ * chunk the app then pulls (`Pos-*.js`, `Payments-*.js`, `sw-updater-*.js`)
+ * imports the entry back by its RELATIVE specifier, which has no `?v=`. Two
+ * URLs are two module records to the browser, so this file used to run
+ * `createPinia()` twice: the app installed the stamped copy's instance, while
+ * everything reaching for this binding from a lazy chunk got a bare second one
+ * with no stores in it. `sw-updater` even made that empty instance the ACTIVE
+ * pinia, so any `useStore()` outside a component context resolved against it.
+ *
+ * Pinning the instance on `globalThis` collapses both copies onto the same
+ * store registry. The symbol keeps it off the global namespace, and per-file
+ * test isolation gives every spec a fresh realm, so this is a no-op there.
+ */
+const PINIA_KEY = Symbol.for("posawesome.pinia");
+const globalScope = globalThis as any;
+
+export const pinia = (globalScope[PINIA_KEY] ||= createPinia());
 
 // Export stores
 export { useCustomersStore } from "./customersStore";

@@ -16,6 +16,7 @@ solely so a double-settle under a lost ack is answerable.
 
 from __future__ import annotations
 
+import copy
 import json
 
 import frappe
@@ -57,6 +58,47 @@ def _target_doctype(pos_profile):
     return "Sales Invoice"
 
 
+def _resumable_till_draft(payload_name, order):
+    """The till's own draft, when the payload's `name` provably points at it.
+
+    The SPA saves a draft the moment Cobro opens, so by the time it settles it
+    is holding a real row. Building a second document beside it would leave a
+    phantom draft — and a burnt naming-series number — behind every mesa sale;
+    settling THROUGH it is also the shape the retail submit has always used.
+
+    Every gate here is a scope gate, because the name is the client's claim:
+    the draft must still be a draft, must belong to this order's register and
+    company, and must not already be another cuenta's settled invoice. A name
+    that fails any of them is ignored rather than refused — settle then builds
+    its own document, which is what this endpoint did before the SPA ever
+    reached it.
+    """
+    if not payload_name or not isinstance(payload_name, str):
+        return None
+    doctype = _target_doctype(order.pos_profile)
+    if not frappe.db.exists(doctype, payload_name):
+        return None
+    row = (
+        frappe.db.get_value(
+            doctype,
+            payload_name,
+            ["docstatus", "pos_profile", "company", "posa_rt_table_order"],
+            as_dict=True,
+        )
+        or {}
+    )
+    if cint(row.get("docstatus")) != 0:
+        return None
+    if row.get("pos_profile") != order.pos_profile:
+        return None
+    if row.get("company") != order.company:
+        return None
+    linked = row.get("posa_rt_table_order")
+    if linked and linked != order.name:
+        return None
+    return payload_name
+
+
 def _invoice_items(order, tip_amount=0):
     """Invoice lines from the ORDER's lines — the payload does not get a vote.
 
@@ -82,6 +124,41 @@ def _invoice_items(order, tip_amount=0):
     return items
 
 
+#: Row identity and audit trail. A serialized draft carries all of these, and
+#: none of them may travel onto the document this endpoint creates instead.
+_ROW_IDENTITY_FIELDS = (
+    "name",
+    "creation",
+    "modified",
+    "owner",
+    "modified_by",
+    "docstatus",
+    "idx",
+)
+
+
+def _detach_from_source_row(payload):
+    """Strip a serialized draft's identity, parent row and children alike.
+
+    The SPA settles from the draft it saved when the payment screen opened, so
+    the payload is a whole `Sales Invoice` document, not the lean dict this
+    endpoint's own tests hand it. Popping `name` alone is not enough to detach
+    it: Frappe refuses a fresh insert that carries `creation` ("El valor no
+    puede ser cambiado para Creado el"), and child rows that keep their `name`
+    collide with the rows they were copied from.
+    """
+    for field in _ROW_IDENTITY_FIELDS:
+        payload.pop(field, None)
+    for key in [key for key in payload if key.startswith("__")]:
+        payload.pop(key, None)
+    for value in payload.values():
+        if isinstance(value, list):
+            for row in value:
+                if isinstance(row, dict):
+                    _detach_from_source_row(row)
+    return payload
+
+
 def _build_invoice(order, payload, client_request_id, tip_amount=0):
     """Order lines + provenance stamps merged OVER the client's payload.
 
@@ -90,9 +167,19 @@ def _build_invoice(order, payload, client_request_id, tip_amount=0):
     come from the fetched order, so a crafted payload cannot settle one
     table's food against another register's books.
     """
-    invoice = dict(payload)
-    invoice.pop("name", None)
-    invoice.pop("modified", None)
+    # Deep, not `dict(...)`: the strip walks into the child rows, and a shallow
+    # copy would reach back through the caller's `payload` to mutate them.
+    invoice = _detach_from_source_row(copy.deepcopy(payload))
+    # `data` is the caller's submit metadata (change, credit redemption,
+    # cashback), read out separately and handed to submit_invoice as its own
+    # argument. It is not an invoice field, and leaving it on the dict would
+    # carry a client-controlled blob into the document we insert.
+    invoice.pop("data", None)
+
+    # …then put back the ONE piece of identity that is ours to reuse.
+    resumable = _resumable_till_draft(payload.get("name"), order)
+    if resumable:
+        invoice["name"] = resumable
 
     invoice["pos_profile"] = order.pos_profile
     invoice["company"] = order.company
@@ -229,11 +316,11 @@ def settle_table_order(
         # TWO steps, and the order matters. `update_invoice` re-derives the
         # payments table from the POS Profile and zeroes it — correct for a
         # draft mid-build, fatal if it were the last word, because the
-        # payments-vs-grand-total invariant then rejects the submit. The SPA
-        # never hits that: it holds a draft from the cart session and sends
-        # `name`, so submit takes the update-the-existing-doc branch and the
-        # tendered payments land. Settle creates its document in one shot, so
-        # it has to make that same shape itself.
+        # payments-vs-grand-total invariant then rejects the submit. Making the
+        # shape in two steps is what lets the tendered payments land, whether
+        # the document is the till's own draft (`_resumable_till_draft` kept its
+        # name above) or one settle mints because the payload named nothing we
+        # could verify.
         draft = creation.update_invoice(json.dumps(invoice, default=str))
         invoice["name"] = (draft or {}).get("name")
         result = creation.submit_invoice(json.dumps(invoice, default=str), json.dumps(submit_data, default=str))
