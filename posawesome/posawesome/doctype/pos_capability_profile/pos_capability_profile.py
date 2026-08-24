@@ -99,6 +99,39 @@ class POSCapabilityProfile(Document):
                 f"Valid: {', '.join(KNOWN_CAPABILITIES)}"
             )
 
+        self._warn_tables_without_record_only()
+
+    def _warn_tables_without_record_only(self):
+        """Table service without Record Only is a misconfiguration, not an error.
+
+        The cuenta on a table is a POS Table Order, and "Record Only" is the
+        only mode that owns one: the cart→order line sync is deliberately inert
+        in every other mode, and a draft Sales Invoice dies with the shift that
+        created it, so it cannot back a table that outlives one waiter's turn
+        (CAFETERIA_GOLDEN_FLOW.md §1). A register saved this way boots a floor
+        whose tiles stay at $0.00 no matter what the waiter rings up.
+
+        A WARNING, never a throw: registers already saved in this shape must
+        keep opening, and a manager fixing the preset needs the record editable
+        while they read the reason.
+        """
+        capabilities = [
+            entry.split(":")[0].strip() for entry in _split_csv(self.capabilities)
+        ]
+        if "tables" not in capabilities:
+            return
+        if (self.invoice_mode or "") == "Record Only":
+            return
+        frappe.msgprint(
+            "This preset grants «tables» but its Invoice Mode is "
+            f"«{self.invoice_mode or '(blank)'}». Table accounts are backed by "
+            "POS Table Order, which only «Record Only» writes — the floor will "
+            "show every table free and every ticket empty. Set Invoice Mode to "
+            "«Record Only» for table service.",
+            title="Table service needs Record Only",
+            indicator="orange",
+        )
+
         # Fail at edit time on malformed vocabulary JSON — a parse error at
         # boot would strand the label map and the SPA would show raw keys.
         if self.labels and self.labels.strip():

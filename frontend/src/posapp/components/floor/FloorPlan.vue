@@ -15,6 +15,7 @@
 								'floor-tile--syncing': tile.syncing,
 								'floor-tile--pending': tile.pending,
 								'floor-tile--dirty': tile.needsCleaning,
+							'floor-tile--selected': tile.selected,
 								'floor-tile--target': transferActive && !tile.occupied,
 								'floor-tile--blocked': transferActive && tile.occupied,
 							},
@@ -107,6 +108,13 @@ const props = defineProps<{
 	availableWidth: number;
 	/** Fit the whole room across `availableWidth` instead of drawing it 1:1. */
 	fit: boolean;
+	/**
+	 * Docname of the table whose sheet is open beside the room. The stage
+	 * shows the sheet and the tile at once, so the tile has to say which table
+	 * the sheet is talking about — without it the panel is a card floating
+	 * beside twelve identical-looking tiles.
+	 */
+	selectedTable?: string | null;
 }>();
 
 const emit = defineEmits<{ (event: "open", table: TableRow): void }>();
@@ -195,6 +203,7 @@ const tiles = computed(() =>
 			total: occupied && total ? formatCurrency(total) : "",
 			unsent: floorStore.unsentCountForTable(table.name),
 			needsCleaning: Boolean(table.needs_cleaning),
+			selected: table.name === props.selectedTable,
 			syncing: floorStore.isSyncing(table.name),
 			// Queued locally, never confirmed by the server. Offline each device
 			// sees only its OWN orders (spec §6.8), so the operator has to be able

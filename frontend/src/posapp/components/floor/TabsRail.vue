@@ -76,8 +76,16 @@ const tabOrders = computed(() => floorStore.tabOrders);
 const activeUid = computed(() => floorStore.activeOrder?.order_uid || null);
 const title = computed(() => verticalStore.t("Tabs"));
 const newLabel = computed(() => verticalStore.t("New tab"));
+/**
+ * This rail is the TABLE-LESS one, and its empty state has to say so.
+ *
+ * «Sin cuentas abiertas» was a claim about the whole register, printed a few
+ * pixels above a room with four occupied tables on it — the register
+ * contradicting itself on one screen. A mesa cuenta is an open account; it
+ * just does not live here.
+ */
 const emptyLabel = computed(() =>
-	verticalStore.t("No open tabs — start one with a name on the cup"),
+	verticalStore.t("No tabs without a table — start one with a name on the cup"),
 );
 
 const chips = computed(() =>

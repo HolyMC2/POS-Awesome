@@ -14,6 +14,21 @@ import * as restaurantApi from "../../api/restaurant";
 import type { OrderLine, OrderRow } from "../../api/restaurant";
 import { buildLineDelta, cartAsLines, orderAsCartItems, rebaseSyncedLines } from "./floorCartBridge";
 
+/**
+ * What the waiter is told about the round they just typed.
+ *
+ * `markSyncing` cannot answer this: it keys on the TABLE name, so a table-less
+ * cup tab reports nothing at all, and it says "a write is in flight" rather
+ * than "your edit is safe". The strip above the ticket needs the second
+ * sentence — the whole complaint the golden flow records is that saving a round
+ * was an 800 ms debounce with nothing on screen.
+ *
+ * `pending` is the debounce window: typed, not pushed. It is deliberately a
+ * state of its own rather than being folded into `saving`, because it is the
+ * only one where closing the till would lose something.
+ */
+export type CartSyncState = "idle" | "pending" | "saving" | "saved" | "error";
+
 export interface CartSyncDeps {
 	/**
 	 * Resolves the invoice store — a GETTER, not the instance.
@@ -32,6 +47,9 @@ export interface CartSyncDeps {
 	markSyncing: (table: string | null, on: boolean) => void;
 	/** The server's fresh row, for the floor list and the active order. */
 	onOrderUpdated: (order: OrderRow) => void;
+	/** Every transition of the visible save state. Optional: unit harnesses
+	 *  that only exercise the delta maths need not supply one. */
+	onSyncState?: (state: CartSyncState) => void;
 	onError: (message: string) => void;
 }
 
@@ -52,6 +70,8 @@ export const createCartSync = (deps: CartSyncDeps): CartSync => {
 	let pending: OrderLine[] | null = null;
 	let watching = false;
 
+	const report = (state: CartSyncState) => deps.onSyncState?.(state);
+
 	/**
 	 * Register the cart watcher on first cart contact. Safe to defer: nothing
 	 * can sync without an active order, and an order becomes active only by
@@ -70,6 +90,14 @@ export const createCartSync = (deps: CartSyncDeps): CartSync => {
 			() => {
 				if (!deps.isRecordOnly.value || !deps.activeOrder.value) return;
 				pending = cartAsLines(invoiceStore.items);
+				// The delta decides the WORD, not the fact that the cart moved.
+				// `loadOrderIntoCart` writes the whole ticket in and bumps this
+				// same version, so reporting "pending" on every bump would put
+				// «guardando…» on a table the waiter has only just opened and
+				// changed nothing on. An empty delta means the cart already
+				// equals the server.
+				const { upserts, removed } = buildLineDelta(pending, syncedLines.value);
+				report(upserts.length || removed.length ? "pending" : "saved");
 				if (timer) clearTimeout(timer);
 				timer = setTimeout(() => void push(), DEBOUNCE_MS);
 			},
@@ -96,6 +124,7 @@ export const createCartSync = (deps: CartSyncDeps): CartSync => {
 			clearTimeout(timer);
 			timer = null;
 		}
+		report("idle");
 	};
 
 	const push = async () => {
@@ -105,8 +134,16 @@ export const createCartSync = (deps: CartSyncDeps): CartSync => {
 		pending = null;
 		if (!order || !cartLines) return;
 		const { upserts, removed, incoming } = buildLineDelta(cartLines, syncedLines.value);
-		if (!upserts.length && !removed.length) return;
+		// Nothing to send is not "unsaved": the cart already equals what the
+		// server accepted, which is exactly what the waiter is asking about.
+		// Reported rather than left `pending`, or the strip would sit on
+		// «guardando…» forever after a no-op edit (a qty typed back to itself).
+		if (!upserts.length && !removed.length) {
+			report("saved");
+			return;
+		}
 		const invoiceStore = deps.invoiceStore();
+		report("saving");
 		deps.markSyncing(order.table, true);
 		try {
 			const updated = (await restaurantApi.updateTableOrder({
@@ -123,7 +160,9 @@ export const createCartSync = (deps: CartSyncDeps): CartSync => {
 				updated.rejected_removals || [],
 			);
 			deps.onOrderUpdated(updated);
+			report("saved");
 		} catch (err: any) {
+			report("error");
 			deps.onError(err?.message || String(err));
 		} finally {
 			deps.markSyncing(order.table, false);

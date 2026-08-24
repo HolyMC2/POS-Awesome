@@ -67,6 +67,28 @@
 
 		<div class="action-band__spacer"></div>
 
+		<!-- SECONDARY verbs, after the spacer so they sit against the primary
+		     rather than beside the breakdown.
+		     ────────────────────────────────────────────────────────────────
+		     §17.7's invariant is one number and one PRIMARY action — not one
+		     button. A mesa-owned sale genuinely has three things to do with the
+		     round in front of it (`SalonCuenta.dc.html`): send it to the
+		     kitchen, charge it, or save it and go back to the room. Only the
+		     last one is the primary; the other two are outline buttons the
+		     artboard draws immediately left of it, and adjacency is the whole
+		     point — a "Cobrar" stranded in the breakdown column reads as a
+		     figure, not a verb.
+
+		     A SLOT rather than a published lane, unlike breakdown/context: the
+		     surface that owns these verbs is the shell itself (it owns the
+		     floor store and the bus), so there is nothing to teleport in from.
+		     Rendered only when the slot is passed — `v-if` on a `<template
+		     #actions>` leaves `$slots.actions` undefined, so a retail band draws
+		     no box and takes none of the band's gaps. -->
+		<div v-if="$slots.actions" class="action-band__actions">
+			<slot name="actions" />
+		</div>
+
 		<!-- THE action. One button, and the only place in the register where a
 		     saturated brand colour is allowed to appear. -->
 		<button
@@ -252,6 +274,21 @@ const primaryParams = computed(() =>
 .action-band__spacer {
 	flex: 1;
 }
+
+/* Outline, never filled: `SalonCuenta.dc.html` gives these the same 92px
+ * height as the primary so the row reads as one control group, and the accent
+ * stays the primary's alone. */
+.action-band__actions {
+	display: flex;
+	align-items: center;
+	gap: var(--reg-space-md, 10px);
+	flex: none;
+}
+
+/* The buttons themselves are styled where they are WRITTEN, not here: slot
+ * content is compiled in the parent and carries the parent's scope id, so a
+ * scoped rule in this file would never match them. `Pos.vue` owns
+ * `.action-band__secondary`. */
 
 /* The one accent. Nothing else in the register may claim it. */
 .action-band__primary {

@@ -32,7 +32,7 @@
 			:loading="loadingFor(chip.id)"
 			@click="$emit(chip.id)"
 		>
-			<span class="pos-action-strip__verb">{{ __(chip.label) }}</span>
+			<span class="pos-action-strip__verb">{{ __(labelFor(chip)) }}</span>
 			<!-- No chord element at all when unbound. An empty chip slot would
 			     read as "this has a shortcut and we forgot it". -->
 			<kbd
@@ -95,6 +95,16 @@ const props = defineProps({
 	 * paths keep every action and their PAY.
 	 */
 	bandOwnsPrimary: { type: Boolean, default: false },
+	/**
+	 * Per-chip label overrides, keyed by chip id. The chip's own label is the
+	 * default and the registry stays the single list of what a chip IS; this is
+	 * for the case where the same action MEANS something else.
+	 *
+	 * The one caller today: a mesa-owned sale, where «Cancelar venta» does not
+	 * cancel a sale — it drops the edits in the cart and leaves the cuenta on
+	 * the table exactly as the kitchen last saw it (golden flow §3).
+	 */
+	labelOverrides: { type: Object, default: () => ({}) },
 });
 
 defineEmits([
@@ -114,6 +124,7 @@ const __ = window.__;
 useResponsive();
 
 const chips = computed(() => visibleChips(props.pos_profile, props.bandOwnsPrimary));
+const labelFor = (chip) => props.labelOverrides?.[chip.id] || chip.label;
 
 // Read once per render rather than per chip: `getActiveKeymap()` is a memoized
 // lookup, but the strip re-renders on every cart mutation and this sits on the

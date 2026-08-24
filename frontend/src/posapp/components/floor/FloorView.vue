@@ -1,5 +1,5 @@
 <template>
-	<div ref="panelEl" class="floor-view">
+	<div ref="panelEl" class="floor-view" :class="{ 'floor-view--stage': stage }">
 		<!-- Transfer is a modal gesture (spec §4): the banner is the mode, the
 		     whole floor is the target picker, Esc is the way out. -->
 		<div v-if="transferOrder" class="floor-view__banner" role="status">
@@ -126,15 +126,38 @@
 				v-else-if="viewMode === 'plan'"
 				:available-width="planWidth"
 				:fit="fit"
+				:selected-table="selectedTableName"
 				@open="askTable"
 			/>
 			<FloorKanban v-else @open="askTable" />
+
+			<!-- The mesa sheet: the whole answer for the table under the finger,
+			     beside the room instead of over it. Only where the stage is the
+			     floor's and there is width for a 352px column — everywhere else
+			     the modal `TableActionSheet` is still what a tap raises. -->
+			<MesaSheet
+				v-if="mesaSheetTable && !transferOrder"
+				class="floor-view__sheet"
+				:table="mesaSheetTable"
+				:orders="selectedTableOrders"
+				:selected-uid="selectedAccountUid"
+				:firing="firing"
+				:releasing="releasing"
+				@select="pickAccount"
+				@add-items="sheetAddItems"
+				@fire="sheetFire"
+				@view="sheetView"
+				@transfer="sheetTransfer"
+				@release="sheetRelease"
+				@open="sheetOpenTable"
+				@clean="sheetClean"
+			/>
 
 			<!-- The open ticket's own detail. Transfer starts here rather than from
 			     a tile menu: the gesture is "this order, somewhere else", and the
 			     order the waiter means is the one they have open. -->
 			<TableTicketPanel
-				v-if="activeOrder && !transferOrder && wide"
+				v-else-if="activeOrder && !transferOrder && wide"
 				:order="activeOrder"
 				:table-label="activeOrderTableLabel"
 				variant="rail"
@@ -169,6 +192,47 @@
 			@action="onSheetAction"
 			@order="openSelectedOrder"
 		/>
+
+		<!-- THE SALÓN'S OWN BAND (golden flow §2).
+		     ────────────────────────────────────────────────────────────────
+		     The band's two lanes are filled by whoever owns the figures, the
+		     way `InvoiceSummary` fills them on the sale screen. Here that is
+		     the floor: the cuenta beside the one selected, the table's
+		     informative total, and the room's occupancy. `Pos.vue` gets the
+		     NUMBER and the ACTION through `@band`; only the columns travel by
+		     teleport, because the shell has neither the selection nor the
+		     snapshot to compute them from.
+
+		     `v-if` rather than `:disabled`, because with no band on screen
+		     there is nothing to say — rendering these in place would put a
+		     second copy of the room's stats inside the room. -->
+		<Teleport v-if="ownsBand" defer to="[data-band-lane='breakdown']">
+			<span class="floor-view__band-divider" aria-hidden="true"></span>
+			<div class="floor-view__band-col" data-testid="floor-band-breakdown">
+				<div v-for="row in bandBreakdownRows" :key="row.key" class="floor-view__band-row">
+					<span class="floor-view__band-term">{{ row.term }}</span>
+					<span class="floor-view__band-value">{{ row.value }}</span>
+				</div>
+			</div>
+		</Teleport>
+		<Teleport v-if="ownsBand" defer to="[data-band-lane='context']">
+			<span class="floor-view__band-divider" aria-hidden="true"></span>
+			<div class="floor-view__band-col" data-testid="floor-band-stats">
+				<span class="floor-view__band-label">{{ salonNowLabel }}</span>
+				<div v-for="row in bandStatRows" :key="row.key" class="floor-view__band-row">
+					<span
+						class="floor-view__band-term"
+						:class="{ 'floor-view__band-term--warn': row.warn }"
+						>{{ row.term }}</span
+					>
+					<span
+						class="floor-view__band-value"
+						:class="{ 'floor-view__band-value--warn': row.warn }"
+						>{{ row.value }}</span
+					>
+				</div>
+			</div>
+		</Teleport>
 	</div>
 </template>
 
@@ -185,11 +249,12 @@
  * usable proxy for the room this component actually has, and a media query
  * here would put a side rail on a 500px column.
  */
-import { computed, inject, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import FloorEditor from "./FloorEditor.vue";
 import FloorKanban from "./FloorKanban.vue";
 import FloorPlan from "./FloorPlan.vue";
 import JumpPad from "./JumpPad.vue";
+import MesaSheet from "./MesaSheet.vue";
 import TableActionSheet, { type TableSheetAction } from "./TableActionSheet.vue";
 import TableTicketPanel from "./TableTicketPanel.vue";
 import TabsRail from "./TabsRail.vue";
@@ -198,12 +263,31 @@ import { bus as importedBus } from "../../bus";
 import * as restaurantApi from "../../api/restaurant";
 import { useFloorStore, type OrderRow, type TableRow } from "../../stores/floorStore";
 import { useVerticalStore } from "../../stores/verticalStore";
+import { useFormat } from "../../format";
+import { resolveBandState, type BandState } from "../../composables/pos/shell/bandState";
 import { trackCustomMark } from "../../utils/telemetry";
 import type { KotProjection } from "../../../offline/restaurantTypes";
 
 // `__` is a global provided by the Frappe boot; `<script setup>` templates
 // cannot see app.config.globalProperties, so bind it locally.
 const __ = window.__ || ((value: string) => value);
+
+const props = withDefaults(
+	defineProps<{
+		/**
+		 * The floor is the whole screen, not a column in it (golden flow §2).
+		 * Passed by the shell rather than measured here: whether the sale's
+		 * column stood down is the shell's fact, and a panel that is merely
+		 * wide is not the same thing.
+		 */
+		ownsStage?: boolean;
+		/** The shell's band is showing what this component publishes. */
+		ownsBand?: boolean;
+	}>(),
+	{ ownsStage: false, ownsBand: false },
+);
+
+const emit = defineEmits<{ (_event: "band", _state: BandState | null): void }>();
 
 /**
  * Enough room for a 360px plan beside a 240px rail. Below it the ticket detail
@@ -213,6 +297,14 @@ const __ = window.__ || ((value: string) => value);
 const WIDE_PANEL = 640;
 /** The rail's own width, subtracted before the plan computes its fit scale. */
 const RAIL_WIDTH = 248;
+/** `Salon.dc.html`'s mesa sheet. Wider than the rail because it carries every
+ *  cuenta on the table with its own total, not just the open ticket's facts. */
+const MESA_SHEET_WIDTH = 352;
+/** Below this the 352px sheet would leave the room less than the ~616px it is
+ *  authored at, so the stage falls back to the shipped 248px ticket rail. */
+const STAGE_SHEET_MIN_PANEL = 900;
+/** The stage's own gap between the plan and the sheet (see floor-view.css). */
+const STAGE_GAP = 12;
 
 /**
  * The bus the SHELL is listening on, taken by injection like every other
@@ -229,6 +321,7 @@ const bus = inject<typeof importedBus>("eventBus", importedBus);
 
 const floorStore = useFloorStore();
 const verticalStore = useVerticalStore();
+const { formatCurrency } = useFormat();
 
 const panelEl = ref<HTMLElement | null>(null);
 const panelWidth = ref(0);
@@ -249,9 +342,49 @@ const editorMode = computed(() => floorStore.editorMode);
 const transferOrder = computed(() => floorStore.transferOrder);
 
 const wide = computed(() => panelWidth.value >= WIDE_PANEL);
-const planWidth = computed(() =>
-	Math.max(0, panelWidth.value - (wide.value && activeOrder.value ? RAIL_WIDTH : 0)),
+/** The full-stage arrangement: the shell gave up the sale's column AND there
+ *  is enough measured width to lay the room out beside a sheet. */
+const stage = computed(() => props.ownsStage && wide.value);
+
+// ---- the selected table and its cuentas ---------------------------------
+//
+// Selection is a state the shipped floor never had: a tap RAISED the modal and
+// the floor forgot the table the moment it closed. The stage needs it to
+// persist — the sheet is beside the room, not over it, and the band names the
+// cuenta it would charge.
+const selectedTableName = ref<string | null>(null);
+const selectedAccountUid = ref<string | null>(null);
+
+const selectedTable = computed(
+	() => floorStore.tables.find((row) => row.name === selectedTableName.value) || null,
 );
+const selectedTableOrders = computed(() =>
+	selectedTable.value ? floorStore.ordersForTable(selectedTable.value.name) : [],
+);
+/**
+ * The cuenta the sheet's verbs and the band's number belong to. Falls back to
+ * the table's first order so a single-account table needs no choosing, and
+ * never invents one for a split bill the operator has already picked from.
+ */
+const selectedAccount = computed<OrderRow | null>(() => {
+	const rows = selectedTableOrders.value;
+	if (!rows.length) return null;
+	return rows.find((row) => row.order_uid === selectedAccountUid.value) || rows[0] || null;
+});
+
+const showMesaSheet = computed(
+	() => stage.value && panelWidth.value >= STAGE_SHEET_MIN_PANEL && Boolean(selectedTable.value),
+);
+/** Null unless the sheet is on: the prop is non-nullable, and this is what
+ *  lets the template narrow it. */
+const mesaSheetTable = computed(() => (showMesaSheet.value ? selectedTable.value : null));
+
+const planWidth = computed(() => {
+	if (showMesaSheet.value) {
+		return Math.max(0, panelWidth.value - MESA_SHEET_WIDTH - STAGE_GAP);
+	}
+	return Math.max(0, panelWidth.value - (wide.value && activeOrder.value ? RAIL_WIDTH : 0));
+});
 
 const canvasWidth = computed(() => {
 	const canvas = resolveCanvas(floorStore.activeFloorRow);
@@ -318,6 +451,97 @@ const activeOrderTableLabel = computed(() => {
 	if (!order?.table) return "";
 	const table = floorStore.tables.find((row) => row.name === order.table);
 	return table ? table.table_label : "";
+});
+
+// ---- the salón band ------------------------------------------------------
+
+const salonNowLabel = computed(() => verticalStore.t("Floor now"));
+
+const tableLabelFor = (name: string | null | undefined) =>
+	(name && floorStore.tables.find((row) => row.name === name)?.table_label) || "";
+
+const accountName = (order: OrderRow | null) =>
+	order ? order.tab_name || order.order_uid.slice(0, 6) : "";
+
+/** «Mesa 7 · Sofía» — the table first, because that is what the waiter walks
+ *  back to, then who is sitting at it. */
+const selectedAccountLabel = computed(() => {
+	const account = selectedAccount.value;
+	if (!account) return "";
+	return [tableLabelFor(account.table), account.tab_name].filter(Boolean).join(" · ");
+});
+
+/**
+ * The band's number is the SELECTED cuenta's own total, never the table's.
+ * UX map §5: the combined total is not displayed beside an action that can
+ * settle only one account, and Charge is not offered for an empty one.
+ */
+const floorBandState = computed<BandState>(() =>
+	resolveBandState({
+		kind: "floorAccount",
+		total: Number(selectedAccount.value?.total) || 0,
+		accountLabel: selectedAccountLabel.value,
+		chargeable: Number(selectedAccount.value?.items_count) > 0,
+	}),
+);
+
+watch(
+	() => (props.ownsBand ? floorBandState.value : null),
+	(state) => emit("band", state),
+	{ immediate: true },
+);
+
+/** The other cuentas on this table, then the room's open money. */
+const bandBreakdownRows = computed(() => {
+	const rows: Array<{ key: string; term: string; value: string }> = [];
+	const account = selectedAccount.value;
+	const tableOrders = selectedTableOrders.value;
+	if (account && tableOrders.length > 1) {
+		for (const other of tableOrders.filter((row) => row.order_uid !== account.order_uid).slice(0, 2)) {
+			rows.push({
+				key: other.order_uid,
+				term: `${accountName(other)} · ${verticalStore.t("separate")}`,
+				value: formatCurrency(Number(other.total) || 0),
+			});
+		}
+		rows.push({
+			key: "table-total",
+			term: `${tableLabelFor(account.table)} · ${verticalStore.t("informational")}`,
+			value: formatCurrency(
+				tableOrders.reduce((sum, row) => sum + (Number(row.total) || 0), 0),
+			),
+		});
+	}
+	rows.push({
+		key: "floor-open",
+		term: verticalStore.t("Open in the floor"),
+		value: formatCurrency(floorStore.floorStats.openTotal),
+	});
+	return rows;
+});
+
+const bandStatRows = computed(() => {
+	const stats = floorStore.floorStats;
+	return [
+		{
+			key: "occupied",
+			term: verticalStore.t("Occupied"),
+			value: `${stats.occupied} / ${stats.tables}`,
+			warn: false,
+		},
+		{
+			key: "accounts",
+			term: verticalStore.t("Open accounts"),
+			value: String(stats.openAccounts),
+			warn: false,
+		},
+		{
+			key: "cleaning",
+			term: verticalStore.t("Needs cleaning"),
+			value: String(stats.needsCleaning),
+			warn: stats.needsCleaning > 0,
+		},
+	];
 });
 
 /**
@@ -447,10 +671,126 @@ function floorActionEnd(startedAt: number) {
 	}
 }
 
+/**
+ * A tap still ASKS — it just asks in a different place depending on how much
+ * room there is to ask in. With the stage and a 352px column to spare, the
+ * question is the sheet BESIDE the room; otherwise it is the modal, unchanged.
+ * Either way the tile creates nothing on its own.
+ */
 function askTable(table: TableRow) {
+	if (stage.value && panelWidth.value >= STAGE_SHEET_MIN_PANEL) {
+		selectTable(table);
+		return;
+	}
 	sheetTable.value = table;
 	sheetOpen.value = true;
 }
+
+function selectTable(table: TableRow) {
+	// A different table means a different set of cuentas, so the account
+	// choice cannot survive the move — it would name an order that is not on
+	// the table any more.
+	if (selectedTableName.value !== table.name) selectedAccountUid.value = null;
+	selectedTableName.value = table.name;
+}
+
+function pickAccount(order: OrderRow) {
+	selectedAccountUid.value = order.order_uid;
+}
+
+/**
+ * Every sheet verb acts on the SELECTED cuenta, so every one of them hydrates
+ * it first: the board's rows carry counts and no lines (§F9), and a verb that
+ * ran against the row would fire an empty ticket or charge a bill missing
+ * someone's food. Already-open is a no-op rather than a second round-trip.
+ */
+async function resumeSelected(): Promise<OrderRow | null> {
+	const account = selectedAccount.value;
+	if (!account) return null;
+	if (floorStore.activeOrder?.order_uid === account.order_uid) return floorStore.activeOrder;
+	const startedAt = floorActionStart();
+	const order = await floorStore.resumeOrder(account);
+	if (order) floorActionEnd(startedAt);
+	return order;
+}
+
+async function sheetAddItems() {
+	if (await resumeSelected()) goToItems();
+}
+
+async function sheetView() {
+	const order = await resumeSelected();
+	if (order) bus.emit("floor_order_opened", { order_uid: order.order_uid });
+}
+
+async function sheetFire() {
+	if (await resumeSelected()) await fire();
+}
+
+function sheetTransfer() {
+	const account = selectedAccount.value;
+	if (account) floorStore.beginTransfer(account);
+}
+
+async function sheetRelease() {
+	if (await resumeSelected()) await release();
+}
+
+async function sheetOpenTable() {
+	const table = selectedTable.value;
+	if (table) await openTable(table, "items");
+}
+
+async function sheetClean() {
+	const table = selectedTable.value;
+	if (!table) return;
+	const startedAt = floorActionStart();
+	await floorStore.markClean(table.name);
+	floorActionEnd(startedAt);
+}
+
+/** The band's COBRAR CUENTA. Hydrate, then hand off to the invoice panel's
+ *  payment validator — the floor never submits money itself (UX map §9). */
+async function chargeSelectedAccount() {
+	const order = await resumeSelected();
+	if (order) chargeActiveOrder();
+}
+
+function onFireRequested() {
+	// From the sale screen the ticket in the cart IS the one to fire — a named
+	// cup tab has no table, so routing that press through the floor's selection
+	// would silently do nothing.
+	if (floorStore.activeOrder) {
+		void fire();
+		return;
+	}
+	void sheetFire();
+}
+
+function onChargeRequested() {
+	void chargeSelectedAccount();
+}
+
+// Coming back from a mesa sale lands on the room with THAT table under the
+// sheet — the waiter's next thought is about the table they just served.
+watch(
+	() => floorStore.activeOrder,
+	(order) => {
+		if (!order?.table) return;
+		selectedTableName.value = order.table;
+		selectedAccountUid.value = order.order_uid;
+	},
+	{ immediate: true },
+);
+
+// A selection on another floor is a sheet describing a table nobody can see.
+watch(
+	() => floorStore.activeFloor,
+	() => {
+		selectedTableName.value = null;
+		selectedAccountUid.value = null;
+	},
+);
 
 /**
  * Every verb resumes the same order; they differ only in where the operator is
@@ -550,6 +890,11 @@ let observer: ResizeObserver | null = null;
 onMounted(() => {
 	void floorStore.activate();
 	window.addEventListener("keydown", onKeydown);
+	// The band presses land here rather than in the shell: the kitchen verdict
+	// poll and the floor-action benchmark mark both live in this component, and
+	// a second call site onto either would be a second place to keep honest.
+	bus.on("floor_fire_active_course", onFireRequested);
+	bus.on("floor_charge_selected_account", onChargeRequested);
 	const element = panelEl.value;
 	if (!element) return;
 	panelWidth.value = element.clientWidth;
@@ -563,6 +908,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
 	window.removeEventListener("keydown", onKeydown);
+	bus.off("floor_fire_active_course", onFireRequested);
+	bus.off("floor_charge_selected_account", onChargeRequested);
 	observer?.disconnect();
 	observer = null;
 	floorStore.deactivate();

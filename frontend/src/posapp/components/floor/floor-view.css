@@ -18,6 +18,24 @@
 	color: var(--pos-text-primary);
 }
 
+/* SALÓN OWNS THE STAGE (CAFETERIA_GOLDEN_FLOW.md §2).
+
+   The dvh arithmetic above is a GUESS at what is left after the dock, and it
+   was the right guess while the floor was one column of a scrolling shell. On
+   the stage it is the wrong tool: the shell's content area is a bounded flex
+   column (`.dynamic-container` is `height: 100%; overflow: hidden` at desktop
+   widths) with the action band as a fixed-height sibling, so the honest answer
+   is "whatever the column has left". Flex computes that exactly; 100dvh minus
+   two constants cannot, and being 40px out is the plan losing its bottom row
+   behind the band. */
+.floor-view--stage {
+	flex: 1 1 auto;
+	height: auto;
+	min-height: 0;
+	max-height: none;
+	margin-top: 0;
+}
+
 /* The board and its detail rail. A row at wide panels, a single column
    otherwise — either way the scrollport stays inside the child. */
 .floor-view__stage {
@@ -31,6 +49,74 @@
 
 .floor-view__stage--wide {
 	flex-direction: row;
+}
+
+/* The mesa sheet: a fixed 352px column, `Salon.dc.html`'s own number. `flex:
+   none` so the plan — the elastic half — absorbs every pixel the window gives
+   or takes, which is what keeps the room off its own horizontal scrollbar at
+   1280 and wider. `min-width: 0` on the plan side does the matching work. */
+.floor-view__sheet {
+	flex: 0 0 352px;
+	width: 352px;
+	max-width: 352px;
+	min-height: 0;
+}
+
+/* ── the band's two columns, teleported into the shell's lanes ──────────
+   Written here so they travel with the component that owns the figures.
+   Scoped CSS keys on the data-v attribute, not on position in the DOM, so
+   these keep their styling after the teleport lands them in the band. */
+.floor-view__band-divider {
+	width: 1px;
+	height: var(--reg-band-divider-height, 88px);
+	flex: none;
+	background: var(--pos-border);
+}
+
+.floor-view__band-col {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	min-width: 0;
+	font-size: 12.5px;
+}
+
+.floor-view__band-label {
+	font-size: 10.5px;
+	font-weight: 700;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+	color: var(--pos-text-secondary);
+	margin-bottom: 2px;
+}
+
+.floor-view__band-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 16px;
+	min-width: 210px;
+}
+
+.floor-view__band-term {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--pos-text-secondary);
+}
+
+.floor-view__band-value {
+	flex: 0 0 auto;
+	font-variant-numeric: tabular-nums;
+	color: var(--pos-text-primary);
+}
+
+/* Not colour alone: the amber pair below is reinforced by the weight, and the
+   term itself names what is wrong («Por limpiar»). */
+.floor-view__band-term.floor-view__band-term--warn,
+.floor-view__band-value.floor-view__band-value--warn {
+	color: var(--pos-button-warning-text, #8a5a0d);
+	font-weight: 700;
 }
 
 .floor-view__banner {

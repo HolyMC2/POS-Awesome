@@ -98,6 +98,16 @@
 	animation: floor-tile-pulse 900ms ease-in-out infinite;
 }
 
+/* "The sheet beside the room is about THIS table." A ring rather than a fill:
+   fill already means occupied, and one visual variable per meaning is the rule
+   the whole plan is built on. Compounded with `.floor-tile` so it cannot lose
+   to a later single-class state rule on source order. */
+.floor-tile.floor-tile--selected {
+	outline: 3px solid var(--pos-primary);
+	outline-offset: 2px;
+	z-index: 1;
+}
+
 /* Transfer mode: every legal destination breathes, so the eligible set reads
    as a set rather than as "the tiles that happen to be pale". */
 .floor-tile--target {

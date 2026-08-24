@@ -2,7 +2,7 @@
 	<!-- Main Invoice Wrapper -->
 	<div class="pa-0 invoice-shell">
 		<!-- Cancel Sale Confirmation Dialog -->
-		<CancelSaleDialog v-model="cancel_dialog" @confirm="cancel_invoice" />
+		<CancelSaleDialog v-model="cancel_dialog" @confirm="confirmCancelSale" />
 
 		<!-- Main Invoice Card (contains all invoice content).
 
@@ -35,6 +35,17 @@
 					{{ __("Invoices saved as POS Invoices") }}
 				</v-alert>
 				<div class="invoice-sections">
+					<!-- Whose ticket this is, whether the last round is safe, and
+					     the way back to the room (golden flow §3). Above the
+					     customer strip on purpose: on a seated sale the table IS
+					     the identity, and the customer row is the fiscal detail
+					     underneath it. Renders only while a table order owns the
+					     cart, so retail and the counter never see it. -->
+					<MesaContextStrip
+						v-if="mesaOrderActive"
+						band-breakdown-target="[data-band-lane='breakdown']"
+					/>
+
 					<!-- The customer as a dense strip, not a card. `Main.dc.html`
 					     draws the name, its provenance and a row of inline facts
 					     with no chrome and no idle form controls; the controls
@@ -345,6 +356,8 @@
 			ref="invoiceSummary"
 			band-breakdown-target="[data-band-lane='breakdown']"
 			band-context-target="[data-band-lane='context']"
+			:band-owned-elsewhere="bandOwnedElsewhere"
+			:mesa-order-active="mesaOrderActive"
 			:pos_profile="pos_profile"
 			:total_qty="total_qty"
 			:additional_discount="additional_discount"
@@ -384,6 +397,7 @@ import DeliveryCharges from "./invoice/DeliveryCharges.vue";
 import PostingDateRow from "./invoice/PostingDateRow.vue";
 import MultiCurrencyRow from "./invoice/MultiCurrencyRow.vue";
 import CancelSaleDialog from "./invoice/CancelSaleDialog.vue";
+import MesaContextStrip from "./invoice/MesaContextStrip.vue";
 import InvoiceSummary from "./invoice/InvoiceSummary.vue";
 import ItemsTable from "./invoice/ItemsTable.vue";
 import InvoiceItemsActionToolbar from "./invoice/InvoiceItemsActionToolbar.vue";
@@ -395,6 +409,7 @@ import invoiceComputed from "./invoice/invoiceComputed";
 import invoiceWatchers from "./invoice/invoiceWatchers";
 import shortcutMethods from "./invoice/invoiceShortcuts";
 import { useInvoiceStore } from "../../stores/invoiceStore.js";
+import { useFloorStore } from "../../stores/floorStore";
 import { useCustomersStore } from "../../stores/customersStore.js";
 import { useToastStore } from "../../stores/toastStore.js";
 import { useUIStore } from "../../stores/uiStore.js";
@@ -431,6 +446,7 @@ export default {
 		const customersStore = useCustomersStore();
 		const toastStore = useToastStore();
 		const { isOnline } = useOnlineStatus();
+		const floorStore = useFloorStore();
 
 		const { activeView, posProfile: livePosProfile } = storeToRefs(uiStore);
 		const {
@@ -477,8 +493,34 @@ export default {
 
 		const stockLogic = useInvoiceStock(items, packed_items, uiStore.eventBus, () => {});
 
+		/**
+		 * The cart belongs to a table order (golden flow §3). One question, three
+		 * consumers: the context strip above the ticket, the identity field's
+		 * label, and the «Cancelar venta» copy — all of which must agree, so all
+		 * of them read this and not the store directly.
+		 */
+		const mesaOrderActive = computed(() => Boolean(floorStore.activeOrder));
+
+		/**
+		 * Someone else is filling the band's lanes.
+		 *
+		 * `InvoiceSummary` teleports its subtotal/IVA/discount column and its
+		 * tender chips into the band whenever the band is the SALE's. It is not,
+		 * on either of this round's two screens: Salón publishes the room's own
+		 * figures, and a mesa-owned sale publishes the round's (`Salon.dc.html`,
+		 * `SalonCuenta.dc.html`). Leaving the summary teleporting would put two
+		 * breakdowns and a set of tender chips in the one lane §17.7 reserves
+		 * for a single statement.
+		 */
+		const bandOwnedElsewhere = computed(
+			() => activeView.value === "floor" || mesaOrderActive.value,
+		);
+
 		return {
 			uiStore,
+			floorStore,
+			mesaOrderActive,
+			bandOwnedElsewhere,
 			activeView,
 			isOnline,
 			toastStore,
@@ -556,6 +598,7 @@ export default {
 		PostingDateRow,
 		MultiCurrencyRow,
 		InvoiceSummary,
+		MesaContextStrip,
 		CancelSaleDialog,
 		ItemsTable,
 		InvoiceItemsActionToolbar,
@@ -972,6 +1015,27 @@ export default {
 		handleClearInvoice() {
 			this.clear_invoice();
 			this.uiStore.triggerItemSearchFocus();
+		},
+		/**
+		 * «Cancelar venta» on a mesa-owned sale abandons the CART, never the
+		 * cuenta — and that is a behaviour, not only a wording.
+		 *
+		 * `cancel_invoice` clears the cart. With a table order still attached,
+		 * that clear bumps the cart's change version, the floor's line sync sees
+		 * an empty cart against a synced baseline, and 800 ms later it pushes
+		 * "remove every line" at Mesa 1 — the waiter cancels their own screen and
+		 * deletes the table's food with it. Detaching FIRST drops the baseline
+		 * and cancels any pending push, which is the same ordering the settle
+		 * path and «Guardar · Volver» both take.
+		 *
+		 * What is lost is whatever the debounce still held; what the server has
+		 * already accepted stays on the cuenta, which is what the copy promises.
+		 */
+		confirmCancelSale() {
+			if (this.floorStore?.activeOrder) {
+				this.floorStore.setActiveOrder(null);
+			}
+			return this.cancel_invoice();
 		},
 		handleLoadInvoice(data) {
 			this.load_invoice(data, { preserveStickies: true });

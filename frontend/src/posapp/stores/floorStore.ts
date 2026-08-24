@@ -17,7 +17,7 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import * as restaurantApi from "../api/restaurant";
-import { createCartSync } from "./floor/floorCartSync";
+import { createCartSync, type CartSyncState } from "./floor/floorCartSync";
 import { createOrderActions } from "./floor/floorOrderActions";
 import { createFloorRealtime } from "./floor/floorRealtime";
 import {
@@ -79,6 +79,14 @@ export const useFloorStore = defineStore("floor", () => {
 	const transferOrder = ref<OrderRow | null>(null);
 	/** The order whose lines are currently loaded in the cart. */
 	const activeOrder = ref<OrderRow | null>(null);
+	/**
+	 * What the mesa strip says about the round in the cart.
+	 *
+	 * Register-wide rather than per-table (`syncingTables` is that) because it
+	 * answers a question about the ONE ticket the operator is looking at, and
+	 * because a table-less cup tab has no table name to key on.
+	 */
+	const cartSyncState = ref<CartSyncState>("idle");
 
 	const posProfileName = computed(() => uiStore.posProfile?.name || "");
 	const companyName = computed(() => uiStore.company || "");
@@ -131,6 +139,25 @@ export const useFloorStore = defineStore("floor", () => {
 
 	const isSyncing = (table: string): boolean => syncingTables.value.includes(table);
 
+	/**
+	 * The room at a glance, for the salón band.
+	 *
+	 * Occupancy and cleaning are per-FLOOR (a waiter reads the room they are
+	 * standing in), while accounts and the open total are per-REGISTER — the
+	 * same reasoning that keeps `refresh` unfiltered so the dock badge cannot
+	 * lie when someone switches floors.
+	 */
+	const floorStats = computed(() => {
+		const roomTables = activeFloorTables.value;
+		return {
+			tables: roomTables.length,
+			occupied: roomTables.filter((table) => isOccupied(table.name)).length,
+			needsCleaning: roomTables.filter((table) => Boolean(table.needs_cleaning)).length,
+			openAccounts: orders.value.length,
+			openTotal: orders.value.reduce((sum, order) => sum + (Number(order.total) || 0), 0),
+		};
+	});
+
 	const markSyncing = (table: string | null, on: boolean) => {
 		if (!table) return;
 		const present = syncingTables.value.includes(table);
@@ -152,6 +179,9 @@ export const useFloorStore = defineStore("floor", () => {
 		onOrderUpdated: (order) => {
 			upsertOrder(order);
 			activeOrder.value = order;
+		},
+		onSyncState: (state) => {
+			cartSyncState.value = state;
 		},
 		onError: (message) => {
 			error.value = message;
@@ -361,8 +391,10 @@ export const useFloorStore = defineStore("floor", () => {
 		lastSyncedAt,
 		transferOrder,
 		activeOrder,
+		cartSyncState,
 		deviceIdentifier,
 		// derived
+		floorStats,
 		hasTables,
 		invoiceMode,
 		isRecordOnly,

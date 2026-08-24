@@ -126,7 +126,14 @@
 					scan field would count every barcode twice. Teleport moves the one
 					header's nodes and leaves its owner mounted.
 				-->
-				<div v-show="!hostedDestinationId && !cobroHosted" id="register-scan-bar"></div>
+				<!-- Hidden, never unmounted, while Salón owns the stage: the scan
+				     header is teleported INTO this div by the one ItemsSelector,
+				     and a `v-if` here would tear that teleport down and put the
+				     register's only scanner attach/detach pair on a view switch. -->
+				<div
+					v-show="!hostedDestinationId && !cobroHosted && !floorOwnsStage"
+					id="register-scan-bar"
+				></div>
 
 				<v-row
 					v-show="!hostedDestinationId && !cobroHosted"
@@ -159,14 +166,22 @@
 				>
 					<PosCoupons></PosCoupons>
 				</v-col>
+				<!-- SALÓN TAKES THE WHOLE STAGE (CAFETERIA_GOLDEN_FLOW.md §2).
+				     A 616px authored room in the 5/12 selector slot is ~440px of
+				     board: horizontal scroll, the Barra clipped, the ticket rail
+				     painted over Mesa 3. The room is the screen while the waiter
+				     is in it, so the column takes 12 and the sale's column stands
+				     down — v-show, so the cart, its scroll and its focus are all
+				     still there when the waiter comes back. -->
 				<v-col
 					v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'floor'"
-					:xl="useCompactPosSwitcher ? 12 : 5"
-					:lg="useCompactPosSwitcher ? 12 : 5"
-					:md="useCompactPosSwitcher ? 12 : 5"
-					:sm="useCompactPosSwitcher ? 12 : 5"
+					:xl="floorColSpan"
+					:lg="floorColSpan"
+					:md="floorColSpan"
+					:sm="floorColSpan"
 					cols="12"
 					class="pos dynamic-col dynamic-col--selector"
+					:class="{ 'dynamic-col--stage': floorOwnsStage }"
 				>
 					<!-- The panel's visibility is v-show like every other selector
 					     column; this v-if is the CAPABILITY gate, so a retail
@@ -174,7 +189,12 @@
 					     socket room. On a restaurant register it mounts with the
 					     shell and stays mounted, which is what keeps the dock badge
 					     honest before anyone has opened the floor. -->
-					<FloorView v-if="floorEnabled"></FloorView>
+					<FloorView
+						v-if="floorEnabled"
+						:owns-stage="floorOwnsStage"
+						:owns-band="floorOwnsStage && railVisible"
+						@band="onFloorBand"
+					></FloorView>
 				</v-col>
 				<v-col
 					v-if="
@@ -193,7 +213,7 @@
 				</v-col>
 
 				<v-col
-					v-show="!useCompactPosSwitcher || compactPanel === 'invoice'"
+					v-show="(!useCompactPosSwitcher || compactPanel === 'invoice') && !floorOwnsStage"
 					:xl="12"
 					:lg="12"
 					:md="12"
@@ -270,7 +290,7 @@
 				<!-- "Se suele llevar junto". Above the band on purpose: it is an
 				     offer, and the band is the commitment. -->
 				<ComboSuggestionStrip
-					v-if="!hostedDestinationId && !cobroHosted && comboSuggestions.length"
+					v-if="!hostedDestinationId && !cobroHosted && !floorOwnsStage && comboSuggestions.length"
 					:suggestions="comboSuggestions"
 					:format-currency="formatCurrency"
 					@add="addComboSuggestion"
@@ -284,7 +304,36 @@
 					:state="bandState"
 					:format-currency="formatCurrency"
 					@primary="onBandPrimary"
-				/>
+				>
+					<!-- The mesa sale's other two verbs. Only for `tableSale`:
+					     read off the resolved band rather than off the store, so
+					     the buttons cannot outlive the band that explains them
+					     (Cobro takes the band over and these go with it). -->
+					<template v-if="bandState.kind === 'tableSale'" #actions>
+						<button
+							type="button"
+							class="action-band__secondary"
+							data-testid="band-fire-course"
+							@click="fireMesaCourse"
+						>
+							<v-icon icon="mdi-silverware-variant" size="19" />
+							{{ verticalT("SEND TO KITCHEN") }}
+							<span v-if="mesaUnsentCount" class="action-band__secondary-badge">{{
+								mesaUnsentCount
+							}}</span>
+						</button>
+						<button
+							type="button"
+							class="action-band__secondary"
+							data-testid="band-charge-account"
+							:disabled="!mesaHasLines"
+							@click="triggerInvoicePay"
+						>
+							<v-icon icon="mdi-cash-register" size="19" />
+							{{ verticalT("CHARGE") }}
+						</button>
+					</template>
+				</ActionBand>
 
 			</div>
 		</div>
@@ -621,6 +670,24 @@ export default {
 			() => vertical.leanVerticalLayout || responsive.windowWidth.value < 1100,
 		);
 		const compactPanel = ref("selector");
+		/**
+		 * Salón is the screen, not a column in it (golden flow §2).
+		 *
+		 * True whenever the floor panel is the one on show. On the compact
+		 * switcher that is already how it works — one panel at a time — so the
+		 * only thing this adds there is the band/scan-bar suppression; on the
+		 * two-column desktop it is what stands the sale's column down.
+		 */
+		const floorOwnsStage = computed(
+			() =>
+				floorEnabled.value &&
+				activeView.value === "floor" &&
+				(!useCompactPosSwitcher.value || compactPanel.value === "selector"),
+		);
+		/** 12 while the floor owns the stage, the shipped 5 otherwise. */
+		const floorColSpan = computed(() =>
+			floorOwnsStage.value || useCompactPosSwitcher.value ? 12 : 5,
+		);
 		const isPhone = computed(() => responsive.isPhone.value);
 		const showBottomDock = computed(
 			() => !dialog.value && (vertical.leanVerticalLayout || responsive.windowWidth.value < 1100),
@@ -785,6 +852,19 @@ export default {
 		// mounted behind it (v-show) and keeps its socket room.
 		const handleFloorOrderOpened = () => {
 			showInvoicePanel();
+			// Salón owns the whole stage now, so "show me the cart" has to move
+			// the VIEW as well as the compact panel — `showInvoicePanel` only
+			// ever moved the latter, which on the two-column desktop used to be
+			// enough because the cart was already beside the floor. It is not
+			// any more: the sale's column stands down while `activeView` is
+			// `floor`, so a resumed cuenta would land on a hidden ticket.
+			//
+			// Compact is deliberately untouched: there the panel IS the answer,
+			// and changing `activeView` would trip the watcher that forces the
+			// selector panel back, landing the waiter on Browse.
+			if (!useCompactPosSwitcher.value && activeView.value === "floor") {
+				uiStore.setActiveView("items");
+			}
 		};
 
 		const handlePaymentDialogUpdate = (value) => {
@@ -1224,21 +1304,110 @@ export default {
 			window.dispatchEvent(new Event("resize"));
 		};
 
-		// One number, one action. `sale` is the only input the shell can answer
-		// today; tender, refund, recharge and closing arrive with the surfaces
-		// that own those numbers.
-		const bandState = computed(
-			() =>
-				hostedBandState.value ??
-				resolveBandState({
-					kind: "sale",
+		// ---- the floor's own band -------------------------------------------
+		//
+		// Published by FloorView (it owns the selection) and held in its own ref
+		// rather than in `hostedBandState`: the floor is a selector COLUMN, not
+		// a hosted destination, so the two watchers that clear a hosted band
+		// (destination change, Cobro opening) say nothing about it.
+		const floorBandState = ref(null);
+		const onFloorBand = (state) => {
+			floorBandState.value = state || null;
+		};
+
+		/**
+		 * The cart holds a table order, so the sale is the MESA's (golden flow
+		 * §3). Read off `activeOrder` alone — the same thing the mesa strip and
+		 * the cart sync branch on — so the band, the strip and the sync can
+		 * never disagree about whose ticket is on screen.
+		 */
+		const mesaOrder = computed(() => floorStore.activeOrder);
+		const mesaSaleActive = computed(() => Boolean(mesaOrder.value));
+		const mesaUnsentCount = computed(() => Number(mesaOrder.value?.unsent_count) || 0);
+		const mesaHasLines = computed(() => itemsCount.value > 0);
+		const mesaAccountLabel = computed(() => {
+			const order = mesaOrder.value;
+			if (!order) return "";
+			const table = order.table
+				? floorStore.tables.find((row) => row.name === order.table)?.table_label || ""
+				: "";
+			// Table first, then who is sitting there — `SalonCuenta.dc.html`
+			// writes «Mesa 1 · Sofía», and the table is what the waiter is
+			// walking back to.
+			return [table, order.tab_name].filter(Boolean).join(" · ");
+		});
+
+		// One number, one action. `sale` is the counter's; a cart owned by a
+		// table order says SAVE instead, and Salón publishes its own.
+		const bandState = computed(() => {
+			if (floorOwnsStage.value) {
+				return (
+					floorBandState.value ??
+					resolveBandState({ kind: "floorAccount", total: 0, chargeable: false })
+				);
+			}
+			if (hostedBandState.value) return hostedBandState.value;
+			if (mesaSaleActive.value) {
+				return resolveBandState({
+					kind: "tableSale",
 					total: invoiceTotal.value,
-					itemCount: itemsCount.value,
-				}),
-		);
+					accountLabel: mesaAccountLabel.value,
+					lineCount: itemsCount.value,
+				});
+			}
+			return resolveBandState({
+				kind: "sale",
+				total: invoiceTotal.value,
+				itemCount: itemsCount.value,
+			});
+		});
+
+		/**
+		 * «GUARDAR · VOLVER AL SALÓN» — the verb the register was missing.
+		 *
+		 * Order is load-bearing and matches the settle path's: flush what the
+		 * debounce still holds, DETACH, then clear. Detaching first drops the
+		 * sync baseline and cancels any pending push, so the cart-clear below
+		 * cannot travel back to the server as "remove every line from Mesa 1".
+		 */
+		const returnToSalon = async () => {
+			try {
+				await floorStore.flushCartSync();
+			} catch {
+				/* the flush already reported itself through the store's error */
+			}
+			floorStore.setActiveOrder(null);
+			eventBus.emit("clear_invoice");
+			applySelectorView("floor");
+		};
+
+		// Named, not the bare async function: `off()` must be given the very
+		// same reference `on()` got, and a bus handler is called with a payload.
+		const handleReturnToSalon = () => {
+			void returnToSalon();
+		};
+
+		// The fire lives in FloorView with its telemetry mark and its kitchen
+		// print verdict poll; the band sends the intent rather than growing a
+		// second call site onto the kitchen path.
+		const fireMesaCourse = () => {
+			eventBus.emit("floor_fire_active_course");
+		};
+
 		const onBandPrimary = (actionId) => {
 			if (actionId === "sale.pay") {
 				triggerInvoicePay();
+				return;
+			}
+			if (actionId === "table.saveAndReturn") {
+				void returnToSalon();
+				return;
+			}
+			if (actionId === "floor.chargeAccount") {
+				// The selected cuenta is not in the cart yet — the floor asks
+				// before it acts — so FloorView hydrates it and then calls the
+				// same payment validator every other Charge goes through.
+				eventBus.emit("floor_charge_selected_account");
 				return;
 			}
 			if (actionId === "sale.collectAndClose") {
@@ -1594,6 +1763,7 @@ export default {
 				eventBus.on("open_mpesa_payments", handleOpenMpesaPayments);
 				eventBus.on("show_change_due", handleShowChangeDue);
 				eventBus.on("floor_order_opened", handleFloorOrderOpened);
+				eventBus.on("floor_return_to_salon", handleReturnToSalon);
 			}
 			nextTick(() => {
 				updateBottomDockHeight();
@@ -1638,6 +1808,7 @@ export default {
 				eventBus.off("open_mpesa_payments", handleOpenMpesaPayments);
 				eventBus.off("show_change_due", handleShowChangeDue);
 				eventBus.off("floor_order_opened", handleFloorOrderOpened);
+				eventBus.off("floor_return_to_salon", handleReturnToSalon);
 			}
 			stopQzPrewarm();
 		});
@@ -1672,6 +1843,17 @@ export default {
 
 			if (["items", "offers", "coupons", "payment", "floor"].includes(view)) {
 				compactPanel.value = "selector";
+			}
+		});
+
+		// The catalogue cannot be open over a room. `applySelectorView` already
+		// closes it on the rail/dock route to Salón, but the bus route
+		// (`set_selector_view`, used by /floor and by the floor's own verbs)
+		// does not go through it — and an anchored drawer left open would take
+		// half the stage the floor was just given.
+		watch(floorOwnsStage, (owns) => {
+			if (owns && catalogDrawer.isOpen.value) {
+				catalogDrawer.close();
 			}
 		});
 
@@ -1746,6 +1928,12 @@ export default {
 			ItemsView,
 			CartView,
 			floorEnabled,
+			floorOwnsStage,
+			floorColSpan,
+			onFloorBand,
+			mesaUnsentCount,
+			mesaHasLines,
+			fireMesaCourse,
 			// Riel y Cajón
 			railVisible,
 			cobroHosted,
@@ -2031,6 +2219,67 @@ export default {
 	flex-direction: column;
 	min-width: 0;
 	min-height: 0;
+}
+
+/* Salón with the stage to itself. `flex-basis: 100%` rather than relying on
+ * the v-col span class alone: the sale's column is only `v-show`n away, so it
+ * is still a flex ITEM of this row on the frame the two swap, and a basis of
+ * 41.67% would let the room start narrow and grow into place. */
+.dynamic-col--stage {
+	flex: 1 1 100%;
+	max-width: 100%;
+}
+
+/* ── The band's secondary verbs (mesa-owned sale) ──────────────────
+ * Written here, not in ActionBand.vue: slot content compiles in the
+ * PARENT, so it carries this file's scope id and only this file's
+ * scoped rules can reach it. Outline, 92px, the accent left to the
+ * primary — `SalonCuenta.dc.html`'s own treatment. */
+.action-band__secondary {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--reg-space-md, 10px);
+	height: var(--reg-band-action-height, 92px);
+	min-height: var(--reg-touch-min, 44px);
+	padding: 0 20px;
+	border: 1.5px solid var(--pos-border, #d8dee6);
+	border-radius: var(--reg-radius-md, 14px);
+	cursor: pointer;
+	background: var(--pos-surface, #ffffff);
+	color: var(--pos-text-primary, #37414d);
+	font-family: inherit;
+	font-size: 14px;
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	white-space: nowrap;
+}
+
+.action-band__secondary:hover:not(:disabled) {
+	border-color: var(--pos-primary, #0097a7);
+}
+
+.action-band__secondary:disabled {
+	color: var(--pos-text-secondary, #8b93a0);
+	cursor: not-allowed;
+}
+
+.action-band__secondary:focus-visible {
+	outline: 3px solid var(--pos-primary, #00838f);
+	outline-offset: 2px;
+}
+
+.action-band__secondary-badge {
+	min-width: 20px;
+	padding: 0 6px;
+	border-radius: 10px;
+	background: var(--pos-error, #b42318);
+	color: #ffffff;
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 20px;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
 }
 
 /* ───────────────────────────────────────────────────────────────

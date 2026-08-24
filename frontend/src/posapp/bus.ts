@@ -161,6 +161,27 @@ export type Events = {
 	 * ticket format — but the event is the seam it will attach to.
 	 */
 	floor_course_fired: KotProjection;
+	/**
+	 * The band's «ENVIAR A COCINA» pressed on a mesa-owned sale. The fire lives
+	 * in `FloorView` — with its telemetry mark and the poll that tells the
+	 * waiter whether the kitchen actually got paper — so the press travels
+	 * there rather than growing a second call site onto the kitchen path.
+	 */
+	floor_fire_active_course: void;
+	/**
+	 * The salón band's «COBRAR CUENTA» pressed. The selected cuenta is NOT in
+	 * the cart (the floor asks before it acts), so `FloorView` hydrates it and
+	 * then hands off to the invoice panel's payment validator like every other
+	 * Charge. Handled in `FloorView.vue`.
+	 */
+	floor_charge_selected_account: void;
+	/**
+	 * «GUARDAR · VOLVER AL SALÓN» / «Volver al salón». Flush the line sync,
+	 * detach the order, clear the register, land on the floor — an ordering
+	 * only the shell can perform, so the mesa strip asks for it by name.
+	 * Handled in `Pos.vue`.
+	 */
+	floor_return_to_salon: void;
 
 	// ---- notifications ------------------------------------------------------
 	show_message: NotificationData;

@@ -36,7 +36,9 @@ export type BandKind =
 	| "recharge"
 	| "opening"
 	| "closing"
-	| "queued";
+	| "queued"
+	| "floorAccount"
+	| "tableSale";
 
 /**
  * Stable action ids, decoupled from key bindings so the shortcuts engine
@@ -50,7 +52,9 @@ export type BandActionId =
 	| "recharge.submit"
 	| "shift.open"
 	| "shift.close"
-	| "offline.keepSelling";
+	| "offline.keepSelling"
+	| "floor.chargeAccount"
+	| "table.saveAndReturn";
 
 export interface BandAction {
 	id: BandActionId;
@@ -135,7 +139,19 @@ export type BandInput =
 	/** Corte: counted against expected. */
 	| { kind: "closing"; expected: unknown; counted: unknown; canClose?: boolean }
 	/** Sin conexión: what is still waiting to upload. */
-	| { kind: "queued"; amount: unknown; ticketCount?: unknown };
+	| { kind: "queued"; amount: unknown; ticketCount?: unknown }
+	/**
+	 * Salón: the floor owns the stage and the number is the SELECTED cuenta's
+	 * own total — never the table's aggregate, which cannot be charged in one
+	 * press (RESTAURANT_UX_MAP §5).
+	 */
+	| { kind: "floorAccount"; total: unknown; accountLabel?: string; chargeable?: boolean }
+	/**
+	 * A sale owned by a table order. The verb is SAVE, not PAY: the seated loop
+	 * ends by putting the round on the cuenta and going back to the room
+	 * (CAFETERIA_GOLDEN_FLOW.md §3).
+	 */
+	| { kind: "tableSale"; total: unknown; accountLabel?: string; lineCount?: unknown };
 
 /**
  * Resolve the band for the current moment.
@@ -299,6 +315,45 @@ export function resolveBandState(input: BandInput): BandState {
 				// problem, so the action returns them to the sale rather than
 				// asking them to do something about the backlog.
 				primaryAction: { id: "offline.keepSelling", labelKey: "KEEP SELLING" },
+				primaryEnabled: true,
+			};
+		}
+
+		case "floorAccount": {
+			const total = round2(num(input.total));
+			const label = (input.accountLabel ?? "").trim();
+			return {
+				kind: "floorAccount",
+				tone: "neutral",
+				value: total,
+				// No account picked yet is a real state of this screen — the
+				// waiter walks in on it — so it gets its own caption rather than
+				// an identity line with a hole in it (the same rule `recharge`
+				// follows for a destination with no carrier yet).
+				labelKey: label ? "Open account · {0}" : "No account selected",
+				labelParams: label ? [label] : undefined,
+				primaryAction: { id: "floor.chargeAccount", labelKey: "CHARGE ACCOUNT" },
+				// UX map §5: Charge is never OFFERED for an empty account. The
+				// button keeps its place (the band must not change shape while a
+				// waiter taps around the room) and refuses the press.
+				primaryEnabled: input.chargeable ?? total > 0,
+			};
+		}
+
+		case "tableSale": {
+			const total = round2(num(input.total));
+			const label = (input.accountLabel ?? "").trim();
+			const lineCount = Math.trunc(num(input.lineCount));
+			return {
+				kind: "tableSale",
+				tone: "neutral",
+				value: total,
+				labelKey: label ? "{0} · {1} lines" : "Table account · {0} lines",
+				labelParams: label ? [label, lineCount] : [lineCount],
+				primaryAction: { id: "table.saveAndReturn", labelKey: "SAVE · BACK TO FLOOR" },
+				// Always pressable, including on an empty cuenta: going back to
+				// the room is how a waiter leaves a table they opened by mistake,
+				// and «Liberar mesa» lives on the mesa sheet, not here.
 				primaryEnabled: true,
 			};
 		}

@@ -490,6 +490,22 @@ const props = defineProps({
 	 */
 	bandBreakdownTarget: { type: String, default: "" },
 	bandContextTarget: { type: String, default: "" },
+	/**
+	 * Another surface is filling the band's lanes right now.
+	 *
+	 * Salón publishes the room's figures and a mesa-owned sale publishes the
+	 * round's (`Salon.dc.html`, `SalonCuenta.dc.html`), and §17.7 gives that
+	 * lane to ONE statement. Passed by `Invoice.vue`, which is the only place
+	 * that can see both the active view and the floor's open order.
+	 */
+	bandOwnedElsewhere: { type: Boolean, default: false },
+	/**
+	 * The cart belongs to a table order. Changes what «Cancelar venta» means
+	 * (the cart's edits, never the cuenta) and nothing else here — the identity
+	 * fields keep working, and «Nombre en cuenta» keeps editing the label,
+	 * which is what `posaTabName` already syncs to the order.
+	 */
+	mesaOrderActive: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -580,6 +596,9 @@ const { parkedOrders, draftSource, paymentDialogOpen } = storeToRefs(uiStore);
 const actionStripProps = computed(() => ({
 	pos_profile: props.pos_profile,
 	bandOwnsPrimary: bandOwnsSaleLane.value,
+	// Declared below this computed; only read at render time, by which point
+	// every `const` in this block has initialised.
+	labelOverrides: actionChipLabels.value,
 	lineSummary: lineSummary.value,
 	saveLoading: saveLoading.value,
 	loadDraftsLoading: loadDraftsLoading.value,
@@ -782,7 +801,21 @@ const bandOwnsSaleLane = computed(() =>
 const saleOwnsBand = computed(() => bandOwnsSaleLane.value && !paymentDialogOpen.value);
 
 const bandLaneActive = computed(
-	() => saleOwnsBand.value && Boolean(props.bandBreakdownTarget || props.bandContextTarget),
+	() =>
+		saleOwnsBand.value &&
+		!props.bandOwnedElsewhere &&
+		Boolean(props.bandBreakdownTarget || props.bandContextTarget),
+);
+
+/**
+ * «Cancelar venta» is the wrong sentence on a mesa-owned sale: it does not
+ * cancel the cuenta, and a waiter who read it that way would never press it.
+ * The registry keeps one definition of the chip; this renames it for the one
+ * state where the same button means something else. The behaviour is fixed in
+ * `Invoice.vue` (`confirmCancelSale`), which detaches before it clears.
+ */
+const actionChipLabels = computed(() =>
+	props.mesaOrderActive ? { "cancel-sale": "Discard cart changes" } : {},
 );
 const showDesktopDrafts = computed(() => Boolean(responsive.isDesktop.value));
 const showReturnDiscountAlert = computed(
@@ -1216,6 +1249,13 @@ defineExpose({
 	gap: 8px;
 	margin-bottom: 8px;
 	min-width: 0;
+	/* One line where there is room for one line, two where there is not.
+	 * Fixed on a nowrap row, «Comensales» had ~50px to print ten characters in
+	 * and rendered as «Co…» — a label nobody can read is not denser than a
+	 * second line, it is just wrong. Wrapping keeps the counter facts together
+	 * (name + guests share a group) and lets Service Type drop below on a
+	 * narrow cart. */
+	flex-wrap: wrap;
 }
 
 .summary-tab-name {
@@ -1224,29 +1264,39 @@ defineExpose({
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	flex: 1 1 auto;
+	/* A real basis, not `auto`: the two fields inside have to fit their own
+	 * labels before this group is allowed to be the one that gives way. */
+	flex: 1 1 320px;
 	min-width: 0;
 }
 
+/* Wide enough for «Comensales» beside its icon at 0.85rem, which is what the
+ * label actually needs — measured, not guessed. */
 .summary-guest-count {
-	flex: 0 0 96px;
+	flex: 0 0 132px;
 }
 
 .summary-service-type {
-	flex: 0 1 230px;
+	flex: 1 1 180px;
 	min-width: 160px;
 }
 
+/* Compact, and still a floating label with somewhere to float TO.
+ *
+ * The rule this replaces forced `.v-field__input { padding-top: 4px }` while a
+ * solo/compact floating label sits at `top: 3px` — so a typed «Sofía» rendered
+ * UNDER its own label, which is the bug the owner marked. Vuetify's own
+ * arithmetic already reserves the room (`--v-field-padding-top` 8px +
+ * `--v-input-padding-top` 8px = 16px, giving a 40px control), so the fix is to
+ * stop overriding the padding at all and let the field be 40px. Two pixels
+ * taller than the number that was written here, and legible.
+ *
+ * `min-height` stays off `.v-field__input` for the same reason: Vuetify
+ * computes it from those two paddings plus the line box, and a hard 38px was
+ * what made the shrunken padding look survivable. */
 .summary-counter-row :deep(.v-field) {
-	min-height: 38px;
 	font-size: 0.85rem;
 	border-radius: 10px;
-}
-
-.summary-counter-row :deep(.v-field__input) {
-	min-height: 38px;
-	padding-top: 4px;
-	padding-bottom: 4px;
 }
 
 .summary-counter-row :deep(.v-field__prepend-inner .v-icon) {
