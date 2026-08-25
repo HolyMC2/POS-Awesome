@@ -28,6 +28,10 @@ import {
 	type LedgerRowSource,
 } from "../src/posapp/components/pos/flows/ledger/ledgerModel";
 import {
+	describeTicketOrigin,
+	ticketDayLabel,
+} from "../src/posapp/components/pos/flows/ledger/ledgerRows";
+import {
 	collections,
 	DIRECTORY,
 	formatCurrency,
@@ -473,5 +477,51 @@ describe("the engine is chromed, not rewritten", () => {
 		// absences rest on.
 		expect(invoiceManagementSource).toContain(`getInvoiceListFields(extraFields = []) {`);
 		expect(invoiceManagementSource).toContain(`"owner",\n\t\t\t\t"modified_by",\n\t\t\t\t...extraFields,`);
+	});
+});
+
+describe("the panel's date — a ticket names its day, not just its hour", () => {
+	const NOW = new Date(2026, 7, 24); // 24 ago 2026
+
+	it("prints the abbreviated day for a same-year ticket", () => {
+		const label = ticketDayLabel("2026-08-22", NOW, "es");
+		expect(label).toContain("22");
+		expect(label.toLowerCase()).toContain("ago");
+		expect(label).not.toContain("2026");
+	});
+
+	it("carries the year only when it is not the current one", () => {
+		expect(ticketDayLabel("2025-12-30", NOW, "es")).toContain("2025");
+	});
+
+	it("says nothing for a date it cannot read", () => {
+		expect(ticketDayLabel("", NOW)).toBe("");
+		expect(ticketDayLabel("mañana", NOW)).toBe("");
+	});
+});
+
+describe("the ticket's origin — the Taller order behind it", () => {
+	it("reads the legacy repair_order field first", () => {
+		expect(describeTicketOrigin({ repair_order: "RO-01" })).toEqual({
+			request: "",
+			label: "RO-01",
+		});
+	});
+
+	it("reads the charge-request marker and prefers its folio tail", () => {
+		const origin = describeTicketOrigin({
+			remarks: "POS Charge Request: PCR-2026-00076 · RO-08699 — TWIP DEV",
+		});
+		expect(origin).toEqual({ request: "PCR-2026-00076", label: "RO-08699 — TWIP DEV" });
+	});
+
+	it("falls back to the request name on a pre-08-24 marker with no tail", () => {
+		const origin = describeTicketOrigin({ remarks: "POS Charge Request: PCR-2026-00003" });
+		expect(origin).toEqual({ request: "PCR-2026-00003", label: "PCR-2026-00003" });
+	});
+
+	it("stays silent for an ordinary counter sale", () => {
+		expect(describeTicketOrigin({ remarks: "gracias por su compra" })).toBeNull();
+		expect(describeTicketOrigin(null)).toBeNull();
 	});
 });

@@ -24,6 +24,7 @@
 			<v-card v-if="ledgerMode" class="pos-themed-card invoice-ledger-card" variant="flat">
 				<InvoiceLedgerSurface
 					:destination-id="ledgerDestinationId"
+					:profile-name="posProfile && posProfile.name"
 					:active-tab="activeTab"
 					:page-size="pageSize"
 					:date-from="historyDateFrom"

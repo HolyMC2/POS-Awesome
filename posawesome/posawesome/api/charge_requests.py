@@ -223,7 +223,10 @@ def prepare_charge_request_invoice(name, pos_profile, pos_opening_shift):
     doc.company = request.company
     doc.pos_profile = pos_profile
     doc.posa_pos_opening_shift = pos_opening_shift
-    doc.remarks = marker
+    # The marker leads (both dedup queries above match on its prefix); the
+    # source label rides behind a middle dot so the ledger panel can NAME the
+    # workshop order («RO-08699 — TWIP DEV») without a lookup per selection.
+    doc.remarks = f"{marker} · {request.source_label}" if request.source_label else marker
     if use_pos_invoice:
         doc.is_pos = 1
         doc.update_stock = 1

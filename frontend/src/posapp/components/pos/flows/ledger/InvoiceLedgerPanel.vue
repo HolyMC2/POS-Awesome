@@ -72,6 +72,43 @@
 					</div>
 				</template>
 
+				<!-- «Cliente» — the facts a counter reaches for while the customer
+				     is still standing there (artboard `Facturas de la caja`,
+				     08-24): the phone off the fetched doc, and the CRM's one-line
+				     answer with a real door into it. Each row renders only when
+				     its fact exists — absence, never a filler dash. -->
+				<template v-if="contactPhone || crmFact">
+					<div class="ledger-panel__label">{{ __("Customer") }}</div>
+					<div v-if="contactPhone" class="ledger-panel__pair">
+						<span class="ledger-panel__pair-label">{{ __("Phone") }}</span>
+						<span class="reg-mono" data-testid="ledger-panel-phone">{{ contactPhone }}</span>
+					</div>
+					<div v-if="crmFact" class="ledger-panel__pair">
+						<span class="ledger-panel__pair-label">CRM</span>
+						<span data-testid="ledger-panel-crm">
+							{{ crmFact.text }}
+							<a
+								v-if="crmFact.href"
+								class="ledger-panel__link"
+								:href="crmFact.href"
+								target="_blank"
+								rel="noopener"
+								data-testid="ledger-panel-crm-link"
+								>{{ __("open") }}</a
+							>
+						</span>
+					</div>
+				</template>
+
+				<!-- «Origen» — only a ticket born in Taller has one to state. -->
+				<template v-if="origin">
+					<div class="ledger-panel__label">{{ __("Origin") }}</div>
+					<div class="ledger-panel__pair">
+						<span class="ledger-panel__pair-label">{{ __("Service Order") }}</span>
+						<span class="reg-mono" data-testid="ledger-panel-origin">{{ origin.label }}</span>
+					</div>
+				</template>
+
 				<div v-if="!detail" class="ledger-panel__pending" data-testid="ledger-panel-pending">
 					{{ __("Press Enter to read this ticket") }}
 				</div>
@@ -175,7 +212,9 @@
 import { computed } from "vue";
 
 import type { LedgerRow, LedgerRowSource } from "./ledgerModel";
+import { describeTicketOrigin, ticketDayLabel } from "./ledgerRows";
 import { translate as __ } from "./ledgerText";
+import type { CrmContext } from "../../../../services/crmService";
 
 const props = withDefaults(
 	defineProps<{
@@ -193,8 +232,11 @@ const props = withDefaults(
 		canDeleteDraft?: boolean;
 		repairBusy?: boolean;
 		offline?: boolean;
+		/** The row's customer as the CRM knows them — fetched by the surface,
+		 * probe-gated there; `null` while unknown or when the app is absent. */
+		crm?: CrmContext | null;
 	}>(),
-	{ canDeleteDraft: false, repairBusy: false, offline: false },
+	{ canDeleteDraft: false, repairBusy: false, offline: false, crm: null },
 );
 
 defineEmits<{
@@ -211,8 +253,49 @@ const money = (value: number) => `${props.currencySymbol ?? ""}${props.formatCur
 const who = computed(() => {
 	const row = props.row;
 	if (!row) return "";
-	return [row.customer, row.cashier, row.time].filter(Boolean).join(" · ");
+	// The DATE rides between the cashier and the time: with «Por fecha» open
+	// the list holds last week's tickets, and a bare «17:37» on one of those
+	// reads as this afternoon. Same abbreviated format as the navbar clock.
+	const day = ticketDayLabel(row.date, new Date());
+	return [row.customer, row.cashier, day, row.time].filter(Boolean).join(" · ");
 });
+
+const contactPhone = computed(() => {
+	const detail = props.detail;
+	if (!detail) return "";
+	return String(detail.contact_mobile || detail.contact_phone || "").trim();
+});
+
+/**
+ * One line about the customer in the CRM, with a real door when there is one.
+ *
+ * A deal outranks a lead (money over interest), and «Sin registro en el CRM»
+ * is stated rather than implied — the strip on the sale surface made the same
+ * call, and a silent absence reads as "not loaded yet" rather than "nothing
+ * there". No fact at all while the context has not arrived: the panel must
+ * not claim an absence it has not confirmed.
+ */
+const crmFact = computed(() => {
+	const context = props.crm;
+	if (!context || !context.installed) return null;
+	const deal = context.deals?.[0];
+	if (deal) {
+		const bits = [deal.status, deal.amount ? props.formatCurrency(deal.amount) : ""]
+			.filter(Boolean)
+			.join(" · ");
+		return { text: bits || deal.name, href: `/crm/deals/${deal.name}` };
+	}
+	if (context.lead) {
+		return {
+			text: context.lead.status || context.lead.label || context.lead.name,
+			href: `/crm/leads/${context.lead.name}`,
+		};
+	}
+	return { text: __("Not in the CRM"), href: null };
+});
+
+/** The Taller order behind the ticket, off the fetched doc — see ledgerRows. */
+const origin = computed(() => describeTicketOrigin(props.detail));
 
 const outstanding = computed(() => Number(props.row?.raw?.outstanding_amount || 0));
 const changeAmount = computed(() => Number(props.detail?.change_amount || 0));
@@ -391,6 +474,15 @@ const tenders = computed(() => {
 	margin-top: 14px;
 	font-size: 11.5px;
 	color: var(--reg-text-muted, #667085);
+}
+
+/* The one door on a fact row. Accent as INK, never as a fill — the surface's
+   single filled accent stays on «Cobrar saldo». */
+.ledger-panel__link {
+	color: var(--reg-accent, #0097a7);
+	font-weight: 600;
+	text-decoration: underline;
+	text-underline-offset: 2px;
 }
 
 .ledger-panel__actions {

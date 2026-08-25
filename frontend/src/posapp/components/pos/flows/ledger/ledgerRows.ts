@@ -163,6 +163,71 @@ export interface LedgerRow {
 	raw: LedgerRowSource;
 }
 
+/**
+ * `2026-08-22` → `vie 22 ago` (plus the year, only when it is not `now`'s).
+ *
+ * The panel's identity line used to end in a bare time — right while the list
+ * was filtered to today, and wrong the moment «Por fecha» opened last week:
+ * «17:37» on an August-3rd ticket reads as this afternoon (owner screenshot,
+ * 08-24). Same abbreviated format as the navbar clock, so the two never teach
+ * the cashier two date vocabularies. Pure: `now` is HANDED IN, never taken.
+ */
+export const ticketDayLabel = (
+	date: string,
+	now: Date,
+	locale?: string | null,
+): string => {
+	const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(date ?? "").trim());
+	if (!match) return "";
+	const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+	if (Number.isNaN(parsed.getTime())) return "";
+	const tag = String(locale ?? "").trim() || undefined;
+	try {
+		const day = new Intl.DateTimeFormat(tag, {
+			weekday: "short",
+			day: "numeric",
+			month: "short",
+		})
+			.format(parsed)
+			.replace(/\.$/, "");
+		return parsed.getFullYear() === now.getFullYear()
+			? day
+			: `${day} ${parsed.getFullYear()}`;
+	} catch {
+		return "";
+	}
+};
+
+export interface TicketOrigin {
+	/** The charge request behind the ticket, when the marker names one. */
+	request: string;
+	/** What the panel prints — the workshop's own folio wording when it rode
+	 * along on the remarks, the raw reference otherwise. */
+	label: string;
+}
+
+/**
+ * The service order a ticket was born from, read off the document the panel
+ * already fetched — never a second request on selection.
+ *
+ * Two sources, oldest first: the legacy POS Invoice `repair_order` custom
+ * field, and the remarks marker `prepare_charge_request_invoice` stamps
+ * (`POS Charge Request: PCR-… · RO-… — device`). A ticket with neither is an
+ * ordinary counter sale and the panel says nothing — absence, not a dash.
+ */
+export const describeTicketOrigin = (
+	detail: Record<string, unknown> | null,
+): TicketOrigin | null => {
+	if (!detail) return null;
+	const legacy = String((detail as Record<string, unknown>).repair_order ?? "").trim();
+	if (legacy) return { request: "", label: legacy };
+	const remarks = String((detail as Record<string, unknown>).remarks ?? "");
+	const match = /POS Charge Request:\s*(\S+)(?:\s*·\s*([^\n]+))?/.exec(remarks);
+	if (!match) return null;
+	const label = String(match[2] ?? "").trim();
+	return { request: match[1] ?? "", label: label || (match[1] ?? "") };
+};
+
 /** `19:52:03.121` → `19:52`. The seconds are never what a cashier is reading. */
 export const shortTime = (value: unknown): string => {
 	const raw = String(value ?? "").split(".")[0] ?? "";

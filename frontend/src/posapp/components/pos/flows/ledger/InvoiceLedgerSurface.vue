@@ -48,6 +48,7 @@
 			<InvoiceLedgerPanel
 				:row="selectedRow"
 				:detail="matchedDetail"
+				:crm="crmContext"
 				:format-currency="formatCurrency"
 				:format-float="formatFloat"
 				:currency-symbol="currencySymbol"
@@ -116,11 +117,18 @@ import {
 	type LedgerRowSource,
 	type LedgerSegmentId,
 } from "./ledgerModel";
+import {
+	crmIsUnavailable,
+	fetchCrmContext,
+	type CrmContext,
+} from "../../../../services/crmService";
 
 const props = withDefaults(
 	defineProps<{
 		/** `useHostedSheet().destinationId` — `drafts` lands on Borradores. */
 		destinationId?: string | null;
+		/** POS Profile NAME — what `fetchCrmContext` scopes its probe by. */
+		profileName?: string | null;
 		/** `InvoiceManagement.activeTab`; the segment follows it, not the reverse. */
 		activeTab: string;
 		collections: LedgerCollections;
@@ -156,6 +164,7 @@ const props = withDefaults(
 	}>(),
 	{
 		destinationId: null,
+		profileName: null,
 		loading: false,
 		employees: () => [],
 		currentCashier: null,
@@ -289,6 +298,37 @@ const selectedRow = computed<LedgerRow | null>(() => visibleRows.value[selectedI
 /** The panel shows lines only for the document it actually holds. */
 const matchedDetail = computed(() =>
 	selectedRow.value && props.detail?.name === selectedRow.value.name ? props.detail : null,
+);
+
+/**
+ * The selected row's customer, as the CRM knows them.
+ *
+ * One fetch per CUSTOMER, not per row — a cashier arrowing through a page of
+ * «Público en General» must cost one probe, not seventeen — and the answer is
+ * checked against the CURRENT selection before it lands, so a slow reply for
+ * the previous row can never dress this one. Probe-gated exactly like the
+ * sale surface's strip: a tenant without the CRM app asks once and stops.
+ */
+const crmContext = ref<CrmContext | null>(null);
+const crmCache = new Map<string, CrmContext | null>();
+watch(
+	() => selectedRow.value?.raw?.customer,
+	async (customer) => {
+		crmContext.value = null;
+		const key = String(customer ?? "").trim();
+		const profile = String(props.profileName ?? "").trim();
+		if (!key || !profile || crmIsUnavailable()) return;
+		if (crmCache.has(key)) {
+			crmContext.value = crmCache.get(key) ?? null;
+			return;
+		}
+		const context = await fetchCrmContext(key, profile);
+		crmCache.set(key, context);
+		if (String(selectedRow.value?.raw?.customer ?? "").trim() === key) {
+			crmContext.value = context;
+		}
+	},
+	{ immediate: true },
 );
 
 /* ---- intents ----------------------------------------------------------- */
