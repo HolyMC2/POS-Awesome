@@ -40,7 +40,7 @@
 			:model-value="modelValue || ''"
 			inputmode="decimal"
 			hide-details
-			@input="setOther"
+			@update:model-value="setOther"
 		/>
 		<div v-if="modelValue > 0" class="restaurant-tip__preview" data-test="tip-preview-line">
 			<span>{{ label }}</span>
@@ -85,8 +85,8 @@ watch(
 	},
 );
 
-const setOther = (event: Event) => {
-	const value = Number((event.target as HTMLInputElement)?.value || 0);
+const setOther = (raw: string | number) => {
+	const value = Number(raw || 0);
 	// Whole pesos like the % buttons — a fractional tip desyncs rounded_total
 	// from the server's re-rounding and strands centavos on the invoice.
 	emit("update:modelValue", Number.isFinite(value) ? Math.round(Math.max(value, 0)) : 0);

@@ -34,7 +34,7 @@
 								variant="outlined"
 								class="pos-themed-input"
 								:rules="[(v) => !!v || __('* Required')]"
-								@input="codeTouched = true"
+								@update:model-value="codeTouched = true"
 							></v-text-field>
 						</v-col>
 						<v-col cols="12">
