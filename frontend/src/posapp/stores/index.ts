@@ -53,5 +53,6 @@ export { useInvoiceStore } from "./invoiceStore";
 export { useUpdateStore, formatBuildVersion } from "./updateStore";
 export { usePricingRulesStore } from "./pricingRulesStore";
 export { useVerticalStore } from "./verticalStore";
+export type { VerticalLayout, VerticalProfile, CapabilityResolutionStatus } from "./verticalStore";
 
 export default pinia;

@@ -33,6 +33,7 @@
     "TranslateFn",
     "ExchangeRateCacheEntry",
     "BootCriticalSyncArgs",
+    "CatalogSyncArgs",
     "CurrencyMatrixSyncArgs",
     "CustomersSyncArgs",
     "ItemsSyncArgs",
@@ -45,7 +46,9 @@
     "PricingRule",
     "SyncCoordinatorOptions",
     "LoadItemsOptions",
-    "RuleContext"
+    "RuleContext",
+    "WorkerLike",
+    "PersistFallbackWriter"
   ],
   "categorizeByGroup": true,
   "groupOrder": ["Functions", "Classes", "Interfaces", "Type Aliases", "Variables"],
