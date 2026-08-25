@@ -4,6 +4,35 @@ All notable changes.
 
 ## Unreleased
 
+- **Orden de servicio queue is fed by Taller's pull flow (08-24, lab).**
+  `Taller App Settings.use_pos_charge_requests` was switched ON on
+  doco-mirror (it defaults OFF and is still OFF on prod): Taller's «Cobrar»
+  now creates/refreshes a `POS Charge Request` pinned via
+  `default_pos_profile` instead of pushing an SI draft into a guessed shift.
+  Verified end-to-end on the mirror (create → queue → prepare in the
+  cashier's own shift). *How to verify:* Cobrar a «Listo para Entregar» RO
+  in Taller and watch it appear under «Listas» at the register.
+  *Safe to skip if:* the tenant bills repairs some other way — with the flag
+  off nothing changes. Prod flip is Marco's call.
+- **«En trabajo» is a figure, not a disabled pill** (queue chips row, per the
+  updated `Orden.dc.html`): right-aligned wrench + count, tooltip carries the
+  provenance sentence. A pill that never presses read as a broken button.
+- **The ticket panel names its day, its customer and its origin** (per the
+  updated «Facturas de la caja» artboard): date in the identity line,
+  «Cliente» (phone + probe-gated CRM line with a link), «Origen» (the Taller
+  order off the remarks marker, which `prepare_charge_request_invoice` now
+  extends with the request's `source_label` — marker prefix unchanged, both
+  dedup queries still match).
+- **The navbar chip ladder measures its own box** (container queries; the
+  viewport ladder let the grown actions cluster push chips under the
+  connection button at 1920), and the cashier chip states the first name
+  with the full name on its tooltip.
+- **The Cobro pad answers the physical keyboard** — digits/decimal/Backspace
+  feed the same buffer as the on-screen keys, Enter applies; keystrokes in
+  real fields are never intercepted.
+- **Cart rows show the item's artwork** — 32px reserved slot, the catalogue
+  card's thumb→image→neutral-box degradation chain, `v-memo`-safe.
+
 - **Quick item creation is a real intake form (roadmap §17.2).** The
   six-field dialog now takes purchase price, selling price, **margin**,
   opening quantity, description and IVA in one pass — the "alta rápida"
