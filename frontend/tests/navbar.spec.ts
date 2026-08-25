@@ -140,7 +140,7 @@ describe("Navbar supervisor access", () => {
 				},
 				stubs: {
 					NavbarAppBar: true,
-					NavbarDrawer: true,
+					MobileNavPanel: true,
 					NavbarMenu: true,
 					NotificationBell: true,
 					StatusIndicator: true,
@@ -192,7 +192,7 @@ describe("Navbar supervisor access", () => {
 				},
 				stubs: {
 					NavbarAppBar: true,
-					NavbarDrawer: true,
+					MobileNavPanel: true,
 					NavbarMenu: true,
 					NotificationBell: true,
 					StatusIndicator: true,
@@ -289,7 +289,7 @@ describe("Navbar supervisor access", () => {
 				},
 				stubs: {
 					NavbarAppBar: true,
-					NavbarDrawer: true,
+					MobileNavPanel: true,
 					NavbarMenu: true,
 					NotificationBell: true,
 					StatusIndicator: true,

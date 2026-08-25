@@ -92,16 +92,16 @@
 			</template>
 		</NavbarAppBar>
 
-		<!-- Use the modular NavbarDrawer component -->
-		<NavbarDrawer
+		<!-- The below-the-rail nav, in the register's design language (the rows
+		     the rail's «Más» flyout draws, sourced from the same registry). -->
+		<MobileNavPanel
 			v-model:drawer="drawer"
-			v-model:item="item"
 			:company="company"
-			:company-img="companyImg"
+			:company-img="drawerLogo"
+			:subtitle="posProfile?.name"
 			:items="items"
 			:footer-action="drawerFooterAction"
 			@open-settings="openSettingsPanel"
-			@change-page="changePage"
 		/>
 		<NavbarSettingsPanel
 			v-model="settingsPanelOpen"
@@ -162,7 +162,7 @@
 <script>
 import { defineAsyncComponent } from "vue";
 import NavbarAppBar from "./navbar/NavbarAppBar.vue";
-import NavbarDrawer from "./navbar/NavbarDrawer.vue";
+import MobileNavPanel from "./navbar/MobileNavPanel.vue";
 import NavbarMenu from "./navbar/NavbarMenu.vue";
 import NavbarSettingsPanel from "./navbar/NavbarSettingsPanel.vue";
 import NotificationBell from "./navbar/NotificationBell.vue";
@@ -241,7 +241,7 @@ export default {
 	},
 	components: {
 		NavbarAppBar,
-		NavbarDrawer,
+		MobileNavPanel,
 		NavbarMenu,
 		NavbarSettingsPanel,
 		NotificationBell,
@@ -418,6 +418,11 @@ export default {
 				bootstrapWarningTooltip: this.bootstrapWarningTooltip,
 				bootstrapCapabilities: this.bootstrapCapabilities,
 			};
+		},
+		drawerLogo() {
+			// The bundled clip-art is a placeholder, not a brand: the panel
+			// header reads better as plain type until the tenant sets a logo.
+			return this.companyImg === posLogo ? null : this.companyImg;
 		},
 		drawerFooterAction() {
 			return {
