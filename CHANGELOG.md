@@ -30,6 +30,10 @@ All notable changes.
 - **The Cobro pad answers the physical keyboard** — digits/decimal/Backspace
   feed the same buffer as the on-screen keys, Enter applies; keystrokes in
   real fields are never intercepted.
+- **A touch register keeps its keyboard down and its bar inside the glass**
+  — mount-time autofocus (Venta search, Cobranza, Orden) is desk-only via a
+  shared `coarsePointer()` rule; the cart's column header is static (was
+  sticky); the navbar container ladder + first-name chip verified at 1340.
 - **Cart rows show the item's artwork** — 32px reserved slot, the catalogue
   card's thumb→image→neutral-box degradation chain, `v-memo`-safe.
 
