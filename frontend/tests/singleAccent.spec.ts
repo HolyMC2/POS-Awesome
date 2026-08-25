@@ -470,7 +470,10 @@ describe("the walk reaches the whole register, not a corner of it", () => {
 		// and the copy stayed behind, still describing a file that is no longer
 		// there. That is precisely the "a fix looks unfixed" hazard.
 		const sidecars = walk(SRC).filter((f) => f.endsWith(".vue.css"));
-		expect(sidecars.length).toBeGreaterThan(0);
+		// Local trees carry these gitignored build artifacts (**/*.vue.css in
+		// .gitignore); a clean CI checkout has none, and the invariant below
+		// is then vacuously true — do not require their presence.
+		if (sidecars.length === 0) return;
 		const importers = walk(SRC)
 			.filter((f) => /\.(vue|ts)$/.test(f))
 			.filter((f) => /["'][^"']*\.vue\.css["']/.test(readFileSync(f, "utf8")))
