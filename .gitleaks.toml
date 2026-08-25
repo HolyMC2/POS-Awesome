@@ -1,0 +1,13 @@
+# Gitleaks config — extends the default ruleset (the workflow comment in
+# .github/workflows/gitleaks.yml anticipates this file for false positives).
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Frappe API literals that trip generic-api-key in prose/docs"
+# The audit docs quote `allow_guest=True` (a Frappe whitelist kwarg, not a
+# credential); generic-api-key flags it because "guest" scores as an
+# identifier and the line carries an assignment.
+regexTarget = "secret"
+regexes = ['''^allow_guest=True$''']
