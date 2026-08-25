@@ -436,6 +436,53 @@ describe("the pad writes through the register's own handlers", () => {
 		expect(onUpdateAmount).not.toHaveBeenCalled();
 	});
 
+	it("takes the PHYSICAL keyboard: digits key the buffer, Enter applies", async () => {
+		// Reported 08-24: the pad only answered the mouse. The keys feed the
+		// same buffer through the same applyKeypadKey, so typed and tapped
+		// amounts cannot diverge.
+		const onUpdateAmount = vi.fn();
+		const rows = [{ ...CASH }];
+		const pad = mount(CobroTenderPad, {
+			props: { ...padProps(rows), "onUpdate-amount": onUpdateAmount },
+			attachTo: document.body,
+		});
+		for (const key of ["4", "5", "0"]) {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+		}
+		window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+		expect(onUpdateAmount).toHaveBeenCalledTimes(1);
+		expect(onUpdateAmount.mock.calls[0][1]).toBe(450);
+		pad.unmount();
+	});
+
+	it("never hijacks a keystroke aimed at a real field", async () => {
+		const onUpdateAmount = vi.fn();
+		const pad = mount(CobroTenderPad, {
+			props: { ...padProps([{ ...CASH }]), "onUpdate-amount": onUpdateAmount },
+			attachTo: document.body,
+		});
+		const input = document.createElement("input");
+		document.body.appendChild(input);
+		input.focus();
+		input.dispatchEvent(new KeyboardEvent("keydown", { key: "7", bubbles: true }));
+		input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+		expect(onUpdateAmount).not.toHaveBeenCalled();
+		input.remove();
+		pad.unmount();
+	});
+
+	it("stops listening once unmounted", () => {
+		const onUpdateAmount = vi.fn();
+		const pad = mount(CobroTenderPad, {
+			props: { ...padProps([{ ...CASH }]), "onUpdate-amount": onUpdateAmount },
+			attachTo: document.body,
+		});
+		pad.unmount();
+		window.dispatchEvent(new KeyboardEvent("keydown", { key: "9", bubbles: true }));
+		window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+		expect(onUpdateAmount).not.toHaveBeenCalled();
+	});
+
 	it("`Exacto` and a method row are the register's `set-full-amount`", async () => {
 		const onSetFullAmount = vi.fn();
 		const rows = [{ ...CASH }, { ...CARD }];

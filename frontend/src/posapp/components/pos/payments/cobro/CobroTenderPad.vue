@@ -131,10 +131,10 @@
  * The row it works on is `resolveTenderTarget`'s, shared with `CobroMethodRows`
  * so the lit method and the row the pad writes into cannot come apart.
  */
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 import PayKeypad from "../../mobile/pay/PayKeypad.vue";
-import { EMPTY_ENTRY, entryMinor } from "../../mobile/pay/keypadEntry";
+import { applyKeypadKey, EMPTY_ENTRY, entryMinor } from "../../mobile/pay/keypadEntry";
 import { denominationsFor, minorToMajor } from "../../closing/denominations";
 import { chordLabelFor } from "../../../../composables/pos/items/useShortcutChordLabel";
 import { resolveTenderTarget } from "./tenderTarget";
@@ -194,6 +194,47 @@ const onExact = () => {
 	emit("set-full-amount", targetPayment.value, props.isReturn);
 	entry.value = EMPTY_ENTRY;
 };
+
+// ── The physical keyboard IS the pad ────────────────────────────────────
+// A cashier at a desktop register reaches for the number row, not the
+// mouse (reported 08-24: "the number pad doesn't work with the keyboard").
+// The keys feed the SAME buffer through the SAME `applyKeypadKey` the
+// on-screen pad uses, so a typed amount and a tapped one cannot diverge.
+// Guarded, not greedy: a keystroke aimed at a real field — the method
+// rows' own amount inputs, a search box, a dialog — is never intercepted,
+// and modifier chords stay with the shortcut system that owns them.
+const isTypingTarget = (el) => {
+	if (!el) return false;
+	const tag = String(el.tagName || "").toUpperCase();
+	return (
+		tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable === true
+	);
+};
+
+const onPhysicalKey = (event) => {
+	if (event.ctrlKey || event.metaKey || event.altKey) return;
+	if (isTypingTarget(event.target)) return;
+	const key = event.key;
+	if (key.length === 1 && key >= "0" && key <= "9") {
+		entry.value = applyKeypadKey(entry.value, key, minorPerMajor.value);
+		event.preventDefault();
+	} else if (key === "." || key === ",") {
+		entry.value = applyKeypadKey(entry.value, ".", minorPerMajor.value);
+		event.preventDefault();
+	} else if (key === "Backspace") {
+		entry.value = applyKeypadKey(entry.value, "backspace", minorPerMajor.value);
+		event.preventDefault();
+	} else if (key === "Enter" && canApply.value) {
+		// Enter commits the keyed amount exactly as `Aplicar` does. With an
+		// empty buffer it is left alone — the register's own submit chord and
+		// whatever else listens for Enter keep their meaning.
+		onApply();
+		event.preventDefault();
+	}
+};
+
+onMounted(() => window.addEventListener("keydown", onPhysicalKey));
+onBeforeUnmount(() => window.removeEventListener("keydown", onPhysicalKey));
 </script>
 
 <style scoped>
