@@ -36,7 +36,20 @@
 					data-testid="browse-query"
 					>{{ query || __("Search") }}</span
 				>
-				<v-icon icon="mdi-barcode-scan" size="18" aria-hidden="true" />
+				<!-- The camera scanner's door (artboard: the glyph inside the
+				     bar IS the scan affordance). Its own tap target, stopping
+				     propagation so it never doubles as "focus the field". -->
+				<span
+					role="button"
+					tabindex="0"
+					class="mbrowse__scan"
+					data-testid="browse-scan"
+					:aria-label="__('Scan barcode')"
+					@click.stop="emit('scan')"
+					@keydown.enter.stop="emit('scan')"
+				>
+					<v-icon icon="mdi-barcode-scan" size="18" aria-hidden="true" />
+				</span>
 			</button>
 
 			<div class="mbrowse__chips" role="group" :aria-label="__('Browse catalogue')">
@@ -197,6 +210,8 @@ const emit = defineEmits<{
 	(_event: "add", _card: BrowseCard): void;
 	/** Focus the register's ONE search field. This screen never owns an input. */
 	(_event: "search"): void;
+	/** Open the camera scanner — the host routes it to ItemsSelector's own. */
+	(_event: "scan"): void;
 }>();
 
 /**
@@ -368,6 +383,23 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	color: var(--reg-on-accent-soft, #00646f);
 	cursor: pointer;
 	font: inherit;
+}
+
+/* The scan door: a 44px square inside the row (the row itself is 44 tall),
+   negative margin so the glyph sits where the decorative icon did. */
+.mbrowse__scan {
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	margin: 0 -12px 0 0;
+	border-radius: 0 9px 9px 0;
+	cursor: pointer;
+}
+
+.mbrowse__scan:focus-visible {
+	outline: none;
+	box-shadow: inset 0 0 0 2px var(--reg-accent-pressed, #00838f);
 }
 
 .mbrowse__query {

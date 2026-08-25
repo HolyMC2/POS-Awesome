@@ -196,6 +196,16 @@ export type Events = {
 	 */
 	"orden:collect": void;
 	"orden:deselect": void;
+	/** The movil browse bar's scan glyph → ItemsSelector's own camera
+	 *  scanner (the ONE scanner; the phone only rings its doorbell). */
+	"movil:start-camera": void;
+	/**
+	 * The movil browse bar's tap → focus the ONE search input. Its own event
+	 * because `focusItemSearch` refuses coarse pointers ON PURPOSE (no
+	 * uninvited keyboards over the queue) — a tap on the search bar is the
+	 * explicit invitation that rule exists to protect.
+	 */
+	"movil:focus-search": void;
 	/**
 	 * A payment was CAPTURED against a party's open invoices — i.e. `PayView`'s
 	 * Payment Entry path finished, not the cart's. Distinct from

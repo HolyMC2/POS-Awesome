@@ -136,9 +136,17 @@
 				     header is teleported INTO this div by the one ItemsSelector,
 				     and a `v-if` here would tear that teleport down and put the
 				     register's only scanner attach/detach pair on a view switch. -->
+				<!-- On movil BROWSE this bar goes invisible-but-live: the teal
+				     bar in MobileBrowseScreen is the one search the artboard
+				     draws, and it ECHOES this input's text — hiding with
+				     opacity (never display:none) keeps the field focusable,
+				     the wedge writing into it, and the phone keyboard rising
+				     when the teal bar hands focus over. Two visible bars was
+				     the round-1 seam this closes. -->
 				<div
 					v-show="!hostedDestinationId && !cobroHosted && !floorOwnsStage"
 					id="register-scan-bar"
+					:class="{ 'register-scan-bar--movil-ghost': movilBrowseActive }"
 				></div>
 
 				<!-- movilOrdenActive joins the guard (round 4): the phone's orden
@@ -258,7 +266,8 @@
 					<MovilShell
 						v-bind="movilShellProps"
 						@add="onMovilAdd"
-						@search="focusItemSearchField"
+						@search="onMovilSearch"
+						@scan="onMovilScan"
 						@primary="onBandPrimary"
 						@select-line="onMovilSelectLine"
 						@change-customer="jumpToCustomer"
@@ -1510,6 +1519,15 @@ export default {
 		// paginated — published by its update:displayedItems. The browse
 		// screen draws these, so the search field and the grid agree.
 		const movilBrowseRows = shallowRef([]);
+		// The LIVE query — item_search_changed carries every keystroke of the
+		// one real input; itemsStore.searchTerm deliberately does not.
+		const movilQuery = ref("");
+		const onMovilScan = () => {
+			eventBus.emit("movil:start-camera");
+		};
+		const onMovilSearch = () => {
+			eventBus.emit("movil:focus-search");
+		};
 		const movilShellProps = computed(() => ({
 			screen: movilOrdenActive.value
 				? "orden"
@@ -1524,7 +1542,7 @@ export default {
 			// null until a server sync, which is exactly the window a cashier
 			// is looking at this screen.
 			cartItems: invoiceStore.items || [],
-			query: itemsStore.searchTerm || "",
+			query: movilQuery.value,
 			catalogueCount: (movilBrowseRows.value || []).length,
 			registerLabel: posProfile.value?.name || "",
 			online: isOnline.value,
@@ -1851,6 +1869,7 @@ export default {
 		 */
 		let searchDrawerTimer = null;
 		const handleItemSearchChanged = (term) => {
+			movilQuery.value = String(term ?? "");
 			if (searchDrawerTimer !== null) {
 				clearTimeout(searchDrawerTimer);
 			}
@@ -2319,6 +2338,7 @@ export default {
 			onBandPrimary,
 			movilPhone,
 			movilBrowseRows,
+			movilBrowseActive,
 			movilStageActive,
 			movilCartActive,
 			movilPayActive,
@@ -2330,6 +2350,8 @@ export default {
 			onMovilSplit,
 			onMovilCollect,
 			onMovilOrdenBack,
+			onMovilScan,
+			onMovilSearch,
 			focusItemSearchField,
 			onHostedBand,
 			hostedDestinationId,
@@ -2528,6 +2550,25 @@ export default {
 </script>
 
 <style scoped>
+/* Invisible, not gone: the movil browse screen's teal bar fronts this input
+   (echo + focus handoff), so it must stay focusable and keep receiving the
+   wedge's keys. display:none would break focus; height collapse removes the
+   layout hole the empty strip left behind. */
+#register-scan-bar.register-scan-bar--movil-ghost {
+	/* Full geometry, zero paint: a 1px clip made the browser REFUSE focus,
+	   so the wedge kept swallowing keys one at a time (each keystroke
+	   REPLACED the term — «bocina» arrived as «a»). Absolute + z-index -1
+	   removes it from flow and stacking; opacity hides it; the input keeps
+	   its box, so focus lands and the phone keyboard rises. */
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	opacity: 0;
+	pointer-events: none;
+	z-index: -1;
+}
+
 .payment-dialog :deep(.v-overlay__content) {
 	max-height: calc(100dvh - 24px);
 }

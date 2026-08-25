@@ -20,6 +20,7 @@
 		:format-currency="formatCurrency"
 		@add="(card) => emit('add', card)"
 		@search="emit('search')"
+		@scan="emit('scan')"
 	/>
 	<div v-else-if="screen === 'orden'" class="movil-orden-stage">
 		<!-- Host chrome, not the ghost component's: MovilOrdenView draws ONE
@@ -177,6 +178,7 @@ withDefaults(
 const emit = defineEmits<{
 	(_event: "add", _card: BrowseCard): void;
 	(_event: "search"): void;
+	(_event: "scan"): void;
 	(_event: "primary", _actionId: string): void;
 	(_event: "select-line", _line: MobileSaleLine): void;
 	(_event: "change-customer"): void;

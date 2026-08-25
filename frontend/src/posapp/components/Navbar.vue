@@ -177,6 +177,7 @@ import OfflineInvoices from "./OfflineInvoices.vue";
 import { getDashboardAccessCached } from "../services/dashboardService";
 import EmployeeSwitchDialog from "./pos/employee/EmployeeSwitchDialog.vue";
 import posLogo from "./pos/pos.png";
+import { parseBooleanSetting } from "../utils/stock";
 import { BRAND } from "../../brand";
 import { clearDerivedOfflineCaches, getPendingTransactionalWorkCounts, isOffline } from "../../offline/index";
 import { clearAllCaches } from "../../utils/clearAllCaches";
@@ -601,6 +602,18 @@ export default {
 		},
 		updateNavigationItems() {
 			const items = [...this.baseItems];
+			// Recargas — the same profile flag that gates the saldo picker
+			// (saldo_enabled). On the phone this row is THE door: the dock has
+			// no recharge tab, and the /pos/top-up destination (now reachable
+			// since shiftOpen reads the store) hosts the surface. The panel
+			// enriches the row from the destination registry by its path.
+			if (parseBooleanSetting(this.posProfile?.saldo_enabled)) {
+				items.splice(1, 0, {
+					text: "Recharge",
+					icon: "mdi-signal-variant",
+					to: "/pos/top-up",
+				});
+			}
 			if (this.posProfile?.posa_use_gift_cards) {
 				items.splice(2, 0, {
 					text: "Gift Cards",

@@ -1001,14 +1001,30 @@ onMounted(() => {
 			}
 		};
 		eventBus.on("saldo:picker-add", saldoPickerAddHandler);
+		// MOVIL-INTEGRATION-POINT — the movil browse bar's scan glyph. The
+		// camera scanner (and the wedge) live HERE; the phone rings the bell.
+		eventBus.on("movil:start-camera", startCameraScanning);
+		// The bar's tap: focus the ONE input directly. focusItemSearch
+		// refuses coarse pointers on purpose; this tap IS the invitation.
+		eventBus.on("movil:focus-search", movilFocusSearch);
 	}
 });
 onBeforeUnmount(() => {
 	if (eventBus && saldoPickerAddHandler && typeof eventBus.off === "function") {
 		eventBus.off("saldo:picker-add", saldoPickerAddHandler);
 		saldoPickerAddHandler = null;
+		eventBus.off("movil:start-camera", startCameraScanning);
+		eventBus.off("movil:focus-search", movilFocusSearch);
 	}
 });
+
+/** Explicit focus for the movil bar's tap — the teleported header's input,
+ *  found where it lives. `focus()` ignores paint, so the ghost-hidden bar
+ *  still takes it and the phone keyboard rises. */
+const movilFocusSearch = () => {
+	const input = document.querySelector<HTMLInputElement>("#register-scan-bar input");
+	input?.focus({ preventScroll: true });
+};
 // /SALDO-INTEGRATION-POINT
 
 onMounted(async () => {
@@ -1339,9 +1355,23 @@ const startCameraScanning = () => {
 		return;
 	}
 	shouldMountCameraScanner.value = true;
-	nextTick(() => {
+	// The scanner is an async chunk (739 lines + OpenCV): on the FIRST press
+	// the template ref does not exist until the chunk lands, and the old
+	// single nextTick made that press a dead tap — on desktop and on the
+	// movil scan glyph alike. Retry briefly, stopping the moment the scanner
+	// reports itself open.
+	let cameraStartAttempts = 0;
+	const tryStartCamera = () => {
+		if (scannerInput.cameraScannerActive.value) {
+			return;
+		}
 		itemsSelectorFocus.startCameraScanning();
-	});
+		cameraStartAttempts += 1;
+		if (!scannerInput.cameraScannerActive.value && cameraStartAttempts < 15) {
+			setTimeout(tryStartCamera, 200);
+		}
+	};
+	nextTick(tryStartCamera);
 };
 const { responsiveStyles } = responsive;
 const { rtlClasses } = rtl;
