@@ -267,6 +267,17 @@ export function usePosShift(openDialog?: () => void) {
 			cachedOpeningShift ||
 			null;
 		if (!resolvedShift) {
+			// Words, not silence (2026-08-25): a refused close with no reason
+			// reads as a dead button — the movil roast's audit found exactly
+			// this shape swallowing a press with nothing on screen.
+			toastStore.show({
+				title: typeof (window as any)?.__ === "function" ? (window as any).__("No open shift") : "No open shift",
+				message:
+					typeof (window as any)?.__ === "function"
+						? (window as any).__("There is no open shift on this register to close.")
+						: "There is no open shift on this register to close.",
+				color: "warning",
+			});
 			return Promise.resolve();
 		}
 
@@ -313,6 +324,19 @@ export function usePosShift(openDialog?: () => void) {
 						? response.pending_drafts
 						: [];
 					if (!closingShift) {
+						// Same rule: the server answered but carried no closing
+						// draft — say so instead of eating the press.
+						toastStore.show({
+							title:
+								typeof (window as any)?.__ === "function"
+									? (window as any).__("Could not prepare closing")
+									: "Could not prepare closing",
+							message:
+								typeof (window as any)?.__ === "function"
+									? (window as any).__("The server returned no closing draft for this shift — try again.")
+									: "The server returned no closing draft for this shift — try again.",
+							color: "error",
+						});
 						return;
 					}
 

@@ -95,7 +95,13 @@ describe("the surface is hosted beside the rail, not raised over it", () => {
 	it("keeps the sale mounted underneath, so backing out returns to the same cart", () => {
 		// v-show, never v-if: the cart, its scroll position and its focus have
 		// to survive a trip to the payment screen and back.
-		expect(shellSource).toContain('v-show="!hostedDestinationId && !cobroHosted"');
+		// movilOrdenActive joined the row's guard in movil round 4: the phone's
+		// orden screen lives in this row's movil col while the hosted surface
+		// is the hidden engine. The protected behaviour is unchanged — the
+		// sale row still hides under Cobro and under every other destination.
+		expect(shellSource).toContain(
+			'v-show="!hostedDestinationId && !cobroHosted || movilOrdenActive"',
+		);
 		expect(shellSource).not.toMatch(/v-if="!cobroHosted"[\s\S]{0,40}dynamic-main-row/);
 	});
 

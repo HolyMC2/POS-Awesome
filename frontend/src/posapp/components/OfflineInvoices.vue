@@ -1,7 +1,33 @@
 <template>
 	<v-row justify="center">
-		<v-dialog v-model="dialog" max-width="1200px" persistent transition="fade-transition">
-			<v-card class="pos-card offline-invoices-card elevation-12">
+		<v-dialog
+			v-model="dialog"
+			max-width="1200px"
+			:fullscreen="movilOffline"
+			persistent
+			transition="fade-transition"
+		>
+			<!-- The phone's offline surface (movil round 4): MovilOfflineSurface
+			     reads the real queue and owns the drain; this dialog keeps the
+			     door and the ✕. The desktop management table stays below for
+			     every other width. -->
+			<v-card v-if="movilOffline" class="pos-card offline-movil-card">
+				<div class="offline-movil-card__bar">
+					<span class="offline-movil-card__title">{{ __("Offline Invoices") }}</span>
+					<v-btn
+						icon="mdi-close"
+						variant="text"
+						density="comfortable"
+						:aria-label="__('Close')"
+						@click="dialog = false"
+					/>
+				</div>
+				<MovilOfflineSurface
+					:online="movilOnline"
+					:format-currency="movilFormatCurrency"
+				/>
+			</v-card>
+			<v-card v-else class="pos-card offline-invoices-card elevation-12">
 				<!-- Revamped Modern Header -->
 				<v-card-title class="offline-header pa-8">
 					<div class="header-content-wrapper">
@@ -409,6 +435,9 @@ import {
 	getWriteQueueDraftReviewRows,
 } from "../../offline/index";
 import { useSyncStore } from "../stores/syncStore";
+import { useResponsive } from "../composables/core/useResponsive";
+import { useOnlineStatus } from "../composables/core/useOnlineStatus";
+import MovilOfflineSurface from "./pos/mobile/offline/MovilOfflineSurface.vue";
 
 defineOptions({
 	name: "OfflineInvoicesDialog",
@@ -423,6 +452,15 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:modelValue", "deleted", "sync-all"]);
+
+// ---- MovilOffline (round 4 of the mobile wiring) ------------------------
+// On phones this dialog's content is the movil offline surface: the held
+// money, the queue behind it, one Reintentar. The surface reads the real
+// queue and owns the drain (its own contract); this dialog keeps the door.
+const responsive = useResponsive();
+const movilOffline = computed(() => responsive.isPhone.value);
+const { isOnline: movilOnline } = useOnlineStatus();
+const movilFormatCurrency = (value) => formatCurrency(value);
 const __ = window.__ || ((text) => text);
 const get_currency_symbol = window.get_currency_symbol;
 const currency_precision = ref(2);
@@ -1197,5 +1235,29 @@ async function confirmRemoveInvoice() {
 .sync-status-indicator span {
 	font-size: 15px;
 	letter-spacing: 0.3px;
+}
+
+/* The phone's slim dialog bar over MovilOfflineSurface (movil round 4). */
+.offline-movil-card {
+	display: flex;
+	flex-direction: column;
+	min-height: 100%;
+	background: var(--pos-surface, #f5f6f8);
+}
+
+.offline-movil-card__bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 12px 10px 18px;
+	background: var(--pos-surface-raised, #ffffff);
+	border-bottom: 1px solid var(--pos-border, #dfe4ea);
+}
+
+.offline-movil-card__title {
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--pos-text-primary, #16222a);
 }
 </style>

@@ -141,8 +141,12 @@
 					id="register-scan-bar"
 				></div>
 
+				<!-- movilOrdenActive joins the guard (round 4): the phone's orden
+				     screen lives in this row's movil col while the HOST is the
+				     hidden engine — the row must be on stage for it. Every other
+				     col already stands down while a destination is hosted. -->
 				<v-row
-					v-show="!hostedDestinationId && !cobroHosted"
+					v-show="!hostedDestinationId && !cobroHosted || movilOrdenActive"
 					dense
 					class="ma-0 dynamic-main-row"
 					:class="{
@@ -1011,7 +1015,16 @@ export default {
 		const router = useRouter();
 		const { isOnline } = useOnlineStatus();
 		const verticalT = (key) => vertical.t(key);
-		const shiftOpen = computed(() => Boolean(shift.pos_opening_shift?.value));
+		// BOTH answers, deliberately: this instance's ref fills on the paths
+		// that boot through it, but the desk-route phone boot lands the shift
+		// in uiStore.posOpeningShift via another usePosShift instance — and a
+		// destination guard reading only the local ref refused a register
+		// whose navbar was showing the open shift (doco-mirror, 2026-08-25).
+		// The router's own registerHasBooted() already treats the store as
+		// canonical; the shell now agrees.
+		const shiftOpen = computed(
+			() => Boolean(shift.pos_opening_shift?.value) || Boolean(uiStore.posOpeningShift),
+		);
 
 		// The rail draws only where it IS the navigation. Below the two-column
 		// boundary the dock is the nav, and drawing both would be two answers

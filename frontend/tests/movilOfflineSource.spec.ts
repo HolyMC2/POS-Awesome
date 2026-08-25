@@ -238,3 +238,19 @@ describe("three treatments of one state, each saying which it is", () => {
 		}
 	});
 });
+
+describe("the surface is mounted, not ghosted (movil round 4)", () => {
+	// The audit's core finding: built ≠ mounted. This pins the door — the
+	// navbar's offline dialog fronts MovilOfflineSurface on phones — so the
+	// suite fails the day someone unwires it back into a ghost.
+	it("OfflineInvoices fronts MovilOfflineSurface behind the phone gate", () => {
+		const dialog = readFileSync(
+			resolve(DIR, "../../../OfflineInvoices.vue"),
+			"utf8",
+		);
+		expect(dialog).toMatch(/import\s+MovilOfflineSurface/);
+		expect(dialog).toContain('<v-card v-if="movilOffline" class="pos-card offline-movil-card">');
+		expect(dialog).toContain("<MovilOfflineSurface");
+		expect(dialog).toMatch(/movilOffline = computed\(\(\) => responsive\.isPhone\.value\)/);
+	});
+});
