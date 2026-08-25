@@ -196,12 +196,17 @@
 						@band="onFloorBand"
 					></FloorView>
 				</v-col>
+				<!-- v-show, not a v-if change: on a movil phone the keypad
+				     screen fronts this panel, but Payments MUST stay mounted —
+				     it owns the money path (payment lines, guards, submit) and
+				     answers movil_collect_payment from right here. -->
 				<v-col
 					v-if="
 						(!useCompactPosSwitcher || compactPanel === 'selector') &&
 						activeView === 'payment' &&
 						!usePaymentDialog
 					"
+					v-show="!movilPayActive"
 					:xl="useCompactPosSwitcher ? 12 : 5"
 					:lg="useCompactPosSwitcher ? 12 : 5"
 					:md="useCompactPosSwitcher ? 12 : 5"
@@ -247,6 +252,8 @@
 						@primary="onBandPrimary"
 						@select-line="onMovilSelectLine"
 						@change-customer="jumpToCustomer"
+						@split="onMovilSplit"
+						@collect="onMovilCollect"
 					/>
 				</v-col>
 
@@ -1370,12 +1377,43 @@ export default {
 				!movilCartDetail.value &&
 				!floorOwnsStage.value,
 		);
-		const movilStageActive = computed(() => movilBrowseActive.value || movilCartActive.value);
+		// «Dividir pago» falls back to the classic Payments panel — the split
+		// flow lives there until the movil split sheet ships. Same shape as
+		// the cart-line fallback, reset by the same moves.
+		const movilPayDetail = ref(false);
+		const movilPayActive = computed(
+			() =>
+				movilPhone.value &&
+				compactPanel.value === "selector" &&
+				activeView.value === "payment" &&
+				!usePaymentDialog.value &&
+				!movilPayDetail.value &&
+				!floorOwnsStage.value,
+		);
+		const movilStageActive = computed(
+			() => movilBrowseActive.value || movilCartActive.value || movilPayActive.value,
+		);
 		watch([compactPanel, activeView], () => {
 			movilCartDetail.value = false;
+			movilPayDetail.value = false;
 		});
 		const onMovilSelectLine = () => {
 			movilCartDetail.value = true;
+		};
+		const onMovilSplit = () => {
+			movilPayDetail.value = true;
+		};
+		const onMovilCollect = (intent) => {
+			// The intent travels; the money path answers. Payments.vue's
+			// handler guards visibility and in-flight, picks the row, and
+			// rides the same submit the band shortcut uses. print:true — the
+			// COLLECT AND CLOSE primary IS the printing close, exactly as the
+			// band's primary is (owner direction 2026-08-24).
+			eventBus.emit("movil_collect_payment", {
+				mode: intent?.mode ?? null,
+				amount: Number(intent?.amount) || 0,
+				print: true,
+			});
 		};
 		const onMovilAdd = (card) => {
 			const code = card?.item_code;
@@ -1396,7 +1434,7 @@ export default {
 		// screen draws these, so the search field and the grid agree.
 		const movilBrowseRows = shallowRef([]);
 		const movilShellProps = computed(() => ({
-			screen: movilCartActive.value ? "cart" : "browse",
+			screen: movilCartActive.value ? "cart" : movilPayActive.value ? "pay" : "browse",
 			browseItems: movilBrowseRows.value || [],
 			combos: comboOffers.value || [],
 			// The LIVE cart (invoiceStore.items off itemsData) — invoiceDoc is
@@ -1417,6 +1455,12 @@ export default {
 			windowWidth: responsive.windowWidth.value,
 			windowHeight: responsive.windowHeight.value,
 			formatCurrency,
+			payTitle: __("Cobro"),
+			payTotal: invoiceTotal.value,
+			currency: activeCurrency.value || null,
+			profile: posProfile.value || null,
+			itemCount: Number(itemsCount.value) || 0,
+			canCollect: movilPayActive.value && Number(itemsCount.value) > 0,
 		}));
 
 		// Browse IS the drawer. Any request to show the catalogue opens it and
@@ -2190,9 +2234,12 @@ export default {
 			movilBrowseRows,
 			movilStageActive,
 			movilCartActive,
+			movilPayActive,
 			movilShellProps,
 			onMovilAdd,
 			onMovilSelectLine,
+			onMovilSplit,
+			onMovilCollect,
 			focusItemSearchField,
 			onHostedBand,
 			hostedDestinationId,

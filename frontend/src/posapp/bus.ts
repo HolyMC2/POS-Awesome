@@ -180,6 +180,15 @@ export type Events = {
 	// ---- payments -----------------------------------------------------------
 	queue_submit_payment_shortcut: { print?: boolean };
 	/**
+	 * The movil keypad's COLLECT AND CLOSE (MovilCobroView, round 2 of the
+	 * mobile wiring). The screen captures {mode, amount} and emits an intent;
+	 * every money decision — row selection, zeroing the other tenders, the
+	 * submit itself — happens in Payments.vue's handler, which rides the SAME
+	 * `submit(null, false, print)` the band shortcut uses, behind the same
+	 * paymentVisible / in-flight guards.
+	 */
+	movil_collect_payment: { mode?: string | null; amount?: number; print?: boolean };
+	/**
 	 * A payment was CAPTURED against a party's open invoices — i.e. `PayView`'s
 	 * Payment Entry path finished, not the cart's. Distinct from
 	 * `invoice_submitted`, which announces a SALE: the two ride different

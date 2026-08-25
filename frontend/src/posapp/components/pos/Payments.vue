@@ -2582,6 +2582,45 @@ const handleSubmitPaymentShortcut = ({ print = false } = {}) => {
 	});
 };
 
+// MOVIL-COBRO-INTEGRATION-POINT — the phone keypad's COLLECT AND CLOSE.
+// MovilCobroView captures {mode, amount} and emits an intent; every money
+// decision stays HERE: which payment row, zeroing the other tenders (the
+// same pattern set_full_amount uses), and the SAME submit the band shortcut
+// rides, behind the same visibility and in-flight guards. A keyed amount is
+// what the customer handed over — it may exceed the total, and change_due
+// answers that exactly as it does for a typed amount. No keyed amount means
+// exact tender: set_full_amount, as the desktop's own row tap does.
+const handleMovilCollect = (payload = {}) => {
+	if (!paymentVisible.value || submissionInFlight.value || loading.value) return;
+	const doc = invoice_doc.value;
+	const rows = Array.isArray(doc?.payments) ? doc.payments : [];
+	if (!rows.length) return;
+	const mode = typeof payload?.mode === "string" && payload.mode ? payload.mode : null;
+	const row =
+		(mode && rows.find((p) => p?.mode_of_payment === mode)) ||
+		rows.find((p) => Number(p?.default)) ||
+		rows[0];
+	const isReturn = Boolean(doc?.is_return);
+	const keyed = Number(payload?.amount);
+	if (Number.isFinite(keyed) && keyed > 0 && !isReturn) {
+		rows.forEach((p) => {
+			if (p !== row) {
+				p.amount = 0;
+				if (p.base_amount !== undefined) p.base_amount = 0;
+			}
+		});
+		row.amount = keyed;
+		if (row.base_amount !== undefined) {
+			row.base_amount = keyed;
+		}
+	} else {
+		set_full_amount(row, isReturn);
+	}
+	nextTick(() => {
+		submit(null, false, payload?.print !== false);
+	});
+};
+
 const queueShortcutSubmit = (payload = {}) => {
 	queuedShortcutSubmit.value = payload;
 	if (isPaymentOpen.value) {
@@ -3007,6 +3046,7 @@ onMounted(() => {
 		eventBus.on("add_the_new_address", onAddTheNewAddress);
 		eventBus.on("set_mpesa_payment", onSetMpesaPayment);
 		eventBus.on("queue_submit_payment_shortcut", queueShortcutSubmit);
+		eventBus.on("movil_collect_payment", handleMovilCollect);
 		eventBus.on("clear_invoice", onClearInvoice);
 	}
 
@@ -3029,6 +3069,7 @@ onBeforeUnmount(() => {
 	eventBus.off("add_the_new_address", onAddTheNewAddress);
 	eventBus.off("set_mpesa_payment", onSetMpesaPayment);
 	eventBus.off("queue_submit_payment_shortcut", queueShortcutSubmit);
+	eventBus.off("movil_collect_payment", handleMovilCollect);
 	eventBus.off("clear_invoice", onClearInvoice);
 	eventBus.off("network-online", onNetworkOnline);
 	eventBus.off("server-online", onNetworkOnline);

@@ -21,6 +21,24 @@
 		@add="(card) => emit('add', card)"
 		@search="emit('search')"
 	/>
+	<MovilCobroView
+		v-else-if="screen === 'pay'"
+		:title="payTitle"
+		:customer-name="customerName"
+		:total="payTotal"
+		:tendered="0"
+		:currency="currency"
+		:format-currency="formatCurrency"
+		:profile="profile"
+		:cart-has-items="itemCount > 0"
+		:is-return="isReturn"
+		:prints-ticket="true"
+		:item-count="itemCount"
+		:can-collect="canCollect"
+		@update:tender="(mode) => emit('update:tender', mode)"
+		@split="(intent) => emit('split', intent)"
+		@collect="(intent) => emit('collect', intent)"
+	/>
 	<MobileSaleScreen
 		v-else-if="screen === 'cart'"
 		:items="cartItems"
@@ -44,9 +62,11 @@
 <script setup lang="ts">
 import type { BandState } from "../../../../composables/pos/shell/bandState";
 import type { ComboOffer } from "../../../../composables/pos/combos/comboCatalog";
+import type { TenderProfile } from "../../invoice/tenderChips";
 import type { SaleSummarySourceLine } from "../../payments/saleSummary";
 import MobileBrowseScreen from "../../mobile/browse/MobileBrowseScreen.vue";
 import type { BrowseCard, BrowseCatalogItem } from "../../mobile/browse/browseCatalog";
+import MovilCobroView, { type CollectionIntent } from "../../mobile/pay/MovilCobroView.vue";
 import MobileSaleScreen from "../../mobile/sale/MobileSaleScreen.vue";
 import type { MobileSaleLine } from "../../mobile/sale/mobileSaleLines";
 
@@ -55,7 +75,7 @@ defineOptions({ name: "MovilShell" });
 withDefaults(
 	defineProps<{
 		/** Which mobile screen owns the stage — follows the dock, decided by Pos.vue. */
-		screen: "browse" | "cart";
+		screen: "browse" | "cart" | "pay";
 		browseItems?: readonly BrowseCatalogItem[];
 		combos?: readonly ComboOffer[];
 		/** The invoice's items child table — the browse screen's compatibility
@@ -76,6 +96,14 @@ withDefaults(
 		windowWidth?: number;
 		windowHeight?: number;
 		formatCurrency: (_value: number) => string;
+		/** Pay screen (MovilCobroView) — the figures; the money path stays in
+		 *  Payments.vue, which answers the emitted intents. */
+		payTitle?: string;
+		payTotal?: number;
+		currency?: string | null;
+		profile?: TenderProfile | null;
+		itemCount?: number;
+		canCollect?: boolean;
 	}>(),
 	{
 		browseItems: () => [],
@@ -93,6 +121,12 @@ withDefaults(
 		isReturn: false,
 		windowWidth: 390,
 		windowHeight: 844,
+		payTitle: "",
+		payTotal: 0,
+		currency: null,
+		profile: null,
+		itemCount: 0,
+		canCollect: false,
 	},
 );
 
@@ -102,5 +136,8 @@ const emit = defineEmits<{
 	(_event: "primary", _actionId: string): void;
 	(_event: "select-line", _line: MobileSaleLine): void;
 	(_event: "change-customer"): void;
+	(_event: "update:tender", _mode: string | null): void;
+	(_event: "split", _intent: CollectionIntent): void;
+	(_event: "collect", _intent: CollectionIntent): void;
 }>();
 </script>

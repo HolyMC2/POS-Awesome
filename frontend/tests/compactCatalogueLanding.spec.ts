@@ -147,13 +147,13 @@ const makeBus = () => {
 	};
 };
 
-const mountShell = (width: number) => {
+const mountShell = (width: number, bus = makeBus()) => {
 	window.innerWidth = width;
 	return mount(Pos, {
 		shallow: true,
 		global: {
 			plugins: [createVuetify()],
-			provide: { eventBus: makeBus() },
+			provide: { eventBus: bus },
 		},
 	});
 };
@@ -249,6 +249,42 @@ describe("the compact shell lands on the catalogue", () => {
 		expect(vm.movilShellProps.screen).toBe("browse");
 		// The drawer never opens on the phone; the browse screen is the grid.
 		expect(vm.catalogDrawer.isOpen.value).toBe(false);
+	});
+
+	it("draws the movil keypad on the phone's payment view, Payments staying mounted behind it", async () => {
+		const vm = mountShell(390).vm as any;
+		await settle();
+
+		// The pre-payment validation path (Invoice.vue) owns the transition
+		// to the payment view; here we place the shell there directly.
+		vm.uiStore?.setActiveView?.("payment");
+		await settle();
+
+		expect(vm.compactPanel).toBe("selector");
+		expect(vm.movilPayActive).toBe(true);
+		expect(vm.movilShellProps.screen).toBe("pay");
+
+		// «Dividir pago» falls back to the classic Payments panel.
+		vm.onMovilSplit();
+		await settle();
+		expect(vm.movilPayActive).toBe(false);
+	});
+
+	it("collect rides the bus into the money path, printing close by default", async () => {
+		const emitted: Array<[string, unknown]> = [];
+		const bus = makeBus();
+		const origEmit = bus.emit;
+		bus.emit = (event: string, payload?: unknown) => {
+			emitted.push([event, payload]);
+			origEmit(event, payload);
+		};
+		const vm = mountShell(390, bus).vm as any;
+		await settle();
+
+		vm.onMovilCollect({ mode: "Cash", amount: 120, amountMinor: 12000 });
+		const collect = emitted.find(([event]) => event === "movil_collect_payment");
+		expect(collect).toBeTruthy();
+		expect(collect?.[1]).toEqual({ mode: "Cash", amount: 120, print: true });
 	});
 
 	it("falls back to the classic cart when a movil line is tapped, and returns on the dock", async () => {
