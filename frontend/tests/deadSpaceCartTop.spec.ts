@@ -180,13 +180,13 @@ describe("nothing stands between the customer strip and the column header", () =
 		).toEqual([".invoice-sections=0", ".invoice-config-sections=0", ".invoice-items-card=0", ".items-table-wrapper=0"]);
 	});
 
-	it("keeps the column header sticky at the scrollport's top edge, with no offset", () => {
-		// A `top` greater than zero here is the sticky-header offset that would
-		// let a row ride up and show above its own header. The rule lives in the
-		// shared table stylesheet, so it is read rather than owned.
+	it("keeps the column header STATIC — it scrolls away with the lines", () => {
+		// It was `position: sticky` and the owner asked for static (08-24): the
+		// column names are learned in a day, and a bar floating over the lines
+		// while the cart scrolls earns its keep never. Static also removes the
+		// offset trap the old assertion policed — there is no `top` to drift.
 		const header = rule(read(TABLE_CSS), ".posa-cart-table th");
-		expect(header).toMatch(/position:\s*sticky/);
-		expect(px(header, "top"), "a non-zero top is a gap rows scroll through").toBe(0);
+		expect(header).not.toMatch(/position:\s*sticky/);
 	});
 
 	it("tames the cart card's shadow so it stops hazing over its own header", () => {

@@ -311,9 +311,10 @@ table.posa-cart-table--native {
 	border-bottom: 1px solid var(--pos-border-light);
 	background-color: var(--pos-surface-muted);
 	color: var(--pos-text-secondary);
-	position: sticky;
-	top: 0;
-	z-index: 3;
+	/* STATIC on purpose (owner, 08-24): the header row used to be
+	   `position: sticky` and floated over the lines while the cart
+	   scrolled. The column names are learned in a day; a bar that shadows
+	   the cashier's scrolling earns its keep never. */
 	overflow: hidden;
 	text-align: center;
 	vertical-align: middle !important;

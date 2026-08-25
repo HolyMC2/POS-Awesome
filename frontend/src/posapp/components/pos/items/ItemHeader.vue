@@ -11,7 +11,7 @@
 						<v-text-field
 						density="compact"
 						clearable
-						:autofocus="!isPhone"
+						:autofocus="!isPhone && !touchDriven"
 						variant="solo"
 						color="primary"
 						class="pos-themed-input"
@@ -250,6 +250,13 @@
 
 <script setup>
 import { computed, ref } from "vue";
+
+import { coarsePointer } from "../../../utils/pointer";
+
+// A tablet passes `!isPhone` and still must not autofocus: focusing the
+// search on mount summons the on-screen keyboard over half the register
+// (owner tablet, 08-24). Evaluated once — a pointer does not change mid-mount.
+const touchDriven = coarsePointer();
 
 const props = defineProps({
 	searchInput: { type: String, default: "" },

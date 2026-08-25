@@ -101,6 +101,7 @@ import {
 import { useInvoiceStore } from "../../../../stores/invoiceStore";
 import { useToastStore } from "../../../../stores/toastStore";
 import { useUIStore } from "../../../../stores/uiStore";
+import { coarsePointer } from "../../../../utils/pointer";
 
 interface BusLike {
 	emit: (event: string, payload?: unknown) => void;
@@ -298,7 +299,8 @@ onMounted(() => {
 	eventBus?.on("orden:collect", onCollectRequested);
 	void loadCounts();
 	void loadQueue();
-	queueRef.value?.focusSearch?.();
+	// Desk only: on a tablet this focus summons the keyboard over the queue.
+	if (!coarsePointer()) queueRef.value?.focusSearch?.();
 });
 
 onBeforeUnmount(() => {

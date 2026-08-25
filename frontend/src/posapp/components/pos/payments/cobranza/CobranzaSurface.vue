@@ -289,6 +289,7 @@ import {
 } from "../../../../services/receivablesService";
 import { useToastStore } from "../../../../stores/toastStore";
 import { useUIStore } from "../../../../stores/uiStore";
+import { coarsePointer } from "../../../../utils/pointer";
 
 // Declared but never emitted: `DestinationHost` binds `@close` on every hosted
 // component, and an undeclared listener falls through onto the root element as
@@ -686,7 +687,8 @@ onMounted(() => {
 	}
 	void loadWorklist();
 	void loadCollected();
-	searchRef.value?.focus?.();
+	// Desk only: on a tablet this focus summons the keyboard over the list.
+	if (!coarsePointer()) searchRef.value?.focus?.();
 });
 
 onBeforeUnmount(() => {
