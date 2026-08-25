@@ -13,7 +13,9 @@ All notable changes.
   cashier's own shift). *How to verify:* Cobrar a «Listo para Entregar» RO
   in Taller and watch it appear under «Listas» at the register.
   *Safe to skip if:* the tenant bills repairs some other way — with the flag
-  off nothing changes. Prod flip is Marco's call.
+  off nothing changes. **Flipped ON on prod (`ventas.docomexico.com`)
+  08-24 evening on Marco's ask** — verified `_use_pos_charge_requests` true
+  in a fresh process; mumu has no taller, nothing to flip there.
 - **«En trabajo» is a figure, not a disabled pill** (queue chips row, per the
   updated `Orden.dc.html`): right-aligned wrench + count, tooltip carries the
   provenance sentence. A pill that never presses read as a broken button.
