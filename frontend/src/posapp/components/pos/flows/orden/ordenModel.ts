@@ -64,8 +64,13 @@ export interface OrdenBucket {
  */
 export const ORDEN_BUCKETS: readonly OrdenBucket[] = [
 	{ id: "ready", labelKey: "Ready to charge", selectable: true },
-	{ id: "working", labelKey: "In progress", selectable: false },
 	{ id: "delivered", labelKey: "Handed over", selectable: true },
+	// Last on purpose: the artboard draws the two FILTERS on the left and the
+	// workshop count as a right-aligned FIGURE after them — a wrench, a number
+	// and «en Taller», no pill. It used to sit between the filters as a
+	// disabled pill, and a pill that never presses reads as a broken button —
+	// which is exactly how it was reported from the register.
+	{ id: "working", labelKey: "In progress", selectable: false },
 ] as const;
 
 export interface OrdenCounts {

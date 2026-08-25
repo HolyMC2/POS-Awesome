@@ -1,0 +1,28 @@
+{
+  "capturedAt": "2026-08-25T03:10:53.509Z",
+  "figureVisible": true,
+  "figureTag": "SPAN",
+  "figureTitle": "Service orders are created and worked in Taller. The register only charges them.",
+  "figureText": "6990 in Taller",
+  "buckets": [
+    {
+      "bucket": "ready",
+      "tag": "BUTTON",
+      "pressed": "true"
+    },
+    {
+      "bucket": "delivered",
+      "tag": "BUTTON",
+      "pressed": "false"
+    },
+    {
+      "bucket": "working",
+      "tag": "SPAN",
+      "pressed": null
+    }
+  ],
+  "readyCards": 81,
+  "deliveredPressed": "true",
+  "deliveredCards": 0,
+  "deliveredEmpty": "Nothing has been handed over yet today."
+}

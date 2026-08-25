@@ -15,20 +15,56 @@
 		</label>
 
 		<div class="orden-queue__chips" data-testid="orden-chips">
-			<button
-				v-for="chip in chips"
-				:key="chip.id"
-				type="button"
-				class="orden-queue__chip"
-				:class="{ 'orden-queue__chip--on': chip.active }"
-				:disabled="!chip.selectable"
-				:data-bucket="chip.id"
-				:aria-pressed="chip.active"
-				@click="chip.selectable && $emit('bucket', chip.id)"
-			>
-				{{ __(chip.labelKey) }}
-				<span v-if="chip.count" class="orden-queue__chip-count">{{ chip.count }}</span>
-			</button>
+			<template v-for="chip in chips" :key="chip.id">
+				<button
+					v-if="chip.selectable"
+					type="button"
+					class="orden-queue__chip"
+					:class="{ 'orden-queue__chip--on': chip.active }"
+					:data-bucket="chip.id"
+					:aria-pressed="chip.active"
+					@click="$emit('bucket', chip.id)"
+				>
+					{{ __(chip.labelKey) }}
+					<span v-if="chip.count" class="orden-queue__chip-count">{{ chip.count }}</span>
+				</button>
+				<!-- «En trabajo» is a FIGURE, not a door — Taller owns that work,
+				     and this surface's only verb is COBRAR Y ENTREGAR. It used to
+				     render as a disabled pill between the filters, and a pill that
+				     never presses reads as a broken button (reported from the
+				     register, 08-24). So: right-aligned, a wrench, a number, no
+				     pill — nothing about it claims it can be pressed. The tooltip
+				     reuses the footer's own sentence rather than minting a new
+				     string. -->
+				<span
+					v-else
+					class="orden-queue__figure"
+					:data-bucket="chip.id"
+					:title="
+						__('Service orders are created and worked in Taller. The register only charges them.')
+					"
+					data-testid="orden-working-figure"
+				>
+					<svg
+						class="orden-queue__figure-icon"
+						width="12"
+						height="12"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path
+							d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+						/>
+					</svg>
+					<span class="orden-queue__figure-count mono">{{ chip.count }}</span>
+					{{ __("in Taller") }}
+				</span>
+			</template>
 		</div>
 
 		<div class="orden-queue__list" data-testid="orden-cards">
@@ -201,6 +237,7 @@ defineExpose({ focusSearch: () => searchEl.value?.focus() });
 .orden-queue__chips {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: var(--reg-space-sm, 6px);
 	flex: none;
 }
@@ -228,13 +265,34 @@ defineExpose({ focusSearch: () => searchEl.value?.focus() });
 	font-weight: 700;
 }
 
-/* `In progress` is a figure, not a door — Taller owns that work. */
-.orden-queue__chip:disabled {
+.orden-queue__chip-count {
+	font-variant-numeric: tabular-nums;
+}
+
+/* The workshop count. Everything about it says "fact": pushed to the far
+   side of the row, no pill, no border, default cursor. The icon rides
+   currentColor at a step below the text so the number stays the loudest
+   part — it is the only piece of this the cashier actually reads. */
+.orden-queue__figure {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	margin-inline-start: auto;
+	font-size: 11.5px;
+	color: var(--reg-text-muted, #667085);
+	white-space: nowrap;
 	cursor: default;
 }
 
-.orden-queue__chip-count {
-	font-variant-numeric: tabular-nums;
+.orden-queue__figure-icon {
+	color: var(--reg-text-muted, #9aa2ae);
+	opacity: 0.75;
+	flex: none;
+}
+
+.orden-queue__figure-count {
+	font-weight: 700;
+	color: var(--reg-text-secondary, #56606e);
 }
 
 .orden-queue__list {

@@ -63,8 +63,10 @@ describe("the chips over the queue", () => {
 	});
 
 	it("keeps «En trabajo» when the workshop genuinely has nothing on the bench", () => {
+		// Last on purpose: the two FILTERS lead and the workshop count trails
+		// as a right-aligned figure — the artboard's order after the 08-24 fix.
 		const chips = describeBuckets({ ready: 4, working: 0, delivered: 2 }, "ready");
-		expect(chips.map((chip) => chip.id)).toEqual(["ready", "working", "delivered"]);
+		expect(chips.map((chip) => chip.id)).toEqual(["ready", "delivered", "working"]);
 	});
 
 	it("marks only the open bucket active", () => {

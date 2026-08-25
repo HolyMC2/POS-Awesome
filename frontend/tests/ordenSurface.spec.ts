@@ -104,19 +104,30 @@ beforeEach(() => {
 });
 
 describe("the queue column", () => {
-	it("draws a chip per bucket the register can report on", () => {
+	it("draws the two filters first and the workshop figure last", () => {
 		const queue = mountQueue([card()]);
 		const chips = queue.findAll('[data-bucket]');
 		expect(chips.map((chip) => chip.attributes("data-bucket"))).toEqual([
 			"ready",
-			"working",
 			"delivered",
+			"working",
 		]);
 	});
 
-	it("leaves «En trabajo» unpressable, because Taller owns that work", () => {
+	it("renders «En trabajo» as a figure, never as a button", () => {
+		// A disabled pill between the filters read as a BROKEN button at the
+		// register (08-24). The count is now a plain right-aligned figure — no
+		// button element, no pill — with the footer's own sentence as tooltip.
 		const queue = mountQueue([card()]);
-		expect(queue.find('[data-bucket="working"]').attributes("disabled")).toBeDefined();
+		const figure = queue.find('[data-testid="orden-working-figure"]');
+		expect(figure.exists()).toBe(true);
+		expect(figure.element.tagName).not.toBe("BUTTON");
+		expect(figure.attributes("title")).toContain("Taller");
+		expect(figure.text()).toContain("9");
+		const buckets = queue
+			.findAll("button[data-bucket]")
+			.map((chip) => chip.attributes("data-bucket"));
+		expect(buckets).not.toContain("working");
 	});
 
 	it("says why an invoiced order cannot be charged, instead of only dimming it", () => {
