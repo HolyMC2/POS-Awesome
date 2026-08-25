@@ -23,6 +23,10 @@ class _PermissionError(Exception):
 
 
 class _Request(types.SimpleNamespace):
+    # prepare_charge_request_invoice reads this even when a test doesn't set
+    # it (round-2 pull flow stamps it into the invoice remarks).
+    source_label = None
+
     def get_items(self):
         return []
 

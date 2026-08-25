@@ -62,6 +62,7 @@ def _install_stubs():
     frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
     frappe_module.session = types.SimpleNamespace(user="cashier-a@example.com")
     frappe_module.conf = {}
+    frappe_module.flags = {}
     frappe_module.db = _Db()
     sys.modules["frappe"] = frappe_module
 
@@ -77,6 +78,12 @@ def _install_stubs():
     utilities = types.ModuleType("posawesome.posawesome.api.utilities")
     utilities.get_version = lambda: 16
     sys.modules["posawesome.posawesome.api.utilities"] = utilities
+
+    # shifts.py imports this at module level (contract-stamp work); None is
+    # the neutral "no vertical preset" answer.
+    vertical = types.ModuleType("posawesome.posawesome.api.vertical")
+    vertical.effective_contract_stamp = lambda *args, **kwargs: None
+    sys.modules["posawesome.posawesome.api.vertical"] = vertical
 
     scope = types.ModuleType("posawesome.posawesome.api._scope")
     scope.assert_company = lambda *args, **kwargs: None

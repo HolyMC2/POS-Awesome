@@ -41,6 +41,18 @@ class FakePaymentEntry:
         return getattr(self, key, default)
 
 
+# What frappe.db.get_value("POS Opening Shift", ...) answers in tests that
+# replace mock_frappe.db: the shift-binding guard in process_pos_payment needs
+# a row matching the payload's register (demo mode skips the strict checks).
+_OPEN_SHIFT_ROW = {
+    "pos_profile": "Main POS",
+    "company": "Test Company",
+    "status": "Open",
+    "docstatus": 1,
+    "user": "cashier@example.com",
+}
+
+
 def _install_framework_stubs():
     frappe_module = types.ModuleType("frappe")
     frappe_utils = types.ModuleType("frappe.utils")
@@ -58,6 +70,10 @@ def _install_framework_stubs():
     frappe_module.logger = lambda: types.SimpleNamespace(info=lambda *args, **kwargs: None)
     frappe_module.msgprint = lambda *args, **kwargs: None
     frappe_module.get_cached_value = lambda *args, **kwargs: None
+    # _scope.py binds THIS module object at load time (the per-test
+    # @patch(...processor.frappe) mock never reaches it); System Manager makes
+    # _is_super short-circuit every assert_profile/assert_company gate.
+    frappe_module.get_roles = lambda user=None: ["System Manager"]
     frappe_module.get_list = lambda *args, **kwargs: []
     frappe_module.get_doc = lambda *args, **kwargs: None
     frappe_module.get_cached_doc = lambda *args, **kwargs: None
@@ -119,6 +135,14 @@ def _install_framework_stubs():
     mpesa_module = types.ModuleType("posawesome.posawesome.api.m_pesa")
     mpesa_module.submit_mpesa_payment = lambda *args, **kwargs: None
     sys.modules["posawesome.posawesome.api.m_pesa"] = mpesa_module
+
+    # processor lazily imports is_demo_pos_site mid-flow; the real shifts.py
+    # drags utilities.py (cstr, add_to_date, ...) into the harness. Demo mode
+    # skips the strict docstatus/status/user shift checks.
+    shifts_module = types.ModuleType("posawesome.posawesome.api.shifts")
+    shifts_module.is_demo_pos_site = lambda: True
+    shifts_module.assert_shift_not_stale = lambda *args, **kwargs: None
+    sys.modules["posawesome.posawesome.api.shifts"] = shifts_module
 
 
 def _install_package_stubs():
@@ -481,7 +505,39 @@ class TestPosPaymentProcessing(unittest.TestCase):
         mock_find_existing_entries,
     ):
         mock_frappe._dict.side_effect = lambda value: AttrDict(value)
-        mock_frappe.throw.side_effect = lambda message: (_ for _ in ()).throw(Exception(message))
+        # Second positional is the exception class (frappe.PermissionError on
+        # the guard paths); raise the message either way so assertRaisesRegex
+        # sees what the code said.
+        mock_frappe.throw.side_effect = lambda message, *args, **kwargs: (_ for _ in ()).throw(
+            Exception(message)
+        )
+        # The shift-binding and payments-enabled gates run BEFORE the draft
+        # guard under test; give them honest answers so the only throw left
+        # is the one this test asserts on (the 1-arg lambda above would choke
+        # on the gates' 2-arg PermissionError throws).
+        mock_frappe.get_cached_doc.return_value = AttrDict(
+            {
+                "name": "Main POS",
+                "company": "Test Company",
+                "posa_use_pos_awesome_payments": 1,
+                "posa_allow_make_new_payments": 1,
+                "posa_allow_reconcile_payments": 1,
+                "posa_allow_mpesa_reconcile_payments": 0,
+                # the same fake answers the replayed Payment Entry lookup in
+                # _assert_accounting_document_access
+                "party_type": "Customer",
+                "party": "Customer 727",
+                "customer": "Customer 727",
+            }
+        )
+        mock_frappe.db = types.SimpleNamespace(
+            get_default=lambda key: 2,
+            has_column=lambda doctype, fieldname: True,
+            sql=lambda *args, **kwargs: [],
+            get_value=lambda *args, **kwargs: (
+                dict(_OPEN_SHIFT_ROW) if args and args[0] == "POS Opening Shift" else None
+            ),
+        )
         mock_find_existing_entries.return_value = [
             {
                 "name": "ACC-PAY-IDEMP-DRAFT-0001",
@@ -733,14 +789,27 @@ class TestPosPaymentProcessing(unittest.TestCase):
             get_default=lambda key: 2,
             has_column=lambda doctype, fieldname: True,
             sql=lambda *args, **kwargs: [],
-            get_value=lambda *args, **kwargs: None,
+            get_value=lambda *args, **kwargs: (
+                dict(_OPEN_SHIFT_ROW) if args and args[0] == "POS Opening Shift" else None
+            ),
         )
-        mock_frappe.get_cached_doc.return_value = types.SimpleNamespace(
-            currency="USD",
-            conversion_rate=1.2,
-            rounded_total=100,
-            grand_total=100,
-            outstanding_amount=100,
+        # Serves BOTH the POS Profile lookup (the scope gate plus the
+        # server-authoritative posa_allow_* flags) and the invoice lookups.
+        mock_frappe.get_cached_doc.return_value = AttrDict(
+            {
+                "name": "Main POS",
+                "company": "Test Company",
+                "posa_use_pos_awesome_payments": 1,
+                "posa_allow_make_new_payments": 1,
+                "posa_allow_reconcile_payments": 1,
+                "posa_allow_mpesa_reconcile_payments": 0,
+                "cost_center": "Main - TC",
+                "currency": "USD",
+                "conversion_rate": 1.2,
+                "rounded_total": 100,
+                "grand_total": 100,
+                "outstanding_amount": 100,
+            }
         )
 
         result = self.processor.process_pos_payment(
@@ -797,7 +866,9 @@ class TestPosPaymentProcessing(unittest.TestCase):
         mock_frappe.db = types.SimpleNamespace(
             has_column=lambda doctype, fieldname: False,
             sql=lambda *args, **kwargs: [],
-            get_value=lambda *args, **kwargs: None,
+            get_value=lambda *args, **kwargs: (
+                dict(_OPEN_SHIFT_ROW) if args and args[0] == "POS Opening Shift" else None
+            ),
         )
 
         self.processor.process_pos_payment(
@@ -849,7 +920,9 @@ class TestPosPaymentProcessing(unittest.TestCase):
         mock_frappe.db = types.SimpleNamespace(
             has_column=lambda doctype, fieldname: False,
             sql=lambda *args, **kwargs: [],
-            get_value=lambda *args, **kwargs: None,
+            get_value=lambda *args, **kwargs: (
+                dict(_OPEN_SHIFT_ROW) if args and args[0] == "POS Opening Shift" else None
+            ),
         )
         mock_frappe.get_list.side_effect = AssertionError(
             "replay lookup should be skipped when the field is missing"

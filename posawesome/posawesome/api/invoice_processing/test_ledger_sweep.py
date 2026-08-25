@@ -109,8 +109,40 @@ def _load_module():
     return module
 
 
+def _restore_modules(snapshot):
+    for name in [k for k in sys.modules if k not in snapshot]:
+        del sys.modules[name]
+    for name, module in snapshot.items():
+        if sys.modules.get(name) is not module:
+            sys.modules[name] = module
+
+
+# `unittest discover` IMPORTS every test module before RUNNING any test, so
+# stubs left in sys.modules here poison the module-level imports of every
+# sibling discovered after this file (their real frappe.utils import resolves
+# to our thin fake → _FailedTest). Install the stubs only long enough to load
+# the module under test, restore immediately, and re-install them just for
+# this module's run window via setUpModule/tearDownModule.
+_PRE_STUB_MODULES = sys.modules.copy()
 FRAPPE, METRICS, CLOSING = _install_stubs()
 SWEEP = _load_module()
+_STUB_DELTA = {
+    name: sys.modules[name]
+    for name in sys.modules
+    if sys.modules.get(name) is not _PRE_STUB_MODULES.get(name)
+}
+_restore_modules(_PRE_STUB_MODULES)
+_RUN_SNAPSHOT = None
+
+
+def setUpModule():
+    global _RUN_SNAPSHOT
+    _RUN_SNAPSHOT = sys.modules.copy()
+    sys.modules.update(_STUB_DELTA)
+
+
+def tearDownModule():
+    _restore_modules(_RUN_SNAPSHOT)
 
 
 class LedgerSweepTestCase(unittest.TestCase):

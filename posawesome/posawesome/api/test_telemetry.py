@@ -110,7 +110,18 @@ def _import_telemetry():
 # Run directly: python3 <this file>.
 _UNDER_BENCH = callable(getattr(sys.modules.get("frappe"), "init", None))
 
+# The tests reach the stub through `telemetry.frappe` (bound when
+# telemetry.py was exec'd), so the fake need not stay in sys.modules — and
+# leaving it there poisons every sibling module `unittest discover` imports
+# after this file. Restore sys.modules immediately after the load.
+_PRE_STUB_MODULES = sys.modules.copy()
 telemetry = None if _UNDER_BENCH else _import_telemetry()
+for _name in [k for k in sys.modules if k not in _PRE_STUB_MODULES]:
+    del sys.modules[_name]
+for _name, _module in _PRE_STUB_MODULES.items():
+    if sys.modules.get(_name) is not _module:
+        sys.modules[_name] = _module
+del _PRE_STUB_MODULES
 
 
 def _event(name: str, value):

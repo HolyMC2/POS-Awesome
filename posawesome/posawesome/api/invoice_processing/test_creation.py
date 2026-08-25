@@ -255,6 +255,27 @@ def _load_module():
 # bench process. Skip under `bench run-tests`; run directly: python3 <file>.
 _UNDER_BENCH = callable(getattr(sys.modules.get("frappe"), "init", None))
 
+# The setUpClass stubs also poison SIBLING standalone modules when the whole
+# api tree runs in one process (`python -m unittest discover`): the thin
+# shifts/frappe.utils fakes shadow the real modules for every file that runs
+# after this one. Snapshot when this module's run window opens (NOT at import
+# — discovery imports all modules first, and an import-time snapshot would
+# roll back other files' import-time stubs), restore when it closes.
+_SAVED_MODULES = None
+
+
+def setUpModule():
+    global _SAVED_MODULES
+    _SAVED_MODULES = sys.modules.copy()
+
+
+def tearDownModule():
+    for name in [k for k in sys.modules if k not in _SAVED_MODULES]:
+        del sys.modules[name]
+    for name, module in _SAVED_MODULES.items():
+        if sys.modules.get(name) is not module:
+            sys.modules[name] = module
+
 @unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class TestUpdateInvoiceReturnPayments(unittest.TestCase):
     @classmethod

@@ -132,7 +132,19 @@ def _import_qz():
 # skipped entirely under bench. Run directly: python3 <this file>.
 _UNDER_BENCH = callable(getattr(sys.modules.get("frappe"), "init", None))
 
+# The tests reach the stub through `qz.frappe` (a module-attribute binding
+# made when qz.py was exec'd), so nothing needs the fake left in sys.modules
+# after the import — and leaving it there poisons every sibling module that
+# `unittest discover` imports after this file (the thin frappe.utils lacks
+# names the real modules import). Restore sys.modules immediately.
+_PRE_STUB_MODULES = sys.modules.copy()
 qz = None if _UNDER_BENCH else _import_qz()
+for _name in [k for k in sys.modules if k not in _PRE_STUB_MODULES]:
+    del sys.modules[_name]
+for _name, _module in _PRE_STUB_MODULES.items():
+    if sys.modules.get(_name) is not _module:
+        sys.modules[_name] = _module
+del _PRE_STUB_MODULES
 
 _WIN_ARCHIVE = "qz-tray-doco.zip"
 _LINUX_ARCHIVE = "qz-tray-doco-linux.tar.gz"

@@ -38,6 +38,9 @@ def _install_invoice_api_stubs():
         state["delete_doc_calls"].append((args, kwargs))
 
     frappe_module._ = lambda text: text
+    # quotations.py (pulled in lazily via quotation_conversion) decorates its
+    # endpoints at import time.
+    frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
     frappe_module.get_all = get_all
     frappe_module.delete_doc = delete_doc
     frappe_module.get_doc = lambda *args, **kwargs: None
@@ -53,6 +56,11 @@ def _install_invoice_api_stubs():
 
     frappe_utils_module.add_days = lambda date, days: date
     frappe_utils_module.flt = lambda value, precision=None: float(value or 0)
+    # on_cancel lazily imports quotation_conversion, which pulls these (plus
+    # quotations / quotation_read_model) at module level.
+    frappe_utils_module.cint = lambda value=0: int(value or 0)
+    frappe_utils_module.nowdate = lambda: "2026-08-25"
+    frappe_utils_module.getdate = lambda value=None: value
     frappe_utils_module.get_url_to_form = lambda doctype, name: f"/app/{doctype}/{name}"
     frappe_module.utils = frappe_utils_module
 
@@ -113,7 +121,16 @@ class TestInvoiceCancelHooks(unittest.TestCase):
         invoice_api.cancel_posawesome_credit_journal_entries = lambda doc: called.update(credit=True)
         invoice_api.restore_posawesome_gift_card_redemptions = lambda doc: called.update(gift_cards=True)
 
-        invoice_api.on_cancel(SimpleNamespace(doctype="Sales Invoice", name="SINV-0001"), None)
+        invoice_api.on_cancel(
+            SimpleNamespace(
+                doctype="Sales Invoice",
+                name="SINV-0001",
+                # on_cancel also clears quotation conversion, which probes
+                # doc.get("posa_quotation"); None = no linked quotation.
+                get=lambda key, default=None: default,
+            ),
+            None,
+        )
 
         self.assertTrue(called["credit"])
         self.assertTrue(called["gift_cards"])
