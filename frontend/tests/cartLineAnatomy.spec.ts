@@ -195,6 +195,43 @@ describe("the row renders both, and neither lies", () => {
 	});
 });
 
+describe("the artwork thumbnail on the line", () => {
+	it("reserves the slot unconditionally and draws the photo inside it", () => {
+		// The slot div carries no v-if; only the <img> does. Rows with and
+		// without photos share one table, and a collapsing slot would ripple
+		// every name to a different x per line.
+		expect(row).toMatch(/class="posa-cart-item-row__thumb"[^>]*aria-hidden="true"/);
+		expect(row).toMatch(/v-if="lineThumbSrc"/);
+	});
+
+	it("walks the catalogue card's degradation chain: thumb, photo, nothing", () => {
+		// Same order as ItemCard.vue — the server's 300px `posa_image_thumb`
+		// first, the full-size photo second. Both already ride the line
+		// (`getNewItem` spreads the search row); nothing is fetched.
+		expect(row).toMatch(/posa_image_thumb[\s\S]{0,80}props\.item\.image/);
+	});
+
+	it("knocks a broken src out rather than showing the broken-image glyph", () => {
+		expect(row).toContain('@error="onThumbError"');
+		expect(row).toMatch(/failedThumbSrcs/);
+	});
+
+	it("keeps the resolved src in the v-memo deps", () => {
+		// Without it a late-arriving or newly-broken picture stays pinned.
+		const deps = /const memoDeps = computed\(\(\) => \{([\s\S]*?)\];/.exec(row)?.[1] ?? "";
+		expect(deps).toContain("lineThumbSrc.value");
+	});
+
+	it("letterboxes, never crops, on the muted surface token", () => {
+		// `object-fit: contain` is the catalogue card's call — a 32px crop of
+		// a phone case is a different-looking product. The empty box follows
+		// the theme through the token, not a literal.
+		const styles = /<style scoped>([\s\S]*?)<\/style>/.exec(row)?.[1] ?? "";
+		expect(styles).toMatch(/\.posa-cart-item-row__thumb-img\s*\{[^}]*object-fit: contain/);
+		expect(styles).toMatch(/\.posa-cart-item-row__thumb\s*\{[^}]*var\(--pos-surface-muted/);
+	});
+});
+
 describe("the stepper keeps the touch target it was given", () => {
 	const css = read("../src/posapp/components/pos/invoice/items-table-styles.css");
 

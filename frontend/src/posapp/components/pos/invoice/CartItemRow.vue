@@ -10,84 +10,105 @@
 			-->
 			<!-- Item Name Column -->
 			<td v-if="column.key === 'item_name'" :class="cartAlignClass(column)" :data-column-key="'item_name'">
-				<div class="d-flex align-center posa-cart-item-row__name-cell">
-					<span class="posa-cart-item-row__name" :title="item.item_name">{{
-						item.item_name
-					}}</span>
-					<v-chip v-if="item.is_bundle" size="x-small" variant="tonal" class="ml-1">
-						{{ __("Bundle") }}
-					</v-chip>
-					<v-chip v-if="item.name_overridden" size="x-small" variant="tonal" class="ml-1">
-						{{ __("Edited") }}
-					</v-chip>
-					<v-chip
-						v-if="item.batch_no_is_expired"
-						color="error"
-						size="x-small"
-						variant="tonal"
-						class="ml-1"
-					>
-						{{ __("Expired") }}
-					</v-chip>
-					<v-chip
-						v-if="item.has_batch_no && item.batch_no"
-						size="x-small"
-						variant="tonal"
-						class="ml-1"
-					>
-						{{ __("Batch") }}: {{ item.batch_no }}
-					</v-chip>
-					<v-chip
-						v-if="item.posa_is_offer || item.is_free_item"
-						color="success"
-						size="x-small"
-						variant="tonal"
-						class="me-1"
-					>
-						{{ __("Offer Item") }}
-					</v-chip>
-					<v-tooltip v-if="item.pricing_rule_badge" location="bottom">
-						<template #activator="{ props }">
-							<v-chip v-bind="props" size="x-small" variant="tonal" class="ml-1">
-								{{ item.pricing_rule_badge.label }}
+				<div class="d-flex align-center posa-cart-item-row__line">
+					<!-- The artwork slot is ALWAYS reserved, photo or not — the same
+					     call ComboCartLine already made. Rows with and without photos
+					     sit in one table, and a slot that collapsed would ripple every
+					     name to a different x per line. A missing or broken photo
+					     leaves the neutral box, never the browser's broken-image
+					     glyph and never a fabricated placeholder graphic. -->
+					<div class="posa-cart-item-row__thumb" aria-hidden="true">
+						<img
+							v-if="lineThumbSrc"
+							:src="lineThumbSrc"
+							alt=""
+							loading="lazy"
+							class="posa-cart-item-row__thumb-img"
+							data-testid="cart-line-thumb"
+							@error="onThumbError"
+						/>
+					</div>
+					<div class="posa-cart-item-row__name-col">
+						<div class="d-flex align-center posa-cart-item-row__name-cell">
+							<span class="posa-cart-item-row__name" :title="item.item_name">{{
+								item.item_name
+							}}</span>
+							<v-chip v-if="item.is_bundle" size="x-small" variant="tonal" class="ml-1">
+								{{ __("Bundle") }}
 							</v-chip>
-						</template>
-						<span>{{ item.pricing_rule_badge.tooltip }}</span>
-					</v-tooltip>
-					<v-btn
-						v-if="posProfile.posa_allow_line_item_name_override && !item.posa_is_replace"
-						icon
-						size="x-small"
-						variant="text"
-						class="ml-1"
-						@click.stop="$emit('open-name-dialog', item)"
-						:aria-label="__('Edit item name')"
-					>
-						<v-icon size="small">mdi-pencil</v-icon>
-					</v-btn>
-					<v-btn
-						v-if="item.name_overridden"
-						icon
-						size="x-small"
-						variant="text"
-						class="ml-1"
-						@click.stop="$emit('reset-item-name', item)"
-						:aria-label="__('Reset item name')"
-					>
-						<v-icon size="small">mdi-undo</v-icon>
-					</v-btn>
-				</div>
-				<!-- `IPN001545 · Accesorios` — how an operator confirms they
-				     scanned the RIGHT variant. This shop sells near-identical
-				     cases differing only by model and colour, so the name alone
-				     cannot settle it. Rendered only when there is something to
-				     say; never a fabricated category. -->
-				<div
-					v-if="lineIdentity"
-					class="posa-cart-item-row__identity"
-					data-testid="cart-line-identity"
-				>
-					{{ lineIdentity }}
+							<v-chip v-if="item.name_overridden" size="x-small" variant="tonal" class="ml-1">
+								{{ __("Edited") }}
+							</v-chip>
+							<v-chip
+								v-if="item.batch_no_is_expired"
+								color="error"
+								size="x-small"
+								variant="tonal"
+								class="ml-1"
+							>
+								{{ __("Expired") }}
+							</v-chip>
+							<v-chip
+								v-if="item.has_batch_no && item.batch_no"
+								size="x-small"
+								variant="tonal"
+								class="ml-1"
+							>
+								{{ __("Batch") }}: {{ item.batch_no }}
+							</v-chip>
+							<v-chip
+								v-if="item.posa_is_offer || item.is_free_item"
+								color="success"
+								size="x-small"
+								variant="tonal"
+								class="me-1"
+							>
+								{{ __("Offer Item") }}
+							</v-chip>
+							<v-tooltip v-if="item.pricing_rule_badge" location="bottom">
+								<template #activator="{ props }">
+									<v-chip v-bind="props" size="x-small" variant="tonal" class="ml-1">
+										{{ item.pricing_rule_badge.label }}
+									</v-chip>
+								</template>
+								<span>{{ item.pricing_rule_badge.tooltip }}</span>
+							</v-tooltip>
+							<v-btn
+								v-if="posProfile.posa_allow_line_item_name_override && !item.posa_is_replace"
+								icon
+								size="x-small"
+								variant="text"
+								class="ml-1"
+								@click.stop="$emit('open-name-dialog', item)"
+								:aria-label="__('Edit item name')"
+							>
+								<v-icon size="small">mdi-pencil</v-icon>
+							</v-btn>
+							<v-btn
+								v-if="item.name_overridden"
+								icon
+								size="x-small"
+								variant="text"
+								class="ml-1"
+								@click.stop="$emit('reset-item-name', item)"
+								:aria-label="__('Reset item name')"
+							>
+								<v-icon size="small">mdi-undo</v-icon>
+							</v-btn>
+						</div>
+						<!-- `IPN001545 · Accesorios` — how an operator confirms they
+						     scanned the RIGHT variant. This shop sells near-identical
+						     cases differing only by model and colour, so the name alone
+						     cannot settle it. Rendered only when there is something to
+						     say; never a fabricated category. -->
+						<div
+							v-if="lineIdentity"
+							class="posa-cart-item-row__identity"
+							data-testid="cart-line-identity"
+						>
+							{{ lineIdentity }}
+						</div>
+					</div>
 				</div>
 			</td>
 
@@ -610,6 +631,10 @@ const memoDeps = computed(() => {
 		fractionalPadOpen.value,
 		props.item.must_be_whole_number,
 		props.item.sub_unit,
+		// The artwork is a rendered cell too: the resolved src moves when the
+		// item's image fields change AND when a load failure knocks a candidate
+		// out, and v-memo would pin the stale (or broken) picture through both.
+		lineThumbSrc.value,
 	];
 	debugLog(`[CartItemRow] memoDeps updated for ${props.item.item_code}`, {
 		uom: props.item.uom,
@@ -635,6 +660,31 @@ const lineStock = computed(() =>
 );
 
 const lineIdentity = computed(() => describeLineIdentity(props.item));
+
+/**
+ * The line's artwork — the SAME degradation chain the catalogue card walks
+ * (`ItemCard.vue`): the server's 300px `posa_image_thumb` when one exists,
+ * else the full-size photo, else nothing. Both fields are already on the line
+ * because `getNewItem` spreads the whole search row, so this fetches nothing —
+ * a per-line request would be N round trips on the hottest path in the
+ * product. A src that 404s (a deleted attachment leaves `image` set) is
+ * remembered and skipped, leaving the neutral box rather than the browser's
+ * broken-image glyph.
+ */
+const failedThumbSrcs = ref([]);
+const lineThumbSrc = computed(
+	() =>
+		[props.item.posa_image_thumb, props.item.image].find(
+			(src) => src && !failedThumbSrcs.value.includes(src),
+		) || null,
+);
+
+function onThumbError() {
+	const src = lineThumbSrc.value;
+	if (src && !failedThumbSrcs.value.includes(src)) {
+		failedThumbSrcs.value = [...failedThumbSrcs.value, src];
+	}
+}
 
 /**
  * Does this line get the weighing affordances?
@@ -919,6 +969,41 @@ function cancelDiscountAmountEdit() {
  * it predates the dark-mode sweep and is not this file's to change, but the
  * values below are the same colours by their token names, so the two rows read
  * identically in light and, unlike the combo, stay legible in dark. */
+/* The line's artwork: a 32px tile inside the 36px the 60px row leaves after
+ * its paddings. The slot is flex-none so a long name squeezes ITS OWN span,
+ * never the picture, and `margin-inline-end` keeps the gap on the correct
+ * side under RTL. `object-fit: contain` on the muted surface is the
+ * catalogue card's call, kept here so the same photo reads the same in both
+ * places — a 32px crop of a phone case is a different-looking product. */
+.posa-cart-item-row__thumb {
+	flex: 0 0 auto;
+	width: 32px;
+	height: 32px;
+	margin-inline-end: 8px;
+	border-radius: 6px;
+	overflow: hidden;
+	background: var(--pos-surface-muted, #eaeef3);
+}
+
+.posa-cart-item-row__thumb-img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+/* Both wrappers must stay shrinkable or the name's two-line clamp dies: a
+ * flex child defaults to min-width:auto, and the cell would grow to the
+ * name's intrinsic width instead of truncating it. */
+.posa-cart-item-row__line {
+	min-width: 0;
+}
+
+.posa-cart-item-row__name-col {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
 .posa-cart-item-row__identity {
 	font-size: 11.5px;
 	line-height: 1.25;
