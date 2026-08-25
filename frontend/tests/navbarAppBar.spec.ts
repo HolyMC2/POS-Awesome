@@ -93,8 +93,14 @@ describe("NavbarAppBar", () => {
 
 		expect(wrapper.findAll('[data-test="cashier-chip"]')).toHaveLength(1);
 		expect(wrapper.find('[data-test="profile-chip-secondary"]').exists()).toBe(false);
-		expect(wrapper.text()).toContain("Backup Cashier");
+		// The chip is a control labelled by the cashier's FIRST name — the full
+		// name spent ~150px of the bar restating what the cashier knows about
+		// themselves, and lives on the tooltip instead (08-24).
+		const chip = wrapper.get('[data-test="cashier-chip"]');
+		expect(chip.text()).toContain("Backup");
+		expect(chip.text()).not.toContain("Backup Cashier");
+		expect(chip.attributes("title")).toBe("Backup Cashier");
 		expect(wrapper.text()).toContain("Main POS");
-		expect(wrapper.get('[data-test="cashier-chip"]').attributes("role")).toBe("button");
+		expect(chip.attributes("role")).toBe("button");
 	});
 });

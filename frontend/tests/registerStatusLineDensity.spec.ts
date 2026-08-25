@@ -46,11 +46,15 @@ const priorities = (input = FULL) =>
 		resolveRegisterStatusLine(input).chips.map((chip) => [chip.id, chip.priority]),
 	);
 
-/** Every `@media (max-width: N)` block that hides a priority, newest first. */
+/** Every `@container (max-width: N)` block that hides a priority, widest first.
+ * Container rules, not media rules: the ladder measures the chips' own box
+ * since 08-24, because a viewport ladder was blind to the actions cluster
+ * growing beside it (the saldo badge pushed the chips under the connection
+ * button at 1920 — a width the media ladder was sure was safe). */
 function dropRules() {
 	const rules: Array<{ width: number; priority: number }> = [];
 	const pattern =
-		/@media\s*\(max-width:\s*(\d+)px\)\s*\{\s*\.register-status-chip\[data-priority="(\d+)"\]/g;
+		/@container\s*\(max-width:\s*(\d+)px\)\s*\{\s*\.register-status-chip\[data-priority="(\d+)"\]/g;
 	let match: RegExpExecArray | null;
 	while ((match = pattern.exec(statusLineSource)) !== null) {
 		rules.push({ width: Number(match[1]), priority: Number(match[2]) });
@@ -96,11 +100,11 @@ describe("the drop ladder", () => {
 		expect(dropRules().some((rule) => rule.priority <= 1)).toBe(false);
 	});
 
-	it("keeps at 1718px the chips the ladder only sheds below it", () => {
-		// Nothing drops above the widest breakpoint, so a 1718px register shows
-		// the whole row the module produced.
+	it("shows the whole row whenever the box affords it", () => {
+		// The full row measures ~704px; nothing may drop while the box still
+		// fits it, so the widest breakpoint stays at or under that measure.
 		const widest = Math.max(...dropRules().map((rule) => rule.width));
-		expect(1718).toBeGreaterThan(widest);
+		expect(widest).toBeLessThanOrEqual(720);
 		const shown = resolveRegisterStatusLine(FULL).chips.map((chip) => chip.id);
 		expect(shown).toEqual(
 			expect.arrayContaining([
@@ -113,9 +117,9 @@ describe("the drop ladder", () => {
 		);
 	});
 
-	it("at 1280px has shed the clock and the day count, and nothing else", () => {
+	it("in a 500px box has shed the clock and the day count, and nothing else", () => {
 		const dropped = dropRules()
-			.filter((rule) => rule.width >= 1280)
+			.filter((rule) => rule.width >= 500)
 			.map((rule) => rule.priority);
 		const rank = priorities();
 		const survives = (id: string) => !dropped.includes(rank[id]!);

@@ -149,6 +149,7 @@
 						data-test="cashier-chip"
 						tabindex="0"
 						role="button"
+						:title="cashierChipTitle"
 						@click="$emit('open-employee-switch')"
 						@keydown.enter="$emit('open-employee-switch')"
 					>
@@ -460,6 +461,17 @@ export default {
 		},
 
 		cashierChipLabel() {
+			// First given name only. This is the LABEL OF A CONTROL — clicking
+			// it switches cashier — and «Marco Antonio Ponce Valdez» spent
+			// ~150px of the bar restating what the cashier already knows about
+			// themselves; at 1920 that was part of what pushed the status chips
+			// under the connection button (owner screenshot, 08-24). The full
+			// name stays on the chip's tooltip.
+			const full = String(this.cashierChipTitle || "").trim();
+			return full.split(/\s+/)[0] || full;
+		},
+
+		cashierChipTitle() {
 			return this.cashierName || this.displayName;
 		},
 

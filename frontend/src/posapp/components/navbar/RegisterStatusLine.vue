@@ -147,14 +147,24 @@ const subtitle = computed(() =>
  * "Online · synce" — the connection chip, the one chip that must never lie
  * about money, severed mid-word by the box it sat in. Chips are
  * `flex: 0 0 auto` so they can never be squashed either; when the row runs
- * out of room the priority rules below remove whole chips instead. */
+ * out of room the priority rules below remove whole chips instead.
+ *
+ * The box is a CONTAINER and the ladder below measures IT, not the window.
+ * The old `@media` ladder was calibrated against a viewport with a smaller
+ * actions cluster; when the cluster grew (the saldo badge, 08-23) the chips
+ * overran their own box at 1920 wide and slid under the connection button —
+ * a width the ladder was sure was safe. A container query cannot be lied to
+ * that way: the chips drop when THIS box runs out of room, whatever the
+ * window measures and whatever the actions cluster grows into next. */
 .register-status-line__chips {
 	display: flex;
 	align-items: center;
+	justify-content: flex-end;
 	gap: 6px;
 	margin-inline-start: auto;
 	min-width: 0;
-	flex: 0 1 auto;
+	flex: 1 1 0;
+	container-type: inline-size;
 }
 
 .register-status-chip {
@@ -175,21 +185,32 @@ const subtitle = computed(() =>
  * chips go before operational ones: the clock is on the wall behind the
  * cashier and the day's count can wait for the corte, but a printer fault is
  * an instruction and the connection state is a claim about whether money has
- * reached the server. Priority 1 has no rule here and therefore never drops. */
-@media (max-width: 1499px) {
+ * reached the server. Priority 1 has no rule here and therefore never drops.
+ *
+ * Thresholds are the measured widths of the chips themselves: the full row
+ * (clock · day count · printer · saldo · connection) needs ~704px of box, and
+ * each rule fires just under what the surviving set needs. Container px, not
+ * viewport px — see the box's own comment above. */
+@container (max-width: 719px) {
 	.register-status-chip[data-priority="5"] {
 		display: none;
 	}
 }
 
-@media (max-width: 1359px) {
+@container (max-width: 569px) {
 	.register-status-chip[data-priority="4"] {
 		display: none;
 	}
 }
 
-@media (max-width: 1239px) {
+@container (max-width: 469px) {
 	.register-status-chip[data-priority="3"] {
+		display: none;
+	}
+}
+
+@container (max-width: 315px) {
+	.register-status-chip[data-priority="2"] {
 		display: none;
 	}
 }
