@@ -109,7 +109,14 @@ interface BusLike {
 	off: (event: string, handler?: (payload?: unknown) => void) => void;
 }
 
-const emit = defineEmits<{ band: [BandState]; close: [] }>();
+const emit = defineEmits<{
+	band: [BandState];
+	close: [];
+	/** The loaded selection, for the movil chrome that fronts this surface on
+	 *  phones (null when nothing is selected). Same publish-up move as the
+	 *  band: the surface keeps owning selection and the charge. */
+	"update:selectedDetail": [ServiceOrderDetail | null];
+}>();
 
 const __ = (window as Record<string, any>).__ || ((value: string) => value);
 
@@ -295,8 +302,18 @@ watch(profileName, () => {
 	void loadQueue();
 });
 
+watch(detail, (loaded) => emit("update:selectedDetail", loaded), { immediate: true });
+
+// The phone's back chip: return to the queue. The movil view has no queue of
+// its own, so "back" means clearing the selection HERE, where it lives.
+const onDeselectRequested = () => {
+	selectedName.value = null;
+	detail.value = null;
+};
+
 onMounted(() => {
 	eventBus?.on("orden:collect", onCollectRequested);
+	eventBus?.on("orden:deselect", onDeselectRequested);
 	void loadCounts();
 	void loadQueue();
 	// Desk only: on a tablet this focus summons the keyboard over the queue.
@@ -305,6 +322,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
 	eventBus?.off("orden:collect", onCollectRequested);
+	eventBus?.off("orden:deselect", onDeselectRequested);
 });
 </script>
 

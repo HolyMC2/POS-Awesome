@@ -12,6 +12,7 @@
   "column_break_3",
   "posting_date",
   "pos_opening_shift",
+  "posa_difference_note",
   "section_break_5",
   "company",
   "column_break_7",
@@ -186,6 +187,13 @@
    "label": "POS Opening Shift",
    "options": "POS Opening Shift",
    "reqd": 1
+  },
+  {
+   "fieldname": "posa_difference_note",
+   "fieldtype": "Small Text",
+   "label": "Difference Note",
+   "read_only": 1,
+   "description": "The cashier's mandatory explanation when the counted drawer differs from expected beyond tolerance (movil corte)."
   },
   {
    "fieldname": "pos_payments",

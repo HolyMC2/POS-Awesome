@@ -189,6 +189,14 @@ export type Events = {
 	 */
 	movil_collect_payment: { mode?: string | null; amount?: number; print?: boolean };
 	/**
+	 * Service-order destination intents (OrdenSurface owns the selection and
+	 * the charge; the shell only sends the press). `orden:collect` predates
+	 * this map's coverage of it; `orden:deselect` (movil round 3) clears the
+	 * selection so the phone's back chip can return to the queue.
+	 */
+	"orden:collect": void;
+	"orden:deselect": void;
+	/**
 	 * A payment was CAPTURED against a party's open invoices — i.e. `PayView`'s
 	 * Payment Entry path finished, not the cart's. Distinct from
 	 * `invoice_submitted`, which announces a SALE: the two ride different

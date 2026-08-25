@@ -103,13 +103,19 @@
 				     does, and the shell answers `sale.collectAndClose` below. -->
 				<CobroSurface v-if="cobroHosted" @band="onHostedBand" />
 
+				<!-- v-show, not a branch change: on the phone the movil orden
+				     screen fronts a SELECTED order, but the surface underneath
+				     owns the queue, the selection and the charge — it must
+				     stay mounted to answer orden:collect / orden:deselect. -->
 				<DestinationHost
 					v-else-if="hostedDestinationId"
+					v-show="!movilOrdenActive"
 					:destination-id="hostedDestinationId"
 					:refusal="destinationRefusal"
 					:t="verticalT"
 					@dismiss="dismissDestination"
 					@band="onHostedBand"
+					@update:selected-detail="movilOrdenDetail = $event"
 				/>
 
 				<!--
@@ -254,6 +260,7 @@
 						@change-customer="jumpToCustomer"
 						@split="onMovilSplit"
 						@collect="onMovilCollect"
+						@orden-back="onMovilOrdenBack"
 					/>
 				</v-col>
 
@@ -534,6 +541,7 @@ import RegisterRail from "./rail/RegisterRail.vue";
 import CatalogDrawer from "./drawer/CatalogDrawer.vue";
 import ActionBand from "./band/ActionBand.vue";
 import MovilShell from "./movil/MovilShell.vue";
+import { toServiceOrderView } from "../mobile/orders/serviceOrderLines";
 import DestinationHost from "./destinations/DestinationHost.vue";
 import CobroSurface from "./cobro/CobroSurface.vue";
 import MobileOfflineOverlay from "./mobile/MobileOfflineOverlay.vue";
@@ -1363,11 +1371,15 @@ export default {
 		// Tapping a cart line falls back to the classic cart, which owns the
 		// line editor. Reset whenever the panel moves or Cart is re-asked.
 		const movilCartDetail = ref(false);
+		// A hosted destination fronts the whole stage (desktop and phone
+		// alike), so the tab-following screens stand down while one is up —
+		// the orden screen below is the destination-shaped exception.
 		const movilBrowseActive = computed(
 			() =>
 				movilPhone.value &&
 				compactPanel.value === "selector" &&
 				activeView.value === "items" &&
+				!hostedDestinationId.value &&
 				!floorOwnsStage.value,
 		);
 		const movilCartActive = computed(
@@ -1375,6 +1387,7 @@ export default {
 				movilPhone.value &&
 				compactPanel.value === "invoice" &&
 				!movilCartDetail.value &&
+				!hostedDestinationId.value &&
 				!floorOwnsStage.value,
 		);
 		// «Dividir pago» falls back to the classic Payments panel — the split
@@ -1388,10 +1401,61 @@ export default {
 				activeView.value === "payment" &&
 				!usePaymentDialog.value &&
 				!movilPayDetail.value &&
+				!hostedDestinationId.value &&
 				!floorOwnsStage.value,
 		);
+		// The orden destination's phone front: the QUEUE stays the hosted
+		// surface (a list squeezes fine, and it owns search and selection);
+		// once a selection's detail loads, MovilOrdenView fronts it. The
+		// surface publishes the loaded detail (update:selectedDetail) and
+		// keeps owning the charge — orden:collect loads the cart exactly as
+		// on desktop, and the sale lands in the movil cart/pay screens.
+		const movilOrdenDetail = shallowRef(null);
+		const movilOrdenView = computed(() => {
+			const detail = movilOrdenDetail.value;
+			if (!detail) {
+				return null;
+			}
+			return toServiceOrderView({
+				name: detail.name,
+				source_label: detail.folio || detail.name,
+				customer: detail.customer,
+				customer_name: detail.customer_name,
+				items: (detail.lines || []).map((line) => ({
+					item_code: line.item_code,
+					description: line.description || line.item_name,
+					qty: line.qty,
+					rate: line.rate,
+					kind: line.kind,
+				})),
+				device_label: detail.title || null,
+				device_id: (detail.serials && detail.serials[0]) || null,
+				technician: detail.technician || null,
+				advance: detail.advance,
+				status_key: detail.repair_status || null,
+			});
+		});
+		const movilOrdenActive = computed(
+			() =>
+				movilPhone.value &&
+				hostedDestinationId.value === SERVICE_ORDER_VIEW &&
+				!!movilOrdenView.value &&
+				!floorOwnsStage.value,
+		);
+		watch(hostedDestinationId, (id) => {
+			if (id !== SERVICE_ORDER_VIEW) {
+				movilOrdenDetail.value = null;
+			}
+		});
+		const onMovilOrdenBack = () => {
+			eventBus.emit("orden:deselect");
+		};
 		const movilStageActive = computed(
-			() => movilBrowseActive.value || movilCartActive.value || movilPayActive.value,
+			() =>
+				movilBrowseActive.value ||
+				movilCartActive.value ||
+				movilPayActive.value ||
+				movilOrdenActive.value,
 		);
 		watch([compactPanel, activeView], () => {
 			movilCartDetail.value = false;
@@ -1434,7 +1498,13 @@ export default {
 		// screen draws these, so the search field and the grid agree.
 		const movilBrowseRows = shallowRef([]);
 		const movilShellProps = computed(() => ({
-			screen: movilCartActive.value ? "cart" : movilPayActive.value ? "pay" : "browse",
+			screen: movilOrdenActive.value
+				? "orden"
+				: movilCartActive.value
+					? "cart"
+					: movilPayActive.value
+						? "pay"
+						: "browse",
 			browseItems: movilBrowseRows.value || [],
 			combos: comboOffers.value || [],
 			// The LIVE cart (invoiceStore.items off itemsData) — invoiceDoc is
@@ -1461,6 +1531,10 @@ export default {
 			profile: posProfile.value || null,
 			itemCount: Number(itemsCount.value) || 0,
 			canCollect: movilPayActive.value && Number(itemsCount.value) > 0,
+			ordenView: movilOrdenView.value,
+			ordenTitle: __("Service Orders"),
+			ordenWho: posProfile.value?.name || "",
+			ordenReadyCount: Number(serviceOrderOpenCount.value) || 0,
 		}));
 
 		// Browse IS the drawer. Any request to show the catalogue opens it and
@@ -2235,11 +2309,14 @@ export default {
 			movilStageActive,
 			movilCartActive,
 			movilPayActive,
+			movilOrdenActive,
+			movilOrdenDetail,
 			movilShellProps,
 			onMovilAdd,
 			onMovilSelectLine,
 			onMovilSplit,
 			onMovilCollect,
+			onMovilOrdenBack,
 			focusItemSearchField,
 			onHostedBand,
 			hostedDestinationId,

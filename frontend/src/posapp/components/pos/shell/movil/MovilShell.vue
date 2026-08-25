@@ -21,6 +21,38 @@
 		@add="(card) => emit('add', card)"
 		@search="emit('search')"
 	/>
+	<div v-else-if="screen === 'orden'" class="movil-orden-stage">
+		<!-- Host chrome, not the ghost component's: MovilOrdenView draws ONE
+		     order and has no queue, so "back" means deselecting in the surface
+		     that owns the selection (orden:deselect via the host). -->
+		<button
+			type="button"
+			class="movil-orden-stage__back"
+			data-testid="movil-orden-back"
+			@click="emit('orden-back')"
+		>
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+				<path
+					d="M15 5 8 12l7 7"
+					stroke="currentColor"
+					stroke-width="2.2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				/>
+			</svg>
+			{{ __("All orders") }}
+		</button>
+		<MovilOrdenView
+			:view="ordenView"
+			:title="ordenTitle"
+			:who="ordenWho"
+			:ready-count="ordenReadyCount"
+			:online="online"
+			:format-currency="formatCurrency"
+			@primary="(actionId) => emit('primary', actionId)"
+			@search="emit('orden-back')"
+		/>
+	</div>
 	<MovilCobroView
 		v-else-if="screen === 'pay'"
 		:title="payTitle"
@@ -67,6 +99,8 @@ import type { SaleSummarySourceLine } from "../../payments/saleSummary";
 import MobileBrowseScreen from "../../mobile/browse/MobileBrowseScreen.vue";
 import type { BrowseCard, BrowseCatalogItem } from "../../mobile/browse/browseCatalog";
 import MovilCobroView, { type CollectionIntent } from "../../mobile/pay/MovilCobroView.vue";
+import MovilOrdenView from "../../mobile/orders/MovilOrdenView.vue";
+import type { ServiceOrderView } from "../../mobile/orders/serviceOrderLines";
 import MobileSaleScreen from "../../mobile/sale/MobileSaleScreen.vue";
 import type { MobileSaleLine } from "../../mobile/sale/mobileSaleLines";
 
@@ -75,7 +109,7 @@ defineOptions({ name: "MovilShell" });
 withDefaults(
 	defineProps<{
 		/** Which mobile screen owns the stage — follows the dock, decided by Pos.vue. */
-		screen: "browse" | "cart" | "pay";
+		screen: "browse" | "cart" | "pay" | "orden";
 		browseItems?: readonly BrowseCatalogItem[];
 		combos?: readonly ComboOffer[];
 		/** The invoice's items child table — the browse screen's compatibility
@@ -104,6 +138,12 @@ withDefaults(
 		profile?: TenderProfile | null;
 		itemCount?: number;
 		canCollect?: boolean;
+		/** Orden screen — the surface owns selection and charge; this is the
+		 *  loaded selection mapped through toServiceOrderView by the host. */
+		ordenView?: ServiceOrderView | null;
+		ordenTitle?: string;
+		ordenWho?: string;
+		ordenReadyCount?: number;
 	}>(),
 	{
 		browseItems: () => [],
@@ -127,6 +167,10 @@ withDefaults(
 		profile: null,
 		itemCount: 0,
 		canCollect: false,
+		ordenView: null,
+		ordenTitle: "",
+		ordenWho: "",
+		ordenReadyCount: 0,
 	},
 );
 
@@ -139,5 +183,42 @@ const emit = defineEmits<{
 	(_event: "update:tender", _mode: string | null): void;
 	(_event: "split", _intent: CollectionIntent): void;
 	(_event: "collect", _intent: CollectionIntent): void;
+	(_event: "orden-back"): void;
 }>();
+
+const __ = (text: string): string => {
+	const translate = typeof window !== "undefined" ? (window as any).__ : undefined;
+	return translate ? translate(text) : text;
+};
 </script>
+
+<style scoped>
+.movil-orden-stage {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+/* The back chip is host chrome in the register vocabulary (44px touch floor,
+   the rail's pressed tint) — MovilOrdenView itself stays untouched. */
+.movil-orden-stage__back {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	align-self: flex-start;
+	min-height: 44px;
+	padding: 8px 14px;
+	border: 0;
+	border-radius: 10px;
+	background: var(--reg-rail-pressed, #e3e8ee);
+	color: var(--pos-text-primary, #16222a);
+	font-size: 13.5px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.movil-orden-stage__back:focus-visible {
+	outline: none;
+	box-shadow: inset 0 0 0 2px var(--pos-primary-variant, #00838f);
+}
+</style>

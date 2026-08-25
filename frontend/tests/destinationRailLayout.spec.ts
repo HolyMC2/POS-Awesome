@@ -153,7 +153,12 @@ describe("the corte, hosted beside the rail", () => {
 	it("still refuses to draw a second band when a shell owns the lane", () => {
 		const corte = read(CORTE);
 		expect(corte).toContain("const bandOwnsAction = computed(() => !destinationSurface);");
-		expect(corte).toContain('<div v-if="bandOwnsAction && bandState" class="closing-band">');
+		// !movilCorte joined the guard in movil round 3: on phones MovilCorte
+		// carries its own primary inside the dialog, and the band stands down
+		// exactly as it does when a shell owns the lane.
+		expect(corte).toContain(
+			'<div v-if="!movilCorte && bandOwnsAction && bandState" class="closing-band">',
+		);
 	});
 
 	it("keeps the DIFFERENCE on screen when the band is not its to draw", () => {
@@ -191,7 +196,11 @@ describe("the corte, hosted beside the rail", () => {
 		// corte keeps its own Submit and prints the difference itself.
 		const host = read("../src/posapp/components/pos/shell/destinations/DestinationHost.vue");
 		expect(host).toContain("@band=\"$emit('band', $event)\"");
-		expect(host).toContain("defineEmits<{ dismiss: []; band: [BandState] }>()");
+		// update:selectedDetail joined in movil round 3 — the orden surface
+		// publishes its loaded selection so the phone's chrome can front it.
+		expect(host).toContain(
+			'defineEmits<{ dismiss: []; band: [BandState]; "update:selectedDetail": [unknown] }>()',
+		);
 		expect(read(CORTE)).toContain('watch(bandState, (state) => emit("band", state)');
 	});
 

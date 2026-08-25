@@ -24,7 +24,33 @@
 				sized by the card's flex chain, so Vuetify's own `overflow-y`
 				on this element simply never has anything to scroll.
 			-->
-			<v-card-text class="pa-0 white-background closing-body">
+			<!-- The phone's corte (MovilCorte, artboard MovilCorte.dc.html):
+			     chrome inside this dialog. The dialog keeps fetch, figures and
+			     submitDialog; the screen counts, asks for the note the
+			     artboard's business rule demands, and hands back one intent. -->
+			<v-card-text v-if="movilCorte" class="pa-0 white-background closing-body">
+				<MovilCorte
+					:register-label="dialog_data.pos_profile || ''"
+					:cashier-name="dialog_data.user || ''"
+					:period-start="dialog_data.period_start_date || ''"
+					:period-end="dialog_data.period_end_date || ''"
+					:shift-open="true"
+					:currency="drawerCurrency"
+					:expected="expectedCash"
+					:breakdown="expectedBreakdown"
+					:initial-counted="initialCountedCash"
+					:takings="Number(dialog_data.grand_total) || 0"
+					:tickets-uploaded="shiftTicketCount ?? 0"
+					:open-drafts="shiftOpenDrafts ?? 0"
+					:note="closingNote"
+					:format-currency="formatCurrencyWithSymbolForDrawer"
+					@update:counted="onMovilCounted"
+					@update:note="onMovilNote"
+					@close-shift="onMovilCloseShift"
+				/>
+			</v-card-text>
+
+			<v-card-text v-else class="pa-0 white-background closing-body">
 				<div class="closing-layout" :class="{ 'closing-layout--no-count': !cashRow }">
 					<!-- The shift's headline figures stay ON SCREEN: they are what
 					     the count is being checked against. -->
@@ -98,7 +124,7 @@
 				</div>
 			</v-card-text>
 
-			<v-divider></v-divider>
+			<v-divider v-if="!movilCorte"></v-divider>
 
 			<!-- One number, one action (§17.7 invariant 1). On the corte that
 			     number is the DIFFERENCE, and `resolveBandState` decides it —
@@ -110,7 +136,7 @@
 			     destination, `DESTINATION_SURFACE` is injected and the shell's
 			     band is already on screen, so a second one here would be two
 			     numbers and two accents. -->
-			<div v-if="bandOwnsAction && bandState" class="closing-band">
+			<div v-if="!movilCorte && bandOwnsAction && bandState" class="closing-band">
 				<ActionBand
 					:state="bandState"
 					:format-currency="formatCurrency"
@@ -141,7 +167,7 @@
 			     no second primary, same strings `resolveBandState` already
 			     names. -->
 			<div
-				v-else-if="bandState"
+				v-else-if="!movilCorte && bandState"
 				class="closing-difference"
 				:class="`closing-difference--${bandState.tone}`"
 				data-testid="closing-difference"
@@ -169,7 +195,7 @@
 				</div>
 			</div>
 
-			<v-card-actions class="dialog-actions-container">
+			<v-card-actions v-if="!movilCorte" class="dialog-actions-container">
 				<v-spacer></v-spacer>
 				<!-- The corte is a destination now, not a dialog over the sale, so
 				     "the primary action of this screen" is answerable: submitting
@@ -230,7 +256,9 @@ import ShiftInsightTiles from "../closing/ShiftInsightTiles.vue";
 import ShiftOverview from "../closing/ShiftOverview.vue";
 import PaymentReconciliation from "../closing/PaymentReconciliation.vue";
 import DrawerCount from "../closing/DrawerCount.vue";
+import MovilCorte from "../mobile/closing/MovilCorte.vue";
 import ActionBand from "./band/ActionBand.vue";
+import { useResponsive } from "../../../composables/core/useResponsive";
 import { DESTINATION_SURFACE } from "./destinations/surfaceContext";
 
 /**
@@ -257,6 +285,7 @@ export default {
 		ShiftOverview,
 		PaymentReconciliation,
 		DrawerCount,
+		MovilCorte,
 		ActionBand,
 	},
 	emits: ["band", "close"],
@@ -490,6 +519,34 @@ export default {
 			overview.value ? Number(overview.value.draft_invoices?.count) || 0 : null,
 		);
 
+		// ---- MovilCorte (round 3 of the mobile wiring) -------------------
+		// On phones the corte renders the movil screen INSIDE this dialog:
+		// the dialog keeps owning fetch, figures and submitDialog — the
+		// screen is chrome, exactly as its own header promises. The note is
+		// the artboard's «Nota del faltante» business rule; it rides the
+		// closing doc's posa_difference_note straight through
+		// submit_closing_shift's get_doc(payload).
+		const responsive = useResponsive();
+		const movilCorte = computed(() => responsive.isPhone.value);
+		const closingNote = ref("");
+		watch(closingDialog, (open) => {
+			if (open) {
+				closingNote.value = "";
+			}
+		});
+		const onMovilCounted = (amount) => onDrawerCounted(amount);
+		const onMovilNote = (note) => {
+			closingNote.value = String(note ?? "");
+		};
+		const onMovilCloseShift = (payload = {}) => {
+			onDrawerCounted(Number(payload.counted) || 0);
+			closingNote.value = String(payload.note ?? closingNote.value ?? "");
+			if (dialog_data.value) {
+				dialog_data.value.posa_difference_note = closingNote.value;
+			}
+			submitDialog();
+		};
+
 		const handleKeydown = (event) => {
 			if (event.key === "Escape" && closingDialog.value) {
 				closeDialog();
@@ -598,6 +655,11 @@ export default {
 			formatCurrencyWithSymbolForDrawer,
 			bandState,
 			bandOwnsAction,
+			movilCorte,
+			closingNote,
+			onMovilCounted,
+			onMovilNote,
+			onMovilCloseShift,
 			shiftTicketCount,
 			shiftOpenDrafts,
 			shouldShowCompanyEquivalent: summary.shouldShowCompanyEquivalent,

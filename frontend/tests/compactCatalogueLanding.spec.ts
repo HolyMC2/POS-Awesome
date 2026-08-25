@@ -287,6 +287,53 @@ describe("the compact shell lands on the catalogue", () => {
 		expect(collect?.[1]).toEqual({ mode: "Cash", amount: 120, print: true });
 	});
 
+	it("fronts a selected service order with the movil screen, and back deselects in the surface", async () => {
+		const emitted: Array<[string, unknown]> = [];
+		const bus = makeBus();
+		const origEmit = bus.emit;
+		bus.emit = (event: string, payload?: unknown) => {
+			emitted.push([event, payload]);
+			origEmit(event, payload);
+		};
+		const vm = mountShell(390, bus).vm as any;
+		await settle();
+
+		// The destination is up but nothing is selected: the hosted QUEUE
+		// stays the stage (it owns search and selection).
+		vm.hostedDestinationId = "serviceOrder";
+		await settle();
+		expect(vm.movilOrdenActive).toBe(false);
+		expect(vm.movilStageActive).toBe(false);
+
+		// The surface publishes a loaded selection → the movil screen fronts.
+		vm.movilOrdenDetail = {
+			name: "SO-0001",
+			folio: "B-04812",
+			customer: "CUST-1",
+			customer_name: "Cliente Uno",
+			title: "iPhone 12",
+			serials: ["356789012345678"],
+			advance: 200,
+			repair_status: "Ready for pickup",
+			lines: [
+				{ item_code: "SCR-1", item_name: "Pantalla", qty: 1, rate: 1450, amount: 1450, kind: "part" },
+			],
+		};
+		await settle();
+		expect(vm.movilOrdenActive).toBe(true);
+		expect(vm.movilShellProps.screen).toBe("orden");
+		expect(vm.movilShellProps.ordenView?.orderId).toBe("B-04812");
+
+		// Back = deselect where the selection lives.
+		vm.onMovilOrdenBack();
+		expect(emitted.some(([event]) => event === "orden:deselect")).toBe(true);
+
+		// Leaving the destination clears the published detail.
+		vm.hostedDestinationId = null;
+		await settle();
+		expect(vm.movilOrdenDetail).toBe(null);
+	});
+
 	it("falls back to the classic cart when a movil line is tapped, and returns on the dock", async () => {
 		const wrapper = mountShell(390);
 		const vm = wrapper.vm as any;

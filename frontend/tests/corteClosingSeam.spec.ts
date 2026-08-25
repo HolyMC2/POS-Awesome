@@ -226,6 +226,45 @@ describe("one action, not two", () => {
 	});
 });
 
+describe("the phone's corte (movil round 3)", () => {
+	it("renders MovilCorte inside the dialog at phone width, desktop body and band standing down", async () => {
+		window.innerWidth = 390;
+		await mountDialog();
+
+		expect(inDialog('[data-testid="movil-corte"]')).toBeTruthy();
+		expect(inDialog('[data-testid="movil-corte-primary"]')).toBeTruthy();
+		// One primary: the desktop actions row and both band forms stand down.
+		expect(inDialog('[data-testid="closing-submit"]')).toBeNull();
+		expect(inDialog('[data-testid="action-band"]')).toBeNull();
+		expect(inDialog('[data-testid="closing-difference"]')).toBeNull();
+	});
+
+	it("close-shift stamps the counted figure and the note onto the doc, then submits", async () => {
+		window.innerWidth = 390;
+		const { wrapper } = await mountDialog();
+		const vm = wrapper.vm as any;
+
+		vm.onMovilCloseShift({ counted: 5391, source: "manual", note: "billete roto en caja" });
+		await nextTick();
+
+		const cashRow = vm.dialog_data.payment_reconciliation.find(
+			(row: any) => row.mode_of_payment === CASH,
+		);
+		expect(Number(cashRow.closing_amount)).toBe(5391);
+		expect(vm.dialog_data.posa_difference_note).toBe("billete roto en caja");
+	});
+
+	it("keeps the desktop corte at tablet width", async () => {
+		window.innerWidth = 900;
+		await mountDialog();
+
+		expect(inDialog('[data-testid="movil-corte"]')).toBeNull();
+		// Standalone, the dialog's own band owns the action — the desktop
+		// corte exactly as it was before the movil branch existed.
+		expect(inDialog('[data-testid="action-band"]')).toBeTruthy();
+	});
+});
+
 describe("the header carries the shift", () => {
 	it("shows the span, the tickets and the open drafts", async () => {
 		await mountDialog();

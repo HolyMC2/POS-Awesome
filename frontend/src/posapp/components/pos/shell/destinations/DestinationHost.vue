@@ -37,6 +37,7 @@
 			v-bind="$attrs"
 			@close="$emit('dismiss')"
 			@band="$emit('band', $event)"
+			@update:selected-detail="$emit('update:selectedDetail', $event)"
 		/>
 
 		<div v-else class="destination-host__loading">
@@ -91,7 +92,7 @@ const props = defineProps<{
  * ignore it, which is what it does today: the corte keeps its own Submit and
  * prints the difference on its own surface (see `closing-difference`).
  */
-defineEmits<{ dismiss: []; band: [BandState] }>();
+defineEmits<{ dismiss: []; band: [BandState]; "update:selectedDetail": [unknown] }>();
 
 const surfaceEl = ref<HTMLElement | null>(null);
 const destinationIdRef = computed(() => String(props.destinationId));
