@@ -1,0 +1,106 @@
+<template>
+	<!-- The phone's own register (roadmap §12: six mobile views, artboards
+	     MovilVenta/MovilExplorar). This shell is CHROME, deliberately thin:
+	     the engines stay mounted where they always were — Invoice.vue keeps
+	     the bus (add_item, request_invoice_payment), the ONE ItemsSelector
+	     keeps the scanner and the teleported search header — and this layer
+	     only decides which mobile screen draws the current dock tab. Every
+	     emit is translated by Pos.vue into a handler the desktop already
+	     trusts; nothing here touches a store or the money path. -->
+	<MobileBrowseScreen
+		v-if="screen === 'browse'"
+		:items="browseItems"
+		:combos="combos"
+		:cart="cartItems"
+		:query="query"
+		:catalogue-count="catalogueCount"
+		:register-label="registerLabel"
+		:online="online"
+		:low-stock-threshold="lowStockThreshold"
+		:format-currency="formatCurrency"
+		@add="(card) => emit('add', card)"
+		@search="emit('search')"
+	/>
+	<MobileSaleScreen
+		v-else-if="screen === 'cart'"
+		:items="cartItems"
+		:state="bandState"
+		:subtotal="subtotal"
+		:tax="tax"
+		:customer-name="customerName"
+		:price-list="priceList"
+		:is-return="isReturn"
+		:low-stock-threshold="lowStockThreshold"
+		:format-currency="formatCurrency"
+		:is-phone="true"
+		:window-width="windowWidth"
+		:window-height="windowHeight"
+		@primary="(actionId) => emit('primary', actionId)"
+		@select-line="(line) => emit('select-line', line)"
+		@change-customer="emit('change-customer')"
+	/>
+</template>
+
+<script setup lang="ts">
+import type { BandState } from "../../../../composables/pos/shell/bandState";
+import type { ComboOffer } from "../../../../composables/pos/combos/comboCatalog";
+import type { SaleSummarySourceLine } from "../../payments/saleSummary";
+import MobileBrowseScreen from "../../mobile/browse/MobileBrowseScreen.vue";
+import type { BrowseCard, BrowseCatalogItem } from "../../mobile/browse/browseCatalog";
+import MobileSaleScreen from "../../mobile/sale/MobileSaleScreen.vue";
+import type { MobileSaleLine } from "../../mobile/sale/mobileSaleLines";
+
+defineOptions({ name: "MovilShell" });
+
+withDefaults(
+	defineProps<{
+		/** Which mobile screen owns the stage — follows the dock, decided by Pos.vue. */
+		screen: "browse" | "cart";
+		browseItems?: readonly BrowseCatalogItem[];
+		combos?: readonly ComboOffer[];
+		/** The invoice's items child table — the browse screen's compatibility
+		 *  scope AND the sale screen's lines read the same rows. */
+		cartItems?: readonly SaleSummarySourceLine[];
+		/** The live query, owned by ItemsSelector's teleported search header. */
+		query?: string;
+		catalogueCount?: number;
+		registerLabel?: string;
+		online?: boolean;
+		lowStockThreshold?: number;
+		bandState: BandState;
+		subtotal?: number;
+		tax?: number;
+		customerName?: string;
+		priceList?: string;
+		isReturn?: boolean;
+		windowWidth?: number;
+		windowHeight?: number;
+		formatCurrency: (_value: number) => string;
+	}>(),
+	{
+		browseItems: () => [],
+		combos: () => [],
+		cartItems: () => [],
+		query: "",
+		catalogueCount: 0,
+		registerLabel: "",
+		online: true,
+		lowStockThreshold: 0,
+		subtotal: 0,
+		tax: 0,
+		customerName: "",
+		priceList: "",
+		isReturn: false,
+		windowWidth: 390,
+		windowHeight: 844,
+	},
+);
+
+const emit = defineEmits<{
+	(_event: "add", _card: BrowseCard): void;
+	(_event: "search"): void;
+	(_event: "primary", _actionId: string): void;
+	(_event: "select-line", _line: MobileSaleLine): void;
+	(_event: "change-customer"): void;
+}>();
+</script>

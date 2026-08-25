@@ -185,8 +185,11 @@ describe("Explorar catálogo uses the drawer's one door", () => {
 	});
 
 	it("is offered only on the sale screen, never to purchase or barcode printing", () => {
+		// The movil suppression (2026-08-25) joins the gate: on a phone the
+		// browse screen IS the catalogue, so the toggle — and its chord hint,
+		// meaningless on glass — stands down without unmounting anything.
 		expect(selectorSource).toMatch(
-			/showBrowseButton = computed\(\(\) => !!props\.headerTarget && props\.context === "pos"\)/,
+			/showBrowseButton = computed\(\s*\(\) => !!props\.headerTarget && props\.context === "pos" && !props\.suppressBrowseButton,?\s*\)/,
 		);
 	});
 });

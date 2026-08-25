@@ -213,7 +213,11 @@
 				</v-col>
 
 				<v-col
-					v-show="(!useCompactPosSwitcher || compactPanel === 'invoice') && !floorOwnsStage"
+					v-show="
+						(!useCompactPosSwitcher || compactPanel === 'invoice') &&
+						!floorOwnsStage &&
+						!movilCartActive
+					"
 					:xl="12"
 					:lg="12"
 					:md="12"
@@ -222,6 +226,28 @@
 					class="pos dynamic-col dynamic-col--invoice"
 				>
 					<component :is="CartView" @open-saldo-picker="openSaldoPicker" />
+				</v-col>
+
+				<!-- The phone's own register (MovilShell). Chrome only: the ONE
+				     ItemsSelector stays mounted in the drawer's persistent slot
+				     (scanner + teleported search header keep working with the
+				     drawer closed) and Invoice.vue stays mounted above via
+				     v-show, so add_item / request_invoice_payment still land.
+				     Tapping a cart line falls back to the classic cart — the
+				     line editor lives there until the movil line sheet ships. -->
+				<v-col
+					v-if="movilStageActive"
+					cols="12"
+					class="pos dynamic-col dynamic-col--movil"
+				>
+					<MovilShell
+						v-bind="movilShellProps"
+						@add="onMovilAdd"
+						@search="focusItemSearchField"
+						@primary="onBandPrimary"
+						@select-line="onMovilSelectLine"
+						@change-customer="jumpToCustomer"
+					/>
 				</v-col>
 
 					<!--
@@ -281,7 +307,9 @@
 								context="pos"
 								header-target="#register-scan-bar"
 								:show-catalog="catalogDrawer.isOpen.value"
+								:suppress-browse-button="movilPhone"
 								@update:items-view="catalogItemsView = $event"
+								@update:displayed-items="movilBrowseRows = $event"
 							/>
 						</template>
 					</CatalogDrawer>
@@ -290,7 +318,13 @@
 				<!-- "Se suele llevar junto". Above the band on purpose: it is an
 				     offer, and the band is the commitment. -->
 				<ComboSuggestionStrip
-					v-if="!hostedDestinationId && !cobroHosted && !floorOwnsStage && comboSuggestions.length"
+					v-if="
+						!hostedDestinationId &&
+						!cobroHosted &&
+						!floorOwnsStage &&
+						!movilStageActive &&
+						comboSuggestions.length
+					"
 					:suggestions="comboSuggestions"
 					:format-currency="formatCurrency"
 					@add="addComboSuggestion"
@@ -475,6 +509,7 @@ import {
 	inject,
 	markRaw,
 	ref,
+	shallowRef,
 	onMounted,
 	onBeforeUnmount,
 	computed,
@@ -491,6 +526,7 @@ import { buildDockTabDefs, isDockTabDimmedOffline } from "../../../vertical/view
 import RegisterRail from "./rail/RegisterRail.vue";
 import CatalogDrawer from "./drawer/CatalogDrawer.vue";
 import ActionBand from "./band/ActionBand.vue";
+import MovilShell from "./movil/MovilShell.vue";
 import DestinationHost from "./destinations/DestinationHost.vue";
 import CobroSurface from "./cobro/CobroSurface.vue";
 import MobileOfflineOverlay from "./mobile/MobileOfflineOverlay.vue";
@@ -905,6 +941,9 @@ export default {
 		// never leak into a later view change. See the watcher for the why.
 		const suppressNextPanelSync = ref(false);
 		const showInvoicePanel = () => {
+			// Re-asking for the cart leaves the classic-cart fallback: the
+			// movil sale screen answers the Cart tab again.
+			movilCartDetail.value = false;
 			compactPanel.value = "invoice";
 			if (activeView.value === "payment" && !usePaymentDialog.value) {
 				// Leaving the inline payment view means changing activeView, and
@@ -1306,12 +1345,94 @@ export default {
 			() => catalogDrawer.isOpen.value && catalogDrawer.presentation.value === "anchored",
 		);
 
+		// ------------------------------------------------------------------
+		// MovilShell — the phone's register (roadmap §12's six mobile views,
+		// first two wired 2026-08-25). Phone geometry uses useResponsive's own
+		// boundary (isPhone, < 768): the 768–1099 tablet band keeps the
+		// compact layout the tablet round tuned; below it, Browse and Cart
+		// draw the mobile screens built to the Móvil artboards.
+		// ------------------------------------------------------------------
+		const movilPhone = computed(() => useCompactPosSwitcher.value && responsive.isPhone.value);
+		// Tapping a cart line falls back to the classic cart, which owns the
+		// line editor. Reset whenever the panel moves or Cart is re-asked.
+		const movilCartDetail = ref(false);
+		const movilBrowseActive = computed(
+			() =>
+				movilPhone.value &&
+				compactPanel.value === "selector" &&
+				activeView.value === "items" &&
+				!floorOwnsStage.value,
+		);
+		const movilCartActive = computed(
+			() =>
+				movilPhone.value &&
+				compactPanel.value === "invoice" &&
+				!movilCartDetail.value &&
+				!floorOwnsStage.value,
+		);
+		const movilStageActive = computed(() => movilBrowseActive.value || movilCartActive.value);
+		watch([compactPanel, activeView], () => {
+			movilCartDetail.value = false;
+		});
+		const onMovilSelectLine = () => {
+			movilCartDetail.value = true;
+		};
+		const onMovilAdd = (card) => {
+			const code = card?.item_code;
+			if (!code) {
+				return;
+			}
+			// The catalogue row, not a synthetic: Invoice.vue's add_item runs
+			// the same pipeline as a tapped selector row and wants the fields
+			// the store holds. A combo card's code is the combo parent item —
+			// the same shape addComboSuggestion already sends.
+			const row =
+				(movilBrowseRows.value || []).find((item) => item?.item_code === code) ||
+				(itemsStore.filteredItems || []).find((item) => item?.item_code === code);
+			eventBus.emit("add_item", row ? { ...row } : { item_code: code });
+		};
+		// The rows the ONE ItemsSelector is displaying — searched, filtered,
+		// paginated — published by its update:displayedItems. The browse
+		// screen draws these, so the search field and the grid agree.
+		const movilBrowseRows = shallowRef([]);
+		const movilShellProps = computed(() => ({
+			screen: movilCartActive.value ? "cart" : "browse",
+			browseItems: movilBrowseRows.value || [],
+			combos: comboOffers.value || [],
+			// The LIVE cart (invoiceStore.items off itemsData) — invoiceDoc is
+			// null until a server sync, which is exactly the window a cashier
+			// is looking at this screen.
+			cartItems: invoiceStore.items || [],
+			query: itemsStore.searchTerm || "",
+			catalogueCount: (movilBrowseRows.value || []).length,
+			registerLabel: posProfile.value?.name || "",
+			online: isOnline.value,
+			lowStockThreshold: Number(posProfile.value?.posa_low_stock_alert_threshold) || 0,
+			bandState: bandState.value,
+			subtotal: Number(grossTotal.value) || 0,
+			tax: Number(invoiceDoc.value?.total_taxes_and_charges) || 0,
+			customerName: dockCustomerLabel.value,
+			priceList: invoiceDoc.value?.selling_price_list || "",
+			isReturn: Boolean(invoiceDoc.value?.is_return),
+			windowWidth: responsive.windowWidth.value,
+			windowHeight: responsive.windowHeight.value,
+			formatCurrency,
+		}));
+
 		// Browse IS the drawer. Any request to show the catalogue opens it and
 		// any move away closes it, so the rail, the dock and the chord cannot
-		// disagree about whether the grid is up.
+		// disagree about whether the grid is up. On a MOVIL phone the browse
+		// screen is the catalogue, so the drawer stays closed — its persistent
+		// slot keeps the ONE ItemsSelector (and the scanner) alive regardless.
 		const applySelectorView = (view, reason = "rail") => {
 			if (view === "items") {
-				catalogDrawer.open(reason);
+				if (movilPhone.value) {
+					if (catalogDrawer.isOpen.value) {
+						catalogDrawer.close();
+					}
+				} else {
+					catalogDrawer.open(reason);
+				}
 			} else if (catalogDrawer.isOpen.value) {
 				catalogDrawer.close();
 			}
@@ -1335,9 +1456,18 @@ export default {
 		 * a column of its own. Opening the catalogue over them would draw two.
 		 */
 		watch(
-			[() => catalogDrawer.presentation.value, compactPanel, activeView],
-			([presentation, panel, view]) => {
+			[() => catalogDrawer.presentation.value, compactPanel, activeView, movilPhone],
+			([presentation, panel, view, movil]) => {
 				if (presentation !== "inline") {
+					return;
+				}
+				if (movil) {
+					// The movil browse screen is the catalogue; a drawer opened
+					// over it would draw the grid twice. Close and stand down —
+					// the persistent slot keeps ItemsSelector mounted either way.
+					if (catalogDrawer.isOpen.value) {
+						catalogDrawer.close();
+					}
 					return;
 				}
 				const catalogueIsThePanel = panel === "selector" && view === "items";
@@ -1595,6 +1725,13 @@ export default {
 			}
 			searchDrawerTimer = setTimeout(() => {
 				searchDrawerTimer = null;
+				if (movilPhone.value) {
+					// The movil browse screen already shows the matches; a
+					// drawer opened by typing would cover them with a second
+					// catalogue. The watcher above cannot catch this open —
+					// its deps do not move when only the term does.
+					return;
+				}
 				const intent = resolveSearchDrawerIntent({
 					term: String(term ?? ""),
 					isOpen: catalogDrawer.isOpen.value,
@@ -2049,6 +2186,14 @@ export default {
 			addComboSuggestion,
 			bandState,
 			onBandPrimary,
+			movilPhone,
+			movilBrowseRows,
+			movilStageActive,
+			movilCartActive,
+			movilShellProps,
+			onMovilAdd,
+			onMovilSelectLine,
+			focusItemSearchField,
 			onHostedBand,
 			hostedDestinationId,
 			invoiceManagementHosted,
@@ -2114,6 +2259,7 @@ export default {
 		CobroSurface,
 		MobileOfflineOverlay,
 		ComboSuggestionStrip,
+		MovilShell,
 		OpeningDialog,
 		ShortcutsCheatSheet,
 		PriceCheckDialog,

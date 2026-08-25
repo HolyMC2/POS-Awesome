@@ -339,6 +339,16 @@ const props = defineProps({
 		default: null,
 	},
 	/**
+	 * MOVIL phones (< 768, MovilShell on stage): the browse screen IS the
+	 * catalogue, so the header's catalogue toggle — and its Alt+B chord hint,
+	 * meaningless on glass — stands down. The search field itself stays: it
+	 * is the register's ONE search and the movil screen focuses it.
+	 */
+	suppressBrowseButton: {
+		type: Boolean,
+		default: false,
+	},
+	/**
 	 * Hide the catalogue panel without unmounting it.
 	 *
 	 * `v-show`, never `v-if`: the scanner attaches to the DOCUMENT
@@ -354,7 +364,7 @@ const props = defineProps({
 	},
 });
 
-const emit = defineEmits(["add-item", "update:itemsView"]);
+const emit = defineEmits(["add-item", "update:itemsView", "update:displayedItems"]);
 
 /**
  * Scan-bar affordances (artboard nodes 22-24).
@@ -376,7 +386,9 @@ const browseChordLabel = chordLabelFor("catalog.toggleDrawer") ?? "";
  * barcode-printing render this component with no `headerTarget` and no drawer,
  * and offering them a catalogue button would open nothing.
  */
-const showBrowseButton = computed(() => !!props.headerTarget && props.context === "pos");
+const showBrowseButton = computed(
+	() => !!props.headerTarget && props.context === "pos" && !props.suppressBrowseButton,
+);
 
 /**
  * The SAME door the rail item and the chord already use — `Pos.vue` owns the
@@ -608,6 +620,18 @@ const displayedItems = computed(() => {
 		limit: enable_custom_items_per_page.value ? items_per_page.value : itemsPerPage.value,
 	});
 });
+
+// Published for the shell (same move as update:itemsView): the movil browse
+// screen draws THESE rows — the searched, filtered, paginated list this
+// selector displays — so search and grid can never disagree about the
+// catalogue. Immediate, so the phone's first paint has the first page.
+watch(
+	displayedItems,
+	(rows) => {
+		emit("update:displayedItems", rows);
+	},
+	{ immediate: true },
+);
 
 const isBarcodeFirstWaiting = computed(() => {
 	if (!pos_profile.value?.posa_hide_items_until_search) return false;

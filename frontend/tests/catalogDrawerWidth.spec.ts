@@ -229,7 +229,9 @@ describe("the drawer is told, never told to look", () => {
 	});
 
 	it("publishes the selector's own choice upward instead of leaving the shell to guess", () => {
-		expect(selectorSource).toContain('const emit = defineEmits(["add-item", "update:itemsView"]);');
+		expect(selectorSource).toContain(
+			'const emit = defineEmits(["add-item", "update:itemsView", "update:displayedItems"]);',
+		);
 		expect(selectorSource).toMatch(
 			/watch\(items_view, \(view\) => emit\("update:itemsView", view\), \{ immediate: true \}\)/,
 		);

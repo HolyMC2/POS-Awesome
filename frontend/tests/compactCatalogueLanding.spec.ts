@@ -185,7 +185,9 @@ describe("the compact shell lands on the catalogue", () => {
 	});
 
 	it("boots showing the grid rather than a blank panel", async () => {
-		const vm = mountShell(390).vm as any;
+		// TABLET compact (768–1099): the catalogue drawer is the grid, as it
+		// has been since the landing rule shipped.
+		const vm = mountShell(900).vm as any;
 		await settle();
 
 		expect(vm.catalogDrawer.presentation.value).toBe("inline");
@@ -196,8 +198,23 @@ describe("the compact shell lands on the catalogue", () => {
 		expect(vm.compactPanel).toBe("selector");
 	});
 
+	it("boots a PHONE onto the movil browse screen, drawer closed", async () => {
+		// Below useResponsive's phone boundary the movil shell IS the grid
+		// (2026-08-25): the drawer stands down so the catalogue is not drawn
+		// twice, and its persistent slot keeps ItemsSelector mounted anyway.
+		// The protected invariant is unchanged: no blank panel at boot.
+		const vm = mountShell(390).vm as any;
+		await settle();
+
+		expect(vm.compactPanel).toBe("selector");
+		expect(vm.catalogDrawer.isOpen.value).toBe(false);
+		expect(vm.movilStageActive).toBe(true);
+		expect(vm.movilShellProps.screen).toBe("browse");
+	});
+
 	it("follows the dock between the ticket and the catalogue", async () => {
-		const wrapper = mountShell(390);
+		// Tablet width: the drawer keeps answering the dock.
+		const wrapper = mountShell(900);
 		const vm = wrapper.vm as any;
 		await settle();
 
@@ -212,6 +229,48 @@ describe("the compact shell lands on the catalogue", () => {
 		expect(vm.catalogDrawer.isOpen.value).toBe(true);
 		// The point of the whole change: Browse costs the same as Cart did.
 		expect(vm.catalogDrawer.transitionDurationMs.value).toBe(0);
+	});
+
+	it("follows the dock between the movil screens on a phone", async () => {
+		const wrapper = mountShell(390);
+		const vm = wrapper.vm as any;
+		await settle();
+
+		tap(vm, "cart");
+		await settle();
+		expect(vm.compactPanel).toBe("invoice");
+		expect(vm.movilCartActive).toBe(true);
+		expect(vm.movilShellProps.screen).toBe("cart");
+		expect(vm.catalogDrawer.isOpen.value).toBe(false);
+
+		tap(vm, "browse");
+		await settle();
+		expect(vm.compactPanel).toBe("selector");
+		expect(vm.movilShellProps.screen).toBe("browse");
+		// The drawer never opens on the phone; the browse screen is the grid.
+		expect(vm.catalogDrawer.isOpen.value).toBe(false);
+	});
+
+	it("falls back to the classic cart when a movil line is tapped, and returns on the dock", async () => {
+		const wrapper = mountShell(390);
+		const vm = wrapper.vm as any;
+		await settle();
+
+		tap(vm, "cart");
+		await settle();
+		expect(vm.movilCartActive).toBe(true);
+
+		// The line editor lives in the classic cart until the movil line
+		// sheet ships; a tapped line hands over rather than dead-ends.
+		vm.onMovilSelectLine();
+		await settle();
+		expect(vm.movilCartActive).toBe(false);
+		expect(vm.compactPanel).toBe("invoice");
+
+		// Re-asking for the cart on the dock returns to the movil screen.
+		tap(vm, "cart");
+		await settle();
+		expect(vm.movilCartActive).toBe(true);
 	});
 
 	it("gives the catalogue up to the panels that have a column of their own", async () => {
