@@ -182,6 +182,20 @@ const refusalBody = computed(() => {
 	overflow: hidden;
 }
 
+/* Below the two-column boundary the document scrolls and the shell is
+ * content-sized (`.dynamic-container` is only viewport-locked at >=1100px),
+ * so a hosted flow that renders ONLY its contained overlay — Borradores and
+ * Facturas, whose dialog is absolutely positioned and adds no intrinsic
+ * height — collapsed this host to 0px and the surface read as blank (found
+ * live on a 390px phone, 2026-08-25). The plain-view sheets grow the host
+ * themselves; this floor is for the overlay ones. Same idiom as `.mbrowse`:
+ * the viewport minus the fixed dock's safe space. */
+@media (max-width: 1099.98px) {
+	.destination-host {
+		min-height: calc(var(--viewport-height, 100vh) - var(--bottom-safe-space, 0px));
+	}
+}
+
 /* A hosted SHEET fills the surface. The flows dialogs were written as centred
  * modals — `max-width`, `margin: 24px`, a card capped at 92vh — and with
  * `contained` those rules still centred a floating card inside the host, with
