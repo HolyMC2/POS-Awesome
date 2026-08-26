@@ -409,8 +409,10 @@ const BUTTON_ALLOWLIST: Record<string, { fills: number; note: string }> = {
 	},
 	// §3 lead-only path.
 	"components/pos/items/Variants.vue": {
-		fills: 1,
-		note: 'Close on a variant picker → variant="text", and drop theme="dark" with it',
+		// Redesigned 2026-08-26 into the register vocabulary: plain buttons
+		// on --reg tokens, no Vuetify colour fills left.
+		fills: 0,
+		note: "picker rebuilt on --reg tokens; the close is a muted icon button",
 	},
 	"components/pos/offers/PosCoupons.vue": {
 		fills: 2,

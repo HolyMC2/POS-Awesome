@@ -1,81 +1,105 @@
 <template>
 	<v-row justify="center">
-		<v-dialog v-model="dialogVisible" max-width="600px">
-			<v-card min-height="500px">
-				<v-card-title>
-					<span class="text-h5 text-primary">Select Item</span>
-					<v-spacer></v-spacer>
-					<v-btn color="error" theme="dark" @click="close_dialog">Close</v-btn>
-				</v-card-title>
-				<v-card-text class="pa-0">
-					<v-container v-if="parentItem">
-						<div v-for="attr in parentItem.attributes" :key="attr.attribute">
-							<v-chip-group
-								v-model="filters[attr.attribute]"
-								selected-class="green--text text--accent-4"
-								column
-								@update:model-value="updateFiltredItems"
+		<!-- The variant picker, in the register's design language (owner ask
+		     2026-08-26: «better ui/ux for the variables, like the cafeteria
+		     artwork»). Fullscreen on the compact band (the flows-sheet
+		     breakpoint), a centred sheet on the desk. The money path is
+		     untouched: a tapped card still rides add_item into Invoice.vue. -->
+		<v-dialog v-model="dialogVisible" v-bind="dialogProps">
+			<v-card
+				class="variantes pos-themed-card"
+				:class="{ 'variantes--full': dialogProps.fullscreen }"
+			>
+				<header class="variantes__head">
+					<div class="variantes__title-copy">
+						<h2 class="variantes__title" data-testid="variantes-title">
+							{{ (parentItem && parentItem.item_name) || __("Variants") }}
+						</h2>
+						<p class="variantes__meta">{{ metaLine }}</p>
+					</div>
+					<button
+						type="button"
+						class="variantes__close"
+						data-testid="variantes-close"
+						:aria-label="__('Close')"
+						@click="close_dialog"
+					>
+						<v-icon icon="mdi-close" :size="20" />
+					</button>
+				</header>
+
+				<div class="variantes__body">
+					<!-- One section per attribute. An attribute with MANY values
+					     (Modelo celular) grows its own filter field and a bounded,
+					     scrollable chip cloud — a phone catalogue can carry dozens
+					     of models, and an unbounded wrap buried the grid. -->
+					<section
+						v-for="attr in attributeGroups"
+						:key="attr.attribute"
+						class="variantes__attr"
+						:data-attr="attr.attribute"
+					>
+						<div class="variantes__attr-head">
+							<span class="variantes__attr-label">{{ attr.attribute }}</span>
+							<label v-if="isLargeAttr(attr)" class="variantes__attr-search">
+								<v-icon icon="mdi-magnify" :size="15" aria-hidden="true" />
+								<input
+									v-model="attrQuery[attr.attribute]"
+									type="text"
+									:placeholder="__('Search')"
+									:aria-label="`${__('Search')} ${attr.attribute}`"
+								/>
+							</label>
+						</div>
+						<div class="variantes__chips" :class="{ 'variantes__chips--cloud': isLargeAttr(attr) }">
+							<button
+								v-for="value in visibleAttrValues(attr)"
+								:key="value.abbr"
+								type="button"
+								class="variantes__chip"
+								:class="{ 'variantes__chip--on': filters[attr.attribute] === value.attribute_value }"
+								:aria-pressed="filters[attr.attribute] === value.attribute_value ? 'true' : 'false'"
+								@click="toggleAttr(attr.attribute, value.attribute_value)"
 							>
-								<v-chip
-									v-for="value in attr.values"
-									:key="value.abbr"
-									:value="value.attribute_value"
-									variant="outlined"
-									label
-								>
-									{{ value.attribute_value }}
-								</v-chip>
-								<v-chip
-									v-if="filters[attr.attribute]"
-									:value="null"
-									variant="text"
-									color="primary"
-									@click.stop="clearFilter(attr.attribute)"
-								>
-									{{ __("Clear") }}
-								</v-chip>
-							</v-chip-group>
-							<v-divider class="p-0 m-0"></v-divider>
+								{{ value.attribute_value }}
+							</button>
+							<button
+								v-if="filters[attr.attribute]"
+								type="button"
+								class="variantes__chip variantes__chip--clear"
+								@click="clearFilter(attr.attribute)"
+							>
+								{{ __("Clear") }}
+							</button>
 						</div>
-						<div>
-							<v-row density="default" class="overflow-y-auto" style="max-height: 500px">
-								<v-col
-									v-for="(item, idx) in displayItems"
-									:key="idx"
-									xl="2"
-									lg="3"
-									md="4"
-									sm="4"
-									cols="6"
-									min-height="50"
-								>
-									<v-card hover="hover" @click="add_item(item)">
-										<v-img
-											:src="item.image || placeholderImage"
-											class="text-white align-end"
-											gradient="to bottom, rgba(0,0,0,.2), rgba(0,0,0,.7)"
-											height="100px"
-										>
-											<v-card-text
-												v-text="item.item_name"
-												class="text-subtitle-2 px-1 pb-2"
-											></v-card-text>
-										</v-img>
-										<v-card-text class="text--primary pa-1">
-											<div class="text-caption text-primary text-accent-3">
-												{{
-													formatCurrencySafe(item.price_list_rate ?? item.rate ?? 0)
-												}}
-												{{ item.currency || "" }}
-											</div>
-										</v-card-text>
-									</v-card>
-								</v-col>
-								<div v-intersect="loadMore"></div>
-							</v-row>
-						</div>
-					</v-container>
-				</v-card-text>
+					</section>
+
+					<div v-if="displayItems.length" class="variantes__grid" data-testid="variantes-grid">
+						<button
+							v-for="item in displayItems"
+							:key="item.item_code"
+							type="button"
+							class="variantes-card"
+							:data-variant="item.item_code"
+							@click="add_item(item)"
+						>
+							<span class="variantes-card__media" aria-hidden="true">
+								<img
+									:src="item.image || placeholderImage"
+									alt=""
+									loading="lazy"
+									class="variantes-card__img"
+								/>
+							</span>
+							<span class="variantes-card__name">{{ variantLabel(item) }}</span>
+							<span class="variantes-card__price">{{
+								formatCurrencySafe(item.price_list_rate ?? item.rate ?? 0)
+							}}</span>
+						</button>
+						<div v-intersect="loadMore"></div>
+					</div>
+					<p v-else class="variantes__empty">{{ __("No items found") }}</p>
+				</div>
 			</v-card>
 		</v-dialog>
 	</v-row>
@@ -86,6 +110,7 @@ import { ensurePosProfile } from "../../../../utils/pos_profile";
 import _ from "lodash";
 import placeholderImage from "../placeholder-image.png";
 import { getCurrentInstance } from "vue";
+import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import { useUIStore } from "../../../stores/uiStore.js";
 import { useInvoiceStore } from "../../../stores/invoiceStore.js";
 export default {
@@ -94,7 +119,10 @@ export default {
 		const eventBus = proxy?.eventBus;
 		const uiStore = useUIStore();
 		const invoiceStore = useInvoiceStore();
-		return { uiStore, invoiceStore, eventBus };
+		// The flows-sheet breakpoint (1100): the compact band gets the picker
+		// fullscreen, the desk gets a centred sheet.
+		const { dialogProps } = useDialogFullscreen({ maxWidth: 760, breakpoint: 1100 });
+		return { uiStore, invoiceStore, eventBus, dialogProps };
 	},
 	data: () => ({
 		// varaintsDialog: false, // Removed in favor of store state
@@ -106,6 +134,8 @@ export default {
 		attributes_meta: {},
 		displayCount: 100,
 		placeholderImage,
+		/** Per-attribute value filter — only drawn for LARGE attributes. */
+		attrQuery: {},
 	}),
 
 	computed: {
@@ -125,6 +155,41 @@ export default {
 			set(val) {
 				if (!val) this.uiStore.closeVariants();
 			},
+		},
+		metaLine() {
+			const translate =
+				typeof window !== "undefined" && window.__ ? window.__ : (text) => text;
+			return `${this.filterdItems.length} ${translate("Variants")}`;
+		},
+		/**
+		 * The attribute sections the picker draws. `attributes_meta` is the
+		 * declared answer, but `get_item_variants` returns it EMPTY for some
+		 * templates (Case Cute Brillo on the mirror) — while every variant
+		 * still carries its own `item_attributes`. So the groups fall back to
+		 * a union derived from the variants themselves; without this the
+		 * whole point of the picker (filter by Color / Modelo) vanished
+		 * exactly on the templates with the most options.
+		 */
+		attributeGroups() {
+			const declared = this.parentItem && this.parentItem.attributes;
+			if (Array.isArray(declared) && declared.length) return declared;
+			const groups = new Map();
+			for (const item of this.variantsItems) {
+				for (const attr of this.parseItemAttributes(item)) {
+					const name = attr && attr.attribute;
+					const value = attr && attr.attribute_value;
+					if (!name || value == null || value === "") continue;
+					if (!groups.has(name)) groups.set(name, new Set());
+					groups.get(name).add(String(value));
+				}
+			}
+			return Array.from(groups.entries()).map(([attribute, values]) => ({
+				attribute,
+				values: Array.from(values).map((value) => ({
+					attribute_value: value,
+					abbr: value,
+				})),
+			}));
 		},
 	},
 
@@ -321,6 +386,59 @@ export default {
 				this.displayCount = 100;
 			});
 		},
+		/** > 10 values earns its own filter field and a bounded chip cloud —
+		 *  a phone catalogue's Modelo attribute can carry dozens of models. */
+		isLargeAttr(attr) {
+			return (attr?.values?.length || 0) > 10;
+		},
+		visibleAttrValues(attr) {
+			const values = attr?.values || [];
+			const q = String(this.attrQuery[attr.attribute] || "")
+				.trim()
+				.toLowerCase();
+			if (!q) return values;
+			return values.filter((value) =>
+				String(value.attribute_value).toLowerCase().includes(q),
+			);
+		},
+		toggleAttr(attribute, value) {
+			// Tap again to clear; the deep `filters` watcher re-filters.
+			this.filters[attribute] = this.filters[attribute] === value ? null : value;
+		},
+		/** One parse for the label, the derived groups and nothing else —
+		 *  `updateFiltredItems` keeps its own copy in the debounce closure. */
+		parseItemAttributes(item) {
+			if (Array.isArray(item?.item_attributes)) return item.item_attributes;
+			if (
+				typeof item?.item_attributes === "string" &&
+				item.item_attributes.trim().startsWith("[")
+			) {
+				try {
+					return JSON.parse(item.item_attributes);
+				} catch {
+					return [];
+				}
+			}
+			return [];
+		},
+		/** «iPhone 16 Pro · Azul Cielo», not the template's name on every
+		 *  card. Attribute values first; else the item_name with the
+		 *  template's own name trimmed off its front. */
+		variantLabel(item) {
+			const attrs = this.parseItemAttributes(item);
+			const values = attrs.map((a) => a && a.attribute_value).filter(Boolean);
+			if (values.length) return values.join(" · ");
+			const parent = String(this.parentItem?.item_name || "").trim();
+			const name = String(item.item_name || item.item_code || "").trim();
+			if (parent && name.toLowerCase().startsWith(parent.toLowerCase())) {
+				const rest = name
+					.slice(parent.length)
+					.replace(/^[\s·:,–—-]+/, "")
+					.trim();
+				if (rest) return rest;
+			}
+			return name;
+		},
 		loadMore() {
 			if (this.displayCount < this.filterdItems.length) {
 				this.displayCount += 100;
@@ -396,3 +514,219 @@ export default {
 	},
 };
 </script>
+
+<style scoped>
+/* The register vocabulary (mbrowse / mobile-nav tokens): the picker is the
+ * catalogue's own design, one level deeper. */
+.variantes {
+	display: flex;
+	flex-direction: column;
+	max-height: 84vh;
+	border-radius: 16px;
+	background: var(--reg-surface-sunken, #f8f9fa);
+	overflow: hidden;
+}
+
+.variantes--full {
+	max-height: 100%;
+	height: 100%;
+	border-radius: 0;
+}
+
+.variantes__head {
+	flex: none;
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 12px 14px 10px;
+	background: var(--reg-surface, #ffffff);
+	border-bottom: 1px solid var(--reg-divider, #eceff3);
+}
+
+.variantes__title-copy {
+	flex: 1;
+	min-width: 0;
+	line-height: 1.2;
+}
+
+.variantes__title {
+	margin: 0;
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--reg-text-primary, #212121);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.variantes__meta {
+	margin: 1px 0 0;
+	font-size: 11px;
+	color: var(--reg-text-muted, #667085);
+}
+
+.variantes__close {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 40px;
+	height: 40px;
+	border: 0;
+	border-radius: 10px;
+	background: var(--reg-surface-muted, #f2f4f7);
+	color: var(--reg-text-primary, #212121);
+	cursor: pointer;
+}
+
+.variantes__body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 10px 14px 14px;
+}
+
+.variantes__attr {
+	margin-bottom: 8px;
+}
+
+.variantes__attr-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 4px 0 5px;
+}
+
+.variantes__attr-label {
+	font-size: 10.5px;
+	font-weight: 700;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+	color: var(--reg-text-muted, #8b93a0);
+}
+
+.variantes__attr-search {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 9px;
+	border: 1px solid var(--reg-border-light, rgba(0, 0, 0, 0.08));
+	border-radius: 999px;
+	background: var(--reg-surface, #ffffff);
+	color: var(--reg-text-muted, #667085);
+}
+
+.variantes__attr-search input {
+	width: 110px;
+	border: 0;
+	outline: none;
+	background: transparent;
+	font: inherit;
+	font-size: 12px;
+	color: var(--reg-text-primary, #212121);
+}
+
+.variantes__chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+/* A LARGE attribute's cloud is bounded and scrolls; unbounded, thirty Modelo
+ * chips buried the variant grid below the fold. */
+.variantes__chips--cloud {
+	max-height: 122px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding-right: 2px;
+}
+
+.variantes__chip {
+	min-height: 36px;
+	padding: 6px 13px;
+	border: 1px solid var(--reg-border-light, rgba(0, 0, 0, 0.1));
+	border-radius: 999px;
+	background: var(--reg-surface, #ffffff);
+	color: var(--reg-text-primary, #212121);
+	font: inherit;
+	font-size: 12.5px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.variantes__chip--on {
+	border-color: var(--reg-accent, #0097a7);
+	background: var(--reg-accent-soft, #e0f7fa);
+	color: var(--reg-on-accent-soft, #00646f);
+}
+
+.variantes__chip--clear {
+	border-style: dashed;
+	color: var(--reg-text-muted, #667085);
+}
+
+.variantes__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 8px;
+	margin-top: 6px;
+}
+
+.variantes-card {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 8px;
+	border: 1px solid var(--reg-border-light, rgba(0, 0, 0, 0.06));
+	border-radius: 12px;
+	background: var(--reg-surface, #ffffff);
+	text-align: left;
+	font: inherit;
+	cursor: pointer;
+}
+
+.variantes-card:active {
+	transform: scale(0.98);
+}
+
+.variantes-card__media {
+	display: grid;
+	place-items: center;
+	height: 78px;
+	border-radius: 8px;
+	background: var(--reg-surface-muted, #f2f4f7);
+	overflow: hidden;
+}
+
+.variantes-card__img {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+}
+
+.variantes-card__name {
+	font-size: 12.5px;
+	font-weight: 700;
+	line-height: 1.25;
+	color: var(--reg-text-primary, #212121);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.variantes-card__price {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--reg-text-primary, #212121);
+}
+
+.variantes__empty {
+	margin: 0;
+	padding: 26px 0;
+	text-align: center;
+	font-size: 12.5px;
+	color: var(--reg-text-muted, #9aa2ae);
+}
+</style>
