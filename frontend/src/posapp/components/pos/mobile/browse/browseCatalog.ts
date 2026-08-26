@@ -56,6 +56,8 @@ export interface BrowseCatalogItem extends CartLineStockSource {
 	item_group?: string;
 	rate?: unknown;
 	image?: string | null;
+	/** Template flag: the card's tap opens the variant picker, not the cart. */
+	has_variants?: boolean | number;
 }
 
 export type BrowseCardKind = "combo" | "item";
@@ -70,6 +72,10 @@ export type BrowseCardKind = "combo" | "item";
 export type BrowseCardChip =
 	| { kind: "saving"; amount: number }
 	| { kind: "stock"; value: number; low: boolean }
+	// A TEMPLATE (has_variants): the tap opens the variant picker, not the
+	// cart, and the chip says so. It replaces the stock chip — a template's
+	// own stock figure aggregates its variants and would mislead.
+	| { kind: "variants" }
 	| null;
 
 export interface BrowseCard {
@@ -203,17 +209,19 @@ export const buildBrowseCards = (input: BuildBrowseCardsInput = {}): BrowseCard[
 			categoryId: String(item?.item_group ?? "").trim(),
 			rate: toNumber(item?.rate),
 			image: item?.image ?? null,
-			chip: stock.show
-				? {
-						kind: "stock" as const,
-						value: stock.value ?? 0,
-						// Zero is drawn low whatever the threshold says. A threshold of
-						// 0 means "never warn about a thin shelf"; it does not mean an
-						// empty one reads as healthy, and the green tint would say
-						// exactly that.
-						low: stock.isLow || (stock.value ?? 0) === 0,
-					}
-				: null,
+			chip: item?.has_variants
+				? { kind: "variants" as const }
+				: stock.show
+					? {
+							kind: "stock" as const,
+							value: stock.value ?? 0,
+							// Zero is drawn low whatever the threshold says. A threshold of
+							// 0 means "never warn about a thin shelf"; it does not mean an
+							// empty one reads as healthy, and the green tint would say
+							// exactly that.
+							low: stock.isLow || (stock.value ?? 0) === 0,
+						}
+					: null,
 			compatible: isCompatible(code),
 		};
 	});

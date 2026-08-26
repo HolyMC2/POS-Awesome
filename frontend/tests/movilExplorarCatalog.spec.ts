@@ -93,6 +93,19 @@ describe("what a card draws about stock", () => {
 		expect(byCode("SRV-INST")?.chip).toBeNull();
 	});
 
+	it("a TEMPLATE draws the variants chip, never its aggregate stock", () => {
+		// The tap on a template opens the picker, not the cart — the chip is
+		// the affordance saying so, and the template's own stock figure (a sum
+		// over its variants) would mislead beside it.
+		const card = byCode("TPL-MICA", {
+			items: [
+				...ITEMS,
+				{ item_code: "TPL-MICA", item_name: "Mica templada", has_variants: 1, actual_qty: 30 },
+			],
+		});
+		expect(card?.chip).toEqual({ kind: "variants" });
+	});
+
 	it("draws nothing when the payload carries no quantity at all", () => {
 		const unknown = byCode("IPN002611", {
 			items: [item({ item_code: "IPN002611", actual_qty: undefined })],

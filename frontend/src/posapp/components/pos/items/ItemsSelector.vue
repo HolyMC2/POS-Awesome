@@ -1010,6 +1010,11 @@ onMounted(() => {
 		// The bar's ×: clear the ONE input (and the grid's narrowing with
 		// it) — the phone's alternative was backspacing on a soft keyboard.
 		eventBus.on("movil:clear-search", movilClearSearch);
+		// A tapped browse card that is a TEMPLATE: the picker (fetch
+		// variants → uiStore.openVariants) lives in THIS component's add
+		// path, so the phone rings it here rather than growing a second
+		// copy of the variant flow.
+		eventBus.on("movil:pick-variant", movilPickVariant);
 	}
 });
 onBeforeUnmount(() => {
@@ -1019,8 +1024,17 @@ onBeforeUnmount(() => {
 		eventBus.off("movil:start-camera", startCameraScanning);
 		eventBus.off("movil:focus-search", movilFocusSearch);
 		eventBus.off("movil:clear-search", movilClearSearch);
+		eventBus.off("movil:pick-variant", movilPickVariant);
 	}
 });
+
+/** Guarded to templates: everything else keeps riding the generic add_item
+ *  event into Invoice.vue's pipeline (round-1 wiring, unchanged). */
+const movilPickVariant = (row) => {
+	if (row?.has_variants) {
+		void add_item({ ...row });
+	}
+};
 
 /** Clearing on a limit-search profile must RE-ASK the server: the in-memory
  *  list is only the last server page, so after a 0-hit search there is

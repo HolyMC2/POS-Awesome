@@ -210,6 +210,14 @@ export type Events = {
 	 *  full grid without a soft-keyboard backspace session. */
 	"movil:clear-search": void;
 	/**
+	 * A tapped browse card that is a TEMPLATE (has_variants). The generic
+	 * `add_item` path lands in Invoice.vue, whose validation refuses
+	 * templates with a toast; the variant PICKER lives in ItemsSelector's
+	 * own add path (handleVariantItem → uiStore.openVariants), so the phone
+	 * rings that bell instead — same doorbell shape as start-camera.
+	 */
+	"movil:pick-variant": Item;
+	/**
 	 * A payment was CAPTURED against a party's open invoices — i.e. `PayView`'s
 	 * Payment Entry path finished, not the cart's. Distinct from
 	 * `invoice_submitted`, which announces a SALE: the two ride different

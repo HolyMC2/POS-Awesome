@@ -104,6 +104,9 @@ const chipTone = computed(() => {
 	const chip = props.card.chip;
 	if (!chip) return "neutral";
 	if (chip.kind === "saving") return "positive";
+	// An affordance, not a state: the chip says "tapping opens a picker",
+	// which is neither good nor bad news about the shelf.
+	if (chip.kind === "variants") return "neutral";
 	return chip.low ? "warning" : "positive";
 });
 
@@ -117,6 +120,7 @@ const chipLabel = computed(() => {
 	const chip = props.card.chip;
 	if (!chip) return "";
 	if (chip.kind === "saving") return `−${props.formatCurrency(chip.amount)}`;
+	if (chip.kind === "variants") return __("Variants");
 	return chip.low ? `${__("left")} ${chip.value}` : String(chip.value);
 });
 
@@ -130,6 +134,7 @@ const ariaLabel = computed(() => {
 	const parts = [`${__("Add")} ${props.card.item_name}`, priceLabel.value];
 	const chip = props.card.chip;
 	if (chip?.kind === "saving") parts.push(`${__("saves")} ${props.formatCurrency(chip.amount)}`);
+	if (chip?.kind === "variants") parts.push(__("This is an item template. Please choose a variant."));
 	if (chip?.kind === "stock") {
 		parts.push(chip.low ? `${__("left")} ${chip.value}` : `${chip.value} ${__("pcs")}`);
 	}
@@ -262,6 +267,12 @@ const onActivate = () => emit("add", props.card);
 .mbrowse-card__chip--warning {
 	background: var(--reg-tone-warning-bg, #fdf9f0);
 	color: var(--reg-tone-warning-label, #8a5a0d);
+}
+
+/* «Variantes» — an affordance, not a state: muted, never green or amber. */
+.mbrowse-card__chip--neutral {
+	background: var(--reg-surface-muted, #f2f4f7);
+	color: var(--reg-text-muted, #667085);
 }
 
 .mbrowse-card--combo .mbrowse-card__chip--warning,

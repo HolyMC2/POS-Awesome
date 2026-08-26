@@ -1524,6 +1524,13 @@ export default {
 			const row =
 				(movilBrowseRows.value || []).find((item) => item?.item_code === code) ||
 				(itemsStore.filteredItems || []).find((item) => item?.item_code === code);
+			// A template is not addable — it is pickable. Invoice.vue's
+			// add_item pipeline refuses templates with a toast; the variant
+			// picker lives in ItemsSelector's add path, so ring that bell.
+			if (row?.has_variants) {
+				eventBus.emit("movil:pick-variant", { ...row });
+				return;
+			}
 			eventBus.emit("add_item", row ? { ...row } : { item_code: code });
 		};
 		// The rows the ONE ItemsSelector is displaying — searched, filtered,
