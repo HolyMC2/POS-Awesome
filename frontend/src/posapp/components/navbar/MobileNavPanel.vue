@@ -47,6 +47,55 @@
 							<span v-if="entry.hint" class="mobile-nav__tool-hint">{{ entry.hint }}</span>
 						</span>
 					</button>
+
+					<!-- «More» — the rail's Más flyout, as a collapsed group: the
+					     tools pages stay one tap away without crowding the rows a
+					     cashier reaches for all day. Auto-expanded while one of
+					     its rows is the active destination, so the lit row is
+					     never hidden behind its own toggle. -->
+					<template v-if="enrichedMoreItems.length">
+						<button
+							type="button"
+							class="mobile-nav__tool"
+							data-testid="mobile-nav-more"
+							:aria-expanded="moreOpen ? 'true' : 'false'"
+							@click="moreOpen = !moreOpen"
+						>
+							<span class="mobile-nav__tool-icon" aria-hidden="true">
+								<v-icon icon="mdi-dots-grid" :size="20" />
+							</span>
+							<span class="mobile-nav__tool-copy">
+								<span class="mobile-nav__tool-label">{{ __("More") }}</span>
+								<span class="mobile-nav__tool-hint">{{ __("Register tools") }}</span>
+							</span>
+							<v-icon
+								class="mobile-nav__more-chevron"
+								:icon="moreOpen ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+								:size="18"
+								aria-hidden="true"
+							/>
+						</button>
+						<div v-show="moreOpen" class="mobile-nav__more-group">
+							<button
+								v-for="entry in enrichedMoreItems"
+								:key="entry.to"
+								type="button"
+								class="mobile-nav__tool"
+								:class="{ 'mobile-nav__tool--on': entry.active }"
+								:data-nav-destination="entry.id || undefined"
+								:aria-current="entry.active ? 'page' : undefined"
+								@click="navigate(entry)"
+							>
+								<span class="mobile-nav__tool-icon" aria-hidden="true">
+									<v-icon :icon="entry.icon" :size="20" />
+								</span>
+								<span class="mobile-nav__tool-copy">
+									<span class="mobile-nav__tool-label">{{ entry.label }}</span>
+									<span v-if="entry.hint" class="mobile-nav__tool-hint">{{ entry.hint }}</span>
+								</span>
+							</button>
+						</div>
+					</template>
 				</nav>
 			</div>
 
@@ -91,6 +140,7 @@ const props = defineProps({
 	companyImg: String,
 	subtitle: { type: String, default: "" },
 	items: { type: Array, default: () => [] },
+	moreItems: { type: Array, default: () => [] },
 	footerAction: { type: Object, default: null },
 });
 
@@ -121,20 +171,33 @@ const DESTINATION_BY_PATH = new Map(DESTINATIONS.map((d) => [d.path, d]));
  * label, icon and hint win — resolved through `verticalStore.t()` so a
  * preset's renames (Explorar → Menú) hold here exactly as on the rail.
  */
-const enrichedItems = computed(() =>
-	props.items.map((item) => {
-		const destination = DESTINATION_BY_PATH.get(item.to);
-		const rail = destination ? getRailDestination(destination.id) : undefined;
-		return {
-			to: item.to,
-			id: destination?.id,
-			icon: rail?.icon || item.icon,
-			label: rail ? verticalStore.t(rail.label) : item.text,
-			hint: rail?.hint ? verticalStore.t(rail.hint) : "",
-			active: route?.path === item.to,
-		};
-	}),
-);
+const enrichEntry = (item) => {
+	const destination = DESTINATION_BY_PATH.get(item.to);
+	const rail = destination ? getRailDestination(destination.id) : undefined;
+	return {
+		to: item.to,
+		id: destination?.id,
+		icon: rail?.icon || item.icon,
+		label: rail ? verticalStore.t(rail.label) : item.text,
+		hint: rail?.hint ? verticalStore.t(rail.hint) : "",
+		active: route?.path === item.to,
+	};
+};
+
+const enrichedItems = computed(() => props.items.map(enrichEntry));
+const enrichedMoreItems = computed(() => props.moreItems.map(enrichEntry));
+
+/**
+ * Collapsed each time the drawer opens — the group is the panel's attic —
+ * UNLESS the active destination lives inside it: a toggle that hides the
+ * row it just lit reads as navigation that went nowhere.
+ */
+const moreOpen = ref(false);
+watch(drawerOpen, (open) => {
+	if (open) {
+		moreOpen.value = enrichedMoreItems.value.some((entry) => entry.active);
+	}
+});
 
 const navigate = (entry) => {
 	drawerOpen.value = false;
@@ -267,5 +330,17 @@ const handleFooterActionClick = () => {
 	font-size: 11.5px;
 	line-height: 1.25;
 	color: var(--pos-text-muted, #667085);
+}
+
+/* Logical property, not margin-left: the drawer flips for RTL. */
+.mobile-nav__more-chevron {
+	margin-inline-start: auto;
+	flex: none;
+	color: var(--pos-text-muted, #667085);
+}
+
+.mobile-nav__more-group {
+	display: flex;
+	flex-direction: column;
 }
 </style>

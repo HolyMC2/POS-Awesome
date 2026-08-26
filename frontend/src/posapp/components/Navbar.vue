@@ -100,6 +100,7 @@
 			:company-img="drawerLogo"
 			:subtitle="posProfile?.name"
 			:items="items"
+			:more-items="moreItems"
 			:footer-action="drawerFooterAction"
 			@open-settings="openSettingsPanel"
 		/>
@@ -191,6 +192,7 @@ import { useToastStore } from "../stores/toastStore";
 import { useUIStore } from "../stores/uiStore";
 import { useEmployeeStore } from "../stores/employeeStore";
 import { useOfflineSyncStore } from "../stores/offlineSyncStore";
+import { useVerticalStore } from "../stores/verticalStore";
 import { storeToRefs } from "pinia";
 
 export default {
@@ -202,6 +204,7 @@ export default {
 		const uiStore = useUIStore();
 		const employeeStore = useEmployeeStore();
 		const offlineSyncStore = useOfflineSyncStore();
+		const verticalStore = useVerticalStore();
 		// Extract reactive refs
 		const {
 			visible,
@@ -235,6 +238,7 @@ export default {
 			freezeTitle,
 			freezeMessage,
 			employeeStore,
+			verticalStore,
 			currentCashier,
 			currentCashierDisplay,
 			offlinePanelOpen,
@@ -321,10 +325,24 @@ export default {
 			showPrintHealthDialog: false,
 			showPrintSetupWizard: false,
 			item: 0,
+			// Rail order (railDestinations.ts), so the phone drawer and the
+			// desktop rail read as the same register. Every `to` names a
+			// registry destination, so the panel enriches label/icon/hint from
+			// the registry — the text/icon here are only the no-registry
+			// fallback. Gated rows (service order, recharge, gift cards,
+			// dashboard) are inserted by `updateNavigationItems`.
 			baseItems: [
 				{ text: "POS", icon: "mdi-network-pos", to: "/pos" },
 				// «Cobranza» — same path, renamed with the surface behind it.
 				{ text: "Receivables", icon: "mdi-credit-card", to: "/payments" },
+				{ text: "Expense", icon: "mdi-cash-minus", to: "/cash-movement" },
+				{ text: "Drafts", icon: "mdi-file-document-outline", to: "/pos/drafts" },
+				{ text: "Invoices", icon: "mdi-receipt-text-outline", to: "/pos/invoices" },
+			],
+			// The tools pages, behind the panel's «More» toggle — the same two
+			// the rail keeps in its «Más» flyout for every register (purchase
+			// and barcode are ungated in the registry, so this list is static).
+			moreItems: [
 				{ text: "Purchase Order", icon: "mdi-cart-plus", to: "/orders" },
 				{ text: "Barcode Printing", icon: "mdi-barcode", to: "/barcode" },
 			],
@@ -380,8 +398,22 @@ export default {
 			},
 			deep: true,
 		},
+		// The capability payload lands after boot (register bootstrap), and
+		// `updateNavigationItems` is imperative — without this watch a
+		// capability-gated row would wait for the next profile change to
+		// appear.
+		serviceOrderAvailable() {
+			this.updateNavigationItems();
+		},
 	},
 	computed: {
+		// The same gate the rail answers for the serviceOrder destination —
+		// the store's resolver (capability OR the legacy flag), not a second
+		// copy of that OR. Listing the row while gated would only bounce the
+		// tap off the router guard back to /pos.
+		serviceOrderAvailable() {
+			return this.verticalStore.externalDocumentCheckout;
+		},
 		// Top-right paints straight over the sticky item-search header on a
 		// phone — the one row the cashier is looking at. Bottom-centre puts
 		// the toast in dead space above the dock instead.
@@ -602,20 +634,30 @@ export default {
 		},
 		updateNavigationItems() {
 			const items = [...this.baseItems];
+			// Servicio — the taller/repair seam, gated exactly as the rail
+			// gates it (capability OR the legacy charge-requests flag). Slot 3,
+			// right after Receivables, mirroring the rail's vertical order.
+			if (this.serviceOrderAvailable) {
+				items.splice(2, 0, {
+					text: "Service Order",
+					icon: "mdi-wrench-outline",
+					to: "/pos/service-order",
+				});
+			}
 			// Recargas — the same profile flag that gates the saldo picker
 			// (saldo_enabled). On the phone this row is THE door: the dock has
 			// no recharge tab, and the /pos/top-up destination (now reachable
 			// since shiftOpen reads the store) hosts the surface. The panel
 			// enriches the row from the destination registry by its path.
 			if (parseBooleanSetting(this.posProfile?.saldo_enabled)) {
-				items.splice(1, 0, {
+				items.push({
 					text: "Recharge",
 					icon: "mdi-signal-variant",
 					to: "/pos/top-up",
 				});
 			}
 			if (this.posProfile?.posa_use_gift_cards) {
-				items.splice(2, 0, {
+				items.push({
 					text: "Gift Cards",
 					icon: "mdi-card-account-details-outline",
 					to: "/gift-cards",
@@ -628,17 +670,12 @@ export default {
 					? this.dashboardAccessAllowed
 					: Boolean(this.currentCashier?.is_supervisor);
 			if (canSeeDashboard) {
-				items.splice(1, 0, {
+				items.push({
 					text: "Awesome Dashboard",
 					icon: "mdi-view-dashboard-outline",
 					to: "/dashboard",
 				});
 			}
-			// No "Cash Movement" entry: on the desktop register it is the rail's
-			// Gasto destination (roadmap §17.7 — the rail is the only nav, and a
-			// second list of the same destinations is two sidebars). The
-			// `/cash-movement` deep link still exists and still mounts the shell
-			// on that destination, so nothing a bookmark reached is lost.
 			this.items = items;
 		},
 		async fetchTerminalEmployees() {
