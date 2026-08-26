@@ -206,6 +206,9 @@ export type Events = {
 	 * explicit invitation that rule exists to protect.
 	 */
 	"movil:focus-search": void;
+	/** The movil browse bar's × → clear the ONE search input, restoring the
+	 *  full grid without a soft-keyboard backspace session. */
+	"movil:clear-search": void;
 	/**
 	 * A payment was CAPTURED against a party's open invoices — i.e. `PayView`'s
 	 * Payment Entry path finished, not the cart's. Distinct from

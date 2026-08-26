@@ -191,6 +191,19 @@ watch(
 	min-height: 0;
 }
 
+/* ONE scrollport: the dialog body (v-dialog `scrollable` already makes it
+ * one). OrderStory's day list is its own scrollport when hosted on a
+ * surface, but inside this dialog it is height-unconstrained (scrollHeight
+ * == clientHeight) — and a non-scrollable `overflow: auto` element with
+ * `overscroll-behavior: contain` swallows the touch gesture instead of
+ * chaining it to the body. On the phone that read as "historial doesn't
+ * scroll" while programmatic scrolling worked fine (owner's live test,
+ * 2026-08-26). */
+.customer-story__body :deep(.order-story__days) {
+	overflow-y: visible;
+	overscroll-behavior: auto;
+}
+
 .customer-story__note {
 	margin: 0;
 	padding: 16px 0;

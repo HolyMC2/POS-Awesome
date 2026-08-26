@@ -21,10 +21,15 @@
 				:class="['pos-text-primary nav-icon', isRtl ? 'rtl-nav-icon' : 'ltr-nav-icon']"
 			/>
 
+			<!-- No logo image on the phone bar: §17.4 makes the navbar the brand
+			     layer, but at 390px the 24px mark plus its gap is exactly the
+			     width the folio needs, and the wordmark alone still brands the
+			     bar (and still opens the Desk). -->
 			<v-img
+				v-if="!isMobile"
 				:src="posLogo"
 				:alt="brand.name"
-				:max-width="isMobile ? 24 : 32"
+				:max-width="32"
 				:class="['pos-navbar-logo', isRtl ? 'rtl-logo' : 'ltr-logo']"
 				loading="lazy"
 			/>
@@ -514,6 +519,12 @@ export default {
 				// Below the rail's breakpoint the strip sheds the clock, the
 				// day's count and the printer, matching the mobile artboards.
 				compact: this.windowWidth < 1100,
+				// The phone bar renders the StatusIndicator circle in this same
+				// row, so the nominal «En línea» chip beside it was a
+				// restatement — and the element that overflowed under the
+				// actions cluster (owner's live phone test, 2026-08-26).
+				// Warnings still render.
+				connectionStatedElsewhere: this.isMobile,
 				// 1359 is where the CSS ladder drops the day's count, and where
 				// a long profile name starts pushing the chips out of their own
 				// box (measured). The identity gives up its own least essential
@@ -762,6 +773,19 @@ export default {
 @media (max-width: 768px) {
 	.mobile-navbar .pos-navbar-actions-section {
 		gap: 4px;
+	}
+	/* The middle of the phone bar belongs to the status line. The brand
+	 * section stops flexing (its wordmark is a fixed word, not a fill), so
+	 * the folio + shift get the leftover width and ellipsize INSIDE their
+	 * own box instead of sliding under the actions cluster (owner's live
+	 * phone test, 2026-08-26: «the topbar is still jam»). */
+	.mobile-navbar .pos-navbar-brand-section {
+		flex: 0 1 auto;
+		gap: 6px;
+	}
+	.mobile-navbar .pos-navbar-title {
+		flex: 0 1 auto;
+		min-width: 20px;
 	}
 	.pos-navbar-title-compact {
 		max-width: 100%;

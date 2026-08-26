@@ -291,17 +291,32 @@ describe("the chips", () => {
 });
 
 describe("the header and footer", () => {
-	it("counts the whole catalogue, not the current page of it", () => {
-		expect(mountScreen().get('[data-testid="browse-meta"]').text()).toBe(
-			"1,482 items · Caja 2",
-		);
+	// The title row is GONE (owner, 2026-08-26): «Explorar catálogo» restated
+	// the dock tab and the connection chip restated the navbar's indicator —
+	// two rows of grid space saying things already on screen. These pins keep
+	// the removal deliberate: a header that grows its identity back is a
+	// regression, not a feature.
+	it("draws no catalogue title or count — the dock tab names this screen", () => {
+		expect(mountScreen().find('[data-testid="browse-meta"]').exists()).toBe(false);
 	});
 
-	it("reports the connection as state", () => {
-		expect(mountScreen().get('[data-testid="browse-connection"]').text()).toBe("Online");
-		expect(mountScreen({ online: false }).get('[data-testid="browse-connection"]').text()).toBe(
-			"Offline",
-		);
+	it("draws no connection chip of its own — the navbar's indicator states it", () => {
+		expect(mountScreen().find('[data-testid="browse-connection"]').exists()).toBe(false);
+		expect(
+			mountScreen({ online: false }).find('[data-testid="browse-connection"]').exists(),
+		).toBe(false);
+	});
+
+	it("offers a one-tap clear only while a search narrows the grid", async () => {
+		expect(mountScreen().find('[data-testid="browse-clear"]').exists()).toBe(false);
+		const onClear = vi.fn();
+		const onSearch = vi.fn();
+		const wrapper = mountScreen({ query: "agua", onClear, onSearch });
+		await wrapper.get('[data-testid="browse-clear"]').trigger("click");
+		expect(onClear).toHaveBeenCalledTimes(1);
+		// Its own tap target: clearing must not double as "focus the field"
+		// (that is the search button's job and it summons the keyboard).
+		expect(onSearch).not.toHaveBeenCalled();
 	});
 
 	it("offers a way out only while something is hidden", async () => {

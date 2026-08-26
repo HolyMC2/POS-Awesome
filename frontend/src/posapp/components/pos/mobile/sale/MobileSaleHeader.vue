@@ -1,15 +1,16 @@
 <template>
 	<header class="movil-header" data-testid="movil-sale-header">
-		<div class="movil-header__identity">
-			<div class="movil-header__names">
-				<div class="movil-header__ticket reg-mono" data-testid="movil-ticket">{{ title }}</div>
-				<div v-if="subtitle" class="movil-header__where" data-testid="movil-where">
-					{{ subtitle }}
-				</div>
-			</div>
-
+		<!-- Warnings only (owner, 2026-08-26): the navbar right above this
+		     screen already states the folio, the shift and the connection, so
+		     a nominal identity row here («Venta nueva · En Línea») restated
+		     the bar over it and cost the cart a row. What survives is what
+		     the navbar does NOT say: warning-tone chips (no connection,
+		     pending sync, a float running low) and the saldo balance — the
+		     chips that guard money keep their seat; the pleasantries lose
+		     theirs. -->
+		<div v-if="alertChips.length" class="movil-header__identity" data-testid="movil-alert-chips">
 			<span
-				v-for="chip in line.chips"
+				v-for="chip in alertChips"
 				:key="chip.id"
 				class="movil-header__chip"
 				:class="[`movil-header__chip--${chip.tone}`, { 'reg-mono': chip.mono }]"
@@ -48,21 +49,12 @@
  * that can lie about money. Restating any of that in a template would put the
  * guard somewhere a later edit can delete without knowing what it was for.
  *
- * TWO DELIBERATE DIFFERENCES FROM THE DESK, both because the phone's sale
- * screen has no navbar actions row:
- *
- *  - **The cashier is named.** `registerStatusLine.ts` omits `cashierName` on
- *    purpose — on the desk the avatar chip states it, as the label of the
- *    control that switches cashier. The phone's sale screen has no avatar
- *    control, so the module's reason ("a third restatement of a fact already
- *    on screen twice") does not hold here: without this the name appears
- *    zero times. Appended rather than interleaved, because the module returns
- *    the subtitle as one resolved string.
- *  - **No shift clock.** The artboard drops it on every mobile board, so the
- *    caller passes no `shiftStart` and the subtitle is `Caja 2 · Jenni`.
- *
- * No brand mark either: §17.4 makes the navbar the brand layer, and a second
- * wordmark on a 390 px bar spends the width the ticket folio needs.
+ * SINCE 2026-08-26 the identity itself (folio, register, cashier, the
+ * nominal «En línea» chip) is NOT drawn here: the navbar directly above this
+ * screen already states all of it, and the restatement cost the cart a row
+ * (owner: live phone test). The strip's resolution still runs — what renders
+ * is its warning-tone chips and the saldo balance, the two things the navbar
+ * does not say.
  */
 import { computed } from "vue";
 
@@ -95,27 +87,20 @@ const __ = (text: string, args?: (string | number)[]): string => {
 
 const line = computed(() => resolveRegisterStatusLine({ ...props.status, compact: true }));
 
-/** A folio is a literal and must not be looked up; a phrase must. */
-const title = computed(() =>
-	line.value.titleIsLiteral
-		? line.value.titleKey
-		: __(line.value.titleKey, line.value.titleParams),
+/**
+ * Only the chips the navbar does not already state: warnings (the connection
+ * chip goes warning-tone exactly when it stops being redundant) and saldo,
+ * which is a balance no other element on this screen carries.
+ */
+const alertChips = computed(() =>
+	line.value.chips.filter((chip) => chip.tone === "warning" || chip.id === "saldo"),
 );
-
-const subtitle = computed(() => {
-	const where = line.value.subtitleKey
-		? __(line.value.subtitleKey, line.value.subtitleParams)
-		: "";
-	const cashier = String(props.status?.cashierName ?? "").trim();
-	if (!cashier) return where;
-	return where ? `${where} · ${cashier}` : cashier;
-});
 </script>
 
 <style scoped>
 .movil-header {
 	flex: none;
-	padding: 13px 14px 11px;
+	padding: 9px 14px;
 	background: var(--reg-surface, #ffffff);
 	border-bottom: 1px solid var(--reg-divider, #eceff3);
 }
@@ -123,31 +108,11 @@ const subtitle = computed(() => {
 .movil-header__identity {
 	display: flex;
 	align-items: center;
-	gap: 9px;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: 6px;
 	min-width: 0;
-}
-
-.movil-header__names {
-	flex: 1;
-	min-width: 0;
-	line-height: 1.15;
-}
-
-.movil-header__ticket {
-	font-size: 12px;
-	font-weight: 700;
-	color: var(--reg-text-primary, #212121);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.movil-header__where {
-	font-size: 9.5px;
-	color: var(--reg-text-muted, #667085);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	margin-bottom: 9px;
 }
 
 /* Chips never shrink and never ellipse. `registerStatusLine.ts` drops whole
@@ -185,7 +150,7 @@ const subtitle = computed(() => {
 }
 
 .movil-header__scan {
-	margin-top: 11px;
+	margin-top: 0;
 }
 
 /* The scan field is somebody else's component arriving through a teleport, so

@@ -1,18 +1,13 @@
 <template>
 	<section class="mbrowse" data-testid="mobile-browse">
 		<header class="mbrowse__head">
-			<div class="mbrowse__title-row">
-				<div class="mbrowse__title-copy">
-					<h2 class="mbrowse__title">{{ __("Browse catalogue") }}</h2>
-					<p class="mbrowse__meta" data-testid="browse-meta">{{ metaLine }}</p>
-				</div>
-				<span
-					class="mbrowse__chip mbrowse__chip--state"
-					:class="online ? 'mbrowse__chip--online' : 'mbrowse__chip--offline'"
-					data-testid="browse-connection"
-					>{{ online ? __("Online") : __("Offline") }}</span
-				>
-			</div>
+			<!-- No title row (owner, 2026-08-26): «Explorar catálogo» restated
+			     the dock tab under it and the connection chip restated the
+			     navbar's indicator above it — both rows spent grid space saying
+			     things already on screen. The search bar leads and the category
+			     chips are the first thing under it: they ARE the browse
+			     mechanism, and on tenants with more item groups the row fills
+			     out on its own. -->
 
 			<!--
 				The search ROW, not a search FIELD. `useScannerInput` attaches the
@@ -36,6 +31,22 @@
 					data-testid="browse-query"
 					>{{ query || __("Search") }}</span
 				>
+				<!-- One-tap way back to the full grid. After a search narrows
+				     the cards (or a scan mis-types into the field) the only
+				     alternative is backspacing on a phone keyboard. Own tap
+				     target, like the scan glyph beside it. -->
+				<span
+					v-if="query"
+					role="button"
+					tabindex="0"
+					class="mbrowse__scan"
+					data-testid="browse-clear"
+					:aria-label="__('Clear search')"
+					@click.stop="emit('clear')"
+					@keydown.enter.stop="emit('clear')"
+				>
+					<v-icon icon="mdi-close" size="18" aria-hidden="true" />
+				</span>
 				<!-- The camera scanner's door (artboard: the glyph inside the
 				     bar IS the scan affordance). Its own tap target, stopping
 				     propagation so it never doubles as "focus the field". -->
@@ -154,7 +165,6 @@ import {
 	buildBrowseFooter,
 	defaultTranslate,
 	filterBrowseCards,
-	formatCount,
 	type BrowseCard,
 	type BrowseCatalogItem,
 	type BrowseTranslate,
@@ -212,6 +222,8 @@ const emit = defineEmits<{
 	(_event: "search"): void;
 	/** Open the camera scanner — the host routes it to ItemsSelector's own. */
 	(_event: "scan"): void;
+	/** Clear the ONE search field (and with it the grid's narrowing). */
+	(_event: "clear"): void;
 }>();
 
 /**
@@ -297,11 +309,6 @@ const footer = computed(() =>
 	}),
 );
 
-const metaLine = computed(() => {
-	const count = `${formatCount(props.catalogueCount)} ${__("items")}`;
-	return props.registerLabel ? `${count} · ${props.registerLabel}` : count;
-});
-
 const toggleCompatible = () => {
 	compatibleOverride.value = !compatibleOnly.value;
 };
@@ -329,7 +336,12 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	 * sizes itself off its content ends up with its last row under the dock.
 	 * The grid is the single scrollport; this element never scrolls.
 	 */
-	height: calc(var(--viewport-height, 100vh) - var(--bottom-safe-space, 0px));
+	/* `--v-layout-top` is Vuetify's own statement of what the app bar costs;
+	   without it this frame overshot the dock by exactly the navbar's height
+	   and the grid's last row hid behind the tabs. */
+	height: calc(
+		var(--viewport-height, 100vh) - var(--bottom-safe-space, 0px) - var(--v-layout-top, 0px)
+	);
 	min-height: 0;
 	overflow: hidden;
 	background: var(--reg-surface-sunken, #f8f9fa);
@@ -339,32 +351,7 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	flex: none;
 	background: var(--reg-surface, #ffffff);
 	border-bottom: 1px solid var(--reg-divider, #eceff3);
-	padding: 13px 14px 11px;
-}
-
-.mbrowse__title-row {
-	display: flex;
-	align-items: center;
-	gap: 9px;
-}
-
-.mbrowse__title-copy {
-	flex: 1;
-	min-width: 0;
-	line-height: 1.15;
-}
-
-.mbrowse__title {
-	font-size: 13px;
-	font-weight: 700;
-	color: var(--reg-text-primary, #212121);
-	margin: 0;
-}
-
-.mbrowse__meta {
-	font-size: 9.5px;
-	color: var(--reg-text-muted, #667085);
-	margin: 0;
+	padding: 9px 14px 9px;
 }
 
 .mbrowse__search {
@@ -372,7 +359,6 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	align-items: center;
 	gap: 9px;
 	width: 100%;
-	margin-top: 11px;
 	height: 44px;
 	/* An outline, not a fill: the saturated accent marks the field the cashier
 	   types into without becoming a second emphasis on a screen full of cards. */
@@ -453,21 +439,6 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 
 .mbrowse__chip--filter {
 	cursor: pointer;
-}
-
-.mbrowse__chip--state {
-	font-weight: 500;
-	padding: 3px 8px;
-}
-
-.mbrowse__chip--online {
-	background: var(--reg-tone-positive-bg, #f4fbf7);
-	color: var(--reg-tone-positive-label, #1b5e20);
-}
-
-.mbrowse__chip--offline {
-	background: var(--reg-tone-warning-bg, #fdf9f0);
-	color: var(--reg-tone-warning-label, #8a5a0d);
 }
 
 .mbrowse__chip--featured {

@@ -73,10 +73,20 @@ describe("the strip costs the app bar no height", () => {
 	// ellipse so it could not shove the chips off the bar. It shipped
 	// "shift since 0…" and "Online · synce" to a real register, and a value
 	// severed mid-word reads as a bug rather than as a design. The strip now
-	// renders whole fields or none.
+	// renders whole fields or none — with ONE scoped exception: on the
+	// compact (phone) bar the nominal connection chip is already gone
+	// (`connectionStatedElsewhere`) and the identity is the only flexible
+	// element left, so IT ellipses there rather than shoving the actions
+	// cluster (owner's live phone test, 2026-08-26). Every text-overflow in
+	// this file must be under the `--compact` scope; a bare one is the old
+	// bug coming back.
 	it("never ellipses or clips a value — it drops whole chips instead", () => {
 		expect(style).toMatch(/\.register-status-line\s*\{[^}]*min-width:\s*0/);
-		expect(style).not.toContain("text-overflow");
+		const unscopedEllipsis = style
+			.split(/\}/)
+			.filter((block) => block.includes("text-overflow"))
+			.filter((block) => !block.includes("--compact"));
+		expect(unscopedEllipsis).toEqual([]);
 
 		// The chips row must not clip: that is what severed the connection
 		// chip, the one chip that carries a claim about money.

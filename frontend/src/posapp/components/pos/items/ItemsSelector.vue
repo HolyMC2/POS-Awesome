@@ -1007,6 +1007,9 @@ onMounted(() => {
 		// The bar's tap: focus the ONE input directly. focusItemSearch
 		// refuses coarse pointers on purpose; this tap IS the invitation.
 		eventBus.on("movil:focus-search", movilFocusSearch);
+		// The bar's ×: clear the ONE input (and the grid's narrowing with
+		// it) — the phone's alternative was backspacing on a soft keyboard.
+		eventBus.on("movil:clear-search", movilClearSearch);
 	}
 });
 onBeforeUnmount(() => {
@@ -1015,8 +1018,31 @@ onBeforeUnmount(() => {
 		saldoPickerAddHandler = null;
 		eventBus.off("movil:start-camera", startCameraScanning);
 		eventBus.off("movil:focus-search", movilFocusSearch);
+		eventBus.off("movil:clear-search", movilClearSearch);
 	}
 });
+
+/** Clearing on a limit-search profile must RE-ASK the server: the in-memory
+ *  list is only the last server page, so after a 0-hit search there is
+ *  nothing local to fall back to and the grid stays empty forever
+ *  (`_performSearch` refuses terms under 3 chars, and
+ *  `itemsStore.searchItems("")` merely preserves that empty page). The
+ *  forced default-page load is the same read the group filter performs —
+ *  see the store's own note at its groupFilter branch. */
+const movilClearSearch = () => {
+	clearSearch();
+	if (usesLimitSearch.value) {
+		const store = itemsIntegration.itemsStore;
+		// Order matters: `searchItems("")` resets the STORE's searchTerm —
+		// while one is active, `setItems` refuses to refresh filteredItems,
+		// which is how the first attempt fetched a page nobody displayed —
+		// but by itself it only preserves the last (possibly empty) server
+		// page. The forced load then brings the default first page back.
+		void Promise.resolve(store?.searchItems?.("")).then(() =>
+			store?.loadItems?.({ forceServer: true, groupFilter: store.itemGroup }),
+		);
+	}
+};
 
 /** Explicit focus for the movil bar's tap — the teleported header's input,
  *  found where it lives. `focus()` ignores paint, so the ghost-hidden bar

@@ -81,7 +81,9 @@ describe("the register's identity is stated once", () => {
 describe("the chip that carries a money claim is the last to go", () => {
 	it("pushes the connection chip after saldo, not before it", () => {
 		const saldoAt = resolver.indexOf('id: "saldo"');
-		const connectionAt = resolver.lastIndexOf("chips.push(connectionChip(input))");
+		// The chip is guarded now (`connectionStatedElsewhere` can null the
+		// NOMINAL claim), so the pin follows the call site, not a bare push.
+		const connectionAt = resolver.lastIndexOf("connectionChip(input)");
 		expect(saldoAt).toBeGreaterThan(-1);
 		expect(connectionAt).toBeGreaterThan(saldoAt);
 	});

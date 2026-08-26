@@ -491,15 +491,17 @@ describe("the guard fails when the register says a number twice", () => {
 });
 
 describe("the app bar states the register once", () => {
-	it("names the ticket, the till and the cashier", () => {
+	// Since 2026-08-26 "once" means the NAVBAR: the folio, the register and
+	// the nominal connection all live in the bar directly above this screen,
+	// and restating them here cost the cart a row (owner's live phone test).
+	// What survives in the header is what the navbar does not say — warning
+	// chips and the saldo balance.
+	it("draws no identity of its own — the navbar above already states it", () => {
 		const screen = mountScreen();
 
-		expect(screen.find('[data-testid="movil-ticket"]').text()).toBe("B-04812");
-		// `registerStatusLine.ts` omits the cashier on the desk because the
-		// avatar chip states it as the label of a control. The phone's sale
-		// screen has no avatar control, so without this the name appears zero
-		// times.
-		expect(screen.find('[data-testid="movil-where"]').text()).toBe("Caja 2 · Jenni");
+		expect(screen.find('[data-testid="movil-ticket"]').exists()).toBe(false);
+		expect(screen.find('[data-testid="movil-where"]').exists()).toBe(false);
+		expect(screen.find('[data-chip="connection"]').exists()).toBe(false);
 	});
 
 	it("drops the profile name and the clock, exactly as the mobile boards do", () => {
@@ -512,10 +514,13 @@ describe("the app bar states the register once", () => {
 		expect(text).not.toContain("Doco Ventas");
 	});
 
-	it("orders saldo before the connection chip", () => {
-		// The chip that must never be lost is dropped last. The stylesheet used
-		// to claim this and the DOM disagreed.
-		const chips = mountScreen()
+	it("orders saldo before the connection chip when both have something to say", () => {
+		// The chip that must never be lost is dropped last. Nominal
+		// connection renders nothing here (the navbar's indicator states it);
+		// a WARNING still takes its seat, after saldo.
+		const chips = mountScreen({
+			status: { ...screenProps().status, online: false },
+		})
 			.find('[data-testid="movil-sale-header"]')
 			.findAll("[data-chip]")
 			.map((chip) => chip.attributes("data-chip"));

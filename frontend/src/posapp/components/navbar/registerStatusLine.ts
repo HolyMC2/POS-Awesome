@@ -100,6 +100,15 @@ export interface RegisterStatusInput {
 	online?: boolean;
 	/** Offline queue depth. Anything above zero forbids the synced claim. */
 	pendingCount?: number;
+	/**
+	 * The bar ALSO carries a dedicated connection indicator (the phone
+	 * navbar's StatusIndicator circle sits in the same row). A nominal
+	 * «Online» chip beside it restates it and, on a 390px bar, was the chip
+	 * that overflowed under the actions cluster. Only the POSITIVE claim is
+	 * dropped: «No connection» and «To upload · N» are warnings about money
+	 * and keep their seat whatever else states the connection.
+	 */
+	connectionStatedElsewhere?: boolean;
 	/** Pre-formatted saldo balance, or null when the app is not installed. */
 	saldoLabel?: string | null;
 	/** Below the rail's breakpoint the strip sheds everything but identity. */
@@ -242,7 +251,7 @@ export const NARROW_IDENTITY_BUDGET = 28;
  * server yet, and a cashier reading "sincronizado" would close the shift on
  * that promise. When the two facts disagree the weaker one wins.
  */
-function connectionChip(input: RegisterStatusInput): StatusChip {
+function connectionChip(input: RegisterStatusInput): StatusChip | null {
 	const pending = Math.max(0, Number(input.pendingCount) || 0);
 	if (input.online === false) {
 		return { id: "connection", labelKey: "No connection", tone: "warning", priority: 1 };
@@ -255,6 +264,10 @@ function connectionChip(input: RegisterStatusInput): StatusChip {
 			tone: "warning",
 			priority: 1,
 		};
+	}
+	// Nominal — sayable by the dedicated indicator when the bar has one.
+	if (input.connectionStatedElsewhere) {
+		return null;
 	}
 	if (input.compact) {
 		return { id: "connection", labelKey: "Online", tone: "positive", priority: 1 };
@@ -365,7 +378,8 @@ export function resolveRegisterStatusLine(
 		chips.push({ id: "saldo", labelKey: saldo, tone: "warning", mono: true, priority: 2 });
 	}
 
-	chips.push(connectionChip(input));
+	const connection = connectionChip(input);
+	if (connection) chips.push(connection);
 
 	return { titleKey, titleParams, titleIsLiteral, subtitleKey, subtitleParams, chips };
 }

@@ -2,6 +2,7 @@
 	<section
 		ref="surfaceEl"
 		class="destination-host"
+		:style="hostTopStyle"
 		:class="{ 'destination-host--page': surfaceKind === 'page' }"
 		:data-testid="testId"
 		:data-destination-surface="surfaceKind"
@@ -59,7 +60,16 @@
  * `useDestinationRouting`, which the shell owns, so the rail, the URL and the
  * keyboard cannot disagree about it.
  */
-import { computed, defineAsyncComponent, provide, ref, shallowRef, watch } from "vue";
+import {
+	computed,
+	defineAsyncComponent,
+	onBeforeUnmount,
+	onMounted,
+	provide,
+	ref,
+	shallowRef,
+	watch,
+} from "vue";
 
 import {
 	destinationTestId,
@@ -96,6 +106,23 @@ defineEmits<{ dismiss: []; band: [BandState]; "update:selectedDetail": [unknown]
 
 const surfaceEl = ref<HTMLElement | null>(null);
 const destinationIdRef = computed(() => String(props.destinationId));
+
+// The host's own top offset, measured — no CSS var states what the navbar
+// (and any chrome above) costs at this width, and the phone stylesheet
+// below needs it to give the host an EXACT height. Same self-truing move
+// as MobileSaleScreen's frame.
+const hostTop = ref(0);
+const measureHostTop = () => {
+	const rect = surfaceEl.value?.getBoundingClientRect();
+	if (rect) hostTop.value = Math.max(0, Math.round(rect.top));
+};
+onMounted(() => {
+	measureHostTop();
+	window.setTimeout(measureHostTop, 300);
+	window.addEventListener("resize", measureHostTop);
+});
+onBeforeUnmount(() => window.removeEventListener("resize", measureHostTop));
+const hostTopStyle = computed(() => ({ "--destination-host-top": `${hostTop.value}px` }));
 
 provide(DESTINATION_SURFACE, {
 	attachTo: surfaceEl,
@@ -184,15 +211,22 @@ const refusalBody = computed(() => {
 
 /* Below the two-column boundary the document scrolls and the shell is
  * content-sized (`.dynamic-container` is only viewport-locked at >=1100px),
- * so a hosted flow that renders ONLY its contained overlay — Borradores and
- * Facturas, whose dialog is absolutely positioned and adds no intrinsic
- * height — collapsed this host to 0px and the surface read as blank (found
- * live on a 390px phone, 2026-08-25). The plain-view sheets grow the host
- * themselves; this floor is for the overlay ones. Same idiom as `.mbrowse`:
- * the viewport minus the fixed dock's safe space. */
+ * so the host has no height of its own there. Two failures came from that,
+ * both found on a live phone:
+ *  - 2026-08-25: an overlay-only sheet (Borradores/Facturas — an absolutely
+ *    positioned contained dialog) collapsed the host to 0px and the surface
+ *    read as blank;
+ *  - 2026-08-26: a list surface (Orden's 84-card queue) grew the host to
+ *    10,000px and "scrolled the page" instead of its own list.
+ * An EXACT height fixes both and restores the desktop discipline (the host
+ * clips; the hosted flow owns the one inner scrollport). The viewport minus
+ * the dock's safe space minus the host's own measured top. */
 @media (max-width: 1099.98px) {
 	.destination-host {
-		min-height: calc(var(--viewport-height, 100vh) - var(--bottom-safe-space, 0px));
+		height: calc(
+			var(--viewport-height, 100vh) - var(--bottom-safe-space, 0px) -
+				var(--destination-host-top, 0px)
+		);
 	}
 }
 

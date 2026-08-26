@@ -172,7 +172,7 @@ const primaryLabel = computed(() =>
 	display: flex;
 	flex-direction: column;
 	flex: none;
-	padding: 12px;
+	padding: 10px 12px;
 	border-radius: var(--reg-radius-md, 14px);
 	border: 1px solid var(--reg-border-light, rgba(0, 0, 0, 0.06));
 	background: var(--reg-surface, #ffffff);
@@ -203,8 +203,8 @@ const primaryLabel = computed(() =>
 	align-items: baseline;
 	justify-content: space-between;
 	gap: var(--reg-space-md, 10px);
-	margin-top: 8px;
-	padding-top: 8px;
+	margin-top: 6px;
+	padding-top: 6px;
 	border-top: 1px solid var(--reg-divider-soft, #f2f4f7);
 }
 
@@ -215,7 +215,7 @@ const primaryLabel = computed(() =>
 }
 
 .movil-totals__total-figure {
-	font-size: 30px;
+	font-size: 26px;
 	font-weight: 700;
 	letter-spacing: -0.03em;
 	color: var(--reg-text-primary, #212121);
@@ -227,7 +227,7 @@ const primaryLabel = computed(() =>
 	justify-content: center;
 	gap: 9px;
 	width: 100%;
-	margin-top: 11px;
+	margin-top: 8px;
 	/* 54px on purpose: it is the artboard's height AND comfortably past the
 	   44px floor, so this control needs no coarse-pointer override. */
 	min-height: 54px;

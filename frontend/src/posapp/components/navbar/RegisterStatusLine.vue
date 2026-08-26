@@ -240,4 +240,21 @@ const subtitle = computed(() =>
 .register-status-line--compact .register-status-line__subtitle {
 	font-size: 10px;
 }
+
+/* Compact (phone) EXCEPTION to "the identity never ellipses": on a 390px bar
+ * there is no chip left to drop (the nominal connection chip is already gone
+ * — `connectionStatedElsewhere`) and the identity is the only flexible
+ * element between the brand and the actions. A folio cut with a visible
+ * ellipsis inside its own box beats a whole chip or button shoved under the
+ * cluster, which is what "never shrinks" produced at this width. */
+.register-status-line--compact .register-status-line__identity {
+	flex: 0 1 auto;
+	overflow: hidden;
+}
+
+.register-status-line--compact .register-status-line__title,
+.register-status-line--compact .register-status-line__subtitle {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
 </style>

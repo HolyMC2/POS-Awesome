@@ -55,6 +55,11 @@ export function useItemsSelectorSearchInput({
 		if (clearingSearch) {
 			clearingSearch.value = false;
 		}
+		// The same announcement typing makes (`handleSearchInput`): the movil
+		// browse bar ECHOES this event, so a clear that stays silent leaves
+		// the teal bar claiming a term the field no longer holds — which is
+		// exactly what the bar's × looked like before this line.
+		eventBus?.emit?.("item_search_changed", "");
 	};
 
 	const handleSearchInput = (value: unknown) => {

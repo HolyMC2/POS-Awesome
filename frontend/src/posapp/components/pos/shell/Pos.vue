@@ -268,6 +268,7 @@
 						@add="onMovilAdd"
 						@search="onMovilSearch"
 						@scan="onMovilScan"
+						@clear-search="onMovilClearSearch"
 						@primary="onBandPrimary"
 						@select-line="onMovilSelectLine"
 						@change-customer="jumpToCustomer"
@@ -986,6 +987,16 @@ export default {
 		const jumpToCustomer = () => {
 			showInvoicePanel();
 			nextTick(() => {
+				// On the phone the movil sale screen answers the Cart tab and
+				// the classic cart — where the customer editor lives — never
+				// draws, so «cambiar» landed on a hidden column. Front the
+				// classic cart the same way a tapped line does. Inside
+				// nextTick: the [compactPanel, activeView] watcher resets
+				// movilCartDetail on the panel change showInvoicePanel makes,
+				// and a synchronous set here would be undone by it.
+				if (movilPhone.value) {
+					movilCartDetail.value = true;
+				}
 				eventBus.emit("open_customer_details");
 			});
 		};
@@ -1527,6 +1538,12 @@ export default {
 		};
 		const onMovilSearch = () => {
 			eventBus.emit("movil:focus-search");
+		};
+		const onMovilClearSearch = () => {
+			// The × on the browse bar. The one real input lives in
+			// ItemsSelector, so the clear does too — same bell-ringing shape
+			// as focus-search and start-camera.
+			eventBus.emit("movil:clear-search");
 		};
 		const movilShellProps = computed(() => ({
 			screen: movilOrdenActive.value
@@ -2352,6 +2369,7 @@ export default {
 			onMovilOrdenBack,
 			onMovilScan,
 			onMovilSearch,
+			onMovilClearSearch,
 			focusItemSearchField,
 			onHostedBand,
 			hostedDestinationId,
@@ -2728,24 +2746,31 @@ export default {
 	padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Compacted 2026-08-26 (owner's live phone test: "make the bottom bar more
+ * compact so we have a bigger products list"). The amount, the customer chip
+ * and the line count share ONE row instead of stacking, and every vertical
+ * allowance below carries the same intent: each pixel the dock gives up is a
+ * pixel the grid and the cart get back. */
 .mobile-dock__summary {
 	display: flex;
 	align-items: center;
-	gap: 12px;
-	padding: 9px 14px;
+	gap: 10px;
+	padding: 5px 12px;
 	border-bottom: 1px solid var(--pos-border);
 }
 
 .mobile-dock__totals {
 	display: flex;
-	flex-direction: column;
-	gap: 3px;
+	flex-direction: row;
+	align-items: center;
+	gap: 10px;
 	min-width: 0;
 	flex: 1 1 auto;
 }
 
 .mobile-dock__amount {
-	font-size: 1.15rem;
+	flex: none;
+	font-size: 1.05rem;
 	font-weight: 700;
 	line-height: 1.15;
 	color: var(--pos-text-primary);
@@ -2801,8 +2826,8 @@ export default {
 	align-items: center;
 	gap: 5px;
 	flex: 0 0 auto;
-	min-width: 44px;
-	min-height: 44px;
+	min-width: 40px;
+	min-height: 38px;
 	padding: 0 10px;
 	border: 1px solid var(--pos-border);
 	border-radius: 999px;
@@ -2828,9 +2853,11 @@ export default {
 
 @media (pointer: coarse) {
 	.mobile-dock__customer {
-		min-height: 44px;
-		padding-top: 10px;
-		padding-bottom: 10px;
+		/* 38px chip in a 44px-tall row: the row itself pads the target out
+		   to the touch floor, so the chip no longer sets the dock's height. */
+		min-height: 38px;
+		padding-top: 7px;
+		padding-bottom: 7px;
 	}
 }
 
@@ -2848,8 +2875,8 @@ export default {
 .mobile-dock__tabs {
 	display: grid;
 	grid-template-columns: repeat(var(--dock-tab-count, 5), minmax(0, 1fr));
-	gap: 6px;
-	padding: 7px 10px 9px;
+	gap: 4px;
+	padding: 3px 8px 5px;
 }
 
 .mobile-dock__tab {
@@ -2858,8 +2885,8 @@ export default {
 	background: transparent;
 	border-radius: 12px;
 	min-width: 0;
-	min-height: 46px;
-	padding: 4px 2px;
+	min-height: 40px;
+	padding: 3px 2px;
 	display: flex;
 	flex-direction: column;
 	align-items: center;

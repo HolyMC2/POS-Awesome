@@ -377,4 +377,26 @@ onBeforeUnmount(() => {
 		max-height: 30%;
 	}
 }
+
+/* On a phone the queue IS the screen. A selection is fronted fullscreen by
+   MovilOrdenView (the shell v-shows it over this surface), so the detail
+   panel and the story here can only ever show their idle placeholders —
+   which squeezed the queue to a strip a card and a half tall (owner's live
+   phone test, 2026-08-26: "a small scroll with all data"). */
+@media (max-width: 767.98px) {
+	.orden-surface {
+		padding: 10px;
+	}
+
+	.orden-surface__body :deep(.orden-queue) {
+		flex: 1 1 auto;
+		max-height: none;
+		min-height: 0;
+	}
+
+	.orden-surface__body :deep(.orden-detail),
+	.orden-surface__story {
+		display: none;
+	}
+}
 </style>

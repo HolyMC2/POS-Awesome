@@ -1,5 +1,5 @@
 <template>
-	<div class="movil-venta" :style="frameStyle" data-testid="movil-venta">
+	<div ref="rootEl" class="movil-venta" :style="frameStyle" data-testid="movil-venta">
 		<MobileSaleHeader :status="status">
 			<template v-if="$slots['scan-bar']" #scan-bar><slot name="scan-bar" /></template>
 		</MobileSaleHeader>
@@ -85,7 +85,7 @@
  * — a screen with a scrolling document AND a scrolling panel is the fight
  * `defaultLayoutMainScroller.spec.ts` exists to prevent.
  */
-import { computed, ref, type CSSProperties } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, type CSSProperties } from "vue";
 
 import CustomerStrip from "../../customer/CustomerStrip.vue";
 import { useItemsSelectorPanelSizing } from "../../../../composables/pos/items/useItemsSelectorPanelSizing";
@@ -186,8 +186,37 @@ const { selectorCardStyle } = useItemsSelectorPanelSizing({
  * The phone's explicit frame. Above the phone breakpoint the composable
  * returns `overflow: hidden` and no height, which is what a tablet or a narrow
  * desktop window wants: the column it sits in owns the height there.
+ *
+ * The composable's budget is viewport minus the dock — measured for a panel
+ * that starts at the top of the layout. This frame starts BELOW the navbar
+ * AND the teleported scan row, so the budget overshot by their combined
+ * height and the totals card slid under the dock while the cart got the
+ * leftovers (owner's live phone test, 2026-08-26). No CSS var states that
+ * offset (`--v-layout-top` resolves empty here, and the scan row is a
+ * sibling this component cannot name), so the frame measures its OWN top —
+ * the one number that is true whatever chrome stacks above it.
  */
-const frameStyle = computed<CSSProperties>(() => selectorCardStyle.value);
+const rootEl = ref<HTMLElement | null>(null);
+const frameTop = ref(0);
+const measureFrameTop = () => {
+	const rect = rootEl.value?.getBoundingClientRect();
+	if (rect) frameTop.value = Math.max(0, Math.round(rect.top));
+};
+onMounted(() => {
+	measureFrameTop();
+	// Fonts and the teleported scan header can land a beat after mount.
+	window.setTimeout(measureFrameTop, 300);
+	window.addEventListener("resize", measureFrameTop);
+});
+onBeforeUnmount(() => window.removeEventListener("resize", measureFrameTop));
+
+const frameStyle = computed<CSSProperties>(() => {
+	const style: CSSProperties = { ...selectorCardStyle.value };
+	if (style.height) {
+		style.height = `calc(var(--viewport-height, 100vh) - var(--bottom-safe-space, 0px) - ${frameTop.value}px)`;
+	}
+	return style;
+});
 </script>
 
 <style scoped>
