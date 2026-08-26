@@ -145,20 +145,25 @@ describe("shell integration — Riel y Cajón", () => {
 		// `catalogDrawer` is returned as a plain object of refs, so setup's
 		// unwrapping does not reach inside it — the template says
 		// `catalogDrawer.phase.value` for the same reason.
+		//
+		// Since 2026-08-26 the compact band (this mount's 1024) is the MOVIL
+		// register: the browse screen is the catalogue and the drawer stays
+		// closed throughout — the toggle still moves the PANEL, so nothing a
+		// chord or the dock reaches ever shows a blank shell.
 		const drawer = vm.catalogDrawer;
 		expect(drawer.presentation.value).toBe("inline");
-		expect(drawer.isOpen.value).toBe(true);
-
-		bus.emit("toggle_catalog_drawer");
-		await nextTick();
 		expect(drawer.isOpen.value).toBe(false);
+		expect(vm.movilShellProps.screen).toBe("browse");
+
+		vm.showInvoicePanel();
+		await nextTick();
 		expect(vm.compactPanel).toBe("invoice");
 
 		bus.emit("toggle_catalog_drawer");
 		await nextTick();
-		expect(drawer.isOpen.value).toBe(true);
-		expect(drawer.openReason.value).toBe("shortcut");
 		expect(vm.compactPanel).toBe("selector");
+		expect(vm.movilShellProps.screen).toBe("browse");
+		expect(drawer.isOpen.value).toBe(false);
 	});
 
 	it("covers and uncovers the cart with the same chord on a desktop register", async () => {
@@ -252,9 +257,10 @@ describe("shell integration — Riel y Cajón", () => {
 		expect(wide.drawerAnchoredOpen).toBe(false);
 	});
 
-	it("treats browse as the drawer, not as a column", async () => {
-		// The catalogue has exactly one home now. If the dock's Buscar tab still
-		// only swapped `activeView`, it would light up with nothing behind it.
+	it("treats browse as the movil screen, drawer standing down", async () => {
+		// The catalogue has exactly one home. On the compact band (since
+		// 2026-08-26) that home is the movil browse screen: every path that
+		// asks for items lands there and the drawer never opens under it.
 		const vm = mountShell().wrapper.vm as any;
 		// Compact boots ON the catalogue, so start from the ticket — otherwise
 		// the tab would be "confirmed" by a state it never had to reach.
@@ -263,7 +269,8 @@ describe("shell integration — Riel y Cajón", () => {
 		expect(vm.catalogDrawer.isOpen.value).toBe(false);
 
 		vm.applySelectorView("items");
-		expect(vm.catalogDrawer.isOpen.value).toBe(true);
+		expect(vm.catalogDrawer.isOpen.value).toBe(false);
+		expect(vm.movilShellProps.screen).toBe("browse");
 
 		vm.applySelectorView("offers");
 		expect(["closing", "closed"]).toContain(vm.catalogDrawer.phase.value);

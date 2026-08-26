@@ -93,6 +93,9 @@ const mountCorte = (
 	});
 
 beforeEach(() => {
+	// Desktop by default: the movil boundary moved to the compact band
+	// (< 1100, 2026-08-26) and jsdom's 1024 default now falls inside it.
+	window.innerWidth = 1440;
 	setActivePinia(createPinia());
 	vi.stubGlobal("__", (text: string) => text);
 	vi.stubGlobal("format_number", (value: number) => Number(value || 0).toFixed(2));

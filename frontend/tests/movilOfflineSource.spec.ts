@@ -251,6 +251,8 @@ describe("the surface is mounted, not ghosted (movil round 4)", () => {
 		expect(dialog).toMatch(/import\s+MovilOfflineSurface/);
 		expect(dialog).toContain('<v-card v-if="movilOffline" class="pos-card offline-movil-card">');
 		expect(dialog).toContain("<MovilOfflineSurface");
-		expect(dialog).toMatch(/movilOffline = computed\(\(\) => responsive\.isPhone\.value\)/);
+		// The compact band since 2026-08-26 (owner: the old view still met him
+		// on a portrait tablet) — one movil boundary, shared with the shell.
+		expect(dialog).toMatch(/movilOffline = computed\(\(\) => responsive\.isCompact\.value\)/);
 	});
 });

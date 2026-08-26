@@ -527,7 +527,9 @@ export default {
 		// closing doc's posa_difference_note straight through
 		// submit_closing_shift's get_doc(payload).
 		const responsive = useResponsive();
-		const movilCorte = computed(() => responsive.isPhone.value);
+		// The compact band (< 1100), matching the shell's movil boundary —
+		// a portrait tablet gets the movil corte, not the desk band.
+		const movilCorte = computed(() => responsive.isCompact.value);
 		const closingNote = ref("");
 		watch(closingDialog, (open) => {
 			if (open) {

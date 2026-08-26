@@ -185,17 +185,17 @@ describe("the compact shell lands on the catalogue", () => {
 	});
 
 	it("boots showing the grid rather than a blank panel", async () => {
-		// TABLET compact (768–1099): the catalogue drawer is the grid, as it
-		// has been since the landing rule shipped.
+		// TABLET compact (768–1099): since 2026-08-26 the movil browse screen
+		// IS the grid here too (owner: «there's still wired the old mobile
+		// view … on my tablet») — the drawer stands down exactly as on the
+		// phone. The protected invariant is unchanged: no blank panel at boot.
 		const vm = mountShell(900).vm as any;
 		await settle();
 
-		expect(vm.catalogDrawer.presentation.value).toBe("inline");
-		expect(vm.catalogDrawer.isOpen.value).toBe(true);
-		// A landing, not a resume: the featured category, not wherever this
-		// register happened to be last.
-		expect(vm.catalogDrawer.openReason.value).toBe("empty-cart");
 		expect(vm.compactPanel).toBe("selector");
+		expect(vm.catalogDrawer.isOpen.value).toBe(false);
+		expect(vm.movilStageActive).toBe(true);
+		expect(vm.movilShellProps.screen).toBe("browse");
 	});
 
 	it("boots a PHONE onto the movil browse screen, drawer closed", async () => {
@@ -213,7 +213,8 @@ describe("the compact shell lands on the catalogue", () => {
 	});
 
 	it("follows the dock between the ticket and the catalogue", async () => {
-		// Tablet width: the drawer keeps answering the dock.
+		// Tablet width: since 2026-08-26 the dock walks the movil screens
+		// here too — the drawer never opens, the browse screen is the grid.
 		const wrapper = mountShell(900);
 		const vm = wrapper.vm as any;
 		await settle();
@@ -221,14 +222,14 @@ describe("the compact shell lands on the catalogue", () => {
 		tap(vm, "cart");
 		await settle();
 		expect(vm.compactPanel).toBe("invoice");
+		expect(vm.movilShellProps.screen).toBe("cart");
 		expect(vm.catalogDrawer.isOpen.value).toBe(false);
 
 		tap(vm, "browse");
 		await settle();
 		expect(vm.compactPanel).toBe("selector");
-		expect(vm.catalogDrawer.isOpen.value).toBe(true);
-		// The point of the whole change: Browse costs the same as Cart did.
-		expect(vm.catalogDrawer.transitionDurationMs.value).toBe(0);
+		expect(vm.movilShellProps.screen).toBe("browse");
+		expect(vm.catalogDrawer.isOpen.value).toBe(false);
 	});
 
 	it("follows the dock between the movil screens on a phone", async () => {

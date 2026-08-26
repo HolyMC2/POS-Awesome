@@ -1394,13 +1394,17 @@ export default {
 		);
 
 		// ------------------------------------------------------------------
-		// MovilShell — the phone's register (roadmap §12's six mobile views,
-		// first two wired 2026-08-25). Phone geometry uses useResponsive's own
-		// boundary (isPhone, < 768): the 768–1099 tablet band keeps the
-		// compact layout the tablet round tuned; below it, Browse and Cart
-		// draw the mobile screens built to the Móvil artboards.
+		// MovilShell — the compact register (roadmap §12's six mobile views,
+		// first two wired 2026-08-25). SINCE 2026-08-26 the boundary is the
+		// COMPACT band (< 1100), not the phone one (< 768): the 768–1099
+		// tablet band used to keep the old compact panels, and the owner met
+		// them on a portrait tablet («there's still wired the old mobile
+		// view») — one boundary, one mobile register. The `isCompact` guard
+		// matters: `useCompactPosSwitcher` is also true for a lean-vertical
+		// preset on a DESKTOP width, and the cafetería's 1920px counter must
+		// not draw phone screens.
 		// ------------------------------------------------------------------
-		const movilPhone = computed(() => useCompactPosSwitcher.value && responsive.isPhone.value);
+		const movilPhone = computed(() => useCompactPosSwitcher.value && responsive.isCompact.value);
 		// Tapping a cart line falls back to the classic cart, which owns the
 		// line editor. Reset whenever the panel moves or Cart is re-asked.
 		const movilCartDetail = ref(false);

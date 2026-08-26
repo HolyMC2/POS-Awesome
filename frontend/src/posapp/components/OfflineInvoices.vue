@@ -458,7 +458,8 @@ const emit = defineEmits(["update:modelValue", "deleted", "sync-all"]);
 // money, the queue behind it, one Reintentar. The surface reads the real
 // queue and owns the drain (its own contract); this dialog keeps the door.
 const responsive = useResponsive();
-const movilOffline = computed(() => responsive.isPhone.value);
+// The compact band (< 1100), matching the shell's movil boundary.
+const movilOffline = computed(() => responsive.isCompact.value);
 const { isOnline: movilOnline } = useOnlineStatus();
 const movilFormatCurrency = (value) => formatCurrency(value);
 const __ = window.__ || ((text) => text);

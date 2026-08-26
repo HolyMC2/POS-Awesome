@@ -111,6 +111,9 @@ const setCount = async (faceMinor: number, count: number) => {
 };
 
 beforeEach(() => {
+	// Desktop by default: the movil boundary moved to the compact band
+	// (< 1100, 2026-08-26) and jsdom's 1024 default now falls inside it.
+	window.innerWidth = 1440;
 	setActivePinia(createPinia());
 	vi.stubGlobal("__", (text: string, args?: (string | number)[]) =>
 		args && args.length ? text.replace(/\{(\d+)\}/g, (m, i) => String(args[Number(i)] ?? m)) : text,
@@ -254,8 +257,17 @@ describe("the phone's corte (movil round 3)", () => {
 		expect(vm.dialog_data.posa_difference_note).toBe("billete roto en caja");
 	});
 
-	it("keeps the desktop corte at tablet width", async () => {
+	it("draws the MOVIL corte at tablet width too — one compact boundary", async () => {
+		// Inverted 2026-08-26 (owner: «there's still wired the old mobile
+		// view … on my tablet»): the 768–1099 band joins the movil register.
 		window.innerWidth = 900;
+		await mountDialog();
+
+		expect(inDialog('[data-testid="movil-corte"]')).toBeTruthy();
+	});
+
+	it("keeps the desktop corte at desktop width", async () => {
+		window.innerWidth = 1440;
 		await mountDialog();
 
 		expect(inDialog('[data-testid="movil-corte"]')).toBeNull();

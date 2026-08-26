@@ -378,12 +378,13 @@ onBeforeUnmount(() => {
 	}
 }
 
-/* On a phone the queue IS the screen. A selection is fronted fullscreen by
-   MovilOrdenView (the shell v-shows it over this surface), so the detail
-   panel and the story here can only ever show their idle placeholders —
-   which squeezed the queue to a strip a card and a half tall (owner's live
-   phone test, 2026-08-26: "a small scroll with all data"). */
-@media (max-width: 767.98px) {
+/* On the compact band the queue IS the screen. A selection is fronted
+   fullscreen by MovilOrdenView (the shell v-shows it over this surface), so
+   the detail panel and the story here can only ever show their idle
+   placeholders — which squeezed the queue to a strip a card and a half tall
+   (owner's live phone test, 2026-08-26: "a small scroll with all data").
+   1099.98 tracks the shell's movil boundary, not the artboard's 1180. */
+@media (max-width: 1099.98px) {
 	.orden-surface {
 		padding: 10px;
 	}

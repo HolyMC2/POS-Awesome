@@ -482,7 +482,10 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 
 .mbrowse__grid {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+	/* auto-fill, not a fixed 2: the same screen now serves the whole compact
+	   band, and a portrait tablet at 800px fits four readable cards where a
+	   phone fits the artboard's two. 170px is the card's comfortable floor. */
+	grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
 	gap: 10px;
 	align-content: start;
 }
