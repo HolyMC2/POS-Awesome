@@ -4,6 +4,7 @@ import { withPerf } from "../../../utils/perf";
 import { debugLog } from "../../../utils/debug";
 // SALDO-INTEGRATION-POINT — saldo capture lives outside this fork.
 import { requireSaldoCapture } from "@saldo/useSaldoCapture";
+import { saldoProfileConfigured } from "../../../components/pos/recargas/recargasGate";
 import { parseBooleanSetting } from "../../../utils/stock";
 import { useToastStore } from "../../../stores/toastStore";
 import { useStockUtils } from "../shared/useStockUtils";
@@ -396,7 +397,25 @@ export function useItemAddition() {
 			item.saldo_enabled !== undefined &&
 			item.saldo_enabled !== null &&
 			!Number(item.saldo_enabled);
-		if (!item.saldo_referencia && !context?.isReturnInvoice && !saldoKnownDisabled) {
+		// Tenant gate for the FALLBACK fetch: an undefined row value proves
+		// nothing about this tenant, and the meta fetch is a saldo.api.* call
+		// — on a tenant without the saldo app it 417s on EVERY add (the meta
+		// cache only stores hits). Ask the server only on evidence the app
+		// exists: the row itself marked saldo (only saldo's get_items
+		// integration ships that field truthy), or the POS Profile flag the
+		// saldo app installs. Same truth-source rule as the navbar pouch
+		// probe (recargasGate.ts, 2026-08-27 sweep).
+		const saldoFallbackAllowed =
+			(item.saldo_enabled !== undefined &&
+				item.saldo_enabled !== null &&
+				Number(item.saldo_enabled) > 0) ||
+			saldoProfileConfigured(context?.pos_profile);
+		if (
+			!item.saldo_referencia &&
+			!context?.isReturnInvoice &&
+			!saldoKnownDisabled &&
+			saldoFallbackAllowed
+		) {
 			try {
 				const captured = await requireSaldoCapture(item);
 				if (captured) {

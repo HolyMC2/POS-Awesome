@@ -58,3 +58,23 @@ export function recargasEnabled(context: RecargasGateContext): boolean {
 		return false;
 	}
 }
+
+/**
+ * May this register SPEND A NETWORK CALL on the saldo server?
+ *
+ * A different question from `recargasEnabled()`, and the difference is the
+ * truth source. The capability leg above reads the vertical preset, and the
+ * default `retail-phones` preset declares "saldo" for every register that
+ * resolves it — it answers "this vertical class COULD sell airtime", which is
+ * the right gate for chrome. A `saldo.api.*` call needs "this TENANT has the
+ * app": `saldo_enabled` is a field the saldo app itself installs on POS
+ * Profile, so on a tenant without the app the flag cannot be set — the flag
+ * IS the installation fact. Gating reads on the capability had every
+ * saldo-less tenant 417-ing `get_pos_available_balance` at boot and then
+ * every 60 seconds, forever (found by the 2026-08-27 register error sweep).
+ */
+export function saldoProfileConfigured(
+	posProfile: Record<string, any> | null | undefined,
+): boolean {
+	return parseBooleanSetting(posProfile?.[SALDO_PROFILE_FLAG]);
+}

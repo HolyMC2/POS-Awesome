@@ -273,7 +273,6 @@ import posLogo from "../pos/pos.png";
 import NavbarInfoGadgets from "./NavbarInfoGadgets.vue";
 import RegisterStatusLine from "./RegisterStatusLine.vue";
 import { useRegisterFacts } from "./useRegisterFacts";
-import { useVerticalStore } from "../../stores/verticalStore";
 import { useFormat } from "../../format";
 import { BRAND } from "../../../brand";
 
@@ -339,22 +338,15 @@ export default {
 		onBeforeUnmount(() => clearInterval(clockTimer));
 
 		// The two facts the strip was drawn with and used to pass `null` for.
-		// Same try/catch discipline as the stores above: `useFormat` and
-		// `useVerticalStore` are both absent when a spec mounts this bar, and
-		// the register facts must then simply be the `null` they already were.
+		// Same try/catch discipline as the stores above: `useFormat` is absent
+		// when a spec mounts this bar, and the register facts must then simply
+		// be the `null` they already were.
 		let registerFacts = null;
 		try {
 			const { formatCurrency, currencySymbol } = useFormat();
-			let verticalStore = null;
-			try {
-				verticalStore = useVerticalStore();
-			} catch {
-				verticalStore = null;
-			}
 			registerFacts = useRegisterFacts({
 				openingShift: () => uiStore?.posOpeningShift?.name || null,
 				posProfile: () => uiStore?.posProfile || null,
-				hasCapability: (capability) => Boolean(verticalStore?.has?.(capability)),
 				formatMoney: (value) =>
 					`${currencySymbol(uiStore?.posProfile?.currency)}${formatCurrency(value)}`,
 				// `Balance` already resolves to «Saldo», which is the artboard's

@@ -7,6 +7,14 @@ vi.mock("../src/posapp/stores/toastStore", () => ({
 	}),
 }));
 
+// A resolvable stand-in so the saldo-gate tests below can count calls. The
+// null resolution means "not a saldo item — proceed", which is also what the
+// real bridge answers for every item in this file.
+vi.mock("@saldo/useSaldoCapture", () => ({
+	requireSaldoCapture: vi.fn(async () => null),
+}));
+
+import { requireSaldoCapture } from "@saldo/useSaldoCapture";
 import { useItemAddition } from "../src/posapp/composables/pos/items/useItemAddition";
 import { useBatchSerial } from "../src/posapp/composables/pos/shared/useBatchSerial";
 import { useInvoiceStore } from "../src/posapp/stores/invoiceStore";
@@ -197,6 +205,48 @@ describe("useItemAddition new line behavior", () => {
 		expect(context.items[0].batch_no).toBe("B-FEFO");
 		expect(context.items[0].rate).toBe(7);
 		expect(context.items[0].price_list_rate).toBe(7);
+	});
+
+	it("spends no saldo meta fetch on a tenant with no evidence of the app", async () => {
+		// `saldo_enabled` undefined on the row proves nothing about THIS
+		// tenant, and the fallback fetch is a saldo.api.* call that 417s on
+		// every add where the app is absent (2026-08-27 sweep). No row
+		// evidence + no profile flag = the capture bridge stays untouched.
+		vi.mocked(requireSaldoCapture).mockClear();
+		const api = useItemAddition();
+		const context = createContext(false);
+		const item = createItem();
+		await api.prepareItemForCart(item, 1, context);
+		await api.addItem(item, context);
+
+		expect(context.items).toHaveLength(1);
+		expect(requireSaldoCapture).not.toHaveBeenCalled();
+	});
+
+	it("still asks when the POS Profile carries the saldo app's own flag", async () => {
+		vi.mocked(requireSaldoCapture).mockClear();
+		const api = useItemAddition();
+		const context = createContext(false);
+		(context.pos_profile as any).saldo_enabled = 1;
+		const item = createItem();
+		await api.prepareItemForCart(item, 1, context);
+		await api.addItem(item, context);
+
+		expect(requireSaldoCapture).toHaveBeenCalledTimes(1);
+	});
+
+	it("still asks when the row itself is marked saldo, whatever the profile says", async () => {
+		// Only saldo's get_items integration ships the field truthy — the row
+		// is tenant evidence too, and doco registers must keep capturing even
+		// where the profile flag is off (the server hook is the backstop).
+		vi.mocked(requireSaldoCapture).mockClear();
+		const api = useItemAddition();
+		const context = createContext(false);
+		const item = { ...createItem(), saldo_enabled: 1 };
+		await api.prepareItemForCart(item, 1, context);
+		await api.addItem(item, context);
+
+		expect(requireSaldoCapture).toHaveBeenCalledTimes(1);
 	});
 
 	it("resets return invoice type back to Invoice on clear", () => {

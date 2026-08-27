@@ -19,11 +19,13 @@
  * **Saldo.** `saldo.api.status.get_pos_available_balance`, the same read the
  * Recargas destination's pouch card makes, reached through the SAME frozen
  * method constant so there is one name for it in this tree. Gated twice
- * over: `recargasEnabled()` first, so a register that does not sell airtime
- * never asks, and then the server's own `visible` flag
- * (`Saldo Settings.show_available_balance_in_pos`, default OFF), so a manager
- * who hid the pouch keeps it hidden here too. A hidden balance is a SETTING,
- * not a fault, and neither one renders a chip.
+ * over: `saldoProfileConfigured()` first — the POS Profile flag ONLY, never
+ * the vertical capability, because the default preset declares "saldo" on
+ * every register and gating on it had every saldo-less tenant 417-ing this
+ * method once a minute forever (see recargasGate.ts) — and then the server's
+ * own `visible` flag (`Saldo Settings.show_available_balance_in_pos`,
+ * default OFF), so a manager who hid the pouch keeps it hidden here too. A
+ * hidden balance is a SETTING, not a fault, and neither one renders a chip.
  *
  * ## Failure is silence, never a zero
  *
@@ -40,7 +42,7 @@
 import { onBeforeUnmount, ref, shallowRef } from "vue";
 import { RECARGAS_READS } from "../pos/recargas/useRecargasSnapshot";
 import { resolveBolsa, type BolsaPayload } from "../pos/recargas/recargasModel";
-import { recargasEnabled } from "../pos/recargas/recargasGate";
+import { saldoProfileConfigured } from "../pos/recargas/recargasGate";
 
 type AnyRecord = Record<string, any>;
 
@@ -59,8 +61,6 @@ export interface RegisterFactsOptions {
 	openingShift?: () => string | null | undefined;
 	/** The active POS Profile document. */
 	posProfile?: () => AnyRecord | null | undefined;
-	/** `verticalStore.has` — capabilities, never a vertical NAME. */
-	hasCapability?: (capability: string) => boolean;
 	/** `YYYY-MM-DD`; defaults to Frappe's own idea of today. */
 	today?: () => string;
 	/** Formats the pouch figure the way the rest of the register formats money. */
@@ -170,9 +170,10 @@ export function useRegisterFacts(options: RegisterFactsOptions = {}) {
 
 	async function readSaldo(): Promise<void> {
 		const posProfile = options.posProfile?.() ?? null;
-		if (!recargasEnabled({ posProfile, hasCapability: options.hasCapability })) {
-			// This register does not sell airtime. Nothing to show, and nothing
-			// to ask the server about either.
+		if (!saldoProfileConfigured(posProfile)) {
+			// No `saldo_enabled` on the profile means no saldo app on this
+			// tenant — the flag is the app's own field. Nothing to show, and
+			// nothing to ask the server about either.
 			bolsa.value = null;
 			saldoLabel.value = null;
 			return;

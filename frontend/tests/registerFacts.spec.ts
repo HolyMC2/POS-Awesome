@@ -127,7 +127,6 @@ describe("the saldo pouch", () => {
 			call,
 			openingShift: () => "POS-OPEN-7",
 			posProfile: () => PLAIN_PROFILE,
-			hasCapability: () => false,
 			formatMoney: money,
 		});
 		await facts.refresh();
@@ -154,7 +153,12 @@ describe("the saldo pouch", () => {
 		expect(facts.saldoLabel.value).toBe("Saldo $1,240");
 	});
 
-	it("opens on the capability alone, the way the rail's gate does", async () => {
+	it("needs the tenant's own flag — the vertical capability alone spends no call", async () => {
+		// The default retail-phones preset declares "saldo" on EVERY register
+		// that resolves it, so a capability-gated read meant every saldo-less
+		// tenant 417-ing this method once a minute forever (2026-08-27 sweep).
+		// `saldo_enabled` is the saldo app's own field: flag absent = app
+		// absent, and the pouch read must stay home.
 		const { call, calls } = recorder({
 			[RECARGAS_READS.balance]: { visible: true, balance: 500 },
 		});
@@ -162,12 +166,11 @@ describe("the saldo pouch", () => {
 			call,
 			openingShift: () => "POS-OPEN-7",
 			posProfile: () => PLAIN_PROFILE,
-			hasCapability: (capability) => capability === "saldo",
 			formatMoney: money,
 		});
 		await facts.refresh();
-		expect(calls.some((entry) => entry.method === RECARGAS_READS.balance)).toBe(true);
-		expect(facts.saldoLabel.value).toBe("Saldo $500");
+		expect(calls.some((entry) => entry.method === RECARGAS_READS.balance)).toBe(false);
+		expect(facts.saldoLabel.value).toBeNull();
 	});
 
 	it("takes its word from the caller, so the chip can be translated", async () => {

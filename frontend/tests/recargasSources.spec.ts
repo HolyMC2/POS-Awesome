@@ -26,7 +26,10 @@ import {
 	findCarrier,
 	tabForCarrier,
 } from "../src/posapp/components/pos/recargas/recargasCatalog";
-import { recargasEnabled } from "../src/posapp/components/pos/recargas/recargasGate";
+import {
+	recargasEnabled,
+	saldoProfileConfigured,
+} from "../src/posapp/components/pos/recargas/recargasGate";
 import {
 	buildTodayLedger,
 	maskReference,
@@ -310,6 +313,25 @@ describe("the capability gate", () => {
 				},
 			}),
 		).toBe(false);
+	});
+});
+
+describe("the network gate", () => {
+	// `recargasEnabled` answers "may this register SHOW recargas chrome";
+	// `saldoProfileConfigured` answers "may it SPEND a saldo.api.* call".
+	// The second must never widen to the capability: the default preset
+	// declares "saldo" everywhere, and reads gated on it had every
+	// saldo-less tenant 417-ing the pouch once a minute (2026-08-27 sweep).
+	it("opens only on the profile flag the saldo app installs", () => {
+		expect(saldoProfileConfigured({ saldo_enabled: 1 })).toBe(true);
+		expect(saldoProfileConfigured({ saldo_enabled: "1" })).toBe(true);
+	});
+
+	it("stays shut without the flag, whatever the preset claims", () => {
+		expect(saldoProfileConfigured({})).toBe(false);
+		expect(saldoProfileConfigured({ saldo_enabled: 0 })).toBe(false);
+		expect(saldoProfileConfigured(null)).toBe(false);
+		expect(saldoProfileConfigured(undefined)).toBe(false);
 	});
 });
 
