@@ -361,8 +361,20 @@
 				<!-- One band, one number, one action (§17.7 invariant 1). Desktop
 				     only: below the boundary the dock's own summary already owns
 				     that lane, and two of them would be two numbers. -->
+				<!-- v-show, NEVER v-if — the same rule the scan-bar div above
+				     states, now for the band's own body: `InvoiceSummary` and
+				     `MesaContextStrip` `<Teleport defer>` INTO the lanes this
+				     band publishes (`[data-band-lane=…]`), and their owners stay
+				     mounted (v-show) across the 1100px crossing. Parent patches
+				     before child, so a v-if here destroys the teleport targets
+				     BEFORE the summaries can disable their teleports — the
+				     deferred-teleport bookkeeping desyncs, the flush aborts
+				     («emitsOptions / parentNode / __isMounted of null» toasts on
+				     every later crossing) and the stage is left half-swapped.
+				     Hidden the band keeps its targets alive; the cashier still
+				     sees exactly one total. -->
 				<ActionBand
-					v-if="railVisible"
+					v-show="railVisible"
 					:state="bandState"
 					:format-currency="formatCurrency"
 					@primary="onBandPrimary"

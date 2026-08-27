@@ -33,10 +33,15 @@ describe("bandLaneOwnership tracks Pos.vue's railVisible", () => {
 		expect(predicate).toContain("1100");
 	});
 
-	it("the band is mounted under the same condition it is yielded to", () => {
+	it("the band is shown under the same condition it is yielded to", () => {
 		const shell = read("../src/posapp/components/pos/shell/Pos.vue");
-		// A band mounted on a condition LOOSER than railVisible would appear
+		// A band shown on a condition LOOSER than railVisible would appear
 		// where the summary has not yielded, which is the defect in reverse.
-		expect(shell).toMatch(/<ActionBand[\s\S]{0,120}v-if="railVisible"/);
+		// v-show, NEVER v-if: the summaries `<Teleport defer>` into the band's
+		// lanes while staying mounted themselves, and the parent-first patch
+		// order means a v-if would destroy those targets before the teleports
+		// can stand down — the resize-crossing crash of 2026-08-26.
+		expect(shell).toMatch(/<ActionBand[\s\S]{0,700}v-show="railVisible"/);
+		expect(shell).not.toMatch(/<ActionBand[\s\S]{0,700}v-if="railVisible"/);
 	});
 });
