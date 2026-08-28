@@ -3011,3 +3011,7 @@ There is no open shift on this register to close.,No hay un turno abierto que ce
 Could not prepare closing,No se pudo preparar el corte
 The server returned no closing draft for this shift — try again.,El servidor no devolvió el borrador del corte — inténtalo de nuevo.
 Scan barcode,Escanear código
+Tap a card to add it,Toca una tarjeta para agregarla
+See all {0},Ver los {0}
+Combos,Combos
+{0} compatible with {1},{0} compatibles con {1}
