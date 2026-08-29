@@ -78,10 +78,12 @@ describe("RegisterRail — landmark and semantics", () => {
 	it("renders every destination as a real button", () => {
 		const { wrapper } = mountRail();
 		const buttons = wrapper.findAll("button.register-rail__item");
-		// Ten primary pills (Cotizaciones joined them in the documentos round),
-		// Corte, and the "More" pill that fronts the tools group — its five
-		// members render inside the flyout, not as pills.
-		expect(buttons).toHaveLength(12);
+		// Eleven primary pills (Cotizaciones joined in the documentos round,
+		// Comandas with the B2 board — floor-gated, so only table-service
+		// registers grow it), Corte, and the "More" pill that fronts the
+		// tools group — its five members render inside the flyout, not as
+		// pills.
+		expect(buttons).toHaveLength(13);
 		expect(buttons.every((b) => b.attributes("type") === "button")).toBe(true);
 	});
 
@@ -147,7 +149,7 @@ describe("RegisterRail — shift gate", () => {
 	it("keeps the rail visible, so the destinations are still discoverable", () => {
 		const { wrapper } = mountRail({ shiftOpen: false });
 		expect(wrapper.find("nav.register-rail").isVisible()).toBe(true);
-		expect(wrapper.findAll("button.register-rail__item").length).toBe(12);
+		expect(wrapper.findAll("button.register-rail__item").length).toBe(13);
 	});
 });
 
@@ -239,7 +241,7 @@ describe("RegisterRail — preset shape", () => {
 			global: { stubs: { VIcon: IconStub } },
 		});
 		expect(wrapper.get(".register-rail__avatar img").attributes("alt")).toBe("cashier");
-		expect(wrapper.findAll("button.register-rail__item")).toHaveLength(12);
+		expect(wrapper.findAll("button.register-rail__item")).toHaveLength(13);
 	});
 });
 

@@ -104,6 +104,8 @@ const METHODS = {
 	fireCourse: "posawesome.posawesome.api.restaurant.kot.fire_course",
 	fireBatchStatus:
 		"posawesome.posawesome.api.restaurant.kot.get_fire_batch_status",
+	listKitchenBatches:
+		"posawesome.posawesome.api.restaurant.kot.list_kitchen_batches",
 	markTableClean: "posawesome.posawesome.api.restaurant.floors.mark_table_clean",
 } as const;
 
@@ -435,6 +437,45 @@ export async function getFireBatchStatus(orderUid: string, batchName: string) {
 		batch: (result?.batch as string) || batchName,
 		status: (result?.status as string) || "unavailable",
 		jobs: (result?.jobs as { destination_key: string; status: string }[]) || [],
+	};
+}
+
+export interface KitchenBatchLine {
+	item: string;
+	qty: number;
+	station: string;
+}
+
+export interface KitchenBatchRow {
+	name: string;
+	status: string;
+	is_void: boolean;
+	fired_at: string;
+	fired_by: string;
+	table: string | null;
+	tab_name: string | null;
+	order_status: string;
+	lines: KitchenBatchLine[];
+	cancellations: KitchenBatchLine[];
+	job_count: number;
+	sent_count: number;
+	failed_count: number;
+}
+
+/**
+ * The comandas board's read (critique B2): this register's kitchen tickets
+ * from the last service window, newest first, each with its frozen lines and
+ * print verdict. ONLINE ONLY — a stale kitchen board seats the same lie a
+ * stale seating chart does.
+ */
+export async function listKitchenBatches(posProfile: string, limit = 30) {
+	const result = await callRestaurant(METHODS.listKitchenBatches, {
+		pos_profile: posProfile,
+		limit,
+	});
+	return {
+		batches: (result?.batches as KitchenBatchRow[]) || [],
+		serverTime: (result?.server_time as string) || null,
 	};
 }
 

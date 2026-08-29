@@ -128,6 +128,7 @@ describe("useRegisterRail — offline", () => {
 		// orders — and `drafts` is blocked, because nothing caches them.
 		expect(dimmed.sort()).toEqual([
 			"closing",
+			"comandas",
 			"dashboard",
 			"drafts",
 			"giftCards",

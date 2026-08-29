@@ -219,6 +219,23 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 		panelView: "floor",
 	},
 	{
+		// The management half of table service (critique B2): what has been
+		// fired, how old it is, and whether the kitchen verifiably got paper.
+		// Reads the durable print batches every fire already leaves behind.
+		id: "comandas",
+		labelKey: "Comandas",
+		kind: "sheet",
+		path: "/comandas",
+		capability: "tables",
+		profileFlag: null,
+		// A stale kitchen board is the seating-chart lie again: it shows
+		// tickets as aging that a bump already served, or misses the fire
+		// that matters. Server read every time.
+		offline: "online_required",
+		shortcutActionId: null,
+		badgeSource: null,
+	},
+	{
 		id: "serviceOrder",
 		labelKey: "Service Order",
 		kind: "sheet",
@@ -463,6 +480,9 @@ export const SHEET_COMPONENTS: Record<string, () => Promise<unknown>> = {
 	// already. `ChargeRequestsDialog` stays exactly as it is for the navbar on
 	// layouts with no rail; only what the rail opens changed.
 	serviceOrder: () => import("../../../components/pos/flows/orden/OrdenSurface.vue"),
+	// A view, not a hosted dialog (the quotations pattern): the board renders
+	// straight into the host and reads the durable print batches (critique B2).
+	comandas: () => import("../../../components/pos/flows/comandas/ComandasBoard.vue"),
 	// Borradores and Facturas are ONE component on two tabs. `Drafts.vue` was
 	// never a surface: its only act on opening is to close itself and open
 	// Invoice Management on the drafts tab, so hosting it put a redirect on

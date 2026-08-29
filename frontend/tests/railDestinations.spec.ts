@@ -57,6 +57,9 @@ describe("rail destination registry", () => {
 			"sale",
 			"payments",
 			"floor",
+			// The comandas board rides the floor's gate (critique B2): the
+			// management half of the same table service, right after the room.
+			"comandas",
 			"serviceOrder",
 			"expense",
 			// Cotizaciones sits with the other documents, before Borradores.
@@ -216,6 +219,9 @@ describe("rail offline contract", () => {
 		const blocked = RAIL_DESTINATIONS.filter(isOfflineBlocked).map((d) => d.id);
 		expect(blocked.sort()).toEqual([
 			"closing",
+			// The board reads print batches; a stale kitchen is the seating
+			// chart's lie applied to tickets.
+			"comandas",
 			"dashboard",
 			"drafts",
 			"giftCards",
@@ -324,9 +330,10 @@ describe("rail vocabulary", () => {
 		// A noun every giro calls the same thing must not go through t(), or
 		// the preset label map becomes a second translation layer.
 		const vocabulary = RAIL_DESTINATIONS.filter((d) => d.vocabulary).map((d) => d.id);
-		// `browse` ("Menú") left the rail; `floor` ("Salón") is the one
-		// renamed noun still drawn.
-		expect(vocabulary.sort()).toEqual(["floor"]);
+		// `browse` ("Menú") left the rail; `floor` ("Salón") and `comandas`
+		// (a giro may call them "Tickets" or "KOTs") are the renamed nouns
+		// still drawn.
+		expect(vocabulary.sort()).toEqual(["comandas", "floor"]);
 	});
 });
 

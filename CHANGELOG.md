@@ -4,6 +4,24 @@ All notable changes.
 
 ## Unreleased
 
+- **The comandas board (08-29, critique B2).** The floor answered «which
+  table do I open?»; nothing answered «what is in the kitchen and how old
+  is it?». New «Comandas» rail destination (floor-gated, table-service
+  registers only, right after Salón): three lanes by the only truth that
+  exists — the print verdict (Imprimiendo / En cocina / Impresión
+  fallida; a «servida» lane would be a lie until the KDS bump exists,
+  see B3) — with per-ticket age on the floor's own fresh/warm/late
+  vocabulary measured on the SERVER's clock, frozen lines per station,
+  void tickets marked, and who fired. Data source: the durable
+  `Doco Print Batch` rows every fire already leaves behind — new
+  `list_kitchen_batches` read, scoped like `get_floor_snapshot`
+  (profile assert + tables capability + doctype read) and joined
+  THROUGH each batch's source order's `pos_profile`, so another
+  register's kitchen traffic is silently not yours. Refreshes on every
+  fire (`floor_course_fired`) plus a 20 s poll; offline-blocked (a
+  stale kitchen board is the seating-chart lie applied to tickets).
+  vitest 4784 ✓ (rail inventory specs updated for the new pill),
+  vue-tsc 0, es.csv +9.
 - **«Dividir entre N» at the payment screen (08-29, critique C1).** The
   register could split across tenders only by hand-typed amounts. New
   SplitEvenlyPanel (beside the tip selector, retail and cobro alike):

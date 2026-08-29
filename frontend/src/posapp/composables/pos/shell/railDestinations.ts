@@ -45,6 +45,7 @@ export const RAIL_DESTINATION_IDS = [
 	// open the drawer, and the mobile dock still has a browse tab.
 	"browse",
 	"floor",
+	"comandas",
 	"serviceOrder",
 	"expense",
 	// Cotizaciones sits with Borradores and Facturas, and BEFORE them, exactly
@@ -265,6 +266,24 @@ export const RAIL_DESTINATIONS: readonly RailDestination[] = [
 		// ready to accept every order.
 		offlineAvailability: "queued",
 		backedBy: "src/offline/restaurantQueue.ts",
+		group: "primary",
+	},
+	{
+		// The management half of table service (critique B2): fired tickets,
+		// their age, and whether the kitchen verifiably got paper. Same gate
+		// as the floor — a register without tables has no kitchen to watch.
+		id: "comandas",
+		label: "Comandas",
+		vocabulary: true,
+		icon: "mdi-clipboard-text-clock",
+		badgeSource: null,
+		gate: "floor",
+		shortcutActionId: null,
+		// The board is a server read of print batches; offline it can only
+		// show a stale kitchen, which is worse than none (the floor's own
+		// stale-chart rule, applied to tickets).
+		offlineAvailability: "blocked",
+		backedBy: null,
 		group: "primary",
 	},
 	{

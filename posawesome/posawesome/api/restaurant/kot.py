@@ -20,7 +20,7 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, now_datetime
+from frappe.utils import add_to_date, cint, flt, now_datetime
 
 from posawesome.posawesome.api.restaurant._tickets import (
     OPEN_STATUS,
@@ -496,3 +496,126 @@ def get_fire_preview(name_or_uid, course_idx=None):
         "stations": _route(fires, station_index, group_by_item),
         "cancellations": _route(cancellations, station_index, group_by_item),
     }
+
+
+# How far back the comandas board looks. A service window, not an archive:
+# yesterday's tickets are the closing report's business, not the kitchen's.
+BOARD_WINDOW_HOURS = 12
+
+
+def _board_lines(station_groups):
+    """Flatten a frozen projection's station groups for the board card."""
+    lines = []
+    for group in station_groups or []:
+        station = group.get("station") or GENERAL_STATION
+        for line in group.get("lines") or []:
+            lines.append(
+                {
+                    "item": line.get("item_name") or line.get("item_code") or "?",
+                    "qty": flt(line.get("qty") or 0),
+                    "station": station,
+                }
+            )
+    return lines
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def list_kitchen_batches(pos_profile, limit=30):
+    """The comandas board's read (critique B2, 08-29).
+
+    Every fire already leaves a durable trace — a ``Doco Print Batch`` with
+    the frozen projection and a per-station delivery verdict — and until now
+    nothing projected it: the floor answered "which table do I open?" and
+    nobody could answer "what is in the kitchen and how old is it?". This
+    read is that projection: the register's kitchen tickets from the last
+    :data:`BOARD_WINDOW_HOURS`, newest first, each carrying its table, its
+    frozen lines, its print status and its age — enough for a board with
+    en-cocina / impresas / falladas lanes and nothing invented (a "servida"
+    lane needs a KDS bump, which does not exist yet — see critique B3).
+
+    Scoped like ``get_floor_snapshot``: the profile assert plus the doctype
+    read gate, because the profile name comes from the client and this read
+    returns another register's kitchen traffic without it. Batches are then
+    joined THROUGH their source order's ``pos_profile`` — a batch whose order
+    belongs to another register is silently not yours to see.
+    """
+    from posawesome.posawesome.api._scope import assert_profile
+
+    assert_profile(frappe.session.user, pos_profile)
+    assert_tables_capability(pos_profile)
+    frappe.has_permission("POS Table Order", "read", throw=True)
+
+    server_time = str(now_datetime())
+    if not frappe.db.exists("DocType", "Doco Print Batch"):
+        return {"batches": [], "server_time": server_time}
+
+    limit = min(max(cint(limit) or 30, 1), 100)
+    rows = frappe.get_all(
+        "Doco Print Batch",
+        filters={
+            "source_doctype": "POS Table Order",
+            "event_key": ["like", "posa-kot%"],
+            "creation": [">=", add_to_date(now_datetime(), hours=-BOARD_WINDOW_HOURS)],
+        },
+        fields=[
+            "name",
+            "status",
+            "source_name",
+            "event_key",
+            "creation",
+            "owner",
+            "projection_json",
+            "job_count",
+            "sent_count",
+            "failed_count",
+        ],
+        order_by="creation desc",
+        # Overfetch: the profile join below drops other registers' traffic,
+        # and a busy multi-register site would otherwise starve the board.
+        limit_page_length=limit * 4,
+        ignore_permissions=True,
+    )
+
+    order_names = list({row.source_name for row in rows if row.source_name})
+    orders = {}
+    if order_names:
+        for order in frappe.get_all(
+            "POS Table Order",
+            filters={"name": ["in", order_names], "pos_profile": pos_profile},
+            fields=["name", "table", "tab_name", "status"],
+            ignore_permissions=True,
+        ):
+            orders[order.name] = order
+
+    batches = []
+    for row in rows:
+        order = orders.get(row.source_name)
+        if not order:
+            continue
+        try:
+            projection = json.loads(row.projection_json or "{}")
+        except (TypeError, ValueError):
+            projection = {}
+        if not isinstance(projection, dict):
+            projection = {}
+        batches.append(
+            {
+                "name": row.name,
+                "status": row.status,
+                "is_void": str(row.event_key or "").startswith(VOID_EVENT_PREFIX),
+                "fired_at": str(row.creation),
+                "fired_by": row.owner,
+                "table": order.table,
+                "tab_name": order.tab_name,
+                "order_status": order.status,
+                "lines": _board_lines(projection.get("stations")),
+                "cancellations": _board_lines(projection.get("cancellations")),
+                "job_count": cint(row.job_count),
+                "sent_count": cint(row.sent_count),
+                "failed_count": cint(row.failed_count),
+            }
+        )
+        if len(batches) >= limit:
+            break
+
+    return {"batches": batches, "server_time": server_time}
