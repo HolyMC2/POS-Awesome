@@ -4,6 +4,24 @@ All notable changes.
 
 ## Unreleased
 
+- **Phantom-setting code paths removed; two destinations now honour their
+  flags (08-29).** The settings audit found runtime code consulting profile
+  fields that have never existed anywhere: three quotation-gate aliases
+  (`documentSources.ts`), `posa_validate_stock` (`useInvoiceItems.ts`),
+  `pose_use_limit_search` fallbacks left from the 2026 rename
+  (`ItemsSelector`, `itemsStore`, `useItemsSelectorSearch`), and four
+  write-off-limit aliases on BOTH sides (`_resolve_write_off_limit`,
+  `usePaymentSubmission`, `Payments.vue`) — ERPNext's native
+  `write_off_limit` is the only real one and now the only one read. The
+  hardcoded "Pakistan" customer-country fallback is gone (profile's
+  Default Country or blank). And the Purchase Orders / Receivables rail
+  destinations now carry `profileFlag` (`posa_allow_purchase_order`,
+  `posa_use_pos_awesome_payments`) — both were server-enforced but
+  client-invisible, so a register with the feature off still offered the
+  page and the cashier met a 403 at the money moment. *Behavior change:*
+  a profile with purchasing off no longer shows the Purchase page (on the
+  mirror that is only Doco Reparaciones, where every action already
+  refused).
 - **Safe-transfer profile settings removed (08-29).** The three POS Profile
   fields (`posa_enable_safe_transfer`, `posa_bank_deposit_account`,
   `posa_safe_transfer_max_amount`) gated five whitelisted endpoints that no

@@ -452,13 +452,10 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 
 	const getWriteOffLimit = (profile: any): number | null => {
 		if (!profile) return null;
-		const possibleLimitFields = [
-			"write_off_limit",
-			"posa_max_write_off_amount",
-			"max_write_off_amount",
-			"write_off_amount",
-			"posa_write_off_limit",
-		];
+		// ERPNext's native POS Profile write_off_limit is the only limit
+		// field that exists; the four posa_/max_ aliases this list once
+		// carried were never fields anywhere (2026-08-29 settings audit).
+		const possibleLimitFields = ["write_off_limit"];
 
 		for (const field of possibleLimitFields) {
 			const rawValue = profile?.[field];

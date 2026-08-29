@@ -171,7 +171,10 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 		kind: "sheet",
 		path: "/payments",
 		capability: null,
-		profileFlag: null,
+		// Server gate lives in payment_processing/processor.py; mirroring it
+		// here keeps a register with POS Awesome Payments off from offering
+		// a Pay screen that can only 403 (2026-08-29 settings audit).
+		profileFlag: "posa_use_pos_awesome_payments",
 		offline: "online_required",
 		shortcutActionId: null,
 		badgeSource: "receivablesOverdueCount",
@@ -328,7 +331,11 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 		kind: "sheet",
 		path: "/orders",
 		capability: null,
-		profileFlag: null,
+		// The server has always enforced this flag (_ensure_allowed in
+		// purchase_orders.py); until 2026-08-29 the destination ignored it,
+		// so a register with purchasing off still showed the page and the
+		// cashier discovered the refusal as a 403 at submit.
+		profileFlag: "posa_allow_purchase_order",
 		offline: "online_required",
 		shortcutActionId: null,
 		badgeSource: null,

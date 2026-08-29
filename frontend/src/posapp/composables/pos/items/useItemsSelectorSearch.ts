@@ -38,9 +38,7 @@ export const useItemsSelectorSearch = ({
 		if (vm.usesLimitSearch && typeof vm.usesLimitSearch.value === "boolean") {
 			return vm.usesLimitSearch.value;
 		}
-		return resolveBooleanSetting(
-			vm.pos_profile?.posa_use_limit_search ?? vm.pos_profile?.pose_use_limit_search,
-		);
+		return resolveBooleanSetting(vm.pos_profile?.posa_use_limit_search);
 	};
 
 	const hasStorageAvailable = (vm: any): boolean => {

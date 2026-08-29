@@ -478,13 +478,10 @@ def _resolve_write_off_limit(pos_profile_doc):
     if not pos_profile_doc:
         return None
 
-    candidate_fields = (
-        "write_off_limit",
-        "posa_max_write_off_amount",
-        "max_write_off_amount",
-        "write_off_amount",
-        "posa_write_off_limit",
-    )
+    # ERPNext's native POS Profile write_off_limit is the only limit field
+    # that exists; the four posa_/max_ aliases this tuple once carried were
+    # never fields anywhere (2026-08-29 settings audit).
+    candidate_fields = ("write_off_limit",)
 
     for fieldname in candidate_fields:
         raw_value = pos_profile_doc.get(fieldname)

@@ -249,12 +249,9 @@ export const useItemsStore = defineStore("items", () => {
 		return Boolean(value);
 	};
 
-	const limitSearchEnabled = computed(() => {
-		const rawValue =
-			posProfile.value?.posa_use_limit_search ??
-			posProfile.value?.pose_use_limit_search;
-		return normalizeBooleanSetting(rawValue);
-	});
+	const limitSearchEnabled = computed(() =>
+		normalizeBooleanSetting(posProfile.value?.posa_use_limit_search),
+	);
 
 	const resolvePageSize = (pageSize = DEFAULT_PAGE_SIZE): number => {
 		return paginationResolvePageSize(

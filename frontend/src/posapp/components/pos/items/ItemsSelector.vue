@@ -542,7 +542,7 @@ const flyConfig = reactive({ speed: 0.6, easing: "ease-in-out" });
 // 3. Computed Properties
 const pos_profile = computed(() => (itemsIntegration.posProfile.value || {}) as any);
 const usesLimitSearch = computed(() =>
-	parseBooleanSetting(pos_profile.value?.posa_use_limit_search ?? pos_profile.value?.pose_use_limit_search),
+	parseBooleanSetting(pos_profile.value?.posa_use_limit_search),
 );
 const { stockSettings: stock_settings_ref } = storeToRefs(uiStore);
 const stock_settings = computed(() => stock_settings_ref.value || {});
@@ -1093,9 +1093,7 @@ onMounted(async () => {
 		itemAvailability,
 		itemCurrencyUtils,
 		get usesLimitSearch() {
-			return parseBooleanSetting(
-				pos_profile.value?.posa_use_limit_search ?? pos_profile.value?.pose_use_limit_search,
-			);
+			return parseBooleanSetting(pos_profile.value?.posa_use_limit_search);
 		},
 		get storageAvailable() {
 			return storageAvailable.value;

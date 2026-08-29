@@ -161,12 +161,9 @@ function isSalesOrderSourceEnabled(posProfile: any): boolean {
 }
 
 function isQuotationSourceEnabled(posProfile: any): boolean {
-	return parseBooleanSetting(
-		posProfile?.custom_allow_create_quotation ??
-			posProfile?.custom_allow_select_quotation ??
-			posProfile?.posa_allow_select_quotation ??
-			posProfile?.posa_allow_quotation_selection,
-	);
+	// custom_allow_create_quotation is the only quotation gate that exists;
+	// the three aliases this chain once consulted were never fields anywhere.
+	return parseBooleanSetting(posProfile?.custom_allow_create_quotation);
 }
 
 export function getAvailableDocumentSources(posProfile: any): DocumentSourceOption[] {
