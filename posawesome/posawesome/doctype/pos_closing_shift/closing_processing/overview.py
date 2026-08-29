@@ -82,6 +82,9 @@ def get_closing_shift_overview(pos_opening_shift):
     cash_movement_drawer_delta = 0
     cash_movement_totals_by_type = {}
     cash_movement_totals_by_currency = {}
+    tips_company_currency_total = 0
+    tips_invoice_count = 0
+    tips_by_waiter = {}
 
     cash_mode_of_payment = frappe.db.get_value("POS Profile", pos_profile, "posa_cash_mode_of_payment")
     if not cash_mode_of_payment:
@@ -261,6 +264,23 @@ def get_closing_shift_overview(pos_opening_shift):
                 rate = abs(flt(base_grand_total)) / abs(flt(invoice_total)) if base_grand_total else None
             if rate:
                 currency_entry["exchange_rates"].add(rate)
+
+        # Tips ride the invoice as posa_rt_tip_amount (stamped server-side at
+        # settle; no_copy, so a return never inherits one). Counted out here so
+        # the corte can NAME the propinas in the drawer instead of letting the
+        # PROPINA line melt into sales — a waiter's payout needs this figure.
+        tip_amount = flt(invoice.get("posa_rt_tip_amount") or 0)
+        if tip_amount > 0:
+            tip_base = flt(tip_amount) * flt(conversion_rate or 1)
+            tips_company_currency_total += tip_base
+            tips_invoice_count += 1
+            waiter = invoice.get("posa_rt_waiter") or ""
+            waiter_entry = tips_by_waiter.setdefault(
+                waiter,
+                {"waiter": waiter, "count": 0, "company_currency_total": 0},
+            )
+            waiter_entry["count"] += 1
+            waiter_entry["company_currency_total"] += tip_base
 
         change_amount = flt(invoice.get("change_amount") or 0)
         has_overpayment_entry = invoice.get("name") in overpayment_invoice_names
@@ -721,6 +741,21 @@ def get_closing_shift_overview(pos_opening_shift):
             "count": returns_count,
             "company_currency_total": flt(returns_company_currency_total),
             "by_currency": prepare_currency_rows(returns_totals_by_currency, include_count=True),
+        },
+        "tips": {
+            "count": tips_invoice_count,
+            "company_currency_total": flt(tips_company_currency_total),
+            "by_waiter": sorted(
+                (
+                    {
+                        "waiter": row["waiter"],
+                        "count": row["count"],
+                        "company_currency_total": flt(row["company_currency_total"]),
+                    }
+                    for row in tips_by_waiter.values()
+                ),
+                key=lambda row: -row["company_currency_total"],
+            ),
         },
         "change_returned": {
             "company_currency_total": flt(

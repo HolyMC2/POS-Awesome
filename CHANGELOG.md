@@ -4,6 +4,18 @@ All notable changes.
 
 ## Unreleased
 
+- **The corte counts tips out (08-29, critique B5).** Tips were wired
+  end-to-end at settle (RestaurantTipSelector → settle_table_order →
+  posa_rt_tip_amount + PROPINA line, capability-gated) but the closing
+  shift was tip-blind: PROPINA melted into sales totals, so the drawer's
+  propinas could never be named or paid out. The shift overview now
+  carries a `tips` block — count, company-currency total, per-waiter
+  breakdown (posa_rt_waiter; no_copy keeps returns out) — and the
+  closing dialog shows a «Propinas» insight tile (auto-hidden at zero;
+  single-waiter shifts name the payout in the caption). Verified live on
+  doco-mirror: zero shape on a clean shift; a tipped invoice lands as
+  count 1 + waiter bucket. es.csv +2 rows, mdi-hand-coin-outline added
+  to the icon map (the coverage spec caught it). vitest 4771 ✓.
 - **POS Profile settings live in their own «POS Awesome» tab, and the
   descriptions finally tell the truth (08-29).** The reorganizer patch is
   rewritten as the single layout authority: a complete, collision-free

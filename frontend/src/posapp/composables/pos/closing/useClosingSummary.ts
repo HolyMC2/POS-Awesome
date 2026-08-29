@@ -75,6 +75,20 @@ export function useClosingSummary(
 		);
 	});
 
+	// Tips are stamped server-side at settle (posa_rt_tip_amount) and counted
+	// out per shift by the overview — the corte names the propinas in the
+	// drawer instead of letting the PROPINA line melt into sales.
+	const tipsSummary = computed(() => {
+		const ov = unref(overview);
+		return (
+			ov?.tips || {
+				count: 0,
+				company_currency_total: 0,
+				by_waiter: [],
+			}
+		);
+	});
+
 	const returnsSummary = computed(() => {
 		const ov = unref(overview);
 		return (
@@ -394,6 +408,27 @@ export function useClosingSummary(
 				color: "accent-secondary",
 			},
 			{
+				key: "tips",
+				zero: !Number(tipsSummary.value.company_currency_total) && !Number(tipsSummary.value.count),
+				label: __("Tips"),
+				value: formatCurrencyWithSymbol(
+					tipsSummary.value.company_currency_total,
+					overviewCompanyCurrency.value,
+				),
+				// One waiter → name the payout; several → count the tipped
+				// sales (the full split can live in a detail table later).
+				caption:
+					(tipsSummary.value.by_waiter || []).length === 1 &&
+					tipsSummary.value.by_waiter[0].waiter
+						? `${String(tipsSummary.value.by_waiter[0].waiter).split("@")[0]}: ${formatCurrencyWithSymbol(
+								tipsSummary.value.by_waiter[0].company_currency_total,
+								overviewCompanyCurrency.value,
+							)}`
+						: `${__("Tipped sales")}: ${formatCount(tipsSummary.value.count || 0)}`,
+				icon: "mdi-hand-coin-outline",
+				color: "accent-success",
+			},
+			{
 				key: "change-returned",
 				zero: !Number(changeReturnedSummary.value.company_currency_total),
 				label: __("Change Returned"),
@@ -530,6 +565,7 @@ export function useClosingSummary(
 		changeReturnedRows,
 		cashExpectedByCurrency,
 		cashMovementSummary,
+		tipsSummary,
 		primaryInsights,
 		secondaryInsights,
 		shouldShowCompanyEquivalent,
