@@ -233,6 +233,18 @@
 	text-align: center;
 }
 
+/* The failed-print alert (critique B1). Sits left of the unsent badge's
+ * corner so the two never overlap when both are on: unsent counts NEW
+ * lines, this one mourns the LAST ticket. Warning, not error red — the
+ * food is ordered, only the paper is missing. */
+.floor-tile__badge--print {
+	inset-inline-end: 16px;
+	background: var(--pos-warning, #b26a00);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
 .floor-tile__glyph {
 	position: absolute;
 	bottom: 2px;

@@ -4,6 +4,22 @@ All notable changes.
 
 ## Unreleased
 
+- **Firing a comanda now moves the world (08-29, critique B1).** «Enviar»
+  used to leave the waiter staring at the same cart with no feedback but
+  an eventual print-verdict toast — which, on a tablet with «Impresora no
+  disponible», could never say anything good. Three changes: (1) the
+  moment the server takes the diff, an immediate «Comanda enviada a
+  cocina» toast — decoupled from printing; (2) firing from the mesa SALE
+  screen returns to the salón (`floor_return_to_salon` → Pos.vue's
+  flush→detach→clear discipline), landing with that table under the
+  sheet; a failed fire keeps the cart put; (3) the print verdict now
+  outlives its toast: failed/partial/timed-out prints pin an
+  `mdi-printer-off` alert on the table tile (`floorStore.kitchenAlert*`),
+  cleared by the next fire or a confirmed print — the waiter who walked
+  back to the room sees it on the thing they are actually looking at.
+  vitest 4775 ✓, vue-tsc 0. Still open from B1's family: per-line
+  enviado/pendiente chips in the cart (needs per-line fired state
+  client-side) — tracked with B4.
 - **The band stops lying on hosted destinations (08-29, critique A1/A2).**
   With Gasto, Cobranza, Borradores, Facturas or any other rail destination
   hosted over the sale, the band used to keep the empty sale state — a

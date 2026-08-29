@@ -549,16 +549,31 @@ const bandStatRows = computed(() => {
  * §5), so no course index is passed. The printing itself belongs to the QZ
  * path — this only asks the server for the projection.
  */
-async function fire() {
+async function fire(): Promise<KotProjection | null> {
 	firing.value = true;
 	const startedAt = floorActionStart();
+	// Captured BEFORE the await: the sale-screen path returns to the salón
+	// right after this resolves, and returnToSalon drops the active order.
+	const firedTable = floorStore.activeOrder?.table || null;
 	try {
 		const projection = await floorStore.fireActiveCourse();
 		if (projection) {
 			floorActionEnd(startedAt);
+			// The SEND succeeded — the server took the diff. Say so NOW
+			// (critique B1): the print verdict below arrives seconds later
+			// and, with no printing spine, may never arrive at all.
+			bus.emit("show_message", {
+				title: __("Comanda enviada a cocina"),
+				color: "success",
+				timeout: 3000,
+			});
+			// A re-fire is the recovery gesture for a failed print — the old
+			// alert is stale the moment a new ticket is on its way.
+			floorStore.setKitchenAlert(firedTable, false);
 			bus.emit("floor_course_fired", projection);
-			void watchKitchenBatchVerdict(projection);
+			void watchKitchenBatchVerdict(projection, firedTable);
 		}
+		return projection;
 	} finally {
 		firing.value = false;
 	}
@@ -574,7 +589,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * the durable batch until the kitchen verifiably got paper, and shout when it
  * didn't. Fire-and-forget: never blocks the register.
  */
-async function watchKitchenBatchVerdict(projection: KotProjection) {
+async function watchKitchenBatchVerdict(projection: KotProjection, firedTable: string | null = null) {
 	const batchName = projection.batch?.name;
 	const orderUid = projection.orderUid;
 	const printedAnything =
@@ -592,6 +607,7 @@ async function watchKitchenBatchVerdict(projection: KotProjection) {
 		}
 		if (verdict.status === "unavailable") return; // no printing spine
 		if (verdict.status === "sent" || verdict.status === "confirmed") {
+			floorStore.setKitchenAlert(firedTable, false);
 			bus.emit("show_message", {
 				title: __("Comanda impresa en cocina"),
 				color: "success",
@@ -603,6 +619,10 @@ async function watchKitchenBatchVerdict(projection: KotProjection) {
 			verdict.status === "partial" ||
 			verdict.status === "cancelled"
 		) {
+			// The tile wears the failure too (critique B1): the waiter who
+			// fired and walked back to the salón never sees a toast — the
+			// table card is what they are looking at.
+			floorStore.setKitchenAlert(firedTable, true);
 			bus.emit("show_message", {
 				title: __("El ticket de cocina NO se imprimió completo — avisa a cocina"),
 				color: "error",
@@ -611,6 +631,7 @@ async function watchKitchenBatchVerdict(projection: KotProjection) {
 			return;
 		}
 	}
+	floorStore.setKitchenAlert(firedTable, true);
 	bus.emit("show_message", {
 		title: __("El ticket de cocina sigue sin imprimirse — revisa la impresora"),
 		color: "warning",
@@ -756,12 +777,18 @@ async function chargeSelectedAccount() {
 	if (order) chargeActiveOrder();
 }
 
-function onFireRequested() {
+async function onFireRequested() {
 	// From the sale screen the ticket in the cart IS the one to fire — a named
 	// cup tab has no table, so routing that press through the floor's selection
 	// would silently do nothing.
 	if (floorStore.activeOrder) {
-		void fire();
+		const projection = await fire();
+		// The round is in the kitchen; the service loop ends back in the room
+		// (critique B1 — «Enviar» used to leave the waiter staring at the same
+		// cart). Pos.vue answers with its flush → detach → clear discipline,
+		// and the salón lands with this table under the sheet. On failure the
+		// cart stays exactly where it was — nothing to walk away from.
+		if (projection) bus.emit("floor_return_to_salon");
 		return;
 	}
 	void sheetFire();

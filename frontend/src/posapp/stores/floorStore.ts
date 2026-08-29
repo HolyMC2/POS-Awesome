@@ -76,6 +76,13 @@ export const useFloorStore = defineStore("floor", () => {
 	const lastSyncedAt = ref<number | null>(null);
 	/** Table names with a write in flight — the plan draws them `syncing`. */
 	const syncingTables = ref<string[]>([]);
+	/**
+	 * Tables whose LAST fired comanda did not verifiably reach kitchen paper
+	 * (print verdict failed/partial/timed out — critique B1, 08-29). The floor
+	 * tile wears the alert so the failure survives the toast the waiter never
+	 * saw from across the room; a new fire for the table clears it.
+	 */
+	const kitchenAlertTables = ref<string[]>([]);
 	const transferOrder = ref<OrderRow | null>(null);
 	/** The order whose lines are currently loaded in the cart. */
 	const activeOrder = ref<OrderRow | null>(null);
@@ -138,6 +145,16 @@ export const useFloorStore = defineStore("floor", () => {
 		ordersForTable(table).reduce((sum, order) => sum + (Number(order.unsent_count) || 0), 0);
 
 	const isSyncing = (table: string): boolean => syncingTables.value.includes(table);
+
+	const hasKitchenAlert = (table: string): boolean => kitchenAlertTables.value.includes(table);
+
+	const setKitchenAlert = (table: string | null, on: boolean) => {
+		if (!table) return;
+		const present = kitchenAlertTables.value.includes(table);
+		if (on && !present) kitchenAlertTables.value = [...kitchenAlertTables.value, table];
+		else if (!on && present)
+			kitchenAlertTables.value = kitchenAlertTables.value.filter((t) => t !== table);
+	};
 
 	/**
 	 * The room at a glance, for the salón band.
@@ -405,6 +422,8 @@ export const useFloorStore = defineStore("floor", () => {
 		isOccupied,
 		unsentCountForTable,
 		isSyncing,
+		hasKitchenAlert,
+		setKitchenAlert,
 		// actions
 		activate,
 		deactivate,

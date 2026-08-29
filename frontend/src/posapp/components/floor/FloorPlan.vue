@@ -45,6 +45,17 @@
 							<span v-else-if="tile.seats" class="floor-tile__seats">{{ tile.seats }}</span>
 						</span>
 						<span v-if="tile.unsent" class="floor-tile__badge">{{ tile.unsent }}</span>
+						<!-- The print verdict outlives its toast here: a waiter who
+						     fired and walked back to the room is looking at the
+						     table, not at a message that expired behind them. A
+						     re-fire clears it (critique B1). -->
+						<span
+							v-if="tile.printAlert"
+							class="floor-tile__badge floor-tile__badge--print"
+							:title="verticalStore.t('Kitchen ticket did not print')"
+						>
+							<v-icon icon="mdi-printer-off" size="12" />
+						</span>
 						<span v-if="tile.pending" class="floor-tile__pending-dot" :title="pendingHint" />
 						<!-- The broom is itself the "mark clean" control: tapping the
 						     glyph clears the latch without opening the table, so a
@@ -202,6 +213,7 @@ const tiles = computed(() =>
 			seats: table.seats || 0,
 			total: occupied && total ? formatCurrency(total) : "",
 			unsent: floorStore.unsentCountForTable(table.name),
+			printAlert: floorStore.hasKitchenAlert(table.name),
 			needsCleaning: Boolean(table.needs_cleaning),
 			selected: table.name === props.selectedTable,
 			syncing: floorStore.isSyncing(table.name),
