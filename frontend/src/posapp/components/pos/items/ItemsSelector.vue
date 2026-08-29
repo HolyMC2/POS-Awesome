@@ -90,7 +90,7 @@
 					v-model:item-group="item_group"
 					v-model:items-view="items_view"
 					:active-price-list="active_price_list"
-					:show-price-list="pos_profile?.posa_enable_price_list_dropdown !== false"
+					:show-price-list="pos_profile?.posa_px_enable_price_list_dropdown !== false"
 					:initial-settings="{
 						new_line,
 						hide_qty_decimals,

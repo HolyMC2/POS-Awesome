@@ -318,7 +318,7 @@ export function useInvoiceCurrency() {
 		if (!pos_profile.value) return [];
 		const profileName = pos_profile.value.name;
 
-		if (pos_profile.value.posa_enable_price_list_dropdown) {
+		if (pos_profile.value.posa_px_enable_price_list_dropdown) {
 			try {
 				const r = await frappe.call({
 					method: "posawesome.posawesome.api.utilities.get_selling_price_lists",

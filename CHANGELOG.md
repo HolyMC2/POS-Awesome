@@ -4,6 +4,28 @@ All notable changes.
 
 ## Unreleased
 
+- **The rate band is drawn around the list that priced the cart (08-29).**
+  `assert_rates_within_band` (and the discount cap's base-rate fallback)
+  compared typed rates against the PROFILE's price list no matter what
+  actually priced the invoice — a phone financed off a customer's
+  «Crédito» default list at ~15% of the retail figure was refused at
+  submit even though the rate matched its list exactly. The guards now
+  resolve the same way pricing does (customer default → customer-group
+  default → profile; `_pricing_price_list` in `_reprice.py`), and
+  `_resolve_effective_price_list` learned the customer-group step so the
+  stored doc names the list the client displayed. A client-declared list
+  is honoured only when it matches a server-derivable source, or when the
+  profile's price-list selector blesses it — a declared list that earns
+  neither trust is *ignored*, not obeyed, so the tamper surface shrinks.
+  New: `posa_px_enable_price_list_dropdown` finally EXISTS
+  (`add_price_list_dropdown_field` patch + fixture) — the register's
+  price-list selector was gated on a field no patch ever created, and it
+  also hid inside the posting-date row, invisible unless
+  `posa_allow_change_posting_date` was on (PostingDateRow now gates each
+  column on its own flag). *How to verify:* give a customer a default
+  price list with a lower Item Price and submit a sale at exactly that
+  price — passes; double it — still blocked. Tests: `test_reprice.py`
+  `GuardPriceListResolutionTests` (9 new, 65 total), vitest 4770 ✓.
 - **Orden de servicio queue is fed by Taller's pull flow (08-24, lab).**
   `Taller App Settings.use_pos_charge_requests` was switched ON on
   doco-mirror (it defaults OFF and is still OFF on prod): Taller's «Cobrar»

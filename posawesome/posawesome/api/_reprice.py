@@ -25,7 +25,9 @@ This module provides three invariants called from ``update_invoice`` /
   * ``assert_rates_within_band(invoice_doc, profile_doc, ...)``
       If the POS Profile's ``posa_allow_user_to_edit_rate`` is OFF,
       every line's declared pre-discount ``price_list_rate`` must match
-      the Item Price for the profile's price list, and ``rate`` must be
+      the Item Price for the invoice's effective price list (customer
+      default → customer-group default → profile — see
+      ``_pricing_price_list``), and ``rate`` must be
       exactly that price with the line's declared discount applied
       (offers/pricing rules are not rate edits). If ON, the typed price
       must stay within ±``posa_px_max_rate_change_pct`` of the Item Price,
@@ -98,6 +100,76 @@ def _line_value(line: Any, key: str, default: Any = None) -> Any:
 
 _GRANTABLE_SENTINEL = object()
 _NON_ITEM_TOKENS = {"", "nothing", "null", "undefined", "none"}
+
+
+def _is_enabled_selling_price_list(price_list: str) -> bool:
+    """True when ``price_list`` is a real, enabled selling Price List."""
+    try:
+        enabled = frappe.db.get_value("Price List", price_list, "enabled")
+        selling = frappe.db.get_value("Price List", price_list, "selling")
+    except Exception:
+        return False
+    return bool(flt(enabled or 0)) and bool(flt(selling or 0))
+
+
+def _pricing_price_list(invoice_doc: Any, profile_doc: Any) -> Any:
+    """The price list this invoice's rates were actually drawn from.
+
+    The register prices the cart from the customer's default price list,
+    else the customer group's, else the profile's (client
+    ``get_effective_price_list``), and ``update_invoice`` stores the same
+    resolution on the doc. Judging typed rates against the PROFILE's list
+    while a customer list priced the cart rejects every honest sale on
+    that list — a phone financed off a credit price list at a fraction of
+    the retail figure sits far outside any band drawn around the retail
+    list, so the till refuses a correctly priced ticket.
+
+    The invoice's declared list is client-supplied on the direct-submit
+    path, so it is honoured only when it matches a server-derivable
+    source (customer / customer-group / profile list), or when the
+    profile's price-list dropdown (``posa_px_enable_price_list_dropdown``)
+    is on and the declared list is a real, enabled selling Price List —
+    turning the dropdown on IS the operator authorizing sales at any such
+    list's prices. A declared list that earns neither trust is ignored,
+    not obeyed: the guards then compare against the server-derived list,
+    which is strictly harder to game than the old profile-or-declared
+    fallback.
+
+    Lookups stay inline (twin of the ``muelle_demo`` conf read below):
+    importing invoice_processing here would drag its deps into the
+    stub-frappe unit harness.
+    """
+    declared = _line_value(invoice_doc, "selling_price_list") or None
+    profile_list = _profile_value(profile_doc, "selling_price_list")
+
+    customer_list = group_list = None
+    customer = _line_value(invoice_doc, "customer")
+    if customer:
+        try:
+            customer_list = frappe.db.get_value(
+                "Customer", customer, "default_price_list"
+            )
+            if not customer_list:
+                group = frappe.db.get_value("Customer", customer, "customer_group")
+                if group:
+                    group_list = frappe.db.get_value(
+                        "Customer Group", group, "default_price_list"
+                    )
+        except Exception:
+            frappe.log_error(
+                frappe.get_traceback(), "POSAwesome guard price-list lookup"
+            )
+
+    legitimate = {pl for pl in (customer_list, group_list, profile_list) if pl}
+    if declared and declared in legitimate:
+        return declared
+    if (
+        declared
+        and flt(_profile_value(profile_doc, "posa_px_enable_price_list_dropdown") or 0)
+        and _is_enabled_selling_price_list(declared)
+    ):
+        return declared
+    return customer_list or group_list or profile_list or declared
 
 
 def _server_grantable_free_items(invoice_doc: Any, profile_doc: Any) -> set | None:
@@ -235,9 +307,7 @@ def enforce_discount_limit(invoice_doc: Any, profile_doc: Any | None = None) -> 
     """
 
     profile_cap = flt(_profile_value(profile_doc, "posa_max_discount_allowed") or 0)
-    price_list = _profile_value(profile_doc, "selling_price_list") or _line_value(
-        invoice_doc, "selling_price_list"
-    )
+    price_list = _pricing_price_list(invoice_doc, profile_doc)
 
     for line in _iter_lines(invoice_doc):
         discount_pct = flt(_line_value(line, "discount_percentage") or 0)
@@ -453,7 +523,11 @@ def assert_rates_within_band(
     profile_doc: Any | None = None,
     band_pct: float | None = None,
 ) -> None:
-    """Validate line rates against Item Price for the profile's price list.
+    """Validate line rates against Item Price for the invoice's price list.
+
+    The comparison list is the one the cart was actually priced from —
+    customer default, else customer-group default, else the profile's
+    (``_pricing_price_list``) — NOT unconditionally the profile's.
 
     Three behaviors:
       * Profile blocks rate edits → the declared pre-discount
@@ -484,9 +558,7 @@ def assert_rates_within_band(
         pass
 
     allow_edit = bool(_profile_value(profile_doc, "posa_allow_user_to_edit_rate"))
-    price_list = _profile_value(profile_doc, "selling_price_list") or _line_value(
-        invoice_doc, "selling_price_list"
-    )
+    price_list = _pricing_price_list(invoice_doc, profile_doc)
     if not price_list:
         # Without a price list we have no source of truth to compare
         # against; skipping is safer than failing legitimate flows.

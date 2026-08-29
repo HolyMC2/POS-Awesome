@@ -49,6 +49,16 @@ def _build_frappe_module(scenario: dict) -> types.ModuleType:
                 return scenario.get("item_group", {}).get(filters)
             if doctype == "Item Group" and fieldname == "posa_px_skip_rate_band":
                 return scenario.get("group_skip_band", {}).get(filters)
+            if doctype == "Customer" and fieldname == "default_price_list":
+                return scenario.get("customer_price_list", {}).get(filters)
+            if doctype == "Customer" and fieldname == "customer_group":
+                return scenario.get("customer_group_of", {}).get(filters)
+            if doctype == "Customer Group" and fieldname == "default_price_list":
+                return scenario.get("group_price_list", {}).get(filters)
+            if doctype == "Price List" and fieldname == "enabled":
+                return scenario.get("price_list_enabled", {}).get(filters)
+            if doctype == "Price List" and fieldname == "selling":
+                return scenario.get("price_list_selling", {}).get(filters)
             if doctype == "Item Price":
                 if isinstance(filters, dict):
                     item_code = filters.get("item_code")
@@ -549,6 +559,140 @@ class RateBandTests(unittest.TestCase):
             "posa_px_max_rate_change_pct": 5,
         }
         rp.assert_rates_within_band(invoice, profile, band_pct=50)  # 140 ∈ 50..150
+
+
+# ---------------------------------------------------------------------------
+# guard price-list resolution (2026-08-29)
+# ---------------------------------------------------------------------------
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class GuardPriceListResolutionTests(unittest.TestCase):
+    """The band must be drawn around the list the cart was actually priced
+    from. A phone financed off a "Credito" list carries an honest rate that
+    is 15% of the retail figure; comparing it against the PROFILE's retail
+    list rejected the sale no matter which price list the operator set up.
+    Resolution now mirrors the pricing itself: customer default →
+    customer-group default → profile, with the declared list honoured only
+    when it matches one of those or the profile's price-list dropdown
+    blesses it (see _pricing_price_list)."""
+
+    def _credit_scenario(self):
+        return {
+            "item_prices": {
+                ("PH-1", "Standard Selling"): 10000.00,
+                ("PH-1", "Credito"): 1500.00,
+            },
+            "customer_price_list": {"C-CRED": "Credito"},
+            "customer_group_of": {"C-GRP": "Mayoreo", "C-PLAIN": "All Customer Groups"},
+            "group_price_list": {"Mayoreo": "Credito"},
+            "price_list_enabled": {"Credito": 1, "Lista Vacia": 1},
+            "price_list_selling": {"Credito": 1, "Lista Vacia": 1},
+        }
+
+    PROFILE = {"posa_allow_user_to_edit_rate": 1, "selling_price_list": "Standard Selling"}
+
+    def _invoice(self, rate, **kw):
+        return dict(
+            {"items": [{"idx": 1, "item_code": "PH-1", "rate": rate}]}, **kw
+        )
+
+    def test_customer_default_list_prices_the_band(self):
+        # 1500 is EXACTLY the Credito price — must pass even though it is
+        # 85% below the profile's retail list.
+        rp = _import_reprice(self._credit_scenario())
+        invoice = self._invoice(
+            1500.00, customer="C-CRED", selling_price_list="Credito"
+        )
+        rp.assert_rates_within_band(invoice, self.PROFILE)
+
+    def test_customer_default_list_still_bands_typos(self):
+        # The band moves WITH the list, it does not vanish: 3000 is double
+        # the Credito price and stays blocked.
+        rp = _import_reprice(self._credit_scenario())
+        invoice = self._invoice(
+            3000.00, customer="C-CRED", selling_price_list="Credito"
+        )
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(invoice, self.PROFILE)
+
+    def test_customer_group_default_list_prices_the_band(self):
+        rp = _import_reprice(self._credit_scenario())
+        invoice = self._invoice(
+            1500.00, customer="C-GRP", selling_price_list="Credito"
+        )
+        rp.assert_rates_within_band(invoice, self.PROFILE)
+
+    def test_declared_list_alone_is_not_trusted(self):
+        # Tamper: client declares a list nobody authorized (dropdown off,
+        # not the customer's, not the profile's). The guard falls back to
+        # the server-derived list and blocks the 85%-off rate.
+        rp = _import_reprice(self._credit_scenario())
+        invoice = self._invoice(
+            1500.00, customer="C-PLAIN", selling_price_list="Credito"
+        )
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(invoice, self.PROFILE)
+
+    def test_dropdown_blesses_declared_enabled_selling_list(self):
+        rp = _import_reprice(self._credit_scenario())
+        profile = dict(self.PROFILE, posa_px_enable_price_list_dropdown=1)
+        invoice = self._invoice(
+            1500.00, customer="C-PLAIN", selling_price_list="Credito"
+        )
+        rp.assert_rates_within_band(invoice, profile)
+
+    def test_dropdown_rejects_unknown_declared_list(self):
+        # Declared list is not a real enabled selling Price List — ignored,
+        # profile list judges the rate.
+        rp = _import_reprice(self._credit_scenario())
+        profile = dict(self.PROFILE, posa_px_enable_price_list_dropdown=1)
+        invoice = self._invoice(
+            1500.00, customer="C-PLAIN", selling_price_list="Lista Fantasma"
+        )
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(invoice, profile)
+
+    def test_dropdown_empty_list_skips_like_profile_list_does(self):
+        # A blessed list with no Item Price row for the item skips the line
+        # (same legacy-item behavior the profile list has always had).
+        rp = _import_reprice(self._credit_scenario())
+        profile = dict(self.PROFILE, posa_px_enable_price_list_dropdown=1)
+        invoice = self._invoice(
+            999.00, customer="C-PLAIN", selling_price_list="Lista Vacia"
+        )
+        rp.assert_rates_within_band(invoice, profile)
+
+    def test_no_customer_no_declared_keeps_profile_list(self):
+        rp = _import_reprice(self._credit_scenario())
+        invoice = self._invoice(10000.00)
+        rp.assert_rates_within_band(invoice, self.PROFILE)
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(self._invoice(1500.00), self.PROFILE)
+
+    def test_discount_cap_uses_effective_list_for_base_rate(self):
+        # enforce_discount_limit's fixed-amount fallback looks up the base
+        # rate on the same effective list: a $150 discount on the Credito
+        # price of 1500 is 10% — inside a 20% cap that the retail list's
+        # 10000 base would also have passed, but a $400 discount (26.7%)
+        # must be judged against 1500, not 10000.
+        scenario = dict(self._credit_scenario())
+        scenario["item_max_discount"] = {"PH-1": 20}
+        rp = _import_reprice(scenario)
+        profile = dict(self.PROFILE)
+        ok = {
+            "customer": "C-CRED",
+            "selling_price_list": "Credito",
+            "items": [{"idx": 1, "item_code": "PH-1", "rate": 1350.00, "discount_amount": 150.00}],
+        }
+        rp.enforce_discount_limit(ok, profile)
+        too_deep = {
+            "customer": "C-CRED",
+            "selling_price_list": "Credito",
+            "items": [{"idx": 1, "item_code": "PH-1", "rate": 1100.00, "discount_amount": 400.00}],
+        }
+        with self.assertRaises(_PermissionError):
+            rp.enforce_discount_limit(too_deep, profile)
 
 
 # ---------------------------------------------------------------------------

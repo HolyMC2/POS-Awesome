@@ -98,6 +98,7 @@ after_migrate = [
     "posawesome.patches.add_gift_card_pos_profile_settings.execute",
     "posawesome.patches.add_customer_card_pos_profile_settings.execute",
     "posawesome.patches.add_rate_band_controls.execute",
+    "posawesome.patches.add_price_list_dropdown_field.execute",
     "posawesome.patches.add_gift_card_invoice_redemption_fields.execute",
     "posawesome.patches.add_quotation_conversion_fields.execute",
     "posawesome.patches.add_credit_note_print_format.execute",
@@ -309,6 +310,10 @@ fixtures = [
                     "POS Profile-posa_px_max_rate_change_pct",
                     "Item-posa_px_skip_rate_band",
                     "Item Group-posa_px_skip_rate_band",
+                    # Price-list selector (add_price_list_dropdown_field):
+                    # the register UI and the rate-band guard were already
+                    # reading this flag; the field itself never existed.
+                    "POS Profile-posa_px_enable_price_list_dropdown",
                     "POS Profile-posa_allow_user_to_edit_additional_discount",
                     "POS Profile-posa_allow_user_to_edit_item_discount",
                     "POS Profile-posa_display_items_in_stock",

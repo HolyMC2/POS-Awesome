@@ -81,11 +81,51 @@ def _resolve_effective_price_list(
     pos_profile: str | None,
     fallback_price_list: str | None = None,
 ) -> str | None:
+    """Price list the invoice is stored and validated under.
+
+    Mirrors the client's ``get_effective_price_list`` (customer default →
+    customer-group default → profile) so the stored doc names the list the
+    cart was actually priced from. When the profile's price-list dropdown
+    (``posa_px_enable_price_list_dropdown``) is on, an explicitly declared
+    list wins first: the dropdown choice arrives as the invoice's
+    ``selling_price_list`` (our ``fallback_price_list``), and resolving
+    past it would silently revert the doc to the customer/profile list
+    while the line rates keep the switched prices. Only a real, enabled
+    selling Price List is honoured that way — the declared value is
+    client-supplied.
+    """
+    if fallback_price_list and pos_profile:
+        try:
+            dropdown_on = cint(
+                frappe.db.get_value(
+                    "POS Profile", pos_profile, "posa_px_enable_price_list_dropdown"
+                )
+                or 0
+            )
+        except Exception:
+            # Site predates the dropdown field; nothing to honour.
+            dropdown_on = 0
+        if dropdown_on:
+            pl = frappe.db.get_value(
+                "Price List", fallback_price_list, ["enabled", "selling"], as_dict=True
+            )
+            if pl and cint(pl.enabled) and cint(pl.selling):
+                return fallback_price_list
+
     customer_price_list = None
     if customer_name:
         customer_price_list = frappe.db.get_value("Customer", customer_name, "default_price_list")
     if customer_price_list:
         return customer_price_list
+
+    if customer_name:
+        customer_group = frappe.db.get_value("Customer", customer_name, "customer_group")
+        if customer_group:
+            group_price_list = frappe.db.get_value(
+                "Customer Group", customer_group, "default_price_list"
+            )
+            if group_price_list:
+                return group_price_list
 
     if pos_profile:
         profile_price_list = frappe.db.get_value("POS Profile", pos_profile, "selling_price_list")

@@ -15,7 +15,7 @@
 					@update:model-value="$emit('update:modelValue', $event)"
 				></v-select>
 			</v-col>
-			<v-col cols="12" class="mb-2" v-if="posProfile.posa_enable_price_list_dropdown !== false">
+			<v-col cols="12" class="mb-2" v-if="posProfile.posa_px_enable_price_list_dropdown !== false">
 				<v-text-field
 					density="compact"
 					variant="solo"
