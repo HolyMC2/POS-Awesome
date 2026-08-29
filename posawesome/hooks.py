@@ -93,6 +93,7 @@ after_migrate = [
     "posawesome.patches.add_customer_card_pos_profile_settings.execute",
     "posawesome.patches.add_rate_band_controls.execute",
     "posawesome.patches.add_price_list_dropdown_field.execute",
+    "posawesome.patches.add_kitchen_ticket_state_fields.execute",
     "posawesome.patches.add_gift_card_invoice_redemption_fields.execute",
     "posawesome.patches.add_quotation_conversion_fields.execute",
     "posawesome.patches.add_credit_note_print_format.execute",
@@ -315,6 +316,12 @@ fixtures = [
                     # the register UI and the rate-band guard were already
                     # reading this flag; the field itself never existed.
                     "POS Profile-posa_px_enable_price_list_dropdown",
+                    # Kitchen-ticket service lifecycle (critique B3,
+                    # add_kitchen_ticket_state_fields): the bump lives on
+                    # doco's print batch, in the posa_rt_ restaurant space.
+                    "Doco Print Batch-posa_rt_kitchen_state",
+                    "Doco Print Batch-posa_rt_bumped_at",
+                    "Doco Print Batch-posa_rt_bumped_by",
                     "POS Profile-posa_allow_user_to_edit_additional_discount",
                     "POS Profile-posa_allow_user_to_edit_item_discount",
                     "POS Profile-posa_display_items_in_stock",

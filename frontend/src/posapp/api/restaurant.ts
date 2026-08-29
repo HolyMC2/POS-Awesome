@@ -106,6 +106,10 @@ const METHODS = {
 		"posawesome.posawesome.api.restaurant.kot.get_fire_batch_status",
 	listKitchenBatches:
 		"posawesome.posawesome.api.restaurant.kot.list_kitchen_batches",
+	bumpKitchenTicket:
+		"posawesome.posawesome.api.restaurant.kot.bump_kitchen_ticket",
+	recallKitchenTicket:
+		"posawesome.posawesome.api.restaurant.kot.recall_kitchen_ticket",
 	markTableClean: "posawesome.posawesome.api.restaurant.floors.mark_table_clean",
 } as const;
 
@@ -460,6 +464,10 @@ export interface KitchenBatchRow {
 	job_count: number;
 	sent_count: number;
 	failed_count: number;
+	/** "" = in service · "Bumped" = the kitchen marked it served (B3). */
+	kitchen_state: string;
+	bumped_at: string;
+	bumped_by: string;
 }
 
 /**
@@ -477,6 +485,28 @@ export async function listKitchenBatches(posProfile: string, limit = 30) {
 		batches: (result?.batches as KitchenBatchRow[]) || [],
 		serverTime: (result?.server_time as string) || null,
 	};
+}
+
+/**
+ * The kitchen's own lifecycle verb (critique B3): mark one ticket served.
+ * Idempotent server-side; the board presses it today and the KDS will press
+ * the same endpoint from a kitchen screen. ONLINE ONLY.
+ */
+export async function bumpKitchenTicket(posProfile: string, batchName: string) {
+	const result = await callRestaurant(METHODS.bumpKitchenTicket, {
+		pos_profile: posProfile,
+		batch_name: batchName,
+	});
+	return { kitchenState: (result?.kitchen_state as string) || "" };
+}
+
+/** Undo a bump — the expo pulled the plate back. ONLINE ONLY. */
+export async function recallKitchenTicket(posProfile: string, batchName: string) {
+	const result = await callRestaurant(METHODS.recallKitchenTicket, {
+		pos_profile: posProfile,
+		batch_name: batchName,
+	});
+	return { kitchenState: (result?.kitchen_state as string) || "" };
 }
 
 /** ONLINE ONLY — see the module header. */

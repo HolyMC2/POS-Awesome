@@ -78,6 +78,35 @@
 						</span>
 						<span class="comandas__by">{{ shortUser(batch.fired_by) }}</span>
 					</div>
+					<!-- The lifecycle verb (critique B3). A void has nothing to
+					     serve; everything else can be bumped even off a failed
+					     print — the kitchen may have cooked from the screen. -->
+					<div v-if="!batch.is_void" class="comandas__actions">
+						<button
+							v-if="batch.kitchen_state !== 'Bumped'"
+							type="button"
+							class="comandas__bump"
+							:disabled="busy.has(batch.name)"
+							data-testid="comandas-bump"
+							@click="bump(batch)"
+						>
+							<v-icon icon="mdi-check-bold" size="14" /> {{ __("Served") }}
+						</button>
+						<template v-else>
+							<span class="comandas__bumped-by">
+								{{ shortUser(batch.bumped_by) }} · {{ __("served") }}
+							</span>
+							<button
+								type="button"
+								class="comandas__recall"
+								:disabled="busy.has(batch.name)"
+								data-testid="comandas-recall"
+								@click="recall(batch)"
+							>
+								{{ __("Recall") }}
+							</button>
+						</template>
+					</div>
 				</article>
 				<p v-if="!lane.batches.length" class="comandas__lane-empty">·</p>
 			</div>
@@ -100,7 +129,12 @@
  * fires (`floor_course_fired` rides the same bus the toast does).
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { listKitchenBatches, type KitchenBatchRow } from "../../../../api/restaurant";
+import {
+	bumpKitchenTicket,
+	listKitchenBatches,
+	recallKitchenTicket,
+	type KitchenBatchRow,
+} from "../../../../api/restaurant";
 import { ageStep, idleMinutes, parseServerTime } from "../../../floor/floorClock";
 import { useVerticalStore } from "../../../../stores/verticalStore";
 import { useUIStore } from "../../../../stores/uiStore";
@@ -167,8 +201,15 @@ onBeforeUnmount(() => {
 const lanes = computed(() => {
 	const pending: KitchenBatchRow[] = [];
 	const printed: KitchenBatchRow[] = [];
+	const served: KitchenBatchRow[] = [];
 	const failed: KitchenBatchRow[] = [];
 	for (const batch of batches.value) {
+		// The human act outranks the printer's verdict: a bumped ticket is
+		// SERVED even if its paper failed — the kitchen cooked it anyway.
+		if (batch.kitchen_state === "Bumped") {
+			served.push(batch);
+			continue;
+		}
 		const status = String(batch.status || "").toLowerCase();
 		if (FAILED_STATUSES.has(status)) failed.push(batch);
 		else if (PRINTED_STATUSES.has(status)) printed.push(batch);
@@ -177,9 +218,41 @@ const lanes = computed(() => {
 	return [
 		{ id: "cocina", label: __("Printing"), batches: pending },
 		{ id: "impresas", label: __("In the kitchen"), batches: printed },
+		{ id: "servidas", label: __("Served"), batches: served },
 		{ id: "fallidas", label: __("Print failed"), batches: failed },
 	];
 });
+
+// Optimistic per-ticket state moves: flip locally, confirm with a silent
+// refresh; on failure the refresh restores the server's truth either way.
+const busy = ref(new Set<string>());
+
+const withTicket = async (
+	batch: KitchenBatchRow,
+	call: () => Promise<{ kitchenState: string }>,
+	optimistic: string,
+) => {
+	busy.value = new Set(busy.value).add(batch.name);
+	const previous = batch.kitchen_state;
+	batch.kitchen_state = optimistic;
+	try {
+		await call();
+	} catch (err: any) {
+		batch.kitchen_state = previous;
+		errorMessage.value = err?.message || String(err);
+	} finally {
+		const next = new Set(busy.value);
+		next.delete(batch.name);
+		busy.value = next;
+		void refresh(true);
+	}
+};
+
+const bump = (batch: KitchenBatchRow) =>
+	withTicket(batch, () => bumpKitchenTicket(profileName.value, batch.name), "Bumped");
+
+const recall = (batch: KitchenBatchRow) =>
+	withTicket(batch, () => recallKitchenTicket(profileName.value, batch.name), "");
 
 const windowLabel = computed(() => __("last 12 h"));
 
@@ -250,7 +323,7 @@ const shortUser = (user: string) => String(user || "").split("@")[0] || "";
 /* The one inner scrollport (flows-sheet discipline). */
 .comandas__lanes {
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 	gap: var(--pos-space-3);
 	overflow-y: auto;
 	min-height: 0;
@@ -349,6 +422,44 @@ const shortUser = (user: string) => String(user || "").split("@")[0] || "";
 }
 .comandas__by {
 	margin-left: auto;
+}
+.comandas__actions {
+	display: flex;
+	align-items: center;
+	gap: var(--pos-space-2);
+	margin-top: 2px;
+}
+.comandas__bump,
+.comandas__recall {
+	border: 1px solid var(--pos-border-light);
+	border-radius: var(--pos-radius-sm);
+	background: var(--pos-surface-raised);
+	padding: 2px 10px;
+	font-size: 12.5px;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.comandas__bump {
+	color: var(--pos-success, #1b7d4f);
+	border-color: currentColor;
+	font-weight: 700;
+}
+.comandas__recall {
+	color: var(--pos-text-secondary);
+}
+.comandas__bump:disabled,
+.comandas__recall:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.comandas__bumped-by {
+	font-size: 12px;
+	color: var(--pos-text-secondary);
+}
+.comandas__lane-title--servidas {
+	color: var(--pos-success, #1b7d4f);
 }
 @media (max-width: 900px) {
 	.comandas__lanes {

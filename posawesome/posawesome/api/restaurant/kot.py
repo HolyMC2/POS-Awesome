@@ -550,6 +550,24 @@ def list_kitchen_batches(pos_profile, limit=30):
         return {"batches": [], "server_time": server_time}
 
     limit = min(max(cint(limit) or 30, 1), 100)
+    # The lifecycle columns land by patch (add_kitchen_ticket_state_fields);
+    # a site mid-rollout must keep its board rather than 500 on a column the
+    # migrate has not created yet — the servida lane simply stays empty.
+    has_state = frappe.db.has_column("Doco Print Batch", "posa_rt_kitchen_state")
+    fields = [
+        "name",
+        "status",
+        "source_name",
+        "event_key",
+        "creation",
+        "owner",
+        "projection_json",
+        "job_count",
+        "sent_count",
+        "failed_count",
+    ]
+    if has_state:
+        fields += ["posa_rt_kitchen_state", "posa_rt_bumped_at", "posa_rt_bumped_by"]
     rows = frappe.get_all(
         "Doco Print Batch",
         filters={
@@ -557,18 +575,7 @@ def list_kitchen_batches(pos_profile, limit=30):
             "event_key": ["like", "posa-kot%"],
             "creation": [">=", add_to_date(now_datetime(), hours=-BOARD_WINDOW_HOURS)],
         },
-        fields=[
-            "name",
-            "status",
-            "source_name",
-            "event_key",
-            "creation",
-            "owner",
-            "projection_json",
-            "job_count",
-            "sent_count",
-            "failed_count",
-        ],
+        fields=fields,
         order_by="creation desc",
         # Overfetch: the profile join below drops other registers' traffic,
         # and a busy multi-register site would otherwise starve the board.
@@ -613,9 +620,94 @@ def list_kitchen_batches(pos_profile, limit=30):
                 "job_count": cint(row.job_count),
                 "sent_count": cint(row.sent_count),
                 "failed_count": cint(row.failed_count),
+                "kitchen_state": (row.get("posa_rt_kitchen_state") or "") if has_state else "",
+                "bumped_at": str(row.get("posa_rt_bumped_at") or "") if has_state else "",
+                "bumped_by": (row.get("posa_rt_bumped_by") or "") if has_state else "",
             }
         )
         if len(batches) >= limit:
             break
 
     return {"batches": batches, "server_time": server_time}
+
+
+def _scoped_kitchen_batch(pos_profile, batch_name):
+    """The write-side twin of the board's join: profile assert, capability,
+    then prove the batch's source order belongs to THIS register before any
+    state moves. A bump on another register's ticket is the same horizontal
+    IDOR the read already refuses — silently there, loudly here."""
+    from posawesome.posawesome.api._scope import assert_profile
+
+    assert_profile(frappe.session.user, pos_profile)
+    assert_tables_capability(pos_profile)
+    frappe.has_permission("POS Table Order", "write", throw=True)
+
+    if not frappe.db.exists("DocType", "Doco Print Batch"):
+        frappe.throw(_("This site has no kitchen ticket spine."))
+    if not frappe.db.has_column("Doco Print Batch", "posa_rt_kitchen_state"):
+        frappe.throw(_("Kitchen ticket states are not installed yet — run migrate."))
+
+    row = frappe.db.get_value(
+        "Doco Print Batch",
+        batch_name,
+        ["name", "source_doctype", "source_name", "event_key"],
+        as_dict=True,
+    )
+    if (
+        not row
+        or row.source_doctype != "POS Table Order"
+        or not str(row.event_key or "").startswith("posa-kot")
+    ):
+        frappe.throw(_("Kitchen ticket {0} does not exist.").format(batch_name))
+    order_profile = frappe.db.get_value("POS Table Order", row.source_name, "pos_profile")
+    if order_profile != pos_profile:
+        frappe.throw(
+            _("Kitchen ticket {0} does not belong to this register.").format(batch_name),
+            frappe.PermissionError,
+        )
+    return row
+
+
+@frappe.whitelist(methods=["POST"])
+def bump_kitchen_ticket(pos_profile, batch_name):
+    """Mark one kitchen ticket served (critique B3) — idempotent.
+
+    This verb is the whole lifecycle: printed paper says nothing about
+    whether the food left the pass, and the «servida» lane must come from a
+    human act, not from a printer verdict. Today the comandas board presses
+    it; the KDS (critique D1) will press the SAME verb from a kitchen
+    screen, which is why it lives here and nowhere else.
+    """
+    row = _scoped_kitchen_batch(pos_profile, batch_name)
+    if frappe.db.get_value("Doco Print Batch", row.name, "posa_rt_kitchen_state") == "Bumped":
+        return {"batch": row.name, "kitchen_state": "Bumped", "already": True}
+    frappe.db.set_value(
+        "Doco Print Batch",
+        row.name,
+        {
+            "posa_rt_kitchen_state": "Bumped",
+            "posa_rt_bumped_at": now_datetime(),
+            "posa_rt_bumped_by": frappe.session.user,
+        },
+        update_modified=False,
+    )
+    return {"batch": row.name, "kitchen_state": "Bumped", "already": False}
+
+
+@frappe.whitelist(methods=["POST"])
+def recall_kitchen_ticket(pos_profile, batch_name):
+    """Undo a bump — the expo pulled the plate back. Clears the state; the
+    bump columns clear with it so a later bump is a fresh fact, not an edit
+    of a stale one."""
+    row = _scoped_kitchen_batch(pos_profile, batch_name)
+    frappe.db.set_value(
+        "Doco Print Batch",
+        row.name,
+        {
+            "posa_rt_kitchen_state": "",
+            "posa_rt_bumped_at": None,
+            "posa_rt_bumped_by": None,
+        },
+        update_modified=False,
+    )
+    return {"batch": row.name, "kitchen_state": ""}

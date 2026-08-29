@@ -4,6 +4,22 @@ All notable changes.
 
 ## Unreleased
 
+- **The kitchen ticket grows a lifecycle — the bump (08-29, critique B3).**
+  Printed paper says nothing about whether the food left the pass. Three
+  `posa_rt_` fields on `Doco Print Batch` (state / bumped_at / bumped_by,
+  patch `add_kitchen_ticket_state_fields`, guarded on the doctype so
+  doco-less sites skip cleanly) and two scoped verbs in kot.py:
+  `bump_kitchen_ticket` (idempotent) and `recall_kitchen_ticket`, both
+  behind the same profile→order join the board reads through — a bump on
+  another register's ticket is a PermissionError. The comandas board
+  grows its real «Servida» lane: a bumped ticket is served even off a
+  failed print (the human act outranks the printer's verdict), with
+  optimistic flips, per-ticket busy locks, who-served attribution, and
+  «Recuperar» when the expo pulls a plate back. The KDS (D1) will press
+  the SAME bump endpoint from the kitchen side — that is why it lives in
+  kot.py and nowhere else. list_kitchen_batches degrades gracefully
+  mid-rollout (has_column guard: no columns → empty servida lane, never
+  a 500). vitest 4784 ✓, vue-tsc 0, coverage checker 239/239, es.csv +3.
 - **The comandas board (08-29, critique B2).** The floor answered «which
   table do I open?»; nothing answered «what is in the kitchen and how old
   is it?». New «Comandas» rail destination (floor-gated, table-service
