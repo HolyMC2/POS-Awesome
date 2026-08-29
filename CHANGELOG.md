@@ -4,6 +4,16 @@ All notable changes.
 
 ## Unreleased
 
+- **Safe-transfer profile settings removed (08-29).** The three POS Profile
+  fields (`posa_enable_safe_transfer`, `posa_bank_deposit_account`,
+  `posa_safe_transfer_max_amount`) gated five whitelisted endpoints that no
+  SPA code ever calls — a feature with no surface, never configured on any
+  tenant (all profiles 0, zero POS Safe Transfer docs). Fields deleted
+  (`remove_safe_transfer_profile_fields`, after_migrate); endpoints stay
+  and now refuse cleanly; the `POS Safe Transfer` doctype and its Desk
+  path (validated against the cash-movement back-office account) are
+  untouched. *Safe to skip if:* you never heard of safe transfers — that
+  is the point.
 - **The rate band is drawn around the list that priced the cart (08-29).**
   `assert_rates_within_band` (and the discount cap's base-rate fallback)
   compared typed rates against the PROFILE's price list no matter what

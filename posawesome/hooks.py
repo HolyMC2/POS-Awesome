@@ -84,7 +84,7 @@ after_uninstall = "posawesome.uninstall.after_uninstall"
 after_migrate = [
     "posawesome.patches.add_pos_cash_movement_settings.execute",
     "posawesome.patches.add_cash_movement_to_workspace.execute",
-    "posawesome.patches.add_safe_transfer_settings.execute",
+    "posawesome.patches.remove_safe_transfer_profile_fields.execute",
     "posawesome.patches.add_customer_display_settings.execute",
     "posawesome.patches.add_dashboard_settings.execute",
     "posawesome.patches.add_dashboard_global_settings.execute",
@@ -454,9 +454,10 @@ fixtures = [
                     "POS Profile-posa_allow_delete_cancelled_cash_movement",
                     "POS Profile-posa_require_cash_movement_remarks",
                     "POS Profile-posa_cash_movement_max_amount",
-                    "POS Profile-posa_enable_safe_transfer",
-                    "POS Profile-posa_bank_deposit_account",
-                    "POS Profile-posa_safe_transfer_max_amount",
+                    # Safe-transfer profile fields removed 2026-08-29
+                    # (remove_safe_transfer_profile_fields): the feature has
+                    # no SPA surface, was never configured on any tenant, and
+                    # the endpoints fail closed without them.
                     "POS Profile-posa_section_awesome_dashboard",
                     "POS Profile-posa_enable_awesome_dashboard",
                     "POS Profile-posa_allow_company_dashboard_scope",
