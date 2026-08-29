@@ -233,6 +233,34 @@ describe("Cafetería · Cafeteria.dc.html · ticket C-0184", () => {
 	});
 });
 
+describe("hostedContext · a destination owns the stage (critique A1, 08-29)", () => {
+	it("carries the parked sale's total and offers only the way back", () => {
+		const state = resolveBandState({ kind: "hostedContext", total: 1129, itemCount: 9 });
+		expect(state.kind).toBe("hostedContext");
+		expect(state.value).toBe(1129);
+		expect(state.labelParams).toEqual([9]);
+		expect(state.primaryAction.id).toBe("sale.return");
+		expect(state.tone).toBe("neutral");
+	});
+
+	it("stays pressable on an empty cart — the way out is never greyed", () => {
+		const state = resolveBandState({ kind: "hostedContext", total: 0, itemCount: 0 });
+		expect(state.primaryEnabled).toBe(true);
+		expect(state.value).toBe(0);
+	});
+
+	it("never resolves to PAGAR — that verb belongs to a surface that can pay", () => {
+		const state = resolveBandState({ kind: "hostedContext", total: 500, itemCount: 2 });
+		expect(state.primaryAction.id).not.toBe("sale.pay");
+	});
+
+	it("survives junk input rather than rendering NaN over Gasto", () => {
+		const state = resolveBandState({ kind: "hostedContext", total: undefined, itemCount: null });
+		expect(state.value).toBe(0);
+		expect(state.labelParams).toEqual([0]);
+	});
+});
+
 describe("the invariant, structurally", () => {
 	const everyKind = [
 		resolveBandState({ kind: "sale", total: 1129, itemCount: 9 }),

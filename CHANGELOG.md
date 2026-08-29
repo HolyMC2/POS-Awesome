@@ -4,6 +4,21 @@ All notable changes.
 
 ## Unreleased
 
+- **The band stops lying on hosted destinations (08-29, critique A1/A2).**
+  With Gasto, Cobranza, Borradores, Facturas or any other rail destination
+  hosted over the sale, the band used to keep the empty sale state — a
+  full-size (disabled) PAGAR, $0.00, tax rows and tender chips over a
+  surface that cannot pay. New `hostedContext` band state: the one true
+  number (the parked sale's total · item count) and the one true verb —
+  «VOLVER A VENTA», wired to `destinationRouting.activate("sale")` (not
+  `dismiss()`, which restores the *previous* destination). Destinations
+  that publish an adoptable band (Recargas, Orden, Cobro) still win; the
+  context state is the fall-through for everything that publishes
+  nothing. The sale furniture goes with it: Pos.vue publishes the hosted
+  destination to `uiStore.hostedDestination`, and InvoiceSummary's
+  band-lane teleports stand down via `bandOwnedElsewhere` — senders
+  gated, lane targets untouched (the r9 deferred-teleport crash trap).
+  Tests: 4 new bandState cases (4775 ✓), vue-tsc 0.
 - **The corte counts tips out (08-29, critique B5).** Tips were wired
   end-to-end at settle (RestaurantTipSelector → settle_table_order →
   posa_rt_tip_amount + PROPINA line, capability-gated) but the closing

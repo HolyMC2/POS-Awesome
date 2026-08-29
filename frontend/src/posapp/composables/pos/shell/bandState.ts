@@ -38,7 +38,8 @@ export type BandKind =
 	| "closing"
 	| "queued"
 	| "floorAccount"
-	| "tableSale";
+	| "tableSale"
+	| "hostedContext";
 
 /**
  * Stable action ids, decoupled from key bindings so the shortcuts engine
@@ -54,7 +55,8 @@ export type BandActionId =
 	| "shift.close"
 	| "offline.keepSelling"
 	| "floor.chargeAccount"
-	| "table.saveAndReturn";
+	| "table.saveAndReturn"
+	| "sale.return";
 
 export interface BandAction {
 	id: BandActionId;
@@ -151,7 +153,15 @@ export type BandInput =
 	 * ends by putting the round on the cuenta and going back to the room
 	 * (CAFETERIA_GOLDEN_FLOW.md §3).
 	 */
-	| { kind: "tableSale"; total: unknown; accountLabel?: string; lineCount?: unknown };
+	| { kind: "tableSale"; total: unknown; accountLabel?: string; lineCount?: unknown }
+	/**
+	 * A hosted destination (Gasto, Cobranza, Borradores…) owns the stage and
+	 * has published no band of its own. The band must not keep wearing the
+	 * sale's PAGAR over a surface that cannot pay — the one thing it can
+	 * honestly say is that the sale is still there behind the sheet, and the
+	 * one thing it can honestly do is go back to it (critique A1, 08-29).
+	 */
+	| { kind: "hostedContext"; total: unknown; itemCount?: unknown };
 
 /**
  * Resolve the band for the current moment.
@@ -360,6 +370,22 @@ export function resolveBandState(input: BandInput): BandState {
 				// Always pressable, including on an empty cuenta: going back to
 				// the room is how a waiter leaves a table they opened by mistake,
 				// and «Liberar mesa» lives on the mesa sheet, not here.
+				primaryEnabled: true,
+			};
+		}
+
+		case "hostedContext": {
+			const total = round2(num(input.total));
+			const itemCount = Math.trunc(num(input.itemCount));
+			return {
+				kind: "hostedContext",
+				tone: "neutral",
+				value: total,
+				labelKey: "Sale in progress · {0} items",
+				labelParams: [itemCount],
+				primaryAction: { id: "sale.return", labelKey: "BACK TO SALE" },
+				// Always pressable: the sale view is always there to return to,
+				// empty cart included — the way out must never be greyed.
 				primaryEnabled: true,
 			};
 		}

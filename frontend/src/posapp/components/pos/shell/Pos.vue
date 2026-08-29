@@ -1066,6 +1066,7 @@ export default {
 		// rail is the nav, and pick it back up the moment the shell unmounts.
 		watch(railVisible, (visible) => uiStore.setRailLayout(visible), { immediate: true });
 		onBeforeUnmount(() => uiStore.setRailLayout(false));
+		onBeforeUnmount(() => uiStore.setHostedDestination(null));
 
 		// Borradores still has no read model: `resolveBadge` renders nothing for
 		// 0, so the rail shows no badge rather than a wrong one, and inventing a
@@ -1210,10 +1211,12 @@ export default {
 				openSheet: (id) => {
 					destinationRefusal.value = null;
 					hostedDestinationId.value = id;
+					uiStore.setHostedDestination(id);
 				},
 				closeSheet: () => {
 					destinationRefusal.value = null;
 					hostedDestinationId.value = null;
+					uiStore.setHostedDestination(null);
 				},
 				navigate: (path) => {
 					router.push(path).catch(() => {});
@@ -1224,6 +1227,7 @@ export default {
 				refuse: (decision) => {
 					destinationRefusal.value = decision.reason;
 					hostedDestinationId.value = decision.destination?.id ?? null;
+					uiStore.setHostedDestination(hostedDestinationId.value);
 				},
 			},
 		);
@@ -1749,6 +1753,17 @@ export default {
 				);
 			}
 			if (hostedBandState.value) return hostedBandState.value;
+			if (hostedDestinationId.value) {
+				// A destination is up and published no band of its own: the
+				// sale band's PAGAR would be a lie over Gasto or Borradores
+				// (critique A1). Say the one true thing — the sale is still
+				// behind the sheet — and offer the one true verb: going back.
+				return resolveBandState({
+					kind: "hostedContext",
+					total: invoiceTotal.value,
+					itemCount: itemsCount.value,
+				});
+			}
 			if (mesaSaleActive.value) {
 				return resolveBandState({
 					kind: "tableSale",
@@ -1799,6 +1814,14 @@ export default {
 		const onBandPrimary = (actionId) => {
 			if (actionId === "sale.pay") {
 				triggerInvoicePay();
+				return;
+			}
+			if (actionId === "sale.return") {
+				// The hostedContext band's promise is the SALE, not "whatever
+				// was open before" — activate it by name rather than dismiss(),
+				// which restores the previous destination (another sheet, after
+				// Gasto → Cobranza → back).
+				destinationRouting.activate("sale", "shortcut");
 				return;
 			}
 			if (actionId === "table.saveAndReturn") {

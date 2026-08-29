@@ -69,6 +69,18 @@ export const useUIStore = defineStore("ui", () => {
     railLayout.value = Boolean(value);
   };
 
+  /**
+   * The rail destination currently hosted over the sale stage (Gasto,
+   * Cobranza, Borradores…), or null when the sale owns the stage. Published
+   * by Pos.vue's sheet effects so surfaces that stay mounted BEHIND the
+   * sheet (InvoiceSummary's band-lane teleports) can stand down — the band
+   * is not the sale's while a destination is up (critique A1/A2, 08-29).
+   */
+  const hostedDestination = ref<string | null>(null);
+  const setHostedDestination = (value: string | null) => {
+    hostedDestination.value = value || null;
+  };
+
   const invoiceManagementDialog = ref(false);
   const invoiceManagementTargetTab = ref<string>("history");
   const invoiceManagementDraftSource = ref<string>("invoice");
@@ -428,6 +440,8 @@ export const useUIStore = defineStore("ui", () => {
     paymentDialogOpen,
     railLayout,
     setRailLayout,
+    hostedDestination,
+    setHostedDestination,
     invoiceManagementDialog,
     invoiceManagementTargetTab,
     invoiceManagementDraftSource,

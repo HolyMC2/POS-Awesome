@@ -513,7 +513,14 @@ export default {
 		 * for a single statement.
 		 */
 		const bandOwnedElsewhere = computed(
-			() => activeView.value === "floor" || mesaOrderActive.value,
+			() =>
+				activeView.value === "floor" ||
+				mesaOrderActive.value ||
+				// A hosted destination (Gasto, Cobranza, Borradores…) owns the
+				// stage: the band shows the hostedContext state, and this card's
+				// tender chips + breakdown must not keep teleporting sale
+				// furniture into it (critique A2, 08-29).
+				Boolean(uiStore.hostedDestination),
 		);
 
 		return {
