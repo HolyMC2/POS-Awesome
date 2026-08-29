@@ -4,7 +4,34 @@ All notable changes.
 
 ## Unreleased
 
-- **Phantom-setting code paths removed; two destinations now honour their
+- **POS Profile settings live in their own «POS Awesome» tab, and the
+  descriptions finally tell the truth (08-29).** The reorganizer patch is
+  rewritten as the single layout authority: a complete, collision-free
+  ORDERED_CHAIN of all 137 POS Awesome fields under one Tab Break at the
+  end of the form (the old `posa_tab` sat right after More Info's tab
+  break, swallowing the native UTM fields into an empty tab), organized
+  into 11 sections (General / Pricing and Discounts / Sales and Returns /
+  Orders and Purchasing / Items and Inventory / Printing and Delivery /
+  Cash Movement / Customer Display / Dashboard / POS Awesome Payments /
+  Performance and Advanced). It now runs LAST in after_migrate so creator
+  patches can no longer re-scramble anchors (five insert_after ties
+  existed, incl. three fields all "after posa_silent_print"). Repairs:
+  `posa_search_limit` was PERMANENTLY INVISIBLE in Desk (depends_on still
+  pointed at the renamed `pose_use_limit_search`); Allow Credit Sale hid
+  behind the unrelated Allow Partial Payment; Hide Variants hid behind
+  Show Template Items. ~30 descriptions rewritten from what the code
+  actually does — headline: "Submit Invoices in Background" now says
+  inline submit is sub-second at any invoice count while queue pickup
+  adds 3-7 s (45-230 s measured on prod when the shared queue was busy)
+  and a failed background submit looks like a completed sale — the
+  description used to claim it was about printing. Cache/search cluster
+  documented honestly (duration only counts with server cache on;
+  "Unlimited Search Results" is the real behavior of the field mislabeled
+  "force reload"; `posa_local_storage` touches two small caches, not the
+  offline stack), and the two cashier-writable shared-state footguns
+  (`posa_qz_printer_name`, `posa_force_server_items`) warn that a change
+  applies to every terminal on the profile. Verified by migrating
+  doco-mirror: 137/137 fields in the tab, zero strays, sections in order.
   flags (08-29).** The settings audit found runtime code consulting profile
   fields that have never existed anywhere: three quotation-gate aliases
   (`documentSources.ts`), `posa_validate_stock` (`useInvoiceItems.ts`),

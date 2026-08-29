@@ -88,13 +88,7 @@ after_migrate = [
     "posawesome.patches.add_customer_display_settings.execute",
     "posawesome.patches.add_dashboard_settings.execute",
     "posawesome.patches.add_dashboard_global_settings.execute",
-    # BEFORE the reorganizer: posa_gr_embedded_barcode_scheme is a member of its
-    # ORDERED_CHAIN, and _set_insert_after silently skips a field that does not
-    # exist yet — so creating it afterwards would leave the knob unanchored
-    # until the NEXT migrate. On a fresh install that is the only migrate the
-    # shop gets before someone opens the profile looking for it.
     "posawesome.patches.add_embedded_barcode_scheme.execute",
-    "posawesome.patches.reorganize_pos_profile_sections.execute",
     "posawesome.patches.add_gift_card_pos_profile_settings.execute",
     "posawesome.patches.add_customer_card_pos_profile_settings.execute",
     "posawesome.patches.add_rate_band_controls.execute",
@@ -106,6 +100,13 @@ after_migrate = [
     "posawesome.patches.add_submission_ledger_to_workspace.execute",
     "posawesome.patches.migrate_pos_supervisor_to_role.execute",
     "posawesome.patches.remove_item_barcode_posa_uom.execute",
+    # LAST on purpose: the reorganizer's ORDERED_CHAIN is the single layout
+    # authority for the POS Awesome tab. Creator patches above may anchor
+    # their fields wherever history put them — running the chain after all
+    # of them re-anchors the whole set every migrate, so anchor collisions
+    # cannot come back. (It used to run early, which is exactly how five
+    # insert_after ties and the scrambled sections accumulated.)
+    "posawesome.patches.reorganize_pos_profile_sections.execute",
 ]
 
 # Desk Notifications
