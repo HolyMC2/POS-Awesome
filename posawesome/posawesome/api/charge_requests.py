@@ -152,6 +152,62 @@ def _request_marker(name: str) -> str:
     return f"POS Charge Request: {name}"
 
 
+_MARKER_PREFIX = "POS Charge Request: "
+
+
+def reassert_request_line_warehouses(invoice_doc) -> None:
+    """Re-stamp producer-owned warehouses on a pulled charge-request invoice.
+
+    The request's items_json is a server-priced contract — rate AND warehouse
+    (taller's consume-first WIP flow bills transferred parts FROM "Taller
+    WIP"; billing them from the sellable warehouse deducts stock a SECOND
+    time and strands the WIP qty — live 2026-08-29, RO-01090..95). The
+    contract does not survive on its own: ERPNext's set_missing_values →
+    set_pos_fields(update_data=True) rewrites EVERY row warehouse to the POS
+    profile default on each update_invoice, and the client's cart rebuilds
+    drop it too. So update_invoice calls this right after set_missing_values,
+    the one authority the whole pipeline funnels through.
+
+    Only rows whose item_code carries an UNAMBIGUOUS warehouse in items_json
+    are touched: lines without one keep the profile default (partially
+    transferred parts bill from the sellable warehouse on purpose), and an
+    item_code that appears with two different warehouses is skipped
+    (fail-open to the old behavior rather than guessing). Cashier-added
+    extra items are never in the map, so they are untouched. Fail-soft: a
+    missing/renamed request must never block the sale."""
+    remarks = invoice_doc.get("remarks") or ""
+    if not remarks.startswith(_MARKER_PREFIX):
+        return
+    request_name = remarks[len(_MARKER_PREFIX):].split(" ·", 1)[0].strip()
+    if not request_name:
+        return
+    try:
+        request = frappe.get_doc(CHARGE_REQUEST_DOCTYPE, request_name)
+        warehouses = {}
+        ambiguous = set()
+        for line in request.get_items():
+            code = line.get("item_code")
+            wh = line.get("warehouse")
+            if not code or not wh:
+                continue
+            if code in warehouses and warehouses[code] != wh:
+                ambiguous.add(code)
+            warehouses[code] = wh
+        for code in ambiguous:
+            warehouses.pop(code, None)
+        if not warehouses:
+            return
+        for row in invoice_doc.get("items") or []:
+            wh = warehouses.get(row.item_code)
+            if wh:
+                row.warehouse = wh
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            f"charge_requests: warehouse reassert failed for invoice {invoice_doc.get('name')}",
+        )
+
+
 @frappe.whitelist(methods=["POST"])
 def prepare_charge_request_invoice(name, pos_profile, pos_opening_shift):
     """Build (insert) the draft invoice for a charge request in the CALLING
@@ -231,16 +287,22 @@ def prepare_charge_request_invoice(name, pos_profile, pos_opening_shift):
         doc.is_pos = 1
         doc.update_stock = 1
     for line in request.get_items():
-        doc.append(
-            "items",
-            {
-                "item_code": line.get("item_code"),
-                "qty": float(line.get("qty") or 0),
-                "uom": line.get("uom"),
-                "rate": float(line.get("rate") or 0),
-                "description": line.get("description"),
-            },
-        )
+        row = {
+            "item_code": line.get("item_code"),
+            "qty": float(line.get("qty") or 0),
+            "uom": line.get("uom"),
+            "rate": float(line.get("rate") or 0),
+            "description": line.get("description"),
+        }
+        # Honor the producer's per-line warehouse. Taller's consume-first WIP
+        # flow stamps fully-transferred parts with the WIP warehouse — losing
+        # it here made update_stock deduct from the sellable warehouse a
+        # SECOND time (the transfer already took the part), stranding the WIP
+        # qty forever (caught live 2026-08-29, RO-01090). Absent → ERPNext
+        # fills the POS profile warehouse at validate, as always.
+        if line.get("warehouse"):
+            row["warehouse"] = line.get("warehouse")
+        doc.append("items", row)
     doc.flags.ignore_permissions = True
     doc.insert(ignore_permissions=True)
     return doc.as_dict()

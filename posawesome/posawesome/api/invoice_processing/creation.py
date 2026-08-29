@@ -1399,6 +1399,15 @@ def update_invoice(data):
 
     # Set missing values first
     invoice_doc.set_missing_values()
+    # set_missing_values → set_pos_fields(update_data=True) just rewrote
+    # EVERY row warehouse to the POS profile default. For invoices born from
+    # a POS Charge Request that contract (items_json) owns the per-line
+    # warehouse — taller's WIP flow bills transferred parts FROM "Taller
+    # WIP", and losing it double-deducts sellable stock. Re-assert it here,
+    # the one point the whole pull pipeline funnels through.
+    from posawesome.posawesome.api.charge_requests import reassert_request_line_warehouses
+
+    reassert_request_line_warehouses(invoice_doc)
     if effective_price_list:
         invoice_doc.selling_price_list = effective_price_list
 

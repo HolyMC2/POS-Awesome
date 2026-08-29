@@ -332,7 +332,17 @@ export function _applyItemDetailPayload(
 	if (!lockReturnPricing) {
 		item.discount_percentage = data.discount_percentage;
 	}
-	item.warehouse = data.warehouse || item.warehouse;
+	// The row's own warehouse wins over the details-refresh default. The
+	// payload's `warehouse` is just the POS profile default
+	// (get_pos_profile_item_details), and letting it override clobbered the
+	// producer-set warehouse on pulled charge-request lines — taller's WIP
+	// flow bills transferred parts FROM "Taller WIP", and this line silently
+	// rewrote them back to the sellable warehouse (double-deduct, live
+	// 2026-08-29 RO-01090..92). Normal items get the profile warehouse at
+	// creation (useItemCreation) and at the only-if-empty fill above, so
+	// nothing changes for ordinary sales; a cashier's manual warehouse pick
+	// (allow_change_warehouse) also stops being reverted by refreshes.
+	item.warehouse = item.warehouse || data.warehouse;
 	item.has_batch_no = data.has_batch_no;
 	item.has_serial_no = data.has_serial_no;
 	item.allow_negative_stock = data.allow_negative_stock;

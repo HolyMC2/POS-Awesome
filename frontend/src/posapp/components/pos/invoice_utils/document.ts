@@ -599,6 +599,15 @@ export function get_invoice_items(context: any) {
 			// Explicitly include stock status to optimize backend validation loops
 			// where O(N) cache lookups occur if this flag is missing.
 			is_stock_item: item.is_stock_item,
+			// Round-trip the row's warehouse. Pull-model drafts are born with
+			// the producer's per-line warehouse (taller's consume-first WIP
+			// flow bills transferred parts FROM "Taller WIP"); omitting it
+			// here made the server refill every row from the POS profile and
+			// deduct the sellable warehouse a SECOND time (live 2026-08-29,
+			// RO-01090/91). Normal cart items always carry the profile
+			// warehouse already (useItemCreation), so this changes nothing
+			// for ordinary sales.
+			...(item.warehouse && { warehouse: item.warehouse }),
 			// SALDO-INTEGRATION-POINT — pass-through per-line fields the
 			// saldo Frappe app's hook expects. Without these the serializer
 			// drops them and the before_submit hook refuses with "no

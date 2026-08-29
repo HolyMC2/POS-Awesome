@@ -247,4 +247,55 @@ describe("get_invoice_doc", () => {
 		expect(doc.posting_date).toBe("2026-03-20");
 		expect(doc.set_posting_time).toBe(1);
 	});
+
+	it("round-trips a per-line warehouse and never invents one", () => {
+		// Pull-model drafts (taller WIP flow) are born with the producer's
+		// warehouse on part lines; the serializer dropping it made the server
+		// refill from the POS profile and double-deduct sellable stock
+		// (2026-08-29, RO-01090/91).
+		const context: any = {
+			invoiceType: "Invoice",
+			pos_profile: {
+				company: "Test Company",
+				name: "Main POS",
+				currency: "PKR",
+				warehouse: "Store - TC",
+				payments: [{ mode_of_payment: "Cash", account: "Cash", type: "Cash", default: 1 }],
+			},
+			selected_currency: "PKR",
+			conversion_rate: 1,
+			company: { default_currency: "PKR" },
+			price_list_currency: "PKR",
+			get_price_list: () => "Standard Selling",
+			customer_info: {},
+			customer: "CUST-1",
+			isReturnInvoice: false,
+			items: [
+				{ item_code: "PART-A", qty: 1, rate: 150, warehouse: "Taller WIP - TC", is_stock_item: 1 },
+				{ item_code: "LABOR", qty: 1, rate: 100, is_stock_item: 0 },
+			],
+			packed_items: [],
+			Total: 250,
+			subtotal: 250,
+			additional_discount: 0,
+			additional_discount_percentage: 0,
+			roundAmount: (value: number) => value,
+			pos_opening_shift: { name: "SHIFT-1" },
+			posa_offers: [],
+			posa_coupons: [],
+			selected_delivery_charge: null,
+			delivery_charges_rate: 0,
+			posting_date_display: "2026-08-29",
+			formatDateForBackend: (value: string) => value,
+			invoice_doc: { name: "SINV-DRAFT", customer: "CUST-1" },
+		};
+
+		const doc = get_invoice_doc(context);
+		const byCode = Object.fromEntries(doc.items.map((row: any) => [row.item_code, row]));
+		expect(byCode["PART-A"].warehouse).toBe("Taller WIP - TC");
+		// No warehouse on the cart item -> none sent; the server fills the
+		// profile default at validate, exactly as before.
+		expect("warehouse" in byCode["LABOR"]).toBe(false);
+	});
+
 });

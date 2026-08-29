@@ -198,5 +198,118 @@ class ChargeRequestProfilePinTests(unittest.TestCase):
         self.assertEqual(invoice["pos_profile"], "Profile A")
 
 
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class ChargeRequestLineWarehouseTests(unittest.TestCase):
+    """The producer's per-line warehouse must survive into the draft.
+
+    Taller's consume-first WIP flow stamps fully-transferred parts with the
+    WIP warehouse in items_json; dropping it here made update_stock deduct
+    from the sellable warehouse a SECOND time (the Material Transfer already
+    took the part) and stranded the WIP qty (live 2026-08-29, RO-01090)."""
+
+    def _prepare_with_lines(self, lines):
+        module = _import_charge_requests(
+            {"legacy_enabled": 1, "request_profile": "Profile A"}
+        )
+        request = sys.modules["frappe"].get_doc("POS Charge Request", "CHARGE-1")
+        request.get_items = lambda: lines
+        return module.prepare_charge_request_invoice("CHARGE-1", "Profile A", "SHIFT-1")
+
+    def test_line_warehouse_passes_through(self):
+        invoice = self._prepare_with_lines(
+            [
+                {
+                    "item_code": "PART-A",
+                    "qty": 1,
+                    "rate": 150.0,
+                    "warehouse": "Taller WIP - GD",
+                },
+                {"item_code": "LABOR", "qty": 1, "rate": 100.0},
+            ]
+        )
+
+        by_code = {row["item_code"]: row for row in invoice["items"]}
+        self.assertEqual(by_code["PART-A"].get("warehouse"), "Taller WIP - GD")
+        # No warehouse on the line → none forced; ERPNext fills the POS
+        # profile default at validate, exactly as before this fix.
+        self.assertNotIn("warehouse", by_code["LABOR"])
+
+
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class ChargeRequestWarehouseReassertTests(unittest.TestCase):
+    """reassert_request_line_warehouses: the items_json warehouse contract
+    survives ERPNext's set_missing_values profile-default rewrite."""
+
+    def _module_with_request_lines(self, lines):
+        module = _import_charge_requests({"legacy_enabled": 1})
+        request = sys.modules["frappe"].get_doc("POS Charge Request", "CHARGE-1")
+        request.get_items = lambda: lines
+        return module
+
+    def _invoice(self, remarks, rows):
+        doc = types.SimpleNamespace(
+            remarks=remarks,
+            items=[types.SimpleNamespace(**r) for r in rows],
+        )
+        doc.get = lambda key, default=None: getattr(doc, key, default)
+        return doc
+
+    def test_reasserts_contract_warehouse_after_profile_rewrite(self):
+        module = self._module_with_request_lines(
+            [
+                {"item_code": "PART-A", "qty": 1, "warehouse": "Taller WIP - GD"},
+                {"item_code": "LABOR", "qty": 1},
+            ]
+        )
+        invoice = self._invoice(
+            "POS Charge Request: CHARGE-1 · RO-1 — DEV",
+            [
+                {"item_code": "PART-A", "warehouse": "Sellable - GD"},
+                {"item_code": "LABOR", "warehouse": "Sellable - GD"},
+                {"item_code": "EXTRA-SALE", "warehouse": "Sellable - GD"},
+            ],
+        )
+
+        module.reassert_request_line_warehouses(invoice)
+
+        by_code = {r.item_code: r.warehouse for r in invoice.items}
+        self.assertEqual(by_code["PART-A"], "Taller WIP - GD")
+        # No warehouse in the contract line -> profile default stands.
+        self.assertEqual(by_code["LABOR"], "Sellable - GD")
+        # Cashier-added extras are never in the map.
+        self.assertEqual(by_code["EXTRA-SALE"], "Sellable - GD")
+
+    def test_ambiguous_item_code_fails_open(self):
+        module = self._module_with_request_lines(
+            [
+                {"item_code": "PART-A", "qty": 1, "warehouse": "Taller WIP - GD"},
+                {"item_code": "PART-A", "qty": 1, "warehouse": "Otro - GD"},
+            ]
+        )
+        invoice = self._invoice(
+            "POS Charge Request: CHARGE-1",
+            [{"item_code": "PART-A", "warehouse": "Sellable - GD"}],
+        )
+
+        module.reassert_request_line_warehouses(invoice)
+
+        self.assertEqual(invoice.items[0].warehouse, "Sellable - GD")
+
+    def test_non_request_invoice_is_untouched(self):
+        module = self._module_with_request_lines(
+            [{"item_code": "PART-A", "qty": 1, "warehouse": "Taller WIP - GD"}]
+        )
+        invoice = self._invoice(
+            "ordinary remarks",
+            [{"item_code": "PART-A", "warehouse": "Sellable - GD"}],
+        )
+
+        module.reassert_request_line_warehouses(invoice)
+
+        self.assertEqual(invoice.items[0].warehouse, "Sellable - GD")
+
+
 if __name__ == "__main__":
     unittest.main()
