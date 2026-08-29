@@ -255,6 +255,19 @@
 						:currency-symbol="currencySymbol(invoice_doc.currency)"
 					/>
 
+					<SplitEvenlyPanel
+						v-if="showSplitPanel"
+						v-model="splitCount"
+						:total="netInvoiceSettlementAmount"
+						:collected="splitShares"
+						:methods="splitMethods"
+						:label="verticalStore.t('Split bill')"
+						:format-currency="(value) => formatCurrency(value, invoice_doc.currency)"
+						@collect="onSplitCollect"
+						@undo="onSplitUndo"
+						@clear="onSplitClear"
+					/>
+
 					<section
 						v-if="is_cashback && invoice_doc"
 						class="payment-section payment-section--methods"
@@ -674,6 +687,7 @@ import PaymentReadinessHeader from "./payments/PaymentReadinessHeader.vue";
 import { useHardwareReadiness } from "./payments/useHardwareReadiness";
 import PaymentDialogs from "./payments/PaymentDialogs.vue";
 import RestaurantTipSelector from "./payments/RestaurantTipSelector.vue";
+import SplitEvenlyPanel from "./payments/SplitEvenlyPanel.vue";
 // Cobro — the desktop payment SURFACE (build plan §14). Chrome only: these
 // five render this component's own state and reach its own handlers through
 // the contract `PaymentMethods` already has. Nothing below `<script setup>`
@@ -811,6 +825,12 @@ const giftCardMode = ref("redeem");
 const giftCardError = ref("");
 const giftCardRedemptions = ref([]);
 const restaurantTipAmount = ref(0);
+// «Dividir entre N» (critique C1, 08-29). splitCount 0 = off; collected
+// shares are the panel's own receipts — the tender rows carry the money,
+// this ledger remembers which method each share went to so Deshacer and
+// Quitar can back the exact amounts out again.
+const splitCount = ref(0);
+const splitShares = ref([]);
 let restaurantTipBaseTotals = null;
 // Tip already folded into the doc totals — lets applyRestaurantTipTotal know
 // what "the total before this change" was when deciding to follow the tip.
@@ -2167,6 +2187,57 @@ const handlePaymentAmountChange = (payment, event) => {
 	}
 };
 
+// ---- «Dividir entre N» (critique C1) --------------------------------------
+// The split rides the EXISTING tender rows: three guests paying card is one
+// card row whose amount grew three times, exactly what a hand-typed split
+// produces — no new seam on the money path (setPaymentToDenomination is the
+// same setter the denomination chips use).
+
+const splitMethods = computed(() =>
+	(invoice_doc.value?.payments || [])
+		.map((row) => row?.mode_of_payment)
+		.filter(Boolean),
+);
+
+const showSplitPanel = computed(
+	() =>
+		Boolean(invoice_doc.value) &&
+		!invoice_doc.value?.is_return &&
+		netInvoiceSettlementAmount.value > 0 &&
+		splitMethods.value.length > 0,
+);
+
+const splitRowFor = (method) =>
+	(invoice_doc.value?.payments || []).find((row) => row?.mode_of_payment === method);
+
+const onSplitCollect = ({ amount, method }) => {
+	const row = splitRowFor(method);
+	const share = flt(amount, currency_precision.value);
+	if (!row || share <= 0) return;
+	setPaymentToDenomination(row, flt(flt(row.amount) + share, currency_precision.value));
+	splitShares.value = [...splitShares.value, { amount: share, method }];
+};
+
+const onSplitUndo = () => {
+	const last = splitShares.value[splitShares.value.length - 1];
+	if (!last) return;
+	const row = splitRowFor(last.method);
+	if (row) {
+		setPaymentToDenomination(
+			row,
+			Math.max(flt(flt(row.amount) - last.amount, currency_precision.value), 0),
+		);
+	}
+	splitShares.value = splitShares.value.slice(0, -1);
+};
+
+const onSplitClear = () => {
+	// Back every share out of its tender before dropping the ledger — Quitar
+	// must leave the rows as if the split never happened.
+	while (splitShares.value.length) onSplitUndo();
+	splitCount.value = 0;
+};
+
 const setPaymentToDenomination = (payment, amount) => {
 	paymentsTouched.value = true;
 	payment.amount = amount;
@@ -2895,6 +2966,8 @@ watch(isPaymentOpen, (isOpen) => {
 	if (isOpen) {
 		restaurantTipAmount.value = 0;
 		lastAppliedRestaurantTip = 0;
+		splitCount.value = 0;
+		splitShares.value = [];
 		captureRestaurantTipBaseTotals();
 		ensurePaymentLinesInitialized();
 		handleShowPayment();
@@ -2905,6 +2978,10 @@ watch(isPaymentOpen, (isOpen) => {
 		applyRestaurantTipTotal();
 		restaurantTipBaseTotals = null;
 		lastAppliedRestaurantTip = 0;
+		// The ledger only — the sale is gone with the sheet; backing amounts
+		// out here would fight the submit path's own teardown.
+		splitCount.value = 0;
+		splitShares.value = [];
 		releaseActiveFocus();
 		paymentVisible.value = false;
 		highlightSubmit.value = false;

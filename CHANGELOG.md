@@ -4,6 +4,22 @@ All notable changes.
 
 ## Unreleased
 
+- **«Dividir entre N» at the payment screen (08-29, critique C1).** The
+  register could split across tenders only by hand-typed amounts. New
+  SplitEvenlyPanel (beside the tip selector, retail and cobro alike):
+  pick 2–6 people, get the quote up front («$117.66 cada quien · $117.68
+  el último» — floor-to-cents, residue on the LAST payer, so 353÷3 never
+  invents a centavo), then collect guest by guest — each share lands on
+  the chosen tender row through setPaymentToDenomination, the same
+  setter the denomination chips use, so three guests paying card are one
+  card row that grew three times and the submit path sees nothing new.
+  Shares recompute from what actually remains, so a tip added mid-split
+  re-divides only among the guests still unpaid. «Deshacer última» backs
+  one share out of its tender; «Quitar» backs out all; the headcount
+  locks once money moved. Math is a pure util (`utils/splitEvenly.ts`)
+  with its own spec (6 cases: residue placement, cent-exact sums, junk
+  input). vitest 4781 ✓, vue-tsc 0. Per-seat and by-items splits stay
+  with B4.
 - **Firing a comanda now moves the world (08-29, critique B1).** «Enviar»
   used to leave the waiter staring at the same cart with no feedback but
   an eventual print-verdict toast — which, on a tablet with «Impresora no
