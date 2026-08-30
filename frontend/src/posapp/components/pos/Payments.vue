@@ -3410,12 +3410,17 @@ defineExpose({
 	align-items: stretch;
 	flex: 0 0 auto;
 	min-height: 0;
+	/* The tip strip and the split panel live in the PAPER column (Marco,
+	   08-30): both are decisions about what closing this sale does, which is
+	   that column's whole job — and the column had dead height below «Más
+	   opciones» while these two sat as full-width bands stretching the
+	   surface taller. WHY · HOW · PAPER (rows 1-3) is untouched. */
 	grid-template-areas:
 		"readiness readiness readiness"
 		"summary tender paper"
 		"summary methods paper"
-		"tip tip tip"
-		"split split split"
+		"summary methods tip"
+		"summary methods split"
 		"adjustments settlement meta";
 }
 
@@ -3433,8 +3438,8 @@ defineExpose({
 		"readiness readiness readiness"
 		"summary tender paper"
 		"summary methods paper"
-		"tip tip tip"
-		"split split split";
+		"summary methods tip"
+		"summary methods split";
 	flex: 1 1 auto;
 }
 
