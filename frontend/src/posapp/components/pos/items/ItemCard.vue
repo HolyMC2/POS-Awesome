@@ -579,7 +579,21 @@ const onDragEnd = (event) => {
    goes to one line, the code goes. The card stays the tap target: 128 × 128
    clears the 44px coarse floor with room to spare. */
 .card-item-card--dense .card-item-image-container {
-	height: 68px;
+	height: 64px;
+}
+
+/* At the 115px column a 407px drawer deals, «$ 650 ⓘ 3 NOS» does not fit on
+   one line and the PRICE was what got ellipsized («$ 6.»). The stock chip
+   may wrap under the price instead; the slot (DENSE_CARD_ROW_HEIGHT) is
+   sized for that second line, and a wider column simply never wraps. */
+.card-item-card--dense .card-item-details {
+	flex-wrap: wrap;
+	row-gap: 2px;
+}
+
+.card-item-card--dense .card-item-stock {
+	padding: 1px 5px;
+	font-size: 0.66rem;
 }
 
 .card-item-card--dense .card-item-content {

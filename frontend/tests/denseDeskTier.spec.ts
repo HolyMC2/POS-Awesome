@@ -126,6 +126,6 @@ describe("dense desk tier — the card grid geometry", () => {
 		expect(selectorSource).toContain(':card-dense="denseDesk"');
 		expect(cardsSource).toContain(':dense="cardDense"');
 		expect(cardSource).toContain("'card-item-card--dense': dense");
-		expect(cardSource).toMatch(/\.card-item-card--dense \.card-item-image-container \{\s*height: 68px;/);
+		expect(cardSource).toMatch(/\.card-item-card--dense \.card-item-image-container \{\s*height: 64px;/);
 	});
 });

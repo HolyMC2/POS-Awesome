@@ -97,7 +97,8 @@ export const DENSE_DESK_MAX_HEIGHT = 820;
  * whose 68px plates read as a strip of letterboxed thumbnails.
  */
 export const DENSE_CARD_MIN_WIDTH = 112;
-export const DENSE_CARD_ROW_HEIGHT = 128;
+/** 64px plate + one-line name + price line + a stock chip allowed to wrap under it. */
+export const DENSE_CARD_ROW_HEIGHT = 132;
 /**
  * Gap AND container padding on the dense tier. The 405px drawer of a 1143px
  * window hands the scroller ~385px; at the roomy 12/12 that is 353px of row
