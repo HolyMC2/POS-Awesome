@@ -69,6 +69,13 @@ describe("buildLineDelta", () => {
 		expect(buildLineDelta([line({ course_idx: 2 })], baseline).upserts).toHaveLength(1);
 	});
 
+	it("treats a seat change as a change — per-seat settling rides on it (B4)", () => {
+		const baseline = new Map([["uid-1", line()]]);
+		expect(buildLineDelta([line({ seat: 2 })], baseline).upserts).toHaveLength(1);
+		// 0 and undefined both mean «the table» — no phantom upsert between them.
+		expect(buildLineDelta([line({ seat: 0 })], baseline).upserts).toHaveLength(0);
+	});
+
 	it("names ONLY locally-dropped lines as removals", () => {
 		const baseline = new Map([
 			["uid-1", line()],
@@ -118,6 +125,17 @@ describe("orderAsCartItems", () => {
 		const rows = orderAsCartItems(order);
 		expect(rows[0]?.posa_row_id).toBe("uid-1");
 		expect(rows[0]?.amount).toBe(70);
+	});
+
+	it("paints seat and the kitchen's fired verdict onto the cart row (B1/B4)", () => {
+		const order = {
+			lines: [line({ seat: 3, fired: 1 }), line({ line_uid: "uid-2", item_code: "PAN" })],
+		} as unknown as OrderRow;
+		const rows = orderAsCartItems(order);
+		expect(rows[0]?.posa_seat).toBe(3);
+		expect(rows[0]?.posa_line_fired).toBe(1);
+		expect(rows[1]?.posa_seat).toBe(0);
+		expect(rows[1]?.posa_line_fired).toBe(0);
 	});
 
 	it("returns an empty cart for a ticket with no lines", () => {

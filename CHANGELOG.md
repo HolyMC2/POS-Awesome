@@ -4,6 +4,25 @@ All notable changes.
 
 ## Unreleased
 
+- **Courses and seats on the line — «phase 2» ships (08-29, critique B4).**
+  The line model always had `course_idx`, `fired`, `fired_at`, and the
+  server always accepted a per-course fire filter; «phase 2» was only
+  ever the UI. Now: (1) `seat` Int joins POS Table Order Item (0 = the
+  table/shared) and rides the whole sync chain (LINE_SCALARS, payload,
+  OrderLine type, cart bridge with a change comparator that treats
+  0≡undefined); (2) mesa cart lines grow three chips — `C2` (tap cycles
+  the course, LOCKS once fired: kitchen history), `A3`/`Mesa` (tap
+  cycles the seat through guest_count, stays editable — it settles
+  money, not food), and «enviada» painted from the kitchen's own fired
+  flag at resume (B1's remainder, closed); retail carts show none of it
+  (lazy, guarded floor-store access — no store, no chips, no import
+  cost); (3) firing prompts per course when the unfired lines span 2+
+  courses («Enviar a cocina: Todo · Curso 1 · Curso 2» — a one-course
+  round fires without a question), on every fire path including the
+  band, and a partial fire returns to the salón with the rest staged.
+  vitest 4786 ✓ (2 new bridge cases), vue-tsc 0, mirror migrate ✓,
+  es.csv +5. Still open from B4's family: per-SEAT split at settle
+  (C1's panel grows a by-seat mode now that lines know their seat).
 - **The kitchen display (08-29, critique D1).** `/kds` — a station-scoped
   screen on the chrome-free display layout (the customer-display
   precedent), deliberately NOT a register: no shift, no cart, no rail.

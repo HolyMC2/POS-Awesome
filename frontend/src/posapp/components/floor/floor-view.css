@@ -262,3 +262,25 @@
 	font-size: 12px;
 	line-height: 1.4;
 }
+
+/* Per-course firing chooser (critique B4). */
+.course-chooser__body {
+	display: grid;
+	gap: 8px;
+}
+.course-chooser__option {
+	border: 1px solid var(--pos-border-light);
+	border-radius: 10px;
+	background: var(--pos-surface-raised);
+	color: var(--pos-text-primary);
+	padding: 12px 14px;
+	font-size: 16px;
+	text-align: start;
+	cursor: pointer;
+}
+.course-chooser__option--all {
+	font-weight: 700;
+}
+.course-chooser__option:hover {
+	border-color: var(--pos-primary);
+}

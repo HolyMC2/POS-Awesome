@@ -34,6 +34,7 @@ export const cartAsLines = (cartItems: readonly any[]): OrderLine[] =>
 			rate: Number(item.rate) || 0,
 			notes: item.posa_notes ?? null,
 			course_idx: Number(item.posa_course_idx) || 1,
+			seat: Number(item.posa_seat) || 0,
 		});
 		if (!item.posa_row_id) {
 			item.posa_row_id = line.line_uid;
@@ -57,6 +58,12 @@ export const orderAsCartItems = (order: OrderRow): Array<Record<string, unknown>
 		amount: (Number(line.qty) || 0) * (Number(line.rate) || 0),
 		posa_notes: line.notes,
 		posa_course_idx: line.course_idx,
+		posa_seat: line.seat ?? 0,
+		// Read-only service truth for the cart's chips (critique B1/B4):
+		// «enviada» is the kitchen's history, painted at resume — the fire
+		// path clears the cart, so a live resync is not needed to keep it
+		// honest.
+		posa_line_fired: line.fired ? 1 : 0,
 	}));
 
 export interface LineDelta {
@@ -70,7 +77,8 @@ const changed = (previous: OrderLine, line: OrderLine): boolean =>
 	previous.qty !== line.qty ||
 	previous.rate !== line.rate ||
 	previous.notes !== line.notes ||
-	previous.course_idx !== line.course_idx;
+	previous.course_idx !== line.course_idx ||
+	(previous.seat ?? 0) !== (line.seat ?? 0);
 
 /** Diff the cart against what the server last accepted. */
 export const buildLineDelta = (

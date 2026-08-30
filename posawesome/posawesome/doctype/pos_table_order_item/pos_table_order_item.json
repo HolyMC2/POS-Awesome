@@ -13,6 +13,7 @@
   "rate",
   "amount",
   "course_idx",
+  "seat",
   "fired",
   "fired_at",
   "notes"
@@ -74,6 +75,15 @@
   },
   {
    "default": "0",
+   "description": "Who ordered it, for per-seat settling. 0 = the table (shared).",
+   "fieldname": "seat",
+   "fieldtype": "Int",
+   "in_list_view": 0,
+   "label": "Seat",
+   "non_negative": 1
+  },
+  {
+   "default": "0",
    "description": "Dispatched to the kitchen. A fired line cannot be silently removed by an offline update.",
    "fieldname": "fired",
    "fieldtype": "Check",
@@ -93,7 +103,7 @@
  "index_web_pages_for_search": 0,
  "istable": 1,
  "links": [],
- "modified": "2026-08-11 00:00:00.000000",
+ "modified": "2026-08-29 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "POS Table Order Item",

@@ -135,6 +135,7 @@
 						:is-expanded="isItemExpanded(item.posa_row_id)"
 						@update-qty="handleQtyUpdate"
 						@update-line-note="handleLineNoteUpdate"
+						@update-line-meta="handleLineMetaUpdate"
 						@qty-edit-submitted="handleQtyEditSubmitted"
 						@minus-click="handleMinusClick"
 						@add-one="addOne"
@@ -591,6 +592,16 @@ const handleLineNoteUpdate = (item: any, note: string) => {
 	const row = index < 0 ? null : items.value[index];
 	if (!row) return;
 	row.posa_notes = note;
+};
+
+// Mesa line attributes (critique B4): course and seat land the same way a
+// note does — straight onto the reactive row, and the floor's cart-sync
+// debounce carries them to the table order.
+const handleLineMetaUpdate = (item: any, patch: Record<string, unknown>) => {
+	const index = getItemIndex(item);
+	const row = index < 0 ? null : items.value[index];
+	if (!row) return;
+	Object.assign(row, patch);
 };
 
 const getItemIndex = (item: any) => {

@@ -73,6 +73,43 @@
 								</template>
 								<span>{{ item.pricing_rule_badge.tooltip }}</span>
 							</v-tooltip>
+							<!-- Mesa line chips (critique B4 + B1's remainder): course,
+							     seat, and the kitchen's verdict. Chips a waiter CYCLES
+							     with taps, not form fields — the two attributes every
+							     service upgrade stacks on. Course locks once the line
+							     is fired (kitchen history); seat stays editable — it
+							     settles money, not food. -->
+							<template v-if="mesaLineChips">
+								<v-chip
+									size="x-small"
+									variant="tonal"
+									class="ml-1"
+									:disabled="Boolean(item.posa_line_fired)"
+									data-testid="cart-course-chip"
+									@click.stop="cycleCourse"
+								>
+									C{{ Number(item.posa_course_idx) || 1 }}
+								</v-chip>
+								<v-chip
+									size="x-small"
+									variant="tonal"
+									class="ml-1"
+									data-testid="cart-seat-chip"
+									@click.stop="cycleSeat"
+								>
+									{{ seatChipLabel }}
+								</v-chip>
+								<v-chip
+									v-if="item.posa_line_fired"
+									color="success"
+									size="x-small"
+									variant="tonal"
+									class="ml-1"
+									data-testid="cart-fired-chip"
+								>
+									{{ __("sent") }}
+								</v-chip>
+							</template>
 							<v-btn
 								v-if="posProfile.posa_allow_line_item_name_override && !item.posa_is_replace"
 								icon
@@ -494,6 +531,7 @@ import { cartAlignClass, cartJustifyClass } from "./cartColumnAlign";
 import FractionalQtyPad from "./FractionalQtyPad.vue";
 import { isFractionEligible } from "../../../utils/fractionalMath";
 import { useVerticalStore } from "../../../stores/verticalStore";
+import { useFloorStore } from "../../../stores/floorStore";
 
 defineOptions({
 	name: "CartItemRow",
@@ -537,6 +575,7 @@ const emit = defineEmits([
 	"update-discount-amount",
 	"qty-edit-submitted",
 	"update-line-note",
+	"update-line-meta",
 	"discount-percent-edit-submitted",
 	"toggle-offer",
 	"toggle-expand",
@@ -567,6 +606,49 @@ const handleDeleteClick = () => {
 };
 
 const verticalStore = useVerticalStore();
+
+// ---- mesa line chips (critique B4) ----------------------------------------
+// Only a table-order-owned cart carries courses and seats; a retail line
+// showing a «C1» chip would be noise about a kitchen that does not exist.
+// LAZY + guarded: this row mounts in spec harnesses whose pinia carries no
+// floor store, and a retail register should not pay the floor stack's
+// import either — no store means no chips, which is also the right answer.
+let floorStoreInstance = null;
+const floorState = () => {
+	if (floorStoreInstance === null) {
+		try {
+			floorStoreInstance = useFloorStore();
+		} catch {
+			floorStoreInstance = false;
+		}
+	}
+	return floorStoreInstance || null;
+};
+const MAX_COURSES = 4;
+const mesaLineChips = computed(() => {
+	const store = floorState();
+	return Boolean(store?.isRecordOnly && store?.activeOrder);
+});
+const mesaSeatCount = computed(
+	() => Number(floorState()?.activeOrder?.guest_count) || MAX_COURSES,
+);
+const seatChipLabel = computed(() => {
+	const seat = Number(props.item.posa_seat) || 0;
+	return seat === 0 ? __("Mesa") : `A${seat}`;
+});
+const cycleCourse = () => {
+	const current = Number(props.item.posa_course_idx) || 1;
+	emit("update-line-meta", props.item, {
+		posa_course_idx: (current % MAX_COURSES) + 1,
+	});
+};
+const cycleSeat = () => {
+	// 0 = the table (shared), then A1..A<guests>, back to the table.
+	const current = Number(props.item.posa_seat) || 0;
+	emit("update-line-meta", props.item, {
+		posa_seat: current >= mesaSeatCount.value ? 0 : current + 1,
+	});
+};
 
 const isEditingQty = ref(false);
 const fractionalPadOpen = ref(false);

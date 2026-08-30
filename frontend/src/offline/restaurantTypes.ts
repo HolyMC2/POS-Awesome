@@ -71,6 +71,8 @@ export interface OrderLine {
 	amount?: number | null;
 	notes?: string | null;
 	course_idx?: number | null;
+	/** Who ordered it, for per-seat settling. 0 = the table (shared). */
+	seat?: number | null;
 	fired?: number;
 	fired_at?: string | null;
 }

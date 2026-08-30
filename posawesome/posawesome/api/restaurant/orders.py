@@ -32,7 +32,7 @@ from posawesome.posawesome.api.restaurant._tickets import (
     resolve_order_name,
 )
 
-LINE_SCALARS = ("item_code", "item_name", "qty", "uom", "rate", "notes", "course_idx")
+LINE_SCALARS = ("item_code", "item_name", "qty", "uom", "rate", "notes", "course_idx", "seat")
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +51,7 @@ def _line_payload(row):
         "amount": flt(row.amount),
         "notes": row.notes,
         "course_idx": cint(row.course_idx),
+        "seat": cint(row.seat),
         "fired": cint(row.fired),
         "fired_at": str(row.fired_at) if row.fired_at else None,
     }

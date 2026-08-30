@@ -165,7 +165,7 @@
 				:releasing="releasing"
 				@add-items="goToItems"
 				@charge="chargeActiveOrder"
-				@fire="fire"
+				@fire="fireWithCoursePrompt"
 				@transfer="floorStore.beginTransfer(activeOrder)"
 				@release="release"
 			/>
@@ -180,10 +180,39 @@
 			:releasing="releasing"
 			@add-items="goToItems"
 			@charge="chargeActiveOrder"
-			@fire="fire"
+			@fire="fireWithCoursePrompt"
 			@transfer="floorStore.beginTransfer(activeOrder)"
 			@release="release"
 		/>
+
+		<!-- Per-course firing (critique B4): shown only when the unfired lines
+		     span 2+ courses — a one-course round fires without a question, so
+		     nothing changes for the register that never courses. -->
+		<v-dialog v-model="courseChooserOpen" max-width="360" @update:model-value="onCourseChooserToggle">
+			<v-card class="course-chooser" data-testid="course-chooser">
+				<v-card-title>{{ __("Send to kitchen") }}</v-card-title>
+				<v-card-text class="course-chooser__body">
+					<button
+						type="button"
+						class="course-chooser__option course-chooser__option--all"
+						data-testid="course-fire-all"
+						@click="resolveCourseChoice('all')"
+					>
+						{{ __("Everything") }} · {{ unfiredCourseTotal }}
+					</button>
+					<button
+						v-for="course in unfiredCourses"
+						:key="course.idx"
+						type="button"
+						class="course-chooser__option"
+						:data-testid="`course-fire-${course.idx}`"
+						@click="resolveCourseChoice(course.idx)"
+					>
+						{{ __("Course") }} {{ course.idx }} · {{ course.count }}
+					</button>
+				</v-card-text>
+			</v-card>
+		</v-dialog>
 
 		<JumpPad v-model="jumpOpen" @open-table="openTable" @open-tab="openNamedTab" />
 		<TableActionSheet
@@ -262,6 +291,7 @@ import { resolveCanvas } from "./floorGeometry";
 import { bus as importedBus } from "../../bus";
 import * as restaurantApi from "../../api/restaurant";
 import { useFloorStore, type OrderRow, type TableRow } from "../../stores/floorStore";
+import { useInvoiceStore } from "../../stores/invoiceStore";
 import { useVerticalStore } from "../../stores/verticalStore";
 import { useFormat } from "../../format";
 import { resolveBandState, type BandState } from "../../composables/pos/shell/bandState";
@@ -549,14 +579,14 @@ const bandStatRows = computed(() => {
  * §5), so no course index is passed. The printing itself belongs to the QZ
  * path — this only asks the server for the projection.
  */
-async function fire(): Promise<KotProjection | null> {
+async function fire(courseIdx?: number): Promise<KotProjection | null> {
 	firing.value = true;
 	const startedAt = floorActionStart();
 	// Captured BEFORE the await: the sale-screen path returns to the salón
 	// right after this resolves, and returnToSalon drops the active order.
 	const firedTable = floorStore.activeOrder?.table || null;
 	try {
-		const projection = await floorStore.fireActiveCourse();
+		const projection = await floorStore.fireActiveCourse(courseIdx);
 		if (projection) {
 			floorActionEnd(startedAt);
 			// The SEND succeeded — the server took the diff. Say so NOW
@@ -577,6 +607,67 @@ async function fire(): Promise<KotProjection | null> {
 	} finally {
 		firing.value = false;
 	}
+}
+
+/**
+ * Per-course firing (critique B4). The line model always had `course_idx`
+ * and the server always accepted a course filter — «phase 2» was only ever
+ * this prompt. The cart is the pre-fire truth (order lines lag the debounce),
+ * and only UNFIRED lines count: fired ones are the kitchen's history.
+ */
+const courseChooserOpen = ref(false);
+let courseChoiceResolver: ((choice: number | "all" | null) => void) | null = null;
+
+// Lazy + guarded, the CartItemRow pattern: the spec harnesses that mount
+// this view mock the floor store and carry no invoice store; a bare cart
+// means one course, which fires without a question — the right degrade.
+let invoiceStoreInstance: any = null;
+const cartItems = (): any[] => {
+	if (invoiceStoreInstance === null) {
+		try {
+			invoiceStoreInstance = useInvoiceStore();
+		} catch {
+			invoiceStoreInstance = false;
+		}
+	}
+	return invoiceStoreInstance ? (invoiceStoreInstance.items as any[]) : [];
+};
+
+const unfiredCourses = computed(() => {
+	const counts = new Map<number, number>();
+	for (const item of cartItems()) {
+		if (Number(item?.posa_line_fired)) continue;
+		const idx = Number(item?.posa_course_idx) || 1;
+		counts.set(idx, (counts.get(idx) || 0) + 1);
+	}
+	return [...counts.entries()]
+		.map(([idx, count]) => ({ idx, count }))
+		.sort((a, b) => a.idx - b.idx);
+});
+const unfiredCourseTotal = computed(() =>
+	unfiredCourses.value.reduce((sum, course) => sum + course.count, 0),
+);
+
+const resolveCourseChoice = (choice: number | "all" | null) => {
+	courseChooserOpen.value = false;
+	const resolver = courseChoiceResolver;
+	courseChoiceResolver = null;
+	resolver?.(choice);
+};
+// Dismissing the dialog (backdrop, Esc) is «no» — the round stays put.
+const onCourseChooserToggle = (open: boolean) => {
+	if (!open && courseChoiceResolver) resolveCourseChoice(null);
+};
+
+async function fireWithCoursePrompt(): Promise<KotProjection | null> {
+	await floorStore.flushCartSync().catch(() => {});
+	if (unfiredCourses.value.length < 2) return fire();
+	const choice = await new Promise<number | "all" | null>((resolve) => {
+		courseChoiceResolver = resolve;
+		courseChooserOpen.value = true;
+	});
+	if (choice === null) return null;
+	return fire(choice === "all" ? undefined : choice);
 }
 
 const KITCHEN_VERDICT_POLL_MS = 3000;
@@ -745,7 +836,7 @@ async function sheetView() {
 }
 
 async function sheetFire() {
-	if (await resumeSelected()) await fire();
+	if (await resumeSelected()) await fireWithCoursePrompt();
 }
 
 function sheetTransfer() {
@@ -782,12 +873,13 @@ async function onFireRequested() {
 	// cup tab has no table, so routing that press through the floor's selection
 	// would silently do nothing.
 	if (floorStore.activeOrder) {
-		const projection = await fire();
+		const projection = await fireWithCoursePrompt();
 		// The round is in the kitchen; the service loop ends back in the room
 		// (critique B1 — «Enviar» used to leave the waiter staring at the same
 		// cart). Pos.vue answers with its flush → detach → clear discipline,
-		// and the salón lands with this table under the sheet. On failure the
-		// cart stays exactly where it was — nothing to walk away from.
+		// and the salón lands with this table under the sheet. On failure or
+		// a dismissed course prompt the cart stays exactly where it was —
+		// nothing to walk away from.
 		if (projection) bus.emit("floor_return_to_salon");
 		return;
 	}
