@@ -83,6 +83,40 @@
 		     printing, language and the cashier tools, none of which are
 		     destinations. Below the two-column boundary the dock is the nav and
 		     the rail is not drawn at all. -->
+		<!-- E4: the corte INSISTS, it no longer seizes. An enforced stale
+		     shift used to auto-front the fullscreen corte at boot; now the
+		     register stays the operator's and this sticky strip carries the
+		     one action. Dismissable — the server blocks sales into a stale
+		     shift anyway, so putting it aside risks only a refused sale —
+		     and it returns on the next boot until the corte is done. -->
+		<div
+			v-if="staleShiftBannerVisible"
+			class="stale-shift-banner"
+			data-testid="stale-shift-banner"
+		>
+			<v-icon icon="mdi-alert" size="16" />
+			<span class="stale-shift-banner__text">{{
+				__("Yesterday's shift is still open — sales are blocked until you close it.")
+			}}</span>
+			<v-btn
+				size="small"
+				variant="outlined"
+				class="stale-shift-banner__action"
+				data-testid="stale-shift-close-now"
+				@click="closeStaleShiftNow"
+			>
+				{{ __("Close shift now") }}
+			</v-btn>
+			<v-btn
+				icon="mdi-close"
+				size="x-small"
+				variant="text"
+				data-testid="stale-shift-dismiss"
+				:aria-label="__('Dismiss')"
+				@click="staleShiftBannerDismissed = true"
+			/>
+		</div>
+
 		<div v-show="!dialog" class="register-shell">
 			<RegisterRail v-if="railVisible" :context="railContext" @setting="openRegisterSetting" />
 
@@ -708,6 +742,18 @@ export default {
 			shift.submit_closing_pos(data);
 		};
 		const handleOpenShiftDetails = () => {
+			shift.get_closing_data();
+		};
+		// E4: the stale-shift strip's state. Dismissal is session-local on
+		// purpose — the shift is still stale, so the next boot re-raises it.
+		const staleShiftBannerDismissed = ref(false);
+		const staleShiftBannerVisible = computed(
+			() =>
+				shift.staleShiftEnforced.value &&
+				!staleShiftBannerDismissed.value &&
+				!dialog.value,
+		);
+		const closeStaleShiftNow = () => {
 			shift.get_closing_data();
 		};
 		const offers = useOffers();
@@ -2347,6 +2393,9 @@ export default {
 			...rtl,
 			...shift,
 			...offers,
+			staleShiftBannerDismissed,
+			staleShiftBannerVisible,
+			closeStaleShiftNow,
 			// SALDO-INTEGRATION-POINT
 			saldoPickerOpen,
 			showSaldoCatalogPicker,
@@ -3107,6 +3156,33 @@ export default {
 	flex: 1 1 auto;
 	min-height: 0;
 	min-width: 0;
+}
+
+/* E4: the stale-shift strip. Warning tokens, not error-red — the register is
+ * usable for everything except selling, and the server enforces that part.
+ * One slim row above the shell: it insists without costing the operator the
+ * screen. Tone is state, never emphasis — the accent stays on the corte
+ * screen's own primary once the operator gets there. */
+.stale-shift-banner {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 14px;
+	background: var(--pos-button-warning-bg);
+	color: var(--pos-button-warning-text);
+	font-size: 13px;
+	font-weight: 600;
+	flex: 0 0 auto;
+}
+
+.stale-shift-banner__text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.stale-shift-banner__action {
+	flex: 0 0 auto;
+	color: inherit;
 }
 
 .register-shell__content {

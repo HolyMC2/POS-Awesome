@@ -15,6 +15,7 @@ import {
 	setBootstrapSnapshot,
 } from "../../../../offline/index";
 import { getValidCachedOpeningForCurrentUser } from "../../../utils/openingCache";
+import { resolveStaleShiftNotice } from "../../../components/pos/shift/staleShiftNotice";
 import { createBootstrapSnapshotFromRegisterData } from "../../../../offline/bootstrapSnapshot";
 import { debugLog } from "../../../utils/debug";
 
@@ -151,6 +152,10 @@ export function usePosShift(openDialog?: () => void) {
 
 	const pos_profile = ref<any>(null);
 	const pos_opening_shift = ref<any>(null);
+	// E4: an enforced stale shift INSISTS (the shell renders a sticky banner
+	// with the corte action) instead of seizing the screen. The server blocks
+	// sales into a stale shift either way, so nothing needs the hostage.
+	const staleShiftEnforced = ref(false);
 
 	function applyRegisterData(data: any) {
 		if (!data) {
@@ -215,26 +220,30 @@ export function usePosShift(openDialog?: () => void) {
 					} catch (e) {
 						console.error("Failed to cache opening data", e);
 					}
-					if (r.message.stale_shift) {
-						// Shift opened on a previous day: never adopt it
-						// silently. Warn always; when the profile enforces
-						// closure, route straight into the closing flow —
-						// the server also blocks submits into a stale shift.
-						const enforced = !!r.message.force_close_stale_shift;
+					// Shift opened on a previous day: never adopt it silently.
+					// Warn always; when the profile enforces closure, INSIST
+					// (sticky banner in the shell with the corte action) — the
+					// old auto-open of the fullscreen corte was critique E4's
+					// hostage-taking, and the contract module can no longer
+					// express it. The server blocks submits into a stale shift
+					// regardless, so the operator dismissing the banner risks
+					// nothing but a refused sale.
+					const notice = resolveStaleShiftNotice(
+						!!r.message.stale_shift,
+						!!r.message.force_close_stale_shift,
+					);
+					staleShiftEnforced.value = !!notice?.insist;
+					if (notice) {
 						toastStore.show({
-							title: __("Shift from a previous day is still open"),
-							message: enforced
-								? __("Close it now to start today's shift. Sales are blocked until it is closed.")
-								: __("Close it and open a new shift to keep the day's cash reconciliation clean."),
-							color: enforced ? "error" : "warning",
+							title: __(notice.titleKey),
+							message: __(notice.messageKey),
+							color: notice.tone,
 							timeout: 0,
 						});
-						if (enforced) {
-							get_closing_data();
-						}
 					}
 				} else {
 					console.info("No opening shift found, opening dialog");
+					staleShiftEnforced.value = false;
 					clearOpeningStorage();
 					openDialog && openDialog();
 				}
@@ -472,6 +481,7 @@ export function usePosShift(openDialog?: () => void) {
 					pos_profile.value = null;
 					pos_opening_shift.value = null;
 					uiStore.posOpeningShift = null;
+					staleShiftEnforced.value = false;
 					clearOpeningStorage();
 					useInvoiceStore().clear();
 					toastStore.show({
@@ -526,6 +536,7 @@ export function usePosShift(openDialog?: () => void) {
 	return {
 		pos_profile,
 		pos_opening_shift,
+		staleShiftEnforced,
 		check_opening_entry,
 		get_closing_data,
 		submit_closing_pos,

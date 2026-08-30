@@ -3076,3 +3076,5 @@ This account has no register with an order queue.,Esta cuenta no tiene una caja 
 Ready — come to the counter,Listas — pasa a caja
 "Nothing waiting — your order will appear here.","Nada en espera — tu orden aparecerá aquí."
 Delivered,Entregadas
+"Yesterday's shift is still open — sales are blocked until you close it.","El turno de ayer sigue abierto — las ventas están bloqueadas hasta hacer el corte."
+Close shift now,Hacer corte ahora
