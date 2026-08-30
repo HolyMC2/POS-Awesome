@@ -2,7 +2,21 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { resolveActiveVersionTransition } from "../src/sw-updater";
+import { deployedVersionDiffers, resolveActiveVersionTransition } from "../src/sw-updater";
+
+describe("deployed-version poll decision (critique E5)", () => {
+	it("announces only when both sides are known and disagree", () => {
+		expect(deployedVersionDiffers("abc123", "def456")).toBe(true);
+		expect(deployedVersionDiffers("abc123", "abc123")).toBe(false);
+	});
+
+	it("stays silent on an unknown side — an absent stamp is not news", () => {
+		expect(deployedVersionDiffers(null, "abc123")).toBe(false);
+		expect(deployedVersionDiffers("abc123", null)).toBe(false);
+		expect(deployedVersionDiffers("", "abc123")).toBe(false);
+		expect(deployedVersionDiffers("  ", "abc123")).toBe(false);
+	});
+});
 
 describe("sw updater version transitions", () => {
 	it("keeps routine controller changes passive when the runtime bundle is still older", () => {
@@ -200,13 +214,21 @@ describe("sw updater runtime safety", () => {
 			controllerResponses: [{ type: "BAD_VERSION_INFO" }],
 		});
 
-		await vi.runAllTimersAsync();
+		// Bounded advance, not runAllTimers: the module now carries a
+		// perpetual deployed-version poll interval (E5), so "run every
+		// timer" never terminates. 6s covers the 4s controller timeout the
+		// startup chain waits on, and stays under the poll's first kick.
+		await vi.advanceTimersByTimeAsync(6000);
 
 		expect(registration.update).toHaveBeenCalledTimes(1);
 	});
 
 	it("ignores malformed unsolicited service worker version messages", async () => {
 		const { updateStore, serviceWorker } = await loadUpdaterHarness();
+		// The module seeds currentVersion with the EXECUTING bundle's stamp
+		// at import (E5) — the invariant here is that a malformed message
+		// changes nothing thereafter, whatever that seed was.
+		const seeded = updateStore.currentVersion;
 
 		serviceWorker.dispatchEvent(
 			new MessageEvent("message", {
@@ -216,7 +238,7 @@ describe("sw updater runtime safety", () => {
 		await Promise.resolve();
 
 		expect(updateStore.setCurrentVersion).not.toHaveBeenCalledWith("", expect.anything());
-		expect(updateStore.currentVersion).toBe("build-1000");
+		expect(updateStore.currentVersion).toBe(seeded);
 	});
 
 	it("does not reject module loading when updater store startup is unavailable", async () => {

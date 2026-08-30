@@ -4,6 +4,15 @@ import { pinia, useUpdateStore } from "./posapp/stores/index.js";
 const VERSION_ENDPOINT = "/assets/posawesome/dist/js/version.json";
 const SERVICE_WORKER_SCOPE = "/sw.js";
 const VERSION_CACHE_TTL = 30 * 1000;
+// Critique E5: how often the register asks the SERVER what is deployed,
+// independent of the service-worker lifecycle. The fleet's staleness mode is
+// a cache-pinned sw.js — same bytes on every registration.update(), so
+// `updatefound` never fires and the SW-event chain below learns nothing.
+// version.json is fetched no-store and is fresh the moment a deploy lands,
+// so this poll is the detection path a poisoned SW cannot silence.
+const DEPLOYED_VERSION_POLL_MS = 5 * 60 * 1000;
+
+declare const __BUILD_VERSION__: string | undefined;
 
 let cachedVersionInfo: {
 	version: string | null;
@@ -52,6 +61,22 @@ export interface ActiveVersionTransition {
 	markUpdateApplied: boolean;
 	reloadWindow: boolean;
 	clearReloadState: boolean;
+}
+
+/**
+ * Whether a polled deployed version is NEWS: both sides known and different.
+ * The runtime side is the EXECUTING bundle's own stamp, never a storage echo
+ * — localStorage can already hold the new stamp (another tab, an SW message)
+ * while this window still runs old code, and that drift is exactly the state
+ * the poll exists to catch.
+ */
+export function deployedVersionDiffers(
+	polled: string | null | undefined,
+	runtime: string | null | undefined,
+): boolean {
+	const polledVersion = String(polled ?? "").trim();
+	const runtimeVersion = String(runtime ?? "").trim();
+	return Boolean(polledVersion && runtimeVersion && polledVersion !== runtimeVersion);
 }
 
 export function resolveActiveVersionTransition({
@@ -111,6 +136,46 @@ if (typeof window !== "undefined" && "serviceWorker" in navigator) {
 	const updateStore = useUpdateStore();
 	updateStore.initializeFromStorage();
 	updateStore.setReloadAction(triggerServiceWorkerUpdate);
+
+	// "Current" means the code THIS window executes, so the executing
+	// bundle's own compile-time stamp outranks whatever storage carries —
+	// another tab or a controller message can have stamped the NEW version
+	// there while this window still runs the old code, and adopting that
+	// echo would silence the very signal the poll below exists to raise.
+	const runtimeBundleVersion =
+		typeof __BUILD_VERSION__ !== "undefined" && __BUILD_VERSION__
+			? String(__BUILD_VERSION__)
+			: null;
+	if (runtimeBundleVersion && updateStore.currentVersion !== runtimeBundleVersion) {
+		updateStore.setCurrentVersion(runtimeBundleVersion, null);
+	}
+
+	async function pollDeployedVersion() {
+		try {
+			const info = await fetchBuildInfo(true);
+			const runtime = runtimeBundleVersion || updateStore.currentVersion;
+			if (!info || !deployedVersionDiffers(info.version, runtime)) {
+				return;
+			}
+			updateStore.setAvailableVersion(info.version, info.timestamp || null);
+			// Nudge the SW so «Reload Now» finds the new bytes already
+			// waiting; harmless when the SW is pinned — the poll's signal
+			// does not depend on it.
+			navigator.serviceWorker
+				.getRegistration(SERVICE_WORKER_SCOPE)
+				.then((registration) => registration?.update())
+				.catch(() => {});
+		} catch (err) {
+			warnVersionFailure("Failed to poll deployed version", err);
+		}
+	}
+	window.setTimeout(() => void pollDeployedVersion(), 10_000);
+	window.setInterval(() => void pollDeployedVersion(), DEPLOYED_VERSION_POLL_MS);
+	document.addEventListener("visibilitychange", () => {
+		// A tablet that slept through a deploy learns the moment it wakes.
+		if (document.visibilityState === "visible") void pollDeployedVersion();
+	});
+	window.addEventListener("online", () => void pollDeployedVersion());
 
 	let lastKnownActiveVersion = updateStore.currentVersion || null;
 	let hasRequestedInitialVersion = false;

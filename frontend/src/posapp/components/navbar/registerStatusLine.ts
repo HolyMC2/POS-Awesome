@@ -61,6 +61,12 @@ export interface StatusChip {
 	 * carry the full words.
 	 */
 	iconOnly?: boolean;
+	/**
+	 * Render as a real button and let the bar act on a tap (critique E5).
+	 * Reserved for chips that ARE an action, not a fact — today only the
+	 * pending-update chip, whose tap reopens the update prompt.
+	 */
+	actionable?: boolean;
 }
 
 export interface RegisterStatusLine {
@@ -106,6 +112,15 @@ export interface RegisterStatusInput {
 	/** `usePrintHealthShared().rollup` — only meaningful with silent print on. */
 	printerStatus?: "ok" | "warn" | "fail" | "unknown";
 	usesSilentPrint?: boolean;
+	/**
+	 * A newer build is deployed than the one this window is running
+	 * (critique E5). Unlike the printer chip this is NOT wallpaper: it is
+	 * actionable, transient (the reload kills it), and it exists precisely
+	 * for the register whose update dialog was dismissed and whose service
+	 * worker is cache-pinned — the two states in which staleness used to be
+	 * invisible while fixed bugs kept resurfacing at the till.
+	 */
+	updateReady?: boolean;
 	/** `useOnlineStatus().isOnline` — server reachability, not `navigator.onLine`. */
 	online?: boolean;
 	/** Offline queue depth. Anything above zero forbids the synced claim. */
@@ -387,6 +402,19 @@ export function resolveRegisterStatusLine(
 		}
 		const printer = printerChip(input);
 		if (printer) chips.push(printer);
+		if (input.updateReady) {
+			chips.push({
+				id: "update",
+				labelKey: "Update",
+				tone: "warning",
+				icon: "mdi-update",
+				actionable: true,
+				// Outlasts the clock and the day count; yields before saldo
+				// and the connection claim. The dialog and the idle
+				// auto-apply still exist on a bar too narrow to carry this.
+				priority: 3,
+			});
+		}
 	}
 
 	// Saldo BEFORE the connection chip. The stylesheet has always claimed the

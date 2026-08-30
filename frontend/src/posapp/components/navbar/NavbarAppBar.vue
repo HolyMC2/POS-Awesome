@@ -60,7 +60,7 @@
 		     beside it: it IS the middle of the bar. Convergence checklist item
 		     A — the artboard states the register's condition in words on this
 		     row, where we previously carried it as icons further right. -->
-		<RegisterStatusLine :input="registerStatusInput" />
+		<RegisterStatusLine :input="registerStatusInput" @chip-action="onStatusChipAction" />
 
 		<!-- Actions Section (right in LTR, left in RTL) -->
 		<div :class="['pos-navbar-actions-section', isRtl ? 'rtl-actions-section' : 'ltr-actions-section']">
@@ -269,6 +269,7 @@ import { useUIStore } from "../../stores/uiStore";
 import { useInvoiceStore } from "../../stores/invoiceStore";
 import { useOnlineStatus } from "../../composables/core/useOnlineStatus";
 import { usePrintHealthShared } from "../../composables/core/usePrintHealthShared";
+import { useUpdateStore } from "../../stores/updateStore";
 import posLogo from "../pos/pos.png";
 import NavbarInfoGadgets from "./NavbarInfoGadgets.vue";
 import RegisterStatusLine from "./RegisterStatusLine.vue";
@@ -330,6 +331,15 @@ export default {
 		} catch {
 			printHealth = null;
 		}
+		// E5: the strip's update chip reads the same store the prompt does.
+		// Same try/catch discipline — a spec mount without pinia simply has
+		// no chip.
+		let navUpdateStore = null;
+		try {
+			navUpdateStore = useUpdateStore();
+		} catch {
+			navUpdateStore = null;
+		}
 
 		const now = ref(new Date());
 		const clockTimer = setInterval(() => {
@@ -373,6 +383,7 @@ export default {
 			navInvoiceStore: invoiceStore,
 			navOnlineStatus: onlineStatus,
 			navPrintHealth: printHealth,
+			navUpdateStore,
 			navSyncStore: syncStore,
 			navNow: now,
 		};
@@ -501,6 +512,12 @@ export default {
 				ticketsToday: this.navTicketsToday ?? null,
 				printerStatus: this.navPrintHealth?.rollup?.value || "unknown",
 				usesSilentPrint: Boolean(profile?.posa_silent_print),
+				// E5: survives the prompt's dismissal on purpose — dismiss
+				// closes the DIALOG, not the fact that this window runs old
+				// code. Dies with the reload.
+				updateReady: Boolean(
+					this.navUpdateStore?.isUpdateReady && !this.navUpdateStore?.reloading,
+				),
 				online: this.navOnlineStatus?.isOnline?.value !== false,
 				pendingCount: this.navSyncStore?.pendingInvoicesCount || 0,
 			// The pouch balance, and ONLY on a register that sells airtime
@@ -557,6 +574,14 @@ export default {
 	},
 
 	methods: {
+		// E5: the update chip's tap reopens the prompt — one reload action,
+		// owned by the dialog, and the chip is only the doorway back to it
+		// after a dismissal (clearing the dismissal is what re-raises it).
+		onStatusChipAction(chipId) {
+			if (chipId !== "update" || !this.navUpdateStore) return;
+			this.navUpdateStore.clearDismissed();
+			this.navUpdateStore.resetSnooze();
+		},
 		updateWindowWidth() {
 			if (this.resizeRafId) {
 				cancelAnimationFrame(this.resizeRafId);

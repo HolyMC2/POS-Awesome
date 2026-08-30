@@ -22,25 +22,36 @@
 		</div>
 
 		<div v-if="line" class="register-status-line__chips">
-			<span
+			<!-- An actionable chip (E5's update chip) is a real button — same
+			     footprint, same ladder, but a tap means something. Everything
+			     else stays an inert span so nothing invites a press it cannot
+			     answer. -->
+			<component
+				:is="chip.actionable ? 'button' : 'span'"
 				v-for="chip in line.chips"
 				:key="chip.id"
+				:type="chip.actionable ? 'button' : undefined"
 				class="register-status-chip"
 				:class="[
 					`register-status-chip--${chip.tone}`,
-					{ mono: chip.mono, 'register-status-chip--icon-only': chip.iconOnly },
+					{
+						mono: chip.mono,
+						'register-status-chip--icon-only': chip.iconOnly,
+						'register-status-chip--action': chip.actionable,
+					},
 				]"
 				:data-testid="`register-status-chip-${chip.id}`"
 				:data-tone="chip.tone"
 				:data-priority="chip.priority"
 				:title="chip.iconOnly ? translate(chip.labelKey, chip.labelParams) : undefined"
 				:aria-label="chip.iconOnly ? translate(chip.labelKey, chip.labelParams) : undefined"
+				@click="chip.actionable ? $emit('chip-action', chip.id) : undefined"
 			>
 				<v-icon v-if="chip.icon" :icon="chip.icon" size="13" />
 				<template v-if="!chip.iconOnly">{{
 					chip.mono ? chip.labelKey : translate(chip.labelKey, chip.labelParams)
 				}}</template>
-			</span>
+			</component>
 		</div>
 	</div>
 </template>
@@ -77,6 +88,8 @@ import {
 const props = withDefaults(defineProps<{ input?: RegisterStatusInput }>(), {
 	input: () => ({}),
 });
+
+defineEmits<{ "chip-action": [chipId: string] }>();
 
 const compact = computed(() => Boolean(props.input?.compact));
 
@@ -241,6 +254,20 @@ const subtitle = computed(() =>
  * a state marker rather than a headline that never changes. */
 .register-status-chip--icon-only {
 	padding: 3px 6px;
+}
+
+/* E5: the one chip that is a control. A button element brings its own UA
+ * chrome, so it is reset back to the chip's shape — and given the cursor
+ * and focus ring the inert chips rightly lack. */
+.register-status-chip--action {
+	border: 0;
+	font: inherit;
+	cursor: pointer;
+}
+
+.register-status-chip--action:focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: 1px;
 }
 
 .mono {

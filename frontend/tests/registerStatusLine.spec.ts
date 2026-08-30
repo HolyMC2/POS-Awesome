@@ -215,6 +215,21 @@ describe("chips that must not appear rather than appear wrong", () => {
 		expect(chip(SELLING, "printer")).toBeUndefined();
 	});
 
+	it("raises an ACTIONABLE update chip when a newer build is deployed (E5)", () => {
+		// Unlike the printer pill this is not wallpaper: it is a control, it
+		// survives the prompt's dismissal, and the reload kills it.
+		const update = chip({ ...SELLING, updateReady: true }, "update");
+		expect(update?.actionable).toBe(true);
+		expect(update?.icon).toBe("mdi-update");
+		expect(update?.tone).toBe("warning");
+		expect(update?.labelKey).toBe("Update");
+		expect(chip(SELLING, "update")).toBeUndefined();
+	});
+
+	it("keeps the update chip off the compact bar — the dialog still serves there", () => {
+		expect(chip({ ...SELLING, updateReady: true, compact: true }, "update")).toBeUndefined();
+	});
+
 	it("warns as a degraded ICON when the printer is unhealthy, sentence on the tooltip", () => {
 		for (const status of ["warn", "fail"] as const) {
 			const degraded = chip({ ...SELLING, printerStatus: status }, "printer");
