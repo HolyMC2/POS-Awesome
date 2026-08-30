@@ -170,17 +170,19 @@
 				     header is teleported INTO this div by the one ItemsSelector,
 				     and a `v-if` here would tear that teleport down and put the
 				     register's only scanner attach/detach pair on a view switch. -->
-				<!-- On movil BROWSE this bar goes invisible-but-live: the teal
-				     bar in MobileBrowseScreen is the one search the artboard
-				     draws, and it ECHOES this input's text — hiding with
-				     opacity (never display:none) keeps the field focusable,
-				     the wedge writing into it, and the phone keyboard rising
-				     when the teal bar hands focus over. Two visible bars was
-				     the round-1 seam this closes. -->
+				<!-- On the movil shell this bar goes invisible-but-live on EVERY
+				     tab: the teal bar in MobileBrowseScreen is the one search the
+				     artboard draws (it ECHOES this input's text), and Ofertas /
+				     Carrito / Cupones / Pagar own no search at all — the bar
+				     showing there was the "old searchbar leaks to other views"
+				     Marco reported (08-30). Hiding with opacity (never
+				     display:none) keeps the field focusable, the wedge writing
+				     into it from any tab, and the phone keyboard rising when the
+				     teal bar hands focus over. -->
 				<div
 					v-show="!hostedDestinationId && !cobroHosted && !floorOwnsStage"
 					id="register-scan-bar"
-					:class="{ 'register-scan-bar--movil-ghost': movilBrowseActive }"
+					:class="{ 'register-scan-bar--movil-ghost': movilPhone }"
 				></div>
 
 				<!-- movilOrdenActive joins the guard (round 4): the phone's orden

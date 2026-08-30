@@ -1177,8 +1177,17 @@ export default {
 	position: relative;
 	display: flex;
 	align-items: center;
-	/* Allow the status+saldo cluster to give ground before the navbar
-	   overflows at phone width. */
-	min-width: 0;
+	/* The cluster NEVER shrinks below its content. It used to (`min-width:
+	   0`, "give ground at phone width") — but its children are buttons that
+	   cannot shrink, so giving ground meant the saldo badge sliding under
+	   the drafts button: the top-bar overlap reported from phones daily
+	   (Marco, 08-30; measured at 390px: a 79px box holding 48 + 50). What
+	   gives ground is the register status line — min-width: 0 with an
+	   ellipsis for exactly that. */
+	flex: 0 0 auto;
+}
+
+.status-entry-surface > * {
+	flex: 0 0 auto;
 }
 </style>

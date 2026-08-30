@@ -689,7 +689,10 @@ export default {
 	gap: 8px;
 	flex-direction: row;
 	/* Default to normal row */
-	min-width: 0;
+	/* Never shrinks: every child is a fixed-size button, so a shrinking
+	   group can only overlap itself (the phone top-bar overlap). The brand
+	   section and the status line are the flexible parties. */
+	flex: 0 0 auto;
 }
 
 .rtl-actions-section {
