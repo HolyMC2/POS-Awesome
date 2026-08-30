@@ -27,6 +27,8 @@ import actionsSource from "../src/posapp/components/pos/invoice/InvoiceActionBut
 import stripSource from "../src/posapp/components/pos/customer/CustomerStrip.vue?raw";
 import drawerSource from "../src/posapp/components/pos/shell/drawer/CatalogDrawer.vue?raw";
 import headerSource from "../src/posapp/components/pos/items/ItemHeader.vue?raw";
+import customerSource from "../src/posapp/components/pos/customer/Customer.vue?raw";
+import cartRowSource from "../src/posapp/components/pos/invoice/CartItemRow.vue?raw";
 import cardSource from "../src/posapp/components/pos/items/ItemCard.vue?raw";
 import cardsSource from "../src/posapp/components/pos/items/ItemsSelectorCards.vue?raw";
 import selectorSource from "../src/posapp/components/pos/items/ItemsSelector.vue?raw";
@@ -36,6 +38,10 @@ import responsiveSource from "../src/posapp/composables/pos/items/useItemsTableR
 // off disk instead (node environment on purpose: nothing here mounts).
 const tokensSource = readFileSync(
 	new URL("../src/posapp/styles/register-tokens.css", import.meta.url),
+	"utf8",
+);
+const tableSource = readFileSync(
+	new URL("../src/posapp/components/pos/invoice/items-table-styles.css", import.meta.url),
 	"utf8",
 );
 
@@ -69,6 +75,9 @@ describe("dense desk tier — one viewport, two stacks", () => {
 		["CustomerStrip.vue", stripSource],
 		["CatalogDrawer.vue", drawerSource],
 		["ItemHeader.vue", headerSource],
+		["Customer.vue", customerSource],
+		["CartItemRow.vue", cartRowSource],
+		["items-table-styles.css", tableSource],
 	])("%s carries the tier under the SAME query the JS switches on", (_name, source) => {
 		expect(source).toContain(TIER_QUERY);
 		// And no sibling pair with a drifted number: every (min-width … max-height)

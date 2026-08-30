@@ -276,6 +276,35 @@
 		margin-right: 4px;
 	}
 }
+/* Dense desk tier (utils/itemSelectorLayout DENSE_DESK_*): ≥1100px wide,
+ * ≤820px tall. The quick-action row under the picker measured 84px of a
+ * ~130px card; «Nuevo cliente» duplicates the picker menu's own entry, so
+ * it goes, and «Editar» — which has no other door — stays as a 30px chip.
+ * The 1.5rem right gutter was the desk's breathing room. */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.customer-input-wrapper {
+		padding-right: 0;
+	}
+
+	.customer-control-row {
+		gap: 6px;
+	}
+
+	.customer-action-btn--new {
+		display: none;
+	}
+
+	.customer-action-btn {
+		min-height: 30px;
+		font-size: 0.78rem;
+		padding: 0 10px;
+	}
+
+	.customer-quick-actions {
+		gap: 6px;
+		margin-top: 4px;
+	}
+}
 </style>
 
 <script>

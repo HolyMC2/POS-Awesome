@@ -1999,6 +1999,45 @@ export default {
 	.invoice-sections {
 		gap: 4px;
 	}
+
+	/* Sale details (Marco, round 4: «recycled old stuff like the user
+	   selector … cargo de entregas … still on the big UI»). The section cards
+	   kept the desk's 1rem headings on 14px of top padding and 40px fields;
+	   on the tier the heading is the register's micro-label voice, the grids
+	   sit on 4px, and the fields inside (Customer, Delivery charges, posting
+	   date, currency — other components' markup, hence :deep) are 36px. */
+	.invoice-section-heading {
+		padding: 6px 12px 0;
+	}
+
+	.invoice-section-heading__title {
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--pos-text-secondary, #667085);
+	}
+
+	.invoice-top-grid,
+	.invoice-meta-grid {
+		gap: 4px;
+	}
+
+	.invoice-config-sections__body {
+		gap: 4px;
+	}
+
+	.invoice-config-sections :deep(.v-field__input) {
+		min-height: 36px;
+		padding-top: 14px;
+		padding-bottom: 2px;
+		font-size: 0.9rem;
+	}
+
+	.invoice-config-sections :deep(.v-field__label) {
+		font-size: 0.7rem;
+		top: 3px;
+	}
 }
 
 /* Short-viewport density (live find, cafetería tablets 08-30). At ~530px of

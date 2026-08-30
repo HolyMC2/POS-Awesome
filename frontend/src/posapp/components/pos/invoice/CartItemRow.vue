@@ -1298,4 +1298,19 @@ td {
 	outline-offset: 2px;
 	z-index: 10;
 }
+/* Dense desk tier (utils/itemSelectorLayout DENSE_DESK_*): ≥1100px wide,
+ * ≤820px tall. Marco (round 4): «some text like the item name on the cart
+ * is kinda big on some views». The name inherited the table's body size;
+ * on the tier it reads at 0.88rem with its identity line at 11px — still
+ * two lines when the name needs them, less of the row when it doesn't. */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.posa-cart-item-row__name {
+		font-size: 0.88rem;
+		line-height: 1.2;
+	}
+
+	.posa-cart-item-row__identity {
+		font-size: 11px;
+	}
+}
 </style>
