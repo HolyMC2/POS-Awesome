@@ -57,6 +57,7 @@
 					:rate-precision="ratePrecision"
 					:is-negative="isNegative"
 					:compact="isCompact"
+					:dense="cardDense"
 					:low-stock-threshold="posProfile?.posa_low_stock_alert_threshold"
 					:style="{
 						width: cardColumnWidth + 'px',
@@ -95,6 +96,8 @@ const props = defineProps({
 	cardSlotWidth: { type: Number, default: 0 },
 	cardColumnWidth: { type: Number, default: 0 },
 	cardRowHeight: { type: Number, default: 0 },
+	/** Dense desk tier (layout composable): the 128px mini-card slot. */
+	cardDense: { type: Boolean, default: false },
 	virtualScrollBuffer: { type: Number, default: 200 },
 	posProfile: { type: Object, default: () => ({}) },
 	context: { type: String, default: "pos" },

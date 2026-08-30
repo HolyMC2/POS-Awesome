@@ -2,9 +2,13 @@
 	<div
 		:class="[
 			'card-item-card',
-			{ 'item-highlighted': isItemHighlighted, 'card-item-card--compact': compact },
+			{
+				'item-highlighted': isItemHighlighted,
+				'card-item-card--compact': compact,
+				'card-item-card--dense': dense,
+			},
 		]"
-		:data-card-anatomy="compact ? 'compact' : 'roomy'"
+		:data-card-anatomy="dense ? 'dense' : compact ? 'compact' : 'roomy'"
 		data-pos-keyboard-target="item-card"
 		tabindex="0"
 		role="button"
@@ -125,6 +129,14 @@ const props = defineProps({
 	 * drawer on a 1440 screen is a desktop by every window measure.
 	 */
 	compact: { type: Boolean, default: false },
+	/**
+	 * The dense desk tier's mini anatomy (68px plate, one-line name, no code)
+	 * for the 128px slot the virtual scroller deals there. Decided by the
+	 * VIEWPORT — `isDenseDeskViewport` in the layout composable — because
+	 * what it answers is a shortage of height, which no panel width can
+	 * tell. Arrives together with `compact` (a 128px column is compact).
+	 */
+	dense: { type: Boolean, default: false },
 	/** `posa_low_stock_alert_threshold` — the register's own number. */
 	lowStockThreshold: { type: [Number, String], default: 0 },
 });
@@ -560,4 +572,43 @@ const onDragEnd = (event) => {
 	transform: none;
 }
 
+/* Dense desk tier (utils/itemSelectorLayout DENSE_*): the 128px slot the
+   virtual scroller deals on a short landscape desk (≥1100 wide, ≤820 tall).
+   Rides on --compact — a 128px column is compact by width — and trims only
+   what that anatomy cannot fit in 128px: the plate drops to 68px, the name
+   goes to one line, the code goes. The card stays the tap target: 128 × 128
+   clears the 44px coarse floor with room to spare. */
+.card-item-card--dense .card-item-image-container {
+	height: 68px;
+}
+
+.card-item-card--dense .card-item-content {
+	padding: 5px 8px 6px;
+	gap: 2px;
+}
+
+.card-item-card--dense .card-item-header {
+	min-width: 0;
+}
+
+.card-item-card--dense .card-item-name {
+	display: block;
+	font-size: 0.76rem;
+	line-height: 1.2;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.card-item-card--dense .card-item-code {
+	display: none;
+}
+
+.card-item-card--dense .card-item-details {
+	padding: 0;
+}
+
+.card-item-card--dense .primary-price {
+	font-size: 0.82rem;
+}
 </style>

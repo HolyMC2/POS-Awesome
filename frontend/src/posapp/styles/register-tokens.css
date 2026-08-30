@@ -261,6 +261,29 @@
 	font-feature-settings: "tnum" 1;
 }
 
+/* ---- dense desk tier (Marco, 08-30: «desk view on horizontal tablets») ---
+ * ≥1100px wide (the shell's compact boundary — the desk layout survives),
+ * ≤820px tall: a landscape tablet or a laptop. At 1195×741 the 134px band
+ * left the cart table 86px; a 104px band with a 44px figure keeps the total
+ * the heaviest thing on the screen and hands 30px back to the goods. The
+ * numbers are utils/itemSelectorLayout's DENSE_DESK_* — the JS card-grid
+ * geometry switches on the same viewport, and tests/denseDeskTier.spec.ts
+ * holds the two together. The 640px layer below is the harder cut and
+ * still wins there (same selectors, later in the file). */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.posapp,
+	:root {
+		--reg-band-height: 104px;
+		--reg-band-pad-x: 18px;
+		--reg-band-gap: 18px;
+		--reg-band-number-size: 44px;
+		--reg-band-divider-height: 72px;
+		--reg-band-action-height: 72px;
+		--reg-band-action-size: 19px;
+		--reg-band-figure-min: min(340px, 26vw);
+	}
+}
+
 /* ---- short-viewport density (live find, cafetería tablets 08-30) --------
  * A landscape tablet gives the register ~530px of height, and the desk
  * scale — 134px band, 60px figure, 92px primary — left the CART with zero

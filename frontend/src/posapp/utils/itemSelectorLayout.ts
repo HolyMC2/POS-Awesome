@@ -81,6 +81,25 @@ export const CARD_MAX_COLUMNS = 6;
 export const COMPACT_CARD_MAX_WIDTH = CARD_PREFERRED_WIDTH;
 
 /**
+ * Dense desk tier — a landscape tablet (or a laptop) keeping the two-column
+ * register: ≥1100px wide (the shell's own compact boundary) but ≤820px tall.
+ * HEIGHT is what starves that screen, not width: at 1195×741 the anchored
+ * drawer showed one row of 280px cards and the cart table got 86px (Marco,
+ * 08-30). These two numbers are the media query every CSS tier of the same
+ * name carries — `tests/denseDeskTier.spec.ts` keeps them in lockstep.
+ */
+export const DENSE_DESK_MIN_WIDTH = 1100;
+export const DENSE_DESK_MAX_HEIGHT = 820;
+/** The mini card the dense tier packs: 68px plate, one-line name, no code. */
+export const DENSE_CARD_MIN_WIDTH = 124;
+export const DENSE_CARD_ROW_HEIGHT = 128;
+
+export type CardGeometryOptions = { dense?: boolean };
+
+export const isDenseDeskViewport = (windowWidth: number, windowHeight: number): boolean =>
+	windowWidth >= DENSE_DESK_MIN_WIDTH && windowHeight > 0 && windowHeight <= DENSE_DESK_MAX_HEIGHT;
+
+/**
  * Columns from the MEASURED container width (never the window). The grid lives
  * in panels of very different widths — the 400px drawer, the phone's full-width
  * tab, a wide purchase panel — so only the container can size it.
@@ -92,6 +111,7 @@ export const getCardColumnsForContainer = (
 	width: number,
 	gap: number = 16,
 	padding: number = 16,
+	options: CardGeometryOptions = {},
 ): number => {
 	if (!width || width <= 0) {
 		// 0 means "not measured yet" — the caller falls back to the window
@@ -106,6 +126,11 @@ export const getCardColumnsForContainer = (
 	// n cards of w need n*w + (n-1)*gap. Adding one gap to both sides of that
 	// inequality turns it into a plain division.
 	const fit = (cardWidth: number) => Math.floor((usable + gap) / (cardWidth + gap));
+	if (options.dense) {
+		// Pack the mini card: a 441px anchored drawer seats three 128px
+		// columns where the roomy rule below seats two 208px posters.
+		return Math.max(1, Math.min(CARD_MAX_COLUMNS, fit(DENSE_CARD_MIN_WIDTH)));
+	}
 
 	// TWO TIERS, and the second one is the whole fix.
 	//
@@ -177,7 +202,14 @@ export const isCompactCard = (columnWidth: number): boolean =>
  * The compact figure is the artboard's card measured: 88px plate + a two-line
  * name + the code + the price/stock baseline + padding.
  */
-export const getCardRowHeight = (columnWidth: number, windowWidth: number): number => {
+export const getCardRowHeight = (
+	columnWidth: number,
+	windowWidth: number,
+	options: CardGeometryOptions = {},
+): number => {
+	if (options.dense) {
+		return DENSE_CARD_ROW_HEIGHT;
+	}
 	if (isCompactCard(columnWidth)) {
 		return 184;
 	}

@@ -3245,4 +3245,27 @@ export default {
 	border-radius: 50%;
 	background: #e9a13b;
 }
+/* Dense desk tier (utils/itemSelectorLayout DENSE_DESK_*): ≥1100px wide,
+ * ≤820px tall — a landscape tablet or a laptop keeping the two-column
+ * register Marco prefers; wide enough for it, too short to feed it.
+ * Measured at 1195×741 against the live demo: the JS-set --dynamic-sm (7px)
+ * padded the cart column twice over, and the scan bar stacked 12px + 12px
+ * of top padding over a 40px field. The 640px layer (register-tokens,
+ * Invoice, CatalogDrawer) still applies on top of this one. */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.dynamic-col--selector,
+	.dynamic-col--invoice {
+		padding: 4px;
+		margin-top: 4px;
+	}
+
+	/* ItemHeader's markup, teleported in — hence :deep. */
+	#register-scan-bar :deep(.sticky-header) {
+		padding-top: 6px;
+	}
+
+	#register-scan-bar :deep(.sticky-header .v-col-12) {
+		padding-top: 6px;
+	}
+}
 </style>

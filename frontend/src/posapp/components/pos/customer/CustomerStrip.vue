@@ -238,4 +238,28 @@ const chips = computed(() => {
 	color: var(--pos-warning-text, #8a5a00);
 	font-weight: 700;
 }
+/* Dense desk tier (utils/itemSelectorLayout DENSE_DESK_*): ≥1100px wide,
+ * ≤820px tall. The strip's three stacked rows measured 80px at 1195×741;
+ * flowed as one wrapping row they measure 54 — name, provenance chips and
+ * the CRM line share the width the cart column has to spare. */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.customer-strip {
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 2px 14px;
+		padding: 2px 2px 3px;
+	}
+
+	.customer-strip__identity,
+	.customer-strip__chips,
+	.customer-strip :deep(.crm-strip) {
+		flex: 0 1 auto;
+		min-width: 0;
+	}
+
+	.customer-strip :deep(.crm-strip) {
+		padding-top: 0;
+	}
+}
 </style>

@@ -7,6 +7,7 @@ import {
 	getCardGap,
 	getCardPadding,
 	getCardRowHeight,
+	isDenseDeskViewport,
 } from "../../../utils/itemSelectorLayout.js";
 
 type SelectorLayoutOptions = {
@@ -33,6 +34,7 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 
 	// State
 	const windowWidth = ref(window.innerWidth);
+	const windowHeight = ref(window.innerHeight);
 	const itemsContainerRef = ref<any>(null);
 	const scrollThrottle = ref<number | null>(null);
 
@@ -71,6 +73,11 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 	// until the panel mounts.
 	const cardGap = computed(() => getCardGap(windowWidth.value));
 	const cardPadding = computed(() => getCardPadding(windowWidth.value));
+	// Dense desk tier (utils/itemSelectorLayout): the two-column register on a
+	// screen wide enough for it but too short to feed it. Viewport-keyed on
+	// purpose — a shortage of HEIGHT is not something the container's width
+	// (which sizes everything else here) can tell.
+	const denseDesk = computed(() => isDenseDeskViewport(windowWidth.value, windowHeight.value));
 
 	// The count is decided with the SAME gap and padding the grid is then laid
 	// out with. The old call passed the container width alone, so the count and
@@ -81,6 +88,7 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 			measuredContainerWidth.value,
 			cardGap.value,
 			cardPadding.value,
+			{ dense: denseDesk.value },
 		);
 		return containerColumns > 0 ? containerColumns : getCardColumns(windowWidth.value);
 	});
@@ -91,7 +99,9 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 	// `ItemsSelectorCards` asks `isCompactCard(cardColumnWidth)` the same
 	// question for the card's anatomy; one function, one answer, so the slot
 	// and the thing in it cannot disagree about which card is being drawn.
-	const cardRowHeight = computed(() => getCardRowHeight(cardColumnWidth.value, windowWidth.value));
+	const cardRowHeight = computed(() =>
+		getCardRowHeight(cardColumnWidth.value, windowWidth.value, { dense: denseDesk.value }),
+	);
 
 	const cardSlotHeight = computed(() => cardRowHeight.value + cardGap.value);
 	const cardSlotWidth = computed(() => cardColumnWidth.value + cardGap.value);
@@ -120,6 +130,7 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 	// Actions
 	const updateWindowWidth = () => {
 		windowWidth.value = window.innerWidth;
+		windowHeight.value = window.innerHeight;
 	};
 
 	// Window width still drives gap, padding, row height and the pre-mount
@@ -180,6 +191,7 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 		cardSlotHeight,
 		cardSlotWidth,
 		cardColumnWidth,
+		denseDesk,
 
 		// Methods
 		scheduleCardMetricsUpdate,

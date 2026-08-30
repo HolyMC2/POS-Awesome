@@ -332,4 +332,20 @@ defineExpose({ ACTION_CHIPS });
 		min-height: 44px !important;
 	}
 }
+/* Dense desk tier (utils/itemSelectorLayout DENSE_DESK_*): ≥1100px wide,
+ * ≤820px tall. At 1195×741 the strip wrapped to two rows (85px) because the
+ * chord badges pushed «Cancelar Venta» down; without them the counts and
+ * the three chips sit on one 37px row. Chords are keyboard affordances — the
+ * shortcuts keep working, the badges just stop spending a cart row. */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.pos-action-strip {
+		margin-top: 0;
+		padding: 4px 8px;
+		gap: 6px 8px;
+	}
+
+	.pos-action-strip__chord {
+		display: none;
+	}
+}
 </style>

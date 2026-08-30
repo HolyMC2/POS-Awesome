@@ -120,6 +120,7 @@
 								:card-slot-width="cardSlotWidth"
 								:card-column-width="cardColumnWidth"
 								:card-row-height="cardRowHeight"
+								:card-dense="denseDesk"
 								:virtual-scroll-buffer="virtualScrollBuffer"
 								:pos-profile="pos_profile"
 								:context="context"
@@ -801,6 +802,7 @@ const {
 	cardSlotHeight,
 	cardSlotWidth,
 	cardColumnWidth,
+	denseDesk,
 	itemsContainerRef,
 	scheduleCardMetricsUpdate,
 	onListScroll: handleListScroll,

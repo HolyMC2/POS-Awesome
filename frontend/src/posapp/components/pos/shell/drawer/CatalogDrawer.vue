@@ -753,6 +753,57 @@ defineExpose({ focusableChildren });
 	font-variant-numeric: tabular-nums;
 }
 
+/* Dense desk tier (utils/itemSelectorLayout DENSE_DESK_*): ≥1100px wide,
+ * ≤820px tall — a landscape tablet or a laptop keeping the desk layout
+ * Marco prefers. Measured at 1195×741 against the live demo: of the
+ * anchored drawer's 449px the goods got 188 — a 48px header, 12px of card
+ * margin, a 117px controls card and a 51px footer took the rest, and the
+ * grid dealt 280px poster cards two abreast. The virtual scroller's dense
+ * geometry (three 128px mini cards per row) lives in the layout composable;
+ * this is the chrome around it. Cumulative with the 640px layer below,
+ * which stays the harder cut. :deep() for the same reason it is used there.
+ * `.mb-2` is matched bare: a v-col given `cols` renders `v-col-12`, never a
+ * bare `v-col` class. */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.catalog-drawer__header {
+		height: 40px;
+	}
+
+	.catalog-drawer__footer {
+		padding: 2px 14px;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .dynamic-padding) {
+		padding: 4px;
+		gap: 4px;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .cards.mt-3) {
+		margin-top: 4px;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .selector-results-card) {
+		padding: 2px;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .cards .dynamic-spacing-sm) {
+		padding: 2px;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .cards .mb-2) {
+		margin-bottom: 4px !important;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .dynamic-margin-xs) {
+		margin: 0;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .v-btn-group .v-btn) {
+		padding: 0 8px;
+		min-width: 0;
+	}
+}
+
 /* Short-viewport density (live find #6 follow-up, 08-30). Tuned by CSS
  * injection against the live demo at 1162x535 before landing: the anchored
  * drawer's controls card was starving the goods, and a 132px card photo has

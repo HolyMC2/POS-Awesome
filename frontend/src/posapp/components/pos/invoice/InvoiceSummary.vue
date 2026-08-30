@@ -1623,6 +1623,31 @@ defineExpose({
 	}
 }
 
+/* Dense desk tier (utils/itemSelectorLayout DENSE_DESK_*): ≥1100px wide,
+ * ≤820px tall. The summary card measured 183px at 1195×741 for one row of
+ * chips and one descuento field: 8px of root padding twice (Vuetify's
+ * `py-2` on the root, hence the !important), the hero's own 4px, and a
+ * 22px `v-input__details` reserved under a field carrying no message. The
+ * details keep their box when there IS a message — only the reserve goes. */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.sticky-summary-card {
+		padding: 3px 8px !important;
+	}
+
+	.summary-money-row {
+		gap: 2px 12px;
+	}
+
+	.summary-hero {
+		padding: 0;
+	}
+
+	.summary-hero__field-wrap :deep(.v-input__details) {
+		min-height: 0;
+		padding-top: 0;
+	}
+}
+
 /* Short-viewport density: the 86px band (register-tokens' max-height layer)
  * must still seat three breakdown pairs — at desk scale they measure 80px
  * and clipped the DESCUENTO row against the band's bottom edge. */

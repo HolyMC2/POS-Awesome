@@ -19,7 +19,7 @@
 		<v-card
 			ref="invoiceCard"
 			:class="[
-				'cards my-0 py-0 mt-3 invoice-main-card',
+				'cards py-0 invoice-main-card',
 				'pos-themed-card',
 				{ 'return-mode': isReturnInvoice },
 			]"
@@ -1969,6 +1969,36 @@ export default {
 :deep(.column-switch .v-label) {
 	opacity: 0.9;
 	font-size: 0.95rem;
+}
+
+/* The main card's top margin used to be Vuetify's `mt-3` (an !important
+ * 12px no tier could lower); it is owned here now so the dense tier below
+ * can spend it. */
+.invoice-main-card {
+	margin: 12px 0 0;
+}
+
+/* Dense desk tier (utils/itemSelectorLayout DENSE_DESK_*): ≥1100px wide,
+ * ≤820px tall — a landscape tablet or a laptop keeping the desk layout.
+ * Measured at 1195×741 against the live demo: the cart column had 442px and
+ * the ITEMS TABLE got 86 of them — 12px of card margin, 7px of padding twice
+ * over, an 80px customer strip above it and a 183px summary card below.
+ * Every value here survived the injection loop (page.addStyleTag against
+ * the live register, zero deploys per iteration); with the strip, the
+ * action chips and the summary card trimmed in their own components the
+ * table measured 253px. The 640px layer below still applies on top. */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.invoice-main-card {
+		margin-top: 4px;
+	}
+
+	.invoice-main-card > .dynamic-padding {
+		padding: 4px 6px;
+	}
+
+	.invoice-sections {
+		gap: 4px;
+	}
 }
 
 /* Short-viewport density (live find, cafetería tablets 08-30). At ~530px of
