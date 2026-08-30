@@ -16,6 +16,13 @@ def _install_stubs():
     frappe_module.throw = lambda message: (_ for _ in ()).throw(Exception(message))
     frappe_module.get_all = lambda *args, **kwargs: []
     frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
+    # search.py (rate-band preview, e9993c613) asks `frappe.db.has_column`
+    # before it merges `posa_px_skip_rate_band` into each row. The stub
+    # answers False — the code's own "site mid-rollout ships no flag" branch —
+    # so this file keeps testing serialization and thumbnail wiring, not the
+    # band. Backend CI had been red on every push since that commit: the
+    # harness lacked `db` altogether (AttributeError, 3 errors / 670).
+    frappe_module.db = types.SimpleNamespace(has_column=lambda *args, **kwargs: False)
     sys.modules["frappe"] = frappe_module
 
     frappe_utils = types.ModuleType("frappe.utils")
