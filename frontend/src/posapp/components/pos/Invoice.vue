@@ -842,6 +842,10 @@ export default {
 
 			switch (payload?.kind) {
 				case "step": {
+					// CartItemRow's disableDecrement / disableIncrement, engine side.
+					if (item.posa_is_replace) return;
+					if (this.isReturnInvoice && (item.is_free_item || item.posa_is_offer)) return;
+					if (Number(payload.delta) > 0 && item.disable_increment) return;
 					// `add_one` / `subtract_one` verbatim: they already mirror
 					// the sign on a return invoice and remove the row when the
 					// step would land on zero, which is what the desk's − does.
@@ -870,8 +874,12 @@ export default {
 					return;
 				}
 				case "rate": {
+					// The engine re-checks the gate the sheet draws from
+					// (CartItemRow's disableRateEdit): a stale sheet or a
+					// synthetic emit must not out-rank the profile.
+					if (!this.pos_profile?.posa_allow_user_to_edit_rate || item.posa_is_replace) return;
 					const rate = Number(payload.rate);
-					if (!Number.isFinite(rate)) return;
+					if (!Number.isFinite(rate) || rate < 0) return;
 					this.setFormatedCurrency(item, "rate", null, false, {
 						target: { value: rate },
 					});
@@ -879,8 +887,15 @@ export default {
 					return;
 				}
 				case "discount": {
+					// CartItemRow's disableDiscountEdit, restated on the engine side.
+					if (
+						!this.pos_profile?.posa_allow_user_to_edit_item_discount ||
+						item.posa_is_replace ||
+						item.posa_offer_applied
+					)
+						return;
 					const discount = Number(payload.discount);
-					if (!Number.isFinite(discount)) return;
+					if (!Number.isFinite(discount) || discount < 0 || discount > 100) return;
 					this.setFormatedCurrency(item, "discount_percentage", null, false, {
 						target: { value: discount },
 					});
@@ -888,6 +903,8 @@ export default {
 					return;
 				}
 				case "remove": {
+					// The delete button's one condition, engine side.
+					if (item.posa_is_replace) return;
 					this.remove_item(item);
 					return;
 				}

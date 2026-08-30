@@ -777,6 +777,26 @@ describe("the routing and the engine call are pinned where they live", () => {
 		expect(handler).toContain("row?.posa_row_id === rowId");
 		expect(handler).toContain("row?.item_code === itemCode");
 		expect(handler).toContain("if (index < 0) return;");
+		// The gates the sheet draws from are re-checked ON THE ENGINE SIDE: a
+		// stale sheet, a replayed event or a synthetic emit cannot out-rank the
+		// profile. Same fields as CartItemRow's disableRateEdit /
+		// disableDiscountEdit / disableDecrement / the delete button.
+		const rateCase = handler.slice(handler.indexOf('case "rate"'), handler.indexOf('case "discount"'));
+		expect(rateCase).toContain("posa_allow_user_to_edit_rate");
+		expect(rateCase).toContain("item.posa_is_replace");
+		expect(rateCase).toContain("rate < 0");
+		const discountCase = handler.slice(
+			handler.indexOf('case "discount"'),
+			handler.indexOf('case "remove"'),
+		);
+		expect(discountCase).toContain("posa_allow_user_to_edit_item_discount");
+		expect(discountCase).toContain("item.posa_offer_applied");
+		expect(discountCase).toContain("discount > 100");
+		const stepCase = handler.slice(handler.indexOf('case "step"'), handler.indexOf('case "qty"'));
+		expect(stepCase).toContain("item.posa_is_replace");
+		expect(stepCase).toContain("item.disable_increment");
+		const removeCase = handler.slice(handler.indexOf('case "remove"'));
+		expect(removeCase).toContain("item.posa_is_replace");
 	});
 
 	it("declares the event on the closed bus map", () => {
