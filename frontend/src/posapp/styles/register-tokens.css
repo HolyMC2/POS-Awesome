@@ -260,3 +260,33 @@
 	font-variant-numeric: tabular-nums;
 	font-feature-settings: "tnum" 1;
 }
+
+/* ---- short-viewport density (live find, cafetería tablets 08-30) --------
+ * A landscape tablet gives the register ~530px of height, and the desk
+ * scale — 134px band, 60px figure, 92px primary — left the CART with zero
+ * rows and the pinned catalog with no item grid at all. This layer keeps
+ * the desk layout (Marco prefers it to the movil variant on tablets) and
+ * shrinks the BAND's geometry only where height, not width, is scarce.
+ *
+ * 34px for the figure is deliberately the roadmap's "discarded direction C"
+ * number: discarded at full height because the total deserves the weight —
+ * adopted here because at 530px the weight costs the goods their rows, and
+ * a register that cannot show what it is selling has worse problems than a
+ * smaller total.
+ *
+ * `.posapp, :root` — the same selector list that defines these above; a
+ * bare `:root` override would be shadowed wherever `.posapp` matches. */
+@media (max-height: 640px) {
+	.posapp,
+	:root {
+		--reg-band-height: 86px;
+		--reg-band-pad-x: 14px;
+		--reg-band-gap: 14px;
+		--reg-band-number-size: 34px;
+		--reg-band-divider-height: 54px;
+		--reg-band-action-height: 58px;
+		--reg-band-action-size: 16px;
+		--reg-band-figure-min: min(300px, 26vw);
+		--reg-band-breakdown-width: 200px;
+	}
+}

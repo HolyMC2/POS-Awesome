@@ -1970,4 +1970,22 @@ export default {
 	opacity: 0.9;
 	font-size: 0.95rem;
 }
+
+/* Short-viewport density (live find, cafetería tablets 08-30). At ~530px of
+ * height the config cards above the goods (customer strip, cuenta fields,
+ * toolbar, descuento) consumed the whole column and the ITEMS TABLE — the
+ * one thing a register exists to show — collapsed to zero. Below 640px the
+ * table takes a floor and the COLUMN becomes the scrollport: a second
+ * scrollport is a deliberate degradation here, traded for the goods being
+ * visible at all. Desk heights keep the strict single-scrollport chain. */
+@media (max-height: 640px) {
+	.invoice-sections {
+		overflow-y: auto;
+	}
+
+	.invoice-items-card {
+		flex: 0 0 auto;
+		min-height: 200px;
+	}
+}
 </style>

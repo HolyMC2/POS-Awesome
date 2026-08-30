@@ -4,7 +4,15 @@
 		:class="{ 'cards--with-mobile-offset': reserveBottomDockSpace }"
 	>
 		<v-row no-gutters align="center" justify="center" class="dynamic-spacing-sm">
-			<v-col cols="12" class="mb-2">
+			<!-- Side by side from md up (08-30): stacked full-width, these two
+			     ate 92px of a short tablet's pinned catalog while the item grid
+			     collapsed to nothing. Two ~200px selects read fine, and phones
+			     (cols=12) keep the stack. -->
+			<v-col
+				cols="12"
+				:md="posProfile.posa_px_enable_price_list_dropdown !== false ? 6 : 12"
+				class="mb-2 pe-md-1"
+			>
 				<v-select
 					:items="itemsGroup"
 					:label="frappe._('Items Group')"
@@ -15,7 +23,7 @@
 					@update:model-value="$emit('update:modelValue', $event)"
 				></v-select>
 			</v-col>
-			<v-col cols="12" class="mb-2" v-if="posProfile.posa_px_enable_price_list_dropdown !== false">
+			<v-col cols="12" md="6" class="mb-2 ps-md-1" v-if="posProfile.posa_px_enable_price_list_dropdown !== false">
 				<v-text-field
 					density="compact"
 					variant="solo"
