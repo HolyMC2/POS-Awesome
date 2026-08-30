@@ -1676,6 +1676,45 @@ def submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
 
     _deduplicate_free_items(invoice_doc)
 
+    # The retail tip moment (critique C2). The mesa path books tips inside
+    # settle_table_order; a counter register books them HERE — same gate
+    # (capability token + 2× cap in validate_profile_tip_amount), same
+    # PROPINA line, same posa_rt_tip_amount the corte counts. The client
+    # only names an amount in `data`; the line and the stamp are server
+    # work, so a crafted payload cannot smuggle a different shape.
+    #
+    # The PROPINA-line guard makes this idempotent AND mesa-safe: a settle
+    # routed through submit already carries its tip line, and a retried
+    # submit whose earlier attempt saved the draft must not tip twice.
+    retail_tip = flt(data.get("posa_rt_tip_amount") or 0)
+    if retail_tip > 0 and not cint(invoice_doc.get("is_return") or 0):
+        from posawesome.posawesome.api.restaurant.tips import (
+            TIP_ITEM_CODE,
+            _tip_item_docname,
+            tip_invoice_line,
+            validate_profile_tip_amount,
+        )
+
+        # The line's item_code is the Item DOCNAME — on doco sites an IPN
+        # serial, never the literal "PROPINA" (tips.py's own naming-series
+        # note) — so the replay guard must match both spellings.
+        tip_identities = {TIP_ITEM_CODE, _tip_item_docname() or TIP_ITEM_CODE}
+        has_tip_line = any(
+            str(row.item_code or "") in tip_identities for row in (invoice_doc.items or [])
+        )
+        if not has_tip_line:
+            base_total = sum(
+                flt(row.qty) * flt(row.rate) for row in (invoice_doc.items or [])
+            )
+            retail_tip = validate_profile_tip_amount(pos_profile, retail_tip, base_total)
+            if retail_tip:
+                invoice_doc.append("items", tip_invoice_line(invoice_doc.company, retail_tip))
+                invoice_doc.posa_rt_tip_amount = retail_tip
+                # Server truth before the money guards: the payment-vs-total
+                # invariant must compare against a grand_total that already
+                # carries the tip line.
+                invoice_doc.calculate_taxes_and_totals()
+
     if invoice_doc.redeem_loyalty_points and not invoice_doc.loyalty_program:
         invoice_doc.loyalty_program = frappe.db.get_value("Customer", invoice_doc.customer, "loyalty_program")
 

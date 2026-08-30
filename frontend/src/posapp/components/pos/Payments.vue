@@ -914,17 +914,22 @@ const invoice_doc = computed({
 	set: (value) => invoiceStore.setInvoiceDoc(value),
 });
 
-const restaurantOrderTotal = computed(() =>
-	(floorStore.activeOrder?.lines || []).reduce(
+const restaurantOrderTotal = computed(() => {
+	// The base the % chips quote from: the mesa ticket's lines when one owns
+	// this sale, else the counter invoice's own lines (critique C2). The
+	// retail tip never exists as a client line — the server injects it at
+	// submit — so this base is always pre-tip.
+	const mesaLines = floorStore.activeOrder?.lines || [];
+	const lines = mesaLines.length ? mesaLines : invoice_doc.value?.items || [];
+	return lines.reduce(
 		(sum, line) => sum + (Number(line.qty) || 0) * (Number(line.rate) || 0),
 		0,
-	),
-);
-const showRestaurantTips = computed(
-	() => shouldShowRestaurantTips(
+	);
+});
+const showRestaurantTips = computed(() =>
+	shouldShowRestaurantTips(
 		verticalStore.has("tips"),
-		floorStore.isRecordOnly,
-		Boolean(floorStore.activeOrder),
+		Boolean(invoice_doc.value?.is_return),
 	),
 );
 const TIP_TOTAL_FIELDS = [

@@ -4,6 +4,21 @@ All notable changes.
 
 ## Unreleased
 
+- **The retail tip moment (08-29, critique C2).** A counter register
+  whose preset grants `tips` now offers the same selector a mesa does —
+  the gate is the capability token alone (returns excluded: nobody tips
+  a refund). One validator for every tip (`validate_profile_tip_amount`:
+  capability refusal + 2× cap; the mesa path delegates to it), and the
+  retail booking is server work: the client sends only an amount in the
+  submit `data`; `submit_invoice` validates, injects the PROPINA line,
+  stamps `posa_rt_tip_amount` and recomputes totals BEFORE the money
+  guards. Replay/mesa-safe via a PROPINA-line guard matched on BOTH the
+  literal item code and the Item docname — on doco sites the line
+  carries an IPN serial, never "PROPINA", and the naive guard would
+  have double-tipped a retried submit (mirror drill proved it:
+  IPN006009). Retail tips land in the corte's «Propinas» tile through
+  the same field B5 counts. The % chips quote off the counter invoice's
+  own pre-tip lines. vitest 4787 ✓, vue-tsc 0.
 - **The self-service kiosk (08-29, critique D2).** `/kiosko` — a
   customer-facing screen on the chrome-free display layout whose only
   exit is a numbered «PAGA EN CAJA» charge request: the D3 hub row the

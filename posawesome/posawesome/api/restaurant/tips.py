@@ -37,7 +37,13 @@ def _tips_capability_enabled(pos_profile: str) -> bool:
     return "tips" in (payload.get("capabilities") or [])
 
 
-def validate_tip_amount(order, tip_amount) -> float:
+def validate_profile_tip_amount(pos_profile, tip_amount, base_total) -> float:
+    """One gate for every tip, wherever it is booked (critique C2).
+
+    The mesa settle and the retail submit both funnel here: same capability
+    refusal, same 2× cap. ``base_total`` is the PRE-tip line total of
+    whatever is being tipped — an order's lines or an invoice's.
+    """
     amount = flt(tip_amount)
     if amount < 0:
         frappe.throw(_("Tip amount cannot be negative."))
@@ -46,16 +52,20 @@ def validate_tip_amount(order, tip_amount) -> float:
         # return-heavy order with a negative line total must still settle
         # tip-free, on any register.
         return 0.0
-    if not _tips_capability_enabled(order.pos_profile):
+    if not _tips_capability_enabled(pos_profile):
         # Capability tokens gate the UI everywhere else (tables precedent);
         # tips are money, so the endpoint refuses independently — a crafted
         # client must not book propinas on a register whose preset lacks the
         # token (Marco ruling 2026-08-12, spec §6.6 M8).
         frappe.throw(_("This register does not accept tips."))
-    maximum = 2 * order_line_total(order)
+    maximum = 2 * flt(base_total)
     if amount > maximum:
         frappe.throw(_("Tip amount cannot exceed twice the order total."))
     return amount
+
+
+def validate_tip_amount(order, tip_amount) -> float:
+    return validate_profile_tip_amount(order.pos_profile, tip_amount, order_line_total(order))
 
 
 TIP_ITEM_GROUP = "Servicios POS"

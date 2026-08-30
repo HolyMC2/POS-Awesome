@@ -13,12 +13,16 @@ describe("restaurant tips", () => {
 	});
 
 	it("hides the row when the tips capability token is absent", () => {
-		expect(shouldShowRestaurantTips(false, true, true)).toBe(false);
+		expect(shouldShowRestaurantTips(false)).toBe(false);
 	});
 
-	it("shows only for a live Record-Only restaurant ticket", () => {
-		expect(shouldShowRestaurantTips(true, true, true)).toBe(true);
-		expect(shouldShowRestaurantTips(true, false, true)).toBe(false);
-		expect(shouldShowRestaurantTips(true, true, false)).toBe(false);
+	it("shows for every sale on a tips-enabled register — mesa AND counter (C2)", () => {
+		// Until 08-29 this required a live Record-Only mesa ticket, which is
+		// why a counter register with the token never saw the row.
+		expect(shouldShowRestaurantTips(true)).toBe(true);
+	});
+
+	it("never offers a tip on a return — nobody tips a refund", () => {
+		expect(shouldShowRestaurantTips(true, true)).toBe(false);
 	});
 });

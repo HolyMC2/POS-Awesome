@@ -983,6 +983,13 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			customer_credit_dict: unref(customerCreditDict),
 			gift_card_redemptions: unref(options.giftCardRedemptions) || [],
 			is_cashback: unref(isCashback),
+			// The retail tip moment (critique C2): the amount only — the
+			// server validates (capability + 2× cap), injects the PROPINA
+			// line and stamps posa_rt_tip_amount. On a mesa settle this
+			// same value travels to settle_table_order instead, and the
+			// submit path's PROPINA-line guard keeps the two from ever
+			// booking twice.
+			posa_rt_tip_amount: unref(options.restaurantTipAmount) || 0,
 		};
 		const hasGiftCardRedemption =
 			Array.isArray(data.gift_card_redemptions) &&
