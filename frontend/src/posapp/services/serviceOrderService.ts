@@ -48,6 +48,9 @@ export interface ServiceOrderCard {
 	repair_status?: string | null;
 	invoiced: boolean;
 	invoice?: string | null;
+	/** Server timestamp of the charge; the pickup board's «Entregadas»
+	 *  strip trims to the last hour with it (D4). */
+	charged_at?: string | null;
 	warranty: boolean;
 	no_charge: boolean;
 	warranty_days?: number | null;

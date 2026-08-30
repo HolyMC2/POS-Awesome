@@ -195,6 +195,9 @@ def describe_order_card(
         # the cashier must NOT charge again.
         "invoiced": charged,
         "invoice": request.get("invoice") if charged else None,
+        # The pickup board (critique D4) trims its «Entregadas» strip to the
+        # last hour; a card without the timestamp would show all day.
+        "charged_at": str(request.get("charged_at") or "") or None,
         "warranty": bool(_cint((repair or {}).get("is_warranty_claim"))),
         "no_charge": bool(_cint((repair or {}).get("no_charge"))),
         "warranty_days": _cint((repair or {}).get("warranty_period_days")) or None,

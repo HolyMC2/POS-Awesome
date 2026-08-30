@@ -390,6 +390,36 @@ def _profile_or_filters(pos_profile: str) -> list:
 
 
 @frappe.whitelist(methods=["GET", "POST"])
+def get_status_board_context():
+    """A status-board screen's boot (critique D4, the KDS/kiosk pattern).
+
+    The board itself reads the SAME scoped queue endpoints the Orden surface
+    uses — this only answers "which registers may this login project?": the
+    profiles the user is assigned to whose charge-request feature is on. An
+    account with none is told so instead of shown an empty wall.
+    """
+    frappe.has_permission("POS Profile", "read", throw=True)
+    names = sorted(
+        set(
+            frappe.get_all(
+                "POS Profile User",
+                filters={"user": frappe.session.user},
+                pluck="parent",
+            )
+        )
+    )
+    profiles = []
+    for name in names:
+        row = frappe.db.get_value("POS Profile", name, ["name", "disabled"], as_dict=True)
+        if not row or cint(row.disabled):
+            continue
+        if not _feature_enabled(name):
+            continue
+        profiles.append({"pos_profile": name})
+    return {"profiles": profiles}
+
+
+@frappe.whitelist(methods=["GET", "POST"])
 def get_service_order_counts(pos_profile):
     """The three numbers over the queue column, and the rail's badge.
 

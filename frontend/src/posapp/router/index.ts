@@ -243,6 +243,19 @@ const routes = [
 		},
 	},
 	{
+		// The pickup board (critique D4): the third display-family screen —
+		// a wall screen customers READ (never touch) showing which order
+		// numbers are ready at the counter. Projects the hub's own scoped
+		// queue reads; no new data surface, same no-client-guard reasoning.
+		path: "/tablero",
+		component: () => import("../components/kiosk/OrderStatusBoard.vue"),
+		meta: {
+			title: "Tablero",
+			layout: "display",
+			loadingMessage: "Loading board...",
+		},
+	},
+	{
 		// Self-service kiosk (critique D2): a CUSTOMER-facing screen that
 		// ends in a numbered «paga en caja» charge request (the D3 hub).
 		// Same chrome-free layout and same no-client-guard reasoning as the
