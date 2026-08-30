@@ -272,6 +272,11 @@ const CSS_SURVIVORS: Record<string, readonly string[]> = {
 	// pass deliberately wears success green, not the accent: serving is a
 	// state change, not the brand moment.
 	"components/kds/KdsView.vue": [".kds__start"],
+	// The kiosk's «PAGAR EN CAJA» (critique D2) — the one action the whole
+	// customer-facing screen exists to reach, on a route with no ActionBand.
+	// Its sibling offender, the qty badge, was restyled to ink instead: a
+	// count is a figure, and this contract is why it did not ship accented.
+	"components/kiosk/KioskView.vue": [".kiosk__bar-pay"],
 	// A 3px section underline, accent into accent-container. Decoration, and
 	// the one entry here that is plainly worth removing when the cart's
 	// stylesheet is next opened.

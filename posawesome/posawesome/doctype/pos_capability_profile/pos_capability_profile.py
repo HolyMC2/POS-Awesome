@@ -46,6 +46,10 @@ KNOWN_CAPABILITIES = (
     # sell-by-importe and labeling-scale barcodes. Item eligibility is the
     # UOM's, this only turns the register affordances on.
     "fractional",
+    # Self-service kiosk (POS critique D2): the /kiosko screen may run
+    # against this profile. Customers browse and queue a «paga en caja»
+    # charge request; the register collects it like any hub row.
+    "kiosk",
 )
 
 # How the open ticket is backed. Blank = the shipped retail behaviour (a draft

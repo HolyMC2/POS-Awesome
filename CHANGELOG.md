@@ -4,6 +4,24 @@ All notable changes.
 
 ## Unreleased
 
+- **The self-service kiosk (08-29, critique D2).** `/kiosko` — a
+  customer-facing screen on the chrome-free display layout whose only
+  exit is a numbered «PAGA EN CAJA» charge request: the D3 hub row the
+  register collects like any sale. The device holds no money path — the
+  worst a hijacked kiosk can do is queue orders a human still charges.
+  New `kiosk` capability token; `api/kiosk.py` (context on the KDS boot
+  pattern; catalog with SERVER prices — an unpriced item simply is not
+  on the menu; `place_kiosk_order` takes item_code+qty ONLY and
+  re-prices at placement so a tampered device cannot discount itself,
+  with line/qty caps and an open-orders flood guard). The view is
+  deliberately subtractive: attract face → big grid with group chips →
+  cart sheet → optional name («Kiosko · Ana» on the register card) →
+  giant ticket number, 90 s idle wipes the cart so no customer inherits
+  the last one's order. The singleAccent contract shaped it live:
+  PAGAR EN CAJA wears the accent (argued allowlist — the screen's one
+  primary), the qty badge shipped in ink. Drill on doco-mirror: refusal
+  → context → 239-item catalog → $200 ticket «58» queued Open/Register.
+  vitest 4786 ✓, vue-tsc 0, es.csv +13.
 - **The order hub, register side (08-29, critique D3).** doco's POS
   Charge Request grew `settle_mode` and a blessed producer API, and the
   storefront now queues apartados (mumu's invisible ~$1,740) — this is

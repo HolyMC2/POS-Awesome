@@ -243,6 +243,20 @@ const routes = [
 		},
 	},
 	{
+		// Self-service kiosk (critique D2): a CUSTOMER-facing screen that
+		// ends in a numbered «paga en caja» charge request (the D3 hub).
+		// Same chrome-free layout and same no-client-guard reasoning as the
+		// KDS: the server enforces the kiosk capability on every call, and
+		// the view self-gates with its own boot read.
+		path: "/kiosko",
+		component: () => import("../components/kiosk/KioskView.vue"),
+		meta: {
+			title: "Kiosko",
+			layout: "display",
+			loadingMessage: "Loading kiosk...",
+		},
+	},
+	{
 		// The kitchen display (critique D1): a station-scoped screen on the
 		// bump endpoint, not a register. Same chrome-free layout as the
 		// customer display; deliberately NO `requiresTables` client guard —
