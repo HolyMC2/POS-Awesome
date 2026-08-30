@@ -1,9 +1,11 @@
 <template>
 	<v-card class="pos-themed-card cash-movement-history__card">
+		<!-- E2: this card is the RECORD, and its name says whose: the shift's.
+		     The old pair («Cash Movements» + a subtitle restating it) was the
+		     surface's third restatement of its own name. -->
 		<div class="cash-movement-history__head">
 			<div>
-				<div class="cash-movement-history__title">{{ __("Cash Movements") }}</div>
-				<div class="cash-movement-history__subtitle">{{ __("Latest entries for current shift") }}</div>
+				<div class="cash-movement-history__title">{{ __("Movements this shift") }}</div>
 			</div>
 			<div class="cash-movement-history__actions">
 				<v-chip v-if="pendingOfflineCount > 0" color="warning" size="small" variant="tonal">
@@ -64,15 +66,32 @@
 		     destination grid, 968px at 1024 once the grid collapses to one
 		     column. A viewport media query would get one of those wrong. -->
 		<div ref="scroller" class="cash-movement-history__scroller">
+			<!-- E2: no pagination chrome. A shift's movements are ONE list —
+			     «Items per page: 10 · 0-0 of 0» under an empty morning table
+			     was footer furniture for a dataset that never earns it. The
+			     card's own scroller is the design. -->
 			<v-data-table
 				:items="rows"
 				:headers="visibleHeaders"
 				v-model:expanded="expandedRows"
 				item-value="name"
 				:loading="loading"
+				:items-per-page="-1"
+				hide-default-footer
 				density="compact"
 				class="elevation-0"
 			>
+				<template #no-data>
+					<div class="cash-movement-history__empty" data-testid="cash-history-empty">
+						<v-icon icon="mdi-cash-register" size="26" />
+						<div class="cash-movement-history__empty-title">
+							{{ __("No movements this shift yet.") }}
+						</div>
+						<div class="cash-movement-history__empty-hint">
+							{{ __("Expenses and deposits you submit will appear here.") }}
+						</div>
+					</div>
+				</template>
 				<template #item.posting_date="{ item }">
 					{{ formatPostingDate(item.posting_date) }}
 				</template>
@@ -376,11 +395,23 @@ function formatPostingDate(value: string) {
 	line-height: 1.4;
 }
 
-.cash-movement-history__subtitle {
-	font-size: 0.875rem;
-	line-height: 1.4;
+.cash-movement-history__empty {
+	display: grid;
+	justify-items: center;
+	gap: 4px;
+	padding: 28px 16px;
 	color: rgb(var(--v-theme-on-surface));
-	opacity: 0.7;
+	opacity: 0.65;
+	text-align: center;
+}
+
+.cash-movement-history__empty-title {
+	font-weight: 600;
+	font-size: 0.9375rem;
+}
+
+.cash-movement-history__empty-hint {
+	font-size: 0.8125rem;
 }
 
 .cash-movement-history__row-actions {

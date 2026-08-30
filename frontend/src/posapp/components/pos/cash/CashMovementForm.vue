@@ -1,18 +1,12 @@
 <template>
 	<v-card class="pos-themed-card cash-movement-form__card">
+		<!-- E2: ONE name per card. The destination is already called Gasto on
+		     the rail; this card is the verb («register a movement»), the card
+		     beside it is the record. And the posting date is a FIELD, not
+		     chrome — it lives in the grid with its peers instead of floating
+		     alone in the corner of the title row. -->
 		<div class="cash-movement-form__head">
-			<div class="cash-movement-form__title">{{ __("Cash Movement") }}</div>
-			<div class="cash-movement-form__posting-date">
-				<v-text-field
-					v-model="postingDate"
-					type="date"
-					variant="outlined"
-					density="compact"
-					hide-details
-					:label="__('Posting Date')"
-					:disabled="submitting || !enabled"
-				/>
-			</div>
+			<div class="cash-movement-form__title">{{ __("New movement") }}</div>
 		</div>
 		<div class="cash-movement-form__subtitle">
 			{{ __("Book an expense, send cash to the back office, or bring cash into the drawer.") }}
@@ -43,15 +37,6 @@
 			</v-col>
 			<v-col cols="12" md="4">
 				<v-text-field
-					v-model="againstName"
-					variant="outlined"
-					density="compact"
-					:label="__('Against Name')"
-					:disabled="submitting || !enabled"
-				/>
-			</v-col>
-			<v-col cols="12" md="4">
-				<v-text-field
 					v-model.number="amount"
 					type="number"
 					inputmode="decimal"
@@ -65,6 +50,25 @@
 					@focus="onAmountFocus"
 					@blur="onAmountBlur"
 					@update:model-value="onAmountInput"
+				/>
+			</v-col>
+			<v-col cols="12" md="4">
+				<v-text-field
+					v-model="postingDate"
+					type="date"
+					variant="outlined"
+					density="compact"
+					:label="__('Posting Date')"
+					:disabled="submitting || !enabled"
+				/>
+			</v-col>
+			<v-col cols="12">
+				<v-text-field
+					v-model="againstName"
+					variant="outlined"
+					density="compact"
+					:label="__('Against Name')"
+					:disabled="submitting || !enabled"
 				/>
 			</v-col>
 			<v-col cols="12" v-if="movementType">
@@ -625,10 +629,7 @@ watch(
 
 .cash-movement-form__head {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
 	margin-bottom: 4px;
 }
 
@@ -648,11 +649,6 @@ watch(
 
 .cash-movement-form__arrow {
 	margin-inline: 4px;
-}
-
-.cash-movement-form__posting-date {
-	width: min(220px, 100%);
-	min-width: 0;
 }
 
 .cash-movement-form__direction {
