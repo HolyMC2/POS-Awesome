@@ -1,7 +1,7 @@
 <template>
 	<v-app-bar
 		flat
-		:height="isNarrow ? 56 : isMobile ? 64 : 56"
+		:height="denseDesk ? 48 : isNarrow ? 56 : isMobile ? 64 : 56"
 		:class="[
 			'pos-navbar-enhanced elevation-2 pos-themed-card pos-theme-immediate',
 			rtlClasses,
@@ -263,6 +263,7 @@
 
 <script>
 import { useRtl } from "../../composables/core/useRtl";
+import { isDenseDeskViewport } from "../../utils/itemSelectorLayout";
 import { computed, onBeforeUnmount, ref } from "vue";
 import { useSyncStore } from "../../stores/syncStore";
 import { useUIStore } from "../../stores/uiStore";
@@ -391,6 +392,7 @@ export default {
 	data() {
 		return {
 			windowWidth: window.innerWidth,
+			windowHeight: window.innerHeight,
 			resizeRafId: null,
 		};
 	},
@@ -564,6 +566,15 @@ export default {
 			return this.windowWidth < 480;
 		},
 
+		/**
+		 * Dense desk tier (utils/itemSelectorLayout DENSE_DESK_*): ≥1100 wide,
+		 * ≤820 tall. The bar goes 56 → 48 there; as the app-bar's height PROP
+		 * (not a CSS override) so Vuetify's layout offset moves with it.
+		 */
+		denseDesk() {
+			return isDenseDeskViewport(this.windowWidth, this.windowHeight);
+		},
+
 		isTablet() {
 			return this.windowWidth >= 768 && this.windowWidth < 1024;
 		},
@@ -588,6 +599,7 @@ export default {
 			}
 			this.resizeRafId = requestAnimationFrame(() => {
 				this.windowWidth = window.innerWidth;
+				this.windowHeight = window.innerHeight;
 			});
 		},
 

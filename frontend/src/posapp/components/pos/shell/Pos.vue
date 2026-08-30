@@ -3259,13 +3259,14 @@ export default {
 		margin-top: 4px;
 	}
 
-	/* ItemHeader's markup, teleported in — hence :deep. */
+	/* ItemHeader's markup, teleported in — hence :deep. The row's own tier
+	   (qty field gone, icon-only browse) lives in ItemHeader.vue. */
 	#register-scan-bar :deep(.sticky-header) {
-		padding-top: 6px;
+		padding-top: 4px;
 	}
 
-	#register-scan-bar :deep(.sticky-header .v-col-12) {
-		padding-top: 6px;
+	#register-scan-bar :deep(.sticky-header .search-col) {
+		padding-top: 4px;
 	}
 }
 </style>

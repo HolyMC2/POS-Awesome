@@ -252,14 +252,17 @@ const chips = computed(() => {
 	}
 
 	.customer-strip__identity,
-	.customer-strip__chips,
-	.customer-strip :deep(.crm-strip) {
+	.customer-strip__chips {
 		flex: 0 1 auto;
 		min-width: 0;
 	}
 
+	/* Marco (round 2): «seguimiento en el CRM can be removed on the tablet
+	   view». Flowed into the row it still broke onto a second line and cost
+	   the cart a row; on this tier the CRM line is dropped — his call, made
+	   with the trade-off (no «seguimiento» from the strip on a tablet) named. */
 	.customer-strip :deep(.crm-strip) {
-		padding-top: 0;
+		display: none;
 	}
 }
 </style>

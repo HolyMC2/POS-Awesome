@@ -22,6 +22,7 @@ import summarySource from "../src/posapp/components/pos/invoice/InvoiceSummary.v
 import actionsSource from "../src/posapp/components/pos/invoice/InvoiceActionButtons.vue?raw";
 import stripSource from "../src/posapp/components/pos/customer/CustomerStrip.vue?raw";
 import drawerSource from "../src/posapp/components/pos/shell/drawer/CatalogDrawer.vue?raw";
+import headerSource from "../src/posapp/components/pos/items/ItemHeader.vue?raw";
 import cardSource from "../src/posapp/components/pos/items/ItemCard.vue?raw";
 import cardsSource from "../src/posapp/components/pos/items/ItemsSelectorCards.vue?raw";
 import selectorSource from "../src/posapp/components/pos/items/ItemsSelector.vue?raw";
@@ -62,6 +63,7 @@ describe("dense desk tier — one viewport, two stacks", () => {
 		["InvoiceActionButtons.vue", actionsSource],
 		["CustomerStrip.vue", stripSource],
 		["CatalogDrawer.vue", drawerSource],
+		["ItemHeader.vue", headerSource],
 	])("%s carries the tier under the SAME query the JS switches on", (_name, source) => {
 		expect(source).toContain(TIER_QUERY);
 		// And no sibling pair with a drifted number: every (min-width … max-height)
@@ -89,6 +91,13 @@ describe("dense desk tier — the card grid geometry", () => {
 		expect(width).toBeGreaterThanOrEqual(DENSE_CARD_MIN_WIDTH);
 		// A dense column is always compact by width — the mini anatomy rides on --compact.
 		expect(isCompactCard(width)).toBe(true);
+	});
+
+	it("still seats three in Marco's 1143px window (a 407px drawer, 375px of row)", () => {
+		// Round 2: at a 124px floor this fell back to two 181px cards.
+		expect(getCardColumnsForContainer(407, GAP, PAD)).toBe(2);
+		expect(getCardColumnsForContainer(407, GAP, PAD, { dense: true })).toBe(3);
+		expect(getCardColumnWidth(407, 3, GAP, PAD)).toBeGreaterThanOrEqual(DENSE_CARD_MIN_WIDTH);
 	});
 
 	it("deals the 128px slot regardless of the column's roomy/compact verdict", () => {

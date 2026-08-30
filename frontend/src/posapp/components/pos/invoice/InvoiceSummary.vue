@@ -1646,6 +1646,50 @@ defineExpose({
 		min-height: 0;
 		padding-top: 0;
 	}
+
+	/* Round 2 (Marco at 1143×656: «the descuento field bar is too big»). The
+	   card becomes one wrapping row: the action strip takes the width and the
+	   descuento field sits at its right on a 36px control, so a strip that
+	   wraps to two rows anyway (doco carries four chips + the margin pair)
+	   costs the field nothing. The cafetería's counter row and the return
+	   alert stay full-width rows above. Vuetify's `.v-messages` reserves 14px
+	   under a field even with no message — that reserve goes, the message
+	   line itself still renders when there is one. */
+	.sticky-summary-card {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0 12px;
+	}
+
+	.sticky-summary-card > .summary-counter-row,
+	.sticky-summary-card > .v-alert {
+		flex: 1 1 100%;
+	}
+
+	.sticky-summary-card > .pos-action-strip {
+		flex: 1 1 340px;
+	}
+
+	.sticky-summary-card > .summary-money-row {
+		flex: 0 1 240px;
+	}
+
+	.summary-hero__field-wrap {
+		width: 100%;
+		max-width: 240px;
+	}
+
+	.summary-hero__field-wrap :deep(.v-field__input) {
+		min-height: 36px;
+		padding-top: 4px;
+		padding-bottom: 4px;
+		font-size: 14px;
+	}
+
+	.summary-hero__field-wrap :deep(.v-messages) {
+		min-height: 0;
+	}
 }
 
 /* Short-viewport density: the 86px band (register-tokens' max-height layer)

@@ -2,7 +2,7 @@
 	<div class="sticky-header" data-perf-tag="item-search">
 		<v-row class="items">
 			<v-col
-				class="pb-0"
+				class="pb-0 search-col"
 				:cols="posProfile.posa_input_qty && !isPhone ? 8 : 12"
 				:sm="posProfile.posa_input_qty && !isPhone ? 9 : 12"
 			>
@@ -153,7 +153,7 @@
 					</div>
 				</div>
 			</v-col>
-			<v-col cols="4" sm="3" class="pb-0" v-if="posProfile.posa_input_qty && !isPhone">
+			<v-col cols="4" sm="3" class="pb-0 search-qty-col" v-if="posProfile.posa_input_qty && !isPhone">
 				<v-text-field
 					density="compact"
 					variant="solo"
@@ -629,6 +629,43 @@ defineExpose({
 	to {
 		opacity: 1;
 		transform: translateY(0);
+	}
+}
+/* Dense desk tier (utils/itemSelectorLayout DENSE_DESK_*): ≥1100px wide,
+ * ≤820px tall. Marco at 1143×656: «the cantidad field can be removed and the
+ * explorar catálogo button made smaller». The qty-for-next-item field goes
+ * (the multiplier chip inside the search field still answers a typed «3*»
+ * and the tools panel keeps its own field), the search column takes the
+ * width it leaves, and the browse button becomes its glyph — Alt+B, the
+ * rail item and the drawer chip are the other three doors to the same
+ * drawer. Heights fall to 36px so the row reads as one line. */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.sticky-header .search-qty-col {
+		display: none;
+	}
+
+	.sticky-header .search-col {
+		flex: 1 1 auto;
+		max-width: none;
+	}
+
+	.search-browse-btn,
+	.search-camera-btn {
+		height: 36px;
+	}
+
+	.search-browse-btn {
+		min-width: 44px;
+		padding: 0 12px;
+	}
+
+	.search-browse-btn__label,
+	.search-browse-btn .search-chord-chip {
+		display: none;
+	}
+
+	.search-browse-btn :deep(.v-icon) {
+		margin-inline-end: 0;
 	}
 }
 </style>

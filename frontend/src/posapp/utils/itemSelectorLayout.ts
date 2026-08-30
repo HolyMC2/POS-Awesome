@@ -90,8 +90,13 @@ export const COMPACT_CARD_MAX_WIDTH = CARD_PREFERRED_WIDTH;
  */
 export const DENSE_DESK_MIN_WIDTH = 1100;
 export const DENSE_DESK_MAX_HEIGHT = 820;
-/** The mini card the dense tier packs: 68px plate, one-line name, no code. */
-export const DENSE_CARD_MIN_WIDTH = 124;
+/**
+ * The mini card the dense tier packs: 68px plate, one-line name, no code.
+ * 112 so that Marco's 1143px window — a 407px anchored drawer, 375px of
+ * usable row — still seats three; at 124 it fell back to two 181px cards
+ * whose 68px plates read as a strip of letterboxed thumbnails.
+ */
+export const DENSE_CARD_MIN_WIDTH = 112;
 export const DENSE_CARD_ROW_HEIGHT = 128;
 
 export type CardGeometryOptions = { dense?: boolean };

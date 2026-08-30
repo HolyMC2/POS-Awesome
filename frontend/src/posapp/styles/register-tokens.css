@@ -273,14 +273,16 @@
 @media (min-width: 1100px) and (max-height: 820px) {
 	.posapp,
 	:root {
-		--reg-band-height: 104px;
-		--reg-band-pad-x: 18px;
-		--reg-band-gap: 18px;
-		--reg-band-number-size: 44px;
-		--reg-band-divider-height: 72px;
-		--reg-band-action-height: 72px;
-		--reg-band-action-size: 19px;
-		--reg-band-figure-min: min(340px, 26vw);
+		/* Round 2 (Marco at 1143×656: «we can still make the payment action bar
+		 * smaller»): 104 → 88, the figure 44 → 36. */
+		--reg-band-height: 88px;
+		--reg-band-pad-x: 16px;
+		--reg-band-gap: 16px;
+		--reg-band-number-size: 36px;
+		--reg-band-divider-height: 58px;
+		--reg-band-action-height: 60px;
+		--reg-band-action-size: 18px;
+		--reg-band-figure-min: min(300px, 26vw);
 	}
 }
 

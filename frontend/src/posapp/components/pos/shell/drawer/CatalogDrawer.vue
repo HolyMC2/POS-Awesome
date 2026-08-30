@@ -778,8 +778,10 @@ defineExpose({ focusableChildren });
 		gap: 4px;
 	}
 
-	.catalog-drawer :deep(.items-selector-shell .cards.mt-3) {
-		margin-top: 4px;
+	/* Vuetify's `mt-3` is !important, and the results wrapper carries it
+	   without `cards` — measured 12px on the deployed round-1 build. */
+	.catalog-drawer :deep(.items-selector-shell .mt-3) {
+		margin-top: 4px !important;
 	}
 
 	.catalog-drawer :deep(.items-selector-shell .selector-results-card) {
@@ -791,16 +793,48 @@ defineExpose({ focusableChildren });
 	}
 
 	.catalog-drawer :deep(.items-selector-shell .cards .mb-2) {
-		margin-bottom: 4px !important;
+		margin-bottom: 2px !important;
 	}
 
 	.catalog-drawer :deep(.items-selector-shell .dynamic-margin-xs) {
 		margin: 0;
+		height: 32px;
 	}
 
 	.catalog-drawer :deep(.items-selector-shell .v-btn-group .v-btn) {
 		padding: 0 8px;
 		min-width: 0;
+	}
+
+	/* Round 2 (Marco at 1143×656: «item group, price list and lista/tarjeta
+	   can get a smaller UI»): 36px selects with the floating label kept,
+	   30px toggle and offer/coupon buttons. */
+	.catalog-drawer :deep(.items-selector-shell .cards .v-field__input) {
+		min-height: 36px;
+		padding-top: 14px;
+		padding-bottom: 2px;
+		font-size: 13px;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .cards .v-field__label) {
+		font-size: 11px;
+		top: 4px;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .cards .v-field--active .v-field__label),
+	.catalog-drawer :deep(.items-selector-shell .cards .v-field--dirty .v-field__label) {
+		transform: translateY(-2px) scale(0.85);
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .view-toggle-btn),
+	.catalog-drawer :deep(.items-selector-shell .view-toggle-btn .v-btn),
+	.catalog-drawer :deep(.items-selector-shell .action-btn-consistent) {
+		height: 30px;
+		min-height: 30px;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .action-btn-consistent) {
+		font-size: 12px;
 	}
 }
 

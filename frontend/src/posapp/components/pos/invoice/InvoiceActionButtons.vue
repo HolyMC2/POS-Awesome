@@ -342,6 +342,11 @@ defineExpose({ ACTION_CHIPS });
 		margin-top: 0;
 		padding: 4px 8px;
 		gap: 6px 8px;
+		/* Round 2: the strip shares its row with the descuento field
+		   (InvoiceSummary lays the card out as one wrapping row), so the
+		   dashed rule and the lifted ground that framed it as a footer go. */
+		border-top: 0;
+		background: transparent;
 	}
 
 	.pos-action-strip__chord {
