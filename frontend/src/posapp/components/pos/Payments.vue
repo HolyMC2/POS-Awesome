@@ -3076,6 +3076,21 @@ const applyIncomingInvoiceDoc = (doc) => {
 	paymentsTouched.value = false;
 	paymentSnapshotBeforeCredit = null;
 
+	// Re-arm the tip fold and the split ledger on EVERY fresh doc, not only
+	// on the isPaymentOpen edge. The hosted Cobro surface mounts this panel
+	// with isPaymentOpen ALREADY true, so the open-watcher below never fires
+	// there — the tip baseline stayed null, applyRestaurantTipTotal
+	// early-returned forever, and a picked propina showed 10.00 while the
+	// totals, the tender row and the split quotes stayed at the pre-tip
+	// figure; the server (correctly) billed items+tip and refused the short
+	// collection (live find, cafetería 08-30).
+	restaurantTipAmount.value = 0;
+	lastAppliedRestaurantTip = 0;
+	splitCount.value = 0;
+	splitShares.value = [];
+	splitSeatMode.value = false;
+	captureRestaurantTipBaseTotals();
+
 	// Decide the credit-return default ONCE, when the return is first
 	// loaded, so reopening the dialog / a failed submit never overrides a
 	// manual toggle change by the cashier.
