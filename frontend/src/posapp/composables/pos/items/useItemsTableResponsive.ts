@@ -1,4 +1,5 @@
 import { ref, computed, onMounted, onBeforeUnmount, type Ref } from "vue";
+import { DENSE_CART_STACK_BELOW, isDenseDeskViewport } from "../../../utils/itemSelectorLayout";
 import * as _ from "lodash";
 
 export interface TableHeader {
@@ -318,7 +319,15 @@ export function useItemsTableResponsive(
 	let resizeObserver: ResizeObserver | null = null;
 
 	const updateBreakpoint = (width: number) => {
-		if (width < 500) return "xs";
+		// Dense desk tier (utils/itemSelectorLayout): with the drawer at half
+		// the register, a tablet's cart sits right across the 500px stack
+		// boundary — the stack wins up to DENSE_CART_STACK_BELOW there. Read
+		// at resize time: the container's width moves with the window, so
+		// this re-resolves whenever the viewport does.
+		const stackBelow = isDenseDeskViewport(window.innerWidth, window.innerHeight)
+			? DENSE_CART_STACK_BELOW
+			: 500;
+		if (width < stackBelow) return "xs";
 		if (width < 700) return "sm";
 		if (width < 900) return "md";
 		if (width < 1200) return "lg";

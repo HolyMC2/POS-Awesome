@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
 	CARD_MAX_COLUMNS,
 	DENSE_CARD_GUTTER,
+	DENSE_CART_STACK_BELOW,
 	DENSE_CARD_MIN_WIDTH,
 	DENSE_CARD_ROW_HEIGHT,
 	DENSE_DESK_MAX_HEIGHT,
@@ -29,6 +30,7 @@ import headerSource from "../src/posapp/components/pos/items/ItemHeader.vue?raw"
 import cardSource from "../src/posapp/components/pos/items/ItemCard.vue?raw";
 import cardsSource from "../src/posapp/components/pos/items/ItemsSelectorCards.vue?raw";
 import selectorSource from "../src/posapp/components/pos/items/ItemsSelector.vue?raw";
+import responsiveSource from "../src/posapp/composables/pos/items/useItemsTableResponsive.ts?raw";
 
 // vitest's CSS pipeline empties a `.css?raw` import — the token sheet is read
 // off disk instead (node environment on purpose: nothing here mounts).
@@ -120,6 +122,18 @@ describe("dense desk tier — the card grid geometry", () => {
 
 	it("never exceeds the column cap on a wide overlay drawer", () => {
 		expect(getCardColumnsForContainer(1400, 16, 16, { dense: true })).toBe(CARD_MAX_COLUMNS);
+	});
+
+	it("half-and-half: the cart stacks its rows across the whole tablet band, not just below 500", () => {
+		// Round 3. With the drawer at 50% the cart measures 524–592 across
+		// 1143–1280 windows; the stack boundary must clear the top of that band.
+		expect(DENSE_CART_STACK_BELOW).toBeGreaterThan(500);
+		expect(DENSE_CART_STACK_BELOW).toBeLessThan(620); // a 1366 laptop keeps the table
+		expect(responsiveSource).toContain("isDenseDeskViewport(window.innerWidth, window.innerHeight)");
+		expect(responsiveSource).toContain("? DENSE_CART_STACK_BELOW");
+		expect(drawerSource).toMatch(
+			/\.catalog-drawer-layer--anchored,\s*\.catalog-drawer-layer--anchored\.catalog-drawer-layer--cards \{\s*width: 50%;\s*max-width: 50%;/,
+		);
 	});
 
 	it("the dense flag travels selector → cards → card, and the card draws it", () => {

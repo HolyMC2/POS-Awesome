@@ -347,5 +347,17 @@ defineExpose({ ACTION_CHIPS });
 	.pos-action-strip__chord {
 		display: none;
 	}
+
+	/* Round 3 (Marco at 100% zoom: «cancelar venta is on a new row with only
+	   that option»). Beside a half-width drawer the strip has ~500px; the
+	   counts duplicate the band's «N ARTÍCULOS» and each chip's glyph costs
+	   ~20px — without both, doco's four verbs sit on one 37px row. */
+	.pos-action-strip__counts {
+		display: none;
+	}
+
+	.pos-action-strip__chip :deep(.v-icon) {
+		display: none;
+	}
 }
 </style>

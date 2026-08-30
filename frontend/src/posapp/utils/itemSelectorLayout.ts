@@ -105,6 +105,15 @@ export const DENSE_CARD_ROW_HEIGHT = 132;
  * and two columns, at 8/8 it is 361px and three 115px columns.
  */
 export const DENSE_CARD_GUTTER = 8;
+/**
+ * Round 3 (Marco: «the catalog can be wider on tablet, half and half»). With
+ * the drawer at 50% the cart is 524–592px wide across 1143–1280 windows —
+ * right ACROSS the cart table's 500px phone-stack boundary: 1143 stacked its
+ * rows, 1195 kept the table with an 80px name column. On the dense tier the
+ * stack wins up to here, so the cart reads the same way on every tablet;
+ * a 1366 laptop (cart ≈ 635) keeps the table with a 177px name.
+ */
+export const DENSE_CART_STACK_BELOW = 580;
 
 export type CardGeometryOptions = { dense?: boolean };
 

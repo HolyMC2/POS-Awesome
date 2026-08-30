@@ -765,6 +765,18 @@ defineExpose({ focusableChildren });
  * `.mb-2` is matched bare: a v-col given `cols` renders `v-col-12`, never a
  * bare `v-col` class. */
 @media (min-width: 1100px) and (max-height: 820px) {
+	/* Round 3 (Marco: «the catalog view can be wider on tablet, half and
+	   half so it's easier to navigate»). The 640px cart floor above was a
+	   desk decision; on a tablet the drawer takes half and the cart table
+	   answers with its stacked row (useItemsTableResponsive raises the
+	   stack boundary on this tier so 1143 and 1195 read the same). At 1143
+	   that is 4 mini cards per row where the 407px drawer dealt 3. */
+	.catalog-drawer-layer--anchored,
+	.catalog-drawer-layer--anchored.catalog-drawer-layer--cards {
+		width: 50%;
+		max-width: 50%;
+	}
+
 	.catalog-drawer__header {
 		height: 40px;
 	}
@@ -811,14 +823,14 @@ defineExpose({ focusableChildren });
 	   30px toggle and offer/coupon buttons. */
 	.catalog-drawer :deep(.items-selector-shell .cards .v-field__input) {
 		min-height: 36px;
-		padding-top: 14px;
-		padding-bottom: 2px;
+		padding-top: 15px;
+		padding-bottom: 1px;
 		font-size: 13px;
 	}
 
 	.catalog-drawer :deep(.items-selector-shell .cards .v-field__label) {
-		font-size: 11px;
-		top: 4px;
+		font-size: 10.5px;
+		top: 3px;
 	}
 
 	.catalog-drawer :deep(.items-selector-shell .cards .v-field--active .v-field__label),
@@ -835,6 +847,23 @@ defineExpose({ focusableChildren });
 
 	.catalog-drawer :deep(.items-selector-shell .action-btn-consistent) {
 		font-size: 12px;
+	}
+
+	/* Round 3: at 100% zoom the LISTA/TARJETA group overran its third of the
+	   row («LISTA ARJET»). The toggle's column sizes to the toggle; the
+	   offers and coupons columns share what is left. */
+	.catalog-drawer :deep(.items-selector-shell .cards .v-col-sm-4:has(.view-toggle-btn)) {
+		flex: 0 0 auto;
+		max-width: none;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .cards .view-toggle-btn) {
+		width: auto;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .cards .v-col-sm-4:not(:has(.view-toggle-btn))) {
+		flex: 1 1 0;
+		max-width: none;
 	}
 }
 
