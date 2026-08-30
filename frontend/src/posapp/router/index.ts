@@ -243,6 +243,22 @@ const routes = [
 		},
 	},
 	{
+		// The kitchen display (critique D1): a station-scoped screen on the
+		// bump endpoint, not a register. Same chrome-free layout as the
+		// customer display; deliberately NO `requiresTables` client guard —
+		// a kitchen tablet boots with no shift and no vertical store, and
+		// the server enforces the tables capability on every read and write
+		// anyway. The view self-gates: an account with no table-service
+		// profile is told so instead of shown an empty pass.
+		path: "/kds",
+		component: () => import("../components/kds/KdsView.vue"),
+		meta: {
+			title: "Kitchen Display",
+			layout: "display",
+			loadingMessage: "Loading kitchen display...",
+		},
+	},
+	{
 		path: "/offline-route-unavailable",
 		name: OFFLINE_ROUTE_UNAVAILABLE_NAME,
 		component: OfflineRouteUnavailable,

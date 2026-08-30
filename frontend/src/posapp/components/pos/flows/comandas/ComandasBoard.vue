@@ -5,6 +5,15 @@
 			<span class="comandas__meta" data-testid="comandas-count">
 				{{ batches.length }} · {{ windowLabel }}
 			</span>
+			<a
+				class="comandas__kds-link"
+				:href="kdsHref"
+				target="_blank"
+				rel="noopener"
+				data-testid="comandas-kds-link"
+			>
+				{{ __("Kitchen display") }} ↗
+			</a>
 			<button
 				type="button"
 				class="comandas__refresh"
@@ -129,6 +138,7 @@
  * fires (`floor_course_fired` rides the same bus the toast does).
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import {
 	bumpKitchenTicket,
 	listKitchenBatches,
@@ -165,6 +175,10 @@ const nowTick = ref(Date.now());
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 const profileName = computed(() => (uiStore.posProfile as any)?.name || "");
+
+// The kitchen's own screen (D1) — same tickets, same bump, other room.
+const router = useRouter();
+const kdsHref = computed(() => router.resolve({ path: "/kds" }).href);
 
 const refresh = async (silent = false) => {
 	if (!profileName.value) return;
@@ -305,6 +319,12 @@ const shortUser = (user: string) => String(user || "").split("@")[0] || "";
 	color: var(--pos-text-secondary);
 	font-size: 13px;
 	flex: 1;
+}
+.comandas__kds-link {
+	font-size: 13px;
+	color: var(--pos-primary);
+	text-decoration: none;
+	white-space: nowrap;
 }
 .comandas__refresh {
 	border: 1px solid var(--pos-border-light);

@@ -108,6 +108,7 @@ const METHODS = {
 		"posawesome.posawesome.api.restaurant.kot.list_kitchen_batches",
 	bumpKitchenTicket:
 		"posawesome.posawesome.api.restaurant.kot.bump_kitchen_ticket",
+	kdsContext: "posawesome.posawesome.api.restaurant.kot.get_kds_context",
 	recallKitchenTicket:
 		"posawesome.posawesome.api.restaurant.kot.recall_kitchen_ticket",
 	markTableClean: "posawesome.posawesome.api.restaurant.floors.mark_table_clean",
@@ -498,6 +499,21 @@ export async function bumpKitchenTicket(posProfile: string, batchName: string) {
 		batch_name: batchName,
 	});
 	return { kitchenState: (result?.kitchen_state as string) || "" };
+}
+
+export interface KdsProfileContext {
+	pos_profile: string;
+	company: string;
+	stations: string[];
+}
+
+/** A kitchen tablet's whole boot sequence (critique D1). ONLINE ONLY. */
+export async function getKdsContext() {
+	const result = await callRestaurant(METHODS.kdsContext, {});
+	return {
+		profiles: (result?.profiles as KdsProfileContext[]) || [],
+		generalStation: (result?.general_station as string) || "General",
+	};
 }
 
 /** Undo a bump — the expo pulled the plate back. ONLINE ONLY. */

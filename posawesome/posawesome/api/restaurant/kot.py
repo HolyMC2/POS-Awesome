@@ -631,6 +631,58 @@ def list_kitchen_batches(pos_profile, limit=30):
     return {"batches": batches, "server_time": server_time}
 
 
+@frappe.whitelist(methods=["GET", "POST"])
+def get_kds_context():
+    """What a kitchen tablet needs to boot (critique D1).
+
+    The KDS is not a register: no shift, no cart, no rail — a screen that
+    logs in, names its station, and watches. This read is its whole boot
+    sequence: the table-service profiles this user is assigned to, each with
+    its active stations (profile-bound stations plus the company-wide ones,
+    the same population ``_station_index`` routes tickets to). A profile the
+    user is not on, or whose preset lacks ``tables``, is simply absent —
+    the picker never offers what the server would refuse.
+    """
+    frappe.has_permission("POS Table Order", "read", throw=True)
+
+    profile_names = sorted(
+        set(
+            frappe.get_all(
+                "POS Profile User",
+                filters={"user": frappe.session.user},
+                pluck="parent",
+            )
+        )
+    )
+    profiles = []
+    for name in profile_names:
+        row = frappe.db.get_value(
+            "POS Profile", name, ["name", "company", "disabled"], as_dict=True
+        )
+        if not row or cint(row.disabled):
+            continue
+        try:
+            assert_tables_capability(name)
+        except Exception:
+            continue
+        stations = frappe.get_all(
+            "POS Kitchen Station",
+            filters={"company": row.company, "is_active": 1},
+            or_filters=[["pos_profile", "=", name], ["pos_profile", "is", "not set"]],
+            fields=["station_name"],
+            order_by="station_name",
+            ignore_permissions=True,
+        )
+        profiles.append(
+            {
+                "pos_profile": name,
+                "company": row.company,
+                "stations": sorted({s.station_name for s in stations if s.station_name}),
+            }
+        )
+    return {"profiles": profiles, "general_station": GENERAL_STATION}
+
+
 def _scoped_kitchen_batch(pos_profile, batch_name):
     """The write-side twin of the board's join: profile assert, capability,
     then prove the batch's source order belongs to THIS register before any

@@ -4,6 +4,26 @@ All notable changes.
 
 ## Unreleased
 
+- **The kitchen display (08-29, critique D1).** `/kds` — a station-scoped
+  screen on the chrome-free display layout (the customer-display
+  precedent), deliberately NOT a register: no shift, no cart, no rail.
+  It boots from `get_kds_context` (the table-service profiles this login
+  may watch, each with its stations — profile-bound plus company-wide,
+  the same population the ticket router uses; a retail account is told
+  it has nothing to watch, not shown an empty pass), remembers its
+  profile+station per tablet, and then projects `list_kitchen_batches`
+  filtered to its own station's lines: big type, age in minutes with
+  fresh/warm/late borders on the server's clock, cancellations struck,
+  «sin papel — cocina desde la pantalla» on failed prints, other-station
+  hints on shared tickets, and a fat SERVED button pressing the SAME
+  `bump_kitchen_ticket` the comandas board presses — one lifecycle, two
+  rooms. «Expo — todas las estaciones» watches everything; a served
+  strip keeps the last bumps recallable. The board links to it. The
+  single-accent design tripwire fired on the boot button and was
+  answered with an argued allowlist entry (a standalone screen's one
+  primary is the exact use the invariant permits; the bump wears success
+  green — serving is a state change, not the brand moment). vitest
+  4784 ✓, vue-tsc 0, es.csv +11.
 - **The kitchen ticket grows a lifecycle — the bump (08-29, critique B3).**
   Printed paper says nothing about whether the food left the pass. Three
   `posa_rt_` fields on `Doco Print Batch` (state / bumped_at / bumped_by,

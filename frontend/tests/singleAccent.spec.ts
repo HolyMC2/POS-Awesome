@@ -265,6 +265,13 @@ const CSS_SURVIVORS: Record<string, readonly string[]> = {
 	// it to guess at `__save`, `__confirm`, `__submit` would be a heuristic
 	// that lets a real leak through the first time someone names one `__go`.
 	"components/navbar/NavbarCashierPinForm.vue": [".navbar-cashier-pin-form__save"],
+	// The KDS boot screen's «Ver la cocina» (critique D1). Same category as
+	// the PIN form's Save: the kitchen display is a standalone screen with
+	// no ActionBand, and this button is that screen's one primary action —
+	// the exact use the invariant reserves the accent for. The bump on the
+	// pass deliberately wears success green, not the accent: serving is a
+	// state change, not the brand moment.
+	"components/kds/KdsView.vue": [".kds__start"],
 	// A 3px section underline, accent into accent-container. Decoration, and
 	// the one entry here that is plainly worth removing when the cart's
 	// stylesheet is next opened.
