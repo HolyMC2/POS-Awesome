@@ -3,12 +3,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
 	CARD_MAX_COLUMNS,
+	DENSE_CARD_GUTTER,
 	DENSE_CARD_MIN_WIDTH,
 	DENSE_CARD_ROW_HEIGHT,
 	DENSE_DESK_MAX_HEIGHT,
 	DENSE_DESK_MIN_WIDTH,
 	getCardColumnWidth,
 	getCardColumnsForContainer,
+	getCardGap,
+	getCardPadding,
 	getCardRowHeight,
 	isCompactCard,
 	isDenseDeskViewport,
@@ -98,6 +101,14 @@ describe("dense desk tier — the card grid geometry", () => {
 		expect(getCardColumnsForContainer(407, GAP, PAD)).toBe(2);
 		expect(getCardColumnsForContainer(407, GAP, PAD, { dense: true })).toBe(3);
 		expect(getCardColumnWidth(407, 3, GAP, PAD)).toBeGreaterThanOrEqual(DENSE_CARD_MIN_WIDTH);
+		// What the scroller actually measures inside that drawer (~385px): the
+		// dense gutters are what keep three columns there.
+		const gutter = getCardGap(1143, { dense: true });
+		expect(gutter).toBe(DENSE_CARD_GUTTER);
+		expect(getCardPadding(1143, { dense: true })).toBe(DENSE_CARD_GUTTER);
+		expect(getCardColumnsForContainer(385, GAP, PAD, { dense: true })).toBe(2);
+		expect(getCardColumnsForContainer(385, gutter, gutter, { dense: true })).toBe(3);
+		expect(getCardColumnWidth(385, 3, gutter, gutter)).toBeGreaterThanOrEqual(DENSE_CARD_MIN_WIDTH);
 	});
 
 	it("deals the 128px slot regardless of the column's roomy/compact verdict", () => {

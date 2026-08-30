@@ -71,13 +71,13 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 
 	// Computed Metrics — container-measured when available, window fallback
 	// until the panel mounts.
-	const cardGap = computed(() => getCardGap(windowWidth.value));
-	const cardPadding = computed(() => getCardPadding(windowWidth.value));
 	// Dense desk tier (utils/itemSelectorLayout): the two-column register on a
 	// screen wide enough for it but too short to feed it. Viewport-keyed on
 	// purpose — a shortage of HEIGHT is not something the container's width
 	// (which sizes everything else here) can tell.
 	const denseDesk = computed(() => isDenseDeskViewport(windowWidth.value, windowHeight.value));
+	const cardGap = computed(() => getCardGap(windowWidth.value, { dense: denseDesk.value }));
+	const cardPadding = computed(() => getCardPadding(windowWidth.value, { dense: denseDesk.value }));
 
 	// The count is decided with the SAME gap and padding the grid is then laid
 	// out with. The old call passed the container width alone, so the count and

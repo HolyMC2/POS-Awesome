@@ -98,6 +98,12 @@ export const DENSE_DESK_MAX_HEIGHT = 820;
  */
 export const DENSE_CARD_MIN_WIDTH = 112;
 export const DENSE_CARD_ROW_HEIGHT = 128;
+/**
+ * Gap AND container padding on the dense tier. The 405px drawer of a 1143px
+ * window hands the scroller ~385px; at the roomy 12/12 that is 353px of row
+ * and two columns, at 8/8 it is 361px and three 115px columns.
+ */
+export const DENSE_CARD_GUTTER = 8;
 
 export type CardGeometryOptions = { dense?: boolean };
 
@@ -244,7 +250,10 @@ export const getCardColumns = (width: number): number => {
 /**
  * Calculates the gap between cards based on container width.
  */
-export const getCardGap = (width: number): number => {
+export const getCardGap = (width: number, options: CardGeometryOptions = {}): number => {
+	if (options.dense) {
+		return DENSE_CARD_GUTTER;
+	}
 	if (width <= 768) {
 		return 10;
 	}
@@ -257,7 +266,10 @@ export const getCardGap = (width: number): number => {
 /**
  * Calculates the padding for the card container based on container width.
  */
-export const getCardPadding = (width: number): number => {
+export const getCardPadding = (width: number, options: CardGeometryOptions = {}): number => {
+	if (options.dense) {
+		return DENSE_CARD_GUTTER;
+	}
 	if (width <= 768) {
 		return 10;
 	}
