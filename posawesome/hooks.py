@@ -161,6 +161,17 @@ doc_events = {
     "Item": {
         "on_update": "posawesome.posawesome.api.item_processing.thumbnails.on_item_update",
     },
+    # Price changes must reach registers that already hold the item cached.
+    # The offline catalog syncs by item-`modified` delta, and an Item Price
+    # edit never touches its Item — so a repricing was invisible to every
+    # cached client until a full rebuild (live find, demo cafetería 08-30:
+    # broken cached rates could never self-heal). Touching the parent Item
+    # folds price edits into the delta stream the registers already poll.
+    "Item Price": {
+        "after_insert": "posawesome.posawesome.api.items.on_item_price_change",
+        "on_update": "posawesome.posawesome.api.items.on_item_price_change",
+        "on_trash": "posawesome.posawesome.api.items.on_item_price_change",
+    },
     "File": {
         "after_insert": "posawesome.posawesome.api.item_processing.thumbnails.on_file_insert",
     },

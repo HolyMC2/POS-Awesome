@@ -429,3 +429,34 @@ def search_items(*args, **kwargs):
     if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
         kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
+
+def on_item_price_change(doc, method=None):
+    """Touch the parent Item when one of its prices changes (live find 08-30).
+
+    The register's offline catalog syncs by DELTA: it asks for items with
+    `modified` after its high-water mark. An Item Price row is its own
+    doctype — editing one never touches the Item — so a price change made
+    after an item's last save reached NO register that already held the item
+    cached. The demo cafetería surfaced the worst shape of this: rows cached
+    with a broken rate could never heal, because the item itself never
+    changed again. Bumping `modified` here folds every price edit into the
+    delta stream the clients already poll; the ~60s sync then repairs any
+    cached rate, stale or broken, with no rebuild.
+
+    `update_modified=False` because the value IS the update — set_value
+    would otherwise stamp its own now() twice. Best-effort: a price save
+    must never fail on the cache-heal side effect.
+    """
+    item_code = getattr(doc, "item_code", None)
+    if not item_code:
+        return
+    try:
+        frappe.db.set_value(
+            "Item", item_code, "modified", frappe.utils.now(), update_modified=False
+        )
+    except Exception:
+        frappe.log_error(
+            f"Failed to touch Item {item_code} after Item Price change",
+            "Item Price cache heal",
+        )
