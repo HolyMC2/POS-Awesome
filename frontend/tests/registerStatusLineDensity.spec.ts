@@ -69,18 +69,24 @@ describe("the drop ladder", () => {
 		// server. It never drops, and nothing may rank below it.
 		expect(rank.connection).toBe(1);
 		expect(Math.min(...Object.values(rank))).toBe(1);
-		// Saldo is the owner's float; a printer fault is an instruction; the
-		// day's count and the wall clock are neither.
-		expect(rank.saldo).toBeLessThan(rank.printer);
-		expect(rank.printer).toBeLessThan(rank["tickets-today"]);
+		// Saldo is the owner's float; the day's count and the wall clock can go
+		// first. (The printer is absent here on purpose — see the next test.)
+		expect(rank.saldo).toBeLessThan(rank["tickets-today"]);
 		expect(rank["tickets-today"]).toBeLessThan(rank.clock);
 	});
 
-	it("promotes an unhealthy printer above a healthy one", () => {
+	it("a healthy printer says nothing; a fault earns an icon on saldo's shelf", () => {
+		// E1 (08-29): «Impresora lista» in the bar all day was reassurance-
+		// wallpaper — the cobro header and opening readiness own that promise.
+		// The FAULT keeps a seat because it is an instruction, and it sits on
+		// the same rung as saldo: both outlast everything except the one claim
+		// about money, which nothing may outrank.
 		const healthy = priorities();
 		const faulty = priorities({ ...FULL, printerStatus: "fail" as const });
-		// "Ready" is reassurance and can go; a fault is an instruction and stays.
-		expect(faulty.printer).toBeLessThan(healthy.printer);
+		expect(healthy.printer).toBeUndefined();
+		expect(faulty.printer).toBe(faulty.saldo);
+		expect(faulty.printer).toBeGreaterThan(faulty.connection);
+		expect(faulty.printer).toBeLessThan(faulty["tickets-today"]);
 	});
 
 	it("hides in strictly descending priority as the bar narrows", () => {
@@ -101,19 +107,14 @@ describe("the drop ladder", () => {
 	});
 
 	it("shows the whole row whenever the box affords it", () => {
-		// The full row measures ~704px; nothing may drop while the box still
-		// fits it, so the widest breakpoint stays at or under that measure.
+		// The full healthy row measures under ~704px (it lost the printer text
+		// chip to E1); nothing may drop while the box still fits it, so the
+		// widest breakpoint stays at or under that measure.
 		const widest = Math.max(...dropRules().map((rule) => rule.width));
 		expect(widest).toBeLessThanOrEqual(720);
 		const shown = resolveRegisterStatusLine(FULL).chips.map((chip) => chip.id);
 		expect(shown).toEqual(
-			expect.arrayContaining([
-				"clock",
-				"tickets-today",
-				"printer",
-				"saldo",
-				"connection",
-			]),
+			expect.arrayContaining(["clock", "tickets-today", "saldo", "connection"]),
 		);
 	});
 
@@ -121,7 +122,9 @@ describe("the drop ladder", () => {
 		const dropped = dropRules()
 			.filter((rule) => rule.width >= 500)
 			.map((rule) => rule.priority);
-		const rank = priorities();
+		// The degraded-printer row is the crowded one now, so the ladder is
+		// asserted against it: the icon and saldo survive, the niceties go.
+		const rank = priorities({ ...FULL, printerStatus: "fail" as const });
 		const survives = (id: string) => !dropped.includes(rank[id]!);
 
 		expect(survives("clock")).toBe(false);

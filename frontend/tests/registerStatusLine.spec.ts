@@ -157,10 +157,21 @@ describe("context shifts with the screen, as the artboard draws it", () => {
 });
 
 describe("what each viewport keeps", () => {
-	it("desktop carries clock, day count, printer, connection", () => {
+	it("desktop carries clock, day count, connection — a healthy printer says nothing", () => {
+		// E1: «Impresora lista» all day was reassurance-wallpaper. The cobro
+		// header and opening readiness state it where it is a promise.
 		const ids = resolveRegisterStatusLine({ ...SELLING, ticketsToday: 31 }).chips.map(
 			(c) => c.id,
 		);
+		expect(ids).toEqual(["clock", "tickets-today", "connection"]);
+	});
+
+	it("a degraded printer earns its seat back — as an icon, words on the tooltip", () => {
+		const ids = resolveRegisterStatusLine({
+			...SELLING,
+			ticketsToday: 31,
+			printerStatus: "fail",
+		}).chips.map((c) => c.id);
 		expect(ids).toEqual(["clock", "tickets-today", "printer", "connection"]);
 	});
 
@@ -197,9 +208,25 @@ describe("chips that must not appear rather than appear wrong", () => {
 		).toBeUndefined();
 	});
 
-	it("warns rather than reassures when the printer is unhealthy", () => {
-		expect(chip({ ...SELLING, printerStatus: "warn" }, "printer")?.tone).toBe("warning");
-		expect(chip({ ...SELLING, printerStatus: "fail" }, "printer")?.tone).toBe("warning");
+	it("omits the printer when it is healthy — the navbar carries no all-day reassurance", () => {
+		// E1: the same lesson as the grey chip, in green. A fact that is true
+		// every minute of every day is wallpaper; the moments that act on it
+		// (opening readiness, the cobro header) say «Impresora lista» there.
+		expect(chip(SELLING, "printer")).toBeUndefined();
+	});
+
+	it("warns as a degraded ICON when the printer is unhealthy, sentence on the tooltip", () => {
+		for (const status of ["warn", "fail"] as const) {
+			const degraded = chip({ ...SELLING, printerStatus: status }, "printer");
+			expect(degraded?.tone).toBe("warning");
+			expect(degraded?.icon).toBe("mdi-printer-off");
+			expect(degraded?.iconOnly).toBe(true);
+			// The tooltip still carries the instruction, and warn/fail keep
+			// distinct wordings there.
+			expect(degraded?.labelKey).toBe(
+				status === "warn" ? "Printer needs attention" : "Printer unavailable",
+			);
+		}
 	});
 
 	it("omits saldo when the app is not installed", () => {

@@ -51,6 +51,16 @@ export interface StatusChip {
 	tone: StatusTone;
 	/** Tabular figures — dates, money, folios. */
 	mono?: boolean;
+	/** mdi icon name; with `iconOnly` the label moves to the tooltip. */
+	icon?: string;
+	/**
+	 * Render the icon alone and keep the words as the tooltip (critique E1).
+	 * For a fact that is true ALL DAY, a text pill is wallpaper — it devalues
+	 * the chips beside it. The icon states "degraded" at a glance; the moments
+	 * where it matters (opening readiness, the cobro header, the fire verdict)
+	 * carry the full words.
+	 */
+	iconOnly?: boolean;
 }
 
 export interface RegisterStatusLine {
@@ -279,20 +289,31 @@ function connectionChip(input: RegisterStatusInput): StatusChip | null {
  * Printer, only where silent printing is configured. A register that prints
  * through the browser dialog has no "ready" state to report, and a chip that
  * is always grey teaches the operator to stop reading the row.
+ *
+ * The navbar says NOTHING about a healthy printer and only an ICON about a
+ * broken one (critique E1). A tablet register with silent print configured
+ * but no QZ on the device is degraded all day, every day — and a warning
+ * pill that lives in the bar all day is not a warning, it is wallpaper that
+ * devalues the badges beside it. «Impresora lista» was the same problem in
+ * reassurance form. The WORDS now live only where printing is about to
+ * matter, and each of those moments already has its own surface: opening
+ * readiness (shift open), the cobro header (hardwareReadiness), and the
+ * fire verdict watch on the salón (B1). Here the fault keeps its seat on
+ * the ladder — degraded, at a glance, in one icon's width — and the tooltip
+ * still carries the sentence for whoever hovers.
  */
 function printerChip(input: RegisterStatusInput): StatusChip | null {
 	if (!input.usesSilentPrint) return null;
 	const status = input.printerStatus ?? "unknown";
-	if (status === "unknown") return null;
-	if (status === "ok") {
-		return { id: "printer", labelKey: "Printer ready", tone: "neutral", priority: 3 };
-	}
+	if (status !== "warn" && status !== "fail") return null;
 	return {
 		id: "printer",
 		labelKey: status === "warn" ? "Printer needs attention" : "Printer unavailable",
 		tone: "warning",
-		// A printer that needs attention outranks a healthy one: "ready" is
-		// reassurance and can go, a fault is an instruction and cannot.
+		icon: "mdi-printer-off",
+		iconOnly: true,
+		// An instruction, same shelf as saldo: it drops only when the bar is
+		// down to the one claim about money (the connection chip).
 		priority: 2,
 	};
 }

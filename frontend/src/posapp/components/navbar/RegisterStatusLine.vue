@@ -26,12 +26,20 @@
 				v-for="chip in line.chips"
 				:key="chip.id"
 				class="register-status-chip"
-				:class="[`register-status-chip--${chip.tone}`, { mono: chip.mono }]"
+				:class="[
+					`register-status-chip--${chip.tone}`,
+					{ mono: chip.mono, 'register-status-chip--icon-only': chip.iconOnly },
+				]"
 				:data-testid="`register-status-chip-${chip.id}`"
 				:data-tone="chip.tone"
 				:data-priority="chip.priority"
+				:title="chip.iconOnly ? translate(chip.labelKey, chip.labelParams) : undefined"
+				:aria-label="chip.iconOnly ? translate(chip.labelKey, chip.labelParams) : undefined"
 			>
-				{{ chip.mono ? chip.labelKey : translate(chip.labelKey, chip.labelParams) }}
+				<v-icon v-if="chip.icon" :icon="chip.icon" size="13" />
+				<template v-if="!chip.iconOnly">{{
+					chip.mono ? chip.labelKey : translate(chip.labelKey, chip.labelParams)
+				}}</template>
 			</span>
 		</div>
 	</div>
@@ -226,6 +234,13 @@ const subtitle = computed(() =>
 .register-status-chip--warning {
 	background: var(--pos-button-warning-bg);
 	color: var(--pos-button-warning-text);
+}
+
+/* E1: a degraded device is an ICON, not a sentence — the words ride the
+ * tooltip, and the pill shrinks to the icon's own footprint so it reads as
+ * a state marker rather than a headline that never changes. */
+.register-status-chip--icon-only {
+	padding: 3px 6px;
 }
 
 .mono {
