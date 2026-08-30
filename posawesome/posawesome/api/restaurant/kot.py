@@ -32,6 +32,9 @@ from posawesome.posawesome.api.restaurant._tickets import (
 
 GENERAL_STATION = "General"
 VOID_EVENT_PREFIX = "posa-kot-void"
+# Kitchen tickets born from a charged POS Charge Request (kiosk orders and
+# any future register-less producer) — same batch spine, second source.
+CHARGE_REQUEST_SOURCE_DOCTYPE = "POS Charge Request"
 
 
 def _load_snapshot(order):
@@ -254,10 +257,7 @@ def _next_snapshot(order, snapshot, course_idx, newly_routed=None):
     return updated
 
 
-def _create_batch(order, event_key, source_event, projection, station_groups):
-    if not frappe.db.exists("DocType", "Doco Print Batch"):
-        return None
-
+def _batch_destinations(station_groups):
     destinations = []
     for kind, station_rows in station_groups:
         for station in station_rows:
@@ -271,6 +271,14 @@ def _create_batch(order, event_key, source_event, projection, station_groups):
                 "width_mm": station.get("paper_width_mm") or 80,
                 "projection": {"kind": kind, **station},
             })
+    return destinations
+
+
+def _create_batch(order, event_key, source_event, projection, station_groups):
+    if not frappe.db.exists("DocType", "Doco Print Batch"):
+        return None
+
+    destinations = _batch_destinations(station_groups)
     if not destinations:
         return None
 
@@ -281,6 +289,98 @@ def _create_batch(order, event_key, source_event, projection, station_groups):
         source_doctype="POS Table Order",
         source_name=order.name,
         source_event=source_event,
+        projection=projection,
+        destinations=destinations,
+    )
+
+
+def fire_charge_request(request, pos_profile):
+    """Kitchen fire for a CHARGED charge request (polish P1, 08-29).
+
+    The kiosk closed its loop at the counter and stopped: a paid kiosk order
+    existed only as a Charged PCR — no KOT fired, nothing reached the KDS or
+    the comandas board, and the kitchen learned about the order when somebody
+    shouted it. This is the missing half: at the charge moment (payment is
+    when a kitchen should start cooking — never at placement, which would
+    cook speculative unpaid orders), the request's frozen `items_json` lines
+    are routed through the SAME station index, projection shape and batch
+    spine as a mesa fire, so the printers, the board and the KDS see one kind
+    of ticket.
+
+    The gate is the venue itself: no active kitchen stations for this
+    register means no kitchen — a phone shop charging a repair PCR, or a
+    lencería charging an apartado, hits `return None` before anything routes.
+    Idempotent by event_key: one charge, one ticket, however many times the
+    mark-charged reconciliation replays.
+
+    NOT whitelisted, and deliberately called best-effort by the charge path:
+    the money truth (request marked charged against a submitted invoice) must
+    never be hostage to a kitchen printer.
+    """
+    if not frappe.db.exists("DocType", "Doco Print Batch"):
+        return None
+
+    station_index = _station_index(request.company, pos_profile)
+    if not station_index:
+        return None
+
+    event_key = f"posa-kot:pcr:{request.name}"
+    if frappe.db.exists("Doco Print Batch", {"event_key": event_key}):
+        return None
+
+    try:
+        lines = json.loads(request.items_json or "[]")
+    except (TypeError, ValueError):
+        lines = []
+    entries = []
+    for idx, line in enumerate(lines if isinstance(lines, list) else [], 1):
+        if not isinstance(line, dict) or not line.get("item_code"):
+            continue
+        qty = flt(line.get("qty") or 0)
+        if qty <= 0:
+            continue
+        entries.append({
+            # PCR lines have no client uid; the serial is stable because the
+            # snapshot is frozen at placement and never edited.
+            "line_uid": f"pcr-{request.name}-{idx}",
+            "item_code": line.get("item_code"),
+            "item_name": line.get("item_name") or line.get("item_code"),
+            "qty": qty,
+            "notes": line.get("description") or None,
+            "course_idx": 1,
+            "kind": "new",
+        })
+    if not entries:
+        return None
+
+    group_by_item = _item_groups({entry["item_code"] for entry in entries})
+    stations = _route(entries, station_index, group_by_item)
+    destinations = _batch_destinations((("fire", stations),))
+    if not destinations:
+        return None
+
+    fired_at = now_datetime()
+    projection = {
+        "order": request.name,
+        "order_uid": None,
+        "table": None,
+        # The board and the KDS render `table || tab_name`, so the source
+        # label («Kiosko · Ana») is exactly what the cook calls out.
+        "tab_name": request.source_label or request.name,
+        "course_idx": None,
+        "stations": stations,
+        "cancellations": [],
+        "fired_at": str(fired_at),
+        "replayed": False,
+    }
+
+    from doco.docoutils.printing.jobs import create_batch
+
+    return create_batch(
+        event_key=event_key,
+        source_doctype=CHARGE_REQUEST_SOURCE_DOCTYPE,
+        source_name=request.name,
+        source_event="charge_request_charged",
         projection=projection,
         destinations=destinations,
     )
@@ -571,11 +671,14 @@ def list_kitchen_batches(pos_profile, limit=30):
     rows = frappe.get_all(
         "Doco Print Batch",
         filters={
-            "source_doctype": "POS Table Order",
+            # Two sources, one board (polish P1): mesa fires and charged
+            # kiosk/charge-request tickets are the same kind of thing to a
+            # cook, so they share the window, the lanes and the bump verb.
+            "source_doctype": ["in", ("POS Table Order", CHARGE_REQUEST_SOURCE_DOCTYPE)],
             "event_key": ["like", "posa-kot%"],
             "creation": [">=", add_to_date(now_datetime(), hours=-BOARD_WINDOW_HOURS)],
         },
-        fields=fields,
+        fields=fields + ["source_doctype"],
         order_by="creation desc",
         # Overfetch: the profile join below drops other registers' traffic,
         # and a busy multi-register site would otherwise starve the board.
@@ -583,7 +686,13 @@ def list_kitchen_batches(pos_profile, limit=30):
         ignore_permissions=True,
     )
 
-    order_names = list({row.source_name for row in rows if row.source_name})
+    order_names = list(
+        {
+            row.source_name
+            for row in rows
+            if row.source_name and row.source_doctype == "POS Table Order"
+        }
+    )
     orders = {}
     if order_names:
         for order in frappe.get_all(
@@ -594,9 +703,43 @@ def list_kitchen_batches(pos_profile, limit=30):
         ):
             orders[order.name] = order
 
+    # Charge-request tickets scope by the QUEUE's own rule: this register's
+    # company, and unpinned or pinned to exactly this profile — the same
+    # discipline `get_open_charge_requests` applies, restated here because
+    # importing it would cycle (charge_requests imports this module to fire).
+    request_names = list(
+        {
+            row.source_name
+            for row in rows
+            if row.source_name and row.source_doctype == CHARGE_REQUEST_SOURCE_DOCTYPE
+        }
+    )
+    requests = {}
+    if request_names and frappe.db.exists("DocType", CHARGE_REQUEST_SOURCE_DOCTYPE):
+        profile_company = frappe.db.get_value("POS Profile", pos_profile, "company")
+        for request in frappe.get_all(
+            CHARGE_REQUEST_SOURCE_DOCTYPE,
+            filters={"name": ["in", request_names], "company": profile_company},
+            or_filters=[["pos_profile", "is", "not set"], ["pos_profile", "=", pos_profile]],
+            fields=["name", "source_label", "status"],
+            ignore_permissions=True,
+        ):
+            requests[request.name] = request
+
     batches = []
     for row in rows:
-        order = orders.get(row.source_name)
+        if row.source_doctype == CHARGE_REQUEST_SOURCE_DOCTYPE:
+            request = requests.get(row.source_name)
+            if not request:
+                continue
+            # Shaped like an order row so ONE card template serves both:
+            # no table, the source label as the tab («Kiosko · Ana»), and
+            # the request's own status where the order's would go.
+            order = frappe._dict(
+                table=None, tab_name=request.source_label or request.name, status=request.status
+            )
+        else:
+            order = orders.get(row.source_name)
         if not order:
             continue
         try:
@@ -707,10 +850,31 @@ def _scoped_kitchen_batch(pos_profile, batch_name):
     )
     if (
         not row
-        or row.source_doctype != "POS Table Order"
+        or row.source_doctype not in ("POS Table Order", CHARGE_REQUEST_SOURCE_DOCTYPE)
         or not str(row.event_key or "").startswith("posa-kot")
     ):
         frappe.throw(_("Kitchen ticket {0} does not exist.").format(batch_name))
+    if row.source_doctype == CHARGE_REQUEST_SOURCE_DOCTYPE:
+        # A charge-request ticket (polish P1) proves itself the way the
+        # board lists it: the register's company, unpinned or pinned to
+        # exactly this profile.
+        request = frappe.db.get_value(
+            CHARGE_REQUEST_SOURCE_DOCTYPE,
+            row.source_name,
+            ["company", "pos_profile"],
+            as_dict=True,
+        )
+        profile_company = frappe.db.get_value("POS Profile", pos_profile, "company")
+        if (
+            not request
+            or request.company != profile_company
+            or (request.pos_profile and request.pos_profile != pos_profile)
+        ):
+            frappe.throw(
+                _("Kitchen ticket {0} does not belong to this register.").format(batch_name),
+                frappe.PermissionError,
+            )
+        return row
     order_profile = frappe.db.get_value("POS Table Order", row.source_name, "pos_profile")
     if order_profile != pos_profile:
         frappe.throw(

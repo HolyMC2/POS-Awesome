@@ -273,6 +273,9 @@ def prepare_charge_request_invoice(name, pos_profile, pos_opening_shift):
     )
     if submitted:
         request.mark_charged(doctype, submitted)
+        # No kitchen fire here on purpose: this branch THROWS, and the
+        # rollback that follows would take the batch with it — while any
+        # eager side effect of batch creation (print jobs) would not.
         frappe.throw(
             _(
                 "This request was already charged with invoice {0} — it has now "
@@ -363,6 +366,20 @@ def mark_charge_request_charged(name, pos_profile, invoice_doctype, invoice_name
     assert_company(frappe.session.user, row.company)
 
     request.mark_charged(invoice_doctype, invoice_name)
+    # The kitchen learns at the charge moment (polish P1): a paid kiosk order
+    # fires its KOT through the same spine a mesa fire uses — printers, the
+    # comandas board and the KDS see one kind of ticket. Best-effort by
+    # design: the money truth above must never be hostage to a kitchen
+    # printer, and a venue with no stations returns None before routing.
+    try:
+        from posawesome.posawesome.api.restaurant.kot import fire_charge_request
+
+        fire_charge_request(request, pos_profile)
+    except Exception:
+        frappe.log_error(
+            f"Kitchen fire failed for charged request {request.name}",
+            "Charge request kitchen fire",
+        )
     return {"name": request.name, "status": request.status, "invoice": invoice_name}
 
 
