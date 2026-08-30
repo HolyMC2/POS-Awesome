@@ -198,6 +198,9 @@ def describe_order_card(
         "warranty": bool(_cint((repair or {}).get("is_warranty_claim"))),
         "no_charge": bool(_cint((repair or {}).get("no_charge"))),
         "warranty_days": _cint((repair or {}).get("warranty_period_days")) or None,
+        # Order hub (critique D3): "Source" rows settle through their
+        # reference's own spine; the surface swaps COBRAR for that trigger.
+        "settle_mode": str(request.get("settle_mode") or "Register"),
     }
 
 

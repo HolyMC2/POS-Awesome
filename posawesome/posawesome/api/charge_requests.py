@@ -96,22 +96,33 @@ def get_open_charge_requests(pos_profile):
     company = frappe.db.get_value("POS Profile", pos_profile, "company")
     assert_company(frappe.session.user, company)
 
+    fields = [
+        "name",
+        "customer",
+        "source_label",
+        "amount_total",
+        "reference_doctype",
+        "reference_name",
+        "creation",
+    ]
+    # settle_mode (order hub, critique D3): "Source" rows are settled by
+    # their reference's own spine — the SPA offers that trigger instead of
+    # the cart load. The column ships with doco; a doco mid-rollout must
+    # keep its queue rather than 500 on a column migrate has not created.
+    has_settle_mode = frappe.db.has_column(CHARGE_REQUEST_DOCTYPE, "settle_mode")
+    if has_settle_mode:
+        fields.append("settle_mode")
     rows = frappe.get_all(
         CHARGE_REQUEST_DOCTYPE,
         filters={"status": "Open", "company": company},
         or_filters=[["pos_profile", "is", "not set"], ["pos_profile", "=", pos_profile]],
-        fields=[
-            "name",
-            "customer",
-            "source_label",
-            "amount_total",
-            "reference_doctype",
-            "reference_name",
-            "creation",
-        ],
+        fields=fields,
         order_by="creation asc",
         limit_page_length=100,
     )
+    if not has_settle_mode:
+        for row in rows:
+            row["settle_mode"] = "Register"
     customer_names = {
         row.customer: frappe.db.get_value("Customer", row.customer, "customer_name")
         for row in rows
@@ -135,6 +146,19 @@ def load_charge_request(name, pos_profile):
             _("Charge request {0} is {1} — someone already handled it.").format(
                 request.name, _(request.status)
             )
+        )
+    if str(getattr(request, "settle_mode", "") or "") == "Source":
+        # Order hub (critique D3): a Source-mode request settles through its
+        # reference's own spine (a storefront apartado's stock recheck +
+        # autobill). Building a SECOND invoice from its lines here would bill
+        # the same goods twice — refuse, and point at the right verb. Server
+        # side, so a stale SPA cannot cart-load one either.
+        frappe.throw(
+            _(
+                "Request {0} ({1}) is settled through its source document — "
+                "use «Registrar pago» on the request instead of loading it "
+                "into the cart."
+            ).format(request.name, request.source_label or request.reference_name)
         )
     return {
         "name": request.name,
@@ -418,22 +442,28 @@ def get_service_order_queue(pos_profile, bucket="ready"):
     assert_company(frappe.session.user, company)
 
     status = "Open" if bucket == "ready" else "Charged"
+    queue_fields = [
+        "name",
+        "customer",
+        "source_label",
+        "amount_total",
+        "status",
+        "reference_doctype",
+        "reference_name",
+        "invoice",
+        "creation",
+        "charged_at",
+    ]
+    # Order hub (critique D3): guarded like the list read — a doco mid-rollout
+    # keeps its queue, and every row simply reads "Register".
+    has_settle_mode = frappe.db.has_column(CHARGE_REQUEST_DOCTYPE, "settle_mode")
+    if has_settle_mode:
+        queue_fields.append("settle_mode")
     rows = frappe.get_all(
         CHARGE_REQUEST_DOCTYPE,
         filters={"status": status, "company": company},
         or_filters=_profile_or_filters(pos_profile),
-        fields=[
-            "name",
-            "customer",
-            "source_label",
-            "amount_total",
-            "status",
-            "reference_doctype",
-            "reference_name",
-            "invoice",
-            "creation",
-            "charged_at",
-        ],
+        fields=queue_fields,
         # Ready oldest-first (the customer has been waiting); delivered
         # newest-first (the cashier is looking for what just left).
         order_by="creation asc" if bucket == "ready" else "charged_at desc",

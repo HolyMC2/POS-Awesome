@@ -3049,3 +3049,8 @@ Everything,Todo
 Course,Curso
 sent,enviada
 Mesa,Mesa
+Settles at source,Se liquida en origen
+Payment registered,Pago registrado
+settled through its source document.,liquidado a través de su documento de origen.
+Could not register the payment on the source document.,No se pudo registrar el pago en el documento de origen.
+The source document did not confirm the payment.,El documento de origen no confirmó el pago.

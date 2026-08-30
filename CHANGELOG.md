@@ -4,6 +4,20 @@ All notable changes.
 
 ## Unreleased
 
+- **The order hub, register side (08-29, critique D3).** doco's POS
+  Charge Request grew `settle_mode` and a blessed producer API, and the
+  storefront now queues apartados (mumu's invisible ~$1,740) — this is
+  the register's half: the queue reads carry `settle_mode`
+  (has_column-guarded — a doco mid-rollout keeps its queue, rows read
+  "Register"); `load_charge_request` REFUSES a Source row server-side
+  (building a second invoice from an apartado's lines would bill the
+  goods twice — the storefront's stock recheck + autobill are the only
+  money path); OrdenSurface's COBRAR branches: a Source card triggers
+  `mark_store_order_paid` on the reference and refreshes the queue in
+  place, and the queue card wears «Se liquida en origen» so the cashier
+  sees the different gesture before pressing the band. Full drill green
+  on doco-mirror (queued → visible → refused → settled → Charged).
+  vitest 4786 ✓, vue-tsc 0, es.csv +5.
 - **Courses and seats on the line — «phase 2» ships (08-29, critique B4).**
   The line model always had `course_idx`, `fired`, `fired_at`, and the
   server always accepted a per-course fire filter; «phase 2» was only

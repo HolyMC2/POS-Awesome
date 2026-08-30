@@ -101,6 +101,16 @@
 					</span>
 					<span class="orden-queue__title">{{ card.title }}</span>
 					<span class="orden-queue__customer">{{ card.customer_name }}</span>
+					<!-- Order hub (D3): a Source-mode row settles through its own
+					     document — the cashier must see it is a different gesture
+					     BEFORE pressing the band. -->
+					<span
+						v-if="card.settle_mode === 'Source'"
+						class="orden-queue__source-badge"
+						data-testid="orden-source-badge"
+					>
+						{{ __("Settles at source") }}
+					</span>
 					<span class="orden-queue__money">
 						<span class="orden-queue__aside">{{ asideFor(card) }}</span>
 						<span class="orden-queue__amount mono">{{
@@ -433,6 +443,18 @@ defineExpose({ focusSearch: () => searchEl.value?.focus() });
 	border-top: 1px dashed var(--reg-border-soft, #e6e9ee);
 	font-size: 11px;
 	line-height: 1.4;
+	color: var(--reg-text-muted, #9aa2ae);
+}
+
+/* Order hub (D3): the Source-mode marker — a different gesture, visibly. */
+.orden-queue__source-badge {
+	align-self: flex-start;
+	border: 1px solid var(--reg-border-soft, #e6e9ee);
+	border-radius: 999px;
+	padding: 0 8px;
+	font-size: 11px;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
 	color: var(--reg-text-muted, #9aa2ae);
 }
 </style>

@@ -51,6 +51,9 @@ export interface ServiceOrderCard {
 	warranty: boolean;
 	no_charge: boolean;
 	warranty_days?: number | null;
+	/** "Register" (cart load) or "Source" — settled by the reference's own
+	 *  spine; the surface triggers it instead of building an invoice (D3). */
+	settle_mode?: string;
 }
 
 export interface ServiceOrderDetail extends ServiceOrderCard {

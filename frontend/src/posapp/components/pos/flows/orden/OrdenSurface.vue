@@ -241,10 +241,54 @@ const chooseBucket = (id: OrdenBucketId) => {
  * in the cart and the cart is where the cashier has to look next — the same
  * move `RecargasDestination` makes once its line is on the sale.
  */
+/**
+ * A Source-mode request (order hub, critique D3): the money settles through
+ * the reference's OWN spine — for a storefront apartado that is
+ * mark_store_order_paid, whose stock recheck + autobill are authoritative.
+ * The register surfaces and triggers it; building a second invoice from the
+ * snapshot lines would bill the same goods twice (the server refuses the
+ * cart load too). The queue refreshes in place: nothing landed in the cart,
+ * so there is nowhere to send the cashier.
+ */
+async function collectSourceSettled(card: ServiceOrderCard) {
+	collecting.value = true;
+	errorMessage.value = "";
+	try {
+		const response = await (window as any).frappe.call({
+			method: "doco.docoutils.storefront.payment.mark_store_order_paid",
+			args: { order: card.reference_name },
+		});
+		const result = response?.message || {};
+		if (!result.ok && result.state !== "paid") {
+			throw new Error(
+				result.message || __("The source document did not confirm the payment."),
+			);
+		}
+		invalidateServiceOrderCounts();
+		useToastStore().show({
+			title: __("Payment registered"),
+			message: `${card.folio} — ${__("settled through its source document.")}`,
+			color: "success",
+		});
+		selectedName.value = null;
+		detail.value = null;
+		void loadQueue();
+		void loadCounts();
+	} catch (error) {
+		reportFailure(error, __("Could not register the payment on the source document."));
+	} finally {
+		collecting.value = false;
+	}
+}
+
 async function collect() {
 	const profile = profileName.value;
 	const card = selectedCard.value;
 	if (!profile || !card || collecting.value || card.invoiced) return;
+	if (card.settle_mode === "Source") {
+		await collectSourceSettled(card);
+		return;
+	}
 	collecting.value = true;
 	errorMessage.value = "";
 	try {
