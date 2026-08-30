@@ -773,7 +773,16 @@ export default {
 			additionalDiscount,
 			additionalDiscountPercentage,
 		} = storeToRefs(invoiceStore);
-		const usePaymentDialog = computed(() => responsive.windowWidth.value >= 992);
+		// The dialog boundary is the SHELL's own compact boundary (1100 — the
+		// dock band, r9's "one boundary"), not the old 992. Below it the
+		// inline payment sheet is the designed surface (tips, dividir entre
+		// N, por asiento — all stacked); the 992–1099 band used to get a
+		// desk-layout dialog instead, which is how a cafetería tablet settled
+		// its cuentas on a fullscreen relic with none of the new cobro work
+		// visible (Marco, 08-30). At ≥1100 the rail hosts CobroSurface; the
+		// dialog survives only as the lean-vertical fallback (railVisible
+		// false at desk width).
+		const usePaymentDialog = computed(() => responsive.windowWidth.value >= 1100);
 
 		// SALDO-INTEGRATION-POINT — per-profile gate for the catalog picker.
 		// SaldoReferenciaDialog + SaldoStatusDialog stay mounted (bus-driven,

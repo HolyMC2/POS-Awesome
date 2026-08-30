@@ -3258,7 +3258,9 @@ defineExpose({
 		"summary adjustments"
 		"methods adjustments"
 		"settlement adjustments"
-		"settlement meta";
+		"settlement meta"
+		"tip tip"
+		"split split";
 }
 
 /* The dialog lays its sections out by NAME, so an unplaced child would be
@@ -3266,6 +3268,20 @@ defineExpose({
    header owns a full-width row of its own above them. */
 .payment-sections--dialog .payment-readiness {
 	grid-area: readiness;
+}
+
+/* The tip strip and the split panel arrived (B5/C1, 08-29) without a named
+   cell in this grid, so auto-placement dropped each into HALF of an implicit
+   bottom row — which is how a cafetería settling a cuenta in the dialog saw
+   «dividir entre N» squeezed into a corner or not at all (Marco, 08-30).
+   Full-width rows of their own; a register that renders neither collapses
+   both rows to nothing. */
+.payment-sections--dialog .restaurant-tip {
+	grid-area: tip;
+}
+
+.payment-sections--dialog .split-evenly {
+	grid-area: split;
 }
 
 /* A thirty-line ticket must not push the payment methods below the fold —
@@ -3387,7 +3403,7 @@ defineExpose({
 	 * (a 420px row is still a usable pad and a readable ticket) and the legacy
 	 * row below it takes whatever height its forms need — the surface scrolls.
 	 */
-	grid-template-rows: auto minmax(420px, auto) auto auto auto;
+	grid-template-rows: auto minmax(420px, auto) auto auto auto auto;
 	gap: var(--pos-space-2);
 	/* `stretch`, not `start`: the ticket card and the change card fill the
 	   height their column was given instead of floating at the top of it. */
@@ -3399,6 +3415,7 @@ defineExpose({
 		"summary tender paper"
 		"summary methods paper"
 		"tip tip tip"
+		"split split split"
 		"adjustments settlement meta";
 }
 
@@ -3411,12 +3428,13 @@ defineExpose({
  * nothing to scroll, nothing clipped.
  */
 .payment-sections--cobro-lean {
-	grid-template-rows: auto minmax(0, 1fr) auto auto;
+	grid-template-rows: auto minmax(0, 1fr) auto auto auto;
 	grid-template-areas:
 		"readiness readiness readiness"
 		"summary tender paper"
 		"summary methods paper"
-		"tip tip tip";
+		"tip tip tip"
+		"split split split";
 	flex: 1 1 auto;
 }
 
@@ -3429,6 +3447,14 @@ defineExpose({
  */
 .payment-sections--cobro .restaurant-tip {
 	grid-area: tip;
+}
+
+/* Same story as the tip strip, one panel later: the split panel (C1) had no
+   named cell here, so on the hosted Cobro surface it auto-placed into an
+   implicit third-width cell below the grid. Its own full-width row, which
+   collapses to nothing on the sales that never show it. */
+.payment-sections--cobro .split-evenly {
+	grid-area: split;
 }
 
 /* Same rule as the dialog: an unplaced child would be auto-placed into the

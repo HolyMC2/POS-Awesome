@@ -156,8 +156,12 @@ export async function show_payment(context: any) {
 			context.invoiceStore.setInvoiceDoc(invoice_doc);
 		}
 
+		// Mirrors Pos.vue's `usePaymentDialog`: 1100 is the shell's one
+		// compact boundary (the dock band). 992–1099 gets the inline compact
+		// payment sheet — the designed surface with the cobro features —
+		// never the desk-layout dialog it used to front there.
 		const useDesktopPaymentDialog =
-			typeof window !== "undefined" && window.innerWidth >= 992;
+			typeof window !== "undefined" && window.innerWidth >= 1100;
 
 		if (useDesktopPaymentDialog && context.uiStore?.openPaymentDialog) {
 			context.uiStore.openPaymentDialog();

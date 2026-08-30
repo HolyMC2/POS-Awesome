@@ -176,8 +176,9 @@ describe("three columns at 1440", () => {
 		expect(rows, "the folded cobro grid states no explicit rows").not.toBeNull();
 		const tracks = (rows as RegExpExecArray)[1].trim().split(/\s+(?![^(]*\))/);
 
-		// readiness · the three columns · the method rows · the tip strip.
-		expect(tracks).toEqual(["auto", "minmax(0, 1fr)", "auto", "auto"]);
+		// readiness · the three columns · the method rows · the tip strip ·
+		// the split panel (its row collapses on sales that never show it).
+		expect(tracks).toEqual(["auto", "minmax(0, 1fr)", "auto", "auto", "auto"]);
 	});
 
 	it("keeps a floor under the panel when the tail unfolds", () => {
@@ -197,6 +198,28 @@ describe("three columns at 1440", () => {
 			/\.payment-sections--cobro \.restaurant-tip \{\s*grid-area: tip;/,
 		);
 		expect(rule(".payment-sections--cobro")).toContain("tip");
+	});
+
+	it("gives the split panel an area too — in the cobro grid AND the dialog's", () => {
+		// The tip strip's lesson, relearned once (08-30): the split panel (C1)
+		// shipped without a named cell, so the hosted surface auto-placed it
+		// into a third-width implicit cell and the dialog halved it into a
+		// corner — a cafetería settling a cuenta could not find «dividir
+		// entre N». Every non-section child of a named grid needs a home, in
+		// EVERY grid that hosts it.
+		expect(styles).toMatch(
+			/\.payment-sections--cobro \.split-evenly \{\s*grid-area: split;/,
+		);
+		expect(rule(".payment-sections--cobro")).toContain("split");
+		expect(rule(".payment-sections--cobro-lean")).toContain("split");
+		expect(styles).toMatch(
+			/\.payment-sections--dialog \.restaurant-tip \{\s*grid-area: tip;/,
+		);
+		expect(styles).toMatch(
+			/\.payment-sections--dialog \.split-evenly \{\s*grid-area: split;/,
+		);
+		expect(rule(".payment-sections--dialog")).toContain("tip");
+		expect(rule(".payment-sections--dialog")).toContain("split");
 	});
 
 	it("makes no section a scrollport of its own", () => {
@@ -282,7 +305,8 @@ describe("the legacy tail folds instead of stacking", () => {
 		// stretched column pretending to fill them.
 		expect(areas(".payment-sections--cobro")).toContain("adjustments settlement meta");
 		expect(areas(".payment-sections--cobro-lean")).not.toContain("adjustments settlement meta");
-		expect(areas(".payment-sections--cobro-lean")).toHaveLength(4);
+		// readiness · columns ×2 · tip · split (the split row joined 08-30).
+		expect(areas(".payment-sections--cobro-lean")).toHaveLength(5);
 		expect(paymentsSource).toContain(
 			"'payment-sections--cobro-lean': cobroMode && !cobroDetailsExpanded,",
 		);
