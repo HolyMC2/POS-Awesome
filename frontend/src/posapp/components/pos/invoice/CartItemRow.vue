@@ -73,6 +73,25 @@
 								</template>
 								<span>{{ item.pricing_rule_badge.tooltip }}</span>
 							</v-tooltip>
+							<!-- Rate-band preview (critique C3): the same window the
+							     server will enforce, read while typing instead of as
+							     a submit-time refusal. A warning, never a block — the
+							     enforcer is _reprice.py; this is its mirror. -->
+							<v-tooltip v-if="bandWindow" location="bottom">
+								<template #activator="{ props: tooltipProps }">
+									<v-chip
+										v-bind="tooltipProps"
+										color="warning"
+										size="x-small"
+										variant="tonal"
+										class="ml-1"
+										data-testid="cart-band-chip"
+									>
+										⚠ {{ bandRangeLabel }}
+									</v-chip>
+								</template>
+								<span>{{ bandTooltip }}</span>
+							</v-tooltip>
 							<!-- Mesa line chips (critique B4 + B1's remainder): course,
 							     seat, and the kitchen's verdict. Chips a waiter CYCLES
 							     with taps, not form fields — the two attributes every
@@ -532,6 +551,7 @@ import FractionalQtyPad from "./FractionalQtyPad.vue";
 import { isFractionEligible } from "../../../utils/fractionalMath";
 import { useVerticalStore } from "../../../stores/verticalStore";
 import { useFloorStore } from "../../../stores/floorStore";
+import { rateOutsideBand } from "../../../utils/rateBand";
 
 defineOptions({
 	name: "CartItemRow",
@@ -606,6 +626,42 @@ const handleDeleteClick = () => {
 };
 
 const verticalStore = useVerticalStore();
+
+// ---- rate-band preview (critique C3) --------------------------------------
+// Mirrors the server's _resolve_band_pct semantics via utils/rateBand. Quiet
+// on discounted lines: the server bands the declared PRE-discount price
+// there (which the client keeps equal to the list rate), so only a bare
+// typed rate can actually be out of band.
+const bandWindow = computed(() => {
+	if (!props.posProfile?.posa_allow_user_to_edit_rate) return null;
+	const hasDiscount =
+		Number(props.item.discount_percentage) || Number(props.item.discount_amount);
+	if (hasDiscount) return null;
+	return rateOutsideBand(
+		props.item.rate,
+		props.item.price_list_rate,
+		props.posProfile?.posa_px_max_rate_change_pct,
+		Boolean(Number(props.item.posa_px_skip_rate_band)),
+	);
+});
+const bandRangeLabel = computed(() => {
+	const window = bandWindow.value;
+	if (!window) return "";
+	const fmt = (value) =>
+		typeof props.formatCurrency === "function"
+			? props.formatCurrency(value)
+			: `$${Number(value).toFixed(2)}`;
+	return `${fmt(window.low)}–${fmt(window.high)}`;
+});
+const bandTooltip = computed(() => {
+	const window = bandWindow.value;
+	if (!window) return "";
+	return `${__("The register accepts")} ${bandRangeLabel.value} (${__("price list")} ${
+		typeof props.formatCurrency === "function"
+			? props.formatCurrency(window.priceListRate)
+			: window.priceListRate
+	} ±${window.bandPct}%). ${__("Adjust the rate, or mark the item as variable-price.")}`;
+});
 
 // ---- mesa line chips (critique B4) ----------------------------------------
 // Only a table-order-owned cart carries courses and seats; a retail line

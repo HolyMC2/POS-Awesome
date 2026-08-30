@@ -4,6 +4,20 @@ All notable changes.
 
 ## Unreleased
 
+- **The rate band is visible while typing (08-29, critique C3).** The
+  ±band on typed prices was server-only — the cashier met the numbers as
+  a submit-time refusal. New `utils/rateBand.ts` mirrors
+  `_resolve_band_pct` exactly (blank/0 → the 20% default, negative =
+  kill switch, 0.01 edge tolerance — a preview that disagrees with the
+  enforcer is worse than none; 7-case spec), and the cart row wears an
+  amber «⚠ $80–$120» chip with a tooltip naming the list price, the
+  band, and the way out — a WARNING, never a block, since the server
+  stays the enforcer. Quiet where the server is quiet: discounted lines
+  (the band judges the declared pre-discount price there), zero/comp
+  lines, rate-edit-off profiles, and skip-band SKUs — the item/group
+  `posa_px_skip_rate_band` opt-out now rides every catalog row (merged
+  server-side, has_column-guarded), so «cambiar pantalla» never nags.
+  vitest 4794 ✓ (7 new), vue-tsc 0, mirror payload verified.
 - **The retail tip moment (08-29, critique C2).** A counter register
   whose preset grants `tips` now offers the same selector a mesa does —
   the gate is the capability token alone (returns excluded: nobody tips

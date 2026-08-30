@@ -220,6 +220,12 @@ def _build_search_plan(
     # saldo-meta HTTP round-trip on first add (doco tenants only; guarded).
     if frappe.db.has_column("Item", "saldo_enabled"):
         fields.append("saldo_enabled")
+    # Rate-band preview (critique C3): the variable-price opt-out rides each
+    # row (merged with its Item Group below) so the cart can warn about an
+    # out-of-band typed rate BEFORE the submit-time 403 — and stay quiet on
+    # the SKUs the band deliberately ignores.
+    if frappe.db.has_column("Item", "posa_px_skip_rate_band"):
+        fields.append("posa_px_skip_rate_band")
     if include_description:
         fields.append("description")
     if include_image:
@@ -555,6 +561,27 @@ def _run_item_query(
 
         if not items_data:
             break
+
+        # Rate-band preview (critique C3): merge the Item Group opt-out into
+        # each row so the SPA can suppress its out-of-band warning exactly
+        # where the server's guard skips the band — a "cambiar pantalla"
+        # priced per job must not nag on every sale. Guarded like
+        # saldo_enabled: a site mid-rollout simply ships no flag.
+        if frappe.db.has_column("Item", "posa_px_skip_rate_band"):
+            group_flags = {}
+            page_groups = {i.get("item_group") for i in items_data if i.get("item_group")}
+            if page_groups and frappe.db.has_column("Item Group", "posa_px_skip_rate_band"):
+                for group in frappe.get_all(
+                    "Item Group",
+                    filters={"name": ["in", list(page_groups)]},
+                    fields=["name", "posa_px_skip_rate_band"],
+                ):
+                    group_flags[group.name] = 1 if group.posa_px_skip_rate_band else 0
+            for item in items_data:
+                merged = 1 if item.get("posa_px_skip_rate_band") else group_flags.get(
+                    item.get("item_group"), 0
+                )
+                item["posa_px_skip_rate_band"] = merged
 
         details = get_items_details(
             json.dumps(pos_profile),
