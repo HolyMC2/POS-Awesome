@@ -11,6 +11,7 @@ import type {
 import type { NotificationData } from "./stores/toastStore";
 import type { RealtimeStockPayload } from "./utils/realtimeStock";
 import type { KotProjection } from "../offline/restaurantTypes";
+import type { MovilLineEditIntent } from "./components/pos/mobile/line/movilLineEdit";
 
 /** A row of the POS Offer table as held by PosOffers.vue (`pos_offers`). Untyped upstream. */
 export interface PosOfferRow {
@@ -217,6 +218,18 @@ export type Events = {
 	 * rings that bell instead — same doorbell shape as start-camera.
 	 */
 	"movil:pick-variant": Item;
+	/**
+	 * A cart line edited from the phone's LINE SHEET (`MovilLineSheet.vue`,
+	 * movil round 10). The sheet owns no mutation: it emits a verb, `Pos.vue`
+	 * stamps the row identity on it, and `Invoice.vue` — which is mounted
+	 * behind the movil screens and already owns every line function — answers
+	 * by calling the SAME code the desktop row calls (`add_one` /
+	 * `subtract_one` for a step, `setFormatedQty` for a typed quantity,
+	 * `setFormatedCurrency` + `calc_prices` for a rate or a discount,
+	 * `remove_item` for a removal). Same money-seam shape as
+	 * `movil_collect_payment`: the screen sends an intent, the engine decides.
+	 */
+	"movil:line-edit": MovilLineEditIntent;
 	/**
 	 * A payment was CAPTURED against a party's open invoices — i.e. `PayView`'s
 	 * Payment Entry path finished, not the cart's. Distinct from

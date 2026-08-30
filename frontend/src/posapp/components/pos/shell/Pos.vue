@@ -290,8 +290,9 @@
 				     (scanner + teleported search header keep working with the
 				     drawer closed) and Invoice.vue stays mounted above via
 				     v-show, so add_item / request_invoice_payment still land.
-				     Tapping a cart line falls back to the classic cart — the
-				     line editor lives there until the movil line sheet ships. -->
+				     Tapping a cart line opens the movil LINE SHEET (round 10);
+				     the classic cart stays reachable behind «More options» for
+				     everything the sheet does not model. -->
 				<v-col
 					v-if="movilStageActive"
 					cols="12"
@@ -309,6 +310,9 @@
 						@split="onMovilSplit"
 						@collect="onMovilCollect"
 						@orden-back="onMovilOrdenBack"
+						@line-edit="onMovilLineEdit"
+						@line-close="onMovilLineClose"
+						@line-more="onMovilLineMore"
 					/>
 				</v-col>
 
@@ -602,6 +606,7 @@ import CatalogDrawer from "./drawer/CatalogDrawer.vue";
 import ActionBand from "./band/ActionBand.vue";
 import MovilShell from "./movil/MovilShell.vue";
 import { toServiceOrderView } from "../mobile/orders/serviceOrderLines";
+import { resolveMovilLineEdit } from "../mobile/line/movilLineEdit";
 import DestinationHost from "./destinations/DestinationHost.vue";
 import CobroSurface from "./cobro/CobroSurface.vue";
 import MobileOfflineOverlay from "./mobile/MobileOfflineOverlay.vue";
@@ -1476,8 +1481,11 @@ export default {
 		// not draw phone screens.
 		// ------------------------------------------------------------------
 		const movilPhone = computed(() => useCompactPosSwitcher.value && responsive.isCompact.value);
-		// Tapping a cart line falls back to the classic cart, which owns the
-		// line editor. Reset whenever the panel moves or Cart is re-asked.
+		// The classic cart, fronted on the phone. Since round 10 a tapped line
+		// opens the movil line sheet instead, and this is what «More options»
+		// (and a line with no `posa_row_id`) still falls back to — the classic
+		// row owns UOM, batch, serial, the offer toggle and the weighing pad.
+		// Reset whenever the panel moves or Cart is re-asked.
 		const movilCartDetail = ref(false);
 		// A hosted destination fronts the whole stage (desktop and phone
 		// alike), so the tab-following screens stand down while one is up —
@@ -1565,12 +1573,69 @@ export default {
 				movilPayActive.value ||
 				movilOrdenActive.value,
 		);
+		// ---- the movil line sheet (round 10) ------------------------------
+		// The ROW ID travels, not the line object: the sheet must follow the
+		// live cart, so the model is re-derived from `invoiceStore.items` on
+		// every tick. Hold the shaped line instead and a qty the engine
+		// clamped, a rate the repricing pass moved or a row somebody removed
+		// from the desk would all leave the sheet showing a stale ticket.
+		const movilLineRowId = ref("");
+		const movilLineRow = computed(() => {
+			const rowId = movilLineRowId.value;
+			if (!rowId) return null;
+			return (invoiceStore.items || []).find((row) => row?.posa_row_id === rowId) || null;
+		});
+		const movilLineSheet = computed(() =>
+			resolveMovilLineEdit(movilLineRow.value, {
+				profile: posProfile.value,
+				isReturn: Boolean(invoiceDoc.value?.is_return),
+			}),
+		);
+		// The row left the cart — removed here, removed from the desk, or the
+		// whole invoice cleared. Drop the selection so a later line cannot
+		// inherit a sheet that was opened over a different item.
+		watch(movilLineRow, (row) => {
+			if (!row) movilLineRowId.value = "";
+		});
 		watch([compactPanel, activeView], () => {
 			movilCartDetail.value = false;
 			movilPayDetail.value = false;
+			movilLineRowId.value = "";
 		});
-		const onMovilSelectLine = () => {
+		const onMovilSelectLine = (line) => {
+			// No identity, no sheet: an edit addressed only by item code would
+			// land on whichever row matched first. The classic cart handles
+			// that row the way it always has.
+			const rowId = line?.rowId;
+			if (!rowId) {
+				movilCartDetail.value = true;
+				return;
+			}
+			movilLineRowId.value = rowId;
+		};
+		const onMovilLineClose = () => {
+			movilLineRowId.value = "";
+		};
+		const onMovilLineMore = () => {
+			movilLineRowId.value = "";
 			movilCartDetail.value = true;
+		};
+		const onMovilLineEdit = (intent) => {
+			const row = movilLineRow.value;
+			if (!row || !intent?.kind) return;
+			// The verb travels; Invoice.vue answers with the desktop row's own
+			// functions. Same seam as movil_collect_payment — the screen never
+			// touches a cart line itself.
+			eventBus.emit("movil:line-edit", {
+				...intent,
+				rowId: movilLineRowId.value,
+				itemCode: row?.item_code || "",
+			});
+			// A removed row has no sheet to return to; every other verb leaves
+			// it open so the cashier can keep adjusting the same line.
+			if (intent.kind === "remove") {
+				movilLineRowId.value = "";
+			}
 		};
 		const onMovilSplit = () => {
 			movilPayDetail.value = true;
@@ -1665,6 +1730,7 @@ export default {
 			ordenTitle: __("Service Orders"),
 			ordenWho: posProfile.value?.name || "",
 			ordenReadyCount: Number(serviceOrderOpenCount.value) || 0,
+			lineSheet: movilLineSheet.value,
 		}));
 
 		// Browse IS the drawer. Any request to show the catalogue opens it and
@@ -2468,6 +2534,10 @@ export default {
 			movilShellProps,
 			onMovilAdd,
 			onMovilSelectLine,
+			onMovilLineEdit,
+			onMovilLineClose,
+			onMovilLineMore,
+			movilLineSheet,
 			onMovilSplit,
 			onMovilCollect,
 			onMovilOrdenBack,

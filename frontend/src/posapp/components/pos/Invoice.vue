@@ -807,6 +807,95 @@ export default {
 			});
 		},
 
+		/**
+		 * The phone's line sheet asked for a line change (`movil:line-edit`).
+		 *
+		 * The sheet is CHROME: it decided what the cashier may touch (that
+		 * gate is `CartItemRow.vue`'s own, restated in `movilLineEdit.ts`) and
+		 * nothing else. Every branch below lands in the exact function the
+		 * desktop cart row lands in, so a phone edit and a desk edit run the
+		 * same clamps, the same repricing pass and the same return-sign rules.
+		 * A second write path into a cart line is how the two surfaces would
+		 * start disagreeing about what the customer is being charged.
+		 */
+		handleMovilLineEdit(payload = {}) {
+			const rows = Array.isArray(this.items) ? this.items : [];
+			if (!rows.length) return;
+
+			// Identity first, item code second — the same two-step
+			// `focusCartItemQty` uses. NO index fallback here: focusing the
+			// wrong row costs a keystroke, editing the wrong row costs money,
+			// so an unresolved edit is dropped instead of guessed.
+			const rowId = payload?.rowId;
+			const itemCode = payload?.itemCode;
+			let index = -1;
+			if (rowId) {
+				index = rows.findIndex((row) => row?.posa_row_id === rowId);
+			}
+			if (index < 0 && itemCode) {
+				index = rows.findIndex((row) => row?.item_code === itemCode);
+			}
+			if (index < 0) return;
+
+			const item = rows[index];
+			if (!item) return;
+
+			switch (payload?.kind) {
+				case "step": {
+					// `add_one` / `subtract_one` verbatim: they already mirror
+					// the sign on a return invoice and remove the row when the
+					// step would land on zero, which is what the desk's − does.
+					const delta = Number(payload.delta);
+					if (delta > 0) {
+						this.add_one(item);
+					} else if (delta < 0) {
+						this.subtract_one(item);
+					} else {
+						return;
+					}
+					this.eventBus?.emit?.("recalculate_return_discount", { defer: true });
+					return;
+				}
+				case "qty": {
+					const qty = Number(payload.qty);
+					if (!Number.isFinite(qty)) return;
+					// A typed 0 is a removal, not a zero-quantity line — the
+					// same answer `add_one` / `subtract_one` give at zero.
+					if (qty === 0) {
+						this.remove_item(item);
+						return;
+					}
+					this.setFormatedQty(item, "qty", null, false, qty);
+					this.eventBus?.emit?.("recalculate_return_discount", { defer: true });
+					return;
+				}
+				case "rate": {
+					const rate = Number(payload.rate);
+					if (!Number.isFinite(rate)) return;
+					this.setFormatedCurrency(item, "rate", null, false, {
+						target: { value: rate },
+					});
+					this.calc_prices(item, rate, { target: { id: "rate" } });
+					return;
+				}
+				case "discount": {
+					const discount = Number(payload.discount);
+					if (!Number.isFinite(discount)) return;
+					this.setFormatedCurrency(item, "discount_percentage", null, false, {
+						target: { value: discount },
+					});
+					this.calc_prices(item, discount, { target: { id: "discount_percentage" } });
+					return;
+				}
+				case "remove": {
+					this.remove_item(item);
+					return;
+				}
+				default:
+					return;
+			}
+		},
+
 		focusAdditionalDiscountField() {
 			this.eventBus?.emit?.("focus_additional_discount");
 			this.$refs.invoiceSummary?.focusAdditionalDiscountField?.();
@@ -1361,6 +1450,9 @@ export default {
 			set_all_items: this.handleSetAllItems,
 			load_return_invoice: this.handleLoadReturnInvoice,
 			focus_cart_item_qty: this.focusCartItemQty,
+			// The phone's line sheet (movil round 10) — the ONE call site for a
+			// cart-line change made from a movil screen.
+			"movil:line-edit": this.handleMovilLineEdit,
 			set_new_line: this.handleSetNewLine,
 			recalculate_return_discount: (payload) => this.applyReturnDiscountProration(payload),
 			reset_invoice_type_to_invoice: () => {

@@ -91,6 +91,22 @@
 		@select-line="(line) => emit('select-line', line)"
 		@change-customer="emit('change-customer')"
 	/>
+
+	<!-- The line sheet, over whichever screen is up. A SIBLING, not a child of
+	     the cart screen: that screen owns an exact height budget and one
+	     scrollport, and a fixed overlay nested inside it would be measured
+	     against a frame it is meant to cover. `v-if` is right here — this IS
+	     the transient surface, it owns no engine and holds no subscription;
+	     the mounted-ness rule protects Invoice / ItemsSelector / Payments,
+	     which stay exactly where they were. -->
+	<MovilLineSheet
+		v-if="lineSheet"
+		:line="lineSheet"
+		:format-currency="formatCurrency"
+		@edit="(intent) => emit('line-edit', intent)"
+		@close="emit('line-close')"
+		@more="emit('line-more')"
+	/>
 </template>
 
 <script setup lang="ts">
@@ -103,6 +119,8 @@ import type { BrowseCard, BrowseCatalogItem } from "../../mobile/browse/browseCa
 import MovilCobroView, { type CollectionIntent } from "../../mobile/pay/MovilCobroView.vue";
 import MovilOrdenView from "../../mobile/orders/MovilOrdenView.vue";
 import type { ServiceOrderView } from "../../mobile/orders/serviceOrderLines";
+import MovilLineSheet from "../../mobile/line/MovilLineSheet.vue";
+import type { MovilLineEdit, MovilLineIntent } from "../../mobile/line/movilLineEdit";
 import MobileSaleScreen from "../../mobile/sale/MobileSaleScreen.vue";
 import type { MobileSaleLine } from "../../mobile/sale/mobileSaleLines";
 
@@ -146,6 +164,9 @@ withDefaults(
 		ordenTitle?: string;
 		ordenWho?: string;
 		ordenReadyCount?: number;
+		/** The tapped cart line, already gated by the profile (`movilLineEdit.ts`).
+		 *  Null closes the sheet — including when the row leaves the cart. */
+		lineSheet?: MovilLineEdit | null;
 	}>(),
 	{
 		browseItems: () => [],
@@ -173,6 +194,7 @@ withDefaults(
 		ordenTitle: "",
 		ordenWho: "",
 		ordenReadyCount: 0,
+		lineSheet: null,
 	},
 );
 
@@ -188,6 +210,12 @@ const emit = defineEmits<{
 	(_event: "split", _intent: CollectionIntent): void;
 	(_event: "collect", _intent: CollectionIntent): void;
 	(_event: "orden-back"): void;
+	/** The line sheet's verb — the host stamps the row identity on it. */
+	(_event: "line-edit", _intent: MovilLineIntent): void;
+	(_event: "line-close"): void;
+	/** «More options» — hand the line back to the classic cart, which still
+	 *  owns UOM, batch, serial, the offer toggle and the weighing pad. */
+	(_event: "line-more"): void;
 }>();
 
 const __ = (text: string): string => {
