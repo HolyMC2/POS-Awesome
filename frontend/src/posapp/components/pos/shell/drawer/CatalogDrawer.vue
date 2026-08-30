@@ -752,4 +752,71 @@ defineExpose({ focusableChildren });
 	font-family: "Roboto Mono", ui-monospace, monospace;
 	font-variant-numeric: tabular-nums;
 }
+
+/* Short-viewport density (live find #6 follow-up, 08-30). Tuned by CSS
+ * injection against the live demo at 1162x535 before landing: the anchored
+ * drawer's controls card was starving the goods, and a 132px card photo has
+ * no business on a 530px screen. Values are the survivors of that loop —
+ * with them the grid shows a full row of mini-cards (48px photo, one-line
+ * name) and LISTA remains one tap away for real density. :deep() because
+ * everything below is another component's markup mounted inside this one. */
+@media (max-height: 640px) {
+	.catalog-drawer :deep(.items-selector-shell .dynamic-padding) {
+		padding: 6px;
+		gap: 6px;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .cards.mt-3) {
+		margin-top: 6px;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .v-col.mb-2) {
+		margin-bottom: 2px;
+	}
+
+	.catalog-drawer :deep(.items-selector-shell .dynamic-margin-xs) {
+		margin: 2px 0;
+	}
+
+	.catalog-drawer :deep(.selector-results-card) {
+		min-height: 100px;
+	}
+
+	.catalog-drawer :deep(.v-btn-group .v-btn) {
+		padding: 0 8px;
+		min-width: 0;
+	}
+
+	.catalog-drawer :deep(.card-item-card .card-item-image-container) {
+		height: 48px;
+	}
+
+	.catalog-drawer :deep(.card-item-card .card-item-name) {
+		font-size: 11.5px;
+		line-height: 1.15;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.catalog-drawer :deep(.card-item-card .card-item-header) {
+		min-width: 0;
+	}
+
+	.catalog-drawer :deep(.card-item-card .card-item-code) {
+		display: none;
+	}
+
+	.catalog-drawer :deep(.card-item-card .card-item-content) {
+		padding: 3px 8px 4px;
+	}
+
+	.catalog-drawer :deep(.card-item-card .card-item-details) {
+		padding: 0;
+	}
+
+	.catalog-drawer :deep(.card-item-card .card-item-price) {
+		font-size: 12px;
+	}
+}
 </style>

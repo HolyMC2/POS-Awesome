@@ -1622,4 +1622,21 @@ defineExpose({
 		font-size: 0.875rem;
 	}
 }
+
+/* Short-viewport density: the 86px band (register-tokens' max-height layer)
+ * must still seat three breakdown pairs — at desk scale they measure 80px
+ * and clipped the DESCUENTO row against the band's bottom edge. */
+@media (max-height: 640px) {
+	.action-band .summary-breakdown {
+		gap: 1px;
+	}
+
+	.action-band .summary-breakdown__label {
+		font-size: 0.6rem;
+	}
+
+	.action-band .summary-breakdown__value {
+		font-size: 0.78rem;
+	}
+}
 </style>
