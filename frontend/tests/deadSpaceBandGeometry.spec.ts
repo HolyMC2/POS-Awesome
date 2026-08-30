@@ -187,3 +187,17 @@ describe("the wiring that gets the figures there", () => {
 		}
 	});
 });
+
+describe("the breakdown column stays single-line (live find 08-30)", () => {
+	it("declares flex-wrap: nowrap beside its column direction", () => {
+		// The base strip wraps. A WRAPPED column container stretches items to
+		// the LINE's cross-size — the widest pair's max-content — so the es-MX
+		// IVA label made every pair ~289px inside a ~200px column and painted
+		// the money over the method chips (measured live at 1144px). The
+		// ellipsis machinery on the pairs only engages when stretch means the
+		// COLUMN's own width, i.e. when the column is one line.
+		const breakdown = rule(summaryCss, ".action-band .summary-breakdown");
+		expect(breakdown).toContain("flex-direction: column");
+		expect(breakdown).toContain("flex-wrap: nowrap");
+	});
+});

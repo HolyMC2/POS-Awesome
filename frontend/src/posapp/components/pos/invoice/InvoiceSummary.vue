@@ -1481,6 +1481,14 @@ defineExpose({
 .action-band .summary-breakdown {
 	flex: 0 1 auto;
 	flex-direction: column;
+	/* The base strip wraps; a WRAPPED column is the whole 08-30 overlap. In a
+	 * multi-line column container `align-items: stretch` sizes items to the
+	 * LINE's cross-size — the widest pair's max-content — so the es-MX IVA
+	 * label made every pair ~289px inside a ~200px column and painted the
+	 * money over the method chips (measured live at 1144px, cafetería).
+	 * Single-line, stretch means THE COLUMN's width, and the pairs' ellipsis
+	 * machinery below finally engages. */
+	flex-wrap: nowrap;
 	align-items: stretch;
 	gap: 6px;
 	width: var(--reg-band-breakdown-width, 216px);
