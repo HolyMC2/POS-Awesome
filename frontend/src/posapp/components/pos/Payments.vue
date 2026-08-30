@@ -258,9 +258,11 @@
 					<SplitEvenlyPanel
 						v-if="showSplitPanel"
 						v-model="splitCount"
+						v-model:seat-mode="splitSeatMode"
 						:total="netInvoiceSettlementAmount"
 						:collected="splitShares"
 						:methods="splitMethods"
+						:seat-plan="splitSeatPlan"
 						:label="verticalStore.t('Split bill')"
 						:format-currency="(value) => formatCurrency(value, invoice_doc.currency)"
 						@collect="onSplitCollect"
@@ -667,6 +669,7 @@ import { resolvePaymentPrintFormatDoctypes } from "../../utils/paymentPrintDocty
 import { resolvePaymentPrintFormat } from "../../utils/paymentPrintFormat";
 import { parseBooleanSetting } from "../../utils/stock";
 import { focusFirstKeyboardTarget } from "../../utils/keyboardNavigation";
+import { seatSplitAvailable, seatSplitPlan } from "../../utils/splitBySeat";
 import { track } from "../../utils/telemetry";
 import { shouldShowRestaurantTips } from "../../utils/restaurantTips";
 
@@ -831,6 +834,9 @@ const restaurantTipAmount = ref(0);
 // Quitar can back the exact amounts out again.
 const splitCount = ref(0);
 const splitShares = ref([]);
+// «Por asiento» (B4's payoff): collect seat-by-seat instead of into N equal
+// shares. Same ledger, same tender rows — only the share arithmetic differs.
+const splitSeatMode = ref(false);
 let restaurantTipBaseTotals = null;
 // Tip already folded into the doc totals — lets applyRestaurantTipTotal know
 // what "the total before this change" was when deciding to follow the tip.
@@ -2212,6 +2218,22 @@ const showSplitPanel = computed(
 		splitMethods.value.length > 0,
 );
 
+// The seat source is the mesa ticket itself — the same lines the tip base
+// reads. A counter sale has no activeOrder, so seatPlan stays null and the
+// «Por asiento» button never exists there.
+const splitSeatLines = computed(() => floorStore.activeOrder?.lines || []);
+const splitCollectedTotal = computed(() =>
+	splitShares.value.reduce((sum, share) => sum + (Number(share.amount) || 0), 0),
+);
+const splitSeatPlan = computed(() => {
+	if (!seatSplitAvailable(splitSeatLines.value)) return null;
+	const remaining = Math.max(
+		netInvoiceSettlementAmount.value - splitCollectedTotal.value,
+		0,
+	);
+	return seatSplitPlan(splitSeatLines.value, remaining, splitShares.value.length);
+});
+
 const splitRowFor = (method) =>
 	(invoice_doc.value?.payments || []).find((row) => row?.mode_of_payment === method);
 
@@ -2241,6 +2263,7 @@ const onSplitClear = () => {
 	// must leave the rows as if the split never happened.
 	while (splitShares.value.length) onSplitUndo();
 	splitCount.value = 0;
+	splitSeatMode.value = false;
 };
 
 const setPaymentToDenomination = (payment, amount) => {
@@ -2973,6 +2996,7 @@ watch(isPaymentOpen, (isOpen) => {
 		lastAppliedRestaurantTip = 0;
 		splitCount.value = 0;
 		splitShares.value = [];
+		splitSeatMode.value = false;
 		captureRestaurantTipBaseTotals();
 		ensurePaymentLinesInitialized();
 		handleShowPayment();
