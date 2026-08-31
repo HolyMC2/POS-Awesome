@@ -96,7 +96,14 @@ export function useResponsive() {
 
 		resizeRafId = requestAnimationFrame(() => {
 			windowWidth.value = window.innerWidth;
-			windowHeight.value = window.innerHeight;
+			// Prefer visualViewport.height: the soft keyboard shrinks the visual
+			// viewport but (with `interactive-widget=resizes-visual`, iOS Safari
+			// always) fires no window `resize` and leaves innerHeight unchanged,
+			// so `--viewport-height` used to stay frozen at full height and the
+			// dock sat behind the keyboard (audit LAYOUT-F4). Pair with the
+			// interactive-widget meta so both engines report the reduced height.
+			const vv = window.visualViewport;
+			windowHeight.value = vv ? Math.round(vv.height) : window.innerHeight;
 			resizeRafId = null;
 		});
 	};
@@ -104,10 +111,15 @@ export function useResponsive() {
 	onMounted(() => {
 		handleResize();
 		window.addEventListener("resize", handleResize);
+		// The soft keyboard changes only the visual viewport on many engines.
+		window.visualViewport?.addEventListener("resize", handleResize);
+		window.visualViewport?.addEventListener("scroll", handleResize);
 	});
 
 	onBeforeUnmount(() => {
 		window.removeEventListener("resize", handleResize);
+		window.visualViewport?.removeEventListener("resize", handleResize);
+		window.visualViewport?.removeEventListener("scroll", handleResize);
 		if (resizeRafId) {
 			cancelAnimationFrame(resizeRafId);
 			resizeRafId = null;
