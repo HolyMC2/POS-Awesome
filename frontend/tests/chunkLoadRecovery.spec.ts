@@ -6,6 +6,7 @@ import {
 	clearChunkRecoveryState,
 	isDynamicImportFailure,
 	recoverFromChunkLoadError,
+	registerUnsavedWorkProbe,
 	scheduleAfterStableBoot,
 	scheduleChunkRecoveryStateReset,
 } from "../src/posapp/utils/chunkLoadRecovery";
@@ -14,6 +15,7 @@ describe("chunk load recovery helpers", () => {
 	beforeEach(() => {
 		window.sessionStorage.clear();
 		window.localStorage.clear();
+		registerUnsavedWorkProbe(null); // never leak the probe between tests
 	});
 
 	afterEach(() => {
@@ -231,5 +233,46 @@ describe("chunk load recovery helpers", () => {
 			expect.any(Error),
 		);
 	});
-});
 
+	it("does NOT silently reload the register when a sale is in progress", async () => {
+		const original = Object.getOwnPropertyDescriptor(window, "location");
+		const replace = vi.fn();
+		Object.defineProperty(window, "location", {
+			configurable: true,
+			value: { replace, pathname: "/posapp/pos", search: "", href: "https://s/posapp/pos" },
+		});
+		try {
+			registerUnsavedWorkProbe(() => true);
+			const handled = await recoverFromChunkLoadError(
+				new Error("Failed to fetch dynamically imported module: /assets/chunk.js"),
+				"with-cart",
+			);
+			expect(replace).not.toHaveBeenCalled();
+			expect(handled).toBe(false);
+			expect(window.sessionStorage.getItem("posa_chunk_reload_once")).toBeNull();
+		} finally {
+			registerUnsavedWorkProbe(null);
+			if (original) Object.defineProperty(window, "location", original);
+		}
+	});
+
+	it("reloads on the first failure when there is no unsaved work", async () => {
+		const original = Object.getOwnPropertyDescriptor(window, "location");
+		const replace = vi.fn();
+		Object.defineProperty(window, "location", {
+			configurable: true,
+			value: { replace, pathname: "/posapp/pos", search: "", href: "https://s/posapp/pos" },
+		});
+		try {
+			registerUnsavedWorkProbe(() => false);
+			await recoverFromChunkLoadError(
+				new Error("Failed to fetch dynamically imported module: /assets/chunk.js"),
+				"no-cart",
+			);
+			expect(replace).toHaveBeenCalledTimes(1);
+		} finally {
+			registerUnsavedWorkProbe(null);
+			if (original) Object.defineProperty(window, "location", original);
+		}
+	});
+});

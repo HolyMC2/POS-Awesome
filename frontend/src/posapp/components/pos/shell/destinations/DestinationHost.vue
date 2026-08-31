@@ -41,6 +41,20 @@
 			@update:selected-detail="$emit('update:selectedDetail', $event)"
 		/>
 
+		<!-- A chunk that could not load is a visible, actionable panel — never an
+		     eternal spinner (audit RUNTIME-F4). The retry re-attempts the load in
+		     place, so a flaky fetch does not cost the cashier the whole screen. -->
+		<div v-else-if="loadError" class="destination-host__refusal" data-testid="destination-load-error">
+			<v-icon icon="mdi-cloud-off-outline" size="34" class="destination-host__refusal-icon" />
+			<h2 class="destination-host__refusal-title">{{ t("Could not load that screen") }}</h2>
+			<p class="destination-host__refusal-body">
+				{{ t("Check the connection and try again — your sale is not lost.") }}
+			</p>
+			<v-btn variant="flat" color="primary" data-testid="destination-load-retry" @click="retryLoad">
+				{{ t("Try again") }}
+			</v-btn>
+		</div>
+
 		<div v-else class="destination-host__loading">
 			<v-progress-circular indeterminate color="primary" size="28" />
 		</div>
@@ -147,15 +161,51 @@ const state = computed<DestinationState>(() => {
 // shallowRef: an async component definition is not reactive data, and letting
 // Vue deep-proxy a component object is pure overhead on every destination swap.
 const sheetComponent = shallowRef<ReturnType<typeof defineAsyncComponent> | null>(null);
+// A hosted chunk that fails every retry: the template shows an actionable panel
+// instead of spinning forever.
+const loadError = ref(false);
+
+const buildSheet = (id: DestinationId) => {
+	const loader = SHEET_COMPONENTS[id];
+	if (!loader) {
+		sheetComponent.value = null;
+		return;
+	}
+	loadError.value = false;
+	sheetComponent.value = defineAsyncComponent({
+		loader: loader as never,
+		delay: 200,
+		// Most chunk failures are one flaky fetch — retry twice before giving up,
+		// so a transient blip does not escalate to a whole-app reload.
+		onError(err, retry, fail, attempts) {
+			if (attempts <= 2) {
+				retry();
+			} else {
+				loadError.value = true;
+				fail();
+			}
+		},
+	});
+};
 
 watch(
 	() => [props.destinationId, props.refusal] as const,
 	([id, refusal]) => {
-		const loader = refusal ? undefined : SHEET_COMPONENTS[id];
-		sheetComponent.value = loader ? defineAsyncComponent(loader as never) : null;
+		if (refusal) {
+			sheetComponent.value = null;
+			loadError.value = false;
+			return;
+		}
+		buildSheet(id as DestinationId);
 	},
 	{ immediate: true },
 );
+
+// Re-attempt the load in place (the retry button). A fresh defineAsyncComponent
+// re-runs the loader, so a chunk that is now reachable resolves.
+const retryLoad = () => {
+	if (!props.refusal) buildSheet(props.destinationId);
+};
 
 const refusalIcon = computed(() => {
 	if (props.refusal === "offline") return "mdi-wifi-off";

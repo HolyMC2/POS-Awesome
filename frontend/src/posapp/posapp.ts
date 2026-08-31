@@ -42,6 +42,7 @@ import {
 	clearChunkRecoveryState,
 	isDynamicImportFailure,
 	recoverFromChunkLoadError,
+	registerUnsavedWorkProbe,
 	scheduleAfterStableBoot,
 	scheduleChunkRecoveryStateReset,
 } from "./utils/chunkLoadRecovery";
@@ -87,6 +88,22 @@ export async function runPosBootSync() {
 async function startOptionalRuntimeServices() {
 	const socketStore = useSocketStore();
 	socketStore.init();
+
+	// Tell chunk recovery when a sale is in progress so a transient chunk
+	// failure (a flaky fetch, a mid-deploy asset swap) does not silently reload
+	// the register and discard the RAM-only cart (audit RUNTIME-F1).
+	try {
+		const { useInvoiceStore } = await import("./stores/invoiceStore");
+		registerUnsavedWorkProbe(() => {
+			try {
+				return (useInvoiceStore().items?.length || 0) > 0;
+			} catch {
+				return false;
+			}
+		});
+	} catch {
+		// non-fatal: without the probe, recovery keeps its prior behaviour.
+	}
 
 	// Browser RUM — PerformanceObserver hooks, custom-mark sampling
 	// (via utils/perf.withPerf), crash hooks, heap-pressure trigger.
@@ -182,7 +199,19 @@ class PosAppController {
 			info: string,
 		) => {
 			if (isDynamicImportFailure(err)) {
-				void recoverFromChunkLoadError(err, "vue-error-handler");
+				// Read the answer: false = recovery gave up (or was deferred
+				// because a cart is unsaved). Either way the cashier must be told
+				// — a silent spinner is what "the register broke" looks like.
+				void recoverFromChunkLoadError(err, "vue-error-handler").then((handled) => {
+					if (!handled) {
+						useToastStore().show({
+							message:
+								"No se pudo cargar esa pantalla. Recarga la caja cuando termines la venta.",
+							color: "error",
+							timeout: -1,
+						});
+					}
+				});
 				return;
 			}
 

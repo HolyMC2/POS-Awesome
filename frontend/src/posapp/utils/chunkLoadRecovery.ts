@@ -21,6 +21,29 @@ function normalizeErrorText(error: unknown): string {
 	return message.trim().toLowerCase();
 }
 
+/**
+ * The register's cart lives only in RAM (invoiceStore has no persistence). An
+ * automatic reload therefore discards a sale in progress with no prompt, which
+ * is exactly what a transient chunk failure — a flaky fetch, a mid-deploy asset
+ * swap — used to do on the FIRST failure. This probe lets the shell tell the
+ * recovery path "there is unsaved work"; when there is, the first failure is
+ * NOT auto-reloaded — it is surfaced (recoverFromChunkLoadError returns false,
+ * posapp toasts "reload needed") so the cashier reloads when they choose.
+ */
+let unsavedWorkProbe: (() => boolean) | null = null;
+
+export function registerUnsavedWorkProbe(probe: (() => boolean) | null): void {
+	unsavedWorkProbe = probe;
+}
+
+function hasUnsavedWork(): boolean {
+	try {
+		return typeof unsavedWorkProbe === "function" && unsavedWorkProbe() === true;
+	} catch {
+		return false;
+	}
+}
+
 export function isDynamicImportFailure(error: unknown): boolean {
 	const message = normalizeErrorText(error);
 	return (
@@ -196,6 +219,17 @@ export async function recoverFromChunkLoadError(
 		urlAlreadyRetried ||
 		window.sessionStorage.getItem(CHUNK_RELOAD_KEY) === "1";
 	if (!alreadyRetried) {
+		// A cart in progress must not be discarded by a silent reload. Defer:
+		// clear the in-progress latch so a later failure re-evaluates (e.g. once
+		// the sale is finished), and return false so the shell surfaces it.
+		if (hasUnsavedWork()) {
+			window.sessionStorage.removeItem(CHUNK_RECOVERY_IN_PROGRESS_KEY);
+			console.warn(
+				"Chunk recovery: deferred, unsaved cart present — surfacing instead of reloading",
+				{ source, error },
+			);
+			return false;
+		}
 		window.sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
 		console.warn("Chunk recovery: reloading POS app after chunk failure", {
 			source,
