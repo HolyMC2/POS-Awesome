@@ -104,4 +104,53 @@ describe("ParkedOrdersList keyboard control", () => {
 		expect(wrapper.text()).toContain("Para llevar");
 		expect(wrapper.text()).not.toContain("Takeout");
 	});
+
+	describe("loading draws the shape of what is coming, not a spinner", () => {
+		// Native-feel round 2. A spinner says "something is happening"; four
+		// ghost cards say "four records are on their way and this is the shape
+		// they will take", which is the only useful thing a loading state can
+		// say — and it is the difference between a list that appears and a
+		// list that jumps into place.
+		const mountLoading = () =>
+			mount(ParkedOrdersList, {
+				props: {
+					parkedOrders: [],
+					loading: true,
+					formatCurrency: (value: number) => String(value),
+					currencySymbol: () => "Rs ",
+				},
+				global: { stubs: { VBtn: { template: '<button type="button"><slot /></button>' } } },
+			});
+
+		it("draws ghost cards instead of a progress circle", () => {
+			const wrapper = mountLoading();
+
+			expect(wrapper.findComponent({ name: "VProgressCircular" }).exists()).toBe(false);
+			expect(wrapper.findAll(".drafts-list__card--ghost")).toHaveLength(4);
+		});
+
+		it("wears the REAL card class, so the box cannot drift from the card", () => {
+			// Not a copy of the card's numbers — the card's own rule. A border,
+			// a radius or a padding edited in one place and not the other is a
+			// jump on every draft load.
+			const ghost = mountLoading().get(".drafts-list__card--ghost");
+			expect(ghost.classes()).toContain("drafts-list__card");
+		});
+
+		it("keeps the wording for a screen reader and shows none of it", () => {
+			const list = mountLoading().get('[data-test="drafts-list-loading"]');
+
+			expect(list.attributes("role")).toBe("status");
+			expect(list.attributes("aria-busy")).toBe("true");
+			expect(list.attributes("aria-label")).toBe("Loading records...");
+			expect(list.text()).toBe("");
+		});
+
+		it("shows the empty message once the load finishes with nothing", () => {
+			const { wrapper } = mountList([]);
+
+			expect(wrapper.find('[data-test="drafts-list-loading"]').exists()).toBe(false);
+			expect(wrapper.text()).toContain("No records found");
+		});
+	});
 });

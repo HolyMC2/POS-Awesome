@@ -295,6 +295,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
+import { tick } from "../../../../utils/haptics";
 import {
 	filterSerialsByBatch,
 	LOT_SEARCH_DEBOUNCE_MS,
@@ -526,6 +527,11 @@ const reasonLabel = (reason: LotBlockReason | null) => {
 
 const confirm = () => {
 	if (!canAdd.value) return;
+	// `tick`, not `confirm`: choosing a box is an ADD, and it has to feel like
+	// the same event a tapped catalogue card is. The double pattern is
+	// reserved for money landing. After the gate, so a disabled primary that
+	// somehow gets a tap says nothing.
+	tick();
 	emit("confirm", adds.value);
 };
 
@@ -594,7 +600,42 @@ onBeforeUnmount(() => {
 	padding: 10px 14px calc(14px + env(safe-area-inset-bottom));
 	border-radius: var(--reg-radius-lg, 18px) var(--reg-radius-lg, 18px) 0 0;
 	background: var(--reg-surface, #ffffff);
-	box-shadow: 0 -8px 28px var(--pos-shadow, rgba(15, 23, 42, 0.18));
+	/* The second, blur-less shadow is the landing pad for
+	 * `--ease-emphasized`'s overshoot — see the same two-shadow note in
+	 * `MovilLineSheet.vue`. Off-screen at rest; a strip of scrim under the
+	 * sheet without it. */
+	box-shadow:
+		0 -8px 28px var(--pos-shadow, rgba(15, 23, 42, 0.18)),
+		0 32px 0 0 var(--reg-surface, #ffffff);
+}
+
+/* ---- enter / leave ------------------------------------------------------
+ * `<Transition name="lot-sheet">` wraps this component in `Pos.vue`, so Vue
+ * stamps the classes on THIS root and the rules belong here, beside the
+ * geometry they move. The desk presentation below re-points the panel's
+ * travel: a centred card does not rise from the bottom of the screen, it
+ * scales up in place from where the cashier's eye already is.
+ */
+.lot-sheet-enter-active .lot-picker__panel,
+.lot-sheet-leave-active .lot-picker__panel {
+	transition: transform var(--motion-slow) var(--ease-emphasized);
+	will-change: transform;
+}
+
+.lot-sheet-enter-active .lot-picker__scrim,
+.lot-sheet-leave-active .lot-picker__scrim {
+	transition: opacity var(--motion-base) var(--ease-out);
+	will-change: opacity;
+}
+
+.lot-sheet-enter-from .lot-picker__panel,
+.lot-sheet-leave-to .lot-picker__panel {
+	transform: translateY(100%);
+}
+
+.lot-sheet-enter-from .lot-picker__scrim,
+.lot-sheet-leave-to .lot-picker__scrim {
+	opacity: 0;
 }
 
 /* The desk: a centred card, the same 1100 boundary the variant picker and the
@@ -610,7 +651,17 @@ onBeforeUnmount(() => {
 		max-height: 84vh;
 		padding: 14px 18px 16px;
 		border-radius: var(--reg-radius-lg, 18px);
+		/* One shadow again — the phone's hard second copy would paint a bar
+		 * under a card that is nowhere near the bottom edge. */
 		box-shadow: 0 18px 48px var(--pos-shadow, rgba(15, 23, 42, 0.18));
+	}
+
+	/* A centred card does not rise from the bottom of a 27-inch monitor. It
+	 * appears where the cashier is already looking, so it scales in — the
+	 * same distance, spent on a different axis. */
+	.lot-sheet-enter-from .lot-picker__panel,
+	.lot-sheet-leave-to .lot-picker__panel {
+		transform: translateY(8px) scale(0.98);
 	}
 
 	.lot-picker__grip {
@@ -810,6 +861,14 @@ onBeforeUnmount(() => {
 .lot-row--tap {
 	font: inherit;
 	cursor: pointer;
+	/* Press feedback (native-feel round 2). Only the TAPPABLE rows get it —
+	 * a batch row is a container with its own stepper inside, and scaling it
+	 * on `:active` would shrink the very button being pressed. */
+	transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.lot-row--tap:active:not(:disabled) {
+	transform: scale(var(--press-scale, 0.98));
 }
 
 .lot-row--picked {
@@ -911,10 +970,12 @@ onBeforeUnmount(() => {
 	background: var(--reg-surface, #ffffff);
 	color: var(--reg-text-primary, #212121);
 	cursor: pointer;
+	transition: transform var(--motion-fast) var(--ease-out);
 }
 
-.lot-step:active {
+.lot-step:active:not(:disabled) {
 	background: var(--reg-surface-muted, #f2f4f7);
+	transform: scale(var(--press-scale, 0.98));
 }
 
 .lot-step:disabled {
@@ -968,10 +1029,12 @@ onBeforeUnmount(() => {
 	font-size: 14px;
 	font-weight: 700;
 	cursor: pointer;
+	transition: transform var(--motion-fast) var(--ease-out);
 }
 
-.lot-picker__primary:active {
+.lot-picker__primary:active:not(:disabled) {
 	background: var(--reg-accent-pressed, #00838f);
+	transform: scale(var(--press-scale, 0.98));
 }
 
 .lot-picker__primary:disabled {
@@ -998,10 +1061,25 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
 	.lot-picker,
 	.lot-picker__panel,
+	.lot-picker__scrim,
+	.lot-picker__primary,
 	.lot-row,
+	.lot-step,
 	.lot-chip-btn {
 		transition: none !important;
 		animation: none !important;
+	}
+
+	/* The travel itself, not only its duration: with the transition gone a
+	 * residual `translateY(100%)` would leave the sheet parked off-screen. */
+	.lot-sheet-enter-from .lot-picker__panel,
+	.lot-sheet-leave-to .lot-picker__panel {
+		transform: none;
+	}
+
+	.lot-sheet-enter-from .lot-picker__scrim,
+	.lot-sheet-leave-to .lot-picker__scrim {
+		opacity: 1;
 	}
 }
 </style>

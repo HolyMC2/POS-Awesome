@@ -545,9 +545,16 @@ defineExpose({ focusableChildren });
 	transform: translateX(100%);
 	opacity: 0;
 	will-change: transform, opacity;
+	/* The DURATION still comes from the composable, and that is deliberate:
+	 * `--catalog-drawer-duration` is 0 for the anchored and inline
+	 * presentations and 0 under reduced motion, so the inline var is the
+	 * gate, not a second opinion. What changed in native-feel round 2 is the
+	 * FALLBACK and the CURVE — both are the register's tokens now, so the
+	 * cajón decelerates on the same curve as the phone's sheets instead of
+	 * on a bezier only this file knew about. */
 	transition:
-		transform var(--catalog-drawer-duration, 180ms) cubic-bezier(0.2, 0, 0, 1),
-		opacity var(--catalog-drawer-duration, 180ms) linear;
+		transform var(--catalog-drawer-duration, var(--motion-base)) var(--ease-out),
+		opacity var(--catalog-drawer-duration, var(--motion-base)) linear;
 }
 
 .catalog-drawer-layer--overlay.catalog-drawer-layer--cards .catalog-drawer {
@@ -565,7 +572,7 @@ defineExpose({ focusableChildren });
 	z-index: 11;
 	background: var(--reg-scrim, rgba(15, 23, 42, 0.32));
 	opacity: 0;
-	transition: opacity 180ms linear;
+	transition: opacity var(--motion-base) linear;
 }
 
 .catalog-drawer__scrim--in {

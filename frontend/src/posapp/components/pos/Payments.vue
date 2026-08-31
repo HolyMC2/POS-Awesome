@@ -717,6 +717,7 @@ import { resolvePaymentPrintFormatDoctypes } from "../../utils/paymentPrintDocty
 import { resolvePaymentPrintFormat } from "../../utils/paymentPrintFormat";
 import { parseBooleanSetting } from "../../utils/stock";
 import { focusFirstKeyboardTarget } from "../../utils/keyboardNavigation";
+import { confirm as hapticConfirm } from "../../utils/haptics";
 import { seatSplitAvailable, seatSplitPlan } from "../../utils/splitBySeat";
 import { track } from "../../utils/telemetry";
 import { shouldShowRestaurantTips } from "../../utils/restaurantTips";
@@ -2702,6 +2703,13 @@ const scheduleBackgroundStatusCheck = ({
 };
 
 // Submission Wrapper
+// Armed by the phone's COLLECT AND CLOSE (`handleMovilCollect`, below), read
+// once in `submitInvoiceWrapper`'s `onSuccess`. A plain `let`, not a ref:
+// nothing renders from it, and a ref would put a haptic on the reactivity
+// graph. Declared HERE rather than beside its writer so it is defined before
+// the function that reads it.
+let movilCollectPending = false;
+
 const submit = async (_event, payment_received = false, print = false) => {
 	await submitInvoiceWrapper(print, undefined, {
 		paymentReceived: payment_received,
@@ -2750,6 +2758,17 @@ const submitInvoiceWrapper = async (print, callbackOverrides = {}, options = {})
 				show_change_dialog.value = true;
 				is_credit_return.value = false;
 				sales_person.value = "";
+				// The phone's COLLECT AND CLOSE, and only it: `onSuccess` is the
+				// one place the register knows the invoice actually submitted
+				// (the wrapper swallows failures into a toast, so awaiting
+				// `submit` cannot tell the two apart). The flag is set by
+				// `handleMovilCollect` and cleared here and in its `finally`,
+				// so a desk submit never buzzes — and on a desk the
+				// `(pointer: coarse)` guard would refuse anyway.
+				if (movilCollectPending) {
+					movilCollectPending = false;
+					hapticConfirm();
+				}
 			},
 			onFinishNavigation: (clearInvoice) => {
 				finishSubmissionNavigation(clearInvoice);
@@ -2782,6 +2801,9 @@ const submitInvoiceWrapper = async (print, callbackOverrides = {}, options = {})
 	} finally {
 		loading.value = false;
 		submissionInFlight.value = false;
+		// A failed movil collect leaves the flag armed otherwise, and the NEXT
+		// submission — a desk one, possibly — would inherit the buzz.
+		movilCollectPending = false;
 	}
 };
 
@@ -2849,6 +2871,10 @@ const handleMovilCollect = (payload = {}) => {
 	} else {
 		set_full_amount(row, isReturn);
 	}
+	// The buzz is armed, not fired: this function has decided a row and a
+	// tender, which is not yet a sale. `onSuccess` is where the invoice
+	// exists.
+	movilCollectPending = true;
 	nextTick(() => {
 		submit(null, false, payload?.print !== false);
 	});

@@ -367,7 +367,12 @@ const props = defineProps({
 	},
 });
 
-const emit = defineEmits(["add-item", "update:itemsView", "update:displayedItems"]);
+const emit = defineEmits([
+	"add-item",
+	"update:itemsView",
+	"update:displayedItems",
+	"update:catalogLoading",
+]);
 
 /**
  * Scan-bar affordances (artboard nodes 22-24).
@@ -1412,6 +1417,18 @@ watch(activeView, (view) => {
 // this component's state and the shell must not reach into the preference the
 // toolbar writes. `immediate` because the seeded view is already the answer.
 watch(items_view, (view) => emit("update:itemsView", view), { immediate: true });
+
+/*
+ * The catalogue's own loading state, published for the same reason the view is:
+ * the shell is TOLD, never left to guess. The phone's browse screen is a second
+ * window onto this selector's rows, and without this it could only infer a
+ * first load from "no rows yet" — which is indistinguishable from a search that
+ * matched nothing, and is why the phone showed «No items found» over a
+ * catalogue that was still on its way. `loading` lives inside the items
+ * integration composable, not in a store, so there is nothing for the shell to
+ * read even if it wanted to.
+ */
+watch(isLoadingOrSyncing, (value) => emit("update:catalogLoading", value), { immediate: true });
 
 let suppressItemsViewSave = false;
 watch(items_view, (view) => {

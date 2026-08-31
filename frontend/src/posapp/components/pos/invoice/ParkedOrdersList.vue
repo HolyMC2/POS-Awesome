@@ -26,9 +26,41 @@
 			</div>
 		</div>
 
-		<div v-if="loading" class="drafts-list__empty drafts-list__empty--loading">
-			<v-progress-circular indeterminate size="22" width="3" color="primary" />
-			<strong>{{ loadingTitle || __("Loading records...") }}</strong>
+		<!--
+			A SKELETON, not a spinner (native-feel round 2). A spinner says
+			"something is happening"; these say "four records are on their way
+			and this is the shape they will take", which is the only useful
+			thing a loading state can say. The ghosts wear `.drafts-list__card`
+			itself — the real class, not a copy of its numbers — so the border,
+			the radius, the padding and the 8px inner gap cannot drift from the
+			cards that replace them, and nothing jumps when they do.
+
+			The wording survives for screen readers: `role="status"` on the
+			list, the label unchanged.
+		-->
+		<div
+			v-if="loading"
+			class="drafts-list__cards"
+			role="status"
+			aria-busy="true"
+			:aria-label="loadingTitle || __('Loading records...')"
+			data-test="drafts-list-loading"
+		>
+			<div
+				v-for="n in 4"
+				:key="n"
+				class="drafts-list__card drafts-list__card--ghost"
+				aria-hidden="true"
+			>
+				<div class="drafts-list__card-top">
+					<span class="drafts-ghost drafts-ghost--title shimmer"></span>
+					<span class="drafts-ghost drafts-ghost--amount shimmer"></span>
+				</div>
+				<div class="drafts-list__meta">
+					<span class="drafts-ghost drafts-ghost--meta shimmer"></span>
+					<span class="drafts-ghost drafts-ghost--meta shimmer"></span>
+				</div>
+			</div>
 		</div>
 		<div v-else-if="parkedOrders.length" class="drafts-list__cards">
 			<button
@@ -70,6 +102,8 @@
 
 <script setup>
 import { nextTick, ref, watch } from "vue";
+// The register's ONE skeleton shimmer — see `styles/shimmer.css`.
+import "../../../styles/shimmer.css";
 import { useVerticalStore } from "../../../stores/verticalStore";
 
 // Service-type label through the vocabulary (matches the InvoiceSummary select),
@@ -312,9 +346,36 @@ defineExpose({
 	color: var(--pos-text-secondary);
 }
 
-.drafts-list__empty--loading {
-	flex-direction: row;
-	align-items: center;
+/* The ghost card keeps the real card's box and drops only what it cannot
+   promise: no hover lift, no pointer, no transition to run. */
+.drafts-list__card--ghost {
+	cursor: default;
+	transition: none;
+}
+
+.drafts-ghost {
+	display: block;
+	position: relative;
+	overflow: hidden;
+	height: 12px;
+	border-radius: 6px;
+	background: rgba(var(--v-theme-on-surface), 0.09);
+}
+
+/* Widths, not content: each bar stands where the text it precedes will. */
+.drafts-ghost--title {
+	width: 46%;
+	min-width: 96px;
+}
+
+.drafts-ghost--amount {
+	width: 72px;
+	flex: none;
+}
+
+.drafts-ghost--meta {
+	width: 64px;
+	height: 9px;
 }
 
 .drafts-list__empty strong {
@@ -333,9 +394,9 @@ defineExpose({
 	cursor: pointer;
 	color: var(--pos-text-primary);
 	transition:
-		transform 0.18s ease,
-		box-shadow 0.18s ease,
-		border-color 0.18s ease;
+		transform var(--motion-base) var(--ease-out),
+		box-shadow var(--motion-base) var(--ease-out),
+		border-color var(--motion-base) var(--ease-out);
 }
 
 .drafts-list__card:hover,
@@ -350,6 +411,15 @@ defineExpose({
 .drafts-list__card--selected {
 	outline: 2px solid rgba(var(--v-theme-primary), 0.62);
 	outline-offset: 2px;
+}
+
+/* Press feedback (native-feel round 2). AFTER the hover/selected rules and at
+   the same specificity, because the press has to win over the lift they
+   apply: `transform` does not compose across rules, so this restates the
+   resting position instead of adding a scale to a translate. */
+.drafts-list__card:active {
+	transform: translateY(0) scale(var(--press-scale, 0.98));
+	transition: transform var(--motion-fast) var(--ease-out);
 }
 
 .drafts-list__card-top {

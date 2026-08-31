@@ -136,8 +136,18 @@ export type CatalogItemsView = "card" | "list";
 export const CATALOG_DRAWER_ANCHOR_MIN_WIDTH = 1100;
 
 /** Overlay transition budget. Anchored is instant, so this never applies to it. */
-export const CATALOG_DRAWER_OPEN_MS = 180;
-export const CATALOG_DRAWER_CLOSE_MS = 140;
+/**
+ * The register's motion tokens, in JS — `--motion-base` and `--motion-fast`
+ * from `styles/register-tokens.css` (native-feel round 2). The CSS reads the
+ * duration back off the inline custom property this composable writes, so
+ * these two numbers ARE the drawer's animation; if they drift from the tokens
+ * the cajón becomes the one surface moving at its own speed again.
+ *
+ * Opening decelerates over `base`; closing is a `fast` dismissal, because the
+ * cashier who closed the catalogue is already looking at the cart.
+ */
+export const CATALOG_DRAWER_OPEN_MS = 200;
+export const CATALOG_DRAWER_CLOSE_MS = 120;
 
 export type CatalogDrawerPhase = "closed" | "opening" | "open" | "closing";
 export type CatalogDrawerPresentation = "anchored" | "overlay" | "inline";

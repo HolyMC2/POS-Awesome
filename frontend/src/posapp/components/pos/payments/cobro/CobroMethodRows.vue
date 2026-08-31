@@ -314,6 +314,15 @@ const pick = (payment) => {
 	border-radius: var(--reg-radius-sm, 10px);
 	border: 1px solid var(--reg-border-soft, #e6e9ee);
 	background: var(--reg-surface, #fff);
+	transition: transform var(--motion-fast) var(--ease-out);
+}
+
+/* Press feedback (native-feel round 2). On the ROW and not on the button
+   inside it because the row IS the tender — its only child is that button,
+   so `:active` on the ancestor is the same press, and scaling the whole chip
+   keeps the armed tint and the border moving with it. */
+.cobro-methods__row:active {
+	transform: scale(var(--press-scale, 0.98));
 }
 
 /* The armed chip, in the accent's PALE derivative — the one saturated colour

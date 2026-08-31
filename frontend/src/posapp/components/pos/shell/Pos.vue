@@ -29,13 +29,20 @@
 		     the shelf. Mounted HERE and not inside ItemsSelector because the
 		     catalogue column is `v-show`-hidden on phones, and an overlay under
 		     `display: none` draws nothing. Same reason Variants lives here. -->
-		<LotPicker
-			v-if="uiStore.lotPickerDialog && lotPickerView"
-			:view="lotPickerView"
-			:requested-qty="lotPickerRequestedQty"
-			@confirm="onLotConfirm"
-			@close="uiStore.closeLotPicker()"
-		></LotPicker>
+		<!-- The picker travels in and out like the phone's other bottom sheet
+		     (native-feel round 2); the rules that move it are written in
+		     `LotPicker.vue`, where its geometry is. `<Transition>` around a
+		     `v-if` only delays the UNMOUNT — the confirm and the close still
+		     emit on the tap. -->
+		<Transition name="lot-sheet">
+			<LotPicker
+				v-if="uiStore.lotPickerDialog && lotPickerView"
+				:view="lotPickerView"
+				:requested-qty="lotPickerRequestedQty"
+				@confirm="onLotConfirm"
+				@close="uiStore.closeLotPicker()"
+			></LotPicker>
+		</Transition>
 		<!-- SALDO-INTEGRATION-POINT — components live in saldo Frappe app -->
 		<SaldoReferenciaDialog
 			v-model="saldoDialogOpen"
@@ -389,6 +396,7 @@
 								:suppress-browse-button="movilPhone"
 								@update:items-view="catalogItemsView = $event"
 								@update:displayed-items="movilBrowseRows = $event"
+								@update:catalog-loading="movilBrowseLoading = $event"
 							/>
 						</template>
 					</CatalogDrawer>
@@ -476,7 +484,9 @@
 		<div v-if="showBottomDock" ref="mobileDock" data-testid="mobile-dock" class="mobile-dock">
 			<div class="mobile-dock__summary">
 				<div class="mobile-dock__totals">
-					<strong class="mobile-dock__amount">{{ formattedCartTotal }}</strong>
+					<strong class="mobile-dock__amount" :class="dockTotalBump">{{
+						formattedCartTotal
+					}}</strong>
 					<div class="mobile-dock__subline">
 						<button
 							type="button"
@@ -646,6 +656,7 @@ import {
 import { buildCombosCategory, buildSuggestions } from "../../../composables/pos/combos/comboCatalog";
 import { useComboOffers } from "../../../composables/pos/combos/useComboOffers";
 import { useOnlineStatus } from "../../../composables/core/useOnlineStatus";
+import { useValueBump } from "../../../composables/core/useValueBump";
 import OpeningDialog from "../shift/OpeningDialog.vue";
 import PosOffers from "../offers/PosOffers.vue";
 import PosCoupons from "../offers/PosCoupons.vue";
@@ -662,6 +673,7 @@ import PriceCheckDialog from "./PriceCheckDialog.vue";
 import SaldoCatalogPicker from "@saldo/SaldoCatalogPicker.vue";
 import { saldoCaptureBus } from "@saldo/useSaldoCapture";
 import { printInvoiceByName } from "../../../utils/printInvoiceByName";
+import { tick as hapticTick } from "../../../utils/haptics";
 import { usePosShift } from "../../../composables/pos/shared/usePosShift";
 import { useOffers } from "../../../composables/pos/shared/useOffers";
 // Import the cache cleanup function
@@ -892,6 +904,14 @@ export default {
 			const symbol = getCurrencySymbol(activeCurrency.value);
 			return `${symbol}${formatCompactNumber(invoiceTotal.value)}`.trim();
 		});
+		/**
+		 * The dock's total is the only figure on the phone's browse screen —
+		 * the cart is a tab away — so a line added from the catalogue changes
+		 * a number the cashier is not looking at. One 4% pulse is the whole
+		 * fix. Watched on the FORMATTED string: a rounding that leaves the
+		 * same digits is not news. Silent under `prefers-reduced-motion`.
+		 */
+		const dockTotalBump = useValueBump(formattedCartTotal);
 		const formattedDiscountTotal = computed(() => {
 			const symbol = getCurrencySymbol(activeCurrency.value);
 			return `${symbol}${formatCompactNumber(discountTotal.value || 0)} ${__("discount")}`.trim();
@@ -1699,6 +1719,12 @@ export default {
 				eventBus.emit("movil:pick-lot", { ...row });
 				return;
 			}
+			// The buzz belongs on THIS line and not on the card's `@click`: the
+			// two branches above are doorbells, not adds — a template opens the
+			// variant picker and a lot-tracked row opens the lot picker, and a
+			// haptic there would tell the hand a line landed when a sheet did.
+			// This is the phone's only tap-add, so it is the phone's only tick.
+			hapticTick();
 			eventBus.emit("add_item", row ? { ...row } : { item_code: code });
 		};
 
@@ -1731,6 +1757,10 @@ export default {
 		// paginated — published by its update:displayedItems. The browse
 		// screen draws these, so the search field and the grid agree.
 		const movilBrowseRows = shallowRef([]);
+		// The catalogue's own first-load flag, published by ItemsSelector. The
+		// phone cannot infer it: an empty row list is also what a search that
+		// matched nothing looks like.
+		const movilBrowseLoading = ref(false);
 		// The LIVE query — item_search_changed carries every keystroke of the
 		// one real input; itemsStore.searchTerm deliberately does not.
 		const movilQuery = ref("");
@@ -1755,6 +1785,7 @@ export default {
 						? "pay"
 						: "browse",
 			browseItems: movilBrowseRows.value || [],
+			browseLoading: movilBrowseLoading.value,
 			combos: comboOffers.value || [],
 			// The LIVE cart (invoiceStore.items off itemsData) — invoiceDoc is
 			// null until a server sync, which is exactly the window a cashier
@@ -2538,6 +2569,10 @@ export default {
 			itemsCount,
 			totalQty,
 			formattedCartTotal,
+			// A template binding missing from this return reads `undefined`
+			// SILENTLY (round 5's trap, `movilBrowseActive`) — the dock would
+			// simply never bump and nothing would say why.
+			dockTotalBump,
 			formattedDiscountTotal,
 			cartMetaLabel,
 			dockCustomerLabel,
@@ -2579,6 +2614,7 @@ export default {
 			onBandPrimary,
 			movilPhone,
 			movilBrowseRows,
+			movilBrowseLoading,
 			movilBrowseActive,
 			movilStageActive,
 			movilCartActive,
@@ -3129,10 +3165,14 @@ export default {
 	font-weight: 600;
 	color: var(--pos-text-secondary);
 	cursor: pointer;
+	/* Native-feel round 2: three hand-picked durations became one token. The
+	 * ceiling `compactPanelSwitchInstant.spec.ts` enforces here is still
+	 * enforced — a tokenised duration is invisible to its scanner, so
+	 * `motionTokens.spec.ts` asserts `--motion-fast` stays under it instead. */
 	transition:
-		background-color 0.15s ease,
-		color 0.15s ease,
-		transform 0.1s ease;
+		background-color var(--motion-fast) var(--ease-out),
+		color var(--motion-fast) var(--ease-out),
+		transform var(--motion-fast) var(--ease-out);
 }
 
 /* Label spans only — a bare `span` selector also matched the count
@@ -3148,8 +3188,10 @@ export default {
 	text-align: center;
 }
 
+/* One press scale for the whole register (`--press-scale`). The dock tab used
+ * to shrink 4% on its own number; every pressable surface now agrees. */
 .mobile-dock__tab:active {
-	transform: scale(0.96);
+	transform: scale(var(--press-scale, 0.98));
 }
 
 .mobile-dock__tab--active {

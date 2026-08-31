@@ -15,7 +15,11 @@
 			<div class="action-band__label" data-testid="action-band-label">
 				{{ __(state.labelKey, state.labelParams) }}
 			</div>
-			<div class="action-band__number reg-mono" data-testid="band-value">
+			<!-- The bump is a CLASS on the number, never a wrapper: §17.7's
+			     invariant is counted from the DOM (`[data-testid="band-value"]`
+			     exactly once), and an animation host element would be a second
+			     box claiming to be the figure. -->
+			<div class="action-band__number reg-mono" :class="bumpClass" data-testid="band-value">
 				{{ formattedValue }}
 			</div>
 		</div>
@@ -131,6 +135,7 @@
 import { computed } from "vue";
 
 import { type BandState, tintForTone } from "../../../../composables/pos/shell/bandState";
+import { useValueBump } from "../../../../composables/core/useValueBump";
 
 const props = withDefaults(
 	defineProps<{
@@ -177,6 +182,13 @@ const formattedValue = computed(() => {
 		minimumFractionDigits: 2,
 	});
 });
+
+/**
+ * The figure's own news. Watched on the FORMATTED string rather than on
+ * `state.value`: a tone flip or a precision change that leaves the same
+ * digits on screen is not something to point at.
+ */
+const bumpClass = useValueBump(formattedValue);
 
 /**
  * A CTA that names its amount ("DEVOLVER $149.00") gets it formatted the same
@@ -310,10 +322,15 @@ const primaryParams = computed(() =>
 	background: var(--reg-accent, #0097a7);
 	color: var(--reg-on-accent, #ffffff);
 	box-shadow: 0 14px 30px -14px var(--reg-accent, #0097a7);
+	/* Press feedback (native-feel round 2). Only `transform` is transitioned;
+	 * the colour swap below is a paint the compositor does not wait on, and
+	 * transitioning it would make the pressed tint arrive after the press. */
+	transition: transform var(--motion-fast) var(--ease-out);
 }
 
 .action-band__primary:active:not(:disabled) {
 	background: var(--reg-accent-pressed, #00838f);
+	transform: scale(var(--press-scale, 0.98));
 }
 
 /* Disabled loses the accent entirely rather than fading it: a washed-out

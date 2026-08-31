@@ -229,9 +229,23 @@ describe("the drawer is told, never told to look", () => {
 	});
 
 	it("publishes the selector's own choice upward instead of leaving the shell to guess", () => {
-		expect(selectorSource).toContain(
-			'const emit = defineEmits(["add-item", "update:itemsView", "update:displayedItems"]);',
-		);
+		// PIN WIDENED, native-feel round 2 (2026-08-30): `update:catalogLoading`
+		// joined the list so the phone's browse screen can draw skeletons
+		// instead of «No items found» during the first catalogue load. That is
+		// this pin's own doctrine — the selector PUBLISHES, the shell does not
+		// guess — so the list grew rather than the rule loosening. Asserted per
+		// event now, because the one-line literal broke on the formatter's
+		// wrapping and told a reader nothing about which event went missing.
+		for (const event of [
+			"add-item",
+			"update:itemsView",
+			"update:displayedItems",
+			"update:catalogLoading",
+		]) {
+			expect(selectorSource).toMatch(
+				new RegExp(`defineEmits\\(\\[[\\s\\S]*?"${event}"[\\s\\S]*?\\]\\)`),
+			);
+		}
 		expect(selectorSource).toMatch(
 			/watch\(items_view, \(view\) => emit\("update:itemsView", view\), \{ immediate: true \}\)/,
 		);
