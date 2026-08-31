@@ -513,6 +513,22 @@ const item_group = computed({
 const virtualScrollBuffer = ref(200);
 const localStorageAvailable = ref(true);
 const shouldMountCameraScanner = ref(false);
+// The camera-start retry loop's timer (RUNTIME-F8). Kept at setup scope and
+// cancellable, so a retry that is still pending cannot re-open the scanner the
+// cashier just dismissed: the moment the scanner reports itself open, the loop
+// stops for good (a later close does not restart it — only a fresh press does).
+let cameraRetryHandle: ReturnType<typeof setTimeout> | null = null;
+const stopCameraRetry = () => {
+	if (cameraRetryHandle) {
+		clearTimeout(cameraRetryHandle);
+		cameraRetryHandle = null;
+	}
+};
+// The moment the scanner reports open, cancel any retry already scheduled — so
+// a close 200ms later (the exact race) has no pending timer to re-open it.
+watch(scannerInput.cameraScannerActive, (active) => {
+	if (active) stopCameraRetry();
+});
 
 // Settings Refs
 const hide_qty_decimals = ref(false);
@@ -1518,15 +1534,18 @@ const startCameraScanning = () => {
 	// single nextTick made that press a dead tap — on desktop and on the
 	// movil scan glyph alike. Retry briefly, stopping the moment the scanner
 	// reports itself open.
+	stopCameraRetry();
 	let cameraStartAttempts = 0;
 	const tryStartCamera = () => {
-		if (scannerInput.cameraScannerActive.value) {
+		cameraRetryHandle = null;
+		// Stop if it opened, or if the scanner was torn down while we waited.
+		if (scannerInput.cameraScannerActive.value || !shouldMountCameraScanner.value) {
 			return;
 		}
 		itemsSelectorFocus.startCameraScanning();
 		cameraStartAttempts += 1;
 		if (!scannerInput.cameraScannerActive.value && cameraStartAttempts < 15) {
-			setTimeout(tryStartCamera, 200);
+			cameraRetryHandle = setTimeout(tryStartCamera, 200);
 		}
 	};
 	nextTick(tryStartCamera);
