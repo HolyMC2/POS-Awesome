@@ -8,11 +8,25 @@
 		:data-availability="line.stock.reason"
 		@click="onSelect"
 	>
-		<!-- The thumbnail is a SLOT, not an <img>. The phone's cart is the
-		     narrowest surface in the product and the register has no image read
-		     model it can promise; the shell fills this where it has one and the
-		     empty box keeps the row's rhythm where it does not. -->
-		<span class="movil-line__thumb" aria-hidden="true"><slot name="thumb" /></span>
+		<!-- The thumbnail slot's FALLBACK is the row's own photo now (owner
+		     08-31: «the new cart view doesnt display the pic of the item»),
+		     resolved by the same preference the desk row uses —
+		     `posa_image_thumb` first, `image` as stand-in, a failed URL
+		     crossed off rather than retried. The empty grey square keeps the
+		     row's rhythm where the catalogue has no photo. -->
+		<span class="movil-line__thumb" aria-hidden="true">
+			<slot name="thumb">
+				<img
+					v-if="thumbSrc"
+					:src="thumbSrc"
+					alt=""
+					loading="lazy"
+					class="movil-line__thumb-img"
+					data-testid="movil-line-thumb"
+					@error="onThumbError"
+				/>
+			</slot>
+		</span>
 
 		<span class="movil-line__body">
 			<span class="movil-line__name">{{ line.itemName }}</span>
@@ -77,7 +91,7 @@
  * no hover, no right-click and nowhere to put a per-line toolbar. It emits
  * `select` and decides nothing.
  */
-import { computed } from "vue";
+import { computed, ref } from "vue";
 
 import type { MobileSaleLine } from "./mobileSaleLines";
 
@@ -98,6 +112,20 @@ const onSelect = () => emit("select", props.line);
 // Bare `__` is a Frappe desk global; absent under vitest and in a bare mount.
 const __ = (value: string): string =>
 	typeof window !== "undefined" && (window as any).__ ? (window as any).__(value) : value;
+
+/** The desk row's own thumb rule (`CartItemRow.lineThumbSrc`), restated for
+ *  the model's list: first source that has not already failed to load. */
+const failedThumbSrcs = ref<string[]>([]);
+const thumbSrc = computed(
+	() =>
+		(props.line.thumbSrcs || []).find((src) => !failedThumbSrcs.value.includes(src)) || null,
+);
+const onThumbError = () => {
+	const src = thumbSrc.value;
+	if (src && !failedThumbSrcs.value.includes(src)) {
+		failedThumbSrcs.value = [...failedThumbSrcs.value, src];
+	}
+};
 
 /** "COMBO · 3" — the count is components, not quantity, as on the desk. */
 const comboBadge = computed(() => `${__("COMBO")} · ${props.line.componentCount}`);
@@ -190,6 +218,14 @@ const subtitleParts = computed<SubtitlePart[]>(() => {
 	overflow: hidden;
 	border-radius: var(--reg-radius-sm, 10px);
 	background: var(--reg-surface-muted, #f2f4f7);
+}
+
+.movil-line__thumb-img {
+	width: 100%;
+	height: 100%;
+	/* Contain, as the browse card does: a product shot cropped to a 38px
+	 * square by `cover` loses exactly the part that identifies it. */
+	object-fit: contain;
 }
 
 .movil-line__body {

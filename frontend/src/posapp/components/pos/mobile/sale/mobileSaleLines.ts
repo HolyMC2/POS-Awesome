@@ -56,6 +56,13 @@ export interface MobileSaleLine extends SaleSummaryLine {
 	 * to open on an empty one rather than editing by item code.
 	 */
 	rowId: string;
+	/**
+	 * The row's photo, in the desk's own preference order
+	 * (`CartItemRow.lineThumbSrc`): the pre-shrunk `posa_image_thumb` first,
+	 * the full `image` as its stand-in. Empty means the tile stays a quiet
+	 * grey square — the row's rhythm, never a broken-image glyph.
+	 */
+	thumbSrcs: string[];
 }
 
 export interface MobileSaleCart {
@@ -117,6 +124,12 @@ export const describeMobileSaleLines = (
 				// line degrades to "no identity" (and so to the classic-cart
 				// fallback) rather than one line carrying its neighbour's.
 				rowId: String(source?.posa_row_id ?? "").trim(),
+				thumbSrcs: [
+					(source as Record<string, unknown> | null)?.posa_image_thumb,
+					(source as Record<string, unknown> | null)?.image,
+				]
+					.map((src) => String(src ?? "").trim())
+					.filter(Boolean),
 			};
 		}),
 		lineCount: summary.lineCount,

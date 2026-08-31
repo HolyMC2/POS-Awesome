@@ -256,6 +256,44 @@ describe("absent stock renders nothing, never a zero", () => {
 	});
 });
 
+describe("the row's photo rides the desk's own preference", () => {
+	const lineWith = (fields: Record<string, unknown>) =>
+		mount(MobileCartLine, {
+			props: {
+				line: describeMobileSaleLines([
+					{ item_code: "X", item_name: "X", qty: 1, rate: 1, ...fields },
+				]).lines[0],
+				formatCurrency: money,
+			},
+		});
+
+	it("prefers the pre-shrunk thumb, falls back to the full image", () => {
+		const both = lineWith({ posa_image_thumb: "/files/x-thumb.jpg", image: "/files/x.jpg" });
+		expect(both.get('[data-testid="movil-line-thumb"]').attributes("src")).toBe(
+			"/files/x-thumb.jpg",
+		);
+
+		const imageOnly = lineWith({ image: "/files/x.jpg" });
+		expect(imageOnly.get('[data-testid="movil-line-thumb"]').attributes("src")).toBe(
+			"/files/x.jpg",
+		);
+	});
+
+	it("keeps the quiet square, never a broken glyph, when there is no photo", () => {
+		const bare = lineWith({});
+		expect(bare.find('[data-testid="movil-line-thumb"]').exists()).toBe(false);
+		expect(bare.find(".movil-line__thumb").exists()).toBe(true);
+	});
+
+	it("crosses off a URL that failed and falls to the next", async () => {
+		const wrapper = lineWith({ posa_image_thumb: "/files/dead.jpg", image: "/files/x.jpg" });
+		await wrapper.get('[data-testid="movil-line-thumb"]').trigger("error");
+		expect(wrapper.get('[data-testid="movil-line-thumb"]').attributes("src")).toBe(
+			"/files/x.jpg",
+		);
+	});
+});
+
 describe("the totals block", () => {
 	it("adds up to the canvas's own ticket", () => {
 		const screen = mountScreen();
