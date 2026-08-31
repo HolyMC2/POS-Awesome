@@ -103,5 +103,19 @@ class TestPriceListRateScope(unittest.TestCase):
             )
 
 
+class TestDeleteSalesInvoiceFacade(unittest.TestCase):
+    """MONEY-F7: the legacy delete_sales_invoice must not bypass the guards.
+
+    It delegates to the hardened delete_invoice now, so it raises on a missing
+    invoice (the old facade silently returned True) — proof it takes the guarded
+    path, without needing a real deletable draft."""
+
+    def test_a_missing_invoice_is_rejected_not_silently_accepted(self):
+        from posawesome.posawesome.api.invoices import delete_sales_invoice
+
+        with self.assertRaises(frappe.ValidationError):
+            delete_sales_invoice("__nonexistent_invoice__")
+
+
 if __name__ == "__main__":
     unittest.main()

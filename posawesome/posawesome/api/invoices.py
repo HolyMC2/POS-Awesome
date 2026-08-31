@@ -345,17 +345,19 @@ def create_sales_invoice_from_order(sales_order, pos_profile=None):
 
 @frappe.whitelist(methods=["POST"])
 def delete_sales_invoice(sales_invoice):
-    """Backward-compatible facade for legacy frontend method path."""
+    """Backward-compatible facade → the hardened `delete_invoice`.
 
+    This twin used to check only `assert_company` and then
+    `delete_doc(force=1)`, skipping the `posa_is_printed` refusal, the
+    `posa_allow_delete` profile backstop, the profile scope and the
+    submission-ledger cleanup that `delete_invoice` documents as load-bearing —
+    leaving a scoped user able to delete a printed draft on a delete-disabled
+    register and orphan its ledger row (audit MONEY-F7). Delegating routes it
+    through every one of those gates. Returns True for the legacy caller shape.
+    """
     if not sales_invoice:
         frappe.throw("sales_invoice is required")
-
-    if frappe.db.exists("Sales Invoice", sales_invoice):
-        # Scope before destroy. delete_doc(force=1) is irreversible
-        # (REVIEW2/03 §2.1 row invoices.py:181).
-        si_company = frappe.db.get_value("Sales Invoice", sales_invoice, "company")
-        assert_company(frappe.session.user, si_company)
-        frappe.delete_doc("Sales Invoice", sales_invoice, force=1)
+    delete_invoice(sales_invoice)
     return True
 
 
