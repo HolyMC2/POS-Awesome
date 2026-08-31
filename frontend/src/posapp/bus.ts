@@ -328,6 +328,14 @@ export type Events = {
 		price_list_rate: number;
 		saldo_referencia: string;
 	};
+	// ---- change dialog / customer display ----------------------------------
+	// The change-due dialog AND the customer display's «Gracias» state both ride
+	// this (declared here so vue-tsc can see the contract — RUNTIME-F9).
+	show_change_due: { amount: number; currency?: string };
+
+	// ---- navbar menu -------------------------------------------------------
+	run_menu_action: { id: string };
+
 };
 
 const bus: Emitter<Events> = mitt<Events>();
