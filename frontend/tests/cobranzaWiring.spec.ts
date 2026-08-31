@@ -122,6 +122,41 @@ describe("the destination is the panel, and the panel contains the tool", () => 
 	});
 });
 
+describe("the compact band's two-step (owner 08-31)", () => {
+	it("fronts the detail only below the one compact boundary", () => {
+		// The gate is the shared breakpoint source, never a local number.
+		expect(SURFACE).toContain("composables/core/useResponsive");
+		expect(SURFACE).toContain("const { isCompact } = useResponsive();");
+		expect(SURFACE).toMatch(/const frontDetail = \(\) => \{\s*if \(isCompact\.value\) detailFronted\.value = true;/);
+	});
+
+	it("a tapped row fronts, a re-tapped row fronts AGAIN, and the ways out close it", () => {
+		// select() must front on the SAME row too: on the compact band that
+		// tap is the way back into a detail the back chip closed.
+		const selectFn = /const select = [\s\S]*?\n\};/.exec(SURFACE)?.[0] as string;
+		expect(selectFn).toBeTruthy();
+		expect(selectFn.indexOf("frontDetail()")).toBeGreaterThan(-1);
+		expect(selectFn.match(/frontDetail\(\)/g)?.length).toBe(2);
+
+		// Tab changes and the post-capture return land on the LIST.
+		expect(SURFACE).toMatch(/const chooseTab[\s\S]*?closeDetailFront\(\);/);
+		expect(SURFACE).toMatch(/function backToWorklist\(\) \{[\s\S]*?closeDetailFront\(\);/);
+
+		// The way back is a real, named control.
+		expect(SURFACE).toContain('data-testid="cobranza-detail-back"');
+		expect(SURFACE).toContain('@click="closeDetailFront"');
+	});
+
+	it("is a class switch over mounted halves, on the register's own boundaries", () => {
+		expect(SURFACE).toContain("'cobranza__body--fronted': detailFronted");
+		// Desk layout is untouched: the stage contributes nothing there.
+		expect(SURFACE).toContain("display: contents;");
+		// The media boundaries are the shared .98 forms (breakpointCoherence).
+		expect(SURFACE).toContain("@media (max-width: 1099.98px)");
+		expect(SURFACE).toContain("@media (max-width: 767.98px)");
+	});
+});
+
 describe("the COBRAR handoff", () => {
 	it("drives the seam PayView already consumes, and sends no amount", () => {
 		// PayView's own auto-allocation fills the amount from the invoice it

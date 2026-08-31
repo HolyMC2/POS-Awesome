@@ -60,7 +60,7 @@
 				</div>
 			</div>
 
-			<div class="cobranza__body">
+			<div class="cobranza__body" :class="{ 'cobranza__body--fronted': detailFronted }">
 				<div class="cobranza__list" data-testid="cobranza-list">
 					<div class="cobranza__tabs" role="tablist">
 						<button
@@ -155,12 +155,16 @@
 							>
 								<span class="mono cobranza__folio">{{ row.name }}</span>
 								<span class="cobranza__customer">{{ row.customer_name || row.customer }}</span>
-								<span class="mono" :data-tone="dueTone(row)">{{ dueText(row) }}</span>
-								<span class="mono cobranza__cell--right">{{ formatCurrency(row.total) }}</span>
+								<span class="mono cobranza__cell--due" :data-tone="dueTone(row)">{{
+									dueText(row)
+								}}</span>
+								<span class="mono cobranza__cell--right cobranza__cell--total">{{
+									formatCurrency(row.total)
+								}}</span>
 								<span class="mono cobranza__cell--right cobranza__amount">
 									{{ formatCurrency(row.outstanding) }}
 								</span>
-								<span>
+								<span class="cobranza__cell--status">
 									<span class="cobranza__chip" :data-tone="estadoChip(row).tone">
 										{{ __(estadoChip(row).label) }}
 									</span>
@@ -191,8 +195,28 @@
 					</div>
 				</div>
 
-				<CobranzaDetail
-					v-if="!isCollectedTab"
+				<div v-if="!isCollectedTab" class="cobranza__detail-stage">
+					<!-- The compact band's way back — hidden on the desk, where
+					     the list never left the screen. -->
+					<button
+						v-if="detailFronted"
+						type="button"
+						class="cobranza__detail-back"
+						data-testid="cobranza-detail-back"
+						@click="closeDetailFront"
+					>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+							<path
+								d="M14 6l-6 6 6 6"
+								stroke="currentColor"
+								stroke-width="2.2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+						{{ __("Back to the list") }}
+					</button>
+					<CobranzaDetail
 					:row="selectedRow"
 					:contact="detail?.contact ?? null"
 					:lines="detail?.lines ?? []"
@@ -208,7 +232,8 @@
 					@collect="collect"
 					@reminder="fileReminder"
 					@statement="announceStatementStub"
-				/>
+					/>
+				</div>
 			</div>
 		</template>
 	</section>
@@ -256,6 +281,7 @@ import { storeToRefs } from "pinia";
 
 import CobranzaDetail from "./CobranzaDetail.vue";
 import PayView from "../../shell/PayView.vue";
+import { useResponsive } from "../../../../composables/core/useResponsive";
 import {
 	defaultTab,
 	describeDue,
@@ -313,6 +339,23 @@ const __ =
 const searchRef = ref<HTMLInputElement | null>(null);
 
 const step = ref<"worklist" | "capture">("worklist");
+
+// ---- the compact band's two-step (owner 08-31: «on mobile the data view
+// covers all screen») -------------------------------------------------------
+// Below the register's ONE compact boundary the desk's list-beside-detail
+// becomes a list step and a detail step, the same shape the orden surface
+// fronts on phones: tapping a row FRONTS the detail with a back chip, and
+// the list keeps its state underneath. Both stay mounted — this is a class
+// switch, not a panel swap, so selection, keyboard state and the loaded
+// detail survive the round trip.
+const { isCompact } = useResponsive();
+const detailFronted = ref(false);
+const frontDetail = () => {
+	if (isCompact.value) detailFronted.value = true;
+};
+const closeDetailFront = () => {
+	detailFronted.value = false;
+};
 const captureTarget = ref<{ invoiceName: string; customerName: string | null } | null>(null);
 
 const tab = ref<ReceivableTabId>("all");
@@ -462,9 +505,16 @@ async function openDetail(name: string) {
 
 const select = (index: number) => {
 	const row = visibleRows.value[index];
-	if (!row || row.name === selectedName.value) return;
+	if (!row) return;
+	if (row.name === selectedName.value) {
+		// The desk ignores a re-tap (nothing to change); the compact band
+		// fronts the detail again — that tap is the way back INTO it.
+		frontDetail();
+		return;
+	}
 	selectedName.value = row.name;
 	detail.value = null;
+	frontDetail();
 	void openDetail(row.name);
 };
 
@@ -474,6 +524,7 @@ const chooseTab = (id: ReceivableTabId) => {
 	landed.value = true;
 	selectedName.value = null;
 	detail.value = null;
+	closeDetailFront();
 	if (id === "collected_today") {
 		void loadCollected();
 		return;
@@ -539,6 +590,9 @@ async function collect(row: ReceivableRow) {
 function backToWorklist() {
 	step.value = "worklist";
 	captureTarget.value = null;
+	// After a capture the cashier lands on the LIST, not on the invoice the
+	// money already settled.
+	closeDetailFront();
 	// PayView clears the target once it has consumed it; clearing again is what
 	// keeps a target the cashier abandoned from re-arming capture on the next
 	// visit to this destination.
@@ -1027,6 +1081,158 @@ onBeforeUnmount(() => {
 
 	.cobranza__stats {
 		flex-wrap: wrap;
+	}
+}
+
+/* ---- the compact band's two-step ----------------------------------------
+ * On the desk the stage wrapper contributes NOTHING to layout
+ * (`display: contents`), so the detail keeps the 430px column it has always
+ * had. Below the register's one compact boundary the surface becomes a list
+ * step and a detail step: tapping a row fronts the detail with a back chip
+ * (owner 08-31 — «on mobile the data view covers all screen»). A class
+ * switch, never a panel swap: both halves stay mounted.
+ */
+.cobranza__detail-stage {
+	display: contents;
+}
+
+.cobranza__detail-back {
+	display: none;
+}
+
+@media (max-width: 1099.98px) {
+	/* The half-and-half stacking from the 1180 rule becomes the two-step. */
+	.cobranza__list {
+		max-height: none;
+		flex: 1 1 auto;
+	}
+
+	.cobranza__detail-stage {
+		display: none;
+	}
+
+	.cobranza__body--fronted .cobranza__list {
+		display: none;
+	}
+
+	.cobranza__body--fronted .cobranza__detail-stage {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		flex: 1 1 auto;
+		min-height: 0;
+	}
+
+	.cobranza__body--fronted .cobranza__detail-stage :deep(.cobranza-detail),
+	.cobranza__body--fronted .cobranza__detail-stage .cobranza-detail {
+		width: auto;
+		flex: 1 1 auto;
+	}
+
+	.cobranza__detail-back {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		align-self: flex-start;
+		min-height: var(--reg-touch-min, 44px);
+		padding: 0 12px;
+		border: 1px solid var(--reg-border, #e6e9ee);
+		border-radius: 999px;
+		background: var(--reg-surface, #fff);
+		color: var(--reg-text-primary, #212121);
+		font: inherit;
+		font-size: 12.5px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	/* Keyboard copy is desk-speak; a thumb never met the arrows. */
+	.cobranza__hint {
+		display: none;
+	}
+}
+
+/* ---- the phone boundary: tiles and cards --------------------------------- */
+@media (max-width: 767.98px) {
+	/* Three quiet tiles in ONE row — the stacked full-width stat cards were
+	 * most of the first screen on a phone. */
+	.cobranza__stats {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 6px;
+	}
+
+	.cobranza__stat {
+		padding: 8px 10px;
+	}
+
+	.cobranza__stat-value {
+		font-size: 15px;
+	}
+
+	.cobranza__stat-note {
+		font-size: 9.5px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	/* A row becomes a two-line card: who and how much, the folio and the due
+	 * age underneath, the chips on their own line. The Total column stands
+	 * down — Pendiente is the figure a collector acts on, and the detail
+	 * carries the rest. Column headers describe columns that no longer
+	 * exist, so they stand down with it. */
+	.cobranza__row--head {
+		display: none;
+	}
+
+	.cobranza__row--item {
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas:
+			"customer amount"
+			"folio    due"
+			"status   status";
+		gap: 2px 10px;
+		padding: 10px 12px;
+	}
+
+	.cobranza__row--item .cobranza__customer {
+		grid-area: customer;
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.cobranza__row--item .cobranza__amount {
+		grid-area: amount;
+		font-weight: 700;
+	}
+
+	.cobranza__row--item .cobranza__folio {
+		grid-area: folio;
+		font-size: 10.5px;
+		color: var(--pos-text-secondary, #8b93a0);
+	}
+
+	.cobranza__row--item .cobranza__cell--due {
+		grid-area: due;
+		justify-self: end;
+		font-size: 10.5px;
+	}
+
+	.cobranza__row--item .cobranza__cell--total {
+		display: none;
+	}
+
+	.cobranza__row--item .cobranza__cell--status {
+		grid-area: status;
+		margin-top: 2px;
+	}
+
+	/* «Cobrado hoy» rows: folio+amount, mode+reference under. */
+	.cobranza__row--paid {
+		grid-template-columns: minmax(0, 1fr) auto;
 	}
 }
 </style>
