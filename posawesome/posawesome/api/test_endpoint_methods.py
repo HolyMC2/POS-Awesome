@@ -10,9 +10,15 @@ any mutating name that reopens the class (there are ~40 such wrappers).
 import importlib
 import unittest
 
-import frappe
 # introspection only — no DB fixtures needed, so a plain TestCase (frappe is
-# already connected under bench run-tests).
+# already connected under bench run-tests). The guarded import is the
+# standalone suite's contract (ci-backend.yml runs `unittest discover` with
+# NO frappe on the path): a bench-only module skips itself there instead of
+# failing the loader — same idiom as test_dashboard_access.py.
+try:
+    import frappe
+except ImportError:
+    raise unittest.SkipTest("bench-only test module - requires frappe") from None
 
 
 # The aliases that were GET-able over a mutating impl (audit 2026-08-31).
