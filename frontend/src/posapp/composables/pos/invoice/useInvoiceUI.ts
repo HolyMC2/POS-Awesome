@@ -56,14 +56,22 @@ export function useInvoiceUI() {
 	};
 
 	const getDefaultInvoiceHeight = () => {
-		if (typeof document === "undefined") {
-			return "68vh";
-		}
-		return (
-			getComputedStyle(document.documentElement)
+		if (typeof document !== "undefined") {
+			const fromVar = getComputedStyle(document.documentElement)
 				.getPropertyValue("--container-height")
-				.trim() || "68vh"
-		);
+				.trim();
+			if (fromVar) return fromVar;
+		}
+		// `--container-height` is set via :style on component elements (the item
+		// selector, the responsive table), never on documentElement, so the read
+		// above almost always misses and this used to fall through to a flat
+		// "68vh" — the "responsive default" was not responsive at all (audit
+		// LAYOUT-F5). Fall back to the SAME height ladder getMaxInvoiceHeightPx
+		// uses, so the default tracks the viewport as intended.
+		const h = getViewportHeight();
+		if (h <= 800) return "58vh";
+		if (h <= 960) return "64vh";
+		return "72vh";
 	};
 
 	const parseHeightToPx = (value: string | null | undefined) => {
@@ -170,6 +178,7 @@ export function useInvoiceUI() {
 
 	return {
 		invoiceHeight,
+		getDefaultInvoiceHeight,
 		canResizeInvoicePanel,
 		saveInvoiceHeight,
 		loadInvoiceHeight,
