@@ -197,7 +197,7 @@ const onActivate = () => emit("add", props.card);
 	display: grid;
 	place-items: center;
 	width: 100%;
-	height: 78px;
+	height: 108px;
 	border-radius: 9px;
 	background: var(--reg-surface-sunken, #f8f9fa);
 	overflow: hidden;
@@ -208,8 +208,18 @@ const onActivate = () => emit("add", props.card);
 }
 
 .mbrowse-card__image {
-	max-width: 100%;
-	max-height: 100%;
+	/* Absolutely fill the well (it is `position: relative`), then let
+	   `object-fit: contain` letterbox the whole photo inside that box. The well
+	   is a `display: grid; place-items: center` cell, so a plain `height: 100%`
+	   resolved to the image's INTRINSIC height (a 3000×4000 portrait rendered
+	   208px tall) and `overflow: hidden` cropped it to the top third (the
+	   reported defect). Absolute `inset: 0` pins the image box to the well's own
+	   height, so a portrait photo sits centred with neutral pillarbox bars on
+	   the sunken well and a landscape one letterboxes — the whole picture shows. */
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
 	object-fit: contain;
 }
 
