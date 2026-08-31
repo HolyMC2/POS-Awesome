@@ -5,6 +5,7 @@ printRuntime.src = "/assets/doco/js/printing_runtime.js?v=20260812a";
 document.head.appendChild(printRuntime);
 // @ts-ignore
 import vuetify from "./plugins/vuetify";
+import { bindInstallPrompt } from "./composables/core/useInstallPrompt";
 // Roboto 100 is deliberately absent — nothing in the app or in the Vuetify
 // styles we bundle asks for it. 600 and 800 are absent too, but those ARE
 // requested by app CSS: the browser resolves them upward to 700 and 900, which
@@ -160,6 +161,9 @@ class PosAppController {
 	}
 
 	async initializeApp() {
+		// PWA install prompt: `beforeinstallprompt` fires once per page load,
+		// whenever the browser decides — bind before any menu could want it.
+		bindInstallPrompt();
 		// Vuetify instance is now imported from plugins/vuetify.ts
 		this.app = createApp(App);
 		const { router, history } = createPosAppRouter();

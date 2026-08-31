@@ -16,7 +16,11 @@
 	<meta charset="utf-8" />
 	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes" />
-	<meta name="theme-color" content="#0f172a" />
+	{# The installed app's title/status bar colour follows the register's own
+	   app-bar ground per scheme (theme.css --pos-navbar-bg / dark surface);
+	   the old single #0f172a painted a navy bar over a white navbar. #}
+	<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+	<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1e1e1e" />
 	<meta name="color-scheme" content="dark light" />
 
 	{# iOS PWA hooks: status-bar + standalone capability + Home-Screen icon.
@@ -25,12 +29,19 @@
 	<meta name="mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-title" content="Muelle POS" />
-	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+	{# `default` = an opaque status bar the page never renders under. The
+	   register does not pad its app bar with env(safe-area-inset-top), so
+	   `black-translucent` put the iPhone's clock over the navbar once the app
+	   was on the Home Screen (native-feel round 1, 08-30). #}
+	<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 	<meta name="format-detection" content="telephone=no" />
 
 	<title>{{ title }}</title>
-	<link rel="icon" type="image/png" href="/assets/posawesome/dist/js/pos-BuGonphY.png" />
-	<link rel="apple-touch-icon" sizes="180x180" href="/assets/posawesome/icons/logo-512.png" />
+	{# Brand icons rendered from muelle-site's favicon.svg (public/icons/):
+	   192/512 `any`, a padded maskable 512 for Android launchers, and a 180
+	   apple-touch-icon on an opaque ground (iOS ignores transparency). #}
+	<link rel="icon" type="image/png" sizes="192x192" href="/assets/posawesome/icons/logo-192.png" />
+	<link rel="apple-touch-icon" sizes="180x180" href="/assets/posawesome/icons/apple-touch-icon-180.png" />
 	<link rel="manifest" href="/manifest.json" />
 
 	{# Cache-busted CSS bundle (build-manifest emits the hashed path). #}

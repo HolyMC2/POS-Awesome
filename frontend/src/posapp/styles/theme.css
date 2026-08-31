@@ -796,6 +796,65 @@ body[data-page-route="posapp"] .desk-container {
 }
 
 /* ==========================================================================
+   PWA foundation — native-feel round 1 (Marco, 08-30: «make the feeling
+   like a native android/ios app, snappy, solid, polished»).
+
+   1. `touch-action: manipulation` on the ROOT, not only on buttons: a
+      double-tap anywhere on the register (a card's photo, a cart row, the
+      band) no longer zooms the page, and pinch-zoom stays available.
+   2. No rubber-band / pull-to-refresh on the shell: an installed register
+      that reloads because a cashier swiped down on the cart is a lost sale.
+   3. The chrome — bar, rail, dock, band, cards, keypad — is not text: no
+      selection highlight when a finger rests, no iOS long-press callout
+      on a card's picture, no grey tap flash.
+   4. Safe areas: the phone dock and the bottom sheets sit above the home
+      indicator (`viewport-fit=cover` is already set in posapp.html; the
+      status bar is opaque — see the meta there — so only the bottom inset
+      is the page's job).
+   ========================================================================== */
+:root {
+	--safe-top: env(safe-area-inset-top, 0px);
+	--safe-right: env(safe-area-inset-right, 0px);
+	--safe-bottom: env(safe-area-inset-bottom, 0px);
+	--safe-left: env(safe-area-inset-left, 0px);
+}
+
+html:has(body[data-page-route="posapp"]),
+body[data-page-route="posapp"] {
+	overscroll-behavior-y: none;
+	-webkit-text-size-adjust: 100%;
+}
+
+.posapp {
+	touch-action: manipulation;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.posapp .v-app-bar,
+.posapp .register-rail,
+.posapp .mobile-dock,
+.posapp .action-band,
+.posapp .card-item-card,
+.posapp .catalog-drawer__header,
+.posapp .pos-action-strip,
+.posapp .pay-keypad,
+.posapp .cobro-methods,
+.posapp .lot-picker__head,
+.posapp .movil-line-sheet__head {
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+}
+
+/* The dock has no bottom padding of its own, so the inset is purely additive
+   here; its ResizeObserver already turns the taller dock into the content's
+   --bottom-safe-space. The two bottom sheets add the inset to their own
+   padding in their own stylesheets. */
+.posapp .mobile-dock {
+	padding-bottom: var(--safe-bottom);
+}
+
+/* ==========================================================================
    M1 — Coarse-pointer (touch) tap-target floor at 44×44 CSS px (WCAG 2.5.5).
    Only applied when `pointer: coarse` so desktop/cashier-monitor density
    is preserved. Mirrors upstream feat-ui-ux-improvements direction; lands

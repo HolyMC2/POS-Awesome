@@ -338,6 +338,7 @@ import { useUpdateStore } from "../../stores/updateStore";
 import { useEmployeeStore } from "../../stores/employeeStore";
 import { useVerticalStore } from "../../stores/verticalStore";
 import { useUIStore } from "../../stores/uiStore";
+import { useInstallPrompt } from "../../composables/core/useInstallPrompt";
 import { storeToRefs } from "pinia";
 import QzTrayDialog from "./QzTrayDialog.vue";
 import QzTestPrintDialog from "../settings/QzTestPrintDialog.vue";
@@ -372,6 +373,10 @@ export default {
 		const navPrintHealth = usePrintHealthShared();
 		const verticalStore = useVerticalStore();
 		const uiStore = useUIStore();
+		// PWA install affordance (native-feel round 1): the browser's deferred
+		// prompt, or the iOS Share-sheet hint, offered from this menu. Returned
+		// as top-level refs so the Options API unwraps them.
+		const installPrompt = useInstallPrompt();
 		return {
 			printLastInvoice,
 			updateStore,
@@ -381,6 +386,9 @@ export default {
 			navPrintHealth,
 			verticalStore,
 			uiStore,
+			installCanInstall: installPrompt.canInstall,
+			installShowsIosHint: installPrompt.showsIosHint,
+			installApp: installPrompt.install,
 		};
 	},
 	data() {
@@ -589,6 +597,30 @@ export default {
 							icon: "mdi-content-save-move-outline",
 							tone: "primary",
 							handler: "closeShift",
+						}
+					: null,
+				// PWA install (native-feel round 1). Chromium hands the page a
+				// deferred prompt → one tap installs; iOS has no such API, so
+				// the Share-sheet path is stated instead. Neither shows once the
+				// register already runs standalone.
+				this.installCanInstall
+					? {
+							id: "install-app",
+							label: __("Install the app"),
+							subtitle: __("Open the register full screen, like an app"),
+							icon: "mdi-cellphone-arrow-down",
+							tone: "info",
+							handler: "installApp",
+						}
+					: null,
+				this.installShowsIosHint
+					? {
+							id: "add-to-home-screen",
+							label: __("Add to Home Screen"),
+							subtitle: __("Share → Add to Home Screen puts the register on your phone"),
+							icon: "mdi-export-variant",
+							tone: "secondary",
+							handler: "closeMenuOnly",
 						}
 					: null,
 			];
@@ -906,6 +938,16 @@ export default {
 				case "printLastInvoiceAction":
 					this.closeMenu();
 					this.printLastInvoice();
+					break;
+				case "installApp":
+					this.closeMenu();
+					// Replays the browser's deferred beforeinstallprompt; the
+					// composable forgets it afterwards either way.
+					void this.installApp();
+					break;
+				case "closeMenuOnly":
+					// The iOS hint is its own instruction; nothing else to do.
+					this.closeMenu();
 					break;
 				case "syncInvoices":
 					this.closeMenu();

@@ -10,6 +10,7 @@
 // Only these paths are pulled out of @mdi/js, so the bundle carries the 238
 // icons this app renders instead of the full 7,447-glyph webfont.
 import {
+	mdiExportVariant,
 	mdiAccount,
 	mdiAccountCashOutline,
 	mdiAccountCircleOutline,
@@ -261,6 +262,8 @@ import {
 
 export const mdiIconPaths: Record<string, string> = {
 	"mdi-account": mdiAccount,
+	// PWA install affordance (native-feel round 1): the iOS Share-sheet hint.
+	"mdi-export-variant": mdiExportVariant,
 	"mdi-account-cash-outline": mdiAccountCashOutline,
 	"mdi-account-circle-outline": mdiAccountCircleOutline,
 	"mdi-account-edit": mdiAccountEdit,

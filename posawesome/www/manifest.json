@@ -7,16 +7,18 @@
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "browser"],
   "orientation": "any",
-  "background_color": "#0F172A",
-  "theme_color": "#0F172A",
-  "lang": "en",
+  "background_color": "#f8f9fa",
+  "theme_color": "#ffffff",
+  "lang": "es-MX",
   "dir": "ltr",
   "categories": ["business", "productivity"],
-  "description": "Muelle POS — punto de venta rápido y con modo offline.",
+  "description": "Muelle POS — la caja de tu negocio: rápida, táctil y con modo sin conexión.",
+  "prefer_related_applications": false,
+  "launch_handler": { "client_mode": "focus-existing" },
   "icons": [
     {
-      "src": "/assets/posawesome/icons/logo-144.png",
-      "sizes": "144x144",
+      "src": "/assets/posawesome/icons/logo-192.png",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
@@ -24,30 +26,29 @@
       "src": "/assets/posawesome/icons/logo-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/posawesome/icons/logo-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
     {
-      "name": "Open POS",
-      "short_name": "POS",
-      "description": "Start a new sale",
+      "name": "Nueva venta",
+      "short_name": "Venta",
+      "description": "Abrir la caja en una venta nueva",
       "url": "/posapp/pos",
-      "icons": [{ "src": "/assets/posawesome/icons/logo-144.png", "sizes": "144x144" }]
+      "icons": [{ "src": "/assets/posawesome/icons/logo-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
-      "name": "Dashboard",
-      "short_name": "Dashboard",
-      "description": "Today's KPIs",
-      "url": "/posapp/dashboard",
-      "icons": [{ "src": "/assets/posawesome/icons/logo-144.png", "sizes": "144x144" }]
-    },
-    {
-      "name": "Cash Movement",
-      "short_name": "Cash",
-      "description": "Open / close till + cash in/out",
-      "url": "/posapp/cash-movement",
-      "icons": [{ "src": "/assets/posawesome/icons/logo-144.png", "sizes": "144x144" }]
+      "name": "Explorar catálogo",
+      "short_name": "Catálogo",
+      "description": "Abrir la caja con el catálogo desplegado",
+      "url": "/posapp/pos/browse",
+      "icons": [{ "src": "/assets/posawesome/icons/logo-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ],
   "screenshots": [
