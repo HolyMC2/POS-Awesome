@@ -210,4 +210,19 @@ const quoteLine = computed(() => {
 	color: var(--pos-text-secondary);
 	font-variant-numeric: tabular-nums;
 }
+/* Dense desk tier (utils/itemSelectorLayout DENSE_DESK_*): ≥1100px wide,
+ * ≤820px tall. On the hosted Cobro the split panel shares the tender column's
+ * elastic height with the keypad; its two-row chip layout (90px) measured the
+ * keys down to 36px at 1143×656 — under the 44px touch floor. One row of
+ * chips on 8px of padding hands the keys their floor back. */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.split-evenly {
+		padding: 8px;
+		gap: 6px;
+	}
+
+	.split-evenly__choices {
+		flex-wrap: nowrap;
+	}
+}
 </style>

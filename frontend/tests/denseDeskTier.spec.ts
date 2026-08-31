@@ -41,6 +41,7 @@ import cobroPadSource from "../src/posapp/components/pos/payments/cobro/CobroTen
 import cobroMethodsSource from "../src/posapp/components/pos/payments/cobro/CobroMethodRows.vue?raw";
 import cobroChangeSource from "../src/posapp/components/pos/payments/cobro/CobroChangeCard.vue?raw";
 import cobroGiftSource from "../src/posapp/components/pos/payments/cobro/CobroGiftCard.vue?raw";
+import splitSource from "../src/posapp/components/pos/payments/SplitEvenlyPanel.vue?raw";
 
 // vitest's CSS pipeline empties a `.css?raw` import — the token sheet is read
 // off disk instead (node environment on purpose: nothing here mounts).
@@ -91,6 +92,7 @@ describe("dense desk tier — one viewport, two stacks", () => {
 		["CobroMethodRows.vue", cobroMethodsSource],
 		["CobroChangeCard.vue", cobroChangeSource],
 		["CobroGiftCard.vue", cobroGiftSource],
+		["SplitEvenlyPanel.vue", splitSource],
 	])("%s carries the tier under the SAME query the JS switches on", (_name, source) => {
 		expect(source).toContain(TIER_QUERY);
 		// And no sibling pair with a drifted number: every (min-width … max-height)

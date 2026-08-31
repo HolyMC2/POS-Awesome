@@ -85,7 +85,11 @@
 		-->
 		<Teleport defer :to="bandContextTarget || 'body'" :disabled="!bandLaneActive">
 			<span v-if="bandLaneActive" class="cobro-band-divider" aria-hidden="true"></span>
-			<div class="cobro-pad__presets" data-testid="cobro-presets">
+			<div
+				class="cobro-pad__presets"
+				data-testid="cobro-presets"
+				:class="{ 'cobro-pad__presets--band': bandLaneActive }"
+			>
 			<button
 				type="button"
 				class="cobro-pad__preset cobro-pad__preset--exact"
@@ -417,6 +421,17 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onPhysicalKey));
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--reg-space-xs, 5px);
+}
+
+/* Hosted in the band's context lane the presets have a fixed width and one
+   row to spend: a chip that does not fit wraps onto a second row that the
+   32px clip never shows, so the lane ends on a whole chip instead of a
+   «1,40» cut mid-figure (measured at 1195×741). */
+.cobro-pad__presets--band {
+	flex-wrap: wrap;
+	row-gap: 40px;
+	max-height: 32px;
+	overflow: hidden;
 }
 
 .cobro-pad__preset {
