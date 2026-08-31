@@ -210,10 +210,16 @@ describe("the Cobro columns state each figure once", () => {
 		// buffer — 0.00 until a digit is pressed — and the presets are offers,
 		// not facts.
 		expect(new Set(rolesOf(mountPad()))).toEqual(new Set(["keyed", "preset"]));
-		// The method rows carry amounts in INPUTS, which declare no role: the
-		// figure there is the cashier's, not the screen's.
+		// The chips carry the amount that sits on each tender, and it declares
+		// no role for the same reason the input it replaced declared none: it
+		// is a restatement of the cashier's own entry, not a fact the screen is
+		// asserting about the sale. What the sale comes to is column one's, and
+		// where it stands is column three's.
 		expect(rolesOf(mountMethods())).toEqual([]);
-		expect(mountMethods().findAll("input").length).toBe(2);
+		// NO INPUT AT ALL (2026-08-30). Focusing one on a tablet summoned the
+		// OS keyboard over the numpad — `cobroControlPanel.spec.ts` carries the
+		// full reasoning and the `payment-action` focus target.
+		expect(mountMethods().findAll("input").length).toBe(0);
 	});
 
 	it("declares no role twice across the whole surface", () => {

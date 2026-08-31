@@ -12,8 +12,15 @@
 			moves under the cashier's thumb while they key an amount, and a
 			figure that changes silently is a figure a screen-reader user has to
 			go hunting for.
+
+			`hideAmount` is the desktop Cobro under a band: the band's 36px
+			figure IS this number, in the lane §17.7 reserves for it, and a 46px
+			copy one column above was the owner's «the band duplicates the
+			surface» in the other direction. The phone has no band, so the flag
+			defaults to false and that screen is untouched.
 		-->
 		<p
+			v-if="!hideAmount"
 			class="change-card__amount reg-mono"
 			data-testid="movil-change-amount"
 			:data-money-role="headline.role"
@@ -67,7 +74,14 @@
 			</template>
 		</p>
 
-		<dl class="change-card__figures">
+		<!--
+			`hideFigures` is the same story as `hideAmount`, one row down: on the
+			desktop Cobro the Recibido / Falta pair is TELEPORTED into the band's
+			breakdown lane, which is the lane the band publishes and the owner
+			found empty across a thousand pixels. Said there, it must not also be
+			said here. The phone keeps the pair — it has no lane to move it to.
+		-->
+		<dl v-if="!hideFigures" class="change-card__figures">
 			<!--
 				The desktop Cobro states the ticket's total in its own column, in
 				`CobroTotalsFooter`, and a second copy here would put it on the
@@ -136,8 +150,12 @@ const props = withDefaults(
 		formatCurrency: (_value: number) => string;
 		/** Drop the `Total` figure because the surface already states it. */
 		hideTotal?: boolean;
+		/** Drop the headline: a band below is already saying this number. */
+		hideAmount?: boolean;
+		/** Drop the Recibido / Falta pair: it went into the band's lane. */
+		hideFigures?: boolean;
 	}>(),
-	{ hideTotal: false },
+	{ hideTotal: false, hideAmount: false, hideFigures: false },
 );
 
 // Bare `__` is a Frappe desk global; absent under vitest and in a bare mount.

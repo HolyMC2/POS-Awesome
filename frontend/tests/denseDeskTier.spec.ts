@@ -33,6 +33,14 @@ import cardSource from "../src/posapp/components/pos/items/ItemCard.vue?raw";
 import cardsSource from "../src/posapp/components/pos/items/ItemsSelectorCards.vue?raw";
 import selectorSource from "../src/posapp/components/pos/items/ItemsSelector.vue?raw";
 import responsiveSource from "../src/posapp/composables/pos/items/useItemsTableResponsive.ts?raw";
+// The Cobro surface joined the tier on 2026-08-30: it is the OTHER full-height
+// screen the register hosts beside the rail, and Marco met it on the same
+// 1195×741 and 1143×656 windows as the sale.
+import paymentsSource from "../src/posapp/components/pos/Payments.vue?raw";
+import cobroPadSource from "../src/posapp/components/pos/payments/cobro/CobroTenderPad.vue?raw";
+import cobroMethodsSource from "../src/posapp/components/pos/payments/cobro/CobroMethodRows.vue?raw";
+import cobroChangeSource from "../src/posapp/components/pos/payments/cobro/CobroChangeCard.vue?raw";
+import cobroGiftSource from "../src/posapp/components/pos/payments/cobro/CobroGiftCard.vue?raw";
 
 // vitest's CSS pipeline empties a `.css?raw` import — the token sheet is read
 // off disk instead (node environment on purpose: nothing here mounts).
@@ -78,6 +86,11 @@ describe("dense desk tier — one viewport, two stacks", () => {
 		["Customer.vue", customerSource],
 		["CartItemRow.vue", cartRowSource],
 		["items-table-styles.css", tableSource],
+		["Payments.vue", paymentsSource],
+		["CobroTenderPad.vue", cobroPadSource],
+		["CobroMethodRows.vue", cobroMethodsSource],
+		["CobroChangeCard.vue", cobroChangeSource],
+		["CobroGiftCard.vue", cobroGiftSource],
 	])("%s carries the tier under the SAME query the JS switches on", (_name, source) => {
 		expect(source).toContain(TIER_QUERY);
 		// And no sibling pair with a drifted number: every (min-width … max-height)

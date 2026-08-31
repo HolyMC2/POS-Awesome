@@ -128,6 +128,36 @@
 							:format-currency="formatSummaryCurrency"
 							:currency-symbol="currencySymbol(invoice_doc.currency)"
 						/>
+						<!--
+							COBRO, the artboard's `Monedero del cliente` slot.
+
+							A gift card is a fact about the money's WHY — whose
+							balance is paying for this ticket — so the capture sits
+							under the totals it changes, not as a 333px marketing
+							block in the tender column under the method list (owner,
+							08-30: «the tarjeta de regalo is under forma de pago …
+							ends up being a long ass scroll»). The tender column's
+							chip row hands the act here; `GiftCardDialog` stays
+							mounted below as the desk fallback and is no longer what
+							this surface opens.
+						-->
+						<CobroGiftCard
+							v-if="cobroMode"
+							ref="cobroGiftCard"
+							:enabled="Boolean(pos_profile?.posa_use_gift_cards)"
+							:card-code="giftCardCode || giftCardRedemptions[0]?.gift_card_code || ''"
+							:balance="giftCardBalance"
+							:applied-amount="giftCardAppliedAmount"
+							:loading="giftCardLoading"
+							:error-message="giftCardError"
+							:format-currency="formatSummaryCurrency"
+							@update:card-code="giftCardCode = $event"
+							@check-balance="checkGiftCardBalance"
+							@apply="applyCobroGiftCard"
+							@clear="clearCobroGiftCard"
+							@activate="cobroGiftActive = true"
+							@deactivate="cobroGiftActive = false"
+						/>
 						<!-- `hide-tendered` on Cobro only: the paper column prints
 						     «Recibido / Falta por cubrir» and the band carries the
 						     shortfall a third time. What is left is the Paid/Credit
@@ -181,7 +211,11 @@
 							:is-return="Boolean(invoice_doc?.is_return)"
 							:format-currency="formatCurrency"
 							:get-visible-denominations="getVisibleDenominations"
+							band-context-target="[data-band-lane='context']"
+							:band-lane-active="cobroBandLaneActive"
+							:keys-redirected="cobroGiftActive"
 							v-on="paymentMethodsHandlers"
+							@key="onCobroKeypadKey"
 						/>
 						<CobroOnClose
 							:item-count="Number(invoice_doc?.total_qty) || 0"
@@ -207,6 +241,8 @@
 							:currency="invoice_doc?.currency"
 							:format-currency="formatCurrency"
 							:tax-id="customer_info?.tax_id || ''"
+							band-breakdown-target="[data-band-lane='breakdown']"
+							:band-owns-figure="cobroBandLaneActive"
 						/>
 						<v-btn
 							block
@@ -293,6 +329,7 @@
 							:is-return="Boolean(invoice_doc?.is_return)"
 							:request-payment-field="request_payment_field"
 							:uses-gift-cards="Boolean(pos_profile?.posa_use_gift_cards)"
+							:gift-applied-amount="giftCardAppliedAmount"
 							:cart-has-items="Boolean(invoice_doc?.items?.length)"
 							:currency-symbol="currencySymbol"
 							:format-currency="formatCurrency"
@@ -301,6 +338,7 @@
 							:is-mpesa-c2b-payment="is_mpesa_c2b_payment"
 							:is-gift-card-payment="isGiftCardPayment"
 							v-on="paymentMethodsHandlers"
+							@set-full-amount="cobroGiftActive = false"
 						/>
 						<!-- Phone: the default method keeps its full card (amount +
 						     quick-cash chips) and the remaining methods collapse
@@ -346,8 +384,18 @@
 								/>
 							</div>
 						</div>
+						<!--
+							The marketing block, everywhere but Cobro. On the
+							hosted surface the capture is `CobroGiftCard` in
+							column one and this would be the same act offered
+							twice — 333px of it, in the column that has to hold
+							the numpad. `enabled` rather than a `v-if` on the
+							element, so the phone sheet and the dialog keep the
+							component they have always had and nothing else here
+							changes shape.
+						-->
 						<PaymentGiftCardSection
-							:enabled="Boolean(pos_profile?.posa_use_gift_cards)"
+							:enabled="!cobroMode && Boolean(pos_profile?.posa_use_gift_cards)"
 							:expanded="giftCardInlineExpanded"
 							:applied-amount="giftCardAppliedAmount"
 							:card-code="giftCardCode || giftCardRedemptions[0]?.gift_card_code || ''"
@@ -701,6 +749,8 @@ import CobroMethodRows from "./payments/cobro/CobroMethodRows.vue";
 import CobroTotalsFooter from "./payments/cobro/CobroTotalsFooter.vue";
 import CobroOnClose from "./payments/cobro/CobroOnClose.vue";
 import CobroChangeCard from "./payments/cobro/CobroChangeCard.vue";
+import CobroGiftCard from "./payments/cobro/CobroGiftCard.vue";
+import { bandOwnsLane } from "./invoice/bandLaneOwnership";
 import { resolveTaxBreakdown } from "./invoice/saleTaxBreakdown";
 // MP-INTEGRATION-POINT (sale checkout): hard gate — isolated, no-op when off.
 import MpPointSaleGateDialog from "../pos_pay/MpPointSaleGateDialog.vue";
@@ -864,9 +914,14 @@ const moreMethodsOpen = ref(false);
 const breakdownOpen = ref(false);
 let shellMeasureFrame = null;
 
+// The width `bandOwnsLane` is asked about. Measured on the same pass as the
+// compact switch so the two answers cannot come from different frames.
+const paymentWindowWidth = ref(typeof window === "undefined" ? 0 : window.innerWidth);
+
 const measureShell = () => {
 	if (typeof window === "undefined") return;
 	compactPaymentLayout.value = !props.dialogMode && window.innerWidth < COMPACT_PAYMENT_WIDTH;
+	paymentWindowWidth.value = window.innerWidth;
 
 	const el = paymentRoot.value;
 	if (!el || props.dialogMode) {
@@ -912,6 +967,77 @@ const cobroDetailsOpen = ref(false);
 
 const toggleCobroDetails = (open) => {
 	cobroDetailsOpen.value = typeof open === "boolean" ? open : !cobroDetailsOpen.value;
+};
+
+/**
+ * IS THERE A BAND LANE FOR THIS SURFACE TO FILL?
+ *
+ * Owner, 08-30: «we have extra space on the action bar, left is the total,
+ * right cobrar e imprimir, and all the center is dead space». `ActionBand`
+ * publishes two lanes and `InvoiceSummary` deliberately stands down from both
+ * while Cobro is up — the SALE's subtotal and the sale's tender chips are not
+ * this screen's facts. So Cobro fills them with its own: `Recibido · Falta`
+ * into `breakdown` (`CobroChangeCard`) and the shortcut chips into `context`
+ * (`CobroTenderPad`). The targets are stated HERE, as attributes, the way
+ * `Invoice.vue` states them for the sale.
+ *
+ * `bandOwnsLane` is the shared predicate, imported rather than re-derived, so
+ * this surface and the summary cannot disagree about whether a band exists.
+ * Cobro only: every other layout renders these figures in place.
+ */
+const cobroBandLaneActive = computed(
+	() =>
+		props.cobroMode &&
+		bandOwnsLane(Boolean(verticalStore.leanVerticalLayout), paymentWindowWidth.value),
+);
+
+/**
+ * ── Who owns the keys ────────────────────────────────────────────────────
+ *
+ * The centre pad is the only keyboard this surface wants on a tablet, and
+ * column one's gift-card capture is the second field it has to serve. LATCHED
+ * rather than focus-driven: tapping a key on the pad moves focus to that
+ * button, so a claim released on blur would be released by the very act it
+ * exists to serve. Released by an act that means something else — picking a
+ * tender chip, applying, clearing, or Escape.
+ */
+const cobroGiftActive = ref(false);
+const cobroGiftCard = ref(null);
+
+/**
+ * One raw press from the pad while the capture holds the keys.
+ *
+ * A gift-card code is not a decimal — `applyKeypadKey` would compose `1` then
+ * `2` into `0.12`, which is right for money and wrong for `12` — so the pad
+ * publishes the KEY and the code is composed here, as plain text. Nothing on
+ * the money path is touched: this writes the same `giftCardCode` the field's
+ * own `@input` writes, and the lookup is still `checkGiftCardBalance`.
+ */
+const onCobroKeypadKey = (key) => {
+	if (!cobroGiftActive.value) return;
+	if (key === "backspace") {
+		giftCardCode.value = String(giftCardCode.value || "").slice(0, -1);
+		return;
+	}
+	// `Aplicar` on a code means "look it up" — the act the field's own Enter
+	// performs, and the only thing a code can be applied to.
+	if (key === "split") {
+		checkGiftCardBalance();
+		return;
+	}
+	if (key === ".") return;
+	giftCardCode.value = `${giftCardCode.value || ""}${key}`;
+};
+
+/** Apply, then hand the keys back: the capture's work is done. */
+const applyCobroGiftCard = async () => {
+	cobroGiftActive.value = false;
+	await applyGiftCardRedemption();
+};
+
+const clearCobroGiftCard = () => {
+	cobroGiftActive.value = false;
+	clearGiftCardRedemption();
 };
 
 // Computed Properties
@@ -1530,6 +1656,18 @@ const toggleGiftCardInline = () => {
 };
 
 const openGiftCardDialog = (payment = null) => {
+	// COBRO OPENS THE CAPTURE, NOT THE DIALOG. The hosted surface has a
+	// scan-first field in column one; a modal over it would cover the pad the
+	// cashier scans and keys with, which is the whole reason this screen stopped
+	// being a dialog. `GiftCardDialog` stays mounted for the desk dialog and the
+	// phone sheet, which have nowhere else to put this.
+	if (props.cobroMode) {
+		activeGiftCardPayment.value = payment;
+		giftCardError.value = "";
+		cobroGiftActive.value = true;
+		nextTick(() => cobroGiftCard.value?.focus?.());
+		return;
+	}
 	activeGiftCardPayment.value = payment;
 	giftCardDialogOpen.value = true;
 	giftCardCode.value = giftCardRedemptions.value[0]?.gift_card_code || "";
@@ -3417,8 +3555,13 @@ defineExpose({
 	 * THE EXPANDED shape. `More options` is open, so the panel keeps a floor
 	 * (a 420px row is still a usable pad and a readable ticket) and the legacy
 	 * row below it takes whatever height its forms need — the surface scrolls.
+	 *
+	 * SIX rows, and the second is the CHIP row: `Cobro.dc.html` puts
+	 * `Forma de pago` ABOVE the amount, because a tender is chosen before it is
+	 * counted. It used to be row three, under the pad, which is the order a
+	 * cashier reads backwards.
 	 */
-	grid-template-rows: auto minmax(420px, auto) auto auto auto auto;
+	grid-template-rows: auto auto minmax(420px, auto) auto auto auto;
 	gap: var(--pos-space-2);
 	/* `stretch`, not `start`: the ticket card and the change card fill the
 	   height their column was given instead of floating at the top of it. */
@@ -3432,10 +3575,10 @@ defineExpose({
 	   surface taller. WHY · HOW · PAPER (rows 1-3) is untouched. */
 	grid-template-areas:
 		"readiness readiness readiness"
-		"summary tender paper"
 		"summary methods paper"
-		"summary methods tip"
-		"summary methods split"
+		"summary tender paper"
+		"summary tender tip"
+		"summary tender split"
 		"adjustments settlement meta";
 }
 
@@ -3448,13 +3591,13 @@ defineExpose({
  * nothing to scroll, nothing clipped.
  */
 .payment-sections--cobro-lean {
-	grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+	grid-template-rows: auto auto minmax(0, 1fr) auto auto;
 	grid-template-areas:
 		"readiness readiness readiness"
-		"summary tender paper"
 		"summary methods paper"
-		"summary methods tip"
-		"summary methods split";
+		"summary tender paper"
+		"summary tender tip"
+		"summary tender split";
 	flex: 1 1 auto;
 }
 
@@ -3597,8 +3740,84 @@ defineExpose({
 	}
 
 	.payment-sections--cobro-lean {
-		grid-template-rows: auto minmax(440px, auto) auto auto;
+		grid-template-rows: auto auto minmax(440px, auto) auto auto;
 		flex: 0 0 auto;
+	}
+}
+
+/*
+ * THE DENSE DESK TIER — and the undoing of the rule above on the one viewport
+ * that rule was hurting.
+ * ─────────────────────────────────────────────────────────────────────────
+ * Marco, 08-30, on an iPad-class window: «instead of one consistent 1 page
+ * app, no scrolls». At 1143×656 the 739px rule was giving the panel a 440px
+ * FLOOR against ~385px of grid box, which does not overflow by accident — it
+ * overflows by construction, and the honest scrollbar it then switched on was
+ * the scroll he was looking at.
+ *
+ * That floor was written when this column carried three stacked method cards
+ * and a 333px gift block. It no longer does: the chip row is 44px, the gift
+ * card is a field in column one, the shortcut chips are in the band's lane and
+ * the change figure is the band's. What is left fits, so the tier takes the
+ * floor off and gives the panel back its `1fr` — the pad absorbs the
+ * difference, which is the property this surface has always been judged on.
+ *
+ * Measured budget (grid box 385px at 1143×656, 470px at 1195×741):
+ *   readiness 42 · gap 6 · chips 44 · gap 6 · [tender rows]
+ *   → tender gets 287px at 656 and 372px at 741
+ *   → pad card 287 − «Al cerrar» 18 − gap 6 = 263, less 16 of padding = 247
+ *   → field 40 + gap 6 → keypad 201 → four rows of ~49px at 656, ~70px at 741.
+ * Every one of those is above the 44px touch minimum §5 asks for.
+ *
+ * The same query the rest of the register switches on; `denseDeskTier.spec.ts`
+ * holds this file in lockstep with it. Declared AFTER the 739px block because
+ * the two tie on specificity and this one has to win.
+ */
+@media (min-width: 1100px) and (max-height: 820px) {
+	/* One page. The panel fits its box, so it is clipped by nothing and
+	   scrolled by nothing — `--flow` (the tail unfolded) is still the one
+	   state that scrolls, and it is the state the cashier asked for.
+	   12 → 8 on the surround: eight points off the top and eight off the
+	   bottom is sixteen points of key, which on a 656px window is the
+	   difference between a 44px key and a 48px one. */
+	.payment-scroll--cobro {
+		overflow: hidden;
+		padding: var(--pos-space-2);
+	}
+
+	.payment-sections--cobro-lean {
+		grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+		flex: 1 1 auto;
+	}
+
+	.payment-sections--cobro {
+		gap: var(--pos-space-1);
+	}
+
+	/* 14 → 8: the section paddings are the cheapest points on the surface and
+	   this column spends them on key height. */
+	.payment-sections--cobro .payment-section {
+		gap: var(--pos-space-2);
+	}
+
+	.payment-sections--cobro .payment-section--adjustments,
+	.payment-sections--cobro .payment-section--settlement,
+	.payment-sections--cobro .payment-section--meta {
+		padding: 8px;
+		gap: 8px;
+		border-radius: var(--pos-radius-sm);
+	}
+
+	/* The buttons keep their 44px: §5's touch minimum is not a density knob,
+	   and this tier exists because the register is on a TABLET. What shrinks
+	   is chrome — padding, radii, gaps — never a target. */
+	.payment-sections--cobro .payment-disclosure {
+		font-size: 0.82rem;
+		padding: 0 10px;
+	}
+
+	.payment-sections--cobro .payment-readiness {
+		padding-bottom: var(--pos-space-1);
 	}
 }
 

@@ -99,6 +99,18 @@ const props = withDefaults(
 const emit = defineEmits<{
 	(_event: "update:entry", _entry: string): void;
 	(_event: "split"): void;
+	/**
+	 * The RAW key, before `applyKeypadKey` composes it into an amount.
+	 *
+	 * Additive, and every existing listener can keep ignoring it. It exists
+	 * because the desktop Cobro has a SECOND field the same pad has to serve —
+	 * the gift-card code in column one — and a code is not a decimal: composing
+	 * `1` then `2` into `0.12` is right for money and wrong for `12`. So the pad
+	 * publishes what was pressed and the screen above decides whose buffer it
+	 * belongs to. The pad still emits `update:entry` as it always did; a screen
+	 * that has redirected the keys simply does not apply it.
+	 */
+	(_event: "key", _key: KeypadKey): void;
 }>();
 
 // Bare `__` is a Frappe desk global; absent under vitest and in a bare mount.
@@ -128,6 +140,7 @@ const ariaLabel = (button: KeypadButton): string | undefined =>
 	button.key === "." ? __("Decimal point") : undefined;
 
 const press = (key: KeypadKey): void => {
+	emit("key", key);
 	if (key === "split") {
 		// Guarded by `:disabled` as well; a disabled button cannot emit, and
 		// the second check is here because the screen's rule — not this

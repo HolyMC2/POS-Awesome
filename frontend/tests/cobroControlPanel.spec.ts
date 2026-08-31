@@ -265,31 +265,48 @@ describe("a method is one line", () => {
 		expect(source()).not.toContain("<h4");
 	});
 
-	it("packs the list into columns only when the SCREEN is short", () => {
-		// Measured on the real box model with headless chromium (the numbers
-		// are in the component's own comment): at 1280×800 the surface has
-		// 584px and three tenders stacked leave the numpad 33px keys. Packed
-		// two-across they leave 45px, above the touch minimum. On a 1023px
-		// screen — the owner's own — nothing packs and every name is whole.
-		//
+	it("is ONE ROW of chips, and tightens only when the SCREEN is short", () => {
+		// 2026-08-30. The stacked list was three 44px lines inside a card with
+		// a heading — ~190px of the one column that also holds the numpad, and
+		// on Marco's iPad (1195×741) the gift block under it ran off the bottom
+		// of the surface. `Cobro.dc.html` draws `Forma de pago` as a ROW; this
+		// is that row.
+		const list = rulesOf(methods).find((rule) => rule.selector === ".cobro-methods__list")?.body ?? "";
+		expect(list).toMatch(/display:\s*flex/);
+		expect(list).toMatch(/flex-wrap:\s*wrap/);
+		expect(list, "a stacked grid is the card list again").not.toMatch(/grid-template-columns/);
+
 		// A HEIGHT query, and the assertion is that it is a height query: a
 		// width query here would abbreviate `Transferencia` on a wide screen
-		// that had all the room in the world.
+		// that had all the room in the world. What the short-screen rule
+		// tightens changed with the row; that it is a height rule did not.
 		const style = stylesOf(methods);
 		const media = /@media \(max-height: (\d+)px\)\s*\{([\s\S]*?)\n\}/.exec(style);
 		expect(media, "no short-screen rule").not.toBeNull();
 		expect(Number(media![1])).toBeLessThan(900);
-		expect(media![2]).toMatch(/grid-template-columns:\s*repeat\(auto-fit/);
-		expect(style).not.toMatch(/@media \(max-width[^)]*\)\s*\{[\s\S]*?auto-fit/);
-		// Default — a tall screen — is one row per method.
-		const list = rulesOf(methods).find((rule) => rule.selector === ".cobro-methods__list")?.body ?? "";
-		expect(list).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/);
+		expect(media![2]).toMatch(/\.cobro-methods__(list|pick)/);
+		expect(style).not.toMatch(/@media \(max-width[^)]*\)\s*\{[\s\S]*?\.cobro-methods/);
 	});
 
-	it("keeps the focus target the surface opens on", () => {
-		// `focusFirstPaymentTarget` looks for exactly this attribute inside the
-		// payment root; losing it opens Cobro with nothing focused.
-		expect(source()).toContain('data-pos-keyboard-target="payment-amount"');
+	it("opens Cobro on a BUTTON, so the tablet keyboard stays down", () => {
+		// Owner, 2026-08-30: «it opened the keyboard, which breaks the
+		// numberpad we have on the center for touch screens».
+		// `focusFirstPaymentTarget` focuses the first `payment-amount` OR
+		// `payment-action` inside the payment root when the surface opens —
+		// with an amount `<input>` on every method row that was a text field,
+		// and iPadOS raised its keyboard over the pad the register had just
+		// drawn. A chip is a `payment-action`: focusing it moves the ring and
+		// nothing else, and the amount is keyed on the pad.
+		expect(source()).toContain('data-pos-keyboard-target="payment-action"');
+		expect(source(), "an amount input here is the keyboard defect").not.toContain(
+			'data-pos-keyboard-target="payment-amount"',
+		);
+		// Comments stripped: this file EXPLAINS the input it no longer draws,
+		// and the explanation is the reason the rule survives the next round.
+		const markup = source()
+			.replace(/<!--[\s\S]*?-->/g, "")
+			.replace(/\/\*[\s\S]*?\*\//g, "");
+		expect(markup, "no text field on the chip row at all").not.toMatch(/<input/);
 		expect(read(PAYMENTS)).toContain(
 			"\"[data-pos-keyboard-target='payment-amount'], [data-pos-keyboard-target='payment-action']\"",
 		);
@@ -339,10 +356,13 @@ describe("the panel is one grid, uniform across its columns", () => {
 		for (const selector of [".payment-sections--cobro", ".payment-sections--cobro-lean"]) {
 			const areas = areasOf(selector);
 			expect(areas[0], selector).toBe("readiness readiness readiness");
-			expect(areas[1], selector).toBe("summary tender paper");
-			// Column two is two stacked cards — the pad, then the method rows it
-			// feeds — while the ticket and the outcome span both.
-			expect(areas[2], selector).toBe("summary methods paper");
+			// Column two is two stacked cards — the tender CHIPS, then the pad
+			// they aim — while the ticket and the outcome span both. That order
+			// flipped on 2026-08-30: `Cobro.dc.html` puts `Forma de pago` above
+			// `Recibido en efectivo`, because a cashier picks the tender and
+			// then counts it, and the surface read it backwards.
+			expect(areas[1], selector).toBe("summary methods paper");
+			expect(areas[2], selector).toBe("summary tender paper");
 		}
 	});
 

@@ -39,7 +39,62 @@
 			read model, and `ChangeToHand` already handles an unknown drawer by
 			suggesting from the currency's faces alone.
 		-->
-		<ChangeToHand :totals="totals" :format-currency="formatChange" hide-total />
+		<!--
+			SAY THE CHANGE ONCE (owner, 08-30).
+
+			The band's figure in `tender` state IS «Cambio a entregar $0.00» —
+			`resolveBandState({ kind: "tender" })`, one row below this card, at
+			36px on the dense tier. This card was printing the same words and the
+			same figure at 46px, 135px of a column that then had dead height
+			under «Más opciones». So under a band the card keeps only what the
+			band cannot say: the NOTES the drawer has to hand back, which is the
+			whole reason a change breakdown exists at a counter.
+
+			And when there are no notes — a settled sale, or a change the
+			currency's faces cannot make — the card is not drawn at all. An
+			empty labelled box is the dead space this round was sent to remove.
+		-->
+		<ChangeToHand
+			v-if="!bandOwnsFigure || hasNotes"
+			:totals="totals"
+			:format-currency="formatChange"
+			hide-total
+			:hide-amount="bandOwnsFigure"
+			:hide-figures="bandOwnsFigure"
+		/>
+
+		<!--
+			`Recibido` and `Falta por cubrir` INTO THE BAND'S BREAKDOWN LANE.
+
+			Owner, 08-30: «we have extra space on the action bar … all the center
+			is dead space». `ActionBand` publishes two lanes and on Cobro both
+			were empty — `InvoiceSummary` stands down there on purpose, because
+			the SALE's subtotal is not this screen's fact. These two ARE this
+			screen's facts, they are the pair the artboard prints under the
+			change figure, and the lane is where the band draws a breakdown.
+
+			Drawn ONLY when there is a lane. With no band — a dialog, a phone, a
+			bare mount — the pair is still `ChangeToHand`'s own, above, exactly
+			as before; a copy here would be the same two figures twice on one
+			surface, which is the defect this screen was rebuilt to remove.
+		-->
+		<Teleport v-if="bandOwnsFigure" defer :to="bandBreakdownTarget || 'body'">
+			<span class="cobro-band-divider" aria-hidden="true"></span>
+			<dl class="cobro-paper__figures" data-testid="cobro-band-breakdown">
+				<div class="cobro-paper__figure">
+					<dt>{{ __("Received") }}</dt>
+					<dd class="reg-mono" data-money-role="received">
+						{{ formatChange(totals.received) }}
+					</dd>
+				</div>
+				<div class="cobro-paper__figure">
+					<dt>{{ __("Still owed") }}</dt>
+					<dd class="reg-mono" data-money-role="shortfall">
+						{{ formatChange(totals.shortfall) }}
+					</dd>
+				</div>
+			</dl>
+		</Teleport>
 
 		<!-- Below the outcome, not above it: the customer's RFC is a fact about
 		     the paperwork, and the cashier's eye belongs on the change first. -->
@@ -74,6 +129,17 @@ const props = defineProps({
 	formatCurrency: { type: Function, required: true },
 	/** `customer_info.tax_id`. A customer with none renders no card. */
 	taxId: { type: String, default: "" },
+	/** `[data-band-lane='breakdown']`, supplied by `Payments.vue`. */
+	bandBreakdownTarget: { type: String, default: "" },
+	/**
+	 * Is there a band below carrying this screen's ONE number?
+	 *
+	 * False by default, so every mount that has no band — the phone, a dialog,
+	 * this component's own spec — keeps the card whole. True is the hosted
+	 * Cobro surface, where the band says the change and this column says what
+	 * the band cannot.
+	 */
+	bandOwnsFigure: { type: Boolean, default: false },
 });
 
 const __ = (value) => (typeof window !== "undefined" && window.__ ? window.__(value) : value);
@@ -93,6 +159,11 @@ const totals = computed(() =>
 
 // ChangeToHand's contract is `(value) => string`; ours takes a currency too.
 const formatChange = (value) => props.formatCurrency(value, props.currency);
+
+/** Is there a breakdown worth a card once the band has taken the figure? */
+const hasNotes = computed(
+	() => totals.value.change.notes.length > 0 || totals.value.change.unbreakableMinor > 0,
+);
 
 /**
  * An RFC identifies a taxpayer and the artboard masks it (`RIBA•••••••M4`).
@@ -140,5 +211,71 @@ const maskedTaxId = computed(() => {
 	margin: var(--reg-space-2xs, 2px) 0 0;
 	font-size: 11.5px;
 	color: var(--reg-text-muted, #667085);
+}
+
+/* The band's own divider, drawn by the lane's filler the way `InvoiceSummary`
+   draws one for the sale. Written here because a teleported node carries THIS
+   component's scope id, so a rule in `ActionBand.vue` would never match it. */
+.cobro-band-divider {
+	width: 1px;
+	height: var(--reg-band-divider-height, 88px);
+	flex: none;
+	background: var(--reg-tone-neutral-divider, #eceff3);
+}
+
+/* A COLUMN of two label/value pairs, and `nowrap` for the same reason the
+   sale's breakdown carries it: the lane gives way before the figure and the
+   primary do, and a pair that wrapped would push the band's own height. */
+.cobro-paper__figures {
+	display: flex;
+	flex-direction: column;
+	flex-wrap: nowrap;
+	justify-content: center;
+	gap: var(--reg-space-2xs, 2px);
+	margin: 0;
+	font-size: 12.5px;
+	color: var(--reg-text-secondary, #56606e);
+}
+
+.cobro-paper__figure {
+	display: flex;
+	align-items: baseline;
+	gap: var(--reg-space-sm, 6px);
+	min-width: 0;
+	white-space: nowrap;
+}
+
+.cobro-paper__figure dt {
+	font-weight: 400;
+}
+
+.cobro-paper__figure dd {
+	margin: 0 0 0 auto;
+	font-weight: 700;
+	color: var(--reg-text-primary, #212121);
+}
+
+/*
+ * THE DENSE DESK TIER — Marco's iPad-class window (1195×741, 1143×656).
+ * The same query the rest of the register switches on; `denseDeskTier.spec.ts`
+ * holds this file in lockstep with it.
+ */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.cobro-paper {
+		gap: var(--reg-space-sm, 8px);
+	}
+
+	.cobro-paper__card {
+		padding: var(--reg-space-sm, 8px) var(--reg-space-md, 10px);
+		border-radius: var(--reg-radius-sm, 10px);
+	}
+
+	.cobro-paper__rfc {
+		font-size: 14px;
+	}
+
+	.cobro-paper__figures {
+		font-size: 12px;
+	}
 }
 </style>

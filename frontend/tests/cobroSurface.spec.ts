@@ -176,9 +176,15 @@ describe("three columns at 1440", () => {
 		expect(rows, "the folded cobro grid states no explicit rows").not.toBeNull();
 		const tracks = (rows as RegExpExecArray)[1].trim().split(/\s+(?![^(]*\))/);
 
-		// readiness · the three columns · the method rows · the tip strip ·
+		// readiness · the tender CHIPS · the three columns · the tip strip ·
 		// the split panel (its row collapses on sales that never show it).
-		expect(tracks).toEqual(["auto", "minmax(0, 1fr)", "auto", "auto", "auto"]);
+		//
+		// The chip row moved ABOVE the pad on 2026-08-30 (`Cobro.dc.html` puts
+		// `Forma de pago` over the amount — a tender is chosen before it is
+		// counted), so the elastic track is the THIRD now rather than the
+		// second. It is still exactly one, and it is still the one holding the
+		// pad, which is the property this case exists for.
+		expect(tracks).toEqual(["auto", "auto", "minmax(0, 1fr)", "auto", "auto"]);
 	});
 
 	it("keeps a floor under the panel when the tail unfolds", () => {
@@ -246,7 +252,13 @@ describe("three columns at 1440", () => {
 			.map((row) => row.replace(/"/g, "").trim())
 			.filter(Boolean);
 		expect(rows[0]).toBe("readiness readiness readiness");
-		expect(rows[1]).toBe("summary tender paper");
+		// WHY · HOW · PAPER, and the HOW column opens on the tender chips —
+		// `Cobro.dc.html`'s `Forma de pago` row sits above `Recibido en
+		// efectivo`, because a cashier picks the tender and then counts it.
+		// Column two used to read pad-then-methods, which is that order
+		// backwards (owner, 08-30).
+		expect(rows[1]).toBe("summary methods paper");
+		expect(rows[2]).toBe("summary tender paper");
 	});
 });
 
@@ -556,10 +568,16 @@ describe("the pad writes through the register's own handlers", () => {
 		expect(methods.find('[data-testid="cobro-tender-Efectivo"]').attributes("data-armed")).toBe(
 			"false",
 		);
-		// The amount is the ROW's, in an input the cashier can correct.
-		expect(
-			(methods.find('[data-testid="cobro-amount-Tarjeta"]').element as HTMLInputElement).value,
-		).toBe(money(1129));
+		// The amount RIDES THE CHIP. It was an `<input>` per method until
+		// 2026-08-30: focusing one on a tablet summoned the OS keyboard over
+		// the numpad this surface exists to give the cashier (owner: «it opened
+		// the keyboard, which breaks the numberpad we have on the center»), and
+		// `focusFirstPaymentTarget` focused one every time Cobro opened. The
+		// amount is now a statement on the chip and the pad is where it is
+		// keyed.
+		expect(methods.find('[data-testid="cobro-amount-Tarjeta"]').text()).toBe(money(1129));
+		// A tender nothing sits on states nothing — a zero is not a fact.
+		expect(methods.find('[data-testid="cobro-amount-Efectivo"]').exists()).toBe(false);
 	});
 
 	it("aims the pad at the same row the method list lights", async () => {

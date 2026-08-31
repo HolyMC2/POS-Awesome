@@ -59,11 +59,33 @@
 			:action-label="applyLabel"
 			:show-display="false"
 			:split-enabled="canApply"
-			@update:entry="entry = $event"
+			@update:entry="onEntry"
+			@key="onRawKey"
 			@split="onApply"
 		/>
 
-		<div class="cobro-pad__presets" data-testid="cobro-presets">
+		<!--
+			THE PRESETS MOVE INTO THE BAND when there is a band to move them
+			into.
+			────────────────────────────────────────────────────────────────────
+			Owner, 08-30: «we have extra space on the action bar, left is the
+			total, right cobrar e imprimir, and all the center is dead space».
+			The band publishes two lanes (`ActionBand.vue`) and on Cobro both
+			were empty — `InvoiceSummary` stands down there on purpose, because
+			the SALE's breakdown is not this screen's. So this column's own
+			shortcut row fills the context lane instead: `Exacto` and the bill
+			presets are OFFERS, not facts, which is exactly what that lane is
+			for, and the two rows they were taking here (Exacto · 200 · 500 ·
+			1,000 · 1,400 · 1,500 · 2,000 wrapped on Marco's window) go back to
+			the keys.
+
+			`:disabled` when there is no lane — a dialog, a phone, a bare mount
+			— renders the row exactly where it is written, which is where it has
+			always been.
+		-->
+		<Teleport defer :to="bandContextTarget || 'body'" :disabled="!bandLaneActive">
+			<span v-if="bandLaneActive" class="cobro-band-divider" aria-hidden="true"></span>
+			<div class="cobro-pad__presets" data-testid="cobro-presets">
 			<button
 				type="button"
 				class="cobro-pad__preset cobro-pad__preset--exact"
@@ -103,7 +125,8 @@
 				<kbd class="cobro-pad__kbd">{{ submitChord }}</kbd>
 				{{ chargesHint }}
 			</span>
-		</div>
+			</div>
+		</Teleport>
 	</section>
 </template>
 
@@ -148,9 +171,25 @@ const props = defineProps({
 	formatCurrency: { type: Function, required: true },
 	/** `usePaymentMethods.getVisibleDenominations` — the preset source. */
 	getVisibleDenominations: { type: Function, required: true },
+	/** `[data-band-lane='context']`, supplied by `Payments.vue`. */
+	bandContextTarget: { type: String, default: "" },
+	/** Is there a band below with a lane to fill? Same predicate the sale's
+	 *  summary uses (`bandOwnsLane`), decided one level up where the window
+	 *  width lives. */
+	bandLaneActive: { type: Boolean, default: false },
+	/**
+	 * Another field owns the keys right now — column one's gift-card capture.
+	 *
+	 * The pad keeps drawing and keeps being tapped; what changes is WHOSE
+	 * buffer a press lands in. It is a prop rather than an internal mode
+	 * because the field that took the keys is not this component's, and two
+	 * components deciding independently who has focus is how a digit ends up
+	 * in neither.
+	 */
+	keysRedirected: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["update-amount", "set-full-amount", "set-denomination"]);
+const emit = defineEmits(["update-amount", "set-full-amount", "set-denomination", "key"]);
 
 const __ = (value) => (typeof window !== "undefined" && window.__ ? window.__(value) : value);
 
@@ -178,9 +217,29 @@ const keyedMinor = computed(() => entryMinor(entry.value, minorPerMajor.value));
 const keyedLabel = computed(() =>
 	props.formatCurrency(minorToMajor(keyedMinor.value, minorPerMajor.value), props.currency),
 );
-const canApply = computed(() => Boolean(targetPayment.value) && keyedMinor.value > 0);
+const canApply = computed(
+	() => props.keysRedirected || (Boolean(targetPayment.value) && keyedMinor.value > 0),
+);
+
+/**
+ * Every press, raw, before `applyKeypadKey` composes it into an amount.
+ * Published upward only while the keys are redirected — a code is not a
+ * decimal, so the screen above needs the KEY, not this pad's buffer.
+ */
+const onRawKey = (key) => {
+	if (props.keysRedirected) emit("key", key);
+};
+
+/** The pad's own buffer stands still while another field has the keys. */
+const onEntry = (next) => {
+	if (props.keysRedirected) return;
+	entry.value = next;
+};
 
 const onApply = () => {
+	// Redirected, the action key belongs to the field that took the keys; the
+	// raw `split` press has already gone up through `onRawKey`.
+	if (props.keysRedirected) return;
 	if (!canApply.value) return;
 	// `setFormatedCurrency` takes either a change event or a bare value; a
 	// number goes straight through `flt` at the register's own precision, so
@@ -214,6 +273,11 @@ const isTypingTarget = (el) => {
 const onPhysicalKey = (event) => {
 	if (event.ctrlKey || event.metaKey || event.altKey) return;
 	if (isTypingTarget(event.target)) return;
+	// The gift-card capture has the keys. It is a real `<input>`, so a focused
+	// one is already excluded by `isTypingTarget` and a scanner's wedge types
+	// straight into it; this guard is for the moment after a tap on the capture
+	// where focus has not landed there yet.
+	if (props.keysRedirected) return;
 	const key = event.key;
 	if (key.length === 1 && key >= "0" && key <= "9") {
 		entry.value = applyKeypadKey(entry.value, key, minorPerMajor.value);
@@ -374,5 +438,55 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onPhysicalKey));
 
 .cobro-pad__preset--exact {
 	font-weight: 700;
+}
+
+/* The band's own divider, drawn by the lane's filler the way `InvoiceSummary`
+   draws one for the sale. Written here because a teleported node carries THIS
+   component's scope id, so a rule in `ActionBand.vue` would never match it. */
+.cobro-band-divider {
+	width: 1px;
+	height: var(--reg-band-divider-height, 88px);
+	flex: none;
+	background: var(--reg-tone-neutral-divider, #eceff3);
+}
+
+/* In the band the shortcuts are a single non-wrapping line: the lane gives way
+   before the figure and the primary do (`.action-band__breakdown` is
+   `flex: 0 1 auto; overflow: hidden`), and a row that wrapped there would push
+   the band's own height. */
+.action-band .cobro-pad__presets {
+	flex-wrap: nowrap;
+	overflow: hidden;
+}
+
+/*
+ * THE DENSE DESK TIER — Marco's iPad-class window (1195×741, 1143×656).
+ * The same query the rest of the register switches on; `denseDeskTier.spec.ts`
+ * holds this file in lockstep with it. Every point trimmed here is a point of
+ * key height, which is the whole argument of this column.
+ */
+@media (min-width: 1100px) and (max-height: 820px) {
+	.cobro-pad {
+		gap: var(--reg-space-sm, 6px);
+		padding: var(--reg-space-sm, 8px);
+		border-radius: var(--reg-radius-sm, 10px);
+	}
+
+	.cobro-pad__field {
+		min-height: 40px;
+		padding: 0 var(--reg-space-sm, 8px);
+	}
+
+	.cobro-pad__amount {
+		font-size: 20px;
+	}
+
+	:deep(.cobro-pad__pad) {
+		gap: var(--reg-space-sm, 6px);
+	}
+
+	:deep(.cobro-pad__pad .pay-keypad__grid) {
+		gap: 5px;
+	}
 }
 </style>
