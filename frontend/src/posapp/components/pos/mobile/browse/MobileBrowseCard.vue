@@ -158,6 +158,27 @@ const onActivate = () => emit("add", props.card);
 	cursor: pointer;
 	font: inherit;
 	color: var(--reg-text-primary, #212121);
+	/* Press feedback (native-feel round 2). This card IS the phone's add
+	 * button — the grid is what a cashier taps all day, and it is the one
+	 * place where a tap that does nothing visible is read as a tap that did
+	 * not register. The haptic tick fires from the same event, in
+	 * `Pos.vue`'s `onMovilAdd`. */
+	transition: transform var(--motion-fast) var(--ease-out);
+	-webkit-tap-highlight-color: transparent;
+}
+
+.mbrowse-card:active {
+	transform: scale(var(--press-scale, 0.98));
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.mbrowse-card {
+		transition: none;
+	}
+
+	.mbrowse-card:active {
+		transform: none;
+	}
 }
 
 /*

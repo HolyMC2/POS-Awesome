@@ -247,6 +247,22 @@ defineExpose({ ACTION_CHIPS });
 	color: var(--pos-error, #c0392f) !important;
 }
 
+/* Press feedback (native-feel round 2). BOTH the compound selector and the
+   `!important` are load-bearing, and neither is cargo: theme.css declares
+   `.posapp .v-btn { transition: background-color/color/border-color .02s
+   linear !important }`, which replaces the whole shorthand. A plain rule
+   here is silently dropped; an equal-specificity `!important` one would come
+   down to which stylesheet the bundler emitted last. `.pos-action-strip`
+   ahead of the chip settles it on specificity instead, which is also why
+   every other rule in this file already shouts. */
+.pos-action-strip .pos-action-strip__chip {
+	transition: transform var(--motion-fast) var(--ease-out) !important;
+}
+
+.pos-action-strip .pos-action-strip__chip:active {
+	transform: scale(var(--press-scale, 0.98));
+}
+
 .pos-action-strip__verb {
 	white-space: nowrap;
 }

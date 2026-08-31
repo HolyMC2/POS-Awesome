@@ -1,3 +1,20 @@
+/*
+ * The register's ONE skeleton shimmer. `ui/Skeleton.vue` and the phone's
+ * browse ghosts both wear it, so a loading state looks the same wherever the
+ * cashier meets one.
+ *
+ * The sweep is DERIVED from `--motion-slow` rather than being a fourth
+ * hand-picked duration (native-feel round 2): four times the slowest UI move
+ * is 1.2s, which is the pace a shimmer has to keep to read as "working" and
+ * not as "flashing". Deriving it also means the reduced-motion layer, which
+ * zeroes the token, reaches this file for free — and the explicit `none`
+ * below still stands, because a 0s infinite animation is not a promise worth
+ * making to a compositor.
+ *
+ * `transform` only: a shimmer that animated `background-position` would
+ * repaint the whole placeholder every frame, once per skeleton, on the
+ * hardware §6 budgets for.
+ */
 .shimmer::after {
 	content: "";
 	position: absolute;
@@ -9,7 +26,7 @@
 		var(--sk-shine, rgba(255, 255, 255, 0.6)),
 		transparent
 	);
-	animation: shimmer 1.5s infinite;
+	animation: shimmer var(--motion-shimmer) infinite;
 }
 @keyframes shimmer {
 	100% {

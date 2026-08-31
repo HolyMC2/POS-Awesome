@@ -65,6 +65,51 @@
 	--reg-radius-lg: var(--pos-radius-lg, 18px);
 	--reg-touch-min: var(--pos-touch-target-min, 44px);
 
+	/* ---- motion (native-feel round 2) -----------------------------------
+	 * ONE set of durations and curves for the whole register. Before this
+	 * block every surface picked its own: the cajón eased at 180ms on
+	 * cubic-bezier(0.2, 0, 0, 1), the dock tab at 0.1s ease, the theme layer
+	 * at 0.02s linear — three vocabularies, so nothing on screen ever moved
+	 * at the same speed as anything else, which is most of what makes a web
+	 * page feel like a web page rather than an app.
+	 *
+	 * Three durations, and no fourth: `fast` is a press answering a finger,
+	 * `base` is a screen or a value changing, `slow` is a sheet travelling
+	 * the height of the phone. A component that wants a duration none of
+	 * these names covers is a component making a decision this file should
+	 * be making.
+	 *
+	 * `--motion-fast` also carries the shell's own budget:
+	 * compactPanelSwitchInstant.spec.ts holds every animation in Pos.vue
+	 * under 150ms, and tokenised durations are invisible to its scanner, so
+	 * motionTokens.spec.ts asserts the ceiling on the token instead.
+	 */
+	--motion-fast: 120ms;
+	--motion-base: 200ms;
+	--motion-slow: 300ms;
+
+	/* DERIVED, not a fourth opinion: the skeleton sweep is the only loop in
+	 * the register, and a loop has to be slower than any one-shot or it reads
+	 * as flashing. Four × slow is 1.2s, and it follows the token — including
+	 * to zero under reduced motion. `styles/shimmer.css` is its only reader. */
+	--motion-shimmer: calc(var(--motion-slow) * 4);
+
+	/* Deceleration: fast out of the gate, settling into place. This is the
+	 * curve of something that was thrown and stopped, which is what a panel
+	 * arriving is supposed to read as. Symmetric easing (`ease`, `linear`)
+	 * reads as a machine moving a part. */
+	--ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+	/* A gentle overshoot for the bottom sheets ONLY — the panel passes its
+	 * resting place by a hair and comes back, the way a real sheet with
+	 * momentum does. Kept off buttons and values on purpose: overshoot on a
+	 * total makes the digits look unstable. */
+	--ease-emphasized: cubic-bezier(0.34, 1.2, 0.64, 1);
+
+	/* The one press scale. A pressed control shrinks; it never lifts, tints
+	 * or shadows — those are all paint the compositor cannot do for free. */
+	--press-scale: 0.98;
+
 	/* ---- surfaces, text and borders ------------------------------------
 	 * All forwarded, none literal. A component that paints with a hex cannot
 	 * follow theme.css's dark palette, which is how the register's primary
@@ -259,6 +304,79 @@
 .reg-mono {
 	font-variant-numeric: tabular-nums;
 	font-feature-settings: "tnum" 1;
+}
+
+/* ---- reduced motion, once, for the whole register ----------------------
+ * The durations go to zero rather than every animation going to `none`:
+ * zeroing the token turns every transition and every keyframe in the app
+ * into an instant state change WITHOUT any component having to know the
+ * media query exists. A surface that also writes its own
+ * `prefers-reduced-motion` block (the cajón, the lot picker) is belt and
+ * braces, not a second system.
+ *
+ * Last in the file on purpose. A media query adds no specificity, so this
+ * wins over the definitions above only on source order — the same rule the
+ * dense-tier layers below rely on.
+ */
+@media (prefers-reduced-motion: reduce) {
+	.posapp,
+	:root {
+		--motion-fast: 0ms;
+		--motion-base: 0ms;
+		--motion-slow: 0ms;
+	}
+}
+
+/* ---- the value bump ----------------------------------------------------
+ * A total that changes without moving is a total the cashier has to notice
+ * by reading it. One short scale settles that: the figure grows 4% and
+ * comes back, on the same `base` duration a screen change takes.
+ *
+ * TWO identical keyframes, alternated by `useValueBump`, and that is the
+ * whole trick: a CSS animation restarts when its `animation-name` changes,
+ * NOT when the class carrying it is removed and re-added inside one Vue
+ * flush (the browser never repaints between two microtask flushes, so the
+ * classic off/on toggle silently plays once and then never again). Ping-
+ * ponging between two names is the only retrigger that needs neither a
+ * forced reflow nor a `requestAnimationFrame` — which also makes it
+ * assertable in jsdom.
+ *
+ * `will-change` is declared HERE, on the active class, and nowhere else:
+ * a permanent `will-change: transform` on a total keeps a compositor layer
+ * alive for a figure that moves twice a minute.
+ */
+.reg-bump-a,
+.reg-bump-b {
+	animation-duration: var(--motion-base);
+	animation-timing-function: var(--ease-out);
+	animation-fill-mode: none;
+	will-change: transform;
+}
+
+.reg-bump-a {
+	animation-name: reg-bump-a;
+}
+
+.reg-bump-b {
+	animation-name: reg-bump-b;
+}
+
+@keyframes reg-bump-a {
+	from {
+		transform: scale(1.04);
+	}
+	to {
+		transform: scale(1);
+	}
+}
+
+@keyframes reg-bump-b {
+	from {
+		transform: scale(1.04);
+	}
+	to {
+		transform: scale(1);
+	}
 }
 
 /* ---- dense desk tier (Marco, 08-30: «desk view on horizontal tablets») ---

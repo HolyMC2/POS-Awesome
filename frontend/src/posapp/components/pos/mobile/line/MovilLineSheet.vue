@@ -212,6 +212,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
+import { tick, warn } from "../../../../utils/haptics";
 import type { MovilLineEdit, MovilLineIntent } from "./movilLineEdit";
 
 const props = withDefaults(
@@ -266,12 +267,22 @@ watch(
 
 const close = () => emit("close");
 
+/**
+ * The haptic fires AFTER the gate, never before it: a disabled ± that buzzes
+ * tells the hand the tap landed when the quantity did not move. It is the
+ * same rule the toast layer follows — feedback describes what happened.
+ */
 const step = (delta: 1 | -1) => {
 	if (delta > 0 ? !props.line.canStepUp : !props.line.canStepDown) return;
+	tick();
 	emit("edit", { kind: "step", delta });
 };
 
-const remove = () => emit("edit", { kind: "remove" });
+/** The heavier pattern: a line leaving the ticket is not a step. */
+const remove = () => {
+	warn();
+	emit("edit", { kind: "remove" });
+};
 
 /**
  * A committed field sends the intent only when it carries a real, CHANGED
@@ -363,7 +374,50 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeydown));
 	padding: 10px 14px calc(18px + env(safe-area-inset-bottom));
 	border-radius: var(--reg-radius-lg, 18px) var(--reg-radius-lg, 18px) 0 0;
 	background: var(--reg-surface, #ffffff);
-	box-shadow: 0 -8px 28px var(--pos-shadow, rgba(15, 23, 42, 0.18));
+	/* Two shadows. The first is the sheet's lift. The SECOND is a hard,
+	 * blur-less copy of the panel painted 32px lower in the surface colour —
+	 * it sits below the viewport at rest and costs nothing, and it is what
+	 * `--ease-emphasized`'s overshoot lands on: the curve carries the panel
+	 * ~5% of its own height past its resting place, and without this the
+	 * bounce would flash a strip of scrim under a sheet that is supposed to
+	 * be sitting ON the bottom edge. A box-shadow rather than a pseudo-
+	 * element because the panel scrolls, and `overflow-y: auto` would clip
+	 * an `::after` while it never clips a shadow. */
+	box-shadow:
+		0 -8px 28px var(--pos-shadow, rgba(15, 23, 42, 0.18)),
+		0 32px 0 0 var(--reg-surface, #ffffff);
+}
+
+/* ---- enter / leave ------------------------------------------------------
+ * Driven by `<Transition name="movil-sheet">` in `MovilShell.vue`, which
+ * v-ifs this component: Vue stamps the classes on THIS root, so the rules
+ * live here, next to the geometry they move.
+ *
+ * The panel travels its own height on the emphasized curve; the scrim only
+ * fades, and faster, so the darkening reads as already-done by the time the
+ * sheet arrives. `transform` and `opacity` only — a sheet that animated
+ * `height` or `bottom` would reflow the whole register per frame.
+ */
+.movil-sheet-enter-active .movil-line-sheet__panel,
+.movil-sheet-leave-active .movil-line-sheet__panel {
+	transition: transform var(--motion-slow) var(--ease-emphasized);
+	will-change: transform;
+}
+
+.movil-sheet-enter-active .movil-line-sheet__scrim,
+.movil-sheet-leave-active .movil-line-sheet__scrim {
+	transition: opacity var(--motion-base) var(--ease-out);
+	will-change: opacity;
+}
+
+.movil-sheet-enter-from .movil-line-sheet__panel,
+.movil-sheet-leave-to .movil-line-sheet__panel {
+	transform: translateY(100%);
+}
+
+.movil-sheet-enter-from .movil-line-sheet__scrim,
+.movil-sheet-leave-to .movil-line-sheet__scrim {
+	opacity: 0;
 }
 
 .movil-line-sheet__panel:focus {
@@ -499,10 +553,15 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeydown));
 	background: var(--reg-surface, #ffffff);
 	color: var(--reg-text-primary, #212121);
 	cursor: pointer;
+	transition: transform var(--motion-fast) var(--ease-out);
 }
 
-.movil-line-sheet__step:active {
+/* The ± is the control this sheet exists for, and it is pressed in runs.
+ * The scale is what makes the fourth tap feel like it landed when the number
+ * has stopped surprising anyone. */
+.movil-line-sheet__step:active:not(:disabled) {
 	background: var(--reg-surface-muted, #f2f4f7);
+	transform: scale(var(--press-scale, 0.98));
 }
 
 .movil-line-sheet__step:disabled {
@@ -580,5 +639,30 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeydown));
 
 .movil-line-sheet__more:active {
 	background: var(--reg-surface-muted, #f2f4f7);
+}
+
+/* The tokens are already 0ms under this query; the block states the intent
+ * where the animation is written, and covers a surface rendered before
+ * register-tokens.css has been wired into the entry. */
+@media (prefers-reduced-motion: reduce) {
+	/* The same compound selectors, or they lose on specificity to the
+	 * `.movil-sheet-*-active` rules above — a media query buys no weight. */
+	.movil-sheet-enter-active .movil-line-sheet__panel,
+	.movil-sheet-leave-active .movil-line-sheet__panel,
+	.movil-sheet-enter-active .movil-line-sheet__scrim,
+	.movil-sheet-leave-active .movil-line-sheet__scrim,
+	.movil-line-sheet__step {
+		transition: none;
+	}
+
+	.movil-sheet-enter-from .movil-line-sheet__panel,
+	.movil-sheet-leave-to .movil-line-sheet__panel {
+		transform: none;
+	}
+
+	.movil-sheet-enter-from .movil-line-sheet__scrim,
+	.movil-sheet-leave-to .movil-line-sheet__scrim {
+		opacity: 1;
+	}
 }
 </style>

@@ -200,6 +200,11 @@ const press = (key: KeypadKey): void => {
 	cursor: pointer;
 	-webkit-tap-highlight-color: transparent;
 	touch-action: manipulation;
+	/* The grey tap flash is off (above) and the wedge keeps the keyboard
+	   away, so the SCALE is the only thing telling a thumb that a key
+	   registered. On a keypad that gets four taps in a row it is the whole
+	   difference between "typing" and "poking glass". */
+	transition: transform var(--motion-fast) var(--ease-out);
 }
 
 /* Twelve digits and two worded keys is a lot of finger travel on a small
@@ -242,7 +247,18 @@ const press = (key: KeypadKey): void => {
 	grid-column: span 2;
 }
 
-.pay-keypad__key:active {
+.pay-keypad__key:active:not(:disabled) {
 	background: var(--reg-surface-muted, #f2f4f7);
+	transform: scale(var(--press-scale, 0.98));
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pay-keypad__key {
+		transition: none;
+	}
+
+	.pay-keypad__key:active:not(:disabled) {
+		transform: none;
+	}
 }
 </style>

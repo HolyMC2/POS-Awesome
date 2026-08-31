@@ -1,7 +1,12 @@
 <template>
 	<div class="items-card-container">
-		<div v-if="isLoading" class="items-card-grid">
-			<Skeleton v-for="n in 8" :key="n" class="mb-4" height="120" />
+		<!-- The skeleton's card is the SCROLLER's card: `cardRowHeight` is what
+		     `getCardRowHeight` hands the virtual list, so the placeholder and
+		     the thing that replaces it are the same box. 120 was a guess that
+		     survived the dense tier's 132px slot and every wide-card layout
+		     since, which is a layout jump on every catalogue load. -->
+		<div v-if="isLoading" class="items-card-grid" role="status" aria-busy="true">
+			<Skeleton v-for="n in 8" :key="n" :height="skeletonCardHeight" />
 		</div>
 		<div
 			v-else-if="displayedItems.length === 0"
@@ -125,6 +130,13 @@ const emit = defineEmits(["select-item", "dragstart", "dragend", "virtual-range-
  * card ends up in a roomy slot with 100px of dead space under it.
  */
 const isCompact = computed(() => isCompactCard(props.cardColumnWidth));
+
+/**
+ * The placeholder's height, taken from the SAME number the scroller sizes a
+ * slot with. `cardRowHeight` is 0 until the layout composable has measured —
+ * 120 is the historical value and stands in only for that first frame.
+ */
+const skeletonCardHeight = computed(() => Number(props.cardRowHeight) || 120);
 
 const showClearButton = computed(() => {
 	return Boolean(props.searchInput) || (props.itemGroup && props.itemGroup !== "ALL");

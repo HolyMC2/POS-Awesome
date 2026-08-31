@@ -107,6 +107,35 @@
 					@add="onAdd"
 				/>
 			</div>
+			<!--
+				A SKELETON, not a spinner, and not the empty state.
+
+				The catalogue's first load used to render «No items found» on
+				this screen — the same defect `itemsSelectorTableLoading.spec.ts`
+				records for the desk table: an empty list and a list that has not
+				arrived look identical from here, so the screen has to be TOLD
+				(`ItemsSelector`'s `update:catalogLoading`, through the shell).
+
+				The ghosts sit in the REAL `.mbrowse__grid`, so the columns the
+				skeleton promises are the columns the cards then take — the same
+				discipline `.items-card-grid` follows on the desk. The status
+				text is for screen readers only; a sighted cashier reads the
+				shape.
+			-->
+			<div
+				v-else-if="loading"
+				class="mbrowse__grid mbrowse__grid--ghost"
+				data-testid="browse-skeleton"
+				role="status"
+				aria-busy="true"
+				:aria-label="__('Loading items...')"
+			>
+				<span v-for="n in 8" :key="n" class="mbrowse-ghost" aria-hidden="true">
+					<span class="mbrowse-ghost__well shimmer"></span>
+					<span class="mbrowse-ghost__line shimmer"></span>
+					<span class="mbrowse-ghost__line mbrowse-ghost__line--short shimmer"></span>
+				</span>
+			</div>
 			<!-- The register's own empty-state wording, not a second phrasing of it. -->
 			<p v-else class="mbrowse__empty" data-testid="browse-empty">
 				{{ __("No items found") }}
@@ -175,6 +204,10 @@ import {
 	resolveCompatibilityScope,
 } from "./browseCompatibility";
 import MobileBrowseCard from "./MobileBrowseCard.vue";
+// The register's ONE shimmer, shared with `ui/Skeleton.vue` rather than
+// re-authored here: a second sweep at a second speed is exactly the drift the
+// motion tokens exist to stop.
+import "../../../../styles/shimmer.css";
 
 defineOptions({ name: "MobileBrowseScreen" });
 
@@ -182,6 +215,13 @@ const props = withDefaults(
 	defineProps<{
 		/** The catalogue rows currently listed — the register's search result. */
 		items?: readonly BrowseCatalogItem[];
+		/**
+		 * `ItemsSelector`'s own first-load flag (`update:catalogLoading`).
+		 * Load-bearing and NOT inferable here: an empty `items` is equally a
+		 * catalogue still arriving and a search that matched nothing, and the
+		 * screen used to answer «No items found» to both.
+		 */
+		loading?: boolean;
 		/** The register's combos, from `useComboOffers`. */
 		combos?: readonly ComboOffer[];
 		/** The ticket, as lines or codes. Identifies the device to match against. */
@@ -203,6 +243,7 @@ const props = withDefaults(
 	}>(),
 	{
 		items: () => [],
+		loading: false,
 		combos: () => [],
 		cart: () => [],
 		deviceItemCode: null,
@@ -488,6 +529,44 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
 	gap: 10px;
 	align-content: start;
+}
+
+/* ---- the loading ghosts ------------------------------------------------
+ * Geometry copied from `.mbrowse-card`, not approximated: 1px border, 12px
+ * radius, 7px padding, a 78px well and two text lines. A skeleton whose
+ * boxes are a different size from the content it precedes is a layout jump
+ * with extra steps.
+ */
+.mbrowse-ghost {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border: 1px solid var(--reg-divider, #eceff3);
+	border-radius: 12px;
+	background: var(--reg-surface, #ffffff);
+	padding: 7px;
+}
+
+.mbrowse-ghost__well {
+	display: block;
+	height: 78px;
+	border-radius: 9px;
+	background: var(--reg-surface-sunken, #f8f9fa);
+	position: relative;
+	overflow: hidden;
+}
+
+.mbrowse-ghost__line {
+	display: block;
+	height: 10px;
+	border-radius: 5px;
+	background: var(--reg-surface-sunken, #f8f9fa);
+	position: relative;
+	overflow: hidden;
+}
+
+.mbrowse-ghost__line--short {
+	width: 55%;
 }
 
 .mbrowse__empty {

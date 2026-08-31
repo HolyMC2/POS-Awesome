@@ -337,6 +337,54 @@ describe("the header and footer", () => {
 	});
 });
 
+describe("a catalogue on its way is not a catalogue with nothing in it", () => {
+	// The desk table learned this first (`itemsSelectorTableLoading.spec.ts`):
+	// an empty-but-loading list told the operator there were no items when the
+	// rows were simply still arriving. The phone had the same bug and no way
+	// to tell the two apart — `loading` is `ItemsSelector`'s own flag, handed
+	// down through the shell (`update:catalogLoading`).
+	it("draws skeletons, not «No items found», during the first load", () => {
+		const wrapper = mountScreen({ items: [], combos: [], cart: [], loading: true });
+
+		expect(wrapper.find('[data-testid="browse-empty"]').exists()).toBe(false);
+		expect(wrapper.get('[data-testid="browse-skeleton"]').exists()).toBe(true);
+		expect(wrapper.findAll(".mbrowse-ghost")).toHaveLength(8);
+	});
+
+	it("puts the ghosts in the REAL grid, so the columns do not jump", () => {
+		// A skeleton whose track differs from the grid it precedes is a layout
+		// shift with extra steps.
+		const wrapper = mountScreen({ items: [], combos: [], cart: [], loading: true });
+
+		expect(wrapper.get('[data-testid="browse-skeleton"]').classes()).toContain("mbrowse__grid");
+	});
+
+	it("says what it is doing to a screen reader and nothing to anyone else", () => {
+		const wrapper = mountScreen({ items: [], combos: [], cart: [], loading: true });
+		const skeleton = wrapper.get('[data-testid="browse-skeleton"]');
+
+		expect(skeleton.attributes("role")).toBe("status");
+		expect(skeleton.attributes("aria-busy")).toBe("true");
+		expect(skeleton.attributes("aria-label")).toBe("Loading items...");
+		expect(skeleton.text()).toBe("");
+	});
+
+	it("never hides rows that already arrived", () => {
+		// A background sync must not blank a catalogue the cashier can use.
+		const wrapper = mountScreen({ cart: [], loading: true });
+
+		expect(wrapper.find('[data-testid="browse-skeleton"]').exists()).toBe(false);
+		expect(wrapper.findAll('[data-testid^="browse-card-"]')).toHaveLength(4);
+	});
+
+	it("goes back to the empty message once the load finishes with nothing", () => {
+		const wrapper = mountScreen({ items: [], combos: [], cart: [], loading: false });
+
+		expect(wrapper.find('[data-testid="browse-skeleton"]').exists()).toBe(false);
+		expect(wrapper.get('[data-testid="browse-empty"]').text()).toBe("No items found");
+	});
+});
+
 describe("the search row hands focus back rather than owning a field", () => {
 	it("is a button that asks the register to focus its one input", () => {
 		const onSearch = vi.fn();

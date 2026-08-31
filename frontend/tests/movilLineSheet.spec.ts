@@ -744,7 +744,16 @@ describe("the routing and the engine call are pinned where they live", () => {
 		// The shell's rule since round 1: Invoice / ItemsSelector / Payments are
 		// `v-show`, never `v-if`. The line sheet is the transient surface and is
 		// the only thing here allowed a `v-if`.
-		expect(ShellSource).toContain('<MovilLineSheet\n\t\tv-if="lineSheet"');
+		// PIN UPDATED, native-feel round 2 (2026-08-30): the sheet is now wrapped
+		// in `<Transition name="movil-sheet">` so its dismissal travels back down
+		// instead of blinking out, which indents it one level. The claim this pin
+		// makes is unchanged and is the reason it is still written as source —
+		// `v-if`, on THIS component, and on nothing else in the shell. A
+		// `<Transition>` does not make it a panel swap: Vue keeps the leaving
+		// element for the length of the leave and then unmounts it, and `close`
+		// still emits on the tap rather than on an animation.
+		expect(ShellSource).toContain('<MovilLineSheet\n\t\t\tv-if="lineSheet"');
+		expect(ShellSource).toContain('<Transition name="movil-sheet">');
 		expect(PosSource).toMatch(/v-show="!movilPayActive"/);
 		expect(PosSource).not.toMatch(/v-if="!movilPayActive"/);
 	});

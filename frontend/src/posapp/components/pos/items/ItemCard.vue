@@ -276,11 +276,15 @@ const onDragEnd = (event) => {
 	border-radius: var(--pos-radius-md);
 	border: 1px solid var(--pos-border-light);
 	overflow: hidden;
+	/* Native-feel round 2: the durations are the register's tokens now, so a
+	 * card settles on the same curve a sheet does. The property list is
+	 * unchanged on purpose — the hover lift and its shadow are what this card
+	 * has always done, and re-picking them is a redesign, not a motion pass. */
 	transition:
-		transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-		box-shadow 0.2s ease,
-		border-color 0.2s ease,
-		background-color 0.2s ease;
+		transform var(--motion-base) var(--ease-in-out),
+		box-shadow var(--motion-base) var(--ease-in-out),
+		border-color var(--motion-base) var(--ease-in-out),
+		background-color var(--motion-base) var(--ease-in-out);
 	cursor: pointer;
 	display: flex;
 	flex-direction: column;
@@ -308,6 +312,19 @@ const onDragEnd = (event) => {
 	background: rgba(var(--v-theme-primary), 0.08);
 }
 
+/* Press feedback (native-feel round 2). LAST of the three transform rules on
+ * purpose: `:hover` sticks after a tap on several Androids and
+ * `.item-highlighted` is set by the scanner, and at equal specificity the
+ * pressed card has to be the one that wins — the press is the only one of
+ * the three the hand is asking about right now. `transform` does not
+ * compose across rules, so this restates the resting position rather than
+ * adding a scale to the hover's lift. */
+.card-item-card:active {
+	transform: translate3d(0, 0, 0) scale(var(--press-scale, 0.98));
+	box-shadow: 0 6px 16px var(--pos-shadow-light);
+	transition: transform var(--motion-fast) var(--ease-out);
+}
+
 .card-item-image-container {
 	position: relative;
 	height: 132px;
@@ -326,7 +343,7 @@ const onDragEnd = (event) => {
 	object-fit: contain; /* Changed to contain to ensure full image visibility */
 	background-color: rgb(var(--v-theme-surface-bright));
 	opacity: 0;
-	transition: opacity 0.2s ease;
+	transition: opacity var(--motion-base) var(--ease-out);
 }
 
 .card-item-image.is-loaded {
