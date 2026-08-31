@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 /**
  * THE HOSTED LEDGER ON A PHONE — two layout guarantees, source-pinned.
  *
@@ -20,8 +22,13 @@
  * Source-scanned (`?raw`) because jsdom computes no layout.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { mount } from "@vue/test-utils";
 
+import InvoiceLedgerPanel from "../src/posapp/components/pos/flows/ledger/InvoiceLedgerPanel.vue";
+import panelSource from "../src/posapp/components/pos/flows/ledger/InvoiceLedgerPanel.vue?raw";
+import { describeRows, type LedgerRowSource } from "../src/posapp/components/pos/flows/ledger/ledgerModel";
+import { DIRECTORY, formatCurrency, formatFloat, row, TODAY } from "./ledgerFixtures";
 import hostSource from "../src/posapp/components/pos/shell/destinations/DestinationHost.vue?raw";
 import managementSource from "../src/posapp/components/pos/flows/InvoiceManagement.vue?raw";
 import headerSource from "../src/posapp/components/pos/flows/ledger/InvoiceLedgerHeader.vue?raw";
@@ -123,8 +130,74 @@ describe("the ledger has a phone layout, on one breakpoint", () => {
 		).toMatch(/display:\s*none/);
 	});
 
-	it("tightens the surface and lets the panel take half the body", () => {
+	it("tightens the surface and leaves the body to the table", () => {
 		const block = phoneBlock(styleOf(surfaceSource), PHONE);
-		expect(ruleBody(block, ".ledger-surface__body :deep(.ledger-panel)")).toMatch(/max-height:\s*50%/);
+		expect(ruleBody(block, ".ledger-surface")).toMatch(/padding:\s*10px 12px/);
+		expect(block).not.toContain(":deep(.ledger-panel)");
+	});
+});
+
+describe("the panel is a bottom sheet on a phone", () => {
+	const panelProps = (rowSource: LedgerRowSource | null) => {
+		const shaped = rowSource ? describeRows([rowSource], { today: TODAY, directory: DIRECTORY })[0] : null;
+		return {
+			row: shaped ?? null,
+			detail: null,
+			formatCurrency,
+			formatFloat,
+			isRepairCandidate: () => false,
+			draftActionsFor: () => [],
+			draftActionLabel: (action: string) => action,
+		};
+	};
+	const at = (width: number) => {
+		window.innerWidth = width;
+	};
+
+	it("renders nothing on a phone until a row is chosen — no «choose a ticket» box", () => {
+		at(390);
+		const wrapper = mount(InvoiceLedgerPanel, { props: panelProps(null) });
+		expect(wrapper.find('[data-testid="ledger-sheet"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="ledger-panel-blank"]').exists()).toBe(false);
+	});
+
+	it("opens as a sheet with a scrim, and the scrim, the × and Escape all close it", async () => {
+		at(390);
+		// A listener rather than `wrapper.emitted()`: the component's root is a
+		// fragment (comment + Transition) and test-utils records nothing through it.
+		const onClose = vi.fn();
+		const wrapper = mount(InvoiceLedgerPanel, { props: { ...panelProps(row()), onClose } });
+		expect(wrapper.find('[data-testid="ledger-sheet"]').exists()).toBe(true);
+		const panel = wrapper.find('[data-testid="ledger-panel"]');
+		expect(panel.classes()).toContain("ledger-panel--sheet");
+		expect(panel.attributes("role")).toBe("dialog");
+		await wrapper.find('[data-testid="ledger-sheet-scrim"]').trigger("click");
+		await wrapper.find('[data-testid="ledger-sheet-close"]').trigger("click");
+		await panel.trigger("keydown", { key: "Escape" });
+		expect(onClose).toHaveBeenCalledTimes(3);
+	});
+
+	it("stays the desk's side panel above the phone boundary", () => {
+		at(1440);
+		const blank = mount(InvoiceLedgerPanel, { props: panelProps(null) });
+		expect(blank.find('[data-testid="ledger-sheet"]').exists()).toBe(false);
+		expect(blank.find('[data-testid="ledger-panel-blank"]').exists()).toBe(true);
+		const chosen = mount(InvoiceLedgerPanel, { props: panelProps(row()) });
+		expect(chosen.find('[data-testid="ledger-panel"]').classes()).not.toContain("ledger-panel--sheet");
+		expect(chosen.find('[data-testid="ledger-sheet-close"]').exists()).toBe(false);
+	});
+
+	it("is positioned against the surface and travels on the register's motion tokens", () => {
+		const style = styleOf(panelSource);
+		expect(ruleBody(style, ".ledger-panel-frame")).toMatch(/display:\s*contents/);
+		expect(ruleBody(style, ".ledger-panel-frame--sheet")).toMatch(/position:\s*absolute/);
+		expect(ruleBody(styleOf(surfaceSource), ".ledger-surface")).toMatch(/position:\s*relative/);
+		expect(ruleBody(style, ".ledger-panel-frame__scrim")).toMatch(/var\(--reg-scrim/);
+		expect(style).toMatch(/\.ledger-sheet-enter-from \.ledger-panel--sheet,\n\.ledger-sheet-leave-to \.ledger-panel--sheet \{\n\ttransform: translateY\(100%\)/);
+		expect(style).toMatch(/transition: transform var\(--motion-slow\) var\(--ease-emphasized\)/);
+		// The surface clears the selection when the sheet asks to close.
+		expect(surfaceSource).toContain('@close="selectedName = null"');
+		// The column layout below 1180 leaves the sheet's own geometry alone.
+		expect(surfaceSource).toContain(":deep(.ledger-panel:not(.ledger-panel--sheet))");
 	});
 });

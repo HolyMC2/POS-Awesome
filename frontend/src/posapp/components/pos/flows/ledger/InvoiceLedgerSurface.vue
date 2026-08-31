@@ -64,6 +64,7 @@
 				@delete-draft="withRow('deleteDraft')"
 				@repair="withRow('repair')"
 				@draft-action="onDraftAction"
+				@close="selectedName = null"
 			/>
 		</div>
 	</section>
@@ -449,6 +450,8 @@ defineExpose({ focusRing: () => tableRef.value?.focusRing?.() });
 
 <style scoped>
 .ledger-surface {
+	/* The phone sheet (InvoiceLedgerPanel's frame) positions against this. */
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	gap: var(--reg-space-md, 10px);
@@ -473,15 +476,14 @@ defineExpose({ focusRing: () => tableRef.value?.focusRing?.() });
 		flex-direction: column;
 	}
 
-	.ledger-surface__body :deep(.ledger-panel) {
+	.ledger-surface__body :deep(.ledger-panel:not(.ledger-panel--sheet)) {
 		width: auto;
 		max-height: 45%;
 	}
 }
 
-/* Phones: tighter gutters, and the panel — already the bottom half below
-   1180px — may take half the body, since the table above keeps the rows the
-   operator is choosing from. */
+/* Phones: tighter gutters. The panel is a bottom sheet over the list there
+   (InvoiceLedgerPanel owns it), so the body holds the table alone. */
 @media (max-width: 767.98px) {
 	.ledger-surface {
 		padding: 10px 12px;
@@ -490,10 +492,6 @@ defineExpose({ focusRing: () => tableRef.value?.focusRing?.() });
 
 	.ledger-surface__body {
 		gap: 8px;
-	}
-
-	.ledger-surface__body :deep(.ledger-panel) {
-		max-height: 50%;
 	}
 }
 </style>

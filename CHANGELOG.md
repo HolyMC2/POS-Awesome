@@ -4,6 +4,17 @@ All notable changes.
 
 ## Unreleased
 
+- **The ticket panel is a bottom sheet on phones (08-31).** Below 768 the
+  ledger's detail panel no longer takes the lower half of the list: it
+  renders only while a row is chosen, as a sheet inside the ledger surface
+  (scrim + grip + × over the list, dock still usable; positioned in the
+  surface rather than fixed to the viewport because the hosted sheet is a
+  focus-retaining contained dialog and the host isolates its stacking).
+  Travels on `--motion-slow`/`--ease-emphasized` like the line sheet, takes
+  focus on open, closes on scrim tap, × or Escape (`close` → the surface
+  clears the selection), actions 44px. Desk unchanged (frame is
+  `display: contents`). Pinned in `ledgerPhoneLayout.spec.ts`; verified on
+  the mirror at 360×800 / 412×915 / 1440×900. vitest 5117 ✓.
 - **The hosted ledger on a phone stops sliding, sits under the drawer,
   and gets a phone layout (08-31).** Tapping «Por fecha» or a date field
   in Facturas/Borradores on a phone panned the whole sheet ~300px left

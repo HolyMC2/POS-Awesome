@@ -41,7 +41,7 @@ vi.mock("../src/posapp/composables/core/useTheme", () => ({
 }));
 
 vi.mock("../src/posapp/composables/core/useResponsive", () => ({
-	useResponsive: () => ({ windowWidth: { value: 1400 } }),
+	useResponsive: () => ({ windowWidth: { value: 1400 }, isPhone: { value: false } }),
 }));
 
 vi.mock("../src/offline/index", () => ({ isOffline: () => false }));

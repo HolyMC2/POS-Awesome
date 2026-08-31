@@ -1,5 +1,39 @@
 <template>
-	<aside class="ledger-panel" data-testid="ledger-panel">
+	<!-- The frame is `display: contents` on the desk, so the aside stays the
+	     body's own flex item. On a phone the frame IS the bottom sheet — scrim
+	     plus panel, absolutely positioned over the ledger — and it exists only
+	     while a row is chosen: the list is the whole screen until then, and a
+	     «choose a ticket» box under it would only take rows away. -->
+	<Transition name="ledger-sheet">
+		<div
+			v-if="!asSheet || row"
+			class="ledger-panel-frame"
+			:class="{ 'ledger-panel-frame--sheet': asSheet }"
+			:data-testid="asSheet ? 'ledger-sheet' : undefined"
+		>
+			<!-- A tap outside is the phone's Escape. Not a <button>: a full-surface
+			     control would be the biggest tab stop on the screen; the × is the
+			     named one. -->
+			<div
+				v-if="asSheet"
+				class="ledger-panel-frame__scrim"
+				data-testid="ledger-sheet-scrim"
+				@click="$emit('close')"
+			></div>
+
+			<aside
+				ref="panelEl"
+				class="ledger-panel"
+				:class="{ 'ledger-panel--sheet': asSheet }"
+				data-testid="ledger-panel"
+				:role="asSheet ? 'dialog' : undefined"
+				:aria-modal="asSheet ? 'true' : undefined"
+				:aria-label="asSheet && row ? __('Ticket {0}', [row.name]) : undefined"
+				:tabindex="asSheet ? -1 : undefined"
+				@keydown.esc="asSheet && $emit('close')"
+			>
+		<span v-if="asSheet" class="ledger-panel__grip" aria-hidden="true"></span>
+
 		<div v-if="!row" class="ledger-panel__blank" data-testid="ledger-panel-blank">
 			{{ __("Choose a ticket to see it here") }}
 		</div>
@@ -14,6 +48,23 @@
 						data-testid="ledger-panel-amount"
 						>{{ money(row.amount) }}</span
 					>
+					<button
+						v-if="asSheet"
+						type="button"
+						class="ledger-panel__close"
+						data-testid="ledger-sheet-close"
+						:aria-label="__('Close')"
+						@click="$emit('close')"
+					>
+						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+							<path
+								d="m6 6 12 12M18 6 6 18"
+								stroke="currentColor"
+								stroke-width="2.2"
+								stroke-linecap="round"
+							/>
+						</svg>
+					</button>
 				</div>
 				<div class="ledger-panel__who">{{ who }}</div>
 				<div class="ledger-panel__chips">
@@ -190,7 +241,9 @@
 				-->
 			</footer>
 		</template>
-	</aside>
+			</aside>
+		</div>
+	</Transition>
 </template>
 
 <script setup lang="ts">
@@ -209,8 +262,9 @@
  * `openAddPayment`, `runDraftAction`, `deleteDraft` and
  * `repairChangeAllocation` are what actually run.
  */
-import { computed } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 
+import { useResponsive } from "../../../../composables/core/useResponsive";
 import type { LedgerRow, LedgerRowSource } from "./ledgerModel";
 import { describeTicketOrigin, ticketDayLabel } from "./ledgerRows";
 import { translate as __ } from "./ledgerText";
@@ -246,7 +300,29 @@ defineEmits<{
 	draftAction: [string];
 	deleteDraft: [];
 	repair: [];
+	/** Phone sheet only: the scrim, the ×, or Escape. The surface clears the selection. */
+	close: [];
 }>();
+
+/**
+ * Below the register's phone boundary the panel is a bottom sheet over the
+ * list (see the frame in the template). The same boundary the ledger's phone
+ * CSS uses, read from the one composable rather than restated here.
+ */
+const { isPhone } = useResponsive();
+const asSheet = computed(() => Boolean(isPhone.value));
+
+// A sheet that opens takes focus, so Escape and the screen reader land on it;
+// `preventScroll` because the host clips and must not be asked to pan.
+const panelEl = ref<HTMLElement | null>(null);
+watch(
+	() => (asSheet.value ? props.row?.name : null),
+	async (name) => {
+		if (!name) return;
+		await nextTick();
+		panelEl.value?.focus?.({ preventScroll: true });
+	},
+);
 
 const money = (value: number) => `${props.currencySymbol ?? ""}${props.formatCurrency(value)}`;
 
@@ -570,5 +646,131 @@ const tenders = computed(() => {
 	background: var(--reg-surface-muted, #f2f4f7);
 	border-color: var(--reg-tone-neutral-border, rgba(0, 0, 0, 0.06));
 	color: var(--reg-text-secondary, #56606e);
+}
+
+/* ---- the phone sheet --------------------------------------------------- */
+
+/* On the desk the frame is nothing: the aside stays the body's flex item. */
+.ledger-panel-frame {
+	display: contents;
+}
+
+/* On a phone the frame covers the ledger surface (its positioned ancestor)
+   and lays the sheet on the bottom edge — the edge the dock sits under, so
+   the dock stays usable and no safe-area padding is needed here. Inside the
+   surface rather than fixed to the viewport: the hosted sheet is a contained
+   Vuetify dialog that retains focus, and the host isolates its stacking, so
+   a body-level sheet would lose both focus and z-order. */
+.ledger-panel-frame--sheet {
+	display: flex;
+	position: absolute;
+	inset: 0;
+	z-index: 5;
+	flex-direction: column;
+	justify-content: flex-end;
+}
+
+.ledger-panel-frame__scrim {
+	position: absolute;
+	inset: 0;
+	background: var(--reg-scrim, rgba(15, 23, 42, 0.32));
+}
+
+.ledger-panel--sheet {
+	position: relative;
+	width: auto;
+	max-height: 86%;
+	border: 0;
+	border-radius: var(--reg-radius-lg, 18px) var(--reg-radius-lg, 18px) 0 0;
+	/* The lift, then a hard copy of the panel 32px lower in its own colour —
+	   what `--ease-emphasized`'s overshoot lands on instead of a strip of
+	   scrim (the line sheet's device). */
+	box-shadow:
+		0 -8px 28px var(--pos-shadow, rgba(15, 23, 42, 0.18)),
+		0 32px 0 0 var(--reg-surface, #fff);
+}
+
+.ledger-panel--sheet:focus {
+	outline: none;
+}
+
+/* The drag handle every phone sheet has. Decorative — the × is the control. */
+.ledger-panel__grip {
+	position: absolute;
+	top: 6px;
+	left: 50%;
+	width: 36px;
+	height: 4px;
+	margin-left: -18px;
+	border-radius: 999px;
+	background: var(--reg-border-soft, #e6e9ee);
+}
+
+.ledger-panel--sheet .ledger-panel__head {
+	padding-top: 18px;
+}
+
+.ledger-panel--sheet .ledger-panel__amount {
+	margin-left: auto;
+}
+
+.ledger-panel__close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	margin: -8px -8px -8px 0;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--reg-text-secondary, #56606e);
+	cursor: pointer;
+}
+
+.ledger-panel__close:focus-visible {
+	outline: 2px solid var(--reg-accent, #0097a7);
+	outline-offset: 1px;
+}
+
+/* Touch-sized actions that share the row. */
+.ledger-panel--sheet .ledger-panel__action {
+	flex: 1 1 auto;
+	height: 44px;
+}
+
+/* ---- enter / leave (Transition name="ledger-sheet" on the frame) --------
+   The panel travels its own height on the emphasized curve; the scrim only
+   fades, faster. `transform` and `opacity` only. Desk frames never toggle,
+   so these rules never run there. */
+.ledger-sheet-enter-active .ledger-panel--sheet,
+.ledger-sheet-leave-active .ledger-panel--sheet {
+	transition: transform var(--motion-slow) var(--ease-emphasized);
+	will-change: transform;
+}
+
+.ledger-sheet-enter-active .ledger-panel-frame__scrim,
+.ledger-sheet-leave-active .ledger-panel-frame__scrim {
+	transition: opacity var(--motion-base) var(--ease-out);
+	will-change: opacity;
+}
+
+.ledger-sheet-enter-from .ledger-panel--sheet,
+.ledger-sheet-leave-to .ledger-panel--sheet {
+	transform: translateY(100%);
+}
+
+.ledger-sheet-enter-from .ledger-panel-frame__scrim,
+.ledger-sheet-leave-to .ledger-panel-frame__scrim {
+	opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ledger-sheet-enter-active .ledger-panel--sheet,
+	.ledger-sheet-leave-active .ledger-panel--sheet,
+	.ledger-sheet-enter-active .ledger-panel-frame__scrim,
+	.ledger-sheet-leave-active .ledger-panel-frame__scrim {
+		transition: none;
+	}
 }
 </style>
