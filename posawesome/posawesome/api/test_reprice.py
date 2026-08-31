@@ -312,6 +312,99 @@ class PaymentTotalsTests(unittest.TestCase):
         with self.assertRaises(_ValidationError):
             rp.assert_payments_match_grand_total(invoice, declared_change=-50.00)
 
+    # ---- settlement channels other than payments[] (MONEY-F1) ----
+
+    def test_write_off_settles_the_remainder(self):
+        # $99.50 tendered on a $100 ticket, $0.50 written off = fully settled.
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "grand_total": 100.00,
+            "is_pos": 1,
+            "write_off_amount": 0.50,
+            "payments": [{"amount": 99.50}],
+        }
+        rp.assert_payments_match_grand_total(invoice)
+
+    def test_loyalty_redemption_settles_the_remainder(self):
+        # $70 tendered, 30 settled by redeemed loyalty points.
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "grand_total": 100.00,
+            "is_pos": 1,
+            "loyalty_amount": 30.00,
+            "payments": [{"amount": 70.00}],
+        }
+        rp.assert_payments_match_grand_total(invoice)
+
+    def test_redeemed_customer_credit_settles_the_remainder(self):
+        # $60 tendered, 40 settled by monedero credit passed in the data payload.
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "grand_total": 100.00,
+            "is_pos": 1,
+            "payments": [{"amount": 60.00}],
+        }
+        rp.assert_payments_match_grand_total(invoice, customer_credit=40.00)
+
+    def test_channels_combine_to_settle(self):
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "grand_total": 100.00,
+            "is_pos": 1,
+            "write_off_amount": 1.00,
+            "loyalty_amount": 9.00,
+            "payments": [{"amount": 50.00}],
+        }
+        rp.assert_payments_match_grand_total(invoice, customer_credit=40.00)
+
+    def test_partial_payment_raises_without_the_flag(self):
+        # $60 of $100 and nothing else settling it is an underpayment — blocked
+        # unless the register permits a partial (or it is a credit sale).
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "grand_total": 100.00,
+            "is_pos": 1,
+            "payments": [{"amount": 60.00}],
+        }
+        with self.assertRaises(_ValidationError):
+            rp.assert_payments_match_grand_total(invoice)
+
+    def test_partial_payment_needs_is_credit_sale_not_a_register_flag(self):
+        # A deliberate partial is signalled by is_credit_sale (remainder →
+        # outstanding). Underpayment is otherwise rejected even on a register
+        # that permits partials, so a tampered $60-for-$100 payload still dies.
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "grand_total": 100.00,
+            "is_pos": 1,
+            "payments": [{"amount": 60.00}],
+        }
+        rp.assert_payments_match_grand_total(invoice, is_credit_sale=True)  # intentional → ok
+        with self.assertRaises(_ValidationError):
+            rp.assert_payments_match_grand_total(invoice)  # no signal → rejected
+
+    def test_credit_sale_still_skips_entirely(self):
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "grand_total": 100.00,
+            "is_pos": 1,
+            "payments": [{"amount": 0}],
+        }
+        rp.assert_payments_match_grand_total(invoice, is_credit_sale=True)
+
+    def test_over_settlement_without_declared_change_raises(self):
+        # Settled beyond the total (here 100 paid + 20 write-off on a 100 ticket)
+        # without declared change is an error, same as an overpay.
+        rp = _import_reprice(_basic_scenario())
+        invoice = {
+            "grand_total": 100.00,
+            "is_pos": 1,
+            "write_off_amount": 20.00,
+            "payments": [{"amount": 100.00}],
+        }
+        with self.assertRaises(_ValidationError):
+            rp.assert_payments_match_grand_total(invoice)
+
 
 # ---------------------------------------------------------------------------
 # rate band

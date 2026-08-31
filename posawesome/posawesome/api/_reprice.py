@@ -379,6 +379,7 @@ def assert_payments_match_grand_total(
     tolerance: float | None = None,
     is_credit_sale: bool = False,
     declared_change: float = 0.0,
+    customer_credit: float = 0.0,
 ) -> None:
     """Require sum(payments[].amount) - declared_change == grand_total.
 
@@ -425,28 +426,48 @@ def assert_payments_match_grand_total(
     for pay in payments:
         paid += flt(_line_value(pay, "amount") or 0)
 
+    # `payments[]` is only ONE of the channels that settle a POS invoice. The
+    # register also writes off a rounding remainder, redeems loyalty points, and
+    # redeems stored customer credit — `_apply_write_off_settings` (creation.py)
+    # defines "settled" as exactly this sum, and the client's own
+    # `validateSubmission` lets the cashier through on the same basis. An
+    # invariant that counted only `payments` rejected every write-off, loyalty
+    # or credit sale at the Cobrar button (audit 2026-08-31 MONEY-F1): the
+    # flow was enabled on every register and dead since the check landed.
+    # Loyalty and customer-credit settle as `advances`, write-off reduces
+    # `outstanding` — none of them is a `payments` row, so summing them here
+    # does not double-count.
+    write_off = max(flt(_line_value(invoice_doc, "write_off_amount") or 0), 0.0)
+    loyalty = max(flt(_line_value(invoice_doc, "loyalty_amount") or 0), 0.0)
+    credit = max(flt(customer_credit), 0.0)
+    settled = paid + write_off + loyalty + credit
+
     # Sales Invoices with `is_pos = 0` (regular non-POS) may have empty
     # payments — that's legitimate (outstanding_amount tracks the debt).
-    # Only enforce when payments[] is non-empty OR is_pos is truthy.
+    # Only enforce when something settled it OR is_pos is truthy.
     is_pos = bool(_line_value(invoice_doc, "is_pos"))
-    if not payments and not is_pos:
+    if not payments and settled <= 0 and not is_pos:
         return
 
     change = max(flt(declared_change), 0.0)
-    if abs(paid - change - grand_total) > tol:
-        if change:
-            frappe.throw(
-                _(
-                    "Payment total {0} minus change {1} does not match grand total {2} (difference {3})."
-                ).format(paid, change, grand_total, paid - change - grand_total),
-                frappe.ValidationError,
-            )
-        frappe.throw(
-            _(
-                "Payment total {0} does not match grand total {1} (difference {2})."
-            ).format(paid, grand_total, paid - grand_total),
-            frappe.ValidationError,
-        )
+    net = settled - change
+    diff = net - grand_total
+    if abs(diff) <= tol:
+        return
+
+    # Anything else fails. An UNDER-settlement is a deliberate partial only when
+    # the caller flags it `is_credit_sale` (returned at the top) — the remainder
+    # then becomes outstanding/anticipo; the `posa_allow_partial_payment` flag
+    # alone does NOT exempt it, so the "$0 for a $1000 cart" class this invariant
+    # exists to stop is still caught even on a register that permits partials.
+    # An OVER-collection without declared change is likewise rejected.
+    frappe.throw(
+        _(
+            "Settled total {0} (payments {1}, write-off {2}, loyalty {3}, credit {4}) "
+            "minus change {5} does not match grand total {6} (difference {7})."
+        ).format(settled, paid, write_off, loyalty, credit, change, grand_total, diff),
+        frappe.ValidationError,
+    )
 
 
 # ---------------------------------------------------------------------------

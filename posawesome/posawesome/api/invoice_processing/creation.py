@@ -1824,6 +1824,7 @@ def submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
         invoice_doc,
         is_credit_sale=cint(data.get("is_credit_sale")),
         declared_change=flt(data.get("paid_change")) + flt(data.get("credit_change")),
+        customer_credit=flt(data.get("redeemed_customer_credit")),
     )
 
     # posa_auto_set_batch is enforced client-side (useItemAddition.ts);
@@ -1859,6 +1860,7 @@ def submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
             invoice_doc,
             is_credit_sale=cint(data.get("is_credit_sale")),
             declared_change=flt(data.get("paid_change")) + flt(data.get("credit_change")),
+            customer_credit=flt(data.get("redeemed_customer_credit")),
         )
 
     if data.get("due_date"):
@@ -2197,6 +2199,7 @@ def submit_in_background_job(kwargs):
                 is_credit_sale=cint((data or {}).get("is_credit_sale")),
                 declared_change=flt((data or {}).get("paid_change"))
                 + flt((data or {}).get("credit_change")),
+                customer_credit=flt((data or {}).get("redeemed_customer_credit")),
             )
 
         from posawesome.posawesome.api._perms import account_perm_bypass
