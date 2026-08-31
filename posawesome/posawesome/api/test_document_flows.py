@@ -429,6 +429,31 @@ class TestDocumentFlows(IntegrationTestCase):
 		self.assertTrue(refs, "a Payment Entry must reference the SO")
 		self.assertEqual(float(refs[0].allocated_amount), 10.0)
 
+	def test_advance_pe_reference_no_is_the_open_shift_not_a_phantom_field(self):
+		"""MONEY-F4: the advance PE's reference_no is the corte's join key.
+
+		It used to be read as so_doc.get("posa_pos_opening_shift") — a field
+		Sales Order does not have — so every apartado down-payment booked a PE
+		with reference_no NULL and get_payments_entries (which filters on
+		reference_no == <shift>) never counted the cash. The shift is now
+		threaded in; assert it lands on the PE."""
+		payments = [{"mode_of_payment": "Cash", "amount": 10, "base_amount": 10}]
+		so_name = self._submit_so(self._so_payload(rate=10, payments=payments))
+
+		sales_orders._payment_entry_job(so_name, payments, "SHIFT-UNDER-TEST")
+
+		refs = frappe.get_all(
+			"Payment Entry Reference",
+			filters={"reference_doctype": "Sales Order", "reference_name": so_name},
+			fields=["parent"],
+		)
+		self.assertTrue(refs, "a Payment Entry must reference the SO")
+		self.assertEqual(
+			frappe.db.get_value("Payment Entry", refs[0].parent, "reference_no"),
+			"SHIFT-UNDER-TEST",
+			"the down-payment must carry the open shift so the corte can see it",
+		)
+
 	def test_submit_sales_order_enqueues_payment_job(self):
 		"""The advance Payment Entry is fire-and-forget: submit_sales_order must
 		enqueue _payment_entry_job with the EXACT dotted path + kwargs. A renamed
@@ -458,6 +483,10 @@ class TestDocumentFlows(IntegrationTestCase):
 			enq.call_args.kwargs.get("enqueue_after_commit"),
 			"advance-PE job must defer to after_commit or the worker can miss the uncommitted SO",
 		)
+		# MONEY-F4: the resolved open shift (or None when the register has none)
+		# is threaded to the job — the job runs as the worker, so it cannot
+		# resolve the cashier's shift itself.
+		self.assertIn("pos_opening_shift", enq.call_args.kwargs)
 
 	# ---------- Quotation ----------
 

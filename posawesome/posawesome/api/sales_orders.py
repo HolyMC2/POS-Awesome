@@ -11,10 +11,10 @@ from frappe.utils import getdate, nowdate
 from posawesome.posawesome.api.payment_entry import create_payment_entry
 
 
-def _payment_entry_job(order_name, payments):
+def _payment_entry_job(order_name, payments, pos_opening_shift=None):
     """Background task to create payment entries."""
     so_doc = frappe.get_doc("Sales Order", order_name)
-    _create_payment_entries(so_doc, payments)
+    _create_payment_entries(so_doc, payments, pos_opening_shift)
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -131,8 +131,17 @@ def update_sales_order(data):
     return so_doc
 
 
-def _create_payment_entries(so_doc, payments):
-    """Create payment entries referencing the sales order."""
+def _create_payment_entries(so_doc, payments, pos_opening_shift=None):
+    """Create payment entries referencing the sales order.
+
+    `pos_opening_shift` is the corte's join key (audit 2026-08-31 MONEY-F4).
+    It used to be read as `so_doc.get("posa_pos_opening_shift")` — a field
+    Sales Order does not have — so every apartado down-payment booked a Payment
+    Entry with `reference_no = NULL`, and `get_payments_entries` (which filters
+    on `reference_no == <shift>`) never counted the cash: it sat in the drawer
+    and was absent from the corte. The shift is resolved in the request, where
+    the cashier's session is known, and threaded through the job.
+    """
     for pay in payments or []:
         if not pay.get("amount"):
             continue
@@ -144,7 +153,7 @@ def _create_payment_entries(so_doc, payments):
             amount=pay.get("amount"),
             currency=pay.get("currency") or so_doc.currency,
             mode_of_payment=pay.get("mode_of_payment"),
-            reference_no=so_doc.get("posa_pos_opening_shift"),
+            reference_no=pos_opening_shift,
             reference_date=nowdate(),
             posting_date=nowdate(),
             submit=0,
@@ -165,6 +174,40 @@ def _create_payment_entries(so_doc, payments):
         with account_perm_bypass():
             pe.save()
             pe.submit()
+
+
+def _resolve_open_shift_for_order(pos_profile, acting_user):
+    """The open POS Opening Shift a down-payment on this order belongs to, or
+    None when the register has none.
+
+    This is the corte's join key (MONEY-F4). Soft on purpose: it REPLACES a
+    read of `so_doc.get("posa_pos_opening_shift")` — a field Sales Order does
+    not have, so it was always None — with the real open shift, which is what
+    the drawer's reconciliation filters on. When a shift is open (the normal
+    case, since the register only sells while one is), the down-payment now
+    lands in the corte; when none is, the value stays None exactly as before,
+    so no existing flow is newly blocked. Same filters as
+    `stored_value._require_open_shift`; only the shift that belongs to THIS
+    profile is used, never one open on another register.
+    """
+    rows = frappe.get_all(
+        "POS Opening Shift",
+        filters={
+            "user": acting_user,
+            "pos_closing_shift": ["is", "not set"],
+            "docstatus": 1,
+            "status": "Open",
+        },
+        fields=["name", "pos_profile"],
+        order_by="period_start_date desc",
+        limit_page_length=1,
+    )
+    if not rows:
+        return None
+    shift = rows[0]
+    if pos_profile and str(shift.get("pos_profile") or "") != str(pos_profile):
+        return None
+    return str(shift.get("name") or "") or None
 
 
 @frappe.whitelist(methods=["POST"])
@@ -193,6 +236,13 @@ def submit_sales_order(order):
 
     payments = order.get("payments")
 
+    # Resolve the corte's join key in the REQUEST — the background job runs as
+    # the worker, not the cashier, so the open shift must be found here where
+    # `frappe.session.user` is the operator (MONEY-F4).
+    pos_opening_shift = None
+    if payments:
+        pos_opening_shift = _resolve_open_shift_for_order(pos_profile, frappe.session.user)
+
     so_doc.flags.ignore_permissions = True
     from posawesome.posawesome.api._perms import account_perm_bypass
     with account_perm_bypass():
@@ -212,6 +262,7 @@ def submit_sales_order(order):
             enqueue_after_commit=True,
             order_name=so_doc.name,
             payments=payments,
+            pos_opening_shift=pos_opening_shift,
         )
 
     # Payment entries run in the background to speed up checkout
