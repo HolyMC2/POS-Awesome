@@ -427,9 +427,16 @@ function makeRealtime() {
 		// the SPA waited on timed out (45 s waitForPostSubmitPayments
 		// gap before print). Defaulting transports lets engine.io
 		// negotiate polling-first → WS upgrade, identical to Desk.
+		// No `reconnectionAttempts` cap: socket.io defaults to Infinity (it backs
+		// off exponentially, so it does not hammer), which is what Desk uses. An
+		// earlier cap of 3 (~8s of trying) meant a till in the FOREGROUND on a
+		// wifi whose uplink flaps — navigator.onLine stays true, the tab stays
+		// visible, so no `online`/`visibilitychange` re-arm fires — burned its
+		// three attempts and the socket was dead for the rest of the shift:
+		// waitForInvoiceProcessed then takes its optimistic early-return, submit
+		// errors never toast, and stock broadcasts stop (audit RUNTIME-F3).
 		const ioOpts: Record<string, unknown> = {
 			withCredentials: true,
-			reconnectionAttempts: 3,
 		};
 		if (window.location.protocol === "https:") {
 			ioOpts.secure = true;
