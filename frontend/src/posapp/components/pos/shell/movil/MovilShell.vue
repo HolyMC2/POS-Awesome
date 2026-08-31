@@ -132,6 +132,8 @@
 			@edit="(intent) => emit('line-edit', intent)"
 			@close="emit('line-close')"
 			@more="emit('line-more')"
+			@weigh="emit('line-weigh')"
+			@lots="emit('line-lots')"
 		/>
 	</Transition>
 </template>
@@ -247,6 +249,10 @@ const emit = defineEmits<{
 	/** «More options» — hand the line back to the classic cart, which still
 	 *  owns UOM, batch, serial, the offer toggle and the weighing pad. */
 	(_event: "line-more"): void;
+	/** The sheet's scale button — the pad itself is hosted by `Pos.vue`. */
+	(_event: "line-weigh"): void;
+	/** The sheet's serial / batch row — the picker is hosted by `Pos.vue`. */
+	(_event: "line-lots"): void;
 }>();
 
 const __ = (text: string): string => {

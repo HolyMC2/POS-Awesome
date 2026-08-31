@@ -13,9 +13,18 @@ describe("the hosted-sheet stacking trap is documented at both ends", () => {
 	it("the host isolates on purpose", () => {
 		expect(hostSrc).toMatch(/isolation:\s*isolate/);
 	});
-	it("each z-30 fixed sheet names the isolation coupling and the Teleport escape", () => {
-		for (const src of [lineSrc, lotSrc]) {
-			expect(src).toMatch(/z-index:\s*30/);
+	it("each dock-beating fixed sheet names the isolation coupling and the Teleport escape", () => {
+		// The line sheet holds 30. The lot picker rides ONE above it (31): the
+		// sheet's serial / batch row opens the picker OVER the sheet, and the
+		// sheet sits later in Pos.vue's DOM, so an equal z-index would paint
+		// the picker underneath the surface that summoned it. Both are capped
+		// by `isolation: isolate` exactly the same way — the coupling this
+		// file pins is unchanged by the value.
+		for (const [src, z] of [
+			[lineSrc, 30],
+			[lotSrc, 31],
+		] as const) {
+			expect(src).toMatch(new RegExp(`z-index:\\s*${z}`));
 			expect(src).toMatch(/isolation: isolate[\s\S]*Teleport to="body"[\s\S]*LAYOUT-F3/);
 		}
 	});

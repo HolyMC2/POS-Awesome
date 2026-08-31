@@ -1066,6 +1066,9 @@ onMounted(() => {
 		// lives in this component's add path for the same reason the variant
 		// picker does, so the phone rings it here.
 		eventBus.on("movil:pick-lot", movilPickLot);
+		// A cart line's serial / batch row on the phone's line sheet: the SAME
+		// picker, opened over the line's current choice instead of the add.
+		eventBus.on("movil:edit-lots", movilEditLots);
 		// …and the picker's answer comes back to the SAME add path, so a
 		// lot-tracked item reaches the cart exactly the way an ordinary one does.
 		eventBus.on("lot:confirm", onLotConfirm);
@@ -1080,6 +1083,7 @@ onBeforeUnmount(() => {
 		eventBus.off("movil:clear-search", movilClearSearch);
 		eventBus.off("movil:pick-variant", movilPickVariant);
 		eventBus.off("movil:pick-lot", movilPickLot);
+		eventBus.off("movil:edit-lots", movilEditLots);
 		eventBus.off("lot:confirm", onLotConfirm);
 	}
 });
@@ -1133,6 +1137,67 @@ const openLotPicker = async (item, requestedQty) => {
 		return;
 	}
 	if (token !== lotPickerSeq || !uiStore.lotPickerDialog) return;
+	publish();
+};
+
+/**
+ * The phone's line sheet asked to CHANGE a line's serial / batch.
+ *
+ * The picker's model is built from the CART ROW itself, stripped of its own
+ * answer — `resolveLotRequirement` deliberately stands down for a row that
+ * already carries a selection ("our own output coming back around"), and an
+ * edit is exactly that output asking to come back. The row already carries
+ * `batch_no_data` / `serial_no_data` for the desk's expanded panel, so the
+ * sheet opens on known stock and the re-read refreshes it — the same
+ * two-step `openLotPicker` performs, with the same late-answer guard.
+ *
+ * `profile: null` on purpose: `posa_auto_set_batch` silences the picker for
+ * an ADD (FEFO already answered), but an edit is the cashier overriding that
+ * very answer, so the gate must not apply.
+ */
+let lotEditSeq = 0;
+const movilEditLots = async (payload) => {
+	const rowId = String(payload?.rowId || "");
+	if (!rowId) return;
+	const row = (invoiceStore.items || []).find((line) => line?.posa_row_id === rowId);
+	if (!row) return;
+
+	const token = ++lotEditSeq;
+	const draft = {
+		...row,
+		serial_no_selected: [],
+		serial_no: null,
+		batch_no: null,
+		to_set_serial_no: null,
+		to_set_batch_no: null,
+	};
+	const currentSerials = Array.isArray(row.serial_no_selected)
+		? row.serial_no_selected.map((serial) => String(serial || "").trim()).filter(Boolean)
+		: [];
+	const qty = Math.abs(Number(row.qty)) || 1;
+	const publish = () =>
+		uiStore.openLotPicker({
+			item: { ...draft },
+			profile: null,
+			requestedQty: qty,
+			// Serials committed on OTHER lines stay grey; the row's own are
+			// the seed, so the collector excludes it by identity.
+			usedSerials: Array.from(collectUsedSerialsForItem(row, { items: invoiceStore.items })),
+			editRowId: rowId,
+			initialSelection: {
+				serials: currentSerials,
+				batches: row.batch_no ? [{ batchNo: row.batch_no, qty }] : [],
+			},
+		});
+
+	publish();
+	try {
+		await itemDetailFetcher.update_items_details([draft], { forceRefresh: true });
+	} catch (error) {
+		console.error("Failed to refresh lot data for the line editor", error);
+		return;
+	}
+	if (token !== lotEditSeq || !uiStore.lotPickerDialog) return;
 	publish();
 };
 

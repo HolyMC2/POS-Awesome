@@ -902,6 +902,99 @@ export default {
 					this.calc_prices(item, discount, { target: { id: "discount_percentage" } });
 					return;
 				}
+				case "discountAmount": {
+					// The peso twin of the % — the expanded row's third pricing
+					// field, through the same gate and the same calc pass.
+					if (
+						!this.pos_profile?.posa_allow_user_to_edit_item_discount ||
+						item.posa_is_replace ||
+						item.posa_offer_applied
+					)
+						return;
+					const amount = Number(payload.amount);
+					if (!Number.isFinite(amount) || amount < 0) return;
+					this.setFormatedCurrency(item, "discount_amount", null, false, {
+						target: { value: amount },
+					});
+					this.calc_prices(item, amount, { target: { id: "discount_amount" } });
+					return;
+				}
+				case "uom": {
+					// The expanded row's UOM select, engine side: frozen on a
+					// replacement and on a return against a document, and only
+					// a unit the item's own UOM table actually lists.
+					if (item.posa_is_replace) return;
+					if (this.isReturnInvoice && this.invoice_doc?.return_against) return;
+					const uom = String(payload.uom || "").trim();
+					if (!uom || uom === item.uom) return;
+					const options = Array.isArray(item.item_uoms) ? item.item_uoms : [];
+					if (!options.some((entry) => String(entry?.uom || "").trim() === uom)) return;
+					item.uom = uom;
+					this.calc_uom(item, uom);
+					this.eventBus?.emit?.("recalculate_return_discount", { defer: true });
+					return;
+				}
+				case "priceListRate": {
+					// The «Change Price» flow minus its prompt — the sheet
+					// already holds the typed rate. Same profile gate the desk
+					// hides the button behind, re-checked engine side.
+					if (!this.pos_profile?.posa_allow_price_list_rate_change || item.posa_is_replace)
+						return;
+					const rate = Number(payload.rate);
+					if (!Number.isFinite(rate) || rate < 0) return;
+					void this.apply_price_list_rate(item, rate);
+					return;
+				}
+				case "deliveryDate": {
+					// Order / Quotation lines only, exactly as the expanded row
+					// draws its date picker. `validate_due_date` owns the rules.
+					if (!this.pos_profile?.posa_allow_sales_order) return;
+					if (!["Order", "Quotation"].includes(String(this.invoiceType || ""))) return;
+					const date = String(payload.date || "").trim();
+					if (!/^\d{2}-\d{2}-\d{4}$/.test(date)) return;
+					item.posa_delivery_date = date;
+					this.validate_due_date(item);
+					return;
+				}
+				case "note": {
+					// The weighing pad's ride-along (`Pos.vue` only sends it for
+					// a line without one) — `ItemsTable.handleLineNoteUpdate`'s
+					// own write, restated.
+					const note = String(payload.note || "").trim();
+					if (!note) return;
+					item.posa_notes = note;
+					return;
+				}
+				case "lots": {
+					// A re-answered lot picker. The FIRST allocation re-shapes
+					// THIS row through the same functions the expanded panel's
+					// autocompletes call; any FURTHER batch allocations become
+					// new lines through the add path, which already knows how
+					// to split a quantity across boxes.
+					if (item.posa_is_replace) return;
+					const adds = Array.isArray(payload.adds) ? payload.adds : [];
+					if (!adds.length) return;
+					const [first, ...rest] = adds;
+					const batchNo = String(first?.batch_no || "").trim();
+					if (batchNo) {
+						this.set_batch_qty(item, batchNo, true);
+					}
+					const serials = Array.isArray(first?.serial_no_selected)
+						? first.serial_no_selected.map((serial) => String(serial || "").trim()).filter(Boolean)
+						: [];
+					if (serials.length) {
+						item.serial_no_selected = serials;
+						// Syncs `serial_no` and the row's qty to the count.
+						this.set_serial_no(item);
+					} else if (Number(first?.qty) > 0) {
+						this.setFormatedQty(item, "qty", null, false, Math.abs(Number(first.qty)));
+					}
+					this.eventBus?.emit?.("recalculate_return_discount", { defer: true });
+					if (rest.length) {
+						this.eventBus?.emit?.("lot:confirm", { adds: rest });
+					}
+					return;
+				}
 				case "remove": {
 					// The delete button's one condition, engine side.
 					if (item.posa_is_replace) return;

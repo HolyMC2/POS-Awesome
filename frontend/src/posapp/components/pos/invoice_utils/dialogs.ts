@@ -366,6 +366,119 @@ export function close_payments(context: any) {
 	}
 }
 
+/**
+ * Apply ONE price-list rate to ONE line and persist it — the half of
+ * «Change Price» that is a WRITE rather than a conversation. The desk's
+ * dialog calls this after its prompt; the phone's line sheet calls it with
+ * the typed rate directly (`movil:line-edit` → `priceListRate`), so both
+ * surfaces move a list price through exactly one path.
+ */
+export async function apply_price_list_rate(
+	context: any,
+	item: any,
+	nextRate: number,
+) {
+	if (!item || !Number.isFinite(nextRate) || nextRate < 0) return;
+	applyPriceListRateLocally(context, item, nextRate);
+	await persistPriceListRate(context, item, nextRate);
+}
+
+function applyPriceListRateLocally(context: any, item: any, nextRate: number) {
+	const priceCurrency =
+		context.selected_currency ||
+		context.price_list_currency ||
+		context.pos_profile?.currency;
+	if (context._applyPriceListRate) {
+		context._applyPriceListRate(item, nextRate, priceCurrency);
+	} else {
+		item.price_list_rate = nextRate;
+		item.base_price_list_rate = context._toBaseCurrency
+			? context._toBaseCurrency(nextRate)
+			: nextRate;
+	}
+
+	// Treat manual price-list change as an explicit rate override.
+	item.rate = nextRate;
+	item.base_rate = context._toBaseCurrency
+		? context._toBaseCurrency(nextRate)
+		: nextRate;
+	item.discount_amount = 0;
+	item.base_discount_amount = 0;
+	item.discount_percentage = 0;
+	item._manual_rate_set = true;
+	item._manual_rate_set_from_uom = false;
+	item.amount = context.flt
+		? context.flt((item.qty || 0) * item.rate, context.currency_precision)
+		: (item.qty || 0) * item.rate;
+	item.base_amount = context._toBaseCurrency
+		? context._toBaseCurrency(item.amount)
+		: item.amount;
+
+	if (typeof context.calc_stock_qty === "function") {
+		context.calc_stock_qty(item, item.qty);
+	}
+	if (typeof context.schedulePricingRuleApplication === "function") {
+		context.schedulePricingRuleApplication(true);
+	}
+	if (typeof context.forceUpdate === "function") {
+		context.forceUpdate();
+	}
+}
+
+function resolveTargetPriceList(context: any) {
+	if (typeof context.get_price_list === "function") {
+		return context.get_price_list();
+	}
+	if (typeof context.get_effective_price_list === "function") {
+		return context.get_effective_price_list();
+	}
+	return (
+		context.selected_price_list ||
+		context.customer_info?.customer_price_list ||
+		context.customer_info?.customer_group_price_list ||
+		context.pos_profile?.selling_price_list ||
+		""
+	);
+}
+
+async function persistPriceListRate(context: any, item: any, nextRate: number) {
+	if (isOffline() || !frappe?.call) {
+		return;
+	}
+
+	const itemCode = item.item_code || item.name;
+	const priceList = resolveTargetPriceList(context);
+	if (!itemCode || !priceList) {
+		return;
+	}
+
+	try {
+		await frappe.call({
+			method: "posawesome.posawesome.api.items.update_price_list_rate",
+			args: {
+				item_code: itemCode,
+				price_list: priceList,
+				rate: nextRate,
+				uom: item.uom || item.stock_uom || undefined,
+				// MONEY-F3: name the profile so the server can check membership
+				// + the posa_allow_price_list_rate_change flag, not just trust
+				// the hidden button.
+				pos_profile: context.pos_profile?.name,
+			},
+		});
+		item._price_list_rate_persisted = true;
+	} catch (error: any) {
+		console.error("Failed to persist price list rate:", error);
+		context.toastStore?.show?.({
+			title: __("Price list rate updated locally only"),
+			message:
+				error?.message ||
+				__("Unable to save the rate to the backend price list"),
+			color: "warning",
+		});
+	}
+}
+
 export async function change_price_list_rate(
 	context: any,
 	item: any,
@@ -382,102 +495,6 @@ export async function change_price_list_rate(
 			? context.flt(parsed, context.currency_precision)
 			: parsed;
 		return rounded >= 0 ? rounded : null;
-	};
-
-	const applyRate = (nextRate: number) => {
-		const priceCurrency =
-			context.selected_currency ||
-			context.price_list_currency ||
-			context.pos_profile?.currency;
-		if (context._applyPriceListRate) {
-			context._applyPriceListRate(item, nextRate, priceCurrency);
-		} else {
-			item.price_list_rate = nextRate;
-			item.base_price_list_rate = context._toBaseCurrency
-				? context._toBaseCurrency(nextRate)
-				: nextRate;
-		}
-
-		// Treat manual price-list change as an explicit rate override.
-		item.rate = nextRate;
-		item.base_rate = context._toBaseCurrency
-			? context._toBaseCurrency(nextRate)
-			: nextRate;
-		item.discount_amount = 0;
-		item.base_discount_amount = 0;
-		item.discount_percentage = 0;
-		item._manual_rate_set = true;
-		item._manual_rate_set_from_uom = false;
-		item.amount = context.flt
-			? context.flt((item.qty || 0) * item.rate, context.currency_precision)
-			: (item.qty || 0) * item.rate;
-		item.base_amount = context._toBaseCurrency
-			? context._toBaseCurrency(item.amount)
-			: item.amount;
-
-		if (typeof context.calc_stock_qty === "function") {
-			context.calc_stock_qty(item, item.qty);
-		}
-		if (typeof context.schedulePricingRuleApplication === "function") {
-			context.schedulePricingRuleApplication(true);
-		}
-		if (typeof context.forceUpdate === "function") {
-			context.forceUpdate();
-		}
-	};
-
-	const resolvePriceList = () => {
-		if (typeof context.get_price_list === "function") {
-			return context.get_price_list();
-		}
-		if (typeof context.get_effective_price_list === "function") {
-			return context.get_effective_price_list();
-		}
-		return (
-			context.selected_price_list ||
-			context.customer_info?.customer_price_list ||
-			context.customer_info?.customer_group_price_list ||
-			context.pos_profile?.selling_price_list ||
-			""
-		);
-	};
-
-	const persistRate = async (nextRate: number) => {
-		if (isOffline() || !frappe?.call) {
-			return;
-		}
-
-		const itemCode = item.item_code || item.name;
-		const priceList = resolvePriceList();
-		if (!itemCode || !priceList) {
-			return;
-		}
-
-		try {
-			await frappe.call({
-				method: "posawesome.posawesome.api.items.update_price_list_rate",
-				args: {
-					item_code: itemCode,
-					price_list: priceList,
-					rate: nextRate,
-					uom: item.uom || item.stock_uom || undefined,
-					// MONEY-F3: name the profile so the server can check membership
-					// + the posa_allow_price_list_rate_change flag, not just trust
-					// the hidden button.
-					pos_profile: context.pos_profile?.name,
-				},
-			});
-			item._price_list_rate_persisted = true;
-		} catch (error: any) {
-			console.error("Failed to persist price list rate:", error);
-			context.toastStore?.show?.({
-				title: __("Price list rate updated locally only"),
-				message:
-					error?.message ||
-					__("Unable to save the rate to the backend price list"),
-				color: "warning",
-			});
-		}
 	};
 
 	const currentRate = parseRate(item.price_list_rate ?? item.rate ?? 0) ?? 0;
@@ -506,6 +523,5 @@ export async function change_price_list_rate(
 		return;
 	}
 
-	applyRate(nextRate);
-	await persistRate(nextRate);
+	await apply_price_list_rate(context, item, nextRate);
 }

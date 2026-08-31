@@ -25,11 +25,13 @@
  * Pure: no Vue, no store, no `__()`.
  */
 
+import { isFractionEligible } from "../../../../utils/fractionalMath";
 import { resolveSaleSummary, type SaleSummarySourceLine } from "../../payments/saleSummary";
 
 /** A cart row, as `invoiceStore.items` holds it, plus the fields the gates read. */
 export interface MovilLineEditSource extends SaleSummarySourceLine {
 	discount_percentage?: number | string | null;
+	discount_amount?: number | string | null;
 	price_list_rate?: number | string | null;
 	/** A free line, an applied offer, a replacement — each disables a control. */
 	is_free_item?: number | boolean | null;
@@ -38,18 +40,47 @@ export interface MovilLineEditSource extends SaleSummarySourceLine {
 	posa_is_replace?: number | boolean | null;
 	/** Set by the stock guard when the shelf cannot pay for one more. */
 	disable_increment?: number | boolean | null;
+	/** The unit story: what it is sold in, what the shelf counts it in. */
+	uom?: string | null;
+	stock_uom?: string | null;
+	item_uoms?: Array<{ uom?: string | null; conversion_factor?: number | string | null }> | null;
+	conversion_factor?: number | string | null;
+	stock_qty?: number | string | null;
+	/** ERPNext's own "may this be fractional" answer, on the items wire. */
+	must_be_whole_number?: unknown;
+	sub_unit?: unknown;
+	/** Stock the expanded row shows read-only. */
+	_base_actual_qty?: number | string | null;
+	warehouse?: string | null;
+	item_group?: string | null;
+	/** The numbered-unit story, exactly as the cart row carries it. */
+	has_serial_no?: unknown;
+	has_batch_no?: unknown;
+	serial_no_selected?: unknown;
+	batch_no?: string | null;
+	batch_no_expiry_date?: string | null;
+	/** Order / Quotation lines carry a promised date. */
+	posa_delivery_date?: string | null;
 }
 
 /** The two POS Profile checkboxes the desk row reads before it draws an editor. */
 export interface MovilLineEditProfile {
 	posa_allow_user_to_edit_rate?: unknown;
 	posa_allow_user_to_edit_item_discount?: unknown;
+	posa_allow_price_list_rate_change?: unknown;
+	posa_allow_sales_order?: unknown;
 }
 
 export interface MovilLineEditOptions {
 	profile?: MovilLineEditProfile | null;
 	/** A return invoice carries negative quantities and freezes free lines. */
 	isReturn?: boolean;
+	/** A return AGAINST a document also freezes the unit of measure. */
+	returnAgainst?: boolean;
+	/** `verticalStore.has("fractional")` — the register weighs, or it does not. */
+	verticalHasFractional?: boolean;
+	/** `invoiceStore.invoiceType` — the delivery date only exists on Order / Quotation. */
+	invoiceType?: string | null;
 }
 
 /** The sheet's whole model: what to draw, and whether it may be touched. */
@@ -63,13 +94,43 @@ export interface MovilLineEdit {
 	/** What the line contributes to the ticket, straight off `resolveSaleSummary`. */
 	amount: number;
 	discountPercentage: number;
+	/** The peso twin of the % — `discount_amount`, sign dropped like the desk's. */
+	discountAmount: number;
 	isCombo: boolean;
 	componentCount: number;
+	/** The unit story. `uomOptions` empty means the item sells in one unit only. */
+	uom: string;
+	stockUom: string;
+	uomOptions: string[];
+	conversionFactor: number;
+	/** What the line counts in shelf units — drawn only when the UOMs differ. */
+	stockQty: number;
+	/** Read-only stock facts the expanded row has always shown. */
+	availableQty: number;
+	warehouse: string;
+	itemGroup: string;
+	/** The list price behind the rate, and whether this register may move it. */
+	priceListRate: number;
+	/** The numbered-unit story: what is chosen now, and whether it can change. */
+	hasLots: boolean;
+	hasSerial: boolean;
+	hasBatch: boolean;
+	lotSerials: string[];
+	lotBatchNo: string;
+	lotBatchExpiry: string;
+	/** `posa_delivery_date`, as the row stores it (dd-MM-yyyy). */
+	deliveryDate: string;
 	canStepUp: boolean;
 	canStepDown: boolean;
 	canTypeQty: boolean;
 	canEditRate: boolean;
 	canEditDiscount: boolean;
+	canEditUom: boolean;
+	/** The weighing pad's gate — the register weighs AND the unit divides. */
+	canWeigh: boolean;
+	canChangePriceListRate: boolean;
+	canEditLots: boolean;
+	canEditDeliveryDate: boolean;
 	canRemove: boolean;
 }
 
@@ -86,6 +147,18 @@ export type MovilLineIntent =
 	| { kind: "qty"; qty: number }
 	| { kind: "rate"; rate: number }
 	| { kind: "discount"; discount: number }
+	/** The peso discount field — `discount_amount` through the same calc pass. */
+	| { kind: "discountAmount"; amount: number }
+	/** The UOM select — `calc_uom` verbatim, which reprices the line. */
+	| { kind: "uom"; uom: string }
+	/** The Change Price flow without its prompt — apply + persist, one rate. */
+	| { kind: "priceListRate"; rate: number }
+	/** dd-MM-yyyy, exactly as `posa_delivery_date` stores it. */
+	| { kind: "deliveryDate"; date: string }
+	/** The weighing pad's note ride-along — only set where the line has none. */
+	| { kind: "note"; note: string }
+	/** A re-answered lot picker: the first add re-shapes THIS row, the rest add lines. */
+	| { kind: "lots"; adds: Array<Record<string, any>> }
 	| { kind: "remove" };
 
 /** The intent as it rides the bus: the sheet's verb plus the row it is about. */
@@ -143,6 +216,23 @@ export const resolveMovilLineEdit = (
 	const frozenReturnLine =
 		isReturn && (flag(row.is_free_item) || flag(row.posa_is_offer) || isReplace);
 
+	// The unit story. `item_uoms` is ERPNext's conversion table on the item
+	// payload; a single entry means there is nothing to choose.
+	const uom = text(row.uom) || text(row.stock_uom);
+	const stockUom = text(row.stock_uom);
+	const uomOptions = Array.isArray(row.item_uoms)
+		? Array.from(new Set(row.item_uoms.map((entry) => text(entry?.uom)).filter(Boolean)))
+		: [];
+
+	// The serial list as the cart row carries it — an array after the picker,
+	// a newline-joined string off a loaded draft. Both are the same selection.
+	const rawSerials = row.serial_no_selected;
+	const lotSerials = Array.isArray(rawSerials)
+		? rawSerials.map(text).filter(Boolean)
+		: text(rawSerials)
+			? text(rawSerials).split("\n").map(text).filter(Boolean)
+			: [];
+
 	return {
 		rowId,
 		itemCode: summary.itemCode,
@@ -151,8 +241,27 @@ export const resolveMovilLineEdit = (
 		rate: summary.rate,
 		amount: summary.amount,
 		discountPercentage: toNumber(row.discount_percentage),
+		// `Math.abs` like the desk's field: a return line carries the sign in
+		// the qty, and a negative discount would read as a surcharge.
+		discountAmount: Math.abs(toNumber(row.discount_amount)),
 		isCombo: summary.isCombo,
 		componentCount: summary.componentCount,
+		uom,
+		stockUom,
+		uomOptions,
+		conversionFactor: toNumber(row.conversion_factor) || 1,
+		stockQty: toNumber(row.stock_qty),
+		availableQty: toNumber(row._base_actual_qty),
+		warehouse: text(row.warehouse),
+		itemGroup: text(row.item_group),
+		priceListRate: toNumber(row.price_list_rate),
+		hasLots: flag(row.has_serial_no) || flag(row.has_batch_no),
+		hasSerial: flag(row.has_serial_no),
+		hasBatch: flag(row.has_batch_no),
+		lotSerials,
+		lotBatchNo: text(row.batch_no),
+		lotBatchExpiry: text(row.batch_no_expiry_date),
+		deliveryDate: text(row.posa_delivery_date),
 		// `disableIncrement` / `disableDecrement`, negated.
 		canStepUp: !isReplace && !flag(row.disable_increment) && !frozenReturnLine,
 		canStepDown: !isReplace && !frozenReturnLine,
@@ -162,6 +271,30 @@ export const resolveMovilLineEdit = (
 			flag(profile?.posa_allow_user_to_edit_item_discount) &&
 			!isReplace &&
 			!flag(row.posa_offer_applied),
+		// The expanded row's UOM select: frozen on a replacement and on a
+		// return that references a source document, and pointless with one UOM.
+		canEditUom:
+			uomOptions.length > 1 && !isReplace && !(isReturn && Boolean(options.returnAgainst)),
+		// `offersFractionalPad`, restated: the REGISTER weighs (`fractional`
+		// vertical) and ERPNext lets this unit divide. The frozen-line clause
+		// is `disableInput`'s, same as the desk's declaration order.
+		canWeigh:
+			Boolean(options.verticalHasFractional) &&
+			isFractionEligible({
+				uom,
+				mustBeWholeNumber: row.must_be_whole_number,
+				precision: 3,
+				subUnit: row.sub_unit,
+			}) &&
+			!frozenReturnLine,
+		canChangePriceListRate: flag(profile?.posa_allow_price_list_rate_change) && !isReplace,
+		// The expanded row's serial / batch editors carry no extra gate; a
+		// combo parent has no lot of its own, its components do.
+		canEditLots:
+			(flag(row.has_serial_no) || flag(row.has_batch_no)) && !isReplace && !summary.isCombo,
+		canEditDeliveryDate:
+			flag(profile?.posa_allow_sales_order) &&
+			["Order", "Quotation"].includes(text(options.invoiceType)),
 		// The desk's delete button carries exactly this one condition.
 		canRemove: !isReplace,
 	};

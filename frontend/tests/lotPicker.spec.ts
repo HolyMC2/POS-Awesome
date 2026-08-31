@@ -568,6 +568,73 @@ const makeBus = () => {
 	};
 };
 
+describe("an edit opens on the line's own answer", () => {
+	beforeEach(() => {
+		vi.stubGlobal("__", (value: string, args?: unknown[]) =>
+			Array.isArray(args)
+				? args.reduce<string>(
+						(out, arg, index) => out.replace(`{${index}}`, String(arg)),
+						value,
+					)
+				: value,
+		);
+	});
+
+	const mountEdit = (
+		item: Record<string, unknown>,
+		initialSelection: Record<string, unknown>,
+		listeners = spy(),
+	) => {
+		const wrapper = mount(LotPicker, {
+			props: {
+				view: view(item),
+				requestedQty: 1,
+				initialSelection,
+				purpose: "edit",
+				...listeners,
+			} as never,
+			attachTo: document.body,
+		});
+		return Object.assign(wrapper, listeners);
+	};
+
+	it("seeds the line's serials, drops the unknown, and says Apply", async () => {
+		// `SN-999` is nobody: a serial the dataset cannot offer must not ride
+		// a seed past the same filter a tap goes through.
+		const sheet = mountEdit(SERIAL_ITEM, { serials: ["SN-002", "SN-999"] });
+		expect(sheet.find('[data-testid="lot-add"]').text()).toContain("Apply");
+
+		await sheet.find('[data-testid="lot-add"]').trigger("click");
+		const adds = sheet.onConfirm.mock.calls[0][0];
+		expect(adds).toHaveLength(1);
+		expect(adds[0].serial_no_selected).toEqual(["SN-002"]);
+		expect(adds[0].qty).toBe(1);
+	});
+
+	it("opens on the line's own batch, not on FEFO's opinion", async () => {
+		const sheet = mountEdit(BATCH_ITEM, { batches: [{ batchNo: "LOTE-B", qty: 3 }] });
+		await sheet.find('[data-testid="lot-add"]').trigger("click");
+		const adds = sheet.onConfirm.mock.calls[0][0];
+		expect(adds).toEqual([expect.objectContaining({ batch_no: "LOTE-B", qty: 3 })]);
+	});
+
+	it("re-seeds across the refresh wave instead of coming back empty", async () => {
+		// The detail refresh re-publishes the view and the source-watch resets
+		// local state; an edit must come back up showing what the line holds.
+		const sheet = mountEdit(SERIAL_ITEM, { serials: ["SN-002"] });
+		await sheet.setProps({ view: view({ ...SERIAL_ITEM }) } as never);
+
+		await sheet.find('[data-testid="lot-add"]').trigger("click");
+		const adds = sheet.onConfirm.mock.calls[0][0];
+		expect(adds[0].serial_no_selected).toEqual(["SN-002"]);
+	});
+
+	it("keeps the add wording for an ordinary add", () => {
+		const sheet = mountPicker(SERIAL_ITEM);
+		expect(sheet.find('[data-testid="lot-add"]').text()).toContain("Add");
+	});
+});
+
 describe("the phone rings the picker instead of adding a unit-less line", () => {
 	let bus: ReturnType<typeof makeBus>;
 

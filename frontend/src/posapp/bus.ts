@@ -233,6 +233,13 @@ export type Events = {
 	 */
 	"movil:pick-lot": Item;
 	/**
+	 * The phone's line sheet asking to CHANGE an existing line's serial /
+	 * batch. `ItemsSelector` answers by re-opening the SAME lot picker over
+	 * the line's current choice; the picker's confirm then rides
+	 * `movil:line-edit` (`kind: "lots"`) back onto the row instead of adding.
+	 */
+	"movil:edit-lots": { rowId: string; itemCode?: string };
+	/**
 	 * The lot picker's «Agregar» — the chosen units, as ready-to-add payloads.
 	 *
 	 * The picker itself adds nothing: it emits what a cashier decided and

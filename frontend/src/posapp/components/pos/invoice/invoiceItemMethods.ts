@@ -350,6 +350,11 @@ const invoiceItemMethods: Record<string, unknown> &
 	change_price_list_rate(item) {
 		return Dialogs.change_price_list_rate(this, item);
 	},
+	// The promptless half, for a surface that already holds the typed rate
+	// (the phone's line sheet). Same apply, same persist, no second path.
+	apply_price_list_rate(item, rate) {
+		return Dialogs.apply_price_list_rate(this, item, rate);
+	},
 
 	// Stock
 	calc_stock_qty(item, value) {

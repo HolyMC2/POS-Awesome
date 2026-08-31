@@ -39,10 +39,29 @@
 				v-if="uiStore.lotPickerDialog && lotPickerView"
 				:view="lotPickerView"
 				:requested-qty="lotPickerRequestedQty"
+				:initial-selection="uiStore.lotPickerData?.initialSelection || null"
+				:purpose="uiStore.lotPickerData?.editRowId ? 'edit' : 'add'"
 				@confirm="onLotConfirm"
 				@close="uiStore.closeLotPicker()"
 			></LotPicker>
 		</Transition>
+		<!-- The WEIGHING PAD, for the phone's line sheet. The desk's cart row
+		     hosts its own copy; this one exists because the sheet lives in a
+		     leaving <Transition> inside MovilShell, where a v-dialog child
+		     would be torn down mid-entry. Same props, same confirm contract —
+		     the qty rides `movil:line-edit` exactly as a typed one does. -->
+		<FractionalQtyPad
+			v-if="movilLineRow && movilLineSheet?.canWeigh"
+			v-model="movilPadOpen"
+			:item="movilLineRow"
+			:uom-facts="movilPadUomFacts"
+			:display-currency="activeCurrency"
+			:currency-precision="movilRegisterPrecision"
+			:format-float="formatFloat"
+			:format-currency="formatCurrency"
+			:currency-symbol="currencySymbol"
+			@confirm="onMovilPadConfirm"
+		/>
 		<!-- SALDO-INTEGRATION-POINT — components live in saldo Frappe app -->
 		<SaldoReferenciaDialog
 			v-model="saldoDialogOpen"
@@ -333,6 +352,8 @@
 						@line-edit="onMovilLineEdit"
 						@line-close="onMovilLineClose"
 						@line-more="onMovilLineMore"
+						@line-weigh="onMovilLineWeigh"
+						@line-lots="onMovilLineLots"
 					/>
 				</v-col>
 
@@ -710,6 +731,7 @@ const SalesOrders = defineAsyncComponent(() => import("../flows/SalesOrders.vue"
 const NewAddress = defineAsyncComponent(() => import("../customer/NewAddress.vue"));
 const Variants = defineAsyncComponent(() => import("../items/Variants.vue"));
 const LotPicker = defineAsyncComponent(() => import("../items/lot/LotPicker.vue"));
+const FractionalQtyPad = defineAsyncComponent(() => import("../invoice/FractionalQtyPad.vue"));
 const Returns = defineAsyncComponent(() => import("../flows/Returns.vue"));
 const MpesaPayments = defineAsyncComponent(() => import("../payments/Mpesa-Payments.vue"));
 
@@ -1005,7 +1027,7 @@ export default {
 		// Change due — raised by Payments.vue via the bus the moment a sale with
 		// change is submitted, and dismissed only by the cashier confirming the
 		// money left the drawer.
-		const { formatCurrency } = useFormat();
+		const { formatCurrency, formatFloat, currencySymbol } = useFormat();
 		const changeDueOpen = ref(false);
 		const changeDueAmount = ref(0);
 		const changeDueCurrency = ref("");
@@ -1627,6 +1649,11 @@ export default {
 			resolveMovilLineEdit(movilLineRow.value, {
 				profile: posProfile.value,
 				isReturn: Boolean(invoiceDoc.value?.is_return),
+				returnAgainst: Boolean(invoiceDoc.value?.return_against),
+				// The desk row's own two context gates, restated once here:
+				// the register weighs, and the delivery date exists at all.
+				verticalHasFractional: vertical.has("fractional"),
+				invoiceType: invoiceStore.invoiceType,
 			}),
 		);
 		// The row left the cart — removed here, removed from the desk, or the
@@ -1674,6 +1701,69 @@ export default {
 			if (intent.kind === "remove") {
 				movilLineRowId.value = "";
 			}
+		};
+		// ---- the sheet's two hosted surfaces (weigh pad, lot picker) ------
+		// Both are DIALOGS the sheet cannot carry itself: the sheet lives in a
+		// leaving <Transition> inside MovilShell, so anything overlay-shaped
+		// mounted in it would be torn down mid-animation. They live here, the
+		// way the add path's LotPicker already does.
+		const movilPadOpen = ref(false);
+		// The pad dies with its line: a sheet closed, a row removed, a cleared
+		// invoice must not leave a scale pad floating over the register.
+		watch(movilLineRow, (row) => {
+			if (!row) movilPadOpen.value = false;
+		});
+		const movilRegisterPrecision = computed(() => {
+			const declared = Number.parseInt(
+				String(posProfile.value?.posa_decimal_precision ?? ""),
+				10,
+			);
+			return Number.isInteger(declared) && declared >= 0 ? declared : 2;
+		});
+		// `CartItemRow.vue`'s uomFacts, for the same pad, from the same row.
+		const movilPadUomFacts = computed(() => {
+			const row = movilLineRow.value || {};
+			return {
+				uom: row.uom || row.stock_uom,
+				mustBeWholeNumber: row.must_be_whole_number,
+				precision: movilRegisterPrecision.value,
+				subUnit: row.sub_unit,
+			};
+		});
+		const onMovilLineWeigh = () => {
+			if (!movilLineSheet.value?.canWeigh) return;
+			movilPadOpen.value = true;
+		};
+		/**
+		 * The pad resolved a weight or an importe into a quantity. It rides
+		 * the SAME intent a typed quantity rides; the note ride-along follows
+		 * `CartItemRow.applyFractionalQty`'s rule — only where the line has
+		 * no note of its own yet.
+		 */
+		const onMovilPadConfirm = (payload) => {
+			const row = movilLineRow.value;
+			const qty = Number(payload?.qty);
+			if (!row || !Number.isFinite(qty) || qty <= 0) return;
+			const identity = { rowId: movilLineRowId.value, itemCode: row.item_code || "" };
+			eventBus.emit("movil:line-edit", { kind: "qty", qty, ...identity });
+			const note = String(payload?.note || "").trim();
+			if (note && !String(row.posa_notes || "").trim()) {
+				eventBus.emit("movil:line-edit", { kind: "note", note, ...identity });
+			}
+		};
+		/**
+		 * The sheet's serial / batch row. The picker itself opens from
+		 * `ItemsSelector` (the catalogue row holds the lot data and the
+		 * refresh machinery lives there); this only rings that bell with the
+		 * row's identity on it.
+		 */
+		const onMovilLineLots = () => {
+			const row = movilLineRow.value;
+			if (!row || !movilLineSheet.value?.canEditLots) return;
+			eventBus.emit("movil:edit-lots", {
+				rowId: movilLineRowId.value,
+				itemCode: row.item_code || "",
+			});
 		};
 		const onMovilSplit = () => {
 			movilPayDetail.value = true;
@@ -1750,8 +1840,23 @@ export default {
 		 * to `ItemsSelector`, which owns the ONE add path.
 		 */
 		const onLotConfirm = (adds) => {
+			// An EDIT session carries the row it was opened over; its answer
+			// re-shapes that row instead of adding lines. `Invoice.vue` owns
+			// the write either way.
+			const editRowId = uiStore.lotPickerData?.editRowId || "";
+			const editItemCode = uiStore.lotPickerData?.item?.item_code || "";
 			uiStore.closeLotPicker();
-			eventBus.emit("lot:confirm", { adds: Array.isArray(adds) ? adds : [] });
+			const list = Array.isArray(adds) ? adds : [];
+			if (editRowId) {
+				eventBus.emit("movil:line-edit", {
+					kind: "lots",
+					adds: list,
+					rowId: editRowId,
+					itemCode: editItemCode,
+				});
+				return;
+			}
+			eventBus.emit("lot:confirm", { adds: list });
 		};
 		// The rows the ONE ItemsSelector is displaying — searched, filtered,
 		// paginated — published by its update:displayedItems. The browse
@@ -2627,6 +2732,16 @@ export default {
 			onMovilLineEdit,
 			onMovilLineClose,
 			onMovilLineMore,
+			onMovilLineWeigh,
+			onMovilLineLots,
+			movilLineRow,
+			movilPadOpen,
+			movilPadUomFacts,
+			movilRegisterPrecision,
+			onMovilPadConfirm,
+			activeCurrency,
+			formatFloat,
+			currencySymbol,
 			movilLineSheet,
 			onMovilSplit,
 			onMovilCollect,
@@ -2719,6 +2834,7 @@ export default {
 		NewAddress,
 		Variants,
 		LotPicker,
+		FractionalQtyPad,
 		MpesaPayments,
 		SalesOrders,
 		// SALDO-INTEGRATION-POINT

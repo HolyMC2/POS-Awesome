@@ -271,7 +271,11 @@
 					:disabled="!canAdd"
 					@click="confirm"
 				>
-					{{ __("Add {0}", [formatQty(totalQty)]) }}
+					{{
+						purpose === "edit"
+							? __("Apply {0}", [formatQty(totalQty)])
+							: __("Add {0}", [formatQty(totalQty)])
+					}}
 				</button>
 				<button type="button" class="lot-picker__secondary" data-testid="lot-cancel" @click="close">
 					{{ __("Cancel") }}
@@ -304,6 +308,7 @@ import {
 	type LotBatchRow,
 	type LotBlockReason,
 	type LotPickerView,
+	type LotSelection,
 	type LotSerialRow,
 } from "./lotPicker";
 
@@ -311,6 +316,15 @@ const props = defineProps<{
 	view: LotPickerView;
 	/** How many units the cashier asked for — the desk's qty field, else 1. */
 	requestedQty?: number;
+	/**
+	 * A line's CURRENT choice, when the picker opens over an existing row
+	 * instead of an add (the phone's line sheet). Seeded on every re-publish
+	 * — the refresh wave resets local state, and an edit must come back up
+	 * showing what the line already holds, not an empty ask.
+	 */
+	initialSelection?: LotSelection | null;
+	/** What the primary verb means here: adding lines, or re-shaping one. */
+	purpose?: "add" | "edit";
 }>();
 
 const emit = defineEmits<{
@@ -354,6 +368,23 @@ const seedBatchAllocation = () => {
 		batchQtys.value = seeded;
 		return;
 	}
+	// An edit opens on the line's OWN batch and quantity, not on FEFO's
+	// opinion: the cashier came to change an answer, so show that answer.
+	const current = (props.initialSelection?.batches ?? []).filter(
+		(allocation) => allocation?.batchNo && Number(allocation?.qty) > 0,
+	);
+	if (current.length) {
+		const byNo = new Map(props.view.batches.map((batch) => [batch.batchNo, batch]));
+		for (const allocation of current) {
+			const batch = byNo.get(allocation.batchNo);
+			if (!batch || !batch.selectable) continue;
+			seeded[batch.batchNo] = Math.min(Number(allocation.qty), batch.availableQty);
+		}
+		if (Object.keys(seeded).length) {
+			batchQtys.value = seeded;
+			return;
+		}
+	}
 	let remaining = requested.value;
 	for (const batch of props.view.batches) {
 		if (remaining <= 0) break;
@@ -366,10 +397,26 @@ const seedBatchAllocation = () => {
 	batchQtys.value = seeded;
 };
 
+/**
+ * An EDIT session's serials, filtered to what the view can actually offer —
+ * on the first wave the row's own dataset, on the second the server's. An
+ * add session seeds nothing: which unit leaves the shelf is the question.
+ */
+const seedSerials = (): string[] => {
+	const seeded = (props.initialSelection?.serials ?? [])
+		.map((serial) => String(serial ?? "").trim())
+		.filter(Boolean);
+	if (!seeded.length) return [];
+	const selectable = new Set(
+		props.view.serials.filter((serial) => serial.selectable).map((serial) => serial.serialNo),
+	);
+	return seeded.filter((serial) => selectable.has(serial));
+};
+
 watch(
 	() => props.view.source,
 	() => {
-		pickedSerials.value = [];
+		pickedSerials.value = seedSerials();
 		batchFilter.value = null;
 		seedBatchAllocation();
 	},
@@ -578,8 +625,11 @@ onBeforeUnmount(() => {
 	position: fixed;
 	inset: 0;
 	/* Above the phone dock (`z-index: 20`) for the same reason the line sheet
-	   is: a picker the dock covers is a picker whose primary is under Pay. */
-	z-index: 30;
+	   is: a picker the dock covers is a picker whose primary is under Pay.
+	   And ONE above the line sheet (30): an edit opens this picker OVER that
+	   sheet, and the sheet sits later in Pos.vue's DOM, so an equal z-index
+	   would paint the picker underneath the surface that summoned it. */
+	z-index: 31;
 	/* LOAD-BEARING: this z-index only beats the dock while the sheet is mounted
 	   OUTSIDE `.destination-host`. That host sets `isolation: isolate` (so a
 	   hosted contained overlay's z-index cannot escape it), which ALSO caps any

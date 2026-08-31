@@ -74,6 +74,7 @@ import ModelSource from "../src/posapp/components/pos/mobile/line/movilLineEdit.
 import PosSource from "../src/posapp/components/pos/shell/Pos.vue?raw";
 import InvoiceSource from "../src/posapp/components/pos/Invoice.vue?raw";
 import ShellSource from "../src/posapp/components/pos/shell/movil/MovilShell.vue?raw";
+import SelectorSource from "../src/posapp/components/pos/items/ItemsSelector.vue?raw";
 import EsCsv from "../../posawesome/translations/es.csv?raw";
 
 /** A plain cart row, as `invoiceStore.items` hands one over. */
@@ -186,6 +187,94 @@ describe("what the phone may touch is what the desk row may touch", () => {
 		expect(combo.isCombo).toBe(true);
 		expect(combo.componentCount).toBe(2);
 	});
+
+	it("offers the unit story only when the item has one", () => {
+		const uoms = [
+			{ uom: "Caja", conversion_factor: 12 },
+			{ uom: "Pza", conversion_factor: 1 },
+		];
+		const line = edit({ uom: "Caja", stock_uom: "Pza", item_uoms: uoms, conversion_factor: 12 });
+		expect(line.uomOptions).toEqual(["Caja", "Pza"]);
+		expect(line.conversionFactor).toBe(12);
+		expect(line.canEditUom).toBe(true);
+		// One unit is not a choice.
+		expect(edit({ item_uoms: [{ uom: "Pza" }] }).canEditUom).toBe(false);
+		// The expanded row's own two freezes: a replacement, and a return that
+		// references a source document. A free return keeps the select.
+		expect(edit({ item_uoms: uoms, posa_is_replace: 1 }).canEditUom).toBe(false);
+		expect(
+			edit({ item_uoms: uoms }, { isReturn: true, returnAgainst: true }).canEditUom,
+		).toBe(false);
+		expect(edit({ item_uoms: uoms }, { isReturn: true }).canEditUom).toBe(true);
+	});
+
+	it("grows the scale only on a register that weighs, for a unit that divides", () => {
+		// `offersFractionalPad`, restated: BOTH gates must hold, and an absent
+		// `must_be_whole_number` reads as ineligible — the desk's own rule for
+		// rows cached before the field shipped.
+		const weighable = { must_be_whole_number: 0 };
+		expect(edit(weighable, { verticalHasFractional: true }).canWeigh).toBe(true);
+		expect(edit(weighable, { verticalHasFractional: false }).canWeigh).toBe(false);
+		expect(edit(weighable, {}).canWeigh).toBe(false);
+		expect(edit({ must_be_whole_number: 1 }, { verticalHasFractional: true }).canWeigh).toBe(
+			false,
+		);
+		expect(edit({}, { verticalHasFractional: true }).canWeigh).toBe(false);
+		// A returned free line has no editable qty and must not gain one by
+		// weighing — `disableInput`'s clause, declared in the same order.
+		expect(
+			edit(
+				{ ...weighable, is_free_item: 1 },
+				{ verticalHasFractional: true, isReturn: true },
+			).canWeigh,
+		).toBe(false);
+	});
+
+	it("names the numbered unit and gates its editor like the desk", () => {
+		const serial = edit({ has_serial_no: 1, serial_no_selected: ["SN-1", "SN-2"] });
+		expect(serial.hasSerial).toBe(true);
+		expect(serial.hasLots).toBe(true);
+		expect(serial.lotSerials).toEqual(["SN-1", "SN-2"]);
+		expect(serial.canEditLots).toBe(true);
+		// A loaded draft carries the same selection as a joined string.
+		expect(edit({ has_serial_no: 1, serial_no_selected: "SN-1\nSN-2" }).lotSerials).toEqual([
+			"SN-1",
+			"SN-2",
+		]);
+		expect(edit({ has_batch_no: 1, batch_no: "L-24" }).lotBatchNo).toBe("L-24");
+		expect(edit({ has_batch_no: 1, posa_is_replace: 1 }).canEditLots).toBe(false);
+		// An untracked item has no numbered unit to name.
+		expect(edit({}).hasLots).toBe(false);
+		expect(edit({}).canEditLots).toBe(false);
+	});
+
+	it("offers the delivery date only where the order flow exists", () => {
+		const profile = { posa_allow_sales_order: 1 };
+		expect(edit({}, { profile, invoiceType: "Order" }).canEditDeliveryDate).toBe(true);
+		expect(edit({}, { profile, invoiceType: "Quotation" }).canEditDeliveryDate).toBe(true);
+		expect(edit({}, { profile, invoiceType: "Invoice" }).canEditDeliveryDate).toBe(false);
+		expect(edit({}, { invoiceType: "Order" }).canEditDeliveryDate).toBe(false);
+	});
+
+	it("lets the list price move only behind the desk's own flag", () => {
+		expect(
+			edit({}, { profile: { posa_allow_price_list_rate_change: 1 } }).canChangePriceListRate,
+		).toBe(true);
+		expect(edit({}).canChangePriceListRate).toBe(false);
+		expect(
+			edit(
+				{ posa_is_replace: 1 },
+				{ profile: { posa_allow_price_list_rate_change: 1 } },
+			).canChangePriceListRate,
+		).toBe(false);
+	});
+
+	it("shows the peso discount without its return sign", () => {
+		// The desk's field renders `Math.abs(discount_amount)`; a negative here
+		// would read as a surcharge on a screen the customer may be watching.
+		expect(edit({ discount_amount: -25 }).discountAmount).toBe(25);
+		expect(edit({ discount_amount: 25 }).discountAmount).toBe(25);
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -198,7 +287,13 @@ describe("what the phone may touch is what the desk row may touch", () => {
  * `movilCobroView.spec.ts` and `movilVenta.spec.ts` assert intents this way.
  * A spec written against `emitted()` here passes on an empty array forever.
  */
-const spy = () => ({ onEdit: vi.fn(), onClose: vi.fn(), onMore: vi.fn() });
+const spy = () => ({
+	onEdit: vi.fn(),
+	onClose: vi.fn(),
+	onMore: vi.fn(),
+	onWeigh: vi.fn(),
+	onLots: vi.fn(),
+});
 
 const mountSheet = (line: MovilLineEdit, listeners = spy()) => {
 	const wrapper = mount(MovilLineSheet, {
@@ -308,6 +403,103 @@ describe("the sheet shows the line and mutates nothing", () => {
 		]);
 	});
 
+	it("sends the peso discount as its own verb, behind the same gate", async () => {
+		const sheet = mountSheet(edit({}, { profile: ALLOW_ALL }));
+		await sheet.find('[data-testid="movil-line-discount-amount"]').setValue("25");
+		expect(sheet.onEdit.mock.calls).toEqual([[{ kind: "discountAmount", amount: 25 }]]);
+
+		const forbidden = mountSheet(
+			edit({}, { profile: { posa_allow_user_to_edit_item_discount: 0 } }),
+		);
+		expect(forbidden.find('[data-testid="movil-line-discount-amount-field"]').exists()).toBe(
+			false,
+		);
+	});
+
+	it("changes the unit with a chip, and an unchanged chip travels nowhere", async () => {
+		const uoms = [
+			{ uom: "Caja", conversion_factor: 12 },
+			{ uom: "Pza", conversion_factor: 1 },
+		];
+		const sheet = mountSheet(
+			edit({ uom: "Caja", stock_uom: "Pza", item_uoms: uoms, conversion_factor: 12 }),
+		);
+		// The conversion is said out loud beside the choice.
+		expect(sheet.find('[data-testid="movil-line-conversion"]').text()).toBe("1 Caja = 12 Pza");
+
+		await sheet.find('[data-testid="movil-line-uom-Caja"]').trigger("click");
+		expect(sheet.onEdit).not.toHaveBeenCalled();
+
+		await sheet.find('[data-testid="movil-line-uom-Pza"]').trigger("click");
+		expect(sheet.onEdit.mock.calls).toEqual([[{ kind: "uom", uom: "Pza" }]]);
+	});
+
+	it("rings the scale's bell rather than weighing anything itself", async () => {
+		const sheet = mountSheet(
+			edit({ must_be_whole_number: 0 }, { verticalHasFractional: true }),
+		);
+		await sheet.find('[data-testid="movil-line-weigh"]').trigger("click");
+		expect(sheet.onWeigh).toHaveBeenCalledTimes(1);
+		expect(sheet.onEdit).not.toHaveBeenCalled();
+
+		// No scale on this register, no button.
+		expect(
+			mountSheet(edit({ must_be_whole_number: 0 }))
+				.find('[data-testid="movil-line-weigh"]')
+				.exists(),
+		).toBe(false);
+	});
+
+	it("states the numbered unit and rings the picker's bell to change it", async () => {
+		const sheet = mountSheet(edit({ has_serial_no: 1, serial_no_selected: ["SN-7"] }));
+		expect(sheet.find('[data-testid="movil-line-lots"]').text()).toContain("SN-7");
+		await sheet.find('[data-testid="movil-line-lots"]').trigger("click");
+		expect(sheet.onLots).toHaveBeenCalledTimes(1);
+
+		// An unanswered batch line asks rather than pretending.
+		const unpicked = mountSheet(edit({ has_batch_no: 1 }));
+		expect(unpicked.find('[data-testid="movil-line-lots"]').text()).toContain("Select");
+	});
+
+	it("unfolds «More options» in place, facts and all", async () => {
+		const sheet = mountSheet(
+			edit(
+				{ _base_actual_qty: 8, stock_uom: "Pza", warehouse: "Bodega - D", item_group: "Audio" },
+				{ profile: ALLOW_ALL },
+			),
+		);
+		expect(sheet.find('[data-testid="movil-line-extra"]').exists()).toBe(false);
+
+		await sheet.find('[data-testid="movil-line-expand"]').trigger("click");
+		const facts = sheet.find('[data-testid="movil-line-facts"]');
+		expect(facts.text()).toContain("8 Pza");
+		expect(facts.text()).toContain("Bodega - D");
+		expect(facts.text()).toContain("Audio");
+		// No price-list flag, so the list price reads as a fact, not a field.
+		expect(facts.text()).toContain(money(120));
+		expect(sheet.find('[data-testid="movil-line-plr"]').exists()).toBe(false);
+	});
+
+	it("sends a changed list price as its own verb, where the flag allows one", async () => {
+		const sheet = mountSheet(
+			edit({}, { profile: { posa_allow_price_list_rate_change: 1 } }),
+		);
+		await sheet.find('[data-testid="movil-line-expand"]').trigger("click");
+		await sheet.find('[data-testid="movil-line-plr"]').setValue("110");
+		expect(sheet.onEdit.mock.calls).toEqual([[{ kind: "priceListRate", rate: 110 }]]);
+	});
+
+	it("sends the delivery date in the row's own dd-MM-yyyy", async () => {
+		const sheet = mountSheet(
+			edit({}, { profile: { posa_allow_sales_order: 1 }, invoiceType: "Order" }),
+		);
+		await sheet.find('[data-testid="movil-line-expand"]').trigger("click");
+		await sheet.find('[data-testid="movil-line-delivery"]').setValue("2026-09-15");
+		expect(sheet.onEdit.mock.calls).toEqual([
+			[{ kind: "deliveryDate", date: "15-09-2026" }],
+		]);
+	});
+
 	it("does not offer a control the gate closed, even to a synthetic press", async () => {
 		// Not merely `disabled` in the markup: the handler refuses too, so a
 		// programmatic click (a stray dispatch, a test, an assistive tool)
@@ -341,10 +533,13 @@ describe("the sheet shows the line and mutates nothing", () => {
 	});
 
 	it("keeps the door to the classic cart open", async () => {
-		// UOM, batch, serial, the offer toggle, the line note and the weighing
-		// pad all still live on the desktop row. «More options» is a door, not
-		// a leftover — deleting it would strand them on the phone.
+		// «More options» now unfolds IN the sheet (UOM, lots, the pad, the
+		// list price, the date, the stock facts) — but the classic cart stays
+		// reachable at the bottom of that section: the bundle dialog and the
+		// customer editor still live there, and deleting the door would
+		// strand them on the phone.
 		const sheet = mountSheet(edit({}, { profile: ALLOW_ALL }));
+		await sheet.find('[data-testid="movil-line-expand"]').trigger("click");
 		await sheet.find('[data-testid="movil-line-more"]').trigger("click");
 		expect(sheet.onMore).toHaveBeenCalledTimes(1);
 	});
@@ -442,6 +637,10 @@ describe("the sheet is drawn in the register's own vocabulary", () => {
 			".movil-line-sheet__remove",
 			".movil-line-sheet__more",
 			".movil-line-sheet__field",
+			".movil-line-sheet__weigh",
+			".movil-line-sheet__uom",
+			".movil-line-sheet__lots",
+			".movil-line-sheet__classic",
 		]) {
 			expect(
 				pxOf(declaration(scopedStyles, selector, "min-height")),
@@ -459,10 +658,14 @@ describe("the sheet is drawn in the register's own vocabulary", () => {
 			[...tag[0].matchAll(/\sclass="([^"]+)"/g)].map((cls) => cls[1].split(/\s+/)[0]),
 		);
 		expect([...new Set(classes)].sort()).toEqual([
+			"movil-line-sheet__classic",
 			"movil-line-sheet__close",
+			"movil-line-sheet__lots",
 			"movil-line-sheet__more",
 			"movil-line-sheet__remove",
 			"movil-line-sheet__step",
+			"movil-line-sheet__uom",
+			"movil-line-sheet__weigh",
 		]);
 	});
 
@@ -806,6 +1009,52 @@ describe("the routing and the engine call are pinned where they live", () => {
 		expect(stepCase).toContain("item.disable_increment");
 		const removeCase = handler.slice(handler.indexOf('case "remove"'));
 		expect(removeCase).toContain("item.posa_is_replace");
+	});
+
+	it("answers the new verbs with the desk's own functions too", () => {
+		const handler = /handleMovilLineEdit\(payload = \{\}\) \{([\s\S]*?)\n\t\t\},\n/.exec(
+			InvoiceSource,
+		)?.[1] as string;
+		expect(handler).toBeTruthy();
+
+		// The peso discount rides the SAME pass as the %, under its own id.
+		expect(handler).toContain('this.setFormatedCurrency(item, "discount_amount"');
+		expect(handler).toContain('{ target: { id: "discount_amount" } }');
+		// The unit change is calc_uom — the expanded row's own handler.
+		expect(handler).toContain("this.calc_uom(item, uom)");
+		// The list price rides the ONE extracted apply+persist path.
+		expect(handler).toContain("this.apply_price_list_rate(item, rate)");
+		// The date is validated by the same rule the desk's picker calls.
+		expect(handler).toContain("this.validate_due_date(item)");
+		// Lots land in the expanded panel's own two setters, batch before
+		// serial so the filter sees it; extra allocations ride the add path.
+		expect(handler).toContain("this.set_batch_qty(item, batchNo, true)");
+		expect(handler).toContain("this.set_serial_no(item)");
+		expect(handler).toContain('"lot:confirm"');
+	});
+
+	it("routes an edited lot back onto its row, and reads the identity before closing", () => {
+		// `closeLotPicker()` NULLS `lotPickerData` — an identity read after the
+		// close would route every edit into the add path and duplicate the line.
+		const confirm = /const onLotConfirm = \(adds\) => \{([\s\S]*?)\n\t\t\};/.exec(
+			PosSource,
+		)?.[1] as string;
+		expect(confirm).toBeTruthy();
+		const readId = confirm.indexOf("uiStore.lotPickerData?.editRowId");
+		const close = confirm.indexOf("uiStore.closeLotPicker()");
+		expect(readId).toBeGreaterThanOrEqual(0);
+		expect(readId).toBeLessThan(close);
+		expect(confirm).toContain('"movil:line-edit"');
+		expect(confirm).toContain('kind: "lots"');
+
+		// The sheet's bell is answered where the lot data lives, with the
+		// auto-set-batch silencer OFF — an edit is the cashier overriding it.
+		expect(SelectorSource).toContain('eventBus.on("movil:edit-lots", movilEditLots)');
+		expect(SelectorSource).toContain("editRowId: rowId");
+		expect(SelectorSource).toContain("profile: null");
+
+		// The pad's answer rides the SAME intent a typed quantity rides.
+		expect(PosSource).toContain('eventBus.emit("movil:line-edit", { kind: "qty", qty, ...identity })');
 	});
 
 	it("declares the event on the closed bus map", () => {

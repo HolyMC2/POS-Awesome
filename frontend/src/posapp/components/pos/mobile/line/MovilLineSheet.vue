@@ -118,6 +118,65 @@
 				</div>
 			</div>
 
+			<!-- The scale, where the register HAS one: the same pad the desk row
+			     opens (weight in, or pesos in, qty out). The sheet only rings
+			     the bell — the pad is hosted beside the lot picker in Pos.vue,
+			     because a v-dialog mounted inside a leaving <Transition> would
+			     be torn down mid-entry. -->
+			<button
+				v-if="line.canWeigh"
+				type="button"
+				class="movil-line-sheet__weigh"
+				data-testid="movil-line-weigh"
+				@click="emit('weigh')"
+			>
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+					<path
+						d="M12 3v3m0 0 5 2m-5-2L7 8m5-2v13m-8 0h16M4 8l-2.2 5.5a3 3 0 0 0 5.9 0L5.5 8M20 8l-2.2 5.5a3 3 0 0 0 5.9 0L21.5 8"
+						stroke="currentColor"
+						stroke-width="1.7"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+				{{ __("Weigh or set amount") }}
+			</button>
+
+			<!-- The unit the line sells in. Chips, not a <select>: the options
+			     are the item's own UOM table (two or three entries), and the
+			     active one has to be readable at a glance mid-sale. -->
+			<div
+				v-if="line.uomOptions.length > 1"
+				class="movil-line-sheet__field movil-line-sheet__field--uom"
+				data-testid="movil-line-uom-field"
+			>
+				<span class="movil-line-sheet__label">{{ __("UOM") }}</span>
+				<div class="movil-line-sheet__uoms" role="group" :aria-label="__('UOM')">
+					<button
+						v-for="option in line.uomOptions"
+						:key="option"
+						type="button"
+						class="movil-line-sheet__uom"
+						:class="{ 'movil-line-sheet__uom--on': option === line.uom }"
+						:disabled="!line.canEditUom"
+						:aria-pressed="option === line.uom ? 'true' : 'false'"
+						:data-testid="`movil-line-uom-${option}`"
+						@click="pickUom(option)"
+					>
+						{{ option }}
+					</button>
+				</div>
+			</div>
+			<!-- The conversion, said out loud: the one line that keeps a cashier
+			     selling a box from believing the price is per piece. -->
+			<p
+				v-if="conversionCaption"
+				class="movil-line-sheet__conversion reg-mono"
+				data-testid="movil-line-conversion"
+			>
+				{{ conversionCaption }}
+			</p>
+
 			<!-- Rate and discount are drawn ONLY where `CartItemRow.vue` would
 			     draw them. The gate is the profile's, resolved once in
 			     `movilLineEdit.ts`; this component never asks a store. -->
@@ -161,6 +220,58 @@
 				/>
 			</div>
 
+			<!-- The % field's peso twin — the desk row carries both, and a
+			     cashier matching a competitor's sticker thinks in pesos, not
+			     percentages. Same gate; `calc_prices` keeps the two agreeing. -->
+			<div
+				v-if="line.canEditDiscount"
+				class="movil-line-sheet__field"
+				data-testid="movil-line-discount-amount-field"
+			>
+				<span class="movil-line-sheet__label">{{ __("Discount Amount") }}</span>
+				<input
+					v-model="discountAmountDraft"
+					class="movil-line-sheet__input reg-mono"
+					data-testid="movil-line-discount-amount"
+					type="number"
+					inputmode="decimal"
+					step="any"
+					enterkeyhint="done"
+					:aria-label="__('Discount Amount')"
+					@change="commitDiscountAmount"
+					@keydown.enter.prevent="commitDiscountAmount"
+				/>
+			</div>
+
+			<!-- Which numbered unit this line actually sells. The row states
+			     the current answer; the tap re-opens the same LOT PICKER the
+			     add path uses, seeded with it. -->
+			<div
+				v-if="line.hasLots"
+				class="movil-line-sheet__field"
+				data-testid="movil-line-lots-field"
+			>
+				<span class="movil-line-sheet__label">{{ lotLabel }}</span>
+				<button
+					type="button"
+					class="movil-line-sheet__lots"
+					data-testid="movil-line-lots"
+					:disabled="!line.canEditLots"
+					@click="emit('lots')"
+				>
+					<span class="movil-line-sheet__lots-summary reg-mono">{{ lotSummary }}</span>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<path
+							d="m9 6 6 6-6 6"
+							stroke="currentColor"
+							stroke-width="2.2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+			</div>
+
 			<div class="movil-line-sheet__actions">
 				<button
 					v-if="line.canRemove"
@@ -171,17 +282,119 @@
 				>
 					{{ __("Remove line") }}
 				</button>
-				<!-- The classic cart still owns everything this sheet does not
-				     model — UOM, batch and serial, the offer toggle, the line
-				     note, the weighing pad. The fallback is a door, not a
-				     leftover: deleting it would strand those on the phone. -->
+				<!-- «More options» now opens IN the sheet: the price-list rate,
+				     the delivery date and the stock facts the desk's expanded
+				     row shows. What used to be here — a jump to the whole
+				     classic cart — is demoted to the last line of that section,
+				     because fronting a five-column desktop table was the one
+				     thing this sheet was built to stop doing. -->
 				<button
 					type="button"
 					class="movil-line-sheet__more"
+					data-testid="movil-line-expand"
+					:aria-expanded="moreOpen ? 'true' : 'false'"
+					@click="toggleMore"
+				>
+					{{ __("More options") }}
+					<svg
+						class="movil-line-sheet__more-chevron"
+						:class="{ 'movil-line-sheet__more-chevron--open': moreOpen }"
+						width="14"
+						height="14"
+						viewBox="0 0 24 24"
+						fill="none"
+						aria-hidden="true"
+					>
+						<path
+							d="m6 9 6 6 6-6"
+							stroke="currentColor"
+							stroke-width="2.2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+			</div>
+
+			<div v-if="moreOpen" class="movil-line-sheet__extra" data-testid="movil-line-extra">
+				<!-- The list price behind the rate. Editable ONLY where the desk's
+				     «Change Price» button is (posa_allow_price_list_rate_change);
+				     everywhere else it reads as a fact below. -->
+				<div
+					v-if="line.canChangePriceListRate"
+					class="movil-line-sheet__field"
+					data-testid="movil-line-plr-field"
+				>
+					<span class="movil-line-sheet__label">{{ __("Price List Rate") }}</span>
+					<input
+						v-model="priceListRateDraft"
+						class="movil-line-sheet__input reg-mono"
+						data-testid="movil-line-plr"
+						type="number"
+						inputmode="decimal"
+						step="any"
+						enterkeyhint="done"
+						:aria-label="__('Price List Rate')"
+						@change="commitPriceListRate"
+						@keydown.enter.prevent="commitPriceListRate"
+					/>
+				</div>
+
+				<!-- Order / Quotation lines promise a date. Native date input:
+				     the phone's own picker beats any widget this sheet could ship. -->
+				<div
+					v-if="line.canEditDeliveryDate"
+					class="movil-line-sheet__field"
+					data-testid="movil-line-delivery-field"
+				>
+					<span class="movil-line-sheet__label">{{ __("Delivery Date") }}</span>
+					<input
+						class="movil-line-sheet__input"
+						data-testid="movil-line-delivery"
+						type="date"
+						:value="deliveryDateIso"
+						:min="todayIso"
+						:aria-label="__('Delivery Date')"
+						@change="commitDeliveryDate"
+					/>
+				</div>
+
+				<!-- The stock facts the desk's expanded panel shows, read-only. -->
+				<dl class="movil-line-sheet__facts" data-testid="movil-line-facts">
+					<div class="movil-line-sheet__fact">
+						<dt>{{ __("Available QTY") }}</dt>
+						<dd class="reg-mono">{{ factQty(line.availableQty) }} {{ line.stockUom }}</dd>
+					</div>
+					<div v-if="line.uom !== line.stockUom" class="movil-line-sheet__fact">
+						<dt>{{ __("Stock QTY") }}</dt>
+						<dd class="reg-mono" data-testid="movil-line-stock-qty">
+							{{ factQty(line.stockQty) }} {{ line.stockUom }}
+						</dd>
+					</div>
+					<div v-if="!line.canChangePriceListRate" class="movil-line-sheet__fact">
+						<dt>{{ __("Price List Rate") }}</dt>
+						<dd class="reg-mono">{{ formatCurrency(line.priceListRate) }}</dd>
+					</div>
+					<div v-if="line.warehouse" class="movil-line-sheet__fact">
+						<dt>{{ __("Warehouse") }}</dt>
+						<dd>{{ line.warehouse }}</dd>
+					</div>
+					<div v-if="line.itemGroup" class="movil-line-sheet__fact">
+						<dt>{{ __("Group") }}</dt>
+						<dd>{{ line.itemGroup }}</dd>
+					</div>
+				</dl>
+
+				<!-- The door to the classic cart, demoted but NOT deleted: the
+				     bundle dialog and the customer editor still live there, and
+				     a spec pins that this stays reachable. -->
+				<button
+					type="button"
+					class="movil-line-sheet__classic"
 					data-testid="movil-line-more"
 					@click="emit('more')"
 				>
-					{{ __("More options") }}
+					{{ __("Open the classic cart") }}
 				</button>
 			</div>
 		</section>
@@ -210,7 +423,7 @@
  * clamped (stock limit, offer cap, return sign) comes straight back into the
  * field instead of the field insisting on what was typed.
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import { tick, warn } from "../../../../utils/haptics";
 import type { MovilLineEdit, MovilLineIntent } from "./movilLineEdit";
@@ -227,6 +440,10 @@ const emit = defineEmits<{
 	(_event: "edit", _intent: MovilLineIntent): void;
 	(_event: "close"): void;
 	(_event: "more"): void;
+	/** Open the weighing pad (hosted in `Pos.vue`, beside the lot picker). */
+	(_event: "weigh"): void;
+	/** Re-open the lot picker over this line's current serial / batch choice. */
+	(_event: "lots"): void;
 }>();
 
 // Bare `__` is a Frappe desk global; absent under vitest and in a bare mount.
@@ -239,12 +456,75 @@ const subtitle = computed(() => {
 	return props.line.itemCode;
 });
 
+/** Trailing zeros trimmed — `12` and `0.5`, never `12.000`. */
+const factQty = (value: number): string => {
+	const rounded = Number.isFinite(value) ? Number(value.toFixed(3)) : 0;
+	return String(rounded);
+};
+
+/** `1 Caja = 12 Pza` — drawn only when the line's unit is not the shelf's. */
+const conversionCaption = computed(() => {
+	const { uom, stockUom, conversionFactor } = props.line;
+	if (!uom || !stockUom || uom === stockUom) return "";
+	if (!Number.isFinite(conversionFactor) || conversionFactor <= 0) return "";
+	return `1 ${uom} = ${factQty(conversionFactor)} ${stockUom}`;
+});
+
+const lotLabel = computed(() => (props.line.hasSerial ? __("Serial No") : __("Batch No")));
+
+/** What is chosen NOW — the serials themselves, the batch, or an ask. */
+const lotSummary = computed(() => {
+	const serials = props.line.lotSerials;
+	if (serials.length === 1) return serials[0];
+	if (serials.length > 1) return `${serials.length} · ${serials[serials.length - 1]}`;
+	if (props.line.lotBatchNo) return props.line.lotBatchNo;
+	return __("Select");
+});
+
+// ---- «More options» — the expanded half of the sheet ----------------------
+const moreOpen = ref(false);
+const toggleMore = () => {
+	moreOpen.value = !moreOpen.value;
+	if (!moreOpen.value) return;
+	// The section unfolds at the bottom of a scrolling panel; without this the
+	// tap "does nothing" visually on a sheet that is already full.
+	void nextTick(() => {
+		// `?.` on the METHOD too: jsdom's elements have no scrollIntoView, and
+		// the `x?.y()` form only guards x being null, not y being absent.
+		panelEl.value
+			?.querySelector('[data-testid="movil-line-extra"]')
+			?.scrollIntoView?.({ block: "nearest" });
+	});
+};
+
+/** dd-MM-yyyy (the row's own format) → yyyy-MM-dd (the input's), and back. */
+const deliveryDateIso = computed(() => {
+	const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(props.line.deliveryDate);
+	return match ? `${match[3]}-${match[2]}-${match[1]}` : "";
+});
+const todayIso = computed(() => {
+	const now = new Date();
+	const pad = (value: number) => String(value).padStart(2, "0");
+	return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+});
+const commitDeliveryDate = (event: Event) => {
+	if (!props.line.canEditDeliveryDate) return;
+	const value = String((event.target as HTMLInputElement)?.value || "");
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+	if (!match) return;
+	const formatted = `${match[3]}-${match[2]}-${match[1]}`;
+	if (formatted === props.line.deliveryDate) return;
+	emit("edit", { kind: "deliveryDate", date: formatted });
+};
+
 /** Numbers become strings for the fields; blank is a legitimate mid-edit state. */
 const asDraft = (value: number) => String(value);
 
 const qtyDraft = ref(asDraft(props.line.qty));
 const rateDraft = ref(asDraft(props.line.rate));
 const discountDraft = ref(asDraft(props.line.discountPercentage));
+const discountAmountDraft = ref(asDraft(props.line.discountAmount));
+const priceListRateDraft = ref(asDraft(props.line.priceListRate));
 
 watch(
 	() => props.line.qty,
@@ -262,6 +542,18 @@ watch(
 	() => props.line.discountPercentage,
 	(value) => {
 		discountDraft.value = asDraft(value);
+	},
+);
+watch(
+	() => props.line.discountAmount,
+	(value) => {
+		discountAmountDraft.value = asDraft(value);
+	},
+);
+watch(
+	() => props.line.priceListRate,
+	(value) => {
+		priceListRateDraft.value = asDraft(value);
 	},
 );
 
@@ -321,6 +613,29 @@ const commitDiscount = () => {
 		kind: "discount",
 		discount,
 	}));
+};
+
+const commitDiscountAmount = () => {
+	if (!props.line.canEditDiscount) return;
+	commit(discountAmountDraft, props.line.discountAmount, (amount) => ({
+		kind: "discountAmount",
+		amount,
+	}));
+};
+
+const commitPriceListRate = () => {
+	if (!props.line.canChangePriceListRate) return;
+	commit(priceListRateDraft, props.line.priceListRate, (rate) => ({
+		kind: "priceListRate",
+		rate,
+	}));
+};
+
+/** A chip tap. The active unit re-tapped travels nowhere — nothing changed. */
+const pickUom = (uom: string) => {
+	if (!props.line.canEditUom || uom === props.line.uom) return;
+	tick();
+	emit("edit", { kind: "uom", uom });
 };
 
 /**
@@ -648,6 +963,166 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeydown));
 	background: var(--reg-surface-muted, #f2f4f7);
 }
 
+.movil-line-sheet__more-chevron {
+	transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.movil-line-sheet__more-chevron--open {
+	transform: rotate(180deg);
+}
+
+/* The scale's door. Tonal, not filled: it OFFERS a faster entry, it is not
+ * the screen's action — that is still the stepper above it. */
+.movil-line-sheet__weigh {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: var(--reg-touch-min, 44px);
+	border: 1px solid var(--reg-border-soft, #e6e9ee);
+	border-radius: var(--reg-radius-sm, 10px);
+	background: var(--reg-surface-sunken, #f8f9fa);
+	color: var(--reg-text-secondary, #56606e);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.movil-line-sheet__weigh:active {
+	background: var(--reg-surface-muted, #f2f4f7);
+}
+
+/* Two or three chips; a catalogue with more scrolls them rather than wrapping
+ * a sheet that must keep Remove above the fold. */
+.movil-line-sheet__uoms {
+	display: flex;
+	gap: var(--reg-space-xs, 5px);
+	max-width: 70%;
+	overflow-x: auto;
+}
+
+.movil-line-sheet__uom {
+	flex: none;
+	min-height: var(--reg-touch-min, 44px);
+	min-width: 52px;
+	padding: 0 12px;
+	border: 1px solid var(--reg-border-soft, #e6e9ee);
+	border-radius: 999px;
+	background: var(--reg-surface, #ffffff);
+	color: var(--reg-text-secondary, #56606e);
+	font: inherit;
+	font-size: 12.5px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.movil-line-sheet__uom--on {
+	border-color: var(--reg-accent, #0097a7);
+	background: var(--reg-accent-soft, #e0f7fa);
+	color: var(--reg-accent-pressed, #00838f);
+}
+
+.movil-line-sheet__uom:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.movil-line-sheet__conversion {
+	margin: -4px 0 0;
+	font-size: 10.5px;
+	text-align: end;
+	color: var(--reg-text-muted, #667085);
+}
+
+/* The lot row reads as a value with a chevron — a row that goes somewhere. */
+.movil-line-sheet__lots {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: var(--reg-touch-min, 44px);
+	max-width: 70%;
+	padding: 0 10px;
+	border: 1px solid var(--reg-border-soft, #e6e9ee);
+	border-radius: var(--reg-radius-sm, 10px);
+	background: var(--reg-surface, #ffffff);
+	color: var(--reg-text-primary, #212121);
+	font: inherit;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.movil-line-sheet__lots:active:not(:disabled) {
+	background: var(--reg-surface-muted, #f2f4f7);
+}
+
+.movil-line-sheet__lots:disabled {
+	color: var(--reg-text-muted, #667085);
+	cursor: default;
+}
+
+.movil-line-sheet__lots-summary {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: end;
+}
+
+/* The unfolded «More options». A divider above it marks where the everyday
+ * sheet ends and the occasional half begins. */
+.movil-line-sheet__extra {
+	display: flex;
+	flex-direction: column;
+	gap: var(--reg-space-md, 10px);
+	padding-top: var(--reg-space-md, 10px);
+	border-top: 1px solid var(--reg-divider, #eceff3);
+}
+
+.movil-line-sheet__facts {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--reg-space-sm, 6px);
+	margin: 0;
+}
+
+.movil-line-sheet__fact {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 8px 10px;
+	border-radius: var(--reg-radius-sm, 10px);
+	background: var(--reg-surface-sunken, #f8f9fa);
+}
+
+.movil-line-sheet__fact dt {
+	font-size: 9.5px;
+	font-weight: 700;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+	color: var(--reg-text-muted, #667085);
+}
+
+.movil-line-sheet__fact dd {
+	margin: 0;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--reg-text-primary, #212121);
+	overflow-wrap: anywhere;
+}
+
+.movil-line-sheet__classic {
+	min-height: var(--reg-touch-min, 44px);
+	border: 0;
+	background: none;
+	color: var(--reg-text-muted, #667085);
+	font: inherit;
+	font-size: 11.5px;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
 /* The tokens are already 0ms under this query; the block states the intent
  * where the animation is written, and covers a surface rendered before
  * register-tokens.css has been wired into the entry. */
@@ -658,7 +1133,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeydown));
 	.movil-sheet-leave-active .movil-line-sheet__panel,
 	.movil-sheet-enter-active .movil-line-sheet__scrim,
 	.movil-sheet-leave-active .movil-line-sheet__scrim,
-	.movil-line-sheet__step {
+	.movil-line-sheet__step,
+	.movil-line-sheet__more-chevron {
 		transition: none;
 	}
 
