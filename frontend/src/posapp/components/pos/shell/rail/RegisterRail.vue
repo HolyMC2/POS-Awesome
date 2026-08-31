@@ -28,7 +28,7 @@
 		:data-rail-state="railDisabled ? 'disabled' : 'enabled'"
 		@keydown="handleKeydown"
 	>
-		<ul class="register-rail__group" role="list">
+		<ul class="register-rail__group register-rail__group--primary" role="list">
 			<li v-for="item in primaryItems" :key="item.id">
 				<button
 					:ref="(el) => registerItemRef(el, item.id)"
@@ -85,7 +85,7 @@
 
 		<div class="register-rail__spacer"></div>
 
-		<ul class="register-rail__group" role="list">
+		<ul class="register-rail__group register-rail__group--footer" role="list">
 			<li v-for="item in footerItems" :key="item.id">
 				<button
 					:ref="(el) => registerItemRef(el, item.id)"
@@ -316,7 +316,15 @@ defineExpose({ items, toolsItems, activeTool, railDisabled });
 	padding: 9px 8px;
 	background: var(--reg-rail-surface, #eef1f4);
 	border-right: 1px solid var(--reg-rail-border, #e2e6ec);
+	/* `clip`, not `hidden`: a hidden-overflow box is still a scroll container,
+	 * so focusing an item that sits past the rail's bottom edge (the footer's
+	 * «Cerrar Turno» on a short laptop) panned the WHOLE rail with no scrollbar
+	 * and no gesture able to bring it back — the ledger-finder defect, on the
+	 * primary navigation. The primary group below owns the only scrollport now;
+	 * the rail itself never scrolls. `hidden` stays first as the pre-`clip`
+	 * fallback. */
 	overflow: hidden;
+	overflow: clip;
 }
 
 /* Shift closed (§5.1). The rail stays VISIBLE — a cashier needs to see that
@@ -338,6 +346,33 @@ defineExpose({ items, toolsItems, activeTool, railDisabled });
 	margin: 0;
 	padding: 0;
 	list-style: none;
+}
+
+/* The long group. `flex: 0 1 auto` + `min-height: 0` lets it — and ONLY it —
+ * give up height when the rail is shorter than its 11 entries (11 × 66px + gaps
+ * ≈ 720px), scrolling its own overflow instead of clipping the footer off the
+ * bottom. `flex-grow: 0` keeps the tall-window layout byte-identical: with room
+ * to spare the group is its content height and the spacer below pushes the
+ * footer to the bottom exactly as before. `overflow-y: auto` is what makes wheel
+ * AND touch-drag work here (an `overflow: hidden` box scrolls to neither). */
+.register-rail__group--primary {
+	flex: 0 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: none;
+}
+
+.register-rail__group--primary::-webkit-scrollbar {
+	display: none;
+}
+
+/* «Cerrar Turno» (and the avatar) must never be the thing that scrolls out of
+ * reach — closing the shift is the one action a cashier must always be able to
+ * take. Pin the footer group so it keeps its height while the primary group
+ * absorbs the shortfall. */
+.register-rail__group--footer {
+	flex: 0 0 auto;
 }
 
 .register-rail__spacer {
