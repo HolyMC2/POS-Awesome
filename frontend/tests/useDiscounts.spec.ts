@@ -43,6 +43,51 @@ const makeOfferItem = (overrides: Record<string, unknown> = {}) => ({
 	...overrides,
 });
 
+describe("a repriced line writes its own amount", () => {
+	beforeEach(() => {
+		toastShow.mockReset();
+		(globalThis as any).__ = (text: string) => text;
+		(globalThis as any).flt = (value: unknown, precision = 2) => {
+			const numeric = Number(value);
+			if (!Number.isFinite(numeric)) {
+				return 0;
+			}
+			return Number(numeric.toFixed(precision));
+		};
+	});
+
+	it("writes amount and base_amount on every discount verb", () => {
+		// The summary readers (`resolveSaleSummary` → the phone's line sheet,
+		// the phone cart row, the payment screen) PREFER the written amount
+		// over their own multiplication; a pass that only moved `rate` left
+		// the old money standing on every one of those surfaces.
+		const { calcPrices } = useDiscounts();
+		const context = makeContext();
+		const item = makeOfferItem({ qty: 2, amount: 200, base_amount: 200 });
+
+		calcPrices(item, 10, { target: { id: "discount_percentage" } }, context);
+		expect(item.rate).toBe(90);
+		expect(item.amount).toBe(180);
+		expect(item.base_amount).toBe(180);
+
+		calcPrices(item, 50, { target: { id: "discount_amount" } }, context);
+		expect(item.rate).toBe(50);
+		expect(item.amount).toBe(100);
+
+		calcPrices(item, 80, { target: { id: "rate" } }, context);
+		expect(item.amount).toBe(160);
+	});
+
+	it("keeps the return sign: a negative qty writes a negative amount", () => {
+		const { calcPrices } = useDiscounts();
+		const context = makeContext();
+		const item = makeOfferItem({ qty: -1, amount: -100, base_amount: -100 });
+
+		calcPrices(item, 10, { target: { id: "discount_percentage" } }, context);
+		expect(item.amount).toBe(-90);
+	});
+});
+
 describe("useDiscounts offer price enforcement", () => {
 	beforeEach(() => {
 		toastShow.mockReset();

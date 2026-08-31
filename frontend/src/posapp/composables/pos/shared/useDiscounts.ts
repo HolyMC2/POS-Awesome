@@ -551,6 +551,23 @@ export function useDiscounts() {
 				}
 			}
 
+			// Write the line's own amount, not only its rate. The desk's cells
+			// multiply live and never read it, but every summary reader
+			// (`resolveSaleSummary` → the phone's line sheet, the phone cart
+			// row, the payment screen) PREFERS the written amount over its own
+			// multiplication — deliberately, so it can never disagree with a
+			// server figure — and nothing here wrote one until now, so a
+			// discount edit left «650.00» standing on a line charging 585.
+			// The same write `apply_price_list_rate` already performs.
+			item.amount = context.flt(
+				(item.qty || 0) * item.rate,
+				context.currency_precision,
+			);
+			item.base_amount = context.flt(
+				(item.qty || 0) * item.base_rate,
+				context.currency_precision,
+			);
+
 			// Update stock calculations and force UI update
 			if (context.calc_stock_qty) context.calc_stock_qty(item, item.qty);
 			refreshInvoiceTotals(context);
