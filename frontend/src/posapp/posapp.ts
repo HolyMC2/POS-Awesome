@@ -86,8 +86,15 @@ export async function runPosBootSync() {
 }
 
 async function startOptionalRuntimeServices() {
-	const socketStore = useSocketStore();
-	socketStore.init();
+	// Each optional service is independent: one failing must not skip the rest.
+	// socketStore.init() used to run unguarded FIRST, so if it threw, the service
+	// worker registration, the PWA manifest, telemetry and the update poller —
+	// the app's own staleness defence — never ran (audit RUNTIME-F5).
+	try {
+		useSocketStore().init();
+	} catch (error) {
+		console.warn("Failed to initialize POS realtime store", error);
+	}
 
 	// Tell chunk recovery when a sale is in progress so a transient chunk
 	// failure (a flaky fetch, a mid-deploy asset swap) does not silently reload
@@ -121,11 +128,15 @@ async function startOptionalRuntimeServices() {
 		console.warn("Failed to initialize POS service worker updater", error);
 	});
 
-	if (!document.querySelector('link[rel="manifest"]')) {
-		const link = document.createElement("link");
-		link.rel = "manifest";
-		link.href = "/manifest.json";
-		document.head.appendChild(link);
+	try {
+		if (!document.querySelector('link[rel="manifest"]')) {
+			const link = document.createElement("link");
+			link.rel = "manifest";
+			link.href = "/manifest.json";
+			document.head.appendChild(link);
+		}
+	} catch (error) {
+		console.warn("Failed to add PWA manifest link", error);
 	}
 
 	if (
@@ -234,7 +245,9 @@ class PosAppController {
 			scheduleChunkRecoveryStateReset();
 			scheduleAfterStableBoot(() => {
 				void finalizePendingBundleActivation();
-				void startOptionalRuntimeServices();
+				void startOptionalRuntimeServices().catch((error) => {
+					console.warn("Optional runtime services failed to start", error);
+				});
 			});
 		});
 

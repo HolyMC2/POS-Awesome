@@ -272,9 +272,22 @@ export const useSocketStore = defineStore("socket", () => {
   };
 
   let initialised = false;
+  let initRetries = 0;
 
   function init() {
-    if (typeof frappe === "undefined" || !frappe.realtime) return;
+    if (initialised) return;
+    if (typeof frappe === "undefined" || !frappe.realtime) {
+      // The realtime shim is not ready at this instant — retry shortly instead
+      // of giving up for the whole session (RUNTIME-F5). Before this, a slightly
+      // late shim left the register with no realtime for the shift:
+      // waitForInvoiceProcessed took its optimistic early-return, submit errors
+      // never toasted, stock broadcasts never arrived.
+      if (initRetries < 20) {
+        initRetries += 1;
+        setTimeout(init, 500);
+      }
+      return;
+    }
     // Guard against double-registration. Each call to `init()` was
     // attaching another set of 6 `frappe.realtime.on(...)` handlers
     // with no `.off()` cleanup. Pos.vue (re)mounts on customer
@@ -283,8 +296,10 @@ export const useSocketStore = defineStore("socket", () => {
     // visible in Firefox Performance as a 2 k → 22 k listener
     // count and 27 s `vendor-CF6GND7R.js f` self-time (Vue's reactive
     // trigger walking the bloated subscriber list).
-    if (initialised) return;
-    initialised = true;
+    //
+    // `initialised` is set at the END, after every listener is attached, so a
+    // throw partway through does not latch a "done" state that never finishes
+    // wiring — a later init() retries instead (RUNTIME-F5).
 
     // Global listener for background submission errors
     frappe.realtime.on("pos_invoice_submit_error", (data: InvoiceProcessingPayload) => {
@@ -506,6 +521,9 @@ export const useSocketStore = defineStore("socket", () => {
         }
       }
     });
+
+    // Every listener attached — now the store is truly initialised.
+    initialised = true;
   }
 
   return {
