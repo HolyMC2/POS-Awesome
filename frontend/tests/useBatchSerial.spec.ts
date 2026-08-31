@@ -33,6 +33,62 @@ describe("useBatchSerial.setSerialNo", () => {
 		expect(item.serial_no).toBe("");
 	});
 
+	it("writes the line's amount when the serial count moves the qty", () => {
+		// The formal qty path ends in syncLineAmounts; a qty the serial count
+		// writes must not skip it — the summary readers and the register's
+		// subtotal prefer the WRITTEN amount, and a two-IMEI line was still
+		// charging for one everywhere they draw.
+		const { setSerialNo } = useBatchSerial();
+		const recalculateTotals = vi.fn();
+		const context = {
+			forceUpdate: vi.fn(),
+			currency_precision: 2,
+			flt: (value: number, precision = 2) => Number(value.toFixed(precision)),
+			invoiceStore: { recalculateTotals },
+		};
+		const item: any = {
+			has_serial_no: 1,
+			has_batch_no: 0,
+			serial_no_data: [{ serial_no: "SER-001" }, { serial_no: "SER-002" }],
+			serial_no_selected: ["SER-001", "SER-002"],
+			rate: 400,
+			base_rate: 400,
+			qty: 1,
+			amount: 400,
+			base_amount: 400,
+		};
+
+		setSerialNo(item, context);
+
+		expect(item.qty).toBe(2);
+		expect(item.amount).toBe(800);
+		expect(item.base_amount).toBe(800);
+		expect(recalculateTotals).toHaveBeenCalled();
+	});
+
+	it("keeps the return sign on a serial-counted amount", () => {
+		const { setSerialNo } = useBatchSerial();
+		const context = {
+			forceUpdate: vi.fn(),
+			currency_precision: 2,
+			flt: (value: number, precision = 2) => Number(value.toFixed(precision)),
+		};
+		const item: any = {
+			has_serial_no: 1,
+			has_batch_no: 0,
+			serial_no_data: [{ serial_no: "SER-001" }],
+			serial_no_selected: ["SER-001"],
+			rate: 400,
+			qty: -2,
+			amount: -800,
+		};
+
+		setSerialNo(item, context);
+
+		expect(item.qty).toBe(-1);
+		expect(item.amount).toBe(-400);
+	});
+
 	it("preserves selected serials when serial dataset is temporarily empty", () => {
 		const { setSerialNo } = useBatchSerial();
 		const context = { forceUpdate: vi.fn() };

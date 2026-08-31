@@ -101,6 +101,26 @@ export function useBatchSerial() {
 			const sign = Number.isFinite(currentQty) && currentQty < 0 ? -1 : 1;
 			if (currentAbsQty !== selectedCount) {
 				item.qty = sign * selectedCount;
+				// The formal qty path (`setFormatedQty`) ends in syncLineAmounts;
+				// a qty the serial COUNT wrote must not skip that bookkeeping.
+				// The summary readers (the phone's line sheet, the phone cart
+				// row, the payment screen) and the register's subtotal all
+				// prefer the line's WRITTEN amount, and until this write a
+				// two-IMEI line kept charging for one.
+				const flt = (value: number) =>
+					typeof context?.flt === "function"
+						? context.flt(value, context.currency_precision)
+						: value;
+				const rate = Number.parseFloat(String(item.rate ?? 0)) || 0;
+				const baseRate =
+					Number.parseFloat(String(item.base_rate ?? item.rate ?? 0)) || 0;
+				item.amount = flt(item.qty * rate);
+				item.base_amount = flt(item.qty * baseRate);
+				if (typeof context?.invoiceStore?.recalculateTotals === "function") {
+					context.invoiceStore.recalculateTotals();
+				} else if (typeof context?.invoiceStore?.triggerUpdateTotals === "function") {
+					context.invoiceStore.triggerUpdateTotals();
+				}
 				if (context?.forceUpdate) context.forceUpdate();
 			}
 		};
