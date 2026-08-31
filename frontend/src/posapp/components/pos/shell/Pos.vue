@@ -1598,8 +1598,13 @@ export default {
 		const movilPayActive = computed(
 			() =>
 				movilPhone.value &&
-				compactPanel.value === "selector" &&
-				(activeView.value === "payment" || movilPayPending.value) &&
+				// The optimistic window overrides BOTH panel gates: a Pagar tap
+				// from the Carrito tab arrives with compactPanel still
+				// "invoice" and activeView still "items", and both only flip
+				// when the server answers — which is exactly the wait the
+				// instant stage exists to cover.
+				(movilPayPending.value ||
+					(compactPanel.value === "selector" && activeView.value === "payment")) &&
 				!usePaymentDialog.value &&
 				!movilPayDetail.value &&
 				!hostedDestinationId.value &&
@@ -1909,10 +1914,13 @@ export default {
 		const movilShellProps = computed(() => ({
 			screen: movilOrdenActive.value
 				? "orden"
-				: movilCartActive.value
-					? "cart"
-					: movilPayActive.value
-						? "pay"
+				// PAY before CART: the optimistic pay window opens while the
+				// Carrito tab's own conditions still hold, and the tap that
+				// opened it must win the stage on that same frame.
+				: movilPayActive.value
+					? "pay"
+					: movilCartActive.value
+						? "cart"
 						: "browse",
 			browseItems: movilBrowseRows.value || [],
 			browseLoading: movilBrowseLoading.value,
