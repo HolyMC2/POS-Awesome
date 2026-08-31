@@ -211,10 +211,12 @@ describe("the compatible filter appears only where the data backs it", () => {
 		expect(wrapper.find('[data-testid="browse-filter-compatible"]').exists()).toBe(false);
 	});
 
-	it("makes no claim in the footer when it is not offered", () => {
+	it("draws no footer at all when there is no claim to make", () => {
+		// The everyday «N items · tap a card» box was noise on a screen whose
+		// navigation is the dock (owner 08-31) — no claim, no footer.
 		const wrapper = mountScreen({ cart: [] });
 
-		expect(wrapper.get('[data-testid="browse-count"]').text()).toBe("4 items");
+		expect(wrapper.find('[data-testid="browse-footer"]').exists()).toBe(false);
 	});
 
 	it("widens back to everything when the cashier turns it off", async () => {
@@ -223,7 +225,8 @@ describe("the compatible filter appears only where the data backs it", () => {
 		await wrapper.get('[data-testid="browse-filter-compatible"]').trigger("click");
 
 		expect(wrapper.findAll('[data-testid^="browse-card-"]')).toHaveLength(4);
-		expect(wrapper.get('[data-testid="browse-count"]').text()).toBe("4 items");
+		// The claim leaves with the filter — and takes the footer with it.
+		expect(wrapper.find('[data-testid="browse-footer"]').exists()).toBe(false);
 	});
 
 	it("forgets an override when the device changes", async () => {

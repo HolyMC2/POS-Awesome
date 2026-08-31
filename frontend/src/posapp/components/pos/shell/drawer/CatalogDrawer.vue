@@ -69,7 +69,7 @@
 			:data-presentation="presentation"
 			@keydown="onKeydown"
 		>
-			<header class="catalog-drawer__header">
+			<header v-show="!hideChrome" class="catalog-drawer__header">
 				<svg
 					class="catalog-drawer__glyph"
 					width="17"
@@ -187,7 +187,7 @@
 				Always rendered: the "Esc closes" affordance is a promise the
 				artboard footer makes on every state of this panel.
 			-->
-			<footer class="catalog-drawer__footer">
+			<footer v-show="!hideChrome" class="catalog-drawer__footer">
 				<span v-if="footerHint" class="catalog-drawer__hint">{{ footerHint }}</span>
 				<div class="catalog-drawer__spacer"></div>
 				<span class="catalog-drawer__chip catalog-drawer__chip--muted mono">{{
@@ -225,6 +225,14 @@ const props = withDefaults(
 		transitionDurationMs?: number;
 		/** Whether the anchored/floating choice is offered at this width. */
 		canAnchor?: boolean;
+		/**
+		 * Hide the drawer's own header strip (glyph, «Catalogue», chips).
+		 * The movil shell's screens own the whole viewport and navigation
+		 * happens in the dock, so the strip is dead chrome peeking below
+		 * them — but the PANEL must stay mounted (the scanner wedge and the
+		 * teleported search header live inside it), so only the chrome goes.
+		 */
+		hideChrome?: boolean;
 		footerHint?: string | null;
 		/**
 		 * What the slotted selector is drawing. Anchored only: a card grid earns

@@ -142,10 +142,17 @@
 			</p>
 		</div>
 
-		<footer class="mbrowse__foot" data-testid="browse-footer">
-			<div class="mbrowse__foot-copy">
+		<!-- The footer draws only when it carries a CLAIM (the compatible
+		     filter is narrowing the grid) or an ACTION (see-all out of a
+		     filtered view). The everyday «N items · tap a card» box was
+		     noise on a screen whose navigation is the dock (owner 08-31). -->
+		<footer
+			v-if="footer.claiming || footer.seeAllLabel"
+			class="mbrowse__foot"
+			data-testid="browse-footer"
+		>
+			<div v-if="footer.claiming" class="mbrowse__foot-copy">
 				<div class="mbrowse__foot-count" data-testid="browse-count">{{ footer.countLine }}</div>
-				<div class="mbrowse__foot-hint">{{ footer.hint }}</div>
 			</div>
 			<button
 				v-if="footer.seeAllLabel"
@@ -525,8 +532,13 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	display: grid;
 	/* auto-fill, not a fixed 2: the same screen now serves the whole compact
 	   band, and a portrait tablet at 800px fits four readable cards where a
-	   phone fits the artboard's two. 170px is the card's comfortable floor. */
-	grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+	   phone fits the artboard's two. The floor is 158px, NOT a rounder 170:
+	   a very common 360px phone has 338px of grid after the gutters, and
+	   170×2+10 = 350 tipped exactly those phones into a one-card column
+	   (owner met it 08-31 — «we can squeeze 2 items per row»). 158×2+10 =
+	   326 keeps the pair down to ~348px viewports; the tablet band still
+	   lands on four columns either way. */
+	grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
 	gap: 10px;
 	align-content: start;
 }

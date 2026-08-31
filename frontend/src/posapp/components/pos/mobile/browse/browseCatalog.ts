@@ -318,6 +318,10 @@ export interface BrowseFooter {
 	hint: string;
 	/** Null when nothing is hidden — an escape hatch out of a full view is noise. */
 	seeAllLabel: string | null;
+	/** True only while the compatible filter narrows the grid (owner 08-31:
+	 *  the plain «N items / tap a card» box is noise on a dock-navigated
+	 *  phone; the footer draws only for a claim or an action). */
+	claiming: boolean;
 	shownCount: number;
 	totalCount: number;
 }
@@ -359,6 +363,9 @@ export const buildBrowseFooter = (input: BuildBrowseFooterInput = {}): BrowseFoo
 			: translate("{0} items", [formatCount(shown)]),
 		hint: translate("Tap a card to add it"),
 		seeAllLabel: total > shown ? translate("See all {0}", [formatCount(total)]) : null,
+		/** True only while the compatible filter is narrowing the grid — the
+		 *  one state where the footer's count is a CLAIM rather than noise. */
+		claiming,
 		shownCount: shown,
 		totalCount: total,
 	};
