@@ -447,7 +447,7 @@ import { useVerticalStore } from "../../../stores/verticalStore";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { useEmployeeStore } from "../../../stores/employeeStore";
 import { parseBooleanSetting } from "../../../utils/stock";
-import { resolveCartMargin } from "./cartMargin";
+import { marginNeedsIntervention, resolveCartMargin } from "./cartMargin";
 import {
 	getAvailableDocumentSources,
 	getDefaultDocumentSource,
@@ -629,8 +629,12 @@ const cartMargin = computed(() =>
  */
 const cartMarginDisplay = computed(() => {
 	const resolved = cartMargin.value;
-	if (resolved.state !== "ready") {
-		return { state: resolved.state, margin: "", cost: "", negative: false };
+	// SILENT until it needs intervention (owner 2026-08-31): the figure
+	// surfaces only on a ticket priced below its own cost — the moment the
+	// seller has a decision to make — and stays off the screen the rest of
+	// the day. `marginNeedsIntervention` is the one place that rule lives.
+	if (!marginNeedsIntervention(resolved)) {
+		return { state: "hidden", margin: "", cost: "", negative: false };
 	}
 	const symbol = props.currencySymbol?.(props.displayCurrency) ?? "";
 	const money = (value) => `${symbol}${props.formatCurrency?.(value) ?? value}`;
@@ -638,9 +642,9 @@ const cartMarginDisplay = computed(() => {
 		state: "ready",
 		margin: money(resolved.margin),
 		cost: money(resolved.cost),
-		// A ticket priced below its own cost is a thing to notice, not a
-		// smaller green number.
-		negative: Number(resolved.margin) < 0,
+		// Only a below-cost ticket reaches the strip, and it reaches it in
+		// the notice tone.
+		negative: true,
 	};
 });
 

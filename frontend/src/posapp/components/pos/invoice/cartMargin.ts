@@ -181,4 +181,25 @@ export function resolveCartMargin(input: CartMarginInput = {}): CartMargin {
 	};
 }
 
+/**
+ * Should the strip actually SAY anything?
+ *
+ * Owner rule (2026-08-31, verbatim): «ui shouldnt always say the price,
+ * sales person doesnt need to know until it need intervention». The margin
+ * and the cost stood at the end of the action strip on every ticket — a
+ * figure the counter does not need while the sale is healthy, and one a
+ * customer facing the screen can read. So the row is SILENT by default and
+ * speaks exactly when there is a decision to make: the ticket has been
+ * priced below its own cost. A partial or unknowable cost stays silent too —
+ * there is nothing provable to intervene on, and «Cost incomplete» on every
+ * ticket with one unvalued line was the same noise.
+ *
+ * The facts above (`resolveCartMargin`) are unchanged — the arithmetic,
+ * the role gate and the three states keep their meaning — this is only the
+ * rule for when the register brings the figure up on its own.
+ */
+export function marginNeedsIntervention(margin: CartMargin): boolean {
+	return margin.state === "ready" && (margin.margin ?? 0) < 0;
+}
+
 export default resolveCartMargin;

@@ -12,9 +12,11 @@
 import { describe, it, expect } from "vitest";
 import {
 	lineCost,
+	marginNeedsIntervention,
 	resolveCartMargin,
 	stockUnits,
 } from "../src/posapp/components/pos/invoice/cartMargin";
+import SummarySource from "../src/posapp/components/pos/invoice/InvoiceSummary.vue?raw";
 
 const line = (over: Record<string, unknown> = {}) => ({
 	qty: 1,
@@ -187,5 +189,59 @@ describe("the arithmetic", () => {
 		// The null line moves nothing, so it costs nothing and blocks nothing.
 		expect(result.state).toBe("ready");
 		expect(result.cost).toBe(10);
+	});
+});
+
+describe("when the register brings the figure up on its own", () => {
+	// Owner rule (2026-08-31): «sales person doesnt need to know until it
+	// need intervention». The strip is silent on a healthy ticket; it speaks
+	// exactly when the ticket is priced below its own cost.
+	const line = { qty: 1, stock_qty: 1, valuation_rate: 45 };
+
+	it("stays silent while the ticket earns its cost back", () => {
+		const healthy = resolveCartMargin({
+			lines: [line],
+			netRevenue: 172.41,
+			isSupervisor: true,
+		});
+		expect(healthy.state).toBe("ready");
+		expect(marginNeedsIntervention(healthy)).toBe(false);
+	});
+
+	it("speaks on a ticket priced below its own cost", () => {
+		const belowCost = resolveCartMargin({
+			lines: [line],
+			netRevenue: 30,
+			isSupervisor: true,
+		});
+		expect(belowCost.state).toBe("ready");
+		expect(marginNeedsIntervention(belowCost)).toBe(true);
+	});
+
+	it("stays silent on what it cannot prove — hidden and incomplete alike", () => {
+		expect(
+			marginNeedsIntervention(
+				resolveCartMargin({ lines: [line], netRevenue: 30, isSupervisor: false }),
+			),
+		).toBe(false);
+		expect(
+			marginNeedsIntervention(
+				resolveCartMargin({
+					lines: [{ qty: 1, valuation_rate: null }],
+					netRevenue: 30,
+					isSupervisor: true,
+				}),
+			),
+		).toBe(false);
+	});
+
+	it("is the rule the summary actually applies", () => {
+		// Source pin: the display computed must route through the ONE named
+		// rule — a hand-rolled `state !== \"ready\"` check here would quietly
+		// bring the always-on figure back.
+		expect(SummarySource).toContain("if (!marginNeedsIntervention(resolved))");
+		expect(SummarySource).toContain(
+			'import { marginNeedsIntervention, resolveCartMargin } from "./cartMargin"',
+		);
 	});
 });
