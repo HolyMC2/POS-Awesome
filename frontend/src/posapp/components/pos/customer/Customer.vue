@@ -644,8 +644,13 @@ export default {
 		onBeforeUnmount(registerUpdateCustomerHost());
 
 		onMounted(async () => {
-			await customersStore.searchCustomers("");
-
+			// Register the watcher and the bus listener SYNCHRONOUSLY, before the
+			// first await. Vue keeps the component's effect scope active only for
+			// the synchronous part of a lifecycle hook — a `watch()` created after
+			// an `await` escapes the scope and is never stopped (a permanent leak,
+			// one per mount), and a listener registered after it is missed by
+			// `onBeforeUnmount` if the component unmounts before the await
+			// resolves. Neither depends on the search result, so both move up.
 			watch(
 				// Drop deep:true — react to profile reassignment only.
 				() => uiStore.posProfile,
@@ -662,6 +667,8 @@ export default {
 			registerBus("set_customer_readonly", (value) => {
 				readonlyState.value = Boolean(value);
 			});
+
+			await customersStore.searchCustomers("");
 		});
 
 		onBeforeUnmount(() => {

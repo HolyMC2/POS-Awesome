@@ -182,6 +182,11 @@ const nowTick = ref(Date.now());
 const busy = ref(new Set<string>());
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+// The context is fetched with an await in onMounted; if the operator leaves
+// during that fetch, onBeforeUnmount runs with pollTimer still null and the
+// continuation would then arm an interval on a dead component — a poll that
+// runs for the life of the tab (audit RUNTIME-F7). `alive` gates the arm.
+let alive = true;
 
 const stationsForChosen = computed(
 	() =>
@@ -240,6 +245,7 @@ onMounted(async () => {
 			: EXPO;
 	if (savedProfile && saved.station) start();
 
+	if (!alive) return; // unmounted during the await — do not arm a poll on a dead component
 	pollTimer = setInterval(() => {
 		nowTick.value = Date.now();
 		void refresh(true);
@@ -247,6 +253,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+	alive = false;
 	if (pollTimer) clearInterval(pollTimer);
 });
 
