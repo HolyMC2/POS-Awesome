@@ -384,6 +384,7 @@
 						:transition-duration-ms="catalogDrawer.transitionDurationMs.value"
 						:can-anchor="catalogDrawer.canAnchor.value"
 						:items-view="catalogItemsView"
+						:hide-chrome="movilPhone"
 						@close="closeCatalogDrawer"
 						@opened="onDrawerOpened"
 						@update:active-category="catalogDrawer.setCategory"
@@ -1148,6 +1149,12 @@ export default {
 				);
 				return;
 			}
+			// Phones front the pay stage on the tap itself; the empty-cart
+			// case is left to the validation toast on the old screen rather
+			// than flashing a zero-peso keypad for one round trip.
+			if (movilPhone.value && Number(itemsCount.value) > 0) {
+				movilPayPending.value = true;
+			}
 			// The invoice panel owns the pre-payment validation; it is
 			// always mounted (v-show, not v-if), so the event always lands.
 			// It also owns the in-flight latch (show_payment), so a repeat
@@ -1155,6 +1162,13 @@ export default {
 			eventBus.emit("request_invoice_payment");
 		};
 		const paymentPending = computed(() => uiStore.paymentRequestPending);
+		// The latch's falling edge is the ONE moment the optimistic stage
+		// resolves: a successful open has already set activeView to
+		// "payment" (the stage holds on the real condition), and a refused
+		// one has not (the stage falls back to the screen the toast is on).
+		watch(paymentPending, (pending) => {
+			if (!pending) movilPayPending.value = false;
+		});
 		const isSelectorViewActive = (view) => compactPanel.value === "selector" && activeView.value === view;
 		// Dock tabs render from the capability profile's dock_tabs list —
 		// the shell owns HOW each id is drawn, the profile owns WHICH ids
@@ -1570,11 +1584,22 @@ export default {
 		// flow lives there until the movil split sheet ships. Same shape as
 		// the cart-line fallback, reset by the same moves.
 		const movilPayDetail = ref(false);
+		// The tap's INSTANT half (owner 08-31: «pay its kinda slow … can we
+		// speed it up?»). `show_payment` awaits update_invoice + a backend
+		// reload before it sets activeView — the better part of a second on a
+		// phone network, spent staring at the previous screen. The stage
+		// switches on the TAP instead: the pay screen's figures are the same
+		// live client figures the dock and the cart already show, and the
+		// COLLECT primary stays down (`canCollect` reads the pending latch)
+		// until the authoritative doc lands. A validation bounce (no items,
+		// no customer, a refused doc) clears the flag on the latch's falling
+		// edge and the stage returns to where it was, toast and all.
+		const movilPayPending = ref(false);
 		const movilPayActive = computed(
 			() =>
 				movilPhone.value &&
 				compactPanel.value === "selector" &&
-				activeView.value === "payment" &&
+				(activeView.value === "payment" || movilPayPending.value) &&
 				!usePaymentDialog.value &&
 				!movilPayDetail.value &&
 				!hostedDestinationId.value &&
@@ -1915,7 +1940,8 @@ export default {
 			currency: activeCurrency.value || null,
 			profile: posProfile.value || null,
 			itemCount: Number(itemsCount.value) || 0,
-			canCollect: movilPayActive.value && Number(itemsCount.value) > 0,
+			canCollect:
+				movilPayActive.value && Number(itemsCount.value) > 0 && !paymentPending.value,
 			ordenView: movilOrdenView.value,
 			ordenTitle: __("Service Orders"),
 			ordenWho: posProfile.value?.name || "",
