@@ -12,9 +12,46 @@ from posawesome.posawesome.api.payment_entry import create_payment_entry
 
 
 def _payment_entry_job(order_name, payments, pos_opening_shift=None):
-    """Background task to create payment entries."""
-    so_doc = frappe.get_doc("Sales Order", order_name)
-    _create_payment_entries(so_doc, payments, pos_opening_shift)
+    """Background task to create the apartado's advance Payment Entries.
+
+    Hardened (audit MONEY-F5). This is fire-and-forget from the operator's
+    point of view — the SO submits synchronously and the register frees up —
+    so a failure here used to die silently in RQ's failed registry: cash in the
+    drawer, no Payment Entry, nobody told, and a requeue booked a SECOND advance
+    because nothing deduped it. Now: each row carries a deterministic
+    `client_request_id` so a retry is idempotent, and a failure rolls back,
+    logs, comments on the order and publishes an error the SPA can surface.
+    """
+    try:
+        so_doc = frappe.get_doc("Sales Order", order_name)
+        _create_payment_entries(so_doc, payments, pos_opening_shift)
+    except Exception:
+        frappe.db.rollback()
+        error = frappe.get_traceback()
+        frappe.log_error(
+            title=f"Apartado advance PE failed for {order_name}",
+            message=error,
+        )
+        try:
+            frappe.get_doc("Sales Order", order_name).add_comment(
+                "Comment",
+                frappe._(
+                    "The down-payment could not be recorded automatically. The cash "
+                    "is in the drawer but no Payment Entry was created — record it "
+                    "manually or retry. (See the error log.)"
+                ),
+            )
+        except Exception:
+            pass
+        from posawesome.posawesome.api.invoice_processing.creation import _posa_publish_dual
+
+        _posa_publish_dual(
+            "pos_sales_order_payment_error",
+            {"sales_order": order_name},
+            doctype="Sales Order",
+            docname=order_name,
+        )
+        raise
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -142,12 +179,30 @@ def _create_payment_entries(so_doc, payments, pos_opening_shift=None):
     and was absent from the corte. The shift is resolved in the request, where
     the cashier's session is known, and threaded through the job.
     """
-    for pay in payments or []:
+    from posawesome.posawesome.api.idempotency import (
+        normalize_client_request_id,
+        find_payment_entries_by_client_request_id,
+    )
+
+    for index, pay in enumerate(payments or []):
         if not pay.get("amount"):
+            continue
+
+        # Deterministic per (order, row): a requeue re-derives the same id, and
+        # the lookup below returns the already-booked PE instead of a second
+        # advance. Rows are keyed by index+mode+amount so two identical tenders
+        # on one order still get distinct ids.
+        request_id = normalize_client_request_id(
+            "so-adv-{0}-{1}-{2}-{3}".format(
+                so_doc.name, index, pay.get("mode_of_payment") or "", pay.get("amount")
+            )
+        )
+        if request_id and find_payment_entries_by_client_request_id(request_id):
             continue
 
         # Create payment entry using helper to ensure exchange rates are set
         pe = create_payment_entry(
+            client_request_id=request_id,
             company=so_doc.company,
             customer=so_doc.customer,
             amount=pay.get("amount"),

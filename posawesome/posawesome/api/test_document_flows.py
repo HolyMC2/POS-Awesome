@@ -454,6 +454,28 @@ class TestDocumentFlows(IntegrationTestCase):
 			"the down-payment must carry the open shift so the corte can see it",
 		)
 
+	def test_advance_pe_job_is_idempotent_on_requeue(self):
+		"""MONEY-F5: the fire-and-forget PE job must not double the advance.
+
+		Each row carries a deterministic client_request_id, so re-running the
+		job (a requeue after a transient failure) books no second Payment Entry
+		— cash taken once, recorded once."""
+		payments = [{"mode_of_payment": "Cash", "amount": 10, "base_amount": 10}]
+		so_name = self._submit_so(self._so_payload(rate=10, payments=payments))
+
+		sales_orders._payment_entry_job(so_name, payments, "SHIFT-A")
+		sales_orders._payment_entry_job(so_name, payments, "SHIFT-A")
+
+		refs = frappe.get_all(
+			"Payment Entry Reference",
+			filters={"reference_doctype": "Sales Order", "reference_name": so_name},
+			fields=["parent"],
+		)
+		self.assertEqual(
+			len({r.parent for r in refs}), 1,
+			"a requeue must not book a second advance Payment Entry",
+		)
+
 	def test_submit_sales_order_enqueues_payment_job(self):
 		"""The advance Payment Entry is fire-and-forget: submit_sales_order must
 		enqueue _payment_entry_job with the EXACT dotted path + kwargs. A renamed
