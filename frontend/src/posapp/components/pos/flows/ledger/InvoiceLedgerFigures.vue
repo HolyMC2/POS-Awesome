@@ -159,4 +159,39 @@ const refundedMeta = computed(() => {
 	font-size: 11.5px;
 	color: var(--reg-text-muted, #667085);
 }
+
+/* ---- phones ----------------------------------------------------------- */
+
+/* A row of three cards leaves ~100px each on a 360px phone and 22px money
+   breaks across two lines. Below the phone boundary the figures pack two to a
+   row, an odd last one spans the row, and every line truncates rather than
+   wraps: money is never split. */
+@media (max-width: 767.98px) {
+	.ledger-figures {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px;
+	}
+
+	.ledger-figure {
+		padding: 10px 12px;
+		gap: 2px;
+	}
+
+	.ledger-figure:nth-child(odd):last-child {
+		grid-column: 1 / -1;
+	}
+
+	.ledger-figure__label,
+	.ledger-figure__number,
+	.ledger-figure__meta {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.ledger-figure__number {
+		font-size: 18px;
+	}
+}
 </style>

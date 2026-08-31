@@ -2919,7 +2919,13 @@ export default {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
-	overflow: hidden;
+	/* `clip` after `hidden` (see `.destination-host`): a chip focused past the
+	 * card's edge must not pan the whole ledger sideways. `!important` because
+	 * Vuetify's `.v-dialog > .v-overlay__content > .v-card` sets `overflow-y:
+	 * auto`, and a `clip` on one axis beside an `auto` on the other computes
+	 * back to `hidden` — a scroll container again. */
+	overflow: hidden !important;
+	overflow: clip !important;
 }
 
 .invoice-management-card--dark {

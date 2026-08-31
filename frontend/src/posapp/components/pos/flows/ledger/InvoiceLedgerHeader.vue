@@ -448,4 +448,110 @@ defineExpose({ focusQuery: () => queryInput.value?.focus() });
 	border-color: var(--reg-accent, #0097a7);
 	color: var(--reg-on-accent-soft, #00646f);
 }
+
+/* ---- phones ----------------------------------------------------------- */
+
+/* Below the register's phone boundary (`useResponsive().isPhone`, 768) the
+   one-row chrome measures ~650px in the finder alone, so it becomes three
+   rows, none wider than the surface:
+
+     [ segment pills — one line, swipes sideways                 ]
+     [ search box  |  Desde [date]  A [date]  — the full width   ]
+     [ mode chips — swipe … ] [ range chip ]
+
+   `.ledger-finder` turns into `display: contents` so its modes and its
+   box/range can be ordered among the head's own children. The segment, the
+   modes and the source switch become one-line scrollers: an intended scroller
+   can be swiped back, an overflow the card clips cannot. The range chip hides
+   while Fecha is armed, because the two date fields print the same range. */
+@media (max-width: 767.98px) {
+	.ledger-head {
+		gap: 8px;
+	}
+
+	.ledger-head__spacer {
+		display: none;
+	}
+
+	.ledger-seg,
+	.ledger-source,
+	.ledger-finder__modes {
+		max-width: 100%;
+		min-width: 0;
+		overflow-x: auto;
+		scrollbar-width: none;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.ledger-seg::-webkit-scrollbar,
+	.ledger-source::-webkit-scrollbar,
+	.ledger-finder__modes::-webkit-scrollbar {
+		display: none;
+	}
+
+	.ledger-seg__item,
+	.ledger-source__item,
+	.ledger-finder__mode {
+		flex: none;
+		white-space: nowrap;
+	}
+
+	.ledger-seg {
+		order: 1;
+		flex: 1 1 100%;
+	}
+
+	.ledger-finder {
+		display: contents;
+	}
+
+	.ledger-finder__box,
+	.ledger-finder__range {
+		order: 2;
+		flex: 1 1 100%;
+		width: auto;
+	}
+
+	/* A date input keeps an intrinsic floor (~120px in Chromium) that
+	   `min-width: 0` does not remove, so the pair shares the row only while
+	   each half can be 150px, and wraps to two rows on anything narrower. */
+	.ledger-finder__range {
+		flex-wrap: wrap;
+	}
+
+	.ledger-finder__range-label {
+		flex: 1 1 150px;
+		min-width: 0;
+	}
+
+	.ledger-finder__date {
+		flex: 1 1 0;
+		min-width: 0;
+		width: 100%;
+		padding: 0 8px;
+	}
+
+	.ledger-finder__modes {
+		order: 3;
+		flex: 1 1 0;
+	}
+
+	.ledger-daterange {
+		order: 4;
+		flex: none;
+		height: 32px;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.ledger-daterange--on {
+		display: none;
+	}
+
+	.ledger-source {
+		order: 5;
+		flex: 1 1 100%;
+	}
+}
 </style>

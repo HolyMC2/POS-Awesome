@@ -4,6 +4,24 @@ All notable changes.
 
 ## Unreleased
 
+- **The hosted ledger on a phone stops sliding, sits under the drawer,
+  and gets a phone layout (08-31).** Tapping «Por fecha» or a date field
+  in Facturas/Borradores on a phone panned the whole sheet ~300px left
+  with no way back: the finder row measured 648px inside a 358px card,
+  and a box with `overflow: hidden` is still a scroll container — the
+  browser scrolls the focused control into view. `.destination-host` and
+  the ledger card now `overflow: clip` (nothing can scroll it; `hidden`
+  kept first as the fallback; the card's is `!important` over Vuetify's
+  scrollable-dialog `overflow-y: auto`). The contained sheet's dialog
+  z-index (2400) also painted over the phone nav drawer (1004):
+  `isolation: isolate` on the host keeps that z-index inside it. Below
+  768 the ledger head wraps into three rows (swipeable segments,
+  full-width search/date range, mode chips + range chip), the figures
+  pack 2+1 with money never split, and the rows re-lay as two lines
+  (ticket / total, hour · customer / status; header, cashier cell and
+  keyboard hint dropped, 36px pager keys). `tests/ledgerPhoneLayout.spec.ts`
+  pins all of it; verified on the mirror at 360×800, 412×915 and
+  1440×900 (desk identical). vitest 5113 ✓, vue-tsc 0.
 - **The rate band is visible while typing (08-29, critique C3).** The
   ±band on typed prices was server-only — the cashier met the numbers as
   a submit-time refusal. New `utils/rateBand.ts` mirrors

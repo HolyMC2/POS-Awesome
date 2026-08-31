@@ -478,4 +478,22 @@ defineExpose({ focusRing: () => tableRef.value?.focusRing?.() });
 		max-height: 45%;
 	}
 }
+
+/* Phones: tighter gutters, and the panel — already the bottom half below
+   1180px — may take half the body, since the table above keeps the rows the
+   operator is choosing from. */
+@media (max-width: 767.98px) {
+	.ledger-surface {
+		padding: 10px 12px;
+		gap: 8px;
+	}
+
+	.ledger-surface__body {
+		gap: 8px;
+	}
+
+	.ledger-surface__body :deep(.ledger-panel) {
+		max-height: 50%;
+	}
+}
 </style>

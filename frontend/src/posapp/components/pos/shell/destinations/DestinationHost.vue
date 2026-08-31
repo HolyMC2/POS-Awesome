@@ -206,7 +206,21 @@ const refusalBody = computed(() => {
 	flex: 1 1 auto;
 	min-height: 0;
 	position: relative;
+	/* `clip`, not `hidden`: a hidden-overflow box is still a scroll container,
+	 * so focusing a descendant that sits past its edge (a chip or an input in
+	 * a hosted sheet wider than the phone) pans the host, with no scrollbar to
+	 * pan it back. `clip` only cuts the paint and nothing can scroll it. The
+	 * `hidden` line stays as the fallback for engines without `clip`. */
 	overflow: hidden;
+	overflow: clip;
+	/* The hosted sheet is a contained Vuetify overlay carrying the dialog
+	 * z-index (2400). Without a stacking context here that value competes at
+	 * the root and paints over the phone/tablet navigation drawer (layout
+	 * z-index 1004), whose panel and scrim then show only below the host.
+	 * Isolating keeps the overlay's z-index inside the host: the sheet is
+	 * page content, and the app bar, the drawer, the dock and body-level
+	 * dialogs stay above it. */
+	isolation: isolate;
 }
 
 /* Below the two-column boundary the document scrolls and the shell is
