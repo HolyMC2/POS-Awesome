@@ -36,7 +36,10 @@ from posawesome.posawesome.api.payment_processing.journal_entry import create_di
 # ----------------------------------------------------------------------
 
 
-@frappe.whitelist(methods=["GET", "POST"])
+# methods=["POST"] only: this alias forwards to a MUTATING impl, and Frappe
+# skips CSRF on GET (auth.py UNSAFE_HTTP_METHODS) — a GET door on a money write
+# is an <img>/fetch CSRF vector with the operator's session (audit MONEY-F2).
+@frappe.whitelist(methods=["POST"])
 def auto_reconcile_customer_invoices(*args, **kwargs):
     """Backward-compat alias → posawesome.posawesome.api.payment_processing.reconciliation.auto_reconcile_customer_invoices.
     Filters kwargs against the impl's signature so Frappe's `cmd` /

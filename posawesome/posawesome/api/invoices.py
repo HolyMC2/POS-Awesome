@@ -447,7 +447,10 @@ def get_last_invoice_rates(*args, **kwargs):
     return _impl(*args, **kwargs)
 
 
-@frappe.whitelist(methods=["GET", "POST"])
+# methods=["POST"] only: this alias forwards to a MUTATING impl, and Frappe
+# skips CSRF on GET (auth.py UNSAFE_HTTP_METHODS) — a GET door on a money write
+# is an <img>/fetch CSRF vector with the operator's session (audit MONEY-F2).
+@frappe.whitelist(methods=["POST"])
 def submit_invoice(*args, **kwargs):
     """Backward-compat alias → posawesome.posawesome.api.invoice_processing.creation.submit_invoice.
     Filters kwargs against the impl's signature so Frappe's `cmd` /
@@ -461,7 +464,10 @@ def submit_invoice(*args, **kwargs):
     return _impl(*args, **kwargs)
 
 
-@frappe.whitelist(methods=["GET", "POST"])
+# methods=["POST"] only: this alias forwards to a MUTATING impl, and Frappe
+# skips CSRF on GET (auth.py UNSAFE_HTTP_METHODS) — a GET door on a money write
+# is an <img>/fetch CSRF vector with the operator's session (audit MONEY-F2).
+@frappe.whitelist(methods=["POST"])
 def update_invoice(*args, **kwargs):
     """Backward-compat alias → posawesome.posawesome.api.invoice_processing.creation.update_invoice.
     Filters kwargs against the impl's signature so Frappe's `cmd` /

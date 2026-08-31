@@ -581,7 +581,10 @@ def issue_gift_card(
     return _serialize_gift_card(gift_card_doc)
 
 
-@frappe.whitelist(methods=["GET", "POST"])
+# methods=["POST"] only: this alias forwards to a MUTATING impl, and Frappe
+# skips CSRF on GET (auth.py UNSAFE_HTTP_METHODS) — a GET door on a money write
+# is an <img>/fetch CSRF vector with the operator's session (audit MONEY-F2).
+@frappe.whitelist(methods=["POST"])
 def top_up_gift_card(pos_profile=None, cashier=None, gift_card_code=None, amount=0):
     profile_name, cashier, _user_doc = _require_supervisor(pos_profile, cashier)
     profile_doc = _get_profile_doc(profile_name)

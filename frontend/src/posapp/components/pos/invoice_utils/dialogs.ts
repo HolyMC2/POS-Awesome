@@ -461,6 +461,10 @@ export async function change_price_list_rate(
 					price_list: priceList,
 					rate: nextRate,
 					uom: item.uom || item.stock_uom || undefined,
+					// MONEY-F3: name the profile so the server can check membership
+					// + the posa_allow_price_list_rate_change flag, not just trust
+					// the hidden button.
+					pos_profile: context.pos_profile?.name,
 				},
 			});
 			item._price_list_rate_persisted = true;

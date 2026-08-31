@@ -403,7 +403,10 @@ def get_price_for_uom(*args, **kwargs):
     return _impl(*args, **kwargs)
 
 
-@frappe.whitelist(methods=["GET", "POST"])
+# methods=["POST"] only: this alias forwards to a MUTATING impl, and Frappe
+# skips CSRF on GET (auth.py UNSAFE_HTTP_METHODS) — a GET door on a money write
+# is an <img>/fetch CSRF vector with the operator's session (audit MONEY-F2).
+@frappe.whitelist(methods=["POST"])
 def update_price_list_rate(*args, **kwargs):
     """Backward-compat alias → posawesome.posawesome.api.item_processing.price.update_price_list_rate.
     Filters kwargs against the impl's signature so Frappe's `cmd` /
