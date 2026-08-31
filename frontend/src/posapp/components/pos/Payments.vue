@@ -865,7 +865,9 @@ const paymentContainer = ref(null);
 const submitButton = ref(null);
 const _shortcutHandlers = ref({});
 const readonly = ref(false); // Add missing readonly ref
-const submissionInFlight = ref(false);
+// The double-submit guard lives in uiStore (RUNTIME-F2): a 1100px resize
+// remounts this component, and a local ref would reset the guard mid-submit.
+const submissionInFlight = computed(() => uiStore.submissionInFlight);
 const queuedShortcutSubmit = ref(null);
 const giftCardDialogOpen = ref(false);
 const giftCardInlineExpanded = ref(false);
@@ -2721,7 +2723,7 @@ const submitInvoiceWrapper = async (print, callbackOverrides = {}, options = {})
 		return;
 	}
 
-	submissionInFlight.value = true;
+	uiStore.setSubmissionInFlight(true);
 	loading.value = true;
 	try {
 		await validateSubmission(options.paymentReceived || false);
@@ -2800,7 +2802,7 @@ const submitInvoiceWrapper = async (print, callbackOverrides = {}, options = {})
 		}
 	} finally {
 		loading.value = false;
-		submissionInFlight.value = false;
+		uiStore.setSubmissionInFlight(false);
 		// A failed movil collect leaves the flag armed otherwise, and the NEXT
 		// submission — a desk one, possibly — would inherit the buzz.
 		movilCollectPending = false;
@@ -3236,6 +3238,10 @@ const applyIncomingInvoiceDoc = (doc) => {
 	last_payment_change_was_cash.value = null;
 	is_credit_sale.value = false;
 	is_write_off_change.value = false;
+	// A fresh invoice cannot have a submit in flight — clear the store guard
+	// defensively so an orphaned true (a submit whose component was unmounted
+	// mid-flight) never blocks the next sale (RUNTIME-F2).
+	uiStore.setSubmissionInFlight(false);
 	// Fresh invoice → allow auto-default again.
 	paymentsTouched.value = false;
 	paymentSnapshotBeforeCredit = null;

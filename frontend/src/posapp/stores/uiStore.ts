@@ -58,6 +58,23 @@ export const useUIStore = defineStore("ui", () => {
   const paymentDialogOpen = ref(false);
 
   /**
+   * A sale submit is in flight — the ONLY client-side double-submit guard
+   * (audit RUNTIME-F2). It lives in the store, not in Payments.vue, because the
+   * register deliberately DESTROYS and rebuilds the payment surface when it
+   * crosses the 1100px boundary (inline column <-> CobroSurface, no KeepAlive);
+   * a component-local ref reset to false on that remount, so a second PAGAR /
+   * F-key / movil collect was accepted for the same invoice while the first
+   * submit — which can wait up to 45s on the socket — was still running. The
+   * server submission ledger dedupes on posa_client_request_id and is the real
+   * backstop, but the guard must survive the remount so the register does not
+   * even send the second request. Reset with the invoice on a new sale.
+   */
+  const submissionInFlight = ref(false);
+  const setSubmissionInFlight = (value: boolean) => {
+    submissionInFlight.value = Boolean(value);
+  };
+
+  /**
    * The register shell is showing the rail (roadmap §17.7). Published by
    * Pos.vue so chrome OUTSIDE the shell — the navbar's hamburger — can stand
    * down: with the rail on screen the drawer is a second list of the same
@@ -455,6 +472,8 @@ export const useUIStore = defineStore("ui", () => {
     freezeMessage,
     activeView,
     paymentDialogOpen,
+    submissionInFlight,
+    setSubmissionInFlight,
     railLayout,
     setRailLayout,
     hostedDestination,
