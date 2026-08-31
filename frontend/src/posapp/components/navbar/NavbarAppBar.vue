@@ -802,7 +802,7 @@ export default {
 	}
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.mobile-navbar .pos-navbar-actions-section {
 		gap: 4px;
 	}
@@ -826,7 +826,7 @@ export default {
 	}
 }
 
-@media (max-width: 600px) {
+@media (max-width: 599.98px) {
 	.pos-navbar-title {
 		font-size: 1rem !important;
 	}
@@ -1332,7 +1332,7 @@ export default {
 
 /* The wordmark and the logo bitmap are the same Desk link — the bitmap
    is redundant at phone width and its ~36px go to the search/actions. */
-@media (max-width: 600px) {
+@media (max-width: 599.98px) {
 	.mobile-navbar .pos-navbar-logo {
 		display: none !important;
 	}
@@ -1385,7 +1385,7 @@ export default {
 }
 
 /* Original responsive adjustments for loading bar */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.glass-card {
 		padding: 6px 12px;
 		left: 8px;

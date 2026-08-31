@@ -36,6 +36,9 @@ import figuresSource from "../src/posapp/components/pos/flows/ledger/InvoiceLedg
 import tableSource from "../src/posapp/components/pos/flows/ledger/InvoiceLedgerTable.vue?raw";
 import surfaceSource from "../src/posapp/components/pos/flows/ledger/InvoiceLedgerSurface.vue?raw";
 import responsiveSource from "../src/posapp/composables/core/useResponsive.ts?raw";
+import { BREAKPOINTS } from "../src/posapp/constants/breakpoints";
+
+const PHONE = BREAKPOINTS.phone;
 
 const styleOf = (source: string) =>
 	source.slice(source.indexOf("<style"), source.lastIndexOf("</style>"));
@@ -60,7 +63,7 @@ const phoneBlock = (style: string, breakpoint: number) => {
 	throw new Error("unterminated media block");
 };
 
-const PHONE = Number(/isPhone = computed\(\(\) => windowWidth\.value < (\d+)\)/.exec(responsiveSource)?.[1]);
+
 
 describe("the hosted sheet cannot be panned and does not cover the drawer", () => {
 	it("clips the destination host with `clip` after the `hidden` fallback", () => {

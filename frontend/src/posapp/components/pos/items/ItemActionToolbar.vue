@@ -162,7 +162,7 @@ defineEmits(["update:modelValue", "update:itemsView", "open-offers", "open-coupo
 	}
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.dynamic-padding {
 		padding: var(--dynamic-xs);
 	}

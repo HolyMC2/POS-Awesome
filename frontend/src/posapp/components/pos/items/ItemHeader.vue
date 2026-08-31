@@ -586,7 +586,7 @@ defineExpose({
 	border-radius: 16px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	/* Keep the bar lean: the 40px compact field is the touch floor (see
 	   the append-inner note above), so height savings come from chrome,
 	   not the field. */

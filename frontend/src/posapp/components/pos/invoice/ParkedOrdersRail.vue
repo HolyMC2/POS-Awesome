@@ -276,7 +276,7 @@ const formatDraftAge = (draft) => {
 	color: var(--pos-text-secondary);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.drafts-rail {
 		padding: 10px;
 	}

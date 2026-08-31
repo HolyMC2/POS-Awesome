@@ -314,7 +314,7 @@ const actionLabel = computed(() =>
 	color: rgb(var(--v-theme-error));
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.gift-card-entry__summary {
 		flex-direction: column;
 		align-items: stretch;

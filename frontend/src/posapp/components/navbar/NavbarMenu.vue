@@ -1585,7 +1585,7 @@ export default {
 }
 
 /* Compact Responsive Design */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.menu-card-compact {
 		min-width: min(280px, calc(100vw - 20px));
 		max-width: min(320px, calc(100vw - 20px));

@@ -300,7 +300,7 @@ const blurTarget = (event) => {
 	font-weight: 600;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.payment-method-card {
 		padding: var(--pos-space-2);
 		gap: var(--pos-space-2);

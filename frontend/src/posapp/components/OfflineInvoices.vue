@@ -1046,7 +1046,7 @@ async function confirmRemoveInvoice() {
 }
 
 /* ========== RESPONSIVE DESIGN ========== */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.offline-invoices-card {
 		margin: 16px !important;
 		border-radius: 16px !important;

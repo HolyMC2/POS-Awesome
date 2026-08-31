@@ -1565,7 +1565,7 @@ export default {
 	padding-right: calc(30px + var(--dp-input-icon-padding));
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.pay-mode-controls {
 		grid-template-columns: 1fr;
 	}

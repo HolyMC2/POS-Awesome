@@ -4051,7 +4051,7 @@ defineExpose({
 	color: rgb(var(--v-theme-on-surface));
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.payment-shell {
 		display: flex;
 		flex-direction: column;

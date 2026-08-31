@@ -1931,7 +1931,7 @@ defineExpose({
    and `.item-container` live in ItemsSelectorCards' template, so they carry
    THAT component's scope attribute — five rules here targeted them and every
    one was dead. See the scoping note at the top of ItemsSelectorCards' style. */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.dynamic-padding {
 		/* Reduce spacing uniformly on smaller screens */
 		padding: var(--dynamic-xs);

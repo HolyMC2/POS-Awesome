@@ -254,7 +254,7 @@
 	}
 }
 
-@media (max-width: 599px) {
+@media (max-width: 599.98px) {
 	/* Once the row has wrapped, the two labelled buttons split the width
 	   rather than huddling against the left edge. */
 	.customer-quick-actions {
@@ -266,7 +266,7 @@
 	}
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.customer-input-wrapper {
 		padding-right: 0;
 	}

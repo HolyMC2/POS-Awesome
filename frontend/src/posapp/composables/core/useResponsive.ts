@@ -1,4 +1,5 @@
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
+import { BREAKPOINTS } from "../../constants/breakpoints";
 
 export function useResponsive() {
 	const windowWidth = ref(window.innerWidth);
@@ -6,12 +7,12 @@ export function useResponsive() {
 	const baseWidth = ref(1440);
 	const baseHeight = ref(900);
 
-	const isPhone = computed(() => windowWidth.value < 768);
+	const isPhone = computed(() => windowWidth.value < BREAKPOINTS.phone);
 	const isTablet = computed(
-		() => windowWidth.value >= 768 && windowWidth.value < 1100,
+		() => windowWidth.value >= BREAKPOINTS.phone && windowWidth.value < BREAKPOINTS.compact,
 	);
-	const isDesktop = computed(() => windowWidth.value >= 1100);
-	const isCompact = computed(() => windowWidth.value < 1100);
+	const isDesktop = computed(() => windowWidth.value >= BREAKPOINTS.compact);
+	const isCompact = computed(() => windowWidth.value < BREAKPOINTS.compact);
 	const isShortViewport = computed(() => windowHeight.value < 760);
 
 	const widthScale = computed(() => windowWidth.value / baseWidth.value);
@@ -66,9 +67,9 @@ export function useResponsive() {
 		// ResizeObserver in Pos.vue) overrides this once mounted. Kept small so
 		// the slim solid action bar doesn't reserve a big empty gap on first paint.
 		let bottomSafeSpace = 24;
-		if (windowWidth.value < 600) {
+		if (windowWidth.value < BREAKPOINTS.dialogFullscreen) {
 			bottomSafeSpace = isShortViewport.value ? 108 : 126;
-		} else if (windowWidth.value < 1100) {
+		} else if (windowWidth.value < BREAKPOINTS.compact) {
 			bottomSafeSpace = isShortViewport.value ? 100 : 116;
 		}
 

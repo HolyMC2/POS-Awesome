@@ -7,6 +7,7 @@ import {
 	type ComputedRef,
 	type Ref,
 } from "vue";
+import { BREAKPOINTS } from "../../constants/breakpoints";
 
 import {
 	DESTINATION_SURFACE,
@@ -18,7 +19,7 @@ import {
  * per side and still has to fit its own padding, so any dialog holding a real
  * form ends up scrolling in two axes. These go fullscreen instead.
  */
-export const DIALOG_FULLSCREEN_BREAKPOINT = 600;
+export const DIALOG_FULLSCREEN_BREAKPOINT = BREAKPOINTS.dialogFullscreen;
 
 export interface DialogGeometry {
 	width?: string | number;

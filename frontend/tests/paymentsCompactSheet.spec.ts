@@ -39,7 +39,7 @@ const mediaBlock = (query: string) =>
 	blockFrom(styleBlock, styleBlock.indexOf(query));
 
 const compactSheetBlock = mediaBlock("@media (max-width: 1099px)");
-const phoneBlock = mediaBlock("@media (max-width: 768px)");
+const phoneBlock = mediaBlock("@media (max-width: 767.98px)");
 
 const ruleFor = (block: string, selector: string) => {
 	const start = block.indexOf(`${selector} {`);
@@ -126,7 +126,7 @@ describe("payment action bar anchoring", () => {
 		// load-bearing, not cosmetic.
 		expect(
 			styleBlock.indexOf("@media (max-width: 1099px)"),
-		).toBeGreaterThan(styleBlock.indexOf("@media (max-width: 768px)"));
+		).toBeGreaterThan(styleBlock.indexOf("@media (max-width: 767.98px)"));
 	});
 
 	it("keeps the bar's own compact sizing off a dead :deep selector", () => {

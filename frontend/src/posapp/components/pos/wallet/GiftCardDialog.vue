@@ -390,7 +390,7 @@ const modeMeta = computed(() => {
 	font-weight: 600;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.gift-card-dialog__header,
 	.gift-card-dialog__scan-banner {
 		flex-direction: column;

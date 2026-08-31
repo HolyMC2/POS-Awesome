@@ -373,7 +373,7 @@ watch(
 
 /* Below the two-column boundary the surface is one column, in reading order:
  * the form first, its history under it. */
-@media (max-width: 1100px) {
+@media (max-width: 1099.98px) {
 	.cash-movement-destination__body {
 		grid-template-columns: minmax(0, 1fr);
 		grid-template-rows: auto;

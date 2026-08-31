@@ -476,7 +476,7 @@ const onDragEnd = (event) => {
    specificity, so the two would be settled by source order alone, and on a
    portrait phone (which is compact) the 112px plate would win and overflow the
    184px slot by 24px. */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.card-item-image-container {
 		height: 112px;
 	}

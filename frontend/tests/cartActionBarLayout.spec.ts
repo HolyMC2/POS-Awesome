@@ -31,7 +31,7 @@ const blockBody = (css: string, from: number) => {
 /** The body of every `@media (max-width: <px>)` block in a stylesheet. */
 const mediaBands = (css: string) => {
 	const bands: { width: number; body: string }[] = [];
-	const opener = /@media\s*\(max-width:\s*(\d+)px\)/g;
+	const opener = /@media\s*\(max-width:\s*(\d+(?:\.\d+)?)px\)/g;
 	let match: RegExpExecArray | null;
 	while ((match = opener.exec(css)) !== null) {
 		bands.push({ width: Number(match[1]), body: blockBody(css, match.index) });
@@ -144,7 +144,7 @@ describe("bottom-dock clearance is reserved exactly once", () => {
 		expect(declaration(shellStyles, ".dynamic-container", "padding-bottom")).toContain(
 			"var(--bottom-safe-space)",
 		);
-		const phoneBand = mediaBands(shellStyles).find((band) => band.width === 768);
+		const phoneBand = mediaBands(shellStyles).find((band) => band.width === 767.98);
 		expect(
 			declaration(phoneBand?.body ?? "", ".dynamic-container", "padding-bottom"),
 		).toContain("var(--bottom-safe-space)");

@@ -169,7 +169,7 @@ const visibleSecondary = computed(() => props.secondaryInsights.filter(showTile)
  * Phone: two up, stacked anatomy. The hover lift is dropped with the pointer
  * that could use it — on a touch screen it only ever fires as a tap artefact.
  */
-@media (max-width: 600px) {
+@media (max-width: 599.98px) {
 	.insight-strip {
 		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 	}

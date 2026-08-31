@@ -1020,7 +1020,7 @@ export default {
 	}
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
 	.returns-result-card {
 		padding: 12px;
 	}

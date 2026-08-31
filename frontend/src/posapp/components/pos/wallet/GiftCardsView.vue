@@ -918,7 +918,7 @@ defineExpose({ lookup, card, transactions });
 	color: var(--reg-text-muted, #9aa2ae);
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1099.98px) {
 	.gift-cards__body {
 		flex-direction: column;
 		overflow-y: auto;

@@ -323,7 +323,7 @@ defineExpose({ ACTION_CHIPS });
    floor theme.css enforces everywhere else (tests/touchTargetSweep.spec.ts),
    so the chips grow. Density is a desktop win; it is never worth a missed tap.
    PAY goes to 48px, where it has always been on a phone band. */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.pos-action-strip {
 		gap: 8px;
 	}

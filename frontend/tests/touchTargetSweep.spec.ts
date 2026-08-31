@@ -378,7 +378,7 @@ describe("customer selector on touch", () => {
 	it("lets the two labelled buttons split the row once it has wrapped", () => {
 		// The phone gets the field on its own line; the buttons underneath
 		// then take half the width each instead of huddling at the left.
-		const phone = /@media\s*\(max-width:\s*599px\)/.exec(customerStyles);
+		const phone = /@media\s*\(max-width:\s*599\.98px\)/.exec(customerStyles);
 		expect(phone).not.toBeNull();
 		const phoneRules = blockBody(customerStyles, (phone as RegExpExecArray).index);
 		expect(declaration(phoneRules, ".customer-quick-actions", "width")).toBe("100%");

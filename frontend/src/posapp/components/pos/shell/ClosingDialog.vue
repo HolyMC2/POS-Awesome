@@ -830,7 +830,7 @@ export default {
 
 /* Fullscreen sheet on phones: square the card, reclaim the padding the
    stat grid + recon table need, and let actions stay reachable. */
-@media (max-width: 600px) {
+@media (max-width: 599.98px) {
 	.closing-dialog-card {
 		border-radius: 0;
 		display: flex;
@@ -856,7 +856,7 @@ export default {
 	padding: 12px 24px 0;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 599.98px) {
 	.closing-band {
 		padding: 8px 10px 0;
 	}

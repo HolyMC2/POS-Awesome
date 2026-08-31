@@ -434,7 +434,7 @@ watch(
 /* Under the flows sheets' own fullscreen floor the two columns stop being two
  * columns: 400px of wallet beside a timeline leaves the timeline unreadable
  * long before the viewport gets narrow enough for Vuetify to care. */
-@media (max-width: 1100px) {
+@media (max-width: 1099.98px) {
 	.cliente-view__body {
 		flex-direction: column;
 		overflow-y: auto;

@@ -1868,7 +1868,7 @@ export default {
 }
 
 /* Responsive breakpoints */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	/* Mobile deliberately opts OUT of the desktop height chain: DefaultLayout
 	 * hands the document back its own scroll below this width, the compact
 	 * switcher shows one panel at a time, and the fixed dock carries the

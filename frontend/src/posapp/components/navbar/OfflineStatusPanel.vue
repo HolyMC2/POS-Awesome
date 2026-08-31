@@ -350,7 +350,7 @@ const cacheUsageLabel = computed(() => `${summary.value.cacheUsage || 0}%`);
 	transform: translateY(-6px);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.offline-status-panel {
 		right: -12px;
 		width: min(340px, calc(100vw - 20px));

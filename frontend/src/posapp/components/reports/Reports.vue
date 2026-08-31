@@ -5364,7 +5364,7 @@ onMounted(() => {
 	}
 }
 
-@media (max-width: 600px) {
+@media (max-width: 599.98px) {
 	.dashboard-tabs--mobile {
 		grid-template-columns: 1fr;
 	}

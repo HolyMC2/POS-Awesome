@@ -1381,7 +1381,7 @@ const adjust_frappe_sidebar_offset = () => {
    the 769-1099px band scroll; keep both or that band clips below the fold.
    tests/defaultLayoutMainScroller.spec.ts guards exactly those rules. */
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.container1 {
 		height: auto;
 		min-height: 100dvh;

@@ -3275,7 +3275,7 @@ export default {
 	background: rgba(var(--v-theme-success), 0.24);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
 	.dynamic-container {
 		padding-top: var(--dynamic-xs);
 		padding-bottom: calc(var(--bottom-safe-space) + 4px);

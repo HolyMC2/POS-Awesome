@@ -774,7 +774,7 @@ const __ = window.__ || ((t) => t);
 
 /* Phone: 2-up compact stat cards, tighter sections + table cells, smaller
    type so the closing sheet reads without endless scroll or clipping. */
-@media (max-width: 600px) {
+@media (max-width: 599.98px) {
 	.overview-wrapper {
 		gap: 12px;
 	}

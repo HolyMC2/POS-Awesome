@@ -13,7 +13,7 @@ const source = readFileSync(
 
 const styleBlock = source.slice(source.lastIndexOf("<style"));
 const compactMediaBlock = (() => {
-	const start = styleBlock.indexOf("@media (max-width: 768px)");
+	const start = styleBlock.indexOf("@media (max-width: 767.98px)");
 	expect(start).toBeGreaterThan(-1);
 	// Walk to the matching close brace of the media query.
 	let depth = 0;
@@ -28,7 +28,7 @@ const compactMediaBlock = (() => {
 			if (depth === 0) return styleBlock.slice(start, index + 1);
 		}
 	}
-	throw new Error("unterminated @media (max-width: 768px) block");
+	throw new Error("unterminated @media (max-width: 767.98px) block");
 })();
 
 const ruleFor = (block: string, selector: string) => {
