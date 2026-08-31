@@ -70,6 +70,7 @@ def _install_stubs():
     employees_module = types.ModuleType("posawesome.posawesome.api.employees")
     scope_module = types.ModuleType("posawesome.posawesome.api._scope")
     perms_module = types.ModuleType("posawesome.posawesome.api._perms")
+    idempotency_module = types.ModuleType("posawesome.posawesome.api.idempotency")
     erpnext_party_module = types.ModuleType("erpnext.accounts.party")
     erpnext_loyalty_module = types.ModuleType(
         "erpnext.accounts.doctype.loyalty_program.loyalty_program"
@@ -121,14 +122,44 @@ def _install_stubs():
             raise AssertionError(f"Unknown POS Profile: {name}")
         return state["profiles"][name]
 
-    def _get_doc(payload):
+    def _get_doc(payload=None, name=None):
+        # Two-arg form get_doc(doctype, name): the deposit's idempotent-replay
+        # path re-fetches the Payment Entry it already booked.
+        if isinstance(payload, str):
+            for entry in state["payment_entries"]:
+                if getattr(entry, "name", None) == name:
+                    return entry
+            raise AssertionError(f"Unknown {payload} {name}")
         entry = FakePaymentEntry(payload)
+        # Unique names so a real duplicate would be visible; idempotency means
+        # the second deposit never creates one, so the first keeps 00001.
+        entry.name = f"ACC-PAY-2026-{len(state['payment_entries']) + 1:05d}"
         state["payment_entries"].append(entry)
         return entry
 
     def _get_all(doctype, filters=None, fields=None, **kwargs):
         if doctype == "POS Opening Shift":
             return [dict(row) for row in state["shifts"]]
+        return [dict(row) for row in state["rows"].get(doctype, [])]
+
+    def _get_list(doctype, filters=None, fields=None, order_by=None, **kwargs):
+        # The deposit's idempotency lookup: find a booked Payment Entry by its
+        # client-request id.
+        if doctype == "Payment Entry":
+            rid = (filters or {}).get("posa_client_request_id")
+            return [
+                {
+                    "name": e.name,
+                    "paid_amount": getattr(e, "paid_amount", 0),
+                    "mode_of_payment": getattr(e, "mode_of_payment", None),
+                    "reference_no": getattr(e, "reference_no", None),
+                    "posting_date": getattr(e, "posting_date", None),
+                    "docstatus": 1 if getattr(e, "submitted", False) else 0,
+                    "posa_client_request_id": getattr(e, "posa_client_request_id", None),
+                }
+                for e in state["payment_entries"]
+                if rid and getattr(e, "posa_client_request_id", None) == rid
+            ]
         return [dict(row) for row in state["rows"].get(doctype, [])]
 
     def _db_get_value(doctype, name, fieldname=None, **kwargs):
@@ -157,6 +188,25 @@ def _install_stubs():
     frappe_module.get_cached_doc = _get_cached_doc
     frappe_module.get_doc = _get_doc
     frappe_module.get_all = _get_all
+    frappe_module.get_list = _get_list
+
+    # The deposit's idempotency helpers, stubbed like ._scope / ._perms above:
+    # they read the same in-memory payment_entries the stub records, so the
+    # dedupe path is exercised without a database.
+    idempotency_module.normalize_client_request_id = lambda value: (
+        (value or "").strip() or None
+    )
+
+    def _find_pes_by_request_id(rid):
+        if not rid:
+            return []
+        return [
+            {"name": e.name, "paid_amount": getattr(e, "paid_amount", 0)}
+            for e in state["payment_entries"]
+            if getattr(e, "posa_client_request_id", None) == rid
+        ]
+
+    idempotency_module.find_payment_entries_by_client_request_id = _find_pes_by_request_id
     frappe_module.db = types.SimpleNamespace(
         get_value=_db_get_value,
         set_value=_db_set_value,
@@ -207,6 +257,7 @@ def _install_stubs():
     sys.modules["posawesome.posawesome.api.employees"] = employees_module
     sys.modules["posawesome.posawesome.api._scope"] = scope_module
     sys.modules["posawesome.posawesome.api._perms"] = perms_module
+    sys.modules["posawesome.posawesome.api.idempotency"] = idempotency_module
     sys.modules["erpnext.accounts.party"] = erpnext_party_module
     sys.modules["erpnext.accounts.doctype.loyalty_program.loyalty_program"] = (
         erpnext_loyalty_module
@@ -440,6 +491,78 @@ class TestDeposit(StoredValueTestCase):
         self.assertEqual(
             sorted(self.state["scope_calls"]), ["company", "customer", "profile"]
         )
+
+
+class TestDepositIdempotency(StoredValueTestCase):
+    """MONEY-F6: a re-press after a lost ack must not book a second deposit.
+
+    The client mints one `client_request_id` per «Depositar» press and reuses it
+    on retry; the server returns the entry it already booked instead of creating
+    another. Without this, the 30s client timeout firing on a slow-but-live
+    request turned one payment into two Payment Entries — the wallet credited
+    twice and the corte expecting double the cash.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # The dedupe lookup is gated on the column existing (has_column).
+        self.state["columns"]["Payment Entry"] = ["posa_client_request_id"]
+
+    def test_a_replayed_request_id_returns_the_same_entry_and_books_no_second_one(self):
+        first = self.module.deposit_stored_value(
+            pos_profile="Main POS",
+            customer="CUST-0001",
+            amount=200,
+            mode_of_payment="Cash",
+            client_request_id="dep-abc",
+        )
+        self.assertEqual(len(self.state["payment_entries"]), 1)
+        self.assertNotIn("idempotent_replay", first)
+
+        # The lost-ack re-press: same id, same everything.
+        second = self.module.deposit_stored_value(
+            pos_profile="Main POS",
+            customer="CUST-0001",
+            amount=200,
+            mode_of_payment="Cash",
+            client_request_id="dep-abc",
+        )
+        # No second Payment Entry, and the reply points at the first.
+        self.assertEqual(len(self.state["payment_entries"]), 1)
+        self.assertTrue(second["idempotent_replay"])
+        self.assertEqual(second["payment_entry"], first["payment_entry"])
+        self.assertEqual(second["amount"], 200.0)
+
+    def test_the_id_is_stamped_on_the_booked_entry(self):
+        self.module.deposit_stored_value(
+            pos_profile="Main POS",
+            customer="CUST-0001",
+            amount=50,
+            mode_of_payment="Cash",
+            client_request_id="dep-xyz",
+        )
+        self.assertEqual(
+            self.state["payment_entries"][0].posa_client_request_id, "dep-xyz"
+        )
+
+    def test_a_different_id_is_a_different_deposit(self):
+        self.module.deposit_stored_value(
+            pos_profile="Main POS", customer="CUST-0001", amount=200,
+            mode_of_payment="Cash", client_request_id="dep-1",
+        )
+        self.module.deposit_stored_value(
+            pos_profile="Main POS", customer="CUST-0001", amount=200,
+            mode_of_payment="Cash", client_request_id="dep-2",
+        )
+        self.assertEqual(len(self.state["payment_entries"]), 2)
+
+    def test_no_id_keeps_the_legacy_behaviour(self):
+        # Back-compat: an old client that sends no id still deposits (no dedupe).
+        self.module.deposit_stored_value(
+            pos_profile="Main POS", customer="CUST-0001", amount=200,
+            mode_of_payment="Cash",
+        )
+        self.assertEqual(len(self.state["payment_entries"]), 1)
 
 
 class TestCashbackPreview(StoredValueTestCase):

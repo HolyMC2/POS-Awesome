@@ -583,10 +583,37 @@ describe("depositing", () => {
 		await view.find('[data-testid="cliente-deposit-submit"]').trigger("click");
 		await flushPromises();
 
-		expect(depositStoredValue).toHaveBeenCalledWith("Doco Ventas", "CUST-0001", 200, "Cash");
+		expect(depositStoredValue).toHaveBeenCalledWith(
+			"Doco Ventas",
+			"CUST-0001",
+			200,
+			"Cash",
+			// MONEY-F6: one client_request_id minted per press, reused on retry.
+			expect.stringMatching(/^dep-/),
+		);
 		// Twice: once on open, once because the deposit moved the balance. The
 		// figure on screen is the one the server holds, never a local sum.
 		expect(fetchCustomerWallet).toHaveBeenCalledTimes(2);
+	});
+
+	it("reuses the SAME request id when a failed press is retried (no double deposit)", async () => {
+		// The anti-double-charge guarantee: the id is minted once per press and
+		// carried through the retry, so the server dedupes a lost-ack re-press.
+		depositStoredValue.mockRejectedValueOnce(new Error("timeout"));
+		const view = await openDeposit();
+		await view.find('[data-testid="cliente-deposit-amount"]').setValue("200");
+
+		await view.find('[data-testid="cliente-deposit-submit"]').trigger("click");
+		await flushPromises();
+		depositStoredValue.mockResolvedValue({});
+		await view.find('[data-testid="cliente-deposit-submit"]').trigger("click");
+		await flushPromises();
+
+		expect(depositStoredValue).toHaveBeenCalledTimes(2);
+		const firstId = depositStoredValue.mock.calls[0][4];
+		const retryId = depositStoredValue.mock.calls[1][4];
+		expect(firstId).toMatch(/^dep-/);
+		expect(retryId).toBe(firstId);
 	});
 
 	it("defaults the tender to the profile's first, not to nothing", async () => {
@@ -606,7 +633,13 @@ describe("depositing", () => {
 		await view.find('[data-testid="cliente-deposit-submit"]').trigger("click");
 		await flushPromises();
 
-		expect(depositStoredValue).toHaveBeenCalledWith("Doco Ventas", "CUST-0001", 1200, "Cash");
+		expect(depositStoredValue).toHaveBeenCalledWith(
+			"Doco Ventas",
+			"CUST-0001",
+			1200,
+			"Cash",
+			expect.stringMatching(/^dep-/),
+		);
 	});
 
 	it("refuses a zero without asking the server", async () => {

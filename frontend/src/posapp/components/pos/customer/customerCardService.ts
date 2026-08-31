@@ -118,13 +118,26 @@ export function depositStoredValue(
 	customer: string,
 	amount: number,
 	modeOfPayment: string,
+	clientRequestId?: string,
 ): Promise<unknown> {
-	return api.call<unknown>(`${BASE}.deposit_stored_value`, {
-		pos_profile: posProfile,
-		customer,
-		amount,
-		mode_of_payment: modeOfPayment,
-	});
+	// A money-IN write gets the invoice submit's leash, not the 30s default:
+	// the server is allowed 120s (gunicorn `--timeout=120`), and the fetch has
+	// no AbortController, so a 30s client timeout reported "failed" while the
+	// deposit was still legitimately posting — a re-press then booked a SECOND
+	// Payment Entry. `client_request_id` (minted once per press by the dialog)
+	// makes the server dedupe a replay; the longer timeout stops the false
+	// failure that triggers the re-press in the first place.
+	return api.call<unknown>(
+		`${BASE}.deposit_stored_value`,
+		{
+			pos_profile: posProfile,
+			customer,
+			amount,
+			mode_of_payment: modeOfPayment,
+			client_request_id: clientRequestId,
+		},
+		{ timeoutMs: 120_000 },
+	);
 }
 
 /**

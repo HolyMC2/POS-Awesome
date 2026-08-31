@@ -108,6 +108,7 @@ import { computed, ref, watch } from "vue";
 import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import { useToastStore } from "../../../stores/toastStore";
 import { depositStoredValue, refusalText } from "./customerCardService";
+import { generateClientRequestId } from "../../../../offline/idempotency";
 
 const props = defineProps<{
 	modelValue: boolean;
@@ -133,6 +134,9 @@ const amountText = ref("");
 const mode = ref("");
 const busy = ref(false);
 const errorMessage = ref("");
+// The idempotency key for the deposit in flight — minted once per «Depositar»
+// press in submit(), reused on retry, cleared on success or on close.
+const pendingRequestId = ref("");
 
 /**
  * Read a peso figure out of whatever was typed.
@@ -160,6 +164,9 @@ watch(
 		amountText.value = "";
 		errorMessage.value = "";
 		busy.value = false;
+		// A fresh open is a new deposit: drop any id left from a press the
+		// operator abandoned by closing the dialog.
+		pendingRequestId.value = "";
 		mode.value = props.tenders[0] ?? "";
 	},
 	{ immediate: true },
@@ -182,8 +189,20 @@ async function submit() {
 	}
 	busy.value = true;
 	errorMessage.value = "";
+	// Mint ONE id for this press, before the try, so a retry after a timeout
+	// carries the SAME id and the server treats it as the same deposit. Minting
+	// inside the retry would defeat the whole guard.
+	if (!pendingRequestId.value) {
+		pendingRequestId.value = generateClientRequestId("dep");
+	}
 	try {
-		await depositStoredValue(props.posProfile, props.customer, amount.value, mode.value);
+		await depositStoredValue(
+			props.posProfile,
+			props.customer,
+			amount.value,
+			mode.value,
+			pendingRequestId.value,
+		);
 		useToastStore().show({
 			title: __("Deposit"),
 			message: __("The wallet has the deposit."),
@@ -193,8 +212,12 @@ async function submit() {
 		// the deposit is one of several things that could have moved it, and
 		// the figure on screen should be the one the server holds.
 		emit("deposited");
+		// Booked: this press is done, the next deposit is a new logical request.
+		pendingRequestId.value = "";
 		open.value = false;
 	} catch (error) {
+		// Keep pendingRequestId so a re-press retries the SAME deposit (the
+		// server dedupes it); it is cleared on success or when the dialog closes.
 		errorMessage.value = refusalText(error, __("The deposit did not go through."));
 	} finally {
 		busy.value = false;

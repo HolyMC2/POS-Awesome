@@ -212,7 +212,7 @@ def _resolve_mode_of_payment_account(profile_doc, mode_of_payment, company):
 
 
 @frappe.whitelist(methods=["POST"])
-def deposit_stored_value(pos_profile=None, customer=None, amount=0, mode_of_payment=None):
+def deposit_stored_value(pos_profile=None, customer=None, amount=0, mode_of_payment=None, client_request_id=None):
     """Take money in and park it as customer credit.
 
     A submitted Payment Entry: party = the customer, `paid_to` = the tender's
@@ -254,6 +254,38 @@ def deposit_stored_value(pos_profile=None, customer=None, amount=0, mode_of_paym
     if not frappe.db.exists("Customer", customer):
         frappe.throw(frappe._("Customer {0} does not exist.").format(customer))
 
+    # Idempotency (audit 2026-08-31 MONEY-F6). This is a money-IN endpoint and
+    # the only one that lacked the request-id every other one carries (invoice
+    # submit, cash movement, safe transfer, receivable collection). Without it a
+    # lost ack — the client's 30s timeout fired but the server kept going and
+    # submitted the Payment Entry — turned a re-press into a SECOND deposit:
+    # the customer's monedero credited twice and the corte expecting double the
+    # cash. The client now mints one id per «Depositar» press (reused on retry);
+    # a replay carrying an id we have already booked returns that entry instead
+    # of creating another.
+    from posawesome.posawesome.api.idempotency import (
+        normalize_client_request_id,
+        find_payment_entries_by_client_request_id,
+    )
+
+    request_id = normalize_client_request_id(client_request_id)
+    if request_id:
+        existing = find_payment_entries_by_client_request_id(request_id)
+        if existing:
+            existing_pe = frappe.get_doc("Payment Entry", existing[0]["name"])
+            summary = get_stored_value_summary(customer=customer, company=company)
+            return {
+                "payment_entry": existing_pe.name,
+                "customer": customer,
+                "company": company,
+                "amount": _normalize_amount(existing_pe.paid_amount),
+                "mode_of_payment": _text(existing_pe.mode_of_payment),
+                "pos_opening_shift": _text(existing_pe.reference_no),
+                "posting_date": _text(existing_pe.posting_date),
+                "balance": summary.get("available_amount", 0),
+                "idempotent_replay": True,
+            }
+
     shift_name = _require_open_shift(profile_doc, acting_user)
     paid_to = _resolve_mode_of_payment_account(profile_doc, mode_of_payment, company)
 
@@ -282,6 +314,9 @@ def deposit_stored_value(pos_profile=None, customer=None, amount=0, mode_of_paym
             # The corte's join key — see this function's docstring.
             "reference_no": shift_name,
             "reference_date": posting_date,
+            # Idempotency key (MONEY-F6): a requeue/re-press with the same id is
+            # caught by the lookup above instead of booking a second deposit.
+            "posa_client_request_id": request_id,
         }
     )
     payment_entry.flags.ignore_permissions = True
