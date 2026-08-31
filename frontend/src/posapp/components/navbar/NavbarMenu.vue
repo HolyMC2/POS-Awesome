@@ -334,6 +334,7 @@ import {
 	stopPrintHealthMonitor,
 	usePrintHealthShared,
 } from "../../composables/core/usePrintHealthShared";
+import { canRunQzTray } from "../../services/qzTray";
 import { useUpdateStore } from "../../stores/updateStore";
 import { useEmployeeStore } from "../../stores/employeeStore";
 import { useVerticalStore } from "../../stores/verticalStore";
@@ -869,6 +870,10 @@ export default {
 		// dot, this logic, the dialog and the wizard cannot disagree.
 		handlePrintHealth(level) {
 			if (!this.usesSilentPrint) return;
+			// A phone or tablet cannot run QZ Tray — no monitor, no wizard
+			// offer, no «printing is not ready» toast. Browser printing is
+			// the printing story on these devices, and it needs no setup.
+			if (!canRunQzTray()) return;
 
 			// First moment we know this profile prints through QZ: run the
 			// checks and arm the 10-min re-check. Deferred to here rather than

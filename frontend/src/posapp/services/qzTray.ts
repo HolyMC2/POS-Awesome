@@ -37,6 +37,30 @@ function reportQzFailure(stage: string, error: unknown, meta: Record<string, unk
 	}
 }
 
+/**
+ * Can THIS DEVICE run QZ Tray at all?
+ *
+ * QZ Tray is a desktop Java application the browser reaches at
+ * wss://localhost — a phone or tablet browser has no localhost tray to
+ * reach, ever. This is a DEVICE fact (user agent), deliberately not a
+ * viewport fact: a desktop browser narrowed to 390px still has its tray,
+ * and a tablet at 1200px still does not. iPadOS 13+ reports a Mac UA; the
+ * touch points tell it apart (same trick as `isIosSafari`).
+ *
+ * On a device that cannot: `connectQzTray` refuses instantly (so the boot
+ * pre-warm, the health monitor and every print attempt skip the doomed
+ * websocket probes and fall straight to browser printing), and the navbar
+ * never auto-offers the setup wizard. Browser printing IS the printing
+ * story on these devices.
+ */
+export function canRunQzTray(): boolean {
+	if (typeof navigator === "undefined") return true;
+	const ua = navigator.userAgent || "";
+	if (/Android|iPhone|iPad|iPod/i.test(ua)) return false;
+	if (/Macintosh/i.test(ua) && (navigator.maxTouchPoints || 0) > 1) return false;
+	return true;
+}
+
 // Visible QZ→browser fallback (concept from upstream 699e7b6b/31167649):
 // the fallback itself still runs — printing must never stall the line —
 // but the operator sees WHY the receipt came out of the wrong pipeline
@@ -572,6 +596,15 @@ export function setSelectedQzPrinter(name: string) {
 }
 
 export async function connectQzTray(options: { userInitiated?: boolean } = {}): Promise<boolean> {
+	// A phone has no tray to connect to — refuse before the library opens
+	// its 8-port localhost probe ladder. Every caller already treats a
+	// false connect as "print through the browser instead".
+	if (!canRunQzTray()) {
+		qzConnected.value = false;
+		qzConnecting.value = false;
+		return false;
+	}
+
 	if (options.userInitiated) {
 		setReconnectPaused(false);
 	}
