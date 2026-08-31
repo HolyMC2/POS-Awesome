@@ -217,12 +217,29 @@ const quoteLine = computed(() => {
  * chips on 8px of padding hands the keys their floor back. */
 @media (min-width: 1100px) and (max-height: 820px) {
 	.split-evenly {
-		padding: 8px;
+		padding: 6px 8px;
 		gap: 6px;
 	}
 
+	/* The label takes its own line as a micro-label and the five chips share
+	   the one below it: «Dividir cuenta» + five 50px chips measured 339px in
+	   a 276px column when forced onto one line. */
 	.split-evenly__choices {
-		flex-wrap: nowrap;
+		row-gap: 4px;
+	}
+
+	.split-evenly__choices > strong {
+		flex: 1 1 100%;
+		font-size: 10.5px;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--pos-text-secondary, #667085);
+	}
+
+	.split-evenly__choices > .v-btn {
+		min-width: 44px;
+		padding: 0 6px;
 	}
 }
 </style>
