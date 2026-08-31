@@ -219,6 +219,35 @@ export type Events = {
 	 */
 	"movil:pick-variant": Item;
 	/**
+	 * A tapped browse card whose UNIT has to be chosen before it can be sold —
+	 * a serial-numbered item, a batch-tracked one, or both (pharma's shape).
+	 * Same doorbell as `movil:pick-variant` and for the same reason: the
+	 * generic `add_item` path lands in Invoice.vue, which would add the row
+	 * with no lot at all, while the LOT PICKER lives in `ItemsSelector`'s own
+	 * add path (`resolveLotRequirement` → `uiStore.openLotPicker`). The phone
+	 * rings that bell instead of growing a second copy of the flow.
+	 *
+	 * NOT rung for a scanned serial/batch (the barcode already named the unit)
+	 * nor for a batch-only item on a `posa_auto_set_batch` profile (that shop
+	 * asked not to be asked) — see `resolveLotRequirement`.
+	 */
+	"movil:pick-lot": Item;
+	/**
+	 * The lot picker's «Agregar» — the chosen units, as ready-to-add payloads.
+	 *
+	 * The picker itself adds nothing: it emits what a cashier decided and
+	 * `ItemsSelector` answers by riding its OWN `add_item`, the same function
+	 * a desk catalogue click rides, once per payload. That keeps one add path
+	 * for lot-tracked and ordinary items alike, and it is what lets a quantity
+	 * split across three batches become three cart lines in a defined order
+	 * instead of three racing bus emits. Same intent shape as
+	 * `movil_collect_payment`: the surface sends a decision, the engine acts.
+	 *
+	 * Each payload is a catalogue row plus `qty` and its resolved
+	 * `batch_no` / `to_set_batch_no` / `serial_no_selected`.
+	 */
+	"lot:confirm": { adds: Array<Record<string, any>> };
+	/**
 	 * A cart line edited from the phone's LINE SHEET (`MovilLineSheet.vue`,
 	 * movil round 10). The sheet owns no mutation: it emits a verb, `Pos.vue`
 	 * stamps the row identity on it, and `Invoice.vue` — which is mounted

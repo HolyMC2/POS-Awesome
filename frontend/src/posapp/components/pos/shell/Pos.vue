@@ -25,6 +25,17 @@
 		<NewAddress v-if="newAddressMounted" :open-request="newAddressOpenRequest"></NewAddress>
 		<MpesaPayments v-if="mpesaMounted" :open-request="mpesaOpenRequest"></MpesaPayments>
 		<Variants v-if="uiStore.variantsDialog"></Variants>
+		<!-- The LOT PICKER: which numbered box / which serial actually leaves
+		     the shelf. Mounted HERE and not inside ItemsSelector because the
+		     catalogue column is `v-show`-hidden on phones, and an overlay under
+		     `display: none` draws nothing. Same reason Variants lives here. -->
+		<LotPicker
+			v-if="uiStore.lotPickerDialog && lotPickerView"
+			:view="lotPickerView"
+			:requested-qty="lotPickerRequestedQty"
+			@confirm="onLotConfirm"
+			@close="uiStore.closeLotPicker()"
+		></LotPicker>
 		<!-- SALDO-INTEGRATION-POINT — components live in saldo Frappe app -->
 		<SaldoReferenciaDialog
 			v-model="saldoDialogOpen"
@@ -674,6 +685,10 @@ import {
 	moveFocusByArrow,
 	resolveKeyboardNavigationRoot,
 } from "../../../utils/keyboardNavigation";
+import {
+	resolveLotPicker,
+	resolveLotRequirement,
+} from "../items/lot/lotPicker";
 
 const Payments = defineAsyncComponent(() => import("../Payments.vue"));
 const FloorView = defineAsyncComponent(() => import("../../floor/FloorView.vue"));
@@ -682,6 +697,7 @@ const InvoiceManagement = defineAsyncComponent(() => import("../flows/InvoiceMan
 const SalesOrders = defineAsyncComponent(() => import("../flows/SalesOrders.vue"));
 const NewAddress = defineAsyncComponent(() => import("../customer/NewAddress.vue"));
 const Variants = defineAsyncComponent(() => import("../items/Variants.vue"));
+const LotPicker = defineAsyncComponent(() => import("../items/lot/LotPicker.vue"));
 const Returns = defineAsyncComponent(() => import("../flows/Returns.vue"));
 const MpesaPayments = defineAsyncComponent(() => import("../payments/Mpesa-Payments.vue"));
 
@@ -1673,7 +1689,43 @@ export default {
 				eventBus.emit("movil:pick-variant", { ...row });
 				return;
 			}
+			// Neither is a serial-numbered or batch-tracked row. Invoice.vue
+			// WOULD add it — and that is the bug: the lot then had to be chosen
+			// in the cart row's expanded panel, which the phone does not have,
+			// so the line reached the ticket with no unit named. Ring the lot
+			// picker's bell instead; `resolveLotRequirement` stays silent for a
+			// scanned unit and for an auto-set-batch profile.
+			if (resolveLotRequirement(row, posProfile.value)) {
+				eventBus.emit("movil:pick-lot", { ...row });
+				return;
+			}
 			eventBus.emit("add_item", row ? { ...row } : { item_code: code });
+		};
+
+		/**
+		 * The lot picker's model, rebuilt whenever the store payload changes —
+		 * `ItemsSelector` re-publishes it once the server answers with fresher
+		 * batch and serial rows.
+		 */
+		const lotPickerView = computed(() => {
+			const data = uiStore.lotPickerData;
+			if (!data?.item) return null;
+			return resolveLotPicker(data.item, {
+				profile: data.profile,
+				usedSerials: data.usedSerials,
+			});
+		});
+		const lotPickerRequestedQty = computed(
+			() => Number(uiStore.lotPickerData?.requestedQty) || 1,
+		);
+		/**
+		 * The picker decided; the ENGINE adds. Closing first keeps the sheet
+		 * from sitting over the cart while the adds land, and the intent rides
+		 * to `ItemsSelector`, which owns the ONE add path.
+		 */
+		const onLotConfirm = (adds) => {
+			uiStore.closeLotPicker();
+			eventBus.emit("lot:confirm", { adds: Array.isArray(adds) ? adds : [] });
 		};
 		// The rows the ONE ItemsSelector is displaying — searched, filtered,
 		// paginated — published by its update:displayedItems. The browse
@@ -2592,6 +2644,9 @@ export default {
 			onChangeDueConfirmed,
 			discountPercentageOfferName,
 			getCurrencySymbol,
+			lotPickerView,
+			lotPickerRequestedQty,
+			onLotConfirm,
 			posRoot,
 			eventBus,
 			dialog,
@@ -2627,6 +2682,7 @@ export default {
 		PosCoupons,
 		NewAddress,
 		Variants,
+		LotPicker,
 		MpesaPayments,
 		SalesOrders,
 		// SALDO-INTEGRATION-POINT

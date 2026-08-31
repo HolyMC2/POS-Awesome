@@ -478,6 +478,22 @@ def get_batches(warehouse: Optional[str], item_codes: Sequence[str], ttl: Option
     )
 
 
+#: Serial No fields the LOT PICKER shows but the cart never needed. Probed
+#: rather than assumed: ERPNext v15 dropped `purchase_date` from Serial No
+#: while older sites still carry it, and a hard-coded projection would make
+#: `get_items` throw on whichever version disagrees — the same reason
+#: `_resolve_bom_cost_fields` probes BOM's cost columns.
+_SERIAL_OPTIONAL_FIELDS = ("warehouse", "warranty_expiry_date", "purchase_date")
+
+
+def _resolve_serial_fields() -> List[str]:
+    fields = ["name as serial_no", "item_code", "batch_no"]
+    for fieldname in _SERIAL_OPTIONAL_FIELDS:
+        if frappe.db.has_column("Serial No", fieldname):
+            fields.append(fieldname)
+    return fields
+
+
 def _fetch_serials(warehouse: str, item_codes: Tuple[str, ...]):
     """Return active serial numbers scoped to a warehouse."""
 
@@ -485,7 +501,7 @@ def _fetch_serials(warehouse: str, item_codes: Tuple[str, ...]):
         return []
     return frappe.get_all(
         "Serial No",
-        fields=["name as serial_no", "item_code", "batch_no"],
+        fields=_resolve_serial_fields(),
         filters={
             "item_code": ["in", item_codes],
             "warehouse": warehouse,
@@ -942,9 +958,18 @@ class ItemDetailAggregator:
 
         serial_map: Dict[str, List[Dict[str, object]]] = {}
         for row in serial_rows:
-            serial_map.setdefault(row.item_code, []).append(
-                {"serial_no": row.serial_no, "batch_no": row.batch_no}
-            )
+            # Only the fields this row actually has: the map is written to the
+            # shared redis cache, and a `None` per absent column on every
+            # serial of a 5,000-unit catalogue is payload nobody reads.
+            entry: Dict[str, object] = {
+                "serial_no": row.serial_no,
+                "batch_no": row.batch_no,
+            }
+            for fieldname in _SERIAL_OPTIONAL_FIELDS:
+                value = row.get(fieldname)
+                if value:
+                    entry[fieldname] = value
+            serial_map.setdefault(row.item_code, []).append(entry)
 
         return ItemLookupData(
             price_map=price_map,

@@ -17,43 +17,65 @@ export const getDisplayableBatchOptions = (batchList: any): any[] => {
 	});
 };
 
+/**
+ * Which serial rows belong to the batch this line is on.
+ *
+ * Module scope since the LOT PICKER (`components/pos/items/lot/`) asks the same
+ * question BEFORE a line exists: a pharma cashier who picks a batch expects the
+ * serial list under it to narrow to that batch, and a second copy of this rule
+ * would be a second answer about which physical box is being sold. The
+ * composable still re-exports it, so every existing caller is untouched.
+ *
+ * Mutates `filtered_serial_no_data` on the way out because the expanded cart
+ * row reads that field; a caller with no row (the picker) simply uses the
+ * return value.
+ */
+export const applySerialBatchFilter = (item: any): any[] => {
+	const serials = Array.isArray(item?.serial_no_data) ? item.serial_no_data : [];
+	if (!item?.has_serial_no) {
+		item.filtered_serial_no_data = serials;
+		return serials;
+	}
+
+	if (!item.has_batch_no || !item.batch_no) {
+		item.filtered_serial_no_data = serials;
+		return serials;
+	}
+
+	const filtered = serials.filter(
+		(serial) => serial?.batch_no === item.batch_no,
+	);
+	item.filtered_serial_no_data = filtered;
+	return filtered;
+};
+
+/**
+ * Is this batch past its expiry date?
+ *
+ * Module scope for the same reason as `applySerialBatchFilter`: the picker has
+ * to grey the row out before anything has been added, and "caducado" must mean
+ * exactly one thing across the register. `today` is injectable so a spec can
+ * ask the question on a fixed day instead of on the day it happens to run.
+ *
+ * A batch expiring TODAY counts as expired — the shelf may not sell it.
+ */
+export const isBatchExpired = (batch: any, today: Date | string = new Date()): boolean => {
+	if (!batch || !batch.expiry_date) return false;
+
+	const now = new Date(today);
+	const expiryDate = new Date(batch.expiry_date);
+	if (Number.isNaN(expiryDate.getTime()) || Number.isNaN(now.getTime())) return false;
+
+	// Treat the batch as expired when the expiry date is today or in the past
+	return expiryDate.setHours(0, 0, 0, 0) <= now.setHours(0, 0, 0, 0);
+};
+
 export function useBatchSerial() {
 	const normalizeSerialSelection = (item: any) => {
 		if (!Array.isArray(item.serial_no_selected)) {
 			item.serial_no_selected = [];
 		}
 		return item.serial_no_selected;
-	};
-
-	const applySerialBatchFilter = (item: any) => {
-		const serials = Array.isArray(item.serial_no_data)
-			? item.serial_no_data
-			: [];
-		if (!item?.has_serial_no) {
-			item.filtered_serial_no_data = serials;
-			return serials;
-		}
-
-		if (!item.has_batch_no || !item.batch_no) {
-			item.filtered_serial_no_data = serials;
-			return serials;
-		}
-
-		const filtered = serials.filter(
-			(serial) => serial?.batch_no === item.batch_no,
-		);
-		item.filtered_serial_no_data = filtered;
-		return filtered;
-	};
-
-	const isBatchExpired = (batch: any) => {
-		if (!batch || !batch.expiry_date) return false;
-
-		const today = new Date();
-		const expiryDate = new Date(batch.expiry_date);
-
-		// Treat the batch as expired when the expiry date is today or in the past
-		return expiryDate.setHours(0, 0, 0, 0) <= today.setHours(0, 0, 0, 0);
 	};
 
 	// Set serial numbers for an item (and update qty)
@@ -375,5 +397,7 @@ export function useBatchSerial() {
 		setBatchQty,
 		getBatchAvailability,
 		getDisplayableBatchOptions,
+		applySerialBatchFilter,
+		isBatchExpired,
 	};
 }

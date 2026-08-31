@@ -298,6 +298,8 @@ import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { useVerticalStore } from "../../../stores/verticalStore";
 import { useEmployeeStore } from "../../../stores/employeeStore";
 
+import { resolveLotRequirement } from "./lot/lotPicker";
+import { collectUsedSerialsForItem } from "../../../composables/pos/items/addition/serialSelection";
 import { parseBooleanSetting } from "../../../utils/stock";
 import { createItemSearchFocusClearGuard } from "../../../utils/itemSearchFocusClearGuard";
 import {
@@ -844,6 +846,28 @@ const add_item = async (item, optionsOrQty: any = {}) => {
 			return;
 		}
 
+		// WHICH physical unit is being sold. A serial-numbered or batch-tracked
+		// row cannot be added until somebody says which numbered box leaves the
+		// shelf — until now that choice hid inside the cart row's expanded
+		// panel, which the phone does not have, so those items landed unusable
+		// on glass (owner ask 2026-08-30). `resolveLotRequirement` returns null
+		// for everything that already has its answer: a scanned serial/batch, a
+		// row the picker itself just resolved, and a batch-only item on a
+		// `posa_auto_set_batch` profile — none of those grow a dialog. The
+		// SCANNER is excluded whole (`fromScan`), including the case where the
+		// barcode named only the ITEM: the add pipeline auto-assigns serials
+		// there as it always has, and a modal between two beeps would turn a
+		// scan run into a tap run. The picker's door is the CATALOGUE — the
+		// desk click and the phone tap.
+		if (
+			!options.lotResolved &&
+			!options.fromScan &&
+			resolveLotRequirement(item, pos_profile.value)
+		) {
+			void openLotPicker(item, requestedQty);
+			return;
+		}
+
 		const context = {
 			pos_profile: pos_profile.value,
 			stock_settings: stock_settings.value,
@@ -1017,6 +1041,13 @@ onMounted(() => {
 		// path, so the phone rings it here rather than growing a second
 		// copy of the variant flow.
 		eventBus.on("movil:pick-variant", movilPickVariant);
+		// A tapped browse card whose UNIT is still undecided — the lot picker
+		// lives in this component's add path for the same reason the variant
+		// picker does, so the phone rings it here.
+		eventBus.on("movil:pick-lot", movilPickLot);
+		// …and the picker's answer comes back to the SAME add path, so a
+		// lot-tracked item reaches the cart exactly the way an ordinary one does.
+		eventBus.on("lot:confirm", onLotConfirm);
 	}
 });
 onBeforeUnmount(() => {
@@ -1027,6 +1058,8 @@ onBeforeUnmount(() => {
 		eventBus.off("movil:focus-search", movilFocusSearch);
 		eventBus.off("movil:clear-search", movilClearSearch);
 		eventBus.off("movil:pick-variant", movilPickVariant);
+		eventBus.off("movil:pick-lot", movilPickLot);
+		eventBus.off("lot:confirm", onLotConfirm);
 	}
 });
 
@@ -1035,6 +1068,74 @@ onBeforeUnmount(() => {
 const movilPickVariant = (row) => {
 	if (row?.has_variants) {
 		void add_item({ ...row });
+	}
+};
+
+/**
+ * Raise the lot picker for a catalogue row, and refresh what it is showing.
+ *
+ * The sheet opens on what the register ALREADY knows — the batch and serial
+ * arrays every catalogue row carries out of `get_items` — because a picker
+ * that waits on the network with a finger on it is a picker cashiers stop
+ * tapping. The re-read then lands and REPLACES the store payload, which is the
+ * only way the surface sees it: mutating the row in place would write past
+ * Vue's proxy and repaint nothing.
+ *
+ * `lotPickerSeq` guards the late answer: by the time the server replies the
+ * cashier may have cancelled, or tapped a different item, and re-opening a
+ * sheet they dismissed would be the register arguing with them.
+ */
+let lotPickerSeq = 0;
+const openLotPicker = async (item, requestedQty) => {
+	const token = ++lotPickerSeq;
+	const draft = { ...item };
+	const requested = Math.abs(Number(requestedQty)) || 1;
+	const publish = () =>
+		uiStore.openLotPicker({
+			item: { ...draft },
+			profile: pos_profile.value,
+			requestedQty: requested,
+			// Serials this ticket has already committed on another line: the
+			// picker greys them out rather than letting the same numbered unit
+			// be sold twice on one invoice.
+			usedSerials: Array.from(
+				collectUsedSerialsForItem(draft, { items: invoiceStore.items }),
+			),
+		});
+
+	publish();
+
+	try {
+		await itemDetailFetcher.update_items_details([draft], { forceRefresh: true });
+	} catch (error) {
+		console.error("Failed to refresh lot data for the picker", error);
+		return;
+	}
+	if (token !== lotPickerSeq || !uiStore.lotPickerDialog) return;
+	publish();
+};
+
+/** The phone's doorbell — guarded to rows that actually need the picker. */
+const movilPickLot = (row) => {
+	if (resolveLotRequirement(row, pos_profile.value)) {
+		void add_item({ ...row });
+	}
+};
+
+/**
+ * The picker's «Agregar». One payload per cart line, added in order and
+ * awaited: a quantity split across three batches is three lines, and three
+ * un-awaited adds would race each other through the merge cache.
+ *
+ * `lotResolved` is belt and braces — every payload already carries the
+ * `batch_no` / `serial_no_selected` that closes `resolveLotRequirement` — so
+ * that no future payload shape can reopen the picker on its own output.
+ */
+const onLotConfirm = async (intent) => {
+	const adds = intent?.adds;
+	for (const payload of Array.isArray(adds) ? adds : []) {
+		if (!payload?.item_code) continue;
+		await add_item({ ...payload }, { qty: payload.qty, lotResolved: true });
 	}
 };
 

@@ -355,6 +355,13 @@ export const useUIStore = defineStore("ui", () => {
   const variantsDialog = ref(false);
   const variantsData = ref<any>(null);
 
+  // The LOT PICKER (`components/pos/items/lot/`). Same shape as the variant
+  // picker beside it: the store holds WHAT is being picked, `ItemsSelector`
+  // opens it from its own add path, and `Pos.vue` mounts the surface — so the
+  // desk click and the phone tap raise one picker, not two.
+  const lotPickerDialog = ref(false);
+  const lotPickerData = ref<any>(null);
+
   function triggerItemSearchFocus() {
     searchFocusTrigger.value++;
   }
@@ -387,6 +394,16 @@ export const useUIStore = defineStore("ui", () => {
   function closeVariants() {
     variantsDialog.value = false;
     variantsData.value = null;
+  }
+
+  function openLotPicker(data: any) {
+    lotPickerData.value = data;
+    lotPickerDialog.value = true;
+  }
+
+  function closeLotPicker() {
+    lotPickerDialog.value = false;
+    lotPickerData.value = null;
   }
 
   const draggedItem = ref<any>(null);
@@ -505,6 +522,10 @@ export const useUIStore = defineStore("ui", () => {
     variantsData,
     openVariants,
     closeVariants,
+    lotPickerDialog,
+    lotPickerData,
+    openLotPicker,
+    closeLotPicker,
     draggedItem,
     setDraggedItem,
     offersCount,

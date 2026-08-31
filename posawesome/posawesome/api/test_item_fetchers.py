@@ -29,6 +29,8 @@ def _install_stubs():
 
     class _Db:
         def has_column(self, doctype, fieldname):
+            if doctype == "Serial No":
+                return fieldname in SERIAL_COLUMNS
             if doctype == "Item" and fieldname in {"valuation_rate", "default_bom"}:
                 return True
             if doctype == "BOM" and fieldname in {
@@ -88,6 +90,11 @@ def _install_stubs():
 
 #: What the entry-attribute stub answers. Default: a tenant with no storefront.
 ENTRY = {"attribute": None, "values": {}}
+
+#: Which Serial No columns the stubbed site has. ERPNext v15 dropped
+#: `purchase_date` from the doctype while v14 sites still carry it, which is
+#: exactly why `_resolve_serial_fields` probes instead of assuming.
+SERIAL_COLUMNS = {"warehouse", "warranty_expiry_date"}
 
 
 def _load_module():
@@ -186,14 +193,137 @@ class TestItemFetchers(unittest.TestCase):
             calls.append((doctype, kwargs))
             return [AttrDict({"parent": "ITEM-001", "barcode": "BOX-001", "uom": "Box"})]
 
+        original = self.module.frappe.get_all
         self.module.frappe.get_all = fake_get_all
-
-        rows = self.module._fetch_barcodes(("ITEM-001",))
+        try:
+            rows = self.module._fetch_barcodes(("ITEM-001",))
+        finally:
+            # Restored: an un-restored stub answers every LATER test's
+            # `get_all` with barcode rows, which is how `_prepare_lookup`
+            # ended up trying to build a frozenset out of them.
+            self.module.frappe.get_all = original
 
         self.assertEqual(rows[0].uom, "Box")
         self.assertEqual(calls[0][0], "Item Barcode")
         self.assertIn("uom", calls[0][1]["fields"])
         self.assertNotIn("posa_uom", calls[0][1]["fields"])
+
+    # ---- the lot picker's serial projection ---------------------------------
+
+    def test_serial_projection_asks_only_for_columns_the_site_has(self):
+        # The picker shows a serial's warehouse, its warranty and (on older
+        # sites) its purchase date. Naming a column the site does not have
+        # would make `get_items` throw for every catalogue read, not just for
+        # the picker — so the projection is probed, like BOM's cost columns.
+        global SERIAL_COLUMNS
+        original = SERIAL_COLUMNS
+        try:
+            SERIAL_COLUMNS = {"warehouse", "warranty_expiry_date"}
+            self.assertEqual(
+                self.module._resolve_serial_fields(),
+                [
+                    "name as serial_no",
+                    "item_code",
+                    "batch_no",
+                    "warehouse",
+                    "warranty_expiry_date",
+                ],
+            )
+
+            SERIAL_COLUMNS = {"warehouse", "warranty_expiry_date", "purchase_date"}
+            self.assertIn("purchase_date", self.module._resolve_serial_fields())
+
+            # A site with none of them still gets the three the cart has always
+            # needed — the picker simply draws fewer facts.
+            SERIAL_COLUMNS = set()
+            self.assertEqual(
+                self.module._resolve_serial_fields(),
+                ["name as serial_no", "item_code", "batch_no"],
+            )
+        finally:
+            SERIAL_COLUMNS = original
+
+    def test_fetch_serials_stays_scoped_to_the_warehouse_and_active_units(self):
+        captured = {}
+
+        def fake_get_all(doctype, fields=None, filters=None, **kwargs):
+            captured.update(doctype=doctype, fields=fields, filters=filters)
+            return []
+
+        original = self.module.frappe.get_all
+        self.module.frappe.get_all = fake_get_all
+        try:
+            self.module._fetch_serials("Farmacia - D", ("PARA-500",))
+        finally:
+            self.module.frappe.get_all = original
+
+        self.assertEqual(captured["doctype"], "Serial No")
+        self.assertIn("warehouse", captured["fields"])
+        # Widening the projection must not widen the SCOPE: a serial belonging
+        # to another warehouse, or one already sold, is still none of this
+        # register's business.
+        self.assertEqual(
+            captured["filters"],
+            {
+                "item_code": ["in", ("PARA-500",)],
+                "warehouse": "Farmacia - D",
+                "status": "Active",
+            },
+        )
+
+    def test_fetch_serials_short_circuits_without_a_warehouse(self):
+        called = []
+        original = self.module.frappe.get_all
+        self.module.frappe.get_all = lambda *args, **kwargs: called.append(1) or []
+        try:
+            self.assertEqual(self.module._fetch_serials(None, ("PARA-500",)), [])
+            self.assertEqual(self.module._fetch_serials("Farmacia - D", ()), [])
+        finally:
+            self.module.frappe.get_all = original
+
+        self.assertEqual(called, [])
+
+    def test_serial_map_carries_the_extra_fields_and_omits_the_absent_ones(self):
+        module = self.module
+        originals = (module._fetch_item_meta, module._fetch_serials, module.frappe.get_all)
+        # A site with nothing else to say: this test is about the serial map,
+        # and it must not inherit whatever `get_all` a neighbour left behind.
+        module.frappe.get_all = lambda *args, **kwargs: []
+        module._fetch_item_meta = lambda codes: [
+            AttrDict({"name": "PARA-500", "stock_uom": "Nos", "has_serial_no": 1})
+        ]
+        module._fetch_serials = lambda warehouse, codes: [
+            AttrDict(
+                {
+                    "serial_no": "SN-0001",
+                    "item_code": "PARA-500",
+                    "batch_no": "LOTE-A",
+                    "warehouse": "Farmacia - D",
+                    "warranty_expiry_date": "2027-01-31",
+                }
+            ),
+            AttrDict({"serial_no": "SN-0002", "item_code": "PARA-500", "batch_no": None}),
+        ]
+        try:
+            aggregator = module.ItemDetailAggregator({"name": "P", "currency": "MXN"})
+            lookup = aggregator._prepare_lookup(["PARA-500"])
+        finally:
+            module._fetch_item_meta, module._fetch_serials, module.frappe.get_all = originals
+
+        # The map is written to the SHARED redis cache: a `None` per absent
+        # column on every serial of a large catalogue is payload nobody reads.
+        self.assertEqual(
+            lookup.serial_map["PARA-500"],
+            [
+                {
+                    "serial_no": "SN-0001",
+                    "batch_no": "LOTE-A",
+                    "warehouse": "Farmacia - D",
+                    "warranty_expiry_date": "2027-01-31",
+                },
+                {"serial_no": "SN-0002", "batch_no": None},
+            ],
+        )
 
 
 @unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")

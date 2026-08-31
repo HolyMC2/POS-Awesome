@@ -3085,3 +3085,23 @@ Expenses and deposits you submit will appear here.,Los gastos y depósitos que r
 Unit price,Precio unitario
 Line total,Total de la línea
 Remove line,Quitar la línea
+Choose a batch,Elige lote
+Choose a serial number,Elige número de serie
+Choose a batch and a serial number,Elige lote y número de serie
+Search batch,Buscar lote
+Search serial number,Buscar número de serie
+All batches,Todos los lotes
+Expiry,Caducidad
+Manufactured,Fabricado
+Purchased,Comprado
+Expired lot,Caducado
+Expires today,Caduca hoy
+{0} days,{0} días
+No stock left,Sin existencia
+Already on this ticket,Ya en este ticket
+No batches available,Sin lotes disponibles
+No serial numbers available,Sin números de serie disponibles
+Choose at least one unit,Elige al menos una unidad
+{0} selected · {1} pcs,{0} seleccionados · {1} pzas
+{0} of {1},{0} de {1}
+Add {0},Agregar {0}

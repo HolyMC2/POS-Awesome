@@ -426,6 +426,14 @@ export function useScanProcessor(context: ScanProcessorContext) {
 			await itemAddition.addItem(newItem, {
 				suppressNegativeWarning: true,
 				skipNotification: true,
+				// The scanner never raises the LOT PICKER. When the barcode
+				// named the unit it is already on the row (`to_set_serial_no` /
+				// `to_set_batch_no`); when it named only the ITEM, the add
+				// pipeline auto-assigns FEFO exactly as it always has. Either
+				// way a modal between two beeps would turn a scan run into a
+				// tap run, and nobody asked for that — the picker's door is the
+				// catalogue, on the desk and on the phone.
+				fromScan: true,
 			});
 			logScanFlow("Item added from scanner", {
 				item_code: newItem.item_code,
