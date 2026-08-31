@@ -580,6 +580,13 @@ onBeforeUnmount(() => {
 	/* Above the phone dock (`z-index: 20`) for the same reason the line sheet
 	   is: a picker the dock covers is a picker whose primary is under Pay. */
 	z-index: 30;
+	/* LOAD-BEARING: this z-index only beats the dock while the sheet is mounted
+	   OUTSIDE `.destination-host`. That host sets `isolation: isolate` (so a
+	   hosted contained overlay's z-index cannot escape it), which ALSO caps any
+	   `position: fixed` descendant — a fixed z-30 sheet mounted inside a hosted
+	   flow would paint BELOW the dock again. If a hosted flow (Returns, Purchase)
+	   ever mounts this sheet, `<Teleport to="body">` it (audit LAYOUT-F3). */
+
 	display: flex;
 	flex-direction: column;
 	justify-content: flex-end;
