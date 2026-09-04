@@ -4,6 +4,44 @@ All notable changes.
 
 ## Unreleased
 
+- **The offline sale now actually syncs, and a lost ack no longer leaves the
+  cashier holding the cart (09-04).** The marketing claim («sigue cobrando
+  sin internet… se sincroniza sola… nada se pierde ni se cobra dos veces»)
+  was drilled on the real register (demo-abarrotes.lab, Playwright, network
+  cut two ways). Found and fixed: (1) **server** — a name-less
+  `submit_invoice` (the offline replay) created its draft through
+  `update_invoice`, whose `set_missing_values` → ERPNext v16
+  `update_multi_mode_option` rebuilds `payments` with no amounts; the
+  settlement invariant then read 0 against the total and every queued sale
+  landed in `draft_review` instead of syncing. `_reapply_payload_payments`
+  merges the tendered rows back onto the server-built rows (account/type
+  kept) before the invariant; two unit tests pin it (tender survives; a
+  genuinely zero tender is still refused). (2) **client** — the
+  connectivity prober `core/useNetwork` was a lazy chunk first fetched by
+  the outage itself; offline, the fetch failed and chunk recovery reloaded
+  the register mid-sale. Static import (`networkProberEager.spec` pins it),
+  chunk recovery surfaces instead of reloading while `navigator.onLine` is
+  false, and `version.json` now publishes every emitted chunk
+  (`assets.chunks`, bare URLs) for the service worker's install precache,
+  so a surface never opened online still opens offline. (3) **client** — a
+  submit whose response died in flight (`TRANSPORT_ERROR`/`TIMEOUT`) used
+  to toast «Failed to fetch» and leave the cart on the pay screen while the
+  server had already booked the sale (re-press replayed safely; cancel and
+  re-ring charged twice). `recoverFromLostAck` asks the server for the
+  draft's docstatus and closes the sale as submitted, or parks it in the
+  offline queue and kicks the drain (replay idempotent by request id);
+  gift-card/store-credit sales and mesa settles keep the loud failure.
+  `tests/e2e/offline-reconnect-sale.spec.ts` was a stub page with its own
+  IndexedDB that never loaded the POS; it is now five drills against the
+  tenant (cable out + offline reload + auto-sync; uplink dead with Wi-Fi up
+  via a cut-able CONNECT proxy; lost ack online; lost ack while the queue
+  drains; lost ack with the server gone), each read back from the write
+  queue in IndexedDB and the tenant's invoices. Green on `/app/posapp` and
+  `/posapp`. vitest 5187 ✓, vue-tsc 0, creation unittest 51 ✓.
+  Files: `api/invoice_processing/creation.py` (+test), `www/sw.js`,
+  `frontend/build-manifest.js`, `composables/runtime/useNetworkLifecycle.ts`,
+  `utils/chunkLoadRecovery.ts`, `composables/pos/payments/usePaymentSubmission.ts`,
+  `tests/e2e/{offline-reconnect-sale.spec.ts,support/}`.
 - **The ticket panel is a bottom sheet on phones (08-31).** Below 768 the
   ledger's detail panel no longer takes the lower half of the list: it
   renders only while a row is chosen, as a sheet inside the ledger surface
