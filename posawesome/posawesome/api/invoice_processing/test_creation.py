@@ -1472,6 +1472,125 @@ class TestManualPostingDatePreservation(unittest.TestCase):
         self.assertEqual(invoice_doc.set_posting_time, 1)
         self.assertEqual(result["status"], 1)
 
+    def test_submit_invoice_fresh_draft_keeps_the_tendered_payments(self):
+        # A name-less submit — the offline queue replay — creates its draft
+        # through update_invoice, whose set_missing_values rebuilds payments
+        # from the POS Profile with NO amounts (ERPNext v16). The settlement
+        # invariant then read 0 against 57 and the queued sale drafted for
+        # review instead of syncing (live drill 2026-09-04). The tender the
+        # register sent has to survive that save.
+        draft = self._build_invoice_doc(
+            name="ACC-SINV-FRESH-0001",
+            total=57,
+            net_total=57,
+            grand_total=57,
+            rounded_total=57,
+            payments=[
+                FakeDoc(
+                    mode_of_payment="Cash",
+                    type="Cash",
+                    account="Cash - T",
+                    default=1,
+                    amount=0,
+                    base_amount=0,
+                )
+            ],
+        )
+        seen_at_submit = {}
+
+        def submit():
+            seen_at_submit["amount"] = draft.payments[0].amount
+            draft.docstatus = 1
+
+        draft.submit = submit
+        update_calls = []
+
+        def fake_update_invoice(payload_json):
+            update_calls.append(json.loads(payload_json))
+            return {"name": "ACC-SINV-FRESH-0001"}
+
+        self.addCleanup(setattr, self.creation, "update_invoice", self.creation.update_invoice)
+        self.creation.update_invoice = fake_update_invoice
+        self.creation.frappe.db.exists = lambda doctype, name: name == "ACC-SINV-FRESH-0001"
+        self.creation.frappe.db.get_value = lambda *args, **kwargs: 0
+        self.creation.frappe.get_value = lambda *args, **kwargs: 0
+        self.creation.frappe.get_doc = lambda *args: draft
+        self.creation._save_draft_with_latest_timestamp = lambda doc: doc
+        self.creation._apply_invoice_gift_card_settlement = lambda *args, **kwargs: None
+        self.creation._process_post_submit_payments = lambda *args, **kwargs: None
+
+        result = self.creation.submit_invoice(
+            json.dumps(
+                {
+                    "doctype": "Sales Invoice",
+                    "pos_profile": "Main POS",
+                    "company": "Test Company",
+                    "currency": "USD",
+                    "customer": "CUST-0001",
+                    "posting_date": "2026-03-21",
+                    "grand_total": 57,
+                    "rounded_total": 57,
+                    "items": [],
+                    "payments": [
+                        {"mode_of_payment": "Cash", "amount": 57, "base_amount": 57, "default": 1}
+                    ],
+                    "posa_client_request_id": "inv-offline-replay-001",
+                }
+            ),
+            json.dumps({"idempotency_key": "inv-offline-replay-001"}),
+            submit_in_background=0,
+        )
+
+        self.assertEqual(len(update_calls), 1)
+        self.assertNotIn("name", update_calls[0])
+        # The server-built row keeps its account/type; only the tender moves.
+        self.assertEqual(draft.payments[0].amount, 57)
+        self.assertEqual(draft.payments[0].base_amount, 57)
+        self.assertEqual(draft.payments[0].account, "Cash - T")
+        self.assertEqual(seen_at_submit["amount"], 57)
+        self.assertEqual(result["status"], 1)
+
+    def test_submit_invoice_fresh_draft_with_zeroed_payments_is_still_refused(self):
+        # The invariant itself is untouched: a payload that really tenders
+        # nothing against a 57 total must still die on the fresh path.
+        draft = self._build_invoice_doc(
+            name="ACC-SINV-FRESH-0002",
+            grand_total=57,
+            rounded_total=57,
+            payments=[FakeDoc(mode_of_payment="Cash", type="Cash", amount=0, base_amount=0)],
+        )
+        draft.submit = lambda: setattr(draft, "docstatus", 1)
+        self.addCleanup(setattr, self.creation, "update_invoice", self.creation.update_invoice)
+        self.creation.update_invoice = lambda *_args, **_kwargs: {"name": "ACC-SINV-FRESH-0002"}
+        self.creation.frappe.db.exists = lambda doctype, name: name == "ACC-SINV-FRESH-0002"
+        self.creation.frappe.db.get_value = lambda *args, **kwargs: 0
+        self.creation.frappe.get_value = lambda *args, **kwargs: 0
+        self.creation.frappe.get_doc = lambda *args: draft
+        self.creation._save_draft_with_latest_timestamp = lambda doc: doc
+        self.creation._apply_invoice_gift_card_settlement = lambda *args, **kwargs: None
+        self.creation._process_post_submit_payments = lambda *args, **kwargs: None
+
+        with self.assertRaises(Exception) as caught:
+            self.creation.submit_invoice(
+                json.dumps(
+                    {
+                        "doctype": "Sales Invoice",
+                        "pos_profile": "Main POS",
+                        "company": "Test Company",
+                        "currency": "USD",
+                        "customer": "CUST-0001",
+                        "grand_total": 57,
+                        "rounded_total": 57,
+                        "items": [],
+                        "payments": [{"mode_of_payment": "Cash", "amount": 0, "base_amount": 0}],
+                    }
+                ),
+                json.dumps({}),
+                submit_in_background=0,
+            )
+        self.assertIn("does not match grand total", str(caught.exception))
+        self.assertEqual(draft.docstatus, 0)
+
     def test_submit_invoice_normalizes_existing_return_draft_payments_before_save(self):
         invoice_doc = self._build_invoice_doc(
             name="ACC-SINV-RETURN-0001",

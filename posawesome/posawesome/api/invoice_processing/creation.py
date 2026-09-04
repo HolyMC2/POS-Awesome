@@ -806,6 +806,45 @@ def _build_fresh_invoice_payload(data, doctype):
     return fresh_data
 
 
+def _reapply_payload_payments(invoice_doc, payload):
+    """Carry the tendered amounts across a fresh draft save.
+
+    ``update_invoice`` saves a NEW document through ``set_missing_values``,
+    and ERPNext v16's ``update_multi_mode_option`` rebuilds ``payments`` from
+    the POS Profile unconditionally — every row comes back with no amount.
+    The online register submits by NAME afterwards, which re-applies its
+    payload over the draft (the ``else`` branch below); a name-less submit —
+    the offline queue replay, a retry after a lost draft ack — reached the
+    settlement invariant with payments summing to 0 and was refused, so the
+    queued sale drafted for review instead of syncing (live drill,
+    demo-abarrotes.lab, 2026-09-04).
+
+    Merge the payload's rows onto the server-built rows by mode of payment,
+    keeping the server's account/type; append a mode the profile no longer
+    carries rather than dropping its tender silently.
+    """
+    rows = [row for row in (payload or {}).get("payments") or [] if isinstance(row, dict)]
+    if not rows:
+        return
+    rate = flt(invoice_doc.get("conversion_rate")) or 1
+    by_mode = {}
+    for existing in invoice_doc.get("payments") or []:
+        mode = str(existing.get("mode_of_payment") or "").strip()
+        if mode and mode not in by_mode:
+            by_mode[mode] = existing
+    for row in rows:
+        mode = str(row.get("mode_of_payment") or "").strip()
+        if not mode:
+            continue
+        target = by_mode.get(mode)
+        if target is None:
+            target = invoice_doc.append("payments", {"mode_of_payment": mode})
+            by_mode[mode] = target
+        target.amount = row.get("amount")
+        target.base_amount = row.get("base_amount")
+        target.amount, target.base_amount = _resolve_payment_amounts(target, rate)
+
+
 def _clear_stale_party_fields_in_payload(
     payload,
     previous_customer,
@@ -1657,6 +1696,7 @@ def submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
         created = update_invoice(json.dumps(invoice))
         invoice_name = created.get("name")
         invoice_doc = frappe.get_doc(doctype, invoice_name)
+        _reapply_payload_payments(invoice_doc, invoice)
     else:
         # Prevent TimestampMismatchError by relying on server-side timestamp
         if "modified" in invoice:
