@@ -1218,3 +1218,200 @@ describe("usePaymentSubmission", () => {
 		});
 	});
 });
+
+describe("usePaymentSubmission — a lost ack is resolved by the register, not the cashier", () => {
+	// Live drill 2026-09-04: the submit call died in flight AFTER the server
+	// booked the sale. The cashier was left on the pay screen with the cart
+	// intact and a transient «Failed to fetch»; re-pressing replayed safely,
+	// cancelling and re-ringing would have charged twice.
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.stubGlobal("__", (value: string, args?: any[]) => {
+			if (!args?.length) return value;
+			return value.replace(/\{(\d+)\}/g, (_match, index) =>
+				String(args[Number(index)] ?? ""),
+			);
+		});
+	});
+
+	const transportFailure = () =>
+		new ApiEnvelopeError({
+			ok: false,
+			data: null,
+			error: { code: "TRANSPORT_ERROR", message: "Failed to fetch", retryable: true },
+			requestId: "req-lost-ack-1",
+			serverTime: null,
+		});
+
+	function buildRegister(overrides: Record<string, any> = {}) {
+		const toastStore = { show: vi.fn() };
+		const syncStore = { updatePendingCount: vi.fn(), syncPendingInvoices: vi.fn(() => Promise.resolve()) };
+		const uiStore = { setLastInvoice: vi.fn(), setLastStockAdjustment: vi.fn() };
+		const customersStore = { setSelectedCustomer: vi.fn() };
+		const invoiceDoc = ref<any>({
+			name: "ACC-SINV-LOST-ACK",
+			doctype: "Sales Invoice",
+			is_return: 0,
+			items: [{ item_code: "ITEM-1", qty: 1 }],
+			payments: [{ mode_of_payment: "Cash", amount: 57, type: "Cash" }],
+			rounded_total: 57,
+			grand_total: 57,
+			posa_client_request_id: "inv-lost-ack-001",
+		});
+		const register = usePaymentSubmission({
+			invoiceDoc,
+			posProfile: ref({
+				name: "Mostrador",
+				customer: "Público en General",
+				posa_allow_submissions_in_background_job: 0,
+				create_pos_invoice_instead_of_sales_invoice: 0,
+			}),
+			stockSettings: ref({}),
+			invoiceType: ref("Invoice"),
+			formatFloat: (value) => Number(value || 0),
+			stores: { toastStore, syncStore, uiStore, customersStore, invoiceStore: { invoiceDoc: invoiceDoc.value } },
+			isCashback: ref(false),
+			paidChange: ref(0),
+			creditChange: ref(0),
+			redeemedCustomerCredit: ref(0),
+			customerCreditDict: ref([]),
+			diff_payment: ref(0),
+			...overrides,
+		});
+		return { ...register, invoiceDoc, toastStore, syncStore, uiStore, customersStore };
+	}
+
+	async function rejectSubmitWithTransportFailure() {
+		const invoiceService = (await import("../src/posapp/services/invoiceService")).default;
+		(invoiceService.submitInvoice as any).mockRejectedValue(transportFailure());
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+	}
+
+	it("finishes the sale as submitted when the server confirms it booked the request", async () => {
+		await rejectSubmitWithTransportFailure();
+		const call = vi.fn(async () => ({ message: { docstatus: 1 } }));
+		vi.stubGlobal("frappe", { utils: { play_sound: vi.fn() }, call });
+		const { saveOfflineInvoice } = await import("../src/offline/index");
+
+		const register = buildRegister();
+		const onFinishNavigation = vi.fn();
+		const onPrint = vi.fn();
+
+		const result = await register.submitInvoice(true, { onFinishNavigation, onPrint });
+
+		expect(result).toEqual(
+			expect.objectContaining({
+				recoveredDuplicateSubmission: true,
+				message: expect.objectContaining({ name: "ACC-SINV-LOST-ACK", docstatus: 1 }),
+			}),
+		);
+		expect(call).toHaveBeenCalledWith(
+			expect.objectContaining({
+				method: "frappe.client.get_value",
+				args: expect.objectContaining({ filters: { name: "ACC-SINV-LOST-ACK" } }),
+			}),
+		);
+		// Booked once, on the server — nothing is queued and the ticket prints.
+		expect(saveOfflineInvoice).not.toHaveBeenCalled();
+		expect(onFinishNavigation).toHaveBeenCalledWith(true);
+		expect(onPrint).toHaveBeenCalledWith(
+			register.invoiceDoc.value,
+			expect.objectContaining({ name: "ACC-SINV-LOST-ACK" }),
+		);
+		expect(register.uiStore.setLastInvoice).toHaveBeenCalledWith("ACC-SINV-LOST-ACK");
+		expect(register.toastStore.show).toHaveBeenCalledWith(
+			expect.objectContaining({ title: "Invoice ACC-SINV-LOST-ACK was already submitted" }),
+		);
+	});
+
+	it("parks the sale in the offline queue and kicks the drain when the server cannot be asked", async () => {
+		await rejectSubmitWithTransportFailure();
+		const call = vi.fn(async () => {
+			throw new Error("Failed to fetch");
+		});
+		vi.stubGlobal("frappe", { utils: { play_sound: vi.fn() }, call });
+		const { saveOfflineInvoice } = await import("../src/offline/index");
+		(saveOfflineInvoice as any).mockResolvedValue({ queue_id: 7 });
+
+		const register = buildRegister();
+		const onFinishNavigation = vi.fn();
+		const onPrint = vi.fn();
+
+		const result = await register.submitInvoice(true, { onFinishNavigation, onPrint });
+
+		expect(result).toEqual({ offline: true, recoveredFromLostAck: true });
+		// The queued payload is the SAME doc, same request id — the replay is
+		// idempotent, so a sale the server did book is found, not repeated.
+		expect(saveOfflineInvoice).toHaveBeenCalledWith(
+			expect.objectContaining({
+				invoice: expect.objectContaining({
+					name: "ACC-SINV-LOST-ACK",
+					posa_client_request_id: "inv-lost-ack-001",
+				}),
+				data: expect.objectContaining({ is_credit_sale: 0 }),
+			}),
+		);
+		expect(register.syncStore.updatePendingCount).toHaveBeenCalled();
+		expect(register.syncStore.syncPendingInvoices).toHaveBeenCalled();
+		expect(onFinishNavigation).toHaveBeenCalledWith(true);
+		expect(onPrint).toHaveBeenCalledWith(register.invoiceDoc.value);
+		expect(register.customersStore.setSelectedCustomer).toHaveBeenCalledWith("Público en General");
+		expect(register.toastStore.show).toHaveBeenCalledWith(
+			expect.objectContaining({
+				title: "Connection lost while charging — sale saved on this register",
+				color: "warning",
+			}),
+		);
+	});
+
+	it("parks the sale when the server answers that the draft is still unsubmitted", async () => {
+		await rejectSubmitWithTransportFailure();
+		const call = vi.fn(async () => ({ message: { docstatus: 0 } }));
+		vi.stubGlobal("frappe", { utils: { play_sound: vi.fn() }, call });
+		const { saveOfflineInvoice } = await import("../src/offline/index");
+		(saveOfflineInvoice as any).mockResolvedValue({ queue_id: 8 });
+
+		const register = buildRegister();
+		const result = await register.submitInvoice(false, { onFinishNavigation: vi.fn() });
+
+		expect(result).toEqual({ offline: true, recoveredFromLostAck: true });
+		expect(saveOfflineInvoice).toHaveBeenCalledTimes(1);
+		expect(register.syncStore.syncPendingInvoices).toHaveBeenCalled();
+	});
+
+	it("keeps the loud failure when the queue refuses the sale", async () => {
+		await rejectSubmitWithTransportFailure();
+		const call = vi.fn(async () => {
+			throw new Error("Failed to fetch");
+		});
+		vi.stubGlobal("frappe", { utils: { play_sound: vi.fn() }, call });
+		const { saveOfflineInvoice } = await import("../src/offline/index");
+		(saveOfflineInvoice as any).mockRejectedValue(new Error("Not enough stock for Tortilla"));
+
+		const register = buildRegister();
+		const onFinishNavigation = vi.fn();
+
+		await expect(register.submitInvoice(false, { onFinishNavigation })).rejects.toThrow(
+			"Failed to fetch",
+		);
+		expect(onFinishNavigation).not.toHaveBeenCalled();
+		expect(register.toastStore.show).toHaveBeenCalledWith(
+			expect.objectContaining({ title: "Connection problem while submitting invoice" }),
+		);
+	});
+
+	it("does not park a sale that redeems a gift card — that must be verified live", async () => {
+		await rejectSubmitWithTransportFailure();
+		const call = vi.fn(async () => ({ message: { docstatus: 0 } }));
+		vi.stubGlobal("frappe", { utils: { play_sound: vi.fn() }, call });
+		const { saveOfflineInvoice } = await import("../src/offline/index");
+
+		const register = buildRegister({
+			giftCardRedemptions: ref([{ gift_card: "GC-1", amount: 20 }]),
+		});
+
+		await expect(register.submitInvoice(false, {})).rejects.toThrow("Failed to fetch");
+		expect(saveOfflineInvoice).not.toHaveBeenCalled();
+	});
+});
+

@@ -450,6 +450,124 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		}
 	};
 
+	/**
+	 * Close the sale on the register when the server already holds it
+	 * submitted — the ordinary success moves (last-invoice stamp, cart clear,
+	 * customer reset, the ticket) without a second booking. Shared by the
+	 * timestamp-collision door and the lost-ack door below.
+	 */
+	const finishAsAlreadySubmitted = (
+		doc: any,
+		invoiceName: string,
+		print: boolean,
+		callbacks: SubmissionCallbacks,
+	) => {
+		const { onPrint, onFinishNavigation, onSuccess } = callbacks;
+		const profile = unref(posProfile);
+		const doctype = doc?.doctype;
+		stores?.toastStore?.show({
+			title: __("Invoice {0} was already submitted", [invoiceName || ""]),
+			color: "warning",
+		});
+
+		if (stores?.uiStore && invoiceName) {
+			stores.uiStore.setLastInvoice(invoiceName);
+		}
+
+		if (onFinishNavigation) {
+			onFinishNavigation(true);
+		}
+
+		if (stores?.customersStore?.setSelectedCustomer) {
+			stores.customersStore.setSelectedCustomer(profile?.customer || null);
+		}
+
+		// The sale IS submitted; every other success path prints here.
+		// Without this a lost response cost the customer their ticket,
+		// silently (backtrace W4). The doc is confirmed, so print now.
+		if (print && onPrint) {
+			onPrint(doc, { name: invoiceName, doctype });
+		}
+
+		if (onSuccess) {
+			onSuccess({
+				name: invoiceName,
+				doctype,
+				docstatus: 1,
+				recovered: true,
+			});
+		}
+
+		return {
+			recoveredDuplicateSubmission: true,
+			message: { name: invoiceName, doctype, docstatus: 1 },
+		};
+	};
+
+	/**
+	 * The submit call died in flight (transport error / timeout). The server
+	 * may have booked the sale before the response was lost and the register
+	 * cannot tell — so this is resolved HERE, not by the cashier:
+	 *
+	 *   1. ask the server for the draft's docstatus; booked → finish exactly
+	 *      like a success (no second booking, ticket prints);
+	 *   2. no answer, or not booked → park the sale in the offline queue and
+	 *      kick the drain. The replay is idempotent by
+	 *      `posa_client_request_id`, so if the server had booked it after
+	 *      all, the drain finds that invoice instead of minting another.
+	 *
+	 * Live drill 2026-09-04 (demo-abarrotes.lab): a lost ack left the cashier
+	 * on the pay screen with the cart intact and a transient «Failed to
+	 * fetch» — while the sale was already ACC-SINV-…47 on the server. A
+	 * re-press replayed safely; cancelling and re-ringing would have charged
+	 * twice. Returns null when the queue refuses the sale (stock guard, empty
+	 * cart), in which case the caller falls through to the loud failure.
+	 */
+	const recoverFromLostAck = async (
+		doc: any,
+		data: Record<string, any>,
+		print: boolean,
+		callbacks: SubmissionCallbacks,
+	) => {
+		const { onPrint, onFinishNavigation } = callbacks;
+		const profile = unref(posProfile);
+		const submittedStatus = await fetchSubmittedDocstatus(doc);
+		if (submittedStatus === 1) {
+			return finishAsAlreadySubmitted(doc, doc?.name, print, callbacks);
+		}
+
+		try {
+			await saveOfflineInvoice({ data, invoice: doc });
+		} catch (queueError) {
+			console.error("Lost ack: the offline queue refused the sale", queueError);
+			return null;
+		}
+		stores?.syncStore?.updatePendingCount?.();
+		stores?.toastStore?.show({
+			title: __("Connection lost while charging — sale saved on this register"),
+			detail: __("It will sync by itself as soon as the server answers."),
+			color: "warning",
+		});
+		// Drain now if the server is in fact reachable (a blip, not an
+		// outage); offline, the drain refuses and the reconnect runs it.
+		try {
+			void Promise.resolve(stores?.syncStore?.syncPendingInvoices?.()).catch(
+				() => undefined,
+			);
+		} catch {
+			/* the drain owns its own reporting */
+		}
+
+		if (print && onPrint) {
+			onPrint(doc);
+		}
+		if (stores?.customersStore?.setSelectedCustomer) {
+			stores.customersStore.setSelectedCustomer(profile?.customer || null);
+		}
+		if (onFinishNavigation) onFinishNavigation(true);
+		return { offline: true, recoveredFromLostAck: true };
+	};
+
 	const getWriteOffLimit = (profile: any): number | null => {
 		if (!profile) return null;
 		// ERPNext's native POS Profile write_off_limit is the only limit
@@ -1477,60 +1595,26 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			const errorMsg = extractSubmissionErrorMessage(exc);
 
 			if (errorCode === "TIMESTAMP_MISMATCH") {
+				// The sale came back through the duplicate-submission door:
+				// confirm docstatus 1 and close it as a success.
 				const submittedStatus = await fetchSubmittedDocstatus(doc);
 				if (submittedStatus === 1) {
-					stores?.toastStore?.show({
-						title: __("Invoice {0} was already submitted", [
-							doc?.name || "",
-						]),
-						color: "warning",
-					});
+					return finishAsAlreadySubmitted(doc, doc?.name, print, callbacks);
+				}
+			}
 
-					if (stores?.uiStore && doc?.name) {
-						stores.uiStore.setLastInvoice(doc.name);
-					}
-
-					if (onFinishNavigation) {
-						onFinishNavigation(true);
-					}
-
-					if (stores?.customersStore?.setSelectedCustomer) {
-						stores.customersStore.setSelectedCustomer(
-							profile?.customer || null,
-						);
-					}
-
-					// The sale IS submitted — `fetchSubmittedDocstatus` just
-					// confirmed docstatus 1 — it merely came back through the
-					// duplicate-submission door. Every other success path
-					// prints here; without this the operator's timestamp
-					// collision cost the customer their ticket, silently
-					// (backtrace W4). No deferred wait: the doc is already
-					// confirmed, so this is the immediate print path.
-					if (print && onPrint) {
-						onPrint(doc, {
-							name: doc?.name,
-							doctype: doc?.doctype,
-						});
-					}
-
-					if (onSuccess) {
-						onSuccess({
-							name: doc?.name,
-							doctype: doc?.doctype,
-							docstatus: 1,
-							recovered: true,
-						});
-					}
-
-					return {
-						recoveredDuplicateSubmission: true,
-						message: {
-							name: doc?.name,
-							doctype: doc?.doctype,
-							docstatus: 1,
-						},
-					};
+			if (
+				(errorCode === "TRANSPORT_ERROR" || errorCode === "TIMEOUT") &&
+				!hasGiftCardRedemption &&
+				formatFloat(unref(redeemedCustomerCredit) || 0, prec) <= 0 &&
+				!(resolveFloorStore()?.isRecordOnly && resolveFloorStore()?.activeOrder)
+			) {
+				// Gift cards and store credit must be verified live (same rule as
+				// the offline branch) and a mesa settle owns its own order state,
+				// so those keep the loud failure; everything else resolves here.
+				const recovered = await recoverFromLostAck(doc, data, print, callbacks);
+				if (recovered) {
+					return recovered;
 				}
 			}
 

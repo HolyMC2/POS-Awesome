@@ -124,8 +124,9 @@ The POS frontend has been migrated to TypeScript. If you add new modules, prefer
 ### Offline Mode
 
 - Invoices, customers, and payments can be created offline.
-- Background sync replays changes when connectivity returns.
-- Failed offline submissions are saved as Drafts.
+- Background sync replays changes when connectivity returns. The replay is idempotent by `posa_client_request_id` (durable submission ledger), so a sale the server already booked is found, never re-booked.
+- A submit whose response is lost in flight is resolved by the register itself: it asks the server for the draft's docstatus and closes the sale if it was booked; if the server cannot be asked, the sale is parked in the offline queue and drained automatically.
+- Failed offline submissions (a real validation error at replay time) are saved as Drafts for review.
 - **Allow Offline Sale Without Stock Verification** on POS Profile lets offline invoice saving continue when local stock cache is missing or below the requested quantity.
 - This option only skips local offline stock blocking. Server-side stock validation still runs when the invoice syncs online.
 
