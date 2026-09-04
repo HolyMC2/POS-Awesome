@@ -59,6 +59,14 @@ describe("build manifest helpers", () => {
 				web_preload: [
 					"/assets/posawesome/dist/js/posawesome-AAA999.js?v=build-2000",
 				],
+				// Every chunk in the fixture, bare, sorted — the SW install
+				// precache (see the dedicated spec below).
+				chunks: [
+					"/assets/posawesome/dist/js/loader-XYZ123.js",
+					"/assets/posawesome/dist/js/offline/index-AbCd1234.js",
+					"/assets/posawesome/dist/js/posawesome-AAA999.js",
+					"/assets/posawesome/dist/js/web-entry-WEB456.js",
+				],
 			},
 		});
 	});
@@ -102,6 +110,28 @@ describe("build manifest helpers", () => {
 			"/assets/posawesome/dist/js/api-DDD.js?v=v1",
 			"/assets/posawesome/dist/js/Pos-EEE.js?v=v1",
 		]);
+	});
+
+	it("publishes every emitted chunk, bare, for the service worker precache", () => {
+		// A lazy chunk the register never opened online was fetched on first
+		// use — offline, that fetch failed and the app reloaded mid-outage.
+		// The SW now precaches the whole split at install, from this list.
+		const payload = buildVersionPayload("v1", {
+			"posawesome-AAA.js": { type: "chunk", name: "posawesome", fileName: "posawesome-AAA.js" },
+			"useNetwork-BBB.js": { type: "chunk", name: "useNetwork", fileName: "useNetwork-BBB.js" },
+			"Cobro-CCC.js": { type: "chunk", name: "Cobro", fileName: "Cobro-CCC.js" },
+			"style-Z9Z9.css": { type: "asset", name: "style.css", fileName: "style-Z9Z9.css", source: "" },
+			"itemWorker.js": { type: "asset", name: "itemWorker", fileName: "workers/itemWorker.js" },
+		});
+		expect(payload.assets.chunks).toEqual([
+			"/assets/posawesome/dist/js/Cobro-CCC.js",
+			"/assets/posawesome/dist/js/posawesome-AAA.js",
+			"/assets/posawesome/dist/js/useNetwork-BBB.js",
+		]);
+		// Bare on purpose: static imports between chunks resolve to the
+		// un-versioned filename, which is the request the SW has to match.
+		expect(payload.assets.chunks.some((url) => url.includes("?v="))).toBe(false);
+		expect(buildVersionPayload("v1", {}).assets.chunks).toEqual([]);
 	});
 
 	it("dedupes preload URLs if two PRELOAD names resolve to the same chunk", () => {

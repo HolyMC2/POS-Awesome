@@ -77,6 +77,26 @@ function buildPreloadList(bundle, version) {
 	return out;
 }
 
+// The service worker precaches these at install (sw.js getPrecacheUrls), so
+// EVERY code-split surface is on disk before the network is needed — the Pay
+// panel, the offline queue, the connectivity prober. Before this only the
+// entry chunks were precached and a lazy chunk the register had not opened
+// yet was fetched on first use; offline, that fetch failed and the
+// chunk-recovery path reloaded the app mid-sale (live drill 2026-09-04).
+// Bare URLs on purpose: Vite's static imports between chunks resolve to the
+// un-versioned filename, which is what the fetch handler must match.
+function buildChunkList(bundle) {
+	const seen = new Set();
+	const out = [];
+	for (const entry of Object.values(bundle || {})) {
+		if (entry?.type !== "chunk" || typeof entry?.fileName !== "string") continue;
+		if (!entry.fileName.endsWith(".js") || seen.has(entry.fileName)) continue;
+		seen.add(entry.fileName);
+		out.push(toPublicAssetUrl(entry.fileName));
+	}
+	return out.sort();
+}
+
 export function buildVersionPayload(version, bundle = {}) {
 	const loaderFile = getChunkFileName(bundle, "loader");
 	const posawesomeFile = getChunkFileName(bundle, "posawesome");
@@ -108,6 +128,8 @@ export function buildVersionPayload(version, bundle = {}) {
 			// Ordered roughly by criticality so the browser's network
 			// scheduler hits the boot-blockers first.
 			web_preload: buildPreloadList(bundle, version),
+			// Every emitted chunk, for the service worker's install precache.
+			chunks: buildChunkList(bundle),
 		},
 	};
 }

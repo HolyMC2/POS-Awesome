@@ -123,7 +123,9 @@ posawesome/
        b. Triggers customersStore.get_customer_names() (background)
        c. Triggers itemsStore.loadItems() (background)
 7. SW handshake:
-       a. SW precaches loader/posawesome/css/offlineIndex from version.json's hashed URLs
+       a. SW precaches loader/posawesome/css/offlineIndex from version.json's hashed URLs,
+          plus EVERY emitted chunk (version.json `assets.chunks`, bare URLs) so a
+          surface never opened while online still opens offline
        b. Cache name = `posawesome-cache-<version>`; old caches dropped
 ```
 

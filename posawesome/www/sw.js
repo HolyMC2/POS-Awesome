@@ -41,6 +41,15 @@ function pickAssetUrl(assets, key, fallbackPath, version) {
 	return buildVersionedAssetUrl(fallbackPath, version);
 }
 
+function getChunkPrecacheUrls(assets) {
+	// build-manifest.js publishes every emitted chunk under assets.chunks.
+	// Precaching them all at install is what makes a surface the cashier
+	// never opened while online — the Pay panel, the offline queue, the
+	// connectivity prober — still open once the network is gone.
+	const chunks = Array.isArray(assets?.chunks) ? assets.chunks : [];
+	return chunks.filter((url) => typeof url === "string" && url.trim().length > 0);
+}
+
 function getPrecacheUrls(version, assets = {}) {
 	return [
 		pickAssetUrl(assets, "loader", "/assets/posawesome/dist/js/loader.js", version),
@@ -51,6 +60,7 @@ function getPrecacheUrls(version, assets = {}) {
 		// route (Phase 1). Hashed filename comes from version.json
 		// just like the other entry chunks.
 		pickAssetUrl(assets, "web_entry", "/assets/posawesome/dist/js/web-entry.js", version),
+		...getChunkPrecacheUrls(assets),
 		...STATIC_PRECACHE_URLS,
 	];
 }

@@ -196,6 +196,23 @@ describe("posawesome service worker — Phase 1.G precache", () => {
 		);
 	});
 
+	it("precaches every chunk version.json publishes, so lazy surfaces open offline", () => {
+		const urls = harness.getPrecacheUrls("build-1234", {
+			chunks: [
+				"/assets/posawesome/dist/js/useNetwork-BBB.js",
+				"/assets/posawesome/dist/js/Cobro-CCC.js",
+				"",
+				42 as unknown as string,
+			],
+		} as any);
+		expect(urls).toContain("/assets/posawesome/dist/js/useNetwork-BBB.js");
+		expect(urls).toContain("/assets/posawesome/dist/js/Cobro-CCC.js");
+		expect(urls).not.toContain("");
+		expect(urls.some((url) => typeof url !== "string")).toBe(false);
+		// An older version.json without the list still installs.
+		expect(harness.getPrecacheUrls("build-1234", {})).toContain("/posapp");
+	});
+
 	it("falls back to the un-hashed web-entry path when version.json is missing it", () => {
 		const urls = harness.getPrecacheUrls("build-1234", {});
 		expect(urls).toContain(
