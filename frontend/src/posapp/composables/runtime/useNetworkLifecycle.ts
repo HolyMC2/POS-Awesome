@@ -2,6 +2,16 @@ import type { Ref } from "vue";
 import { watch } from "vue";
 import type { Emitter } from "mitt";
 import type { Events } from "../../bus";
+// Static on purpose. This used to be a dynamic import of core/useNetwork — a
+// lazy chunk fetched the first time the shell needed to probe the server, which is
+// the moment the network has just gone. Offline, that fetch failed, the
+// chunk-recovery handler reloaded the register mid-outage, and the prober
+// never ran (live drill, demo-abarrotes.lab, 2026-09-04). The code that
+// decides whether we are offline cannot itself depend on the network.
+import {
+	checkNetworkConnectivity as probeServerConnectivity,
+	manualNetworkRetry,
+} from "../core/useNetwork";
 
 type EventBusLike = {
 	emit?: Emitter<Events>["emit"];
@@ -87,12 +97,7 @@ export function useNetworkLifecycle(options: UseNetworkLifecycleOptions) {
 				await options.checkNetworkConnectivity(checkOptions);
 				return;
 			}
-			const { checkNetworkConnectivity: utilsCheckNetworkConnectivity } =
-				await import("../core/useNetwork");
-			await utilsCheckNetworkConnectivity.call(
-				networkProxy as any,
-				checkOptions,
-			);
+			await probeServerConnectivity.call(networkProxy as any, checkOptions);
 		},
 	};
 
@@ -239,7 +244,6 @@ export function useNetworkLifecycle(options: UseNetworkLifecycleOptions) {
 	}
 
 	async function retry() {
-		const { manualNetworkRetry } = await import("../core/useNetwork");
 		await manualNetworkRetry(networkProxy as any);
 	}
 

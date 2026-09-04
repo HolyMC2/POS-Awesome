@@ -11,6 +11,10 @@ const CHUNK_RELOAD_PARAM = "_posa_chunk_reload";
 const CHUNK_CACHE_RECOVERY_PARAM = "_posa_chunk_cache_recovery";
 const POSAWESOME_CACHE_PREFIX = "posawesome-cache-";
 
+function isBrowserOffline(): boolean {
+	return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
 function normalizeErrorText(error: unknown): string {
 	const message =
 		error instanceof Error
@@ -219,6 +223,19 @@ export async function recoverFromChunkLoadError(
 		urlAlreadyRetried ||
 		window.sessionStorage.getItem(CHUNK_RELOAD_KEY) === "1";
 	if (!alreadyRetried) {
+		// A reload cannot fetch the chunk the network just refused. With the
+		// cable out the service worker would bring the shell back, but the
+		// cashier loses the screen they were on for nothing, and a queued sale
+		// is exactly what they came to check. Surface it; the failure is
+		// re-evaluated once the network returns.
+		if (isBrowserOffline()) {
+			window.sessionStorage.removeItem(CHUNK_RECOVERY_IN_PROGRESS_KEY);
+			console.warn(
+				"Chunk recovery: deferred, browser is offline — surfacing instead of reloading",
+				{ source, error },
+			);
+			return false;
+		}
 		// A cart in progress must not be discarded by a silent reload. Defer:
 		// clear the in-progress latch so a later failure re-evaluates (e.g. once
 		// the sale is finished), and return false so the shell surfaces it.

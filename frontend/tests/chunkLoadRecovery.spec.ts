@@ -47,6 +47,37 @@ describe("chunk load recovery helpers", () => {
 		);
 	});
 
+	it("surfaces instead of reloading while the browser is offline", async () => {
+		// The connectivity prober used to be a lazy chunk first fetched by the
+		// outage itself; a reload cannot fetch what the network just refused,
+		// and it threw the cashier off the screen they were on (live drill
+		// 2026-09-04). Offline, the first failure is deferred, not retried.
+		const original = Object.getOwnPropertyDescriptor(Navigator.prototype, "onLine");
+		Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+		const replace = vi.fn();
+		const locationDescriptor = Object.getOwnPropertyDescriptor(window, "location");
+		Object.defineProperty(window, "location", {
+			configurable: true,
+			value: { ...window.location, search: "", pathname: "/app/posapp", hash: "", replace },
+		});
+		try {
+			const recovered = await recoverFromChunkLoadError(
+				new TypeError("Failed to fetch dynamically imported module: /assets/useNetwork-x.js"),
+				"unhandled-rejection",
+			);
+			expect(recovered).toBe(false);
+			expect(replace).not.toHaveBeenCalled();
+			// No retry consumed: once the network is back the same failure may
+			// still take the ordinary reload path.
+			expect(window.sessionStorage.getItem("posa_chunk_reload_once")).toBeNull();
+			expect(window.sessionStorage.getItem("posa_chunk_recovery_in_progress")).toBeNull();
+		} finally {
+			if (locationDescriptor) Object.defineProperty(window, "location", locationDescriptor);
+			if (original) Object.defineProperty(navigator, "onLine", original);
+			else delete (navigator as any).onLine;
+		}
+	});
+
 	it("preserves retry history when clearing transient progress between reloads", async () => {
 		const chunkError = new TypeError(
 			"Failed to fetch dynamically imported module: /assets/chunk.js",
