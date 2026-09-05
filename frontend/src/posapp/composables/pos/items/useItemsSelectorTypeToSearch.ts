@@ -76,6 +76,16 @@ export function registerItemsSelectorTypeToSearch({
 		return () => {};
 	}
 
+	/** A hosted destination (Cobranza, Series y lotes…) or the anchored pay
+	 *  screen has the keyboard; a bare key there must not reveal the sale. */
+	const isAnotherSurfaceUp = () =>
+		Boolean(
+			document.querySelector(".destination-host, [data-pos-keyboard-root='payment']") &&
+				Array.from(
+					document.querySelectorAll(".destination-host, [data-pos-keyboard-root='payment']"),
+				).some((el) => el instanceof HTMLElement && (el.offsetWidth || el.offsetHeight)),
+		);
+
 	const isCartRowFocused = () =>
 		Boolean(
 			document.activeElement instanceof Element &&
@@ -96,7 +106,8 @@ export function registerItemsSelectorTypeToSearch({
 			// A focused cart line owns its bare keys (the keymap's ROW scope:
 			// p = price, d = discount, s = serial…). Routing them into the
 			// search box here would steal the loop the line exists for.
-			isCartRowFocused()
+			isCartRowFocused() ||
+			isAnotherSurfaceUp()
 		) {
 			return;
 		}

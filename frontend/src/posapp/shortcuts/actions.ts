@@ -19,6 +19,8 @@ export type ShortcutCategory =
 	| "lines"
 	| "customer"
 	| "payment"
+	| "pay"
+	| "collections"
 	| "documents"
 	| "app";
 
@@ -34,7 +36,7 @@ export type ShortcutCategory =
  * system keyboard driven… like SICAR, keyboard only for searching, selecting,
  * editing prices, discount».
  */
-export type ShortcutScope = "global" | "row";
+export type ShortcutScope = "global" | "row" | "pay" | "cobranza";
 
 export interface ShortcutAction {
 	id: string;
@@ -125,6 +127,46 @@ export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
 	{ id: "row.details", label: "Open line details", category: "lines", scope: "row" },
 	{ id: "row.remove", label: "Remove line", category: "lines", scope: "row" },
 	{ id: "row.back", label: "Back to search", category: "lines", scope: "row" },
+
+	// ── pay (the Cobro screen is open) ──────────────────────────────────
+	// Asked by `Payments.vue`'s own listener, never by the document one. The
+	// digits, Backspace and Enter are the tender pad's and need no binding:
+	// they type and apply the amount for the ARMED method.
+	{
+		id: "pay.armPrevious",
+		label: "Arm the previous method",
+		category: "pay",
+		scope: "pay",
+		hint: "Digits type the amount for the armed method, Enter applies it",
+	},
+	{ id: "pay.armNext", label: "Arm the next method", category: "pay", scope: "pay" },
+	{
+		id: "pay.exact",
+		label: "Exact amount on the armed method",
+		category: "pay",
+		scope: "pay",
+		hint: "Then Alt+P closes the sale with a ticket",
+	},
+	{ id: "pay.close", label: "Back to the sale", category: "pay", scope: "pay" },
+
+	// ── collections (Cobranza) ───────────────────────────────────────────
+	{
+		id: "collections.open",
+		label: "Open receivables",
+		category: "collections",
+		hint: "Cobranza — what customers owe",
+	},
+	{ id: "cobranza.previous", label: "Previous invoice", category: "collections", scope: "cobranza" },
+	{ id: "cobranza.next", label: "Next invoice", category: "collections", scope: "cobranza" },
+	{ id: "cobranza.collect", label: "Collect the selected invoice", category: "collections", scope: "cobranza" },
+	{ id: "cobranza.search", label: "Search a folio or customer", category: "collections", scope: "cobranza" },
+	{
+		id: "cobranza.back",
+		label: "Back to the list",
+		category: "collections",
+		scope: "cobranza",
+		hint: "From the capture or a detail",
+	},
 	{ id: "invoice.focusAdditionalDiscount", label: "Edit invoice discount", category: "cart" },
 	{ id: "invoice.focusDeliveryCharges", label: "Edit delivery charges", category: "cart" },
 	{ id: "invoice.focusPostingDate", label: "Edit posting date", category: "cart" },
@@ -195,6 +237,8 @@ export const CATEGORY_ORDER: readonly ShortcutCategory[] = [
 	"lines",
 	"customer",
 	"payment",
+	"pay",
+	"collections",
 	"documents",
 	"app",
 ] as const;
@@ -205,6 +249,8 @@ export const CATEGORY_LABELS: Record<ShortcutCategory, string> = {
 	lines: "Cart lines · with a line focused",
 	customer: "Customer",
 	payment: "Payment",
+	pay: "Cobro · with the pay screen open",
+	collections: "Cobranza · on the receivables screen",
 	documents: "Documents",
 	app: "Application",
 };

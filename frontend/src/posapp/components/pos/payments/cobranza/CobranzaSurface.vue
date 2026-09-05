@@ -1,5 +1,11 @@
 <template>
-	<section class="cobranza" data-testid="cobranza-surface">
+	<!-- The COBRANZA scope of the keymap (2026-09-05): ↑↓ Enter walk and
+	     collect from anywhere while this surface is up (the search box
+	     included, so a typed folio + Enter collects), `/` jumps to the search,
+	     Esc backs out of the capture or a detail. Listened for on the
+	     DOCUMENT (see `onSurfaceKeydown`): a key pressed with nothing focused
+	     never bubbles through this section. -->
+	<section ref="surfaceRef" class="cobranza" data-testid="cobranza-surface">
 		<!-- CAPTURE. The same PayView the Payments destination has always been,
 		     mounted here rather than navigated to — see the header. -->
 		<template v-if="step === 'capture'">
@@ -302,6 +308,8 @@ import {
 	type ReceivableTabId,
 	type ReceivableTotals,
 } from "./receivablesModel";
+import { scopedActionForEvent } from "../../../../shortcuts";
+import { isEditableElement } from "../../../../utils/keyboardNavigation";
 import { useFormat } from "../../../../format";
 import { bus } from "../../../../bus";
 import { useOnlineStatus } from "../../../../composables/core/useOnlineStatus";
@@ -532,6 +540,62 @@ const chooseTab = (id: ReceivableTabId) => {
 	void loadWorklist();
 };
 
+const surfaceRef = ref<HTMLElement | null>(null);
+
+const onSurfaceKeydown = (event: KeyboardEvent) => {
+	if (event.defaultPrevented) return;
+	// Mounted but hidden (the phone fronting an orden detail) is not up.
+	const root = surfaceRef.value;
+	if (!root || !(root.offsetWidth || root.offsetHeight)) return;
+	// An editable that is not ours (the item search under the surface)
+	// neither types here nor blocks: the surface answers the key.
+	const action = scopedActionForEvent("cobranza", event);
+	if (!action) return;
+	const target = event.target as Element | null;
+	const typing = isEditableElement(target) && Boolean(root.contains(target));
+	switch (action) {
+		case "cobranza.search":
+			// A `/` typed INTO the search box is a slash.
+			if (typing) return;
+			searchRef.value?.focus?.();
+			searchRef.value?.select?.();
+			break;
+		case "cobranza.back":
+			if (step.value === "capture") {
+				backToWorklist();
+			} else if (typing && searchRef.value === target) {
+				searchRef.value?.blur?.();
+			} else if (selectedName.value) {
+				selectedName.value = null;
+				detail.value = null;
+				closeDetailFront();
+			} else {
+				return;
+			}
+			break;
+		case "cobranza.previous":
+		case "cobranza.next": {
+			if (isCollectedTab.value || step.value === "capture") return;
+			const current = visibleRows.value.findIndex((row) => row.name === selectedName.value);
+			const next = nextIndex(action === "cobranza.next" ? "ArrowDown" : "ArrowUp", current, visibleRows.value.length);
+			if (next === null) return;
+			select(next);
+			break;
+		}
+		case "cobranza.collect": {
+			if (isCollectedTab.value || step.value === "capture") return;
+			const row = selectedRow.value;
+			if (!row) return;
+			void collect(row);
+			break;
+		}
+		default:
+			return;
+	}
+	event.preventDefault();
+	event.stopPropagation();
+};
+
 const onKeydown = (event: KeyboardEvent) => {
 	if (isCollectedTab.value) return;
 	if (event.key === "Enter") {
@@ -725,6 +789,13 @@ watch(profileName, () => {
 	selectedName.value = null;
 	detail.value = null;
 	void refreshAll();
+});
+
+onMounted(() => {
+	document.addEventListener("keydown", onSurfaceKeydown);
+});
+onBeforeUnmount(() => {
+	document.removeEventListener("keydown", onSurfaceKeydown);
 });
 
 onMounted(() => {

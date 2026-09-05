@@ -218,6 +218,25 @@ const __ = (value) => (typeof window !== "undefined" && window.__ ? window.__(va
 const rows = computed(() => (Array.isArray(props.payments) ? props.payments.filter(Boolean) : []));
 const target = computed(() => resolveTenderTarget(rows.value));
 
+/**
+ * The keyboard's way through the rows (pay scope ↑↓, 2026-09-05): arm the
+ * neighbour of the current target through the SAME `pick` a tap performs.
+ * Gift cards are skipped — their pick opens a capture, not a tender, and an
+ * arrow that opens a dialog is an arrow that stops walking.
+ */
+const pickRelative = (delta) => {
+	const walkable = rows.value.filter((payment) => !props.isGiftCardPayment(payment));
+	if (!walkable.length) return null;
+	const current = walkable.indexOf(target.value);
+	const next = current < 0 ? (delta > 0 ? 0 : walkable.length - 1) : (current + delta + walkable.length) % walkable.length;
+	const payment = walkable[next];
+	if (!payment) return null;
+	pick(payment);
+	return payment.mode_of_payment || null;
+};
+
+defineExpose({ pickRelative });
+
 /** Formatted, or "" for a tender nothing sits on — a zero is not a fact. */
 const amountOf = (payment) => {
 	const amount = Number(payment?.amount);

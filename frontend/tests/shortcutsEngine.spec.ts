@@ -114,6 +114,9 @@ describe("legacy binding parity", () => {
 			"arrowup", "arrowdown", "plus", "minus", "numpadadd", "numpadsubtract",
 			"q", "p", "d", "s", "enter", "delete", "escape",
 		];
+		// v6: the pay screen (`=` exact; ↑↓ Esc shared tokens) and Cobranza
+		// (`/` search; alt+shift+c opens it — c alone is the price check).
+		const PAY_AND_COLLECTIONS_CHORDS = ["=", "/", "alt+shift+c"];
 		const boundChords = [...new Set(resolved.bindings.map((b) => b.chord.id))].sort();
 		expect(boundChords).toEqual(
 			[
@@ -122,6 +125,7 @@ describe("legacy binding parity", () => {
 				...RAIL_DESTINATION_CHORDS,
 				...DOCUMENT_CHORDS,
 				...KEYBOARD_REGISTER_CHORDS,
+				...PAY_AND_COLLECTIONS_CHORDS,
 			].sort(),
 		);
 	});
@@ -256,6 +260,8 @@ describe("cheat sheet", () => {
 			"lines",
 			"customer",
 			"payment",
+			"pay",
+			"collections",
 			"documents",
 			"app",
 		]);
@@ -282,7 +288,7 @@ describe("effects cover the invoice surface", () => {
 		// Row-scoped actions are the CART LINE's (CartItemRow.onRowKeydown),
 		// not the invoice's: the document listener never dispatches them.
 		for (const binding of resolved.bindings) {
-			if (actionScope(binding.actionId) === "row") continue;
+			if (actionScope(binding.actionId) !== "global") continue;
 			expect(
 				INVOICE_SHORTCUT_EFFECTS[binding.actionId],
 				`no effect for ${binding.actionId}`,

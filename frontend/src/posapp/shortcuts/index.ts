@@ -15,9 +15,11 @@ import {
 	describeKeymap,
 	resolveKeymap,
 	resolveRowShortcutAction,
+	resolveScopedShortcutAction,
 	resolveShortcutAction,
 	type ResolvedKeymap,
 } from "./engine";
+import type { ShortcutScope } from "./actions";
 import { getKeymap } from "./keymap";
 
 let active: ResolvedKeymap = resolveKeymap(getKeymap(null));
@@ -52,6 +54,12 @@ export const actionForEvent = (event: KeyboardEvent): string | null =>
 /** The row-scoped action a key event names — for a focused cart line only. */
 export const rowActionForEvent = (event: KeyboardEvent): string | null =>
 	resolveRowShortcutAction(event, active);
+
+/** The action of one non-global scope, for the surface that owns it. */
+export const scopedActionForEvent = (
+	scope: Exclude<ShortcutScope, "global">,
+	event: KeyboardEvent,
+): string | null => resolveScopedShortcutAction(scope, event, active);
 
 /** Cheat-sheet sections for the active keymap. */
 export const activeCheatSheet = () => describeKeymap(active);

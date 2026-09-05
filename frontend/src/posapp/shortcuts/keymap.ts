@@ -49,7 +49,12 @@ export const MUELLE_DEFAULT: Keymap = {
 	// discount (d is Cobrar, e is the old «quitar primera»), and the ROW
 	// scope: bare keys that fire only with a cart line focused — see
 	// `ShortcutScope`. Alt+3 now clears the box on the way in.
-	version: 5,
+	// v6 (2026-09-05): the pay screen and Cobranza join the keyboard (owner:
+	// «cobranza shortcuts, payments shortcuts… so powerusers can shine»).
+	// PAY scope (Payments.vue's listener): ↑↓ arm the method, `=` exact,
+	// Esc back to the sale. COBRANZA scope (the surface): ↑↓ Enter `/` Esc.
+	// + alt+shift+c opens Cobranza (c alone is the price check).
+	version: 6,
 	label: "Muelle POS (default)",
 	bindings: {
 		// navigation
@@ -85,6 +90,20 @@ export const MUELLE_DEFAULT: Keymap = {
 		"row.details": ["enter"],
 		"row.remove": ["delete"],
 		"row.back": ["escape"],
+
+		// pay — the Cobro screen (bare keys, only while it is open)
+		"pay.armPrevious": ["arrowup"],
+		"pay.armNext": ["arrowdown"],
+		"pay.exact": ["="],
+		"pay.close": ["escape"],
+
+		// collections — Cobranza
+		"collections.open": ["alt+shift+c"],
+		"cobranza.previous": ["arrowup"],
+		"cobranza.next": ["arrowdown"],
+		"cobranza.collect": ["enter"],
+		"cobranza.search": ["/"],
+		"cobranza.back": ["escape"],
 		"invoice.focusAdditionalDiscount": ["alt+a"],
 		"invoice.focusDeliveryCharges": ["alt+9"],
 		"invoice.focusPostingDate": ["alt+backquote"],

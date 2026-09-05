@@ -203,17 +203,23 @@ export const resolveKeymap = (
 				continue;
 			}
 			bindings.push({ actionId, chord });
-			const owners = byChord.get(chord.id) || [];
+			// A chord clashes only INSIDE a scope: ↓ is «next line» on a
+			// focused cart row and «next method» on the pay screen, and the
+			// two never listen at the same time. Cross-scope reuse of the
+			// arrow keys is the design, not a packaging bug.
+			const scopedId = `${actionScope(actionId)}:${chord.id}`;
+			const owners = byChord.get(scopedId) || [];
 			if (!owners.includes(actionId)) {
 				owners.push(actionId);
 			}
-			byChord.set(chord.id, owners);
+			byChord.set(scopedId, owners);
 		}
 	}
 
 	const conflicts: KeymapConflict[] = [];
-	for (const [chordId, actionIds] of byChord) {
+	for (const [scopedId, actionIds] of byChord) {
 		if (actionIds.length > 1) {
+			const chordId = scopedId.slice(scopedId.indexOf(":") + 1);
 			conflicts.push({ chordId, actionIds: [...actionIds].sort() });
 		}
 	}
@@ -240,12 +246,12 @@ export const resolveKeymap = (
 
 /** The action a key event triggers, or null. First match wins (see sort). */
 /**
- * The row scope is STRICT about modifiers where the global scope is loose:
- * the inherited «F4 fires under Alt+F4» rule would make Alt+↓ on a focused
- * line read as «next line» and eat the very chord that leads out of the
- * scope. A bare row key is a bare key.
+ * Every non-global scope is STRICT about modifiers where the global scope is
+ * loose: the inherited «F4 fires under Alt+F4» rule would make Alt+↓ on a
+ * focused line read as «next line» and eat the very chord that leads out of
+ * the scope. A bare scoped key is a bare key.
  */
-const matchesRowChord = (event: KeyboardEvent, chord: Chord): boolean =>
+const matchesScopedChord = (event: KeyboardEvent, chord: Chord): boolean =>
 	matchesKeyToken(event, chord.key) &&
 	chord.alt === Boolean(event.altKey) &&
 	chord.ctrl === Boolean(event.ctrlKey) &&
@@ -256,7 +262,7 @@ const resolveInScope = (
 	resolved: ResolvedKeymap,
 	scope: ShortcutScope,
 ): string | null => {
-	const matches = scope === "row" ? matchesRowChord : matchesChord;
+	const matches = scope === "global" ? matchesChord : matchesScopedChord;
 	for (const binding of resolved.bindings) {
 		if (actionScope(binding.actionId) !== scope) continue;
 		if (matches(event, binding.chord)) {
@@ -283,6 +289,14 @@ export const resolveRowShortcutAction = (
 	resolved: ResolvedKeymap,
 ): string | null => resolveInScope(event, resolved, "row");
 
+/** The action of ONE non-global scope — asked by the surface that owns it
+ * (`pay` by Payments.vue, `cobranza` by CobranzaSurface). */
+export const resolveScopedShortcutAction = (
+	scope: Exclude<ShortcutScope, "global">,
+	event: KeyboardEvent,
+	resolved: ResolvedKeymap,
+): string | null => resolveInScope(event, resolved, scope);
+
 /** Human chord label: "alt+1" → "Alt + 1", "alt+pageup" → "Alt + Page Up". */
 const KEY_LABELS: Record<string, string> = {
 	backquote: "`",
@@ -301,6 +315,8 @@ const KEY_LABELS: Record<string, string> = {
 	numpadsubtract: "Num −",
 	plus: "+",
 	minus: "−",
+	"=": "=",
+	"/": "/",
 };
 
 export const formatChord = (chord: Chord): string => {

@@ -325,6 +325,7 @@
 						-->
 						<CobroMethodRows
 							v-if="cobroMode"
+							ref="cobroRowsRef"
 							:payments="visiblePaymentMethods"
 							:currency="invoice_doc?.currency"
 							:is-return="Boolean(invoice_doc?.is_return)"
@@ -717,7 +718,7 @@ import { peekArmedTender } from "./invoice/armedTender";
 import { resolvePaymentPrintFormatDoctypes } from "../../utils/paymentPrintDoctype";
 import { resolvePaymentPrintFormat } from "../../utils/paymentPrintFormat";
 import { parseBooleanSetting } from "../../utils/stock";
-import { focusFirstKeyboardTarget } from "../../utils/keyboardNavigation";
+import { focusFirstKeyboardTarget, isEditableElement } from "../../utils/keyboardNavigation";
 import { confirm as hapticConfirm } from "../../utils/haptics";
 import { seatSplitAvailable, seatSplitPlan } from "../../utils/splitBySeat";
 import { track } from "../../utils/telemetry";
@@ -748,6 +749,8 @@ import SplitEvenlyPanel from "./payments/SplitEvenlyPanel.vue";
 // LABELS (`cobroTaxLabel`, `cobroDiscountTotal`) that move no money.
 import CobroTenderPad from "./payments/cobro/CobroTenderPad.vue";
 import CobroMethodRows from "./payments/cobro/CobroMethodRows.vue";
+import { resolveTenderTarget } from "./payments/cobro/tenderTarget";
+import { scopedActionForEvent } from "../../shortcuts";
 import CobroTotalsFooter from "./payments/cobro/CobroTotalsFooter.vue";
 import CobroOnClose from "./payments/cobro/CobroOnClose.vue";
 import CobroChangeCard from "./payments/cobro/CobroChangeCard.vue";
@@ -861,6 +864,8 @@ const paymentsTouched = ref(false);
 let paymentSnapshotBeforeCredit = null;
 const backgroundStatusCheck = ref(null);
 const paymentVisible = ref(false);
+/** The Cobro method rows — the pay scope's ↑↓ arm through their own `pick`. */
+const cobroRowsRef = ref(null);
 const paymentRoot = ref(null);
 const paymentContainer = ref(null);
 const submitButton = ref(null);
@@ -2247,10 +2252,46 @@ const focusFirstPaymentTarget = () => {
 	return focusSubmitButton();
 };
 
+/**
+ * The pay screen OWNS the keyboard while it is open (2026-09-05 drill): under
+ * the anchored screen the item search kept the focus, so the tender pad's
+ * digits fed the scan detector and the pay scope's keys typed into a box
+ * nobody could see. On open the focus is taken to the first payment target,
+ * and any later grab by an editable outside the screen is answered the same
+ * way — `focusin` is the only hook that sees every thief.
+ */
+const isPayEditableFocused = () => {
+	const active = document.activeElement;
+	return Boolean(
+		isEditableElement(active) && paymentRoot.value && paymentRoot.value.contains(active),
+	);
+};
+const reclaimPayFocus = (event) => {
+	if (!paymentVisible.value) return;
+	const target = event?.target;
+	if (!(target instanceof HTMLElement) || !isEditableElement(target)) return;
+	if (paymentRoot.value && paymentRoot.value.contains(target)) return;
+	if (giftCardDialogOpen.value || cobroGiftActive.value) return;
+	target.blur();
+	focusFirstPaymentTarget();
+};
+watch(paymentVisible, (visible) => {
+	if (typeof document === "undefined") return;
+	if (visible) {
+		document.addEventListener("focusin", reclaimPayFocus);
+	} else {
+		document.removeEventListener("focusin", reclaimPayFocus);
+	}
+});
+onBeforeUnmount(() => {
+	if (typeof document !== "undefined") document.removeEventListener("focusin", reclaimPayFocus);
+});
+
 const handleShowPayment = () => {
 	paymentVisible.value = true;
 	nextTick(() => {
 		setTimeout(() => {
+			releaseActiveFocus();
 			focusFirstPaymentTarget();
 			if (queuedShortcutSubmit.value) {
 				const payload = queuedShortcutSubmit.value;
@@ -2855,7 +2896,47 @@ const handlePaymentShortcut = (event) => {
 		event.preventDefault();
 		event.stopPropagation();
 		submit(null, false, false);
+		return;
 	}
+
+	handlePayScopeKey(event);
+};
+
+/**
+ * The PAY scope of the keymap (2026-09-05): bare keys that only mean
+ * something while this screen is open, asked here and never by the document
+ * listener. ↑↓ arm the previous / next method through the rows' own `pick`,
+ * `=` puts the exact remaining amount on the armed method (the pad's «Exacto»),
+ * Esc is «Volver a la venta». An editable target keeps its keys: the gift-card
+ * capture is a real input and its Escape/arrows are its own.
+ */
+const handlePayScopeKey = (event) => {
+	// Only an editable INSIDE the pay screen keeps its keys (the gift-card
+	// capture). The item search under an anchored pay screen is not typing.
+	if (isPayEditableFocused()) return;
+	const action = scopedActionForEvent("pay", event);
+	if (!action) return;
+	const rows = Array.isArray(invoice_doc.value?.payments) ? invoice_doc.value.payments : [];
+	switch (action) {
+		case "pay.armPrevious":
+			cobroRowsRef.value?.pickRelative?.(-1);
+			break;
+		case "pay.armNext":
+			cobroRowsRef.value?.pickRelative?.(1);
+			break;
+		case "pay.exact": {
+			const target = resolveTenderTarget(rows);
+			if (target) set_full_amount(target, Boolean(invoice_doc.value?.is_return));
+			break;
+		}
+		case "pay.close":
+			cancel_payment();
+			break;
+		default:
+			return;
+	}
+	event.preventDefault();
+	event.stopPropagation();
 };
 
 const handleSubmitPaymentShortcut = ({ print = false } = {}) => {
@@ -3352,7 +3433,11 @@ const onClearInvoice = () => {
 
 onMounted(() => {
 	_shortcutHandlers.value.handlePaymentShortcut = handlePaymentShortcut.bind(this);
-	document.addEventListener("keydown", _shortcutHandlers.value.handlePaymentShortcut);
+	// CAPTURE, not bubble (2026-09-05): the register's spatial arrow navigation
+	// (`Pos.vue` → `moveFocusByArrow`, a bubble listener registered earlier)
+	// consumed ↓ before this handler saw it, so the pay scope's «arm the next
+	// method» never fired. While the pay screen is up it answers first.
+	document.addEventListener("keydown", _shortcutHandlers.value.handlePaymentShortcut, true);
 
 	measureShell();
 	nextTick(scheduleShellMeasure);
@@ -3405,7 +3490,7 @@ onBeforeUnmount(() => {
 	}
 
 	if (_shortcutHandlers.value.handlePaymentShortcut) {
-		document.removeEventListener("keydown", _shortcutHandlers.value.handlePaymentShortcut);
+		document.removeEventListener("keydown", _shortcutHandlers.value.handlePaymentShortcut, true);
 	}
 });
 

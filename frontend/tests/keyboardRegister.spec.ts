@@ -8,8 +8,12 @@ import {
 	describeKeymap,
 	resolveKeymap,
 	resolveRowShortcutAction,
+	resolveScopedShortcutAction,
 	resolveShortcutAction,
 } from "../src/posapp/shortcuts";
+import PaymentsSource from "../src/posapp/components/pos/Payments.vue?raw";
+import RowsSource from "../src/posapp/components/pos/payments/cobro/CobroMethodRows.vue?raw";
+import CobranzaSource from "../src/posapp/components/pos/payments/cobranza/CobranzaSurface.vue?raw";
 import { isSearchFieldPrimedForScan } from "../src/posapp/utils/keyboardScan";
 import { parseQtyPrefix, stripQtyPrefix } from "../src/posapp/utils/searchQtyPrefix";
 import RowSource from "../src/posapp/components/pos/invoice/CartItemRow.vue?raw";
@@ -38,7 +42,7 @@ const resolved = resolveKeymap(MUELLE_DEFAULT);
 
 describe("keymap v5 — the row scope", () => {
 	it("is a new revision, bound whole, with no clashes", () => {
-		expect(MUELLE_DEFAULT.version).toBe(5);
+		expect(MUELLE_DEFAULT.version).toBe(6);
 		expect(resolved.errors).toEqual([]);
 		expect(resolved.conflicts).toEqual([]);
 		expect(resolved.unbound).toEqual([]);
@@ -89,7 +93,17 @@ describe("keymap v5 — the row scope", () => {
 	});
 
 	it("draws the lines section on the cheat sheet, in the cashier's keys", () => {
-		expect(CATEGORY_ORDER).toEqual(["navigation", "cart", "lines", "customer", "payment", "documents", "app"]);
+		expect(CATEGORY_ORDER).toEqual([
+			"navigation",
+			"cart",
+			"lines",
+			"customer",
+			"payment",
+			"pay",
+			"collections",
+			"documents",
+			"app",
+		]);
 		const lines = describeKeymap(resolved).find((s) => s.category === "lines");
 		expect(lines?.label).toBe("Cart lines · with a line focused");
 		const chords = Object.fromEntries((lines?.entries ?? []).map((e) => [e.actionId, e.chords]));
@@ -100,6 +114,58 @@ describe("keymap v5 — the row scope", () => {
 		expect(chords["row.back"]).toEqual(["Esc"]);
 		const cart = describeKeymap(resolved).find((s) => s.category === "cart");
 		expect(cart?.entries.find((e) => e.actionId === "cart.focusRows")?.chords).toEqual(["Alt + ↓"]);
+	});
+});
+
+describe("keymap v6 — the pay and cobranza scopes", () => {
+	it("keeps bare keys inside the screen that owns them", () => {
+		// `=` on the pay screen is «exact»; nowhere else is it anything.
+		expect(resolveScopedShortcutAction("pay", key("=", "Equal"), resolved)).toBe("pay.exact");
+		expect(resolveShortcutAction(key("=", "Equal"), resolved)).toBeNull();
+		expect(resolveRowShortcutAction(key("=", "Equal"), resolved)).toBeNull();
+		// ↑↓ Esc are shared TOKENS across scopes, never shared actions.
+		expect(resolveScopedShortcutAction("pay", key("ArrowDown", "ArrowDown"), resolved)).toBe("pay.armNext");
+		expect(resolveScopedShortcutAction("cobranza", key("ArrowDown", "ArrowDown"), resolved)).toBe("cobranza.next");
+		expect(resolveScopedShortcutAction("pay", key("Escape", "Escape"), resolved)).toBe("pay.close");
+		expect(resolveScopedShortcutAction("cobranza", key("/", "Slash"), resolved)).toBe("cobranza.search");
+		expect(resolveScopedShortcutAction("cobranza", key("Enter", "Enter"), resolved)).toBe("cobranza.collect");
+		// A modified key is not a scoped key.
+		expect(resolveScopedShortcutAction("pay", key("=", "Equal", { ctrlKey: true }), resolved)).toBeNull();
+	});
+
+	it("opens Cobranza from anywhere with a chord the price check does not own", () => {
+		expect(resolveShortcutAction(key("c", "KeyC", { altKey: true, shiftKey: true }), resolved)).toBe("collections.open");
+		// Inherited loose rule: Alt+C ignores Shift, so the plain chord still
+		// reaches the price check — the two must stay distinct chords.
+		expect(resolveShortcutAction(key("c", "KeyC", { altKey: true }), resolved)).toBe("items.priceCheck");
+	});
+
+	it("draws the two sections on the cheat sheet", () => {
+		const sheet = describeKeymap(resolved);
+		const pay = sheet.find((s) => s.category === "pay");
+		const col = sheet.find((s) => s.category === "collections");
+		expect(pay?.entries.map((e) => e.actionId)).toEqual(["pay.armPrevious", "pay.armNext", "pay.exact", "pay.close"]);
+		expect(pay?.entries.find((e) => e.actionId === "pay.exact")?.chords).toEqual(["="]);
+		expect(col?.entries.map((e) => e.actionId)).toEqual([
+			"collections.open",
+			"cobranza.previous",
+			"cobranza.next",
+			"cobranza.collect",
+			"cobranza.search",
+			"cobranza.back",
+		]);
+		expect(col?.entries.find((e) => e.actionId === "collections.open")?.chords).toEqual(["Alt + Shift + C"]);
+	});
+
+	it("is asked by the surfaces that own the scopes", () => {
+		expect(PaymentsSource).toContain('scopedActionForEvent("pay", event)');
+		expect(PaymentsSource).toContain("cobroRowsRef.value?.pickRelative?.(1);");
+		expect(RowsSource).toContain("defineExpose({ pickRelative });");
+		expect(CobranzaSource).toContain('scopedActionForEvent("cobranza", event)');
+		expect(CobranzaSource).toContain('document.addEventListener("keydown", onSurfaceKeydown);');
+		expect(PaymentsSource).toContain('document.addEventListener("focusin", reclaimPayFocus);');
+		// Capture phase: the spatial arrow navigation must not eat ↓ first.
+		expect(PaymentsSource).toContain('document.addEventListener("keydown", _shortcutHandlers.value.handlePaymentShortcut, true);');
 	});
 });
 

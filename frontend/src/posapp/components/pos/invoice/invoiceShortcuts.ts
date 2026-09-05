@@ -185,6 +185,11 @@ export const INVOICE_SHORTCUT_EFFECTS: Record<string, ShortcutEffect> = {
 		this.eventBus.emit("open_destination", "expense");
 	},
 
+	"collections.open"(event) {
+		consumeEvent(event);
+		this.eventBus.emit("open_destination", "payments");
+	},
+
 	"invoice.openManagement"(event) {
 		consumeEvent(event);
 		this.eventBus.emit("open_destination", "invoices");
