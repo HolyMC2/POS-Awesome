@@ -4,6 +4,40 @@ All notable changes.
 
 ## Unreleased
 
+- **A sale queued offline now syncs even when the reconnect beats the boot
+  (09-05).** Re-running the desktop drill caught a fourth defect the first
+  pass missed: an offline sale that survived a reload stayed `pending` and
+  never synced when the network came back. `syncOfflineInvoices` read the
+  in-memory queue mirror (`getOfflineInvoices()`) and bailed at
+  `if (!invoices.length) return` BEFORE the Dexie-backed claim. After a reload
+  that mirror starts empty and is only refilled by `ensureOfflineQueueReady`
+  (`refreshAllQueueMemory`); a reconnect that lands while the reloaded page is
+  still booting drains once against the empty mirror, finds nothing, and —
+  the drain being edge-triggered with no periodic retry — never tries again.
+  The sale sat safe on disk but stopped leaving. Fix: the drain now
+  `await ensureOfflineQueueReady()` first, so the mirror reflects disk before
+  it decides there is nothing to sync. `offlineInvoiceReconcile.spec` pins it
+  (the drain must reach the claim even when the mirror starts empty). This is
+  «se sincroniza sola» — the bug is live on prod (`087831a25`) until the next
+  roll. Desktop drills A–E green on demo-abarrotes.lab, A draining in 35s.
+- **The phone can ring up a sale while offline (09-04).** Same drill as the
+  desktop one, on the MOVIL shell (390×844, coarse pointer): the offline
+  layer («Keep selling») was an absolutely positioned sheet over everything
+  above the dock with no way past it — it read «You can: Charge and print»
+  while no Browse card, cart row or keypad could be tapped for the whole
+  outage. `MobileOfflineOverlay` now opens as the sheet and folds, on
+  «Continue selling», into a slim strip above the dock that is the only
+  thing catching taps (`data-offline-collapsed`, `offline-overlay-strip`);
+  tapping the strip reopens the details, and a NEW outage opens the sheet
+  again. The strip's one number was also a literal 0 / "" in `Pos.vue`
+  («0 tickets» over a queue holding the day's sales) — it now reads the
+  write queue through `useOfflineQueue()` and refreshes on the sync store's
+  pending count and on every online/offline move. `mobileOfflineOverlay.spec`
+  (+4), `mobileOfflineOverlayWiring.spec` (source pin, node env — jsdom shims
+  `node:fs`), es.csv «Continue selling». New
+  `tests/e2e/offline-reconnect-sale.movil.spec.ts`: the five drills on the
+  phone (card taps, Cart primary, COLLECT AND CLOSE), with a hit-test that
+  names whatever sits over a card — green on demo-abarrotes.lab.
 - **The offline sale now actually syncs, and a lost ack no longer leaves the
   cashier holding the cart (09-04) — ON PROD both tenants, `b32a7071b →
   087831a25`, stamp `087831a255df`, Marco «push to prod».** The marketing claim («sigue cobrando
