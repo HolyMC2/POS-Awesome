@@ -18,8 +18,9 @@ All notable changes.
   `await ensureOfflineQueueReady()` first, so the mirror reflects disk before
   it decides there is nothing to sync. `offlineInvoiceReconcile.spec` pins it
   (the drain must reach the claim even when the mirror starts empty). This is
-  «se sincroniza sola» — the bug is live on prod (`087831a25`) until the next
-  roll. Desktop drills A–E green on demo-abarrotes.lab, A draining in 35s.
+  «se sincroniza sola». **ON PROD both tenants 09-05, `087831a25 →
+  1b3fc52096a6`, Marco «push to prod».** Desktop drills A–E green on
+  demo-abarrotes.lab, A draining in 35s.
 - **The phone can ring up a sale while offline (09-04).** Same drill as the
   desktop one, on the MOVIL shell (390×844, coarse pointer): the offline
   layer («Keep selling») was an absolutely positioned sheet over everything
@@ -37,7 +38,8 @@ All notable changes.
   `node:fs`), es.csv «Continue selling». New
   `tests/e2e/offline-reconnect-sale.movil.spec.ts`: the five drills on the
   phone (card taps, Cart primary, COLLECT AND CLOSE), with a hit-test that
-  names whatever sits over a card — green on demo-abarrotes.lab.
+  names whatever sits over a card — green on demo-abarrotes.lab. **ON PROD
+  both tenants 09-05, `1b3fc52096a6`, Marco «push to prod».**
 - **The offline sale now actually syncs, and a lost ack no longer leaves the
   cashier holding the cart (09-04) — ON PROD both tenants, `b32a7071b →
   087831a25`, stamp `087831a255df`, Marco «push to prod».** The marketing claim («sigue cobrando
