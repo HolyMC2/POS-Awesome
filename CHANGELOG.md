@@ -4,6 +4,38 @@ All notable changes.
 
 ## Unreleased
 
+- **Series y lotes — the register's own serial / IMEI and batch lookup (09-05),
+  ON LAB, prod pending «push to prod».** Owner: a sale was refused because the
+  IMEI in the cashier's hand had been «sold» two months earlier (an earlier
+  ticket consumed the wrong unit), and finding which serial of the same model
+  was still Active meant leaving for the desk's Serial No list. New rail
+  destination «Series y lotes» (first in the tools «Más» group; phone drawer
+  «More»; deep link `/lots?q=<IMEI>`): one search box over serials OR batches,
+  status tabs with server counts (En existencia / Vendido / Consumido…),
+  warehouse chips, keyboard navigation, and a story panel per row — a sold unit
+  shows its ticket, the customer, the total and the cashier with «Abrir
+  documento»; an in-stock unit gets «Vender esta unidad», which lands on the
+  ticket through the lot picker's own `lot:confirm` contract and returns to the
+  sale; a sold unit lists the SAME item's units still on the shelf with «Vender»
+  one tap away. Batches: FEFO order, expiry countdown, stock split per
+  warehouse, «Vender una de este lote». Backend `api/lot_lookup.py` (read-only,
+  scoped by the POS Profile's company, profile asserted against the session)
+  over a pure `lot_read_model.py` (21 unittest cases).
+  - **Desk line detail re-shaped.** The cart row's dialog kept the serial /
+    batch choice LAST, under three sections of greyed inputs, as an
+    autocomplete. The unit is now the FIRST card (chosen IMEIs as chips, «N de
+    M elegidos», pending/partial flagged) and its button opens the SAME lot
+    picker the catalogue tap and the phone line sheet use (`movil:edit-lots`),
+    the dialog stepping aside so the picker is not under it. Read-only stock
+    facts became a fact grid; qty/UdM/price/discounts sit on two rows with the
+    total large.
+  - Files: `posawesome/api/lot_lookup.py`, `lot_read_model.py`,
+    `test_lot_read_model.py`; `frontend/src/posapp/components/pos/lots/*`,
+    `services/lotLookupService.ts`, `invoice/ItemsTableExpandedRow.vue`,
+    `ItemsTable.vue`, `shell/railDestinations.ts`, `destinationRegistry.ts`,
+    `Navbar.vue`, `plugins/icons/mdiIconPaths.ts`, `translations/es.csv`;
+    specs `lotsModel`, `lotsSurface`, `lineDetailLots` + rail/navbar pins.
+
 - **MercadoPago + partial/split payments hardened across the register (09-05)
   — ON PROD both tenants, `1b3fc5209 → 37210bcc8150`, Marco «push to prod».**
   A run through the payments flows for Doco Ventas (MercadoPago Point on a
