@@ -111,6 +111,41 @@ class TestRestaurantOrders(RestaurantTestCase):
         self.assertEqual(second["name"], first["name"], "tap must open the order, not seat a second party")
         self.assertTrue(second["existing"])
 
+    def test_new_account_opens_a_second_cuenta_on_a_busy_table(self):
+        first = self._open(table=self.table_a, tab_name="Mesa · A")
+        second = self._open(table=self.table_a, tab_name="Mesa · B", new_account=1)
+
+        self.assertNotEqual(
+            second["name"],
+            first["name"],
+            "nueva cuenta must seat a SECOND party, not resolve to the first",
+        )
+        self.assertFalse(second["existing"])
+        self.assertEqual(second["table"], self.table_a)
+        self.assertEqual(
+            frappe.db.count(
+                "POS Table Order", {"table": self.table_a, "status": "Open"}
+            ),
+            2,
+            "the table now carries two open cuentas",
+        )
+
+    def test_new_account_open_is_still_idempotent_on_request_id(self):
+        request_id = uid("tbl-req")
+        first = self._open(client_request_id=request_id, table=self.table_a)
+        # A retried "nueva cuenta" tap with the same request id must not mint a
+        # third order — idempotency runs before the table check either way.
+        second = orders.open_table_order(
+            pos_profile=self.profile,
+            company=self.company,
+            client_request_id=request_id,
+            order_uid=uid("ord"),
+            table=self.table_a,
+            new_account=1,
+        )
+        self.assertEqual(second["name"], first["name"])
+        self.assertTrue(second["existing"])
+
     def test_open_without_table_is_a_named_tab(self):
         result = self._open(tab_name="Ana", table=None)
 

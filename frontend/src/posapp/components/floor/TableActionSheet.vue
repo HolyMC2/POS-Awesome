@@ -30,6 +30,19 @@
 					</span>
 					<span v-if="order.unsent_count" class="table-sheet__action-badge">{{ order.unsent_count }}</span>
 				</button>
+				<!-- Add yet another party to a table that already has two or more
+				     cuentas — the picker otherwise replaces the action rows. -->
+				<button
+					type="button"
+					class="table-sheet__action table-sheet__account"
+					data-test="table-sheet-new-account"
+					@click="pick('new-account')"
+				>
+					<v-icon icon="mdi-account-multiple-plus-outline" size="20" />
+					<span class="table-sheet__action-text">
+						<strong>{{ verticalStore.t("New account") }}</strong>
+					</span>
+				</button>
 			</div>
 
 			<div v-else class="table-sheet__actions">
@@ -61,7 +74,14 @@
  * because `<script setup>` may not carry ES exports — the parent needs the
  * union to type its handler.
  */
-export type TableSheetAction = "open" | "view" | "add-items" | "charge" | "clean" | "release";
+export type TableSheetAction =
+	| "open"
+	| "new-account"
+	| "view"
+	| "add-items"
+	| "charge"
+	| "clean"
+	| "release";
 </script>
 
 <script setup lang="ts">
@@ -188,6 +208,14 @@ const actions = computed<ActionRow[]>(() => {
 			icon: "mdi-receipt-text-outline",
 			label: verticalStore.t("View order"),
 			badge: unsent.value || undefined,
+		});
+		// A second party at the same table: open THEIR own cuenta, settled and
+		// printed on its own invoice. `openNewAccount` skips the table dedupe
+		// that "Add items"/"View order" ride on.
+		rows.push({
+			id: "new-account",
+			icon: "mdi-account-multiple-plus-outline",
+			label: verticalStore.t("New account"),
 		});
 		if (lines.value > 0) {
 			rows.push({ id: "charge", icon: "mdi-cash-register", label: verticalStore.t("Charge") });

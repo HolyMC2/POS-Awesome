@@ -123,12 +123,19 @@ def _current_user_shift(pos_profile):
     )
 
 
-def _dedupe_open(pos_profile, client_request_id, order_uid, table):
+def _dedupe_open(
+    pos_profile, client_request_id, order_uid, table, allow_table_dedupe=True
+):
     """Return an existing order this open call should resolve to, or None.
 
     Three ways the same tap arrives twice: a retried request (same
     client_request_id), a replayed queue entry (same order_uid), and a second
     waiter tapping a table that is already busy (tap-to-open).
+
+    `allow_table_dedupe=False` keeps the first two (idempotency: a retry or a
+    replayed queue entry must never mint a second order) but skips the third,
+    so an explicit "nueva cuenta" opens a SECOND order on an already-busy
+    table — the split-bill case where two parties share one table.
     """
     if client_request_id:
         name = frappe.db.get_value(
@@ -144,7 +151,7 @@ def _dedupe_open(pos_profile, client_request_id, order_uid, table):
         if name:
             return frappe.get_doc("POS Table Order", name)
 
-    if table:
+    if table and allow_table_dedupe:
         names = frappe.get_all(
             "POS Table Order",
             filters=open_order_filters(table=table),
@@ -170,11 +177,17 @@ def open_table_order(
     service_type=None,
     customer=None,
     source_device=None,
+    new_account=None,
 ):
     """Seat a table (or open a named tab). Tapping IS the transition.
 
     There is no "seat party" dialog and no status dropdown: one open order on
     the table → return it; none → create one.
+
+    `new_account=1` opens a SECOND cuenta on an already-busy table (two parties
+    sharing a table, each settling to its own invoice) instead of resolving to
+    the table's existing order. Retries/replays are still deduped by
+    client_request_id / order_uid, so the extra cuenta is minted at most once.
     """
     from posawesome.posawesome.api._scope import (
         assert_company,
@@ -190,7 +203,13 @@ def open_table_order(
     if table and not frappe.db.exists("POS Table", table):
         frappe.throw(_("Table {0} not found.").format(table), frappe.DoesNotExistError)
 
-    existing = _dedupe_open(pos_profile, client_request_id, order_uid, table)
+    existing = _dedupe_open(
+        pos_profile,
+        client_request_id,
+        order_uid,
+        table,
+        allow_table_dedupe=not cint(new_account),
+    )
     if existing:
         return order_payload(existing, existing=True)
 

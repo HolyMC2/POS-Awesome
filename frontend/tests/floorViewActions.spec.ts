@@ -49,6 +49,7 @@ const floorStore = reactive({
 	cancelTransfer: vi.fn(),
 	markClean: vi.fn(async () => undefined),
 	openOrCreate: vi.fn(async () => order),
+	openNewAccount: vi.fn(async () => order),
 	resumeOrder: vi.fn(async () => order),
 	openTab: vi.fn(async () => order),
 	flushCartSync: vi.fn(async () => undefined),
@@ -106,6 +107,7 @@ vi.mock("../src/posapp/components/floor/TableActionSheet.vue", async () => {
 				return () => h("div", { "data-test": "sheet", "data-open": String(props.modelValue) }, [
 					h("button", { "data-test": "sheet-add", onClick: () => emit("action", "add-items", props.table) }),
 					h("button", { "data-test": "sheet-view", onClick: () => emit("action", "view", props.table) }),
+					h("button", { "data-test": "sheet-new-account", onClick: () => emit("action", "new-account", props.table) }),
 					h("button", { "data-test": "sheet-charge", onClick: () => emit("action", "charge", props.table) }),
 					h("button", { "data-test": "sheet-release", onClick: () => emit("action", "release", props.table) }),
 					h("button", { "data-test": "sheet-order", onClick: () => emit("order", {
@@ -196,6 +198,20 @@ describe("FloorView action routing", () => {
 		await wrapper.find("[data-test='sheet-view']").trigger("click");
 
 		expect(eventBus.emit).toHaveBeenCalledWith("floor_order_opened", { order_uid: "ord-a" });
+	});
+
+	it("routes New account to a second cuenta, then the item list", async () => {
+		const { wrapper, eventBus } = mountFloor();
+		await wrapper.find("[data-test='plan-table']").trigger("click");
+		await wrapper.find("[data-test='sheet-new-account']").trigger("click");
+		await flushPromises();
+
+		// The split-bill gesture: never the table's existing order.
+		expect(floorStore.openNewAccount).toHaveBeenCalledWith(
+			expect.objectContaining({ name: table.name }),
+		);
+		expect(floorStore.openOrCreate).not.toHaveBeenCalled();
+		expect(eventBus.emit).toHaveBeenCalledWith("set_selector_view", "items");
 	});
 
 	it("hydrates the exact split account the operator selected", async () => {

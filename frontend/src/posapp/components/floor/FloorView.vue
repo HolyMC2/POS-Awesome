@@ -962,6 +962,15 @@ async function onSheetAction(action: TableSheetAction, table: TableRow) {
 		}
 		return;
 	}
+	// A second party at the same table: open THEIR cuenta (a fresh order, never
+	// the table's existing one) and land on the item list to start ringing it.
+	if (action === "new-account") {
+		const startedAt = floorActionStart();
+		const order = await floorStore.openNewAccount(table);
+		floorActionEnd(startedAt);
+		if (order) goToItems();
+		return;
+	}
 	// openTable carries its own mark — every other entry point (plan tile,
 	// jump pad, tabs rail) funnels through it too.
 	const opened = await openTable(table, action === "view" ? "cart" : "items");

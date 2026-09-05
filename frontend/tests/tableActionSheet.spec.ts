@@ -99,6 +99,7 @@ describe("TableActionSheet", () => {
 		expect(actionIds(wrapper)).toEqual([
 			"table-sheet-add-items",
 			"table-sheet-view",
+			"table-sheet-new-account",
 			"table-sheet-charge",
 		]);
 		expect(wrapper.text()).toContain("Occupied");
@@ -132,6 +133,7 @@ describe("TableActionSheet", () => {
 		expect(actionIds(mountSheet(table()))).toEqual([
 			"table-sheet-add-items",
 			"table-sheet-view",
+			"table-sheet-new-account",
 			"table-sheet-release",
 		]);
 	});
@@ -198,6 +200,8 @@ describe("TableActionSheet", () => {
 		expect(actionIds(wrapper)).toEqual([
 			"table-sheet-order-ord-a",
 			"table-sheet-order-ord-b",
+			// A third party can still open their own cuenta from the picker.
+			"table-sheet-new-account",
 		]);
 		expect(wrapper.text()).toContain("2 open accounts");
 		expect(wrapper.text()).not.toContain("$200.00");

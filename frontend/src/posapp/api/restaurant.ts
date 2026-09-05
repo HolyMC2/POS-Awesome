@@ -214,6 +214,7 @@ export async function openTableOrder(p: OpenOrderParams): Promise<OrderRow> {
 			guest_count: p.guestCount ?? null,
 			service_type: p.serviceType ?? null,
 			customer: p.customer ?? null,
+			new_account: p.newAccount ? 1 : 0,
 		},
 	});
 

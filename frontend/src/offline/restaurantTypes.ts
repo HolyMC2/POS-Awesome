@@ -133,6 +133,12 @@ export interface OpenOrderParams {
 	customer?: string | null;
 	/** Supply to re-open a known uid; omitted mints a fresh UUID. */
 	orderUid?: string;
+	/**
+	 * Open a SECOND cuenta on an already-busy table instead of resolving to the
+	 * table's existing order — two parties sharing one table, each settling to
+	 * its own invoice. Retries stay deduped by orderUid.
+	 */
+	newAccount?: boolean;
 }
 
 export interface UpdateOrderParams {

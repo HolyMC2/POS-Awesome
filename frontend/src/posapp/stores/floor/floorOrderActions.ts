@@ -119,6 +119,39 @@ export const createOrderActions = (deps: OrderActionDeps) => {
 		}
 	};
 
+	/**
+	 * Open a SECOND cuenta on an already-busy table (split bill). Unlike
+	 * `openOrCreate`, it never resolves to the table's existing order — the
+	 * server mints a new one because `newAccount` skips the table dedupe. The
+	 * optional label rides on `tab_name` so the account picker can name it.
+	 */
+	const openNewAccount = async (
+		table: TableRow,
+		tabName?: string | null,
+	): Promise<OrderRow | null> => {
+		deps.markSyncing(table.name, true);
+		try {
+			const opened = (await restaurantApi.openTableOrder({
+				posProfile: deps.posProfile.value,
+				company: deps.company.value,
+				orderUid: newUid("ord"),
+				table: table.name,
+				guestCount: table.seats || null,
+				tabName: tabName || null,
+				newAccount: true,
+			})) as OrderRow;
+			if (refuseIfSettling(opened)) return null;
+			const order = await withLines(opened);
+			adopt(order);
+			return order;
+		} catch (err: any) {
+			deps.onError(err?.message || String(err));
+			return null;
+		} finally {
+			deps.markSyncing(table.name, false);
+		}
+	};
+
 	/** Table-less order for the cafetería tab rail. */
 	const openTab = async (tabName: string): Promise<OrderRow | null> => {
 		try {
@@ -273,6 +306,7 @@ export const createOrderActions = (deps: OrderActionDeps) => {
 
 	return {
 		openOrCreate,
+		openNewAccount,
 		openTab,
 		resumeOrder,
 		settleActiveOrder,
