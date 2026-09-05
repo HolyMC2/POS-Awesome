@@ -1,17 +1,22 @@
-// MP-INTEGRATION-POINT (sale checkout) — hard gate.
+// MP-INTEGRATION-POINT — hard terminal-charge gate.
 //
-// Isolated MercadoPago module: blocks finalizing a POS *sale* until the
-// MercadoPago Point terminal actually approves the charge. Will NOT be
-// upstreamed — keep all MP logic in this file + MpPointSaleGateDialog.vue.
+// Isolated MercadoPago module: blocks a POS money action until the MercadoPago
+// Point terminal actually approves the charge. Will NOT be upstreamed — keep all
+// MP logic in this file + MpPointSaleGateDialog.vue.
+//
+// Two entry points, one charge machinery (so there is exactly ONE
+// createPointOrder call site — see mpSingleChargePath.spec):
+//   • ensureChargedBeforeFinalize() — the SALE checkout. Charges the sum of the
+//     MercadoPago Point tender rows on the draft invoice before it is submitted.
+//   • ensureChargedForInvoice({ invoiceName, amount }) — the COLLECT-on-account
+//     tool. Charges a given amount against ONE existing outstanding invoice
+//     before its Payment Entry is created.
 //
 // Gating: reads frappe.boot.mercadopago.enabled + the active POS Profile
-// mp_point_enabled. No-op (returns true) when the connector is off or the sale
-// has no MercadoPago Point amount, so retail /
-// mumu profiles see zero behavior change.
-//
-// Flow: validateSubmission() → ensureChargedBeforeFinalize() → submitInvoice().
-// The terminal charge is keyed to the draft invoice name (external_reference),
-// so the connector auto-matches the booked payment to this exact invoice.
+// mp_point_enabled. No-op (returns true) when the connector is off or there is
+// no MercadoPago Point amount, so retail / mumu profiles see zero behavior
+// change. The charge is keyed to the invoice name (external_reference), so the
+// connector auto-matches the booked payment to that exact invoice.
 import { reactive, onBeforeUnmount } from "vue";
 import {
 	createPointOrder,
@@ -67,6 +72,15 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 	// Pending sale context while the cashier picks a terminal ("choosing").
 	let pendingInvoice: string | null = null;
 	let pendingAmount = 0;
+
+	// What the current charge is against. `saleDoc` is set only for the sale
+	// checkout (so an override can stamp its remarks); the collect flow charges
+	// an existing invoice by name with no draft doc in hand.
+	let chargeTarget: {
+		invoiceName: string;
+		invoiceDoctype: string;
+		saleDoc: any | null;
+	} | null = null;
 
 	let pollTimer: ReturnType<typeof setTimeout> | null = null;
 	let deadline = 0;
@@ -248,7 +262,10 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 	): Promise<void> => {
 		setPhase("sending", __("Enviando a la terminal…"));
 		try {
-			const invoice_doctype = opts.getInvoiceDoc()?.doctype || "Sales Invoice";
+			const invoice_doctype =
+				chargeTarget?.invoiceDoctype ||
+				opts.getInvoiceDoc()?.doctype ||
+				"Sales Invoice";
 			const res: any = await createPointOrder({ pos_invoice, amount, terminal_id, invoice_doctype });
 			if (!res || !res.ok || !res.order || !res.order.name) {
 				terminalFailed((res && res.order && res.order.error_message) || __("No se pudo enviar a la terminal"));
@@ -295,9 +312,31 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 		void dispatchToTerminal(pendingInvoice, pendingAmount, terminal_id);
 	}
 
-	// PUBLIC: call from the finalize path. Resolves true when it's safe to
-	// finalize the sale (terminal approved, nothing to charge, or supervisor
-	// override), false when the cashier cancelled.
+	// The shared charge runner behind both public entries. Opens the modal and
+	// resolves true on approval / override, false on cancel or unmount.
+	function runCharge(target: {
+		invoiceName: string;
+		amount: number;
+		currency: string;
+		invoiceDoctype: string;
+		saleDoc: any | null;
+	}): Promise<boolean> {
+		chargeTarget = {
+			invoiceName: target.invoiceName,
+			invoiceDoctype: target.invoiceDoctype,
+			saleDoc: target.saleDoc,
+		};
+		state.amount = target.amount;
+		state.currency = target.currency || "";
+		return new Promise<boolean>((resolve) => {
+			resolver = resolve;
+			void start(target.invoiceName, target.amount);
+		});
+	}
+
+	// PUBLIC (sale checkout): call from the finalize path. Resolves true when
+	// it's safe to finalize the sale (terminal approved, nothing to charge, or
+	// supervisor override), false when the cashier cancelled.
 	async function ensureChargedBeforeFinalize(): Promise<boolean> {
 		if (!enabled()) return true;
 		const due = pointAmountDue();
@@ -312,18 +351,49 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 			return false;
 		}
 
-		state.amount = due;
-		state.currency = doc?.currency || "";
-		return new Promise<boolean>((resolve) => {
-			resolver = resolve;
-			void start(pos_invoice, due);
+		return runCharge({
+			invoiceName: pos_invoice,
+			amount: due,
+			currency: doc?.currency || "",
+			invoiceDoctype: doc?.doctype || "Sales Invoice",
+			saleDoc: doc,
+		});
+	}
+
+	// PUBLIC (collect-on-account): charge a given amount against ONE existing
+	// outstanding invoice before its Payment Entry is booked. No-op (true) when
+	// MP is off or the amount is zero — the caller only invokes this when a
+	// MercadoPago Point payment row is present. Returns false (blocks the
+	// collection) if the cashier cancels or no invoice name is available to
+	// match on.
+	async function ensureChargedForInvoice(args: {
+		invoiceName: string | null | undefined;
+		amount: number;
+		currency?: string;
+		invoiceDoctype?: string;
+	}): Promise<boolean> {
+		if (!enabled()) return true;
+		if (!(Number(args.amount) > 0)) return true;
+		if (!args.invoiceName) {
+			frappe.msgprint(
+				__(
+					"Selecciona una sola factura para cobrar con la terminal MercadoPago",
+				),
+			);
+			return false;
+		}
+		return runCharge({
+			invoiceName: args.invoiceName,
+			amount: Number(args.amount),
+			currency: args.currency || "",
+			invoiceDoctype: args.invoiceDoctype || "Sales Invoice",
+			saleDoc: null,
 		});
 	}
 
 	// Dialog actions ────────────────────────────────────────────────
 	function retry(): void {
-		const doc = opts.getInvoiceDoc();
-		const pos_invoice = doc?.name;
+		const pos_invoice = chargeTarget?.invoiceName;
 		if (!pos_invoice) return;
 		const old = state.orderName;
 		if (old) void cancelPointOrder(old).catch(() => {});
@@ -349,26 +419,30 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 	// device). Stamps the invoice so the override is auditable.
 	function override(): void {
 		if (!opts.isSupervisor()) return;
-		const doc = opts.getInvoiceDoc();
-		if (doc) {
+		// Sale checkout: stamp the draft's remarks so the override is visible on
+		// the ticket. The collect flow has no draft doc — only the audit row.
+		const saleDoc = chargeTarget?.saleDoc;
+		if (saleDoc) {
 			const who = frappe?.session?.user || "?";
 			const stamp = __("[MP-OVERRIDE] Terminal sin confirmar — autorizado por {0}", [who]);
-			doc.remarks = doc.remarks ? `${doc.remarks}\n${stamp}` : stamp;
-			// Server-side audit row (Comment on the invoice timeline). The
-			// remarks stamp above is client-editable after the fact; the
-			// Comment is server-stamped (user + time). Fire-and-forget —
-			// the sale must never block on audit plumbing.
+			saleDoc.remarks = saleDoc.remarks ? `${saleDoc.remarks}\n${stamp}` : stamp;
+		}
+		// Server-side audit row (Comment on the invoice timeline), server-stamped
+		// (user + time), against the charge target in either flow. Fire-and-
+		// forget — the money action must never block on audit plumbing.
+		const invoiceName = chargeTarget?.invoiceName || saleDoc?.name || null;
+		if (invoiceName) {
 			try {
 				frappe.call({
 					method: "posawesome.posawesome.api.mp_audit.log_mp_override",
 					args: {
-						invoice_name: doc.name || null,
-						doctype: doc.doctype || "Sales Invoice",
+						invoice_name: invoiceName,
+						doctype: chargeTarget?.invoiceDoctype || saleDoc?.doctype || "Sales Invoice",
 					},
 					freeze: false,
 				});
 			} catch {
-				/* never block the sale on audit */
+				/* never block on audit */
 			}
 		}
 		stopPolling();
@@ -387,8 +461,10 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 	return {
 		state,
 		enabled,
+		pointMop,
 		pointAmountDue,
 		ensureChargedBeforeFinalize,
+		ensureChargedForInvoice,
 		retry,
 		cancel,
 		override,

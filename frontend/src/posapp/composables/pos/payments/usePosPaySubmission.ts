@@ -1,6 +1,11 @@
 import { ref, type Ref } from "vue";
 import { isOffline, saveOfflinePayment } from "../../../../offline/index";
 import { ensurePaymentClientRequestId } from "../../../../offline/idempotency";
+// MP-INTEGRATION-POINT: the collect-on-account tool drives the MercadoPago Point
+// terminal through the SAME gate the sale checkout uses (one createPointOrder
+// call site — see mpSingleChargePath.spec).
+import { useMpPointSaleGate } from "./useMpPointSaleGate";
+import { useEmployeeStore } from "../../../stores/employeeStore";
 
 declare const frappe: any;
 declare const __: (_text: string, _args?: any[]) => string;
@@ -73,6 +78,54 @@ export function usePosPaySubmission({
 	autoReconcile,
 }: PosPaySubmissionArgs) {
 	const isSubmitting = ref(false);
+
+	// MP-INTEGRATION-POINT: a terminal-charge gate scoped to this collect
+	// surface. No draft doc here — it charges a chosen outstanding invoice by
+	// name. No-op (enabled() false) for profiles without MercadoPago Point.
+	const employeeStore = useEmployeeStore();
+	const mpGate = useMpPointSaleGate({
+		getInvoiceDoc: () => null,
+		getPosProfile: () => posProfile.value,
+		isSupervisor: () => Boolean(employeeStore.currentCashier?.is_supervisor),
+	});
+
+	// Charge the MercadoPago Point portion of a collection on the terminal
+	// before any Payment Entry is booked. Returns true to proceed (nothing to
+	// charge, or the terminal approved), false to abort (offline, no single
+	// invoice to match, or the cashier cancelled). MERCADOPAGO one-invoice
+	// rule: the connector matches by external_reference = invoice name, so a
+	// terminal collection must target exactly ONE selected invoice.
+	async function chargeMercadoPagoIfNeeded(): Promise<boolean> {
+		if (!mpGate.enabled()) return true;
+		// Only a "Receive" collection drives the customer's card terminal; a
+		// supplier "Pay" never should, so never charge it there.
+		if ((paymentType?.value || "Receive") !== "Receive") return true;
+		const mopName = mpGate.pointMop();
+		const mpAmount = payment_methods.value
+			.filter((m: any) => m?.mode_of_payment === mopName)
+			.reduce((acc: number, m: any) => acc + (flt(m?.amount) || 0), 0);
+		if (!(mpAmount > 0)) return true;
+
+		if (isOffline()) {
+			frappe.msgprint(
+				__("The MercadoPago terminal can't be charged while offline."),
+			);
+			return false;
+		}
+		if (selected_invoices.value.length !== 1) {
+			frappe.msgprint(
+				__("A MercadoPago terminal charge needs a single selected invoice."),
+			);
+			return false;
+		}
+		const target = selected_invoices.value[0] || {};
+		return mpGate.ensureChargedForInvoice({
+			invoiceName: target.name,
+			amount: mpAmount,
+			currency: invoiceTotalCurrency.value,
+			invoiceDoctype: target.doctype || "Sales Invoice",
+		});
+	}
 
 	async function processPayment({
 		printAfter = false,
@@ -174,6 +227,13 @@ export function usePosPaySubmission({
 			};
 			ensurePaymentClientRequestId(payload);
 
+			// MP-INTEGRATION-POINT: drive the terminal for the MercadoPago Point
+			// portion BEFORE booking. If it isn't approved (or can't run), abort
+			// so no Payment Entry is created for money the terminal never took.
+			if (!(await chargeMercadoPagoIfNeeded())) {
+				return;
+			}
+
 			if (isOffline()) {
 				try {
 					await saveOfflinePayment({ args: { payload } });
@@ -267,5 +327,8 @@ export function usePosPaySubmission({
 	return {
 		isSubmitting,
 		processPayment,
+		// MP-INTEGRATION-POINT: PayView mounts <MpPointSaleGateDialog :gate> with
+		// this so the terminal modal (status / retry / cancel / choose) renders.
+		mpGate,
 	};
 }

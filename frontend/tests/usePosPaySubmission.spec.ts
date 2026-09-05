@@ -8,8 +8,40 @@ vi.mock("../src/offline/index", () => ({
 	saveOfflinePayment: vi.fn(),
 }));
 
+// MP-INTEGRATION-POINT: the collect flow instantiates the terminal gate + reads
+// the cashier. Mock both so the composable runs without Pinia / a component, and
+// so a test can drive the MercadoPago path (enabled, approve/cancel).
+const { mpEnabled, ensureChargedForInvoice, cashier } = vi.hoisted(() => ({
+	mpEnabled: vi.fn(() => false),
+	ensureChargedForInvoice: vi.fn(async () => true),
+	cashier: { value: null as any },
+}));
+vi.mock("../src/posapp/stores/employeeStore", () => ({
+	useEmployeeStore: () => ({
+		get currentCashier() {
+			return cashier.value;
+		},
+	}),
+}));
+vi.mock("../src/posapp/composables/pos/payments/useMpPointSaleGate", () => ({
+	useMpPointSaleGate: () => ({
+		enabled: mpEnabled,
+		pointMop: () => "MercadoPago Point",
+		ensureChargedForInvoice,
+		state: { open: false },
+	}),
+}));
+
+const { isOffline } = await import("../src/offline/index");
+
 describe("usePosPaySubmission", () => {
 	beforeEach(() => {
+		mpEnabled.mockClear();
+		mpEnabled.mockReturnValue(false);
+		ensureChargedForInvoice.mockClear();
+		ensureChargedForInvoice.mockResolvedValue(true);
+		cashier.value = null;
+		(isOffline as any).mockReturnValue(false);
 		(globalThis as any).__ = (value: string) => value;
 		(globalThis as any).flt = (value: unknown) => Number(value || 0);
 		(globalThis as any).frappe = {
@@ -422,5 +454,88 @@ describe("usePosPaySubmission", () => {
 
 		const callConfig = (globalThis as any).frappe.call.mock.calls[0][0];
 		expect(callConfig.args.payload.client_request_id).toEqual(expect.any(String));
+	});
+
+	// MP-INTEGRATION-POINT: MercadoPago Point collection ────────────────────
+	function collectArgs(overrides: any = {}) {
+		return {
+			customerName: ref("Customer 900"),
+			company: ref("Test Company"),
+			posProfile: ref({ name: "Main POS", mp_point_enabled: 1 }),
+			posOpeningShift: ref({ name: "POS-OPEN-0001" }),
+			exchangeRate: ref(1),
+			invoiceTotalCurrency: ref("MXN"),
+			referenceNo: ref(""),
+			referenceDate: ref(""),
+			autoAllocatePaymentAmount: ref(false),
+			payment_methods: ref([
+				{ mode_of_payment: "MercadoPago Point", amount: 57 },
+			]),
+			selected_invoices: ref([
+				{ name: "ACC-SINV-0001", outstanding_amount: 57 },
+			]),
+			selected_payments: ref([]),
+			selected_mpesa_payments: ref([]),
+			total_selected_invoices: ref(57),
+			total_selected_payments: ref(0),
+			total_selected_mpesa_payments: ref(0),
+			total_payment_methods: ref(57),
+			clearSelections: vi.fn(),
+			resetPaymentMethodAmounts: vi.fn(),
+			load_print_page: vi.fn(),
+			eventBus: { emit: vi.fn() },
+			get_outstanding_invoices: vi.fn(),
+			get_unallocated_payments: vi.fn(),
+			get_draft_mpesa_payments_register: vi.fn(),
+			set_mpesa_search_params: vi.fn(),
+			autoReconcile: vi.fn(),
+			...overrides,
+		};
+	}
+
+	it("charges the terminal for the MercadoPago amount before booking, then submits", async () => {
+		mpEnabled.mockReturnValue(true);
+		(globalThis as any).frappe.call.mockImplementation(({ callback }: any) =>
+			callback({ message: { new_payments_entry: [{ name: "ACC-PAY-9" }] } }),
+		);
+		const { processPayment } = usePosPaySubmission(collectArgs());
+		await processPayment();
+		expect(ensureChargedForInvoice).toHaveBeenCalledWith(
+			expect.objectContaining({ invoiceName: "ACC-SINV-0001", amount: 57 }),
+		);
+		expect((globalThis as any).frappe.call).toHaveBeenCalledTimes(1);
+	});
+
+	it("blocks a MercadoPago terminal collection that spans more than one invoice", async () => {
+		mpEnabled.mockReturnValue(true);
+		const { processPayment } = usePosPaySubmission(
+			collectArgs({
+				selected_invoices: ref([
+					{ name: "ACC-SINV-0001", outstanding_amount: 30 },
+					{ name: "ACC-SINV-0002", outstanding_amount: 27 },
+				]),
+			}),
+		);
+		await processPayment();
+		expect(ensureChargedForInvoice).not.toHaveBeenCalled();
+		expect((globalThis as any).frappe.call).not.toHaveBeenCalled();
+		expect((globalThis as any).frappe.msgprint).toHaveBeenCalled();
+	});
+
+	it("does not book the Payment Entry when the terminal charge is not approved", async () => {
+		mpEnabled.mockReturnValue(true);
+		ensureChargedForInvoice.mockResolvedValue(false);
+		const { processPayment } = usePosPaySubmission(collectArgs());
+		await processPayment();
+		expect((globalThis as any).frappe.call).not.toHaveBeenCalled();
+	});
+
+	it("refuses a MercadoPago terminal collection while offline", async () => {
+		mpEnabled.mockReturnValue(true);
+		(isOffline as any).mockReturnValue(true);
+		const { processPayment } = usePosPaySubmission(collectArgs());
+		await processPayment();
+		expect(ensureChargedForInvoice).not.toHaveBeenCalled();
+		expect((globalThis as any).frappe.call).not.toHaveBeenCalled();
 	});
 });

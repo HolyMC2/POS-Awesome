@@ -207,6 +207,10 @@ const SOURCE_DEFECTS = new Map<string, string>([
 		'English source: "Save the sale before charging on the terminal"',
 	],
 	[
+		"Selecciona una sola factura para cobrar con la terminal MercadoPago",
+		'English source: "Select a single invoice to charge on the MercadoPago terminal"',
+	],
+	[
 		"[MP-OVERRIDE] Terminal sin confirmar — autorizado por {0}",
 		'English source: "[MP-OVERRIDE] Terminal unconfirmed — authorised by {0}"',
 	],

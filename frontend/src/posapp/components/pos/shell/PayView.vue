@@ -207,6 +207,9 @@
 				</v-card>
 			</v-col>
 		</v-row>
+		<!-- MP-INTEGRATION-POINT: terminal-charge modal for a MercadoPago Point
+		     collection (status / retry / cancel / choose terminal). -->
+		<MpPointSaleGateDialog :gate="mpGate" />
 	</div>
 </template>
 
@@ -246,6 +249,8 @@ import { getValidCachedOpeningForCurrentUser } from "../../../utils/openingCache
 import { usePosPayData } from "../../../composables/pos/payments/usePosPayData";
 import { usePosPaySelection } from "../../../composables/pos/payments/usePosPaySelection";
 import { usePosPaySubmission } from "../../../composables/pos/payments/usePosPaySubmission";
+// MP-INTEGRATION-POINT: terminal-charge modal, shared with the sale checkout.
+import MpPointSaleGateDialog from "../../pos_pay/MpPointSaleGateDialog.vue";
 import {
 	getAllowedPartyTypes,
 	normalizePartyTypeForPaymentType,
@@ -300,6 +305,7 @@ export default {
 		PayActionButtons,
 		PayPartySelector,
 		AppLoadingOverlay,
+		MpPointSaleGateDialog,
 	},
 	setup() {
 		const { proxy } = getCurrentInstance();
@@ -656,7 +662,7 @@ export default {
 		);
 		const paymentsLoadingMessage = computed(() => buildPaymentRouteLoadingMessage(loadProgress.value));
 
-		const { isSubmitting, processPayment } = usePosPaySubmission({
+		const { isSubmitting, processPayment, mpGate } = usePosPaySubmission({
 			customerName: customer_name,
 			partyName: customer_name,
 			partyType,
@@ -1311,6 +1317,7 @@ export default {
 			clearSelections,
 			isSubmitting,
 			processPayment,
+			mpGate,
 			invoiceTotalCurrency,
 			paymentTotalCurrency,
 			mpesaTotalCurrency,
