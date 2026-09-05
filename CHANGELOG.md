@@ -4,6 +4,41 @@ All notable changes.
 
 ## Unreleased
 
+- **The keyboard-driven register — keymap v5 (09-05), ON LAB, prod pending
+  «push to prod».** Owner: «people using SICAR fast af using keyboard only for
+  searching, selecting, editing prices, discount… lets add more keyboard driven
+  actions», and «Alt+3 should select the searchbar and clean it».
+  - **Alt+3 clears the box on the way in** (term, `3*` multiplier, highlight)
+    so the chord means «ready for the next search».
+  - **The multiplier `3*`:** typing `3*coca` (or `3*` and then a beep) adds
+    three. The live filter, the search dispatch and the scanner primer all
+    read the same prefix (`utils/searchQtyPrefix.ts`); the quantity lands in
+    the selector's «Cantidad» field the add path already uses.
+  - **The row scope:** a cart line is now a keyboard target. **Alt+↓** lands
+    on the last line; with a line focused, **↑ ↓** walk the cart, **+ −**
+    (row or numpad) change its quantity, **Q** types it, **P** opens the
+    price, **D** the line discount %, **S** the serial/batch picker, **Enter**
+    the line detail, **Supr** removes it and **Esc** returns to a cleared
+    search box. Bare keys fire ONLY from a focused line (`ShortcutScope`
+    «row», strict about modifiers) — the document listener never sees them,
+    so a `p` typed in the search box stays a p. The focused line wears the
+    accent rail so «which line will + act on» is never a guess.
+  - **Alt+W** edits the line discount % (cycles rows on repeat, like Alt+Q/R).
+  - Two things the mirror drill caught and fixed: on limit-search profiles
+    (Doco Ventas) Enter re-ran the server search even with a result
+    highlighted, so ↓ then Enter never added anything — the highlighted row
+    now wins on every profile; and the type-anywhere-to-search listener stole
+    bare keys off a focused cart line, so `p` jumped to the search box
+    instead of opening the price — a focused line now keeps its keys.
+  - The cheat sheet (Alt+H) gains a «Líneas del carrito · con una línea
+    enfocada» section, in the cashier's keys (↑ ↓ + − Supr Esc).
+  - Files: `shortcuts/{actions,keymap,engine,index}.ts`,
+    `utils/searchQtyPrefix.ts`, `utils/keyboardScan.ts`,
+    `composables/pos/items/useItemsSelectorSearch.ts`, `stores/uiStore.ts`,
+    `components/pos/items/ItemsSelector.vue`,
+    `components/pos/invoice/{invoiceShortcuts.ts,CartItemRow.vue,items-table-styles.css}`,
+    `translations/es.csv`; specs `keyboardRegister` + engine/effects pins.
+
 - **Series y lotes — the register's own serial / IMEI and batch lookup (09-05),
   ON LAB, prod pending «push to prod».** Owner: a sale was refused because the
   IMEI in the cashier's hand had been «sold» two months earlier (an earlier
