@@ -50,7 +50,22 @@
 				<span class="split-evenly__who">
 					{{ nextPayerLabel }} ·
 					<strong>{{ formatCurrency(nextShare) }}</strong>
+					<template v-if="tipEnabled && Number(tipDraft) > 0">
+						+ {{ formatCurrency(Number(tipDraft)) }}
+					</template>
 				</span>
+				<label v-if="tipEnabled" class="split-evenly__tip" data-test="split-tip">
+					<span class="split-evenly__tip-label">Propina</span>
+					<input
+						type="number"
+						min="0"
+						inputmode="decimal"
+						class="split-evenly__tip-input"
+						data-test="split-tip-input"
+						:value="tipDraft"
+						@input="tipDraft = Number(($event.target as HTMLInputElement).value) || 0"
+					/>
+				</label>
 				<span class="split-evenly__methods">
 					<v-btn
 						v-for="method in methods"
@@ -59,7 +74,7 @@
 						variant="tonal"
 						color="primary"
 						:data-test="`split-collect-${method}`"
-						@click="$emit('collect', { amount: nextShare, method })"
+						@click="collectShare(method)"
 					>
 						{{ method }}
 					</v-btn>
@@ -82,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { nextShareAmount, previewShares } from "../../../utils/splitEvenly";
 import type { SeatShare } from "../../../utils/splitBySeat";
 
@@ -100,14 +115,30 @@ const props = defineProps<{
 	seatPlan?: SeatShare[] | null;
 	/** true = collecting by seat; the numbered buttons stand down. */
 	seatMode?: boolean;
+	/** Restaurant only: let each payer add their own tip to their share. */
+	tipEnabled?: boolean;
 }>();
 const emit = defineEmits<{
 	"update:modelValue": [value: number];
 	"update:seatMode": [value: boolean];
-	collect: [share: { amount: number; method: string }];
+	collect: [share: { amount: number; method: string; tip?: number }];
 	undo: [];
 	clear: [];
 }>();
+
+// This payer's tip, added on top of their share. Cleared after each collect so
+// it never carries to the next person. The tip rides onto the invoice's PROPINA
+// line and this payer's tender; because both the total and the collected amount
+// grow by the same tip, the remaining share the others owe is unchanged.
+const tipDraft = ref(0);
+const collectShare = (method: string) => {
+	emit("collect", {
+		amount: nextShare.value,
+		method,
+		tip: Number(tipDraft.value) || 0,
+	});
+	tipDraft.value = 0;
+};
 
 // Once money moved, the headcount is history — changing 3 → 4 (or hopping
 // between even and per-seat) after two guests paid would re-divide receipts
@@ -209,6 +240,23 @@ const quoteLine = computed(() => {
 	font-size: 12.5px;
 	color: var(--pos-text-secondary);
 	font-variant-numeric: tabular-nums;
+}
+.split-evenly__tip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 12px;
+	color: var(--pos-text-secondary);
+}
+.split-evenly__tip-input {
+	width: 64px;
+	padding: 4px 6px;
+	border: 1px solid var(--pos-border-light);
+	border-radius: var(--pos-radius-sm, 6px);
+	background: var(--pos-surface, #fff);
+	color: var(--pos-text-primary, #101828);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
 }
 /* Dense desk tier (utils/itemSelectorLayout DENSE_DESK_*): ≥1100px wide,
  * ≤820px tall. On the hosted Cobro the split panel shares the tender column's

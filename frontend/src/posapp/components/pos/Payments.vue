@@ -300,6 +300,7 @@
 						:methods="splitMethods"
 						:seat-plan="splitSeatPlan"
 						:label="verticalStore.t('Split bill')"
+						:tip-enabled="showRestaurantTips"
 						:format-currency="(value) => formatCurrency(value, invoice_doc.currency)"
 						@collect="onSplitCollect"
 						@undo="onSplitUndo"
@@ -2378,12 +2379,30 @@ const splitSeatPlan = computed(() => {
 const splitRowFor = (method) =>
 	(invoice_doc.value?.payments || []).find((row) => row?.mode_of_payment === method);
 
-const onSplitCollect = ({ amount, method }) => {
+const onSplitCollect = ({ amount, method, tip }) => {
 	const row = splitRowFor(method);
 	const share = flt(amount, currency_precision.value);
 	if (!row || share <= 0) return;
-	setPaymentToDenomination(row, flt(flt(row.amount) + share, currency_precision.value));
-	splitShares.value = [...splitShares.value, { amount: share, method }];
+	const tipAdd = Math.max(flt(tip || 0, currency_precision.value), 0);
+	// Per-share tip (mesa): it rides onto the invoice's PROPINA line AND this
+	// payer's tender. Because the settlement total and the collected total both
+	// grow by the tip, the base share the remaining payers owe is unchanged.
+	// `restaurantTipAmount`'s watcher folds the tip into the doc totals; the
+	// tender is set with an explicit amount, so the flush order does not matter.
+	if (tipAdd > 0) {
+		restaurantTipAmount.value = flt(
+			flt(restaurantTipAmount.value) + tipAdd,
+			currency_precision.value,
+		);
+	}
+	setPaymentToDenomination(
+		row,
+		flt(flt(row.amount) + share + tipAdd, currency_precision.value),
+	);
+	splitShares.value = [
+		...splitShares.value,
+		{ amount: flt(share + tipAdd, currency_precision.value), method, tip: tipAdd },
+	];
 };
 
 const onSplitUndo = () => {
@@ -2394,6 +2413,13 @@ const onSplitUndo = () => {
 		setPaymentToDenomination(
 			row,
 			Math.max(flt(flt(row.amount) - last.amount, currency_precision.value), 0),
+		);
+	}
+	// Back this payer's tip out of the invoice total as well.
+	if (last.tip) {
+		restaurantTipAmount.value = Math.max(
+			flt(flt(restaurantTipAmount.value) - last.tip, currency_precision.value),
+			0,
 		);
 	}
 	splitShares.value = splitShares.value.slice(0, -1);
