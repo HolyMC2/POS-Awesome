@@ -4,9 +4,9 @@
 // MercadoPago Point terminal actually approves the charge. Will NOT be
 // upstreamed — keep all MP logic in this file + MpPointSaleGateDialog.vue.
 //
-// Gating mirrors MPPointDialog.vue: reads frappe.boot.mercadopago.enabled +
-// the active POS Profile mp_point_enabled. No-op (returns true) when the
-// connector is off or the sale has no MercadoPago Point amount, so retail /
+// Gating: reads frappe.boot.mercadopago.enabled + the active POS Profile
+// mp_point_enabled. No-op (returns true) when the connector is off or the sale
+// has no MercadoPago Point amount, so retail /
 // mumu profiles see zero behavior change.
 //
 // Flow: validateSubmission() → ensureChargedBeforeFinalize() → submitInvoice().
@@ -306,8 +306,8 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 		const doc = opts.getInvoiceDoc();
 		const pos_invoice = doc?.name;
 		if (!pos_invoice) {
-			// No saved draft name → the connector can't auto-match. Match the
-			// existing MPPointDialog behaviour: tell the cashier to save first.
+			// No saved draft name → the connector can't auto-match (external
+			// reference is the invoice name). Tell the cashier to save first.
 			frappe.msgprint(__("Guarda la venta antes de cobrar en la terminal"));
 			return false;
 		}

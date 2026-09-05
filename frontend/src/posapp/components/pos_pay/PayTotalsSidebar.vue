@@ -165,11 +165,12 @@
 							</template>
 						</div>
 					</div>
-					<!-- MP-INTEGRATION-POINT: shows only on the MercadoPago Point MoP when enabled -->
-					<MPPointDialog
-						:amount="selectedMop.amount"
-						:mop-name="selectedMop.mode_of_payment"
-					/>
+					<!-- MP-INTEGRATION-POINT: the MercadoPago Point charge fires
+					     ONCE at close, driven by useMpPointSaleGate for the sum of
+					     the Point tender rows (so it works in a split). There is
+					     deliberately no mid-sale charge button here: an independent
+					     push plus the finalize push double-charged the card once the
+					     first charge finished before the cashier closed. -->
 					<div v-if="partyAccount && getPaymentMethodAccount(selectedMop.mode_of_payment)" class="text-caption mb-2">
 						<div class="d-flex align-center mb-1">
 							<span class="text-medium-emphasis" style="min-width: 50px">{{ __("From:") }}</span>
@@ -404,8 +405,6 @@
 import { computed, ref, watch } from "vue";
 import VueDatePicker from "@vuepic/vue-datepicker";
 import { normalizeDateForBackend } from "../../format";
-// MP-INTEGRATION-POINT: push-to-terminal button (self-gated; no-op when off)
-import MPPointDialog from "./MPPointDialog.vue";
 
 const flt = (value, precision) => {
 	const num = parseFloat(String(value ?? 0).replace(/,/g, ""));
