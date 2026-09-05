@@ -29,7 +29,7 @@ const DESTINATIONS = [
 	"sale", "browse", "floor", "serviceOrder", "expense",
 	"drafts", "invoices", "return", "recharge",
 	// The tools group lives behind the "More" pill; the loop opens it first.
-	"payments", "purchase", "barcode", "giftCards", "dashboard",
+	"payments", "lots", "purchase", "barcode", "giftCards", "dashboard",
 	"closing",
 ];
 

@@ -311,8 +311,10 @@ describe("Navbar supervisor access", () => {
 			"/pos/invoices",
 		]);
 		// The tools pages left the main list for the «More» group — exactly
-		// the two the rail keeps behind «Más» for every register.
+		// the ungated ones the rail keeps behind «Más» for every register;
+		// Series y lotes leads them (2026-09-05).
 		expect((wrapper.vm as any).moreItems.map((item: any) => item.to)).toEqual([
+			"/lots",
 			"/orders",
 			"/barcode",
 		]);

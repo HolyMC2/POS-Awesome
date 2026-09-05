@@ -1,0 +1,815 @@
+/* SERIES Y LOTES — surface + story. Global (not scoped) on purpose: the story
+ * is a render-function child and the two files share one vocabulary, so one
+ * sheet under a `lots-` prefix beats two scoped copies of the same rules.
+ * Every colour is a register token with the artboard value as fallback — a
+ * literal here cannot follow theme.css into dark. */
+
+.lots {
+	display: flex;
+	flex-direction: column;
+	gap: var(--reg-space-md, 10px);
+	flex: 1 1 auto;
+	min-height: 0;
+	padding: 14px 16px 16px;
+	background: var(--reg-surface-sunken, #f8f9fa);
+}
+
+.lots__bar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex: none;
+}
+
+.lots__kinds {
+	display: inline-flex;
+	padding: 3px;
+	gap: 2px;
+	border-radius: 12px;
+	background: var(--reg-surface-muted, #eceff3);
+}
+
+.lots__kind {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 34px;
+	padding: 0 14px;
+	border: 0;
+	border-radius: 9px;
+	background: transparent;
+	font: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--reg-text-secondary, #56606e);
+	cursor: pointer;
+}
+
+.lots__kind--on {
+	background: var(--reg-surface, #fff);
+	color: var(--reg-accent-ink, #00646f);
+	box-shadow: 0 1px 2px var(--reg-scrim, rgba(15, 23, 42, 0.12));
+}
+
+.lots__search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 40px;
+	padding: 0 10px 0 12px;
+	border-radius: 999px;
+	border: 1px solid var(--reg-border, #e6e9ee);
+	background: var(--reg-surface, #fff);
+	color: var(--reg-text-secondary, #56606e);
+}
+
+.lots__search:focus-within {
+	border-color: var(--reg-accent-edge, #9fdde6);
+	box-shadow: 0 0 0 3px var(--reg-accent-soft, #e0f7fa);
+}
+
+.lots__search-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	border: 0;
+	outline: none;
+	background: transparent;
+	font: inherit;
+	font-size: 14px;
+	color: var(--reg-text-primary, #212121);
+}
+
+.lots__search-input::-webkit-search-cancel-button {
+	display: none;
+}
+
+.lots__clear {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border: 0;
+	border-radius: 999px;
+	background: var(--reg-surface-muted, #eceff3);
+	color: var(--reg-text-secondary, #56606e);
+	cursor: pointer;
+}
+
+.lots__error {
+	flex: none;
+}
+
+.lots__body {
+	display: flex;
+	gap: var(--reg-space-lg, 14px);
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.lots__list {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 60%;
+	min-width: 0;
+	/* Load-bearing: a flex child defaults to min-height:auto, so without this
+	   the column grows past the host and the rows above the scrollport
+	   (tabs, chips, head) SHRINK to make room — the mirror drill caught the
+	   tabs half-clipped and the chips painted over the column heads. */
+	min-height: 0;
+	overflow: hidden;
+	padding: 12px 0 6px;
+	background: var(--reg-surface, #fff);
+	border: 1px solid var(--reg-border-light, rgba(0, 0, 0, 0.06));
+	border-radius: var(--reg-radius-md, 14px);
+}
+
+.lots__tabs {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+	padding: 0 12px 10px;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.lots__tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 34px;
+	padding: 0 12px;
+	border-radius: 10px;
+	border: 1px solid var(--reg-border, #e6e9ee);
+	background: var(--reg-surface, #fff);
+	font: inherit;
+	font-size: 12.5px;
+	font-weight: 500;
+	white-space: nowrap;
+	color: var(--reg-text-secondary, #56606e);
+	cursor: pointer;
+}
+
+.lots__tab--on {
+	background: var(--reg-accent-soft, #e0f7fa);
+	border-color: var(--reg-accent-edge, #9fdde6);
+	color: var(--reg-accent-ink, #00646f);
+	font-weight: 700;
+}
+
+.lots__tab-count {
+	opacity: 0.7;
+}
+
+.lots__chips {
+	display: flex;
+	flex: none;
+	gap: 6px;
+	padding: 0 12px 10px;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.lots__chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 10px;
+	border-radius: 999px;
+	border: 1px solid var(--reg-border, #e6e9ee);
+	background: var(--reg-surface-sunken, #f2f4f7);
+	font: inherit;
+	font-size: 12px;
+	white-space: nowrap;
+	color: var(--reg-text-secondary, #56606e);
+	cursor: pointer;
+}
+
+.lots__chip--on {
+	background: var(--reg-accent-soft, #e0f7fa);
+	border-color: var(--reg-accent-edge, #9fdde6);
+	color: var(--reg-accent-ink, #00646f);
+}
+
+.lots__chip-n {
+	opacity: 0.7;
+}
+
+.lots__table {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	outline: none;
+}
+
+.lots__table:focus-visible {
+	box-shadow: inset 0 0 0 2px var(--reg-accent-edge, #9fdde6);
+}
+
+.lots__row {
+	display: grid;
+	flex: none;
+	gap: 10px;
+	padding: 9px 14px;
+	align-items: center;
+	border: 0;
+	border-bottom: 1px solid var(--reg-border-light, #f5f7f9);
+	background: transparent;
+	font: inherit;
+	font-size: 12.5px;
+	color: var(--reg-text-secondary, #4a5260);
+	text-align: left;
+}
+
+/* Percentages only — a `max()` track is silently dropped by this grid — and
+   they sum UNDER 100% because the gaps are added on top; a 100% sum pushed
+   the last column past the panel's edge. */
+.lots__row--serial {
+	grid-template-columns: 22% 30% 14% 29%;
+}
+
+.lots__row--batch {
+	grid-template-columns: 21% 31% 18% 11% 11%;
+}
+
+.lots__row--head {
+	font-size: 10.5px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--reg-text-muted, #8b93a0);
+	border-bottom: 1px solid var(--reg-border, #eceff3);
+}
+
+.lots__row--item {
+	min-height: var(--reg-touch-min, 44px);
+	cursor: pointer;
+}
+
+.lots__row--item:hover {
+	background: var(--reg-surface-sunken, #f8f9fa);
+}
+
+.lots__row--sel {
+	background: var(--reg-accent-soft, #e0f7fa);
+	box-shadow: inset 3px 0 0 var(--reg-accent, #0097a7);
+}
+
+.lots__code {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--reg-text-primary, #212121);
+	overflow-wrap: anywhere;
+}
+
+.lots__item {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.lots__item-name {
+	color: var(--reg-text-primary, #212121);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.lots__muted {
+	color: var(--reg-text-muted, #8b93a0);
+	font-size: 11.5px;
+}
+
+.lots__where {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.lots__cell--right {
+	text-align: right;
+}
+
+.lots__here[data-here="true"] {
+	color: var(--reg-tone-positive-label, #1b7f4b);
+	font-weight: 700;
+}
+
+.lots__status {
+	display: inline-flex;
+	align-items: center;
+	height: 22px;
+	padding: 0 8px;
+	border-radius: 999px;
+	border: 1px solid var(--reg-tone-neutral-border, #e2e6ec);
+	background: var(--reg-tone-neutral-bg, #f2f4f7);
+	color: var(--reg-tone-neutral-label, #56606e);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+}
+
+.lots__status--lg {
+	height: 28px;
+	padding: 0 12px;
+	font-size: 12.5px;
+}
+
+.lots__status[data-tone="positive"] {
+	background: var(--reg-tone-positive-bg, #e6f6ec);
+	border-color: var(--reg-tone-positive-border, #bfe6cc);
+	color: var(--reg-tone-positive-label, #1b7f4b);
+}
+
+.lots__status[data-tone="returned"] {
+	background: var(--reg-tone-returned-bg, #eef0f5);
+	border-color: var(--reg-tone-returned-border, #d5dae5);
+	color: var(--reg-tone-returned-label, #4b5568);
+}
+
+.lots__status[data-tone="warning"] {
+	background: var(--reg-tone-warning-bg, #fff4e0);
+	border-color: var(--reg-tone-warning-border, #ffd9a0);
+	color: var(--reg-tone-warning-label, #8a5a00);
+}
+
+.lots__status[data-tone="negative"] {
+	background: var(--reg-tone-negative-bg, #fdecec);
+	border-color: var(--reg-tone-negative-border, #f5c2c2);
+	color: var(--reg-tone-negative-label, #a12626);
+}
+
+.lots__status[data-tone="muted"] {
+	color: var(--reg-text-muted, #8b93a0);
+}
+
+.lots__empty {
+	padding: 28px 14px;
+	text-align: center;
+	color: var(--reg-text-muted, #8b93a0);
+	font-size: 13px;
+}
+
+.lots__more {
+	margin: 8px 14px;
+	height: 36px;
+	border-radius: 10px;
+	border: 1px dashed var(--reg-border, #e6e9ee);
+	background: transparent;
+	font: inherit;
+	font-size: 12.5px;
+	color: var(--reg-accent-ink, #00646f);
+	cursor: pointer;
+}
+
+.lots__hint {
+	padding: 8px 14px 2px;
+	font-size: 11px;
+	color: var(--reg-text-muted, #8b93a0);
+}
+
+/* ───────────── story ───────────── */
+
+.lots-story {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	flex: 1 1 40%;
+	min-width: 0;
+	min-height: 0;
+	max-width: 480px;
+	overflow-y: auto;
+	padding: 16px;
+	background: var(--reg-surface, #fff);
+	border: 1px solid var(--reg-border-light, rgba(0, 0, 0, 0.06));
+	border-radius: var(--reg-radius-md, 14px);
+}
+
+.lots-story__back {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	align-self: flex-start;
+	height: 36px;
+	padding: 0 12px 0 8px;
+	border-radius: 999px;
+	border: 1px solid var(--reg-border, #e6e9ee);
+	background: var(--reg-surface-sunken, #f2f4f7);
+	font: inherit;
+	font-size: 13px;
+	color: var(--reg-text-secondary, #56606e);
+	cursor: pointer;
+}
+
+.lots-story__head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.lots-story__ident {
+	min-width: 0;
+}
+
+.lots-story__ident p {
+	margin: 0;
+}
+
+.lots-story__code {
+	font-size: 20px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	color: var(--reg-text-primary, #212121);
+	overflow-wrap: anywhere;
+}
+
+.lots-story__name {
+	margin-top: 2px !important;
+	font-size: 14px;
+	color: var(--reg-text-primary, #212121);
+}
+
+.lots-story__muted {
+	margin: 0;
+	font-size: 12px;
+	color: var(--reg-text-muted, #8b93a0);
+}
+
+.lots-story__side {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: none;
+}
+
+.lots-story__icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 10px;
+	border: 1px solid var(--reg-border, #e6e9ee);
+	background: var(--reg-surface, #fff);
+	color: var(--reg-text-secondary, #56606e);
+	cursor: pointer;
+}
+
+.lots-story__sold {
+	padding: 12px 14px;
+	border-radius: 12px;
+	background: var(--reg-tone-returned-bg, #eef0f5);
+	border: 1px solid var(--reg-tone-returned-border, #d5dae5);
+}
+
+.lots-story__sold p {
+	margin: 0;
+}
+
+.lots-story__sold-title {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--reg-tone-returned-label, #4b5568);
+}
+
+.lots-story__sold-line {
+	margin-top: 4px !important;
+	font-size: 13px;
+	color: var(--reg-text-primary, #212121);
+}
+
+.lots-story__link {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	margin-top: 8px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--reg-accent-ink, #00646f);
+	cursor: pointer;
+}
+
+.lots-story__facts {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 6px 14px;
+	margin: 0;
+	font-size: 13px;
+}
+
+.lots-story__facts dt {
+	color: var(--reg-text-muted, #8b93a0);
+	font-size: 12px;
+}
+
+.lots-story__facts dd {
+	margin: 0;
+	color: var(--reg-text-primary, #212121);
+	overflow-wrap: anywhere;
+}
+
+.lots-story__facts dd[data-tone="soon"] {
+	color: var(--reg-tone-warning-label, #8a5a00);
+	font-weight: 700;
+}
+
+.lots-story__facts dd[data-tone="expired"] {
+	color: var(--reg-tone-negative-label, #a12626);
+	font-weight: 700;
+}
+
+.lots-story__actions {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.lots-story__primary {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: var(--reg-touch-min, 44px);
+	padding: 0 18px;
+	border: 0;
+	border-radius: 12px;
+	background: var(--reg-accent, #0097a7);
+	color: var(--reg-on-accent, #fff);
+	font: inherit;
+	font-size: 14px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.lots-story__primary:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.lots-story__note {
+	margin: 0;
+	padding: 10px 12px;
+	border-radius: 10px;
+	background: var(--reg-tone-warning-bg, #fff4e0);
+	color: var(--reg-tone-warning-label, #8a5a00);
+	font-size: 12.5px;
+}
+
+.lots-story__section {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.lots-story__h {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--reg-text-muted, #8b93a0);
+}
+
+.lots-story__count {
+	opacity: 0.8;
+}
+
+.lots-story__rows {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.lots-story__row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 40px;
+	padding: 4px 0;
+	border-bottom: 1px solid var(--reg-border-light, #f5f7f9);
+	font-size: 12.5px;
+}
+
+.lots-story__row-code {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--reg-accent-ink, #00646f);
+	cursor: pointer;
+}
+
+.lots-story__row-meta {
+	flex: 1 1 auto;
+	min-width: 0;
+	color: var(--reg-text-secondary, #56606e);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.lots-story__mini {
+	height: 30px;
+	padding: 0 12px;
+	border-radius: 8px;
+	border: 1px solid var(--reg-accent-edge, #9fdde6);
+	background: var(--reg-accent-soft, #e0f7fa);
+	color: var(--reg-accent-ink, #00646f);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.lots-story__timeline {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.lots-story__move {
+	display: grid;
+	grid-template-columns: 112px 1fr auto auto;
+	gap: 8px;
+	align-items: center;
+	padding: 7px 0;
+	border-bottom: 1px solid var(--reg-border-light, #f5f7f9);
+	font-size: 12.5px;
+}
+
+.lots-story__move--cancelled .lots-story__move-verb,
+.lots-story__move--cancelled .lots-story__move-doc {
+	text-decoration: line-through;
+	opacity: 0.6;
+}
+
+.lots-story__move-when {
+	color: var(--reg-text-muted, #8b93a0);
+	font-size: 11.5px;
+}
+
+.lots-story__move-what {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 8px;
+	min-width: 0;
+}
+
+.lots-story__move-verb {
+	font-weight: 700;
+	color: var(--reg-text-primary, #212121);
+}
+
+.lots-story__move[data-tone="returned"] .lots-story__move-verb {
+	color: var(--reg-tone-returned-label, #4b5568);
+}
+
+.lots-story__move[data-tone="positive"] .lots-story__move-verb {
+	color: var(--reg-tone-positive-label, #1b7f4b);
+}
+
+.lots-story__move-flag {
+	color: var(--reg-tone-negative-label, #a12626);
+	font-weight: 700;
+}
+
+.lots-story__move-party {
+	color: var(--reg-text-secondary, #56606e);
+}
+
+.lots-story__move-qty {
+	color: var(--reg-text-secondary, #56606e);
+}
+
+.lots-story__move-doc {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	font-size: 12px;
+	color: var(--reg-accent-ink, #00646f);
+	cursor: pointer;
+}
+
+.lots-story__empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 40px 16px;
+	text-align: center;
+	font-size: 13px;
+	color: var(--reg-text-secondary, #56606e);
+}
+
+.lots-story__empty p {
+	margin: 0;
+	max-width: 32ch;
+}
+
+.lots-story__empty-glyph {
+	color: var(--reg-text-muted, #8b93a0);
+}
+
+/* Below the artboard's width the story sits under the list. */
+@media (max-width: 1180px) {
+	.lots__body {
+		flex-direction: column;
+	}
+
+	.lots__list {
+		max-height: 50%;
+	}
+
+	.lots-story {
+		max-width: none;
+	}
+}
+
+/* The phone: one screen at a time. The list owns it until a row is chosen;
+   then the story FRONTS it, with a back chip — the same swap the orden queue
+   makes on glass. */
+@media (max-width: 767.98px) {
+	.lots {
+		padding: 10px;
+	}
+
+	.lots__bar {
+		flex-wrap: wrap;
+	}
+
+	.lots__search {
+		flex-basis: 100%;
+	}
+
+	.lots__list {
+		max-height: none;
+	}
+
+	.lots--story .lots__list {
+		display: none;
+	}
+
+	.lots-story:not(.lots-story--fronted) {
+		display: none;
+	}
+
+	.lots__row--serial {
+		grid-template-columns: 1fr 1fr;
+		grid-template-areas: "code status" "item where";
+	}
+
+	.lots__row--serial > :nth-child(1) { grid-area: code; }
+	.lots__row--serial > :nth-child(2) { grid-area: item; }
+	.lots__row--serial > :nth-child(3) { grid-area: status; justify-self: end; }
+	.lots__row--serial > :nth-child(4) { grid-area: where; }
+
+	.lots__row--batch {
+		grid-template-columns: 1fr auto auto;
+		grid-template-areas: "code total here" "item status status";
+	}
+
+	.lots__row--batch > :nth-child(1) { grid-area: code; }
+	.lots__row--batch > :nth-child(2) { grid-area: item; }
+	.lots__row--batch > :nth-child(3) { grid-area: status; justify-self: end; }
+	.lots__row--batch > :nth-child(4) { grid-area: total; }
+	.lots__row--batch > :nth-child(5) { grid-area: here; }
+
+	.lots__row--head {
+		display: none;
+	}
+
+	.lots-story__move {
+		grid-template-columns: 1fr auto;
+		grid-template-areas: "when qty" "what doc";
+	}
+
+	.lots-story__move > :nth-child(1) { grid-area: when; }
+	.lots-story__move > :nth-child(2) { grid-area: what; }
+	.lots-story__move > :nth-child(3) { grid-area: qty; }
+	.lots-story__move > :nth-child(4) { grid-area: doc; justify-self: end; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.lots *,
+	.lots-story * {
+		transition: none !important;
+	}
+}

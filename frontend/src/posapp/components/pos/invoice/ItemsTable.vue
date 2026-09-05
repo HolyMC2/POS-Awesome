@@ -185,11 +185,9 @@
 						:calc-prices="calcPrices"
 						:calc-uom="calcUom"
 						:change-price-list-rate="changePriceListRate"
-						:get-serial-options="getSerialOptions"
-						:set-serial-no="setSerialNo"
-						:set-batch-qty="setBatchQty"
 						:validate-due-date="validateDueDate"
 						@qty-change="handleQtyChange"
+						@request-close="detailDialogOpen = false"
 					/>
 				</v-card-text>
 			</v-card>

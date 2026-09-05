@@ -343,6 +343,17 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 	// top with `sale` — its def moved with it because this tuple's order IS
 	// the rail's.)
 	{
+		id: "lots",
+		labelKey: "Serials & batches",
+		kind: "sheet",
+		path: "/lots",
+		capability: null,
+		profileFlag: null,
+		offline: "online_required",
+		shortcutActionId: null,
+		badgeSource: null,
+	},
+	{
 		id: "purchase",
 		labelKey: "Purchase Orders",
 		kind: "sheet",
@@ -511,6 +522,9 @@ export const SHEET_COMPONENTS: Record<string, () => Promise<unknown>> = {
 	// surface, and COBRAR mounts the same capture tool this entry used to point
 	// at, armed through `uiStore.paymentRouteTarget`. See the surface's header.
 	payments: () => import("../../../components/pos/payments/cobranza/CobranzaSurface.vue"),
+	// A view (the quotations pattern): list beside story, straight into the
+	// host, under the sheet discipline of one inner scrollport per column.
+	lots: () => import("../../../components/pos/lots/LotsSurface.vue"),
 	purchase: () => import("../../../components/pos/purchase/PurchaseOrders.vue"),
 	barcode: () => import("../../../components/pos/shell/BarcodePrinting.vue"),
 	giftCards: () => import("../../../components/pos/wallet/GiftCardsView.vue"),

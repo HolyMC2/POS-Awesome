@@ -343,6 +343,7 @@ export default {
 			// the rail keeps in its «Más» flyout for every register (purchase
 			// and barcode are ungated in the registry, so this list is static).
 			moreItems: [
+				{ text: "Serials & batches", icon: "mdi-magnify-scan", to: "/lots" },
 				{ text: "Purchase Order", icon: "mdi-cart-plus", to: "/orders" },
 				{ text: "Barcode Printing", icon: "mdi-barcode", to: "/barcode" },
 			],

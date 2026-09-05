@@ -3120,3 +3120,59 @@ Apply {0},Aplicar {0}
 The MercadoPago terminal can't be charged while offline.,No se puede cobrar en la terminal MercadoPago sin conexión.
 A MercadoPago terminal charge needs a single selected invoice.,El cobro con terminal MercadoPago requiere seleccionar una sola factura.
 New account,Nueva cuenta
+Serials & batches,Series y lotes
+Find a serial or a batch and where it went,Busca una serie o un lote y a dónde fue
+Serials,Series
+Batches,Lotes
+"IMEI, serial, item or customer…","IMEI, serie, artículo o cliente…"
+"Batch, item…","Lote, artículo…"
+Where · when,Dónde · cuándo
+Here,Aquí
+In stock,En existencia
+Consumed,Consumido
+Inactive,Inactivo
+Empty,Vacío
+Disabled,Deshabilitado
+Expires in {0} days,Caduca en {0} días
+All warehouses,Todos los almacenes
+Showing {0} of {1} · load more,Mostrando {0} de {1} · cargar más
+"↑↓ moves · Enter opens · type an IMEI, a batch, an item or a customer","↑↓ mueve · Enter abre · escribe un IMEI, un lote, un artículo o un cliente"
+Nothing matches «{0}» in this list.,Nada coincide con «{0}» en esta lista.
+Nothing in this list yet.,Todavía no hay nada en esta lista.
+Could not search serials and batches.,No se pudo buscar series y lotes.
+Could not open this record.,No se pudo abrir este registro.
+Not sellable here,No se puede vender aquí
+{0} is not in this register's warehouse or catalogue.,{0} no está en el almacén ni en el catálogo de esta caja.
+Added to the sale,Agregado a la venta
+{0} is on the ticket.,{0} ya está en el ticket.
+Copy,Copiar
+Copied,Copiado
+Could not copy,No se pudo copiar
+Sold on {0},Vendido el {0}
+Open document,Abrir documento
+Last movement,Último movimiento
+Sell this unit,Vender esta unidad
+In {0} — this register sells from {1}.,Está en {0} — esta caja vende desde {1}.
+Same item in stock,Mismo artículo en existencia
+No other unit of this item is in stock.,No hay otra unidad de este artículo en existencia.
+Sell,Vender
+Sell one from this batch,Vender una de este lote
+None in {0}.,No hay en {0}.
+Where the units are,Dónde están las unidades
+No units on any shelf.,No hay unidades en ningún almacén.
+No movements recorded.,Sin movimientos registrados.
+Pick a serial or a batch to read where it is and where it went.,Elige una serie o un lote para ver dónde está y a dónde fue.
+A sold unit shows its ticket and the customer; an in-stock one can go straight onto the sale.,Una unidad vendida muestra su ticket y el cliente; una en existencia puede irse directo a la venta.
+Purchase,Compra
+Purchase return,Devolución de compra
+Issued,Salida
+Serial & batch,Serie y lote
+{0} of {1} chosen,{0} de {1} elegidos
+Chosen,Elegido
+Change serial numbers,Cambiar números de serie
+Change batch,Cambiar lote
+No serial number chosen yet.,Aún no se elige número de serie.
+No batch chosen yet.,Aún no se elige lote.
+The picker needs the register's cart.,El selector necesita el carrito de la caja.
+Stock out,Salida de inventario
+Stock in,Entrada de inventario

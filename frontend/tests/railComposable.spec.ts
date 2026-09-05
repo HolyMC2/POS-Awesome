@@ -133,6 +133,7 @@ describe("useRegisterRail — offline", () => {
 			"drafts",
 			"giftCards",
 			"invoices",
+			"lots",
 			"payments",
 			"purchase",
 			"quotations",
@@ -264,6 +265,7 @@ describe("useRegisterRail — groups", () => {
 		expect(rail.activeTool.value?.id).toBe("purchase");
 		expect(rail.activeTool.value?.hint).toBe("Orders to suppliers");
 		expect(rail.toolsItems.value.map((item) => item.id)).toEqual([
+			"lots",
 			"purchase",
 			"barcode",
 			"giftCards",

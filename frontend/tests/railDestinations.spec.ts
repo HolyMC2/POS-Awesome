@@ -68,8 +68,10 @@ describe("rail destination registry", () => {
 			"invoices",
 			"return",
 			"recharge",
-			// The tools group — one "More" pill on the rail, four entries in
-			// its flyout (canvas «Riel con herramientas»).
+			// The tools group — one "More" pill on the rail, five entries in
+			// its flyout (canvas «Riel con herramientas»); Series y lotes leads
+			// it because it is asked mid-sale.
+			"lots",
 			"purchase",
 			"barcode",
 			"giftCards",
@@ -178,6 +180,7 @@ describe("rail capability gating", () => {
 			"drafts",
 			"invoices",
 			"return",
+			"lots",
 			"purchase",
 			"barcode",
 		]);
@@ -226,6 +229,7 @@ describe("rail offline contract", () => {
 			"drafts",
 			"giftCards",
 			"invoices",
+			"lots",
 			"payments",
 			"purchase",
 			"quotations",
@@ -240,6 +244,7 @@ describe("rail offline contract", () => {
 		// rail's second pill.
 		const visible = visibleRailDestinations(gates());
 		expect(idsOf(railDestinationsInGroup(visible, "tools"))).toEqual([
+			"lots",
 			"purchase",
 			"barcode",
 			"giftCards",
@@ -249,6 +254,7 @@ describe("rail offline contract", () => {
 		// profile without gift cards never sees Monedero.
 		const cashier = visibleRailDestinations(gates({ dashboard: false, giftCards: false }));
 		expect(idsOf(railDestinationsInGroup(cashier, "tools"))).toEqual([
+			"lots",
 			"purchase",
 			"barcode",
 		]);

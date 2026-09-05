@@ -60,6 +60,10 @@ export const RAIL_DESTINATION_IDS = [
 	// The tools group (§17.7 addendum 2026-08-22): the pages the hamburger
 	// drawer used to hold. They render behind ONE rail item, "More", because
 	// sixteen 66px items do not fit a 900px register — see `RailGroup`.
+	// Series y lotes FIRST among the tools (owner, 2026-09-05): a serial
+	// lookup happens mid-sale, with a customer waiting, and the flyout's top
+	// row is the one a thumb finds without reading.
+	"lots",
 	"purchase",
 	"barcode",
 	"giftCards",
@@ -401,6 +405,21 @@ export const RAIL_DESTINATIONS: readonly RailDestination[] = [
 		// Primary, not footer: the artboard's spacer sits BELOW Recarga.
 		// Selling air time is selling; only the session controls go bottom.
 		group: "primary",
+	},
+	{
+		id: "lots",
+		label: "Serials & batches",
+		icon: "mdi-magnify-scan",
+		badgeSource: null,
+		gate: null,
+		shortcutActionId: null,
+		// Every answer here is the ledger's — where a serial went, which batch
+		// still has units — and the ledger lives on the server. A cached copy
+		// would be the exact lie this surface exists to dispel.
+		offlineAvailability: "blocked",
+		backedBy: null,
+		group: "tools",
+		hint: "Find a serial or a batch and where it went",
 	},
 	{
 		id: "purchase",
