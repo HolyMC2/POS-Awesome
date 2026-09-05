@@ -4,6 +4,33 @@ All notable changes.
 
 ## Unreleased
 
+- **MercadoPago + partial/split payments hardened across the register (09-05).**
+  A run through the payments flows for Doco Ventas (MercadoPago Point on a
+  Newland N950), lab-verified, prod pending a live terminal drill:
+  - **A credit partial sale can now "Cobrar e imprimir," not only "Cobrar sin
+    ticket."** The Cobro band disabled print-and-close on any tender shortfall;
+    a credit sale's shortfall is the customer's receivable (the one case the
+    backend's settlement invariant allows), so the print primary now stays
+    pressable when credit is on and blocked for an ordinary underpayment.
+  - **The MercadoPago terminal charges once, at close.** The per-row "Cobrar
+    con terminal MP" button charged the terminal but fed nothing, and the
+    finalize step then charged again — a double-charge once the first charge
+    finished before the sale was closed. Removed; the finalize gate is the one
+    charge, for the sum of the MercadoPago Point rows (so it works in a split),
+    pinned as the only terminal-charge call site.
+  - **MercadoPago now works in the collect-on-account tool.** Paying an
+    outstanding balance by card drives the terminal through the same gate,
+    keyed to the invoice so the connector matches it. It needs one selected
+    invoice (clean match); multi-invoice card collection is blocked with a
+    message and is a follow-up. Offline and supplier-pay never touch the
+    terminal.
+  - **A table can hold several cuentas.** Opening an occupied table used to
+    collapse to its one ticket; a "Nueva cuenta" gesture now opens a second
+    (or third) cuenta on the same table, each its own invoice. Because each
+    settles independently, every cuenta carries its own tip and its own
+    MercadoPago charge — "tips by parts" and card-per-party with no
+    multiple-charges-on-one-invoice problem. Retries stay deduped, so a cuenta
+    is minted at most once.
 - **A sale queued offline now syncs even when the reconnect beats the boot
   (09-05).** Re-running the desktop drill caught a fourth defect the first
   pass missed: an offline sale that survived a reload stayed `pending` and
