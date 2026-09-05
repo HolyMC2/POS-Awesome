@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // vi.hoisted so the spies exist before the hoisted vi.mock factories run.
 const {
 	claimRetryableQueueEntries,
+	ensureOfflineQueueReady,
 	markWriteQueueEntryDrafted,
 	markWriteQueueEntrySynced,
 	markWriteQueueEntryFailed,
@@ -12,6 +13,7 @@ const {
 	enqueueWriteQueueEntry,
 } = vi.hoisted(() => ({
 	claimRetryableQueueEntries: vi.fn(),
+	ensureOfflineQueueReady: vi.fn(async () => {}),
 	markWriteQueueEntryDrafted: vi.fn(async () => true),
 	markWriteQueueEntrySynced: vi.fn(async () => true),
 	markWriteQueueEntryFailed: vi.fn(async () => true),
@@ -22,6 +24,7 @@ const {
 
 vi.mock("../src/offline/writeQueue", () => ({
 	claimRetryableQueueEntries,
+	ensureOfflineQueueReady,
 	markWriteQueueEntryDrafted,
 	markWriteQueueEntrySynced,
 	markWriteQueueEntryFailed,
@@ -115,6 +118,32 @@ describe("reconcileAlreadySubmitted", () => {
 		expect(
 			await reconcileAlreadySubmitted({ posa_client_request_id: "inv-1" }),
 		).toBe(false);
+	});
+});
+
+describe("syncOfflineInvoices — hydrates before deciding the queue is empty", () => {
+	it("still claims a persisted sale when a reconnect fires before the mirror is hydrated", async () => {
+		// After a reload the in-memory mirror starts EMPTY; only
+		// ensureOfflineQueueReady (refreshAllQueueMemory) refills it from Dexie.
+		// A reconnect that lands during a still-booting page drains once — if
+		// the drain read the mirror before hydrating it would see nothing,
+		// bail at the early return, and never reach the Dexie-backed claim,
+		// stranding the sale `pending` forever. The drain must hydrate first.
+		let hydrated = false;
+		ensureOfflineQueueReady.mockImplementation(async () => {
+			hydrated = true;
+		});
+		getQueuedPayloadSnapshots.mockImplementation(() =>
+			hydrated ? [{ invoice: {} }] : [],
+		);
+		claimRetryableQueueEntries.mockResolvedValueOnce([entry()]);
+		frappeCall.mockResolvedValue({ message: {} });
+
+		await syncOfflineInvoices();
+
+		expect(ensureOfflineQueueReady).toHaveBeenCalled();
+		// The proof it did not bail on the empty mirror: it reached the claim.
+		expect(claimRetryableQueueEntries).toHaveBeenCalledTimes(1);
 	});
 });
 

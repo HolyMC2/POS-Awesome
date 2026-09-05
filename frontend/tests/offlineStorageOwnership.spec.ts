@@ -40,6 +40,7 @@ vi.mock("../src/offline/db", () => ({
 
 vi.mock("../src/offline/writeQueue", () => ({
 	claimRetryableQueueEntries: vi.fn(),
+	ensureOfflineQueueReady: vi.fn(async () => {}),
 	clearWriteQueueEntries: vi.fn(),
 	deleteWriteQueueEntryByIndex: vi.fn(),
 	enqueueWriteQueueEntry: vi.fn(),

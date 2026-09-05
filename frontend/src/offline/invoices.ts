@@ -14,6 +14,7 @@ import {
 	clearWriteQueueEntries,
 	deleteWriteQueueEntryByIndex,
 	enqueueWriteQueueEntry,
+	ensureOfflineQueueReady,
 	getQueuedPayloadCount,
 	getQueuedPayloadSnapshots,
 	markWriteQueueEntryDrafted,
@@ -424,6 +425,17 @@ export async function syncOfflineInvoices() {
 	invoiceSyncInProgress = true;
 	invoiceSyncStartedAt = Date.now();
 	try {
+		// Hydrate the in-memory mirror from Dexie FIRST. After a reload the
+		// mirror starts empty and is only refilled by `ensureOfflineQueueReady`
+		// (refreshAllQueueMemory). A drain edge that fires before any other
+		// queue op — e.g. a reconnect that lands during a still-booting page —
+		// would otherwise read an empty `getOfflineInvoices()`, bail at the
+		// early return below, and never reach the Dexie-backed claim, leaving
+		// a persisted sale stranded `pending` with no retry. This is «se
+		// sincroniza sola», so the mirror must reflect disk before we decide
+		// there is nothing to sync.
+		await ensureOfflineQueueReady();
+
 		await syncOfflineCustomers();
 
 		const invoices = getOfflineInvoices();
