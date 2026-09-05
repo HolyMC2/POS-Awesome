@@ -44,7 +44,12 @@ export const MUELLE_DEFAULT: Keymap = {
 	// v4 (2026-08-24): + alt+z «Guardar cotización». The operator's word is
 	// cotización and c/o/t are already taken (price check, orden, tiempo aire),
 	// so the mnemonic falls to the remaining letter in the word.
-	version: 4,
+	// v5 (2026-09-05): the keyboard-driven register (owner: «like SICAR,
+	// keyboard only»). + alt+↓ jumps to the cart lines, + alt+w line
+	// discount (d is Cobrar, e is the old «quitar primera»), and the ROW
+	// scope: bare keys that fire only with a cart line focused — see
+	// `ShortcutScope`. Alt+3 now clears the box on the way in.
+	version: 5,
 	label: "Muelle POS (default)",
 	bindings: {
 		// navigation
@@ -63,6 +68,23 @@ export const MUELLE_DEFAULT: Keymap = {
 		"cart.focusUom": ["alt+u"],
 		"cart.focusRate": ["alt+r"],
 		"cart.removeFirstItem": ["alt+e"],
+		"cart.focusDiscount": ["alt+w"],
+		"cart.focusRows": ["alt+arrowdown"],
+
+		// lines — row scope (bare keys, only with a cart line focused).
+		// `+`/`-` name both the row key and the numpad key: a cashier's
+		// right hand lives on the numpad.
+		"row.previous": ["arrowup"],
+		"row.next": ["arrowdown"],
+		"row.increment": ["plus", "numpadadd"],
+		"row.decrement": ["minus", "numpadsubtract"],
+		"row.quantity": ["q"],
+		"row.price": ["p"],
+		"row.discount": ["d"],
+		"row.lots": ["s"],
+		"row.details": ["enter"],
+		"row.remove": ["delete"],
+		"row.back": ["escape"],
 		"invoice.focusAdditionalDiscount": ["alt+a"],
 		"invoice.focusDeliveryCharges": ["alt+9"],
 		"invoice.focusPostingDate": ["alt+backquote"],

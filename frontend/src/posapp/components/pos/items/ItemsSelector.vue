@@ -298,6 +298,7 @@ import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { useVerticalStore } from "../../../stores/verticalStore";
 import { useEmployeeStore } from "../../../stores/employeeStore";
 
+import { parseQtyPrefix, stripQtyPrefix } from "../../../utils/searchQtyPrefix";
 import { resolveLotRequirement } from "./lot/lotPicker";
 import { collectUsedSerialsForItem } from "../../../composables/pos/items/addition/serialSelection";
 import { parseBooleanSetting } from "../../../utils/stock";
@@ -626,7 +627,10 @@ const displayedItems = computed(() => {
 		(typeof search_input.value === "string" && search_input.value) ||
 		first_search.value ||
 		"";
-	const term = (typeof rawTerm === "string" ? rawTerm : "").trim().toLowerCase();
+	// `3*coca` filters on «coca»: the multiplier is the qty, not the search.
+	const term = stripQtyPrefix(typeof rawTerm === "string" ? rawTerm : "")
+		.trim()
+		.toLowerCase();
 	// Barcode-first mode: nothing visible until the operator searches/
 	// scans. Cuts visual noise in convenience-store layouts where every
 	// sale is a barcode hit and the operator never browses the grid.
@@ -1461,7 +1465,27 @@ onBeforeUnmount(() => {
 
 // 8. Watchers
 watch(searchFocusTrigger, () => {
+	// Alt+3 (`triggerItemSearchReset`): the box is cleared on the way in so
+	// the next search starts from nothing — term, multiplier and highlight.
+	if (uiStore.searchFocusResetPending) {
+		uiStore.searchFocusResetPending = false;
+		search_input.value = "";
+		first_search.value = "";
+		qty.value = 1;
+		itemSelection.clearHighlightedItem?.();
+	}
 	requestItemSearchFocus();
+});
+
+// The multiplier: `3*` in the box sets the qty the next add will use, the
+// same field the «Cantidad» input feeds. Only SET here — the add path resets
+// qty to 1 itself, and a box that lost its prefix (a scan replaced it with
+// the code) must keep the quantity the cashier just asked for.
+watch(search_input, (next) => {
+	const parsed = parseQtyPrefix(next);
+	if (parsed.qty !== null) {
+		qty.value = parsed.qty;
+	}
 });
 
 // Limit-search profiles (Doco Ventas, etc.) keep the local catalog

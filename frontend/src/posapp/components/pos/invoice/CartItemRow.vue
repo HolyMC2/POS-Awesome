@@ -1,5 +1,17 @@
 <template>
-	<tr class="posa-cart-item-row" v-memo="memoDeps">
+	<!-- The row is a keyboard TARGET (SICAR-style loop, 2026-09-05): Alt+↓ lands
+	     on it, ↑↓ walk the cart, and the bare keys the keymap's row scope names
+	     (+ − q p d s Enter Supr Esc) act on THIS line. `native-arrows` keeps the
+	     register's spatial arrow nav out of the way; the handler owns ↑↓. -->
+	<tr
+		class="posa-cart-item-row"
+		v-memo="memoDeps"
+		tabindex="0"
+		data-pos-keyboard-target="cart-row"
+		data-pos-keyboard-native-arrows
+		:data-row-id="item.posa_row_id"
+		@keydown="onRowKeydown"
+	>
 		<template v-for="column in visibleColumns" :key="column.key">
 			<!--
 				EVERY cell below takes its alignment from `cartAlignClass(column)`
@@ -543,8 +555,11 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from "vue";
+import { computed, inject, nextTick, ref } from "vue";
 import { debugLog } from "../../../utils/debug";
+import { isEditableElement } from "../../../utils/keyboardNavigation";
+import { rowActionForEvent } from "../../../shortcuts";
+import { useUIStore } from "../../../stores/uiStore";
 import { describeLineStock, describeLineIdentity } from "./cartLineStock";
 import { cartAlignClass, cartJustifyClass } from "./cartColumnAlign";
 import FractionalQtyPad from "./FractionalQtyPad.vue";
@@ -608,6 +623,82 @@ const COARSE_POINTER =
 	typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches === true;
 const deleteArmed = ref(false);
 let deleteArmTimer = null;
+/**
+ * The ROW scope of the keymap, answered by this line while it holds the
+ * focus. Every key here is a bare key, so two guards are load-bearing: an
+ * editable target (the inline qty/rate/discount inputs bubble through this
+ * `<tr>`) keeps its keystrokes, and an event a cell already answered
+ * (Enter on the qty display opens the qty editor) is not answered twice.
+ */
+const rowBus = inject("eventBus", null);
+
+const focusSiblingRow = (current, delta) => {
+	const tbody = current.closest("tbody");
+	const rows = tbody ? Array.from(tbody.querySelectorAll(".posa-cart-item-row[tabindex]")) : [];
+	const index = rows.indexOf(current);
+	const target = rows[index + delta];
+	if (target) {
+		target.scrollIntoView?.({ block: "nearest" });
+		target.focus();
+	}
+};
+
+const onRowKeydown = (event) => {
+	if (event.defaultPrevented || isEditableElement(event.target)) return;
+	const action = rowActionForEvent(event);
+	if (!action) return;
+	const row = event.currentTarget;
+	switch (action) {
+		case "row.previous":
+			focusSiblingRow(row, -1);
+			break;
+		case "row.next":
+			focusSiblingRow(row, 1);
+			break;
+		case "row.increment":
+			emit("add-one", props.item);
+			break;
+		case "row.decrement":
+			emit("minus-click", props.item);
+			break;
+		case "row.quantity":
+			openQtyEdit();
+			break;
+		case "row.price":
+			openRateEdit();
+			break;
+		case "row.discount":
+			openDiscountPercentEdit();
+			break;
+		case "row.lots":
+			// Only a tracked item has a unit to choose; the bell is the same
+			// one the phone line sheet and the desk line detail ring.
+			if ((props.item.has_serial_no || props.item.has_batch_no) && props.item.posa_row_id) {
+				rowBus?.emit("movil:edit-lots", {
+					rowId: String(props.item.posa_row_id),
+					itemCode: String(props.item.item_code || ""),
+				});
+			}
+			break;
+		case "row.details":
+			emit("toggle-expand");
+			break;
+		case "row.remove":
+			// A keyboard is a precise pointer: no two-press arming here.
+			emit("remove-item", props.item);
+			break;
+		case "row.back":
+			// Resolved on the keypress, not at setup: the row mounts in specs
+			// and in the phone's line sheet without an active pinia.
+			useUIStore().triggerItemSearchReset();
+			break;
+		default:
+			return;
+	}
+	event.preventDefault();
+	event.stopPropagation();
+};
+
 const handleDeleteClick = () => {
 	if (!COARSE_POINTER) {
 		emit("remove-item", props.item);

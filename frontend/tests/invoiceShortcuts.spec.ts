@@ -19,6 +19,7 @@ const createVm = () => ({
 	uiStore: {
 		setActiveView: vi.fn(),
 		triggerItemSearchFocus: vi.fn(),
+		triggerItemSearchReset: vi.fn(),
 		selectTopItem: vi.fn(),
 		toggleItemSettings: vi.fn(),
 		paymentRequestPending: false,
@@ -46,7 +47,10 @@ describe("invoiceShortcuts", () => {
 		expect(vm.eventBus.emit).toHaveBeenCalledWith("set_compact_panel", "selector");
 		expect(vm.eventBus.emit).toHaveBeenCalledWith("focus_item_search");
 		expect(vm.uiStore.setActiveView).toHaveBeenCalledWith("items");
-		expect(vm.uiStore.triggerItemSearchFocus).toHaveBeenCalledTimes(1);
+		// Alt+3 RESETS the box on the way in (owner, 2026-09-05): the chord
+		// means «ready for the next search», not «cursor after the old text».
+		expect(vm.uiStore.triggerItemSearchReset).toHaveBeenCalledTimes(1);
+		expect(vm.uiStore.triggerItemSearchFocus).not.toHaveBeenCalled();
 		expect(event.defaultPrevented).toBe(true);
 	});
 

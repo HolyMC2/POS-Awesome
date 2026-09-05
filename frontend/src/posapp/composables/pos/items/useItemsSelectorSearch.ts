@@ -1,4 +1,5 @@
 import _ from "lodash";
+import { parseQtyPrefix } from "../../../utils/searchQtyPrefix";
 import { shouldReloadOnSearchClear } from "../../../utils/searchUtils.js";
 import { isOffline } from "../../../../offline/index";
 import { resolveBooleanSetting } from "./selectorSearch/resolveBooleanSetting";
@@ -277,7 +278,13 @@ export const useItemsSelectorSearch = ({
 
 		// Prefer the visible input value so Enter uses the latest typed text.
 		const rawQuery = getCurrentSearchInput(vm);
-		const trimmedQuery = String(rawQuery || "").trim();
+		// `3*coca` / `3*` + scan: the multiplier becomes the selector's qty and
+		// the search asks for what follows it (utils/searchQtyPrefix.ts).
+		const prefixed = parseQtyPrefix(rawQuery);
+		if (prefixed.qty !== null) {
+			vm.qty = prefixed.qty;
+		}
+		const trimmedQuery = String(prefixed.term || "").trim();
 
 		// Use trimmedQuery for matching / barcode detection only — do NOT
 		// write it back into the visible search field. On a slow multiword
@@ -445,6 +452,21 @@ export const useItemsSelectorSearch = ({
 		const vm = getVm();
 		if (!vm) return;
 
+		// A highlighted result wins on EVERY profile. Limit-search registers
+		// (Doco Ventas) used to re-run the server search here even with a row
+		// highlighted, so ↓ then Enter — the whole keyboard loop — never
+		// added anything and the box kept its term (mirror drill, 2026-09-05).
+		if (getHighlightedIndex(itemSelection || vm.itemSelection) >= 0) {
+			if (event && typeof event.preventDefault === "function") {
+				event.preventDefault();
+			}
+			if (search_onchange.cancel) {
+				search_onchange.cancel();
+			}
+			(itemSelection || vm.itemSelection).selectHighlightedItem();
+			return;
+		}
+
 		if (usesLimitSearch(vm)) {
 			if (event && typeof event.preventDefault === "function") {
 				event.preventDefault();
@@ -454,14 +476,6 @@ export const useItemsSelectorSearch = ({
 				search_onchange.cancel();
 			}
 			_performSearch();
-			return;
-		}
-
-		if (getHighlightedIndex(itemSelection || vm.itemSelection) >= 0) {
-			if (event && typeof event.preventDefault === "function") {
-				event.preventDefault();
-			}
-			(itemSelection || vm.itemSelection).selectHighlightedItem();
 			return;
 		}
 		if (search_onchange.cancel) {

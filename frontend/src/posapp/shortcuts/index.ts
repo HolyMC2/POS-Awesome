@@ -11,7 +11,13 @@
  * the whole truth and this module is a one-line lookup.
  */
 
-import { describeKeymap, resolveKeymap, resolveShortcutAction, type ResolvedKeymap } from "./engine";
+import {
+	describeKeymap,
+	resolveKeymap,
+	resolveRowShortcutAction,
+	resolveShortcutAction,
+	type ResolvedKeymap,
+} from "./engine";
 import { getKeymap } from "./keymap";
 
 let active: ResolvedKeymap = resolveKeymap(getKeymap(null));
@@ -42,6 +48,10 @@ export const getActiveKeymap = (): ResolvedKeymap => active;
 /** The action a key event triggers under the active keymap, or null. */
 export const actionForEvent = (event: KeyboardEvent): string | null =>
 	resolveShortcutAction(event, active);
+
+/** The row-scoped action a key event names — for a focused cart line only. */
+export const rowActionForEvent = (event: KeyboardEvent): string | null =>
+	resolveRowShortcutAction(event, active);
 
 /** Cheat-sheet sections for the active keymap. */
 export const activeCheatSheet = () => describeKeymap(active);

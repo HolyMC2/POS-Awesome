@@ -1357,3 +1357,15 @@ table.posa-cart-table--native {
 	border: none !important;
 	background: transparent !important;
 }
+
+/* The keyboard's line (row scope, 2026-09-05): the focused row wears the
+   accent rail the lots and ledger lists use for their selection, so «which
+   line will + act on» is never a guess. `:focus-within` covers a cell editor
+   open inside the row. No outline on a mouse click — the click already
+   opened the detail dialog and a ring under it would read as a second state. */
+tr.posa-cart-item-row:focus-visible,
+tr.posa-cart-item-row:focus-within {
+	outline: none;
+	box-shadow: inset 3px 0 0 var(--reg-accent, #0097a7);
+	background: var(--reg-accent-soft, #e0f7fa);
+}

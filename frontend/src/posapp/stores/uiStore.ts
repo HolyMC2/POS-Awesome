@@ -363,6 +363,7 @@ export const useUIStore = defineStore("ui", () => {
 
   // Dialogs & Focus Triggers
   const searchFocusTrigger = ref(0);
+  const searchFocusResetPending = ref(false);
   const newAddressDialog = ref(false);
   const newAddressCustomer = ref<any>(null);
 
@@ -380,6 +381,16 @@ export const useUIStore = defineStore("ui", () => {
   const lotPickerData = ref<any>(null);
 
   function triggerItemSearchFocus() {
+    searchFocusTrigger.value++;
+  }
+
+  /**
+   * Focus the item search AND clear it — «ready for the next search» (owner
+   * ask 2026-09-05 for Alt+3). The selector reads and lowers the flag when it
+   * answers the trigger; a plain `triggerItemSearchFocus` leaves the text.
+   */
+  function triggerItemSearchReset() {
+    searchFocusResetPending.value = true;
     searchFocusTrigger.value++;
   }
 
@@ -529,6 +540,8 @@ export const useUIStore = defineStore("ui", () => {
     setApplicableOffers,
     searchFocusTrigger,
     triggerItemSearchFocus,
+    triggerItemSearchReset,
+    searchFocusResetPending,
     newAddressDialog,
     newAddressCustomer,
     openNewAddress,

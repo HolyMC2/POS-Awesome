@@ -86,7 +86,11 @@ describe("useItemsSelectorSearch", () => {
 		expect(selectHighlightedItem).not.toHaveBeenCalled();
 	});
 
-	it("prioritizes search over highlighted selection when enter is pressed in limit search mode", async () => {
+	// REVERSED 2026-09-05 (keyboard-driven register): a highlighted row wins
+	// on every profile. Under the old rule a limit-search register (Doco
+	// Ventas) re-ran the server search on Enter even with a row highlighted,
+	// so ↓ then Enter — the whole keyboard loop — never added anything.
+	it("adds the highlighted item on enter even in limit search mode", async () => {
 		const searchItems = vi.fn().mockResolvedValue([]);
 		const selectHighlightedItem = vi.fn();
 		const preventDefault = vi.fn();
@@ -116,8 +120,8 @@ describe("useItemsSelectorSearch", () => {
 		await Promise.resolve();
 
 		expect(preventDefault).toHaveBeenCalled();
-		expect(searchItems).toHaveBeenCalledWith("abcd");
-		expect(selectHighlightedItem).not.toHaveBeenCalled();
+		expect(selectHighlightedItem).toHaveBeenCalledTimes(1);
+		expect(searchItems).not.toHaveBeenCalled();
 	});
 
 	it("selects the highlighted item when enter is pressed with a highlighted ref index", () => {

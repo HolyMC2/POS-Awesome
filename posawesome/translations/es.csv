@@ -3176,3 +3176,19 @@ No batch chosen yet.,Aún no se elige lote.
 The picker needs the register's cart.,El selector necesita el carrito de la caja.
 Stock out,Salida de inventario
 Stock in,Entrada de inventario
+Cart lines · with a line focused,Líneas del carrito · con una línea enfocada
+Edit line discount,Editar descuento de la línea
+Jump to the cart lines,Ir a las líneas del carrito
+Lands on the last line; the keys below then work on it,Cae en la última línea; las teclas de abajo actúan sobre ella
+Previous line,Línea anterior
+Next line,Línea siguiente
+One more,Uno más
+One less,Uno menos
+Type the quantity,Escribir la cantidad
+Change the price,Cambiar el precio
+Line discount %,Descuento % de la línea
+Serial or batch,Serie o lote
+Opens the picker for a tracked item,Abre el selector de un artículo con serie o lote
+Open line details,Abrir detalles de la línea
+Back to search,Volver al buscador
+Clears the box · type 3* before a term or a scan to add three,Limpia el buscador · escribe 3* antes del término o del escaneo para agregar tres

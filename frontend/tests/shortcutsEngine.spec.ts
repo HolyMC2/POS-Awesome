@@ -9,9 +9,10 @@
  * table is how a keymap refactor proves it did not break them.
  */
 
+import RowSource from "../src/posapp/components/pos/invoice/CartItemRow.vue?raw";
 import { describe, expect, it } from "vitest";
 
-import { SHORTCUT_ACTIONS, getAction } from "../src/posapp/shortcuts/actions";
+import { SHORTCUT_ACTIONS, actionScope, getAction } from "../src/posapp/shortcuts/actions";
 import {
 	describeKeymap,
 	formatChord,
@@ -103,6 +104,16 @@ describe("legacy binding parity", () => {
 		const DOCUMENT_CHORDS = [
 			"alt+z", // save the cart as a quotation
 		];
+		// The keyboard-driven register (2026-09-05, keymap v5). Two global
+		// chords and the ROW scope: bare keys that only a focused cart line
+		// answers (`ShortcutScope`), so they never reach the document
+		// listener and a `p` typed in the search box stays a p.
+		const KEYBOARD_REGISTER_CHORDS = [
+			"alt+arrowdown", // jump to the cart lines
+			"alt+w", // line discount (d = cobrar, e = quitar primera)
+			"arrowup", "arrowdown", "plus", "minus", "numpadadd", "numpadsubtract",
+			"q", "p", "d", "s", "enter", "delete", "escape",
+		];
 		const boundChords = [...new Set(resolved.bindings.map((b) => b.chord.id))].sort();
 		expect(boundChords).toEqual(
 			[
@@ -110,6 +121,7 @@ describe("legacy binding parity", () => {
 				...ENGINE_ADDED_CHORDS,
 				...RAIL_DESTINATION_CHORDS,
 				...DOCUMENT_CHORDS,
+				...KEYBOARD_REGISTER_CHORDS,
 			].sort(),
 		);
 	});
@@ -241,6 +253,7 @@ describe("cheat sheet", () => {
 		expect(sections.map((s) => s.category)).toEqual([
 			"navigation",
 			"cart",
+			"lines",
 			"customer",
 			"payment",
 			"documents",
@@ -266,11 +279,21 @@ describe("effects cover the invoice surface", () => {
 		// The cheat-sheet action is the invoice surface's own; everything else
 		// bound in the default pack must be implemented here too, or the key
 		// would be advertised and do nothing.
+		// Row-scoped actions are the CART LINE's (CartItemRow.onRowKeydown),
+		// not the invoice's: the document listener never dispatches them.
 		for (const binding of resolved.bindings) {
+			if (actionScope(binding.actionId) === "row") continue;
 			expect(
 				INVOICE_SHORTCUT_EFFECTS[binding.actionId],
 				`no effect for ${binding.actionId}`,
 			).toBeTypeOf("function");
+		}
+	});
+
+	it("the cart line answers every row-scoped action", () => {
+		const rowIds = SHORTCUT_ACTIONS.filter((a) => a.scope === "row").map((a) => a.id);
+		for (const id of rowIds) {
+			expect(RowSource, `CartItemRow does not handle ${id}`).toContain(`case "${id}":`);
 		}
 	});
 });

@@ -24,6 +24,8 @@ import {
 	SHORTCUT_ACTIONS,
 	type ShortcutAction,
 	type ShortcutCategory,
+	type ShortcutScope,
+	actionScope,
 	getAction,
 } from "./actions";
 import type { Keymap } from "./keymap";
@@ -109,6 +111,14 @@ export const matchesKeyToken = (event: KeyboardEvent, token: string): boolean =>
 	}
 	if (token === "backquote") {
 		return eventKey === "`" || eventCode === "Backquote";
+	}
+	// `+` cannot be spelled inside a chord (it is the separator), so the
+	// row scope names it: the key on whatever layout produces it.
+	if (token === "plus") {
+		return eventKey === "+";
+	}
+	if (token === "minus") {
+		return eventKey === "-";
 	}
 	// Named keys: PageUp, Home, F4… compared case-insensitively against both.
 	return eventKey.toLowerCase() === token || eventCode.toLowerCase() === token;
@@ -229,17 +239,49 @@ export const resolveKeymap = (
 };
 
 /** The action a key event triggers, or null. First match wins (see sort). */
-export const resolveShortcutAction = (
+/**
+ * The row scope is STRICT about modifiers where the global scope is loose:
+ * the inherited «F4 fires under Alt+F4» rule would make Alt+↓ on a focused
+ * line read as «next line» and eat the very chord that leads out of the
+ * scope. A bare row key is a bare key.
+ */
+const matchesRowChord = (event: KeyboardEvent, chord: Chord): boolean =>
+	matchesKeyToken(event, chord.key) &&
+	chord.alt === Boolean(event.altKey) &&
+	chord.ctrl === Boolean(event.ctrlKey) &&
+	chord.meta === Boolean(event.metaKey);
+
+const resolveInScope = (
 	event: KeyboardEvent,
 	resolved: ResolvedKeymap,
+	scope: ShortcutScope,
 ): string | null => {
+	const matches = scope === "row" ? matchesRowChord : matchesChord;
 	for (const binding of resolved.bindings) {
-		if (matchesChord(event, binding.chord)) {
+		if (actionScope(binding.actionId) !== scope) continue;
+		if (matches(event, binding.chord)) {
 			return binding.actionId;
 		}
 	}
 	return null;
 };
+
+/**
+ * The GLOBAL action a key event names, or null. Row-scoped bindings are
+ * invisible here by construction: a bare `p` is a row action only when a
+ * cart line holds the focus, and the document listener must never see it as
+ * one — the search box would lose every p typed into it.
+ */
+export const resolveShortcutAction = (
+	event: KeyboardEvent,
+	resolved: ResolvedKeymap,
+): string | null => resolveInScope(event, resolved, "global");
+
+/** The ROW action a key event names — asked only by a focused cart line. */
+export const resolveRowShortcutAction = (
+	event: KeyboardEvent,
+	resolved: ResolvedKeymap,
+): string | null => resolveInScope(event, resolved, "row");
 
 /** Human chord label: "alt+1" → "Alt + 1", "alt+pageup" → "Alt + Page Up". */
 const KEY_LABELS: Record<string, string> = {
@@ -248,6 +290,17 @@ const KEY_LABELS: Record<string, string> = {
 	pagedown: "Page Down",
 	home: "Home",
 	end: "End",
+	arrowup: "↑",
+	arrowdown: "↓",
+	arrowleft: "←",
+	arrowright: "→",
+	enter: "Enter",
+	escape: "Esc",
+	delete: "Supr",
+	numpadadd: "Num +",
+	numpadsubtract: "Num −",
+	plus: "+",
+	minus: "−",
 };
 
 export const formatChord = (chord: Chord): string => {

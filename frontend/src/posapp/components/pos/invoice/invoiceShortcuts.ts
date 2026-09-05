@@ -25,7 +25,7 @@ const showCompactPanel = (
 	eventBus?.emit?.("set_compact_panel", panel);
 };
 
-type ShortcutField = "qty" | "uom" | "rate";
+type ShortcutField = "qty" | "uom" | "rate" | "discount_percentage";
 
 interface InvoiceShortcutsVm {
 	toastStore: { show: (_payload: { title: string; color: string }) => void };
@@ -37,6 +37,7 @@ interface InvoiceShortcutsVm {
 	uiStore: {
 		setActiveView: (_view: string) => void;
 		triggerItemSearchFocus: () => void;
+		triggerItemSearchReset: () => void;
 		selectTopItem: () => void;
 		toggleItemSettings: () => void;
 		/** A Pay round-trip is already open — see show_payment's in-flight latch. */
@@ -245,7 +246,9 @@ export const INVOICE_SHORTCUT_EFFECTS: Record<string, ShortcutEffect> = {
 		consumeEvent(event);
 		showCompactPanel(this.eventBus, "selector");
 		this.uiStore.setActiveView("items");
-		this.uiStore.triggerItemSearchFocus();
+		// Reset, not focus: the chord means «ready for the next search»
+		// (owner, 2026-09-05), so whatever the box held is gone on the way in.
+		this.uiStore.triggerItemSearchReset();
 		this.eventBus.emit("focus_item_search");
 	},
 
@@ -337,6 +340,29 @@ export const INVOICE_SHORTCUT_EFFECTS: Record<string, ShortcutEffect> = {
 		}
 	},
 
+	"cart.focusDiscount"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "invoice");
+		this.focusItemTableField("discount_percentage");
+	},
+
+	/**
+	 * Alt+↓ — the door into the ROW scope. Lands on the LAST line (the one
+	 * just added, in a running sale) and from there ↑↓ walk the cart and the
+	 * bare keys work on the focused line (`CartItemRow.onRowKeydown`).
+	 */
+	"cart.focusRows"(event) {
+		consumeEvent(event);
+		showCompactPanel(this.eventBus, "invoice");
+		if (typeof document === "undefined") return;
+		const rows = document.querySelectorAll<HTMLElement>(".posa-cart-item-row[tabindex]");
+		const last = rows[rows.length - 1];
+		if (last) {
+			last.scrollIntoView?.({ block: "nearest" });
+			last.focus();
+		}
+	},
+
 	"items.focusToolbarSearch"(event) {
 		consumeEvent(event);
 		showCompactPanel(this.eventBus, "invoice");
@@ -407,7 +433,7 @@ const invoiceShortcuts: Record<string, unknown> & ThisType<InvoiceShortcutsVm> =
 			}
 
 			if (!this.shortcutCycle) {
-				this.shortcutCycle = { qty: 0, uom: 0, rate: 0 };
+				this.shortcutCycle = { qty: 0, uom: 0, rate: 0, discount_percentage: 0 };
 			}
 
 			let index = Number.isInteger(this.shortcutCycle[field])

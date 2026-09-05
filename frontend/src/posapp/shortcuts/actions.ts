@@ -16,10 +16,25 @@
 export type ShortcutCategory =
 	| "navigation"
 	| "cart"
+	| "lines"
 	| "customer"
 	| "payment"
 	| "documents"
 	| "app";
+
+/**
+ * Where a chord is listened for.
+ *
+ * `global` (the default) is the document listener: Alt chords and F-keys
+ * that work from anywhere on the register. `row` is a CART LINE with the
+ * keyboard focus on it — bare keys (`+`, `-`, `p`, `d`, Supr…) that would be
+ * unthinkable as global chords, because typing "p" in the search box must
+ * type a p. The row's own keydown asks the engine for these; the document
+ * listener never sees them. Owner ask 2026-09-05: «a more robust item select
+ * system keyboard driven… like SICAR, keyboard only for searching, selecting,
+ * editing prices, discount».
+ */
+export type ShortcutScope = "global" | "row";
 
 export interface ShortcutAction {
 	id: string;
@@ -28,6 +43,8 @@ export interface ShortcutAction {
 	category: ShortcutCategory;
 	/** Longer help text where the label alone would mislead. */
 	hint?: string;
+	/** Defaults to `global`. */
+	scope?: ShortcutScope;
 }
 
 /**
@@ -41,7 +58,16 @@ export interface ShortcutAction {
 export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
 	// ── navigation ──────────────────────────────────────────────────────
 	{ id: "invoice.showInvoicePanel", label: "Show invoice panel", category: "navigation" },
-	{ id: "items.focusSearch", label: "Focus item search", category: "navigation" },
+	{
+		id: "items.focusSearch",
+		label: "Focus item search",
+		category: "navigation",
+		// The box is CLEARED on the way in (owner, 2026-09-05): the chord is
+		// «ready for the next search», not «put the cursor after what is
+		// already there». The multiplier rides the same box: `3*` before a
+		// term or a scan adds three.
+		hint: "Clears the box · type 3* before a term or a scan to add three",
+	},
 	{ id: "items.focusToolbarSearch", label: "Focus toolbar search", category: "navigation" },
 	{ id: "items.selectTop", label: "Add top search result", category: "navigation" },
 	{ id: "items.toggleSettings", label: "Toggle item settings", category: "navigation" },
@@ -65,6 +91,40 @@ export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
 	{ id: "cart.focusUom", label: "Edit unit of measure", category: "cart", hint: "Cycles through cart rows on repeat" },
 	{ id: "cart.focusRate", label: "Edit rate", category: "cart", hint: "Cycles through cart rows on repeat" },
 	{ id: "cart.removeFirstItem", label: "Remove first cart item", category: "cart" },
+	{
+		id: "cart.focusDiscount",
+		label: "Edit line discount",
+		category: "cart",
+		hint: "Cycles through cart rows on repeat",
+	},
+	{
+		id: "cart.focusRows",
+		label: "Jump to the cart lines",
+		category: "cart",
+		hint: "Lands on the last line; the keys below then work on it",
+	},
+
+	// ── lines (a cart line has the focus) ───────────────────────────────
+	// Bare keys, on purpose: this is the SICAR-style loop — arrow to the
+	// line, +/− the quantity, P for the price, D for the discount, S for the
+	// serial, Supr to drop it, Enter for the whole line, Esc back to the box.
+	{ id: "row.previous", label: "Previous line", category: "lines", scope: "row" },
+	{ id: "row.next", label: "Next line", category: "lines", scope: "row" },
+	{ id: "row.increment", label: "One more", category: "lines", scope: "row" },
+	{ id: "row.decrement", label: "One less", category: "lines", scope: "row" },
+	{ id: "row.quantity", label: "Type the quantity", category: "lines", scope: "row" },
+	{ id: "row.price", label: "Change the price", category: "lines", scope: "row" },
+	{ id: "row.discount", label: "Line discount %", category: "lines", scope: "row" },
+	{
+		id: "row.lots",
+		label: "Serial or batch",
+		category: "lines",
+		scope: "row",
+		hint: "Opens the picker for a tracked item",
+	},
+	{ id: "row.details", label: "Open line details", category: "lines", scope: "row" },
+	{ id: "row.remove", label: "Remove line", category: "lines", scope: "row" },
+	{ id: "row.back", label: "Back to search", category: "lines", scope: "row" },
 	{ id: "invoice.focusAdditionalDiscount", label: "Edit invoice discount", category: "cart" },
 	{ id: "invoice.focusDeliveryCharges", label: "Edit delivery charges", category: "cart" },
 	{ id: "invoice.focusPostingDate", label: "Edit posting date", category: "cart" },
@@ -125,11 +185,14 @@ export const getAction = (id: string): ShortcutAction | undefined => BY_ID.get(i
 
 export const isKnownAction = (id: string): boolean => BY_ID.has(id);
 
+export const actionScope = (id: string): ShortcutScope => getAction(id)?.scope ?? "global";
+
 /** Cheat-sheet section order — deliberate, not alphabetical: a cashier scans
  * for the thing they are doing right now, and that is the sale, not the app. */
 export const CATEGORY_ORDER: readonly ShortcutCategory[] = [
 	"navigation",
 	"cart",
+	"lines",
 	"customer",
 	"payment",
 	"documents",
@@ -139,6 +202,7 @@ export const CATEGORY_ORDER: readonly ShortcutCategory[] = [
 export const CATEGORY_LABELS: Record<ShortcutCategory, string> = {
 	navigation: "Navigation",
 	cart: "Cart",
+	lines: "Cart lines · with a line focused",
 	customer: "Customer",
 	payment: "Payment",
 	documents: "Documents",

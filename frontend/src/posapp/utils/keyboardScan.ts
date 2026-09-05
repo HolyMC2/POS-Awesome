@@ -91,5 +91,7 @@ export const isSearchFieldPrimedForScan = (value: string): boolean => {
     if (!value) {
         return true;
     }
-    return /^\d*$/.test(value);
+    // `3*` (a quantity multiplier waiting for the beep) primes exactly as an
+    // empty box does — see utils/searchQtyPrefix.ts.
+    return /^(\d+(?:[.,]\d+)?\s*\*\s*)?\d*$/.test(value);
 };

@@ -76,6 +76,12 @@ export function registerItemsSelectorTypeToSearch({
 		return () => {};
 	}
 
+	const isCartRowFocused = () =>
+		Boolean(
+			document.activeElement instanceof Element &&
+				document.activeElement.closest('[data-pos-keyboard-target="cart-row"]'),
+		);
+
 	const handleGlobalTypeToSearchKeydown = (event: KeyboardEvent) => {
 		if (!isTypeToSearchKey(event)) {
 			return;
@@ -86,7 +92,11 @@ export function registerItemsSelectorTypeToSearch({
 			activeView.value === "payment" ||
 			cameraScannerActive.value ||
 			hasVisibleDialog() ||
-			isEditableElement(document.activeElement)
+			isEditableElement(document.activeElement) ||
+			// A focused cart line owns its bare keys (the keymap's ROW scope:
+			// p = price, d = discount, s = serial…). Routing them into the
+			// search box here would steal the loop the line exists for.
+			isCartRowFocused()
 		) {
 			return;
 		}
