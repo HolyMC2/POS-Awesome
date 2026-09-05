@@ -5,7 +5,8 @@ All notable changes.
 ## Unreleased
 
 - **The offline sale now actually syncs, and a lost ack no longer leaves the
-  cashier holding the cart (09-04).** The marketing claim («sigue cobrando
+  cashier holding the cart (09-04) — ON PROD both tenants, `b32a7071b →
+  087831a25`, stamp `087831a255df`, Marco «push to prod».** The marketing claim («sigue cobrando
   sin internet… se sincroniza sola… nada se pierde ni se cobra dos veces»)
   was drilled on the real register (demo-abarrotes.lab, Playwright, network
   cut two ways). Found and fixed: (1) **server** — a name-less
