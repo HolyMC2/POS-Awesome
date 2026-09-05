@@ -14,13 +14,39 @@
 	<div
 		v-if="visible"
 		class="mobile-offline-overlay"
+		:class="{ 'mobile-offline-overlay--collapsed': collapsed }"
 		data-testid="offline-overlay"
 		data-offline-scope="overlay"
+		:data-offline-collapsed="collapsed ? 'true' : 'false'"
 		role="status"
 		aria-live="polite"
 		:style="{ bottom: `${dockHeight}px` }"
 	>
-		<div class="mobile-offline-overlay__card">
+		<!--
+			Folded: one strip above the dock, and ONLY the strip takes taps.
+			The full sheet used to stay over the catalogue for the whole outage,
+			so while it read «You can: Charge and print» no card could be
+			tapped and the phone could not ring up a sale at all (live drill,
+			demo-abarrotes.lab, 2026-09-04). The sheet is for the moment the
+			signal drops; the strip is for the sale that goes on.
+		-->
+		<button
+			v-if="collapsed"
+			type="button"
+			class="mobile-offline-overlay__strip"
+			data-testid="offline-overlay-strip"
+			@click="expand"
+		>
+			<v-icon icon="mdi-cloud-off-outline" size="16" aria-hidden="true" />
+			<span class="mobile-offline-overlay__strip-text">
+				{{ __("no signal") }} · {{ __("To upload") }} · {{ pendingCount }}
+				{{ pendingCount === 1 ? __("ticket") : __("tickets") }}
+				<template v-if="queuedAmountLabel"> · <span class="mono">{{ queuedAmountLabel }}</span></template>
+			</span>
+			<span class="mobile-offline-overlay__strip-more">{{ __("Details") }}</span>
+		</button>
+
+		<div v-if="!collapsed" class="mobile-offline-overlay__card">
 			<div class="mobile-offline-overlay__head">
 				<div class="mobile-offline-overlay__glyph" aria-hidden="true">
 					<v-icon icon="mdi-cloud-off-outline" size="20" />
@@ -51,11 +77,20 @@
 					-->
 					<div class="mobile-offline-overlay__queue-amount mono">{{ queuedAmountLabel }}</div>
 				</div>
-				<slot name="action"></slot>
+				<slot name="action">
+					<button
+						type="button"
+						class="mobile-offline-overlay__continue"
+						data-testid="offline-overlay-continue"
+						@click="collapse"
+					>
+						{{ __("Continue selling") }}
+					</button>
+				</slot>
 			</div>
 		</div>
 
-		<div class="mobile-offline-overlay__card mobile-offline-overlay__split">
+		<div v-if="!collapsed" class="mobile-offline-overlay__card mobile-offline-overlay__split">
 			<div class="mobile-offline-overlay__col">
 				<div class="mobile-offline-overlay__col-label">{{ __("You can") }}</div>
 				<div
@@ -94,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 
 import {
 	OFFLINE_SURFACES,
@@ -132,6 +167,25 @@ const __ = (window as any).__ || ((text: string) => text);
 
 const worksOffline = computed(() => surfacesThatWorkOffline(props.surfaces));
 const needsSignal = computed(() => surfacesThatNeedSignal(props.surfaces));
+
+/**
+ * Folded or open. The fold is per OUTAGE: a cashier who tapped «Continue
+ * selling» keeps the strip until the signal is back, and the next time it
+ * drops the full sheet returns — losing signal is an announcement each time.
+ */
+const collapsed = ref(false);
+const collapse = () => {
+	collapsed.value = true;
+};
+const expand = () => {
+	collapsed.value = false;
+};
+watch(
+	() => props.visible,
+	(now, before) => {
+		if (now && !before) collapsed.value = false;
+	},
+);
 </script>
 
 <style scoped>
@@ -147,6 +201,64 @@ const needsSignal = computed(() => surfacesThatNeedSignal(props.surfaces));
 	padding: 10px 11px 0;
 	overflow-y: auto;
 	background: var(--reg-surface-sunken, #f8f9fa);
+}
+
+/* Folded: the layer shrinks to its strip and stops catching taps — the
+ * catalogue, the cart and the keypad underneath are the cashier's again. */
+.mobile-offline-overlay--collapsed {
+	top: auto;
+	padding: 0 8px 6px;
+	overflow: visible;
+	background: transparent;
+	pointer-events: none;
+}
+
+.mobile-offline-overlay__strip {
+	pointer-events: auto;
+	width: 100%;
+	min-height: 40px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-radius: 11px;
+	border: 1px solid var(--reg-tone-warning-border, #f0dcae);
+	background: var(--reg-tone-warning-bg, #fdf9f0);
+	color: var(--reg-tone-warning-strong, #6b4a10);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	text-align: left;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.mobile-offline-overlay__strip-text {
+	flex: 1;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mobile-offline-overlay__strip-more {
+	flex: none;
+	font-size: 11px;
+	text-decoration: underline;
+}
+
+.mobile-offline-overlay__continue {
+	flex: none;
+	min-height: 44px;
+	padding: 0 16px;
+	border-radius: 11px;
+	border: 0;
+	/* strong/bg swap together per palette: dark brown on cream in light,
+	   dark brown text on light amber in dark — AA in both. */
+	background: var(--reg-tone-warning-strong, #6b4a10);
+	color: var(--reg-tone-warning-bg, #fdf9f0);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 700;
 }
 
 .mobile-offline-overlay__card {

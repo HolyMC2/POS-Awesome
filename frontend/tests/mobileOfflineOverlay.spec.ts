@@ -64,6 +64,56 @@ describe("offline is a state, not a destination", () => {
 	});
 });
 
+describe("the sheet folds out of the way so the sale can go on", () => {
+	// Live drill 2026-09-04: the sheet stayed over the catalogue for the whole
+	// outage — «You can: Charge and print» on a screen where no card could be
+	// tapped. The sheet is for the moment the signal drops; the strip is for
+	// the sale that goes on.
+	it("opens as the full sheet, with a way to continue selling", () => {
+		const wrapper = mountOverlay();
+		expect(wrapper.get('[data-testid="offline-overlay"]').attributes("data-offline-collapsed")).toBe(
+			"false",
+		);
+		expect(wrapper.find('[data-testid="offline-overlay-continue"]').exists()).toBe(true);
+		expect(wrapper.find('[data-testid="offline-overlay-strip"]').exists()).toBe(false);
+	});
+
+	it("folds into a strip that keeps the count and the amount, and stops catching taps", async () => {
+		const wrapper = mountOverlay({ pendingCount: 23, queuedAmountLabel: "$9,013.00" });
+		await wrapper.get('[data-testid="offline-overlay-continue"]').trigger("click");
+
+		const root = wrapper.get('[data-testid="offline-overlay"]');
+		expect(root.attributes("data-offline-collapsed")).toBe("true");
+		expect(root.classes()).toContain("mobile-offline-overlay--collapsed");
+		const strip = wrapper.get('[data-testid="offline-overlay-strip"]');
+		expect(strip.text()).toContain("23");
+		expect(strip.text()).toContain("$9,013.00");
+		// The reference columns are gone with the sheet; the strip is all that
+		// is left over the screen.
+		expect(wrapper.find(".mobile-offline-overlay__split").exists()).toBe(false);
+		expect(wrapper.find('[data-testid="offline-overlay-continue"]').exists()).toBe(false);
+	});
+
+	it("tapping the strip reopens the details", async () => {
+		const wrapper = mountOverlay();
+		await wrapper.get('[data-testid="offline-overlay-continue"]').trigger("click");
+		await wrapper.get('[data-testid="offline-overlay-strip"]').trigger("click");
+		expect(wrapper.get('[data-testid="offline-overlay"]').attributes("data-offline-collapsed")).toBe(
+			"false",
+		);
+	});
+
+	it("a new outage opens the full sheet again", async () => {
+		const wrapper = mountOverlay();
+		await wrapper.get('[data-testid="offline-overlay-continue"]').trigger("click");
+		await wrapper.setProps({ visible: false });
+		await wrapper.setProps({ visible: true });
+		expect(wrapper.get('[data-testid="offline-overlay"]').attributes("data-offline-collapsed")).toBe(
+			"false",
+		);
+	});
+});
+
 describe("the one number that matters offline", () => {
 	it("shows what has been taken but not yet banked", () => {
 		const wrapper = mountOverlay({

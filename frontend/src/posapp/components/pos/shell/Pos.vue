@@ -706,6 +706,8 @@ import { connectQzTray } from "../../../services/qzTray";
 import { useRtl } from "../../../composables/core/useRtl";
 import { useUIStore } from "../../../stores/uiStore";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
+import { useSyncStore } from "../../../stores/syncStore";
+import { useOfflineQueue } from "../offline/useOfflineQueue";
 import { useVerticalStore } from "../../../stores/verticalStore";
 import { useFloorStore } from "../../../stores/floorStore";
 import { useItemsStore } from "../../../stores/itemsStore";
@@ -2209,10 +2211,26 @@ export default {
 			}
 		};
 
-		// Offline queue figures are not published to the shell yet; 0 and an
-		// empty label render the overlay's copy without inventing a number.
-		const queuedInvoiceCount = ref(0);
-		const queuedAmountLabel = ref("");
+		// The offline layer's «one number»: what the shop has taken but not
+		// banked. Read from the REAL write queue through the same seam the
+		// queue view uses, refreshed whenever the sync store's pending count
+		// moves (the offline save, the drain) and on every online/offline
+		// transition. A literal 0 here renders «0 tickets» over a real queue.
+		const offlineQueue = useOfflineQueue();
+		const syncStore = useSyncStore();
+		const queuedInvoiceCount = computed(() => offlineQueue.summary.value.ticketCount);
+		const queuedAmountLabel = computed(() =>
+			queuedInvoiceCount.value
+				? formatCurrency(offlineQueue.summary.value.totalHeld)
+				: "",
+		);
+		watch(
+			() => [syncStore.pendingInvoicesCount, isOnline.value],
+			() => {
+				void offlineQueue.refresh();
+			},
+			{ immediate: true },
+		);
 
 		// `serviceOrder` is a DESTINATION, not a selector panel: it is a hosted
 		// sheet in the destination registry, and `PosActiveView` (uiStore) does
