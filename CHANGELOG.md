@@ -4,9 +4,12 @@ All notable changes.
 
 ## Unreleased
 
-- **MercadoPago + partial/split payments hardened across the register (09-05).**
+- **MercadoPago + partial/split payments hardened across the register (09-05)
+  — ON PROD both tenants, `1b3fc5209 → 37210bcc8150`, Marco «push to prod».**
   A run through the payments flows for Doco Ventas (MercadoPago Point on a
-  Newland N950), lab-verified, prod pending a live terminal drill:
+  Newland N950); browser-drilled end to end on the mirror in mock mode (the
+  terminal charged once and the connector reconciled the payment to the sale
+  invoice):
   - **A credit partial sale can now "Cobrar e imprimir," not only "Cobrar sin
     ticket."** The Cobro band disabled print-and-close on any tender shortfall;
     a credit sale's shortfall is the customer's receivable (the one case the
