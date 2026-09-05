@@ -87,6 +87,54 @@ describe("Cobro · the boundary where a shortfall becomes change", () => {
 	});
 });
 
+describe("Cobro · a credit sale's shortfall is a legitimate close", () => {
+	const total = 400;
+
+	it("a partial credit tender can still charge-and-print", () => {
+		// $200 tendered on a $400 credit sale: the other $200 becomes the
+		// customer's outstanding balance. The backend exempts is_credit_sale
+		// from the settlement invariant, so the band must stay pressable.
+		const state = resolveBandState({
+			kind: "tender",
+			total,
+			received: 200,
+			isCreditSale: 1,
+		});
+		expect(state.kind).toBe("shortfall");
+		expect(state.value).toBe(200);
+		expect(state.labelKey).toBe("On credit");
+		expect(state.primaryEnabled).toBe(true);
+	});
+
+	it("keeps the same shortfall blocked when it is NOT a credit sale", () => {
+		const state = resolveBandState({ kind: "tender", total, received: 200 });
+		expect(state.labelKey).toBe("Still owed");
+		expect(state.primaryEnabled).toBe(false);
+	});
+
+	it("accepts the boolean form of the flag", () => {
+		const state = resolveBandState({
+			kind: "tender",
+			total,
+			received: 0,
+			isCreditSale: true,
+		});
+		expect(state.primaryEnabled).toBe(true);
+		expect(state.labelKey).toBe("On credit");
+	});
+
+	it("a credit flag does not turn a fully-paid sale into a shortfall", () => {
+		const state = resolveBandState({
+			kind: "tender",
+			total,
+			received: total,
+			isCreditSale: 1,
+		});
+		expect(state.kind).toBe("change");
+		expect(state.primaryEnabled).toBe(true);
+	});
+});
+
 describe("Orden de servicio · Orden.dc.html · #RS-2048", () => {
 	const state = resolveBandState({
 		kind: "balanceDue",

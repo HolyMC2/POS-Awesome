@@ -116,7 +116,17 @@ export type BandInput =
 	 * shortfall is decided here, not by the caller — that decision IS the
 	 * band's job.
 	 */
-	| { kind: "tender"; total: unknown; received: unknown }
+	| {
+			kind: "tender";
+			total: unknown;
+			received: unknown;
+			/**
+			 * A credit sale is deliberately under-tendered — the remainder is
+			 * the customer's outstanding balance. When set, a shortfall is a
+			 * legitimate close, not a blocked one.
+			 */
+			isCreditSale?: unknown;
+	  }
 	/** Orden de servicio: order total less advances, plus counter sales. */
 	| {
 			kind: "balanceDue";
@@ -198,13 +208,23 @@ export function resolveBandState(input: BandInput): BandState {
 			// it the number is what is still owed; at or above it the number is
 			// what goes back to the customer.
 			if (delta < 0) {
+				// A credit sale is DELIBERATELY under-tendered: the unpaid
+				// remainder becomes the customer's outstanding balance
+				// (anticipo/receivable), which is the one case the backend's
+				// settlement invariant exempts (api/_reprice.
+				// assert_payments_match_grand_total returns early on
+				// is_credit_sale). So print-and-close must stay pressable — the
+				// shortfall IS the credit, not a mistake. A non-credit shortfall
+				// is still an unfinished sale and stays blocked.
+				const onCredit =
+					input.isCreditSale === true || num(input.isCreditSale) === 1;
 				return {
 					kind: "shortfall",
 					tone: "warning",
 					value: round2(-delta),
-					labelKey: "Still owed",
+					labelKey: onCredit ? "On credit" : "Still owed",
 					primaryAction: { id: "sale.collectAndClose", labelKey: "CHARGE AND PRINT" },
-					primaryEnabled: false,
+					primaryEnabled: onCredit,
 				};
 			}
 

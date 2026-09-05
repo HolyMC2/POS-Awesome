@@ -83,7 +83,16 @@ const received = computed(() => {
 });
 
 const band = computed(() =>
-	resolveBandState({ kind: "tender", total: total.value, received: received.value }),
+	resolveBandState({
+		kind: "tender",
+		total: total.value,
+		received: received.value,
+		// A credit sale's shortfall is the receivable, not a blocked total —
+		// the band must keep print-and-close pressable. `is_credit_sale` is
+		// stamped onto the shared invoice doc by Payments.vue's credit watcher.
+		isCreditSale: (invoiceDoc.value as { is_credit_sale?: unknown } | null)
+			?.is_credit_sale,
+	}),
 );
 
 // `immediate`: the surface is mounted BECAUSE the cashier pressed PAGAR, so

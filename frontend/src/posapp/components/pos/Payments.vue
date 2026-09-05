@@ -3049,6 +3049,15 @@ watch(sales_person, (newVal) => {
 });
 
 watch(is_credit_sale, (newVal) => {
+	// Stamp the flag onto the shared invoice doc so the Cobro band (CobroSurface)
+	// knows a shortfall is a legitimate credit close, not a blocked one. The
+	// submit payload still carries is_credit_sale from the ref; this is the
+	// read surface for the band. Stamp before the payments guard so it lands
+	// even on a doc that has no payment rows yet.
+	if (invoice_doc.value) {
+		invoice_doc.value.is_credit_sale = newVal ? 1 : 0;
+	}
+
 	if (!invoice_doc.value || !Array.isArray(invoice_doc.value.payments)) return;
 
 	const doc = invoice_doc.value;
