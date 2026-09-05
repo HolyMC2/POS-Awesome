@@ -31,6 +31,12 @@ All notable changes.
     MercadoPago charge — "tips by parts" and card-per-party with no
     multiple-charges-on-one-invoice problem. Retries stay deduped, so a cuenta
     is minted at most once.
+  - **Per-share tips on a single split bill.** When one bill is split among N
+    payers (Dividir / Por asiento), each payer can add their own tip beside
+    their share; it rides onto the invoice's PROPINA line and that payer's
+    tender, and the arithmetic self-balances so it never changes what the
+    others owe. Use cuentas for separate bills, per-share tips for one shared
+    bill.
 - **A sale queued offline now syncs even when the reconnect beats the boot
   (09-05).** Re-running the desktop drill caught a fourth defect the first
   pass missed: an offline sale that survived a reload stayed `pending` and
