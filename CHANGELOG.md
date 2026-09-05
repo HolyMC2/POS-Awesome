@@ -4,6 +4,44 @@ All notable changes.
 
 ## Unreleased
 
+- **The pay screen and Cobranza join the keyboard — keymap v6 (09-05), ON
+  LAB, prod pending «push to prod».** Owner: «we can still add cobranza
+  shortcuts, payments shortcuts, think on how to improve speed and usability
+  so powerusers can shine».
+  - **Cobro (pay screen open):** **↑ ↓** arm the previous / next method
+    through the rows' own pick (the same act as a tap, gift cards skipped),
+    digits type the amount for the armed method and **Enter** applies it (the
+    tender pad, as before), **=** puts the exact remaining amount on the armed
+    method («Exacto»), **Esc** is «Volver a la venta». Alt+P / Alt+X close the
+    sale with / without a ticket as before. The fastest cash sale is now
+    Alt+D · = · Alt+P, or Alt+P straight from the sale.
+  - **Cobranza:** **Alt+Shift+C** opens it from anywhere (Alt+C stays the
+    price check). On the screen **↑ ↓** walk the invoices and **Enter**
+    collects the selected one from anywhere on the surface — a folio typed in
+    the search box then Enter collects —, **/** jumps to the search, **Esc**
+    backs out of the capture, a detail, or the search box.
+  - Both are keymap SCOPES (`pay`, `cobranza`), asked only by the screen that
+    owns them; the cheat sheet gains «Cobro · con la pantalla de cobro
+    abierta» and «Cobranza · en la pantalla de cobranza». Chord clashes are
+    now detected per scope — ↓ on a cart line, on the pay screen and on
+    Cobranza are three actions on purpose.
+  - Three things the mirror drill caught and fixed: under the anchored pay
+    screen the item search kept the keyboard focus, so the tender pad's
+    digits fed the scan detector and never the amount — the pay screen now
+    takes the focus on open and reclaims it if a box outside it grabs it;
+    the register's spatial arrow navigation consumed ↓ before the pay screen
+    saw it — the pay listener now runs first; and the type-anywhere-to-search
+    listener revealed the sale on any bare key while Cobranza (or any hosted
+    destination) was up — it now stands down while another surface is up.
+  - Lab only: the doco mirror's System Settings time zone was Asia/Kolkata
+    (prod is America/Mazatlan on both tenants), which blocked the pay screen
+    after 11:30 local with «Changing the posting date is not enabled in POS
+    Profile»; set to America/Mazatlan.
+  - Files: `shortcuts/{actions,keymap,engine,index}.ts`,
+    `components/pos/Payments.vue`, `payments/cobro/CobroMethodRows.vue`,
+    `payments/cobranza/CobranzaSurface.vue`, `invoice/invoiceShortcuts.ts`,
+    `translations/es.csv`; specs `keyboardRegister` + engine pins.
+
 - **The keyboard-driven register — keymap v5 (09-05), ON LAB, prod pending
   «push to prod».** Owner: «people using SICAR fast af using keyboard only for
   searching, selecting, editing prices, discount… lets add more keyboard driven
