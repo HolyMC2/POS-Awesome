@@ -51,6 +51,7 @@ import { onMounted, ref } from "vue";
 import TerminalInvoiceRecovery from "./TerminalInvoiceRecovery.vue";
 import { db, memory, isOffline } from "../../../offline/db";
 import { getPendingShiftWorkCount } from "../../../offline/shiftQueueGuard";
+import { currentQueueOwner } from "../../../offline/queueOwnership";
 import { applyTerminalStatus, getShiftTerminalContext, getTerminalCredentials, refreshTerminalStatus, terminalFenceKey } from "../../../offline/shiftTerminal";
 
 const __ = (window as any).__ || ((value: string) => value);
@@ -121,6 +122,7 @@ async function act(action: string) {
 	busy.value = true;
 	error.value = "";
 	try {
+		const owner = currentQueueOwner();
 		const draining = action === "release_terminal" || action === "resume_terminal";
 		if (draining && await getPendingShiftWorkCount({ name: openingName }, true)) {
 			throw new Error(__("Sync and review all saved sales and cash movements first."));
@@ -134,10 +136,20 @@ async function act(action: string) {
 		});
 		applyTerminalStatus(response.message);
 		status.value = await refreshTerminalStatus();
-		const fence = await db.table("keyval").get(terminalFenceKey(openingName));
-		if (status.value?.owned && status.value.terminal_generation > Number(fence?.value?.generation || 0)) {
-			await db.table("keyval").delete(terminalFenceKey(openingName));
-		}
+		const keyval = db.table("keyval");
+		await db.transaction("rw", keyval, async () => {
+			const fence = await keyval.get(terminalFenceKey(openingName));
+			const currentOwner = currentQueueOwner();
+			if (!owner || !currentOwner || owner.queue_user !== currentOwner.queue_user ||
+				owner.queue_profile !== currentOwner.queue_profile ||
+				memory.pos_opening_storage?.pos_opening_shift?.name !== openingName) return;
+			// Ownership survives closure. Read and conditionally remove the old
+			// fence atomically so another tab's new close cannot lose its fence.
+			if (status.value?.owned && status.value.opening_shift === openingName && status.value.status === "Open" &&
+				status.value.terminal_generation > Number(fence?.value?.generation || 0)) {
+				await keyval.delete(terminalFenceKey(openingName));
+			}
+		});
 		await refresh();
 	} catch (failure) { error.value = String((failure as Error).message); }
 	finally { busy.value = false; }
