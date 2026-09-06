@@ -29,6 +29,12 @@ class _FakeDB:
     def __init__(self, presets):
         self.presets = presets
         self.writes = []
+        self.profile_table_exists = True
+
+    def table_exists(self, doctype):
+        if doctype != "POS Capability Profile":
+            raise AssertionError(f"Unexpected table: {doctype}")
+        return self.profile_table_exists
 
     def get_value(self, doctype, name, field):
         return self.presets[name].get(field)
@@ -44,6 +50,8 @@ class _FakeFrappe(types.SimpleNamespace):
         self.db = _FakeDB(presets)
 
     def get_all(self, doctype, pluck=None):
+        if not self.db.table_exists(doctype):
+            raise AssertionError("Cannot query a missing profile table")
         return list(self.db.presets.keys())
 
     def logger(self):
@@ -144,6 +152,12 @@ class RepairPresetDockMigrationTests(unittest.TestCase):
 
     def test_no_presets_at_all_does_not_raise(self):
         module, fake = _load({})
+        module.execute()
+        self.assertEqual(fake.db.writes, [])
+
+    def test_missing_profile_table_is_skipped_before_model_sync(self):
+        module, fake = _load({})
+        fake.db.profile_table_exists = False
         module.execute()
         self.assertEqual(fake.db.writes, [])
 
