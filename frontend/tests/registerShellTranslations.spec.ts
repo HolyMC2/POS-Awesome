@@ -63,7 +63,10 @@ const SCAN_ROOTS = ["components/pos", "composables/pos"];
  * translated until the Riel y Cajón wave. It sits outside both roots, so it is
  * named here.
  */
-const SCANNED_FILES = ["shortcuts/actions.ts"];
+const SCANNED_FILES = [
+	"shortcuts/actions.ts",
+	"components/navbar/ChargeRequestsDialog.vue",
+];
 
 /**
  * Keys that carry a translatable value.

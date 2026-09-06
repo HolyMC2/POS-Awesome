@@ -3447,3 +3447,27 @@ Payment is not fully confirmed. Keep the original request and review pending pay
 Refresh status,Actualizar estado
 Last checked,Última consulta
 Review the existing provider transaction before collecting again.,Revise la operación existente del proveedor antes de volver a cobrar.
+Release draft,Liberar borrador
+Release unsubmitted charge draft?,¿Liberar el borrador de cobro sin confirmar?
+The draft is retained and cannot collect this retired request. Saved or processing payments must be reviewed first. Reload the current source quote after release.,"El borrador se conserva y ya no podrá cobrar esta solicitud retirada. Primero revise los pagos guardados o en proceso. Después de liberarlo, vuelva a cargar la cotización actual del documento de origen."
+Keep draft,Conservar borrador
+The cashier or register changed. Reopen pending charges.,Cambió el cajero o la caja. Vuelva a abrir los cobros pendientes.
+Reconnect before releasing a charge draft.,Vuelva a conectarse antes de liberar un borrador de cobro.
+Review saved or processing payments before releasing a charge draft.,Revise los pagos guardados o en proceso antes de liberar un borrador de cobro.
+Release could not be verified. Refresh pending charges before retrying.,No se pudo verificar la liberación. Actualice los cobros pendientes antes de reintentar.
+Draft released,Borrador liberado
+Reload the current source quote before collecting payment.,Vuelva a cargar la cotización actual del documento de origen antes de cobrar.
+Could not release this charge draft.,No se pudo liberar este borrador de cobro.
+An amendment must be submitted before rebinding its charge request.,Debe confirmar la factura enmendada antes de vincularla de nuevo a su solicitud de cobro.
+Cancelled invoice {0} was replaced by amendment {1}.,La factura cancelada {0} fue sustituida por la factura enmendada {1}.
+This retired request can only be collected through an amendment of its cancelled invoice.,Esta solicitud retirada solo puede cobrarse mediante una enmienda de su factura cancelada.
+Another charge already exists for this source. Review it before amending the cancelled invoice.,Ya existe otro cobro para este documento de origen. Revíselo antes de enmendar la factura cancelada.
+The invoice must be cancelled before retiring its charge request.,Debe cancelar la factura antes de retirar su solicitud de cobro.
+Invoice {0} was cancelled. Its source history is retained; review any delivery or payment outside this invoice.,Se canceló la factura {0}. Se conserva el historial del documento de origen; revise cualquier entrega o pago registrado fuera de esta factura.
+The charge request belongs to a different register or company.,La solicitud de cobro pertenece a otra caja o empresa.
+The pinned draft changed. Refresh pending charges before releasing it.,Cambió el borrador vinculado. Actualice los cobros pendientes antes de liberarlo.
+Only the owning cashier can release this register's unsubmitted draft.,Solo el cajero propietario puede liberar el borrador sin confirmar de esta caja.
+A completed charge cannot be released.,No se puede liberar un cobro completado.
+This draft contains a payment intent. Review saved payments before releasing it.,Este borrador contiene una intención de pago. Revise los pagos guardados antes de liberarlo.
+Submission or payment processing has started. Review the original transaction before releasing it.,La confirmación o el procesamiento del pago ya comenzó. Revise la operación original antes de liberarlo.
+Cashier released unsubmitted draft {0}; the draft is retained and cannot collect this retired request.,El cajero liberó el borrador sin confirmar {0}; el borrador se conserva y ya no podrá cobrar esta solicitud retirada.

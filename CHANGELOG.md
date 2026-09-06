@@ -4,6 +4,42 @@ All notable changes.
 
 ## Unreleased
 
+- **POS review corrections (09-06); production pending.**
+  - Make terminal resume retries return the first successful generation after
+    a lost response. Persist protected resume provenance; ordinary money
+    requests still require the current generation. Protect terminal fields
+    during native updates after submission as well as ordinary saves.
+  - Clear a closing fence only after proving that the shift is still open
+    with a newer generation. Compare and delete atomically so another tab's
+    newer fence survives. No timeout clears an uncertain close result.
+  - Separate Spanish labels for change due, changing a kitchen station,
+    delivered status and delivered orders; enforce unique translation keys.
+  - Retire cancelled invoice claims without losing their source history.
+    Rebind only a matching native amendment of the currently linked cancelled
+    invoice; reject competing source charges and preserve the retired claim
+    if submission fails. Cashiers can release their untouched pinned draft
+    after reviewing saved payments, then reload the current repair quote.
+  - Stop source callbacks for cancelled invoices and move an eighth failed
+    callback to visible Needs Review. Reuse a live charged repair request
+    instead of creating another charge on a subsequent source save. Read the
+    current locked source quote before preparation and submission.
+  - Prepare POS Invoices with profile-derived zero tender rows. Preserve the
+    source currency and use native receivable and server exchange-rate rules.
+  - Verification: 5,438 frontend tests in 475 files, type-check and production
+    build passed (`review0906-3`). 36 native charge/Taller/exception regressions
+    passed in 42.7 seconds with fixture rollback, including cancel/amend,
+    changed-quote release/reload, zero-tender POS Invoice and USD preparation.
+    Also passed: 77 focused backend checks, six native terminal/recovery cases,
+    22 closing-fence/recovery frontend checks and six translation checks.
+    Installed Frappe already maps database error
+    1020 to the existing read-only retry; no broad retry was added. Native
+    manager recovery preserves a parked sale's original request and posts it
+    once after a terminal generation change.
+  - Eight-hour endurance remains unverified. Native invoice-first locks and
+    source-first callback locks can contend; a two-connection cancellation/
+    delivery deadlock drill remains outstanding. No generic financial write
+    retry or production deployment is included in this correction pass.
+
 - **POS exception review and release evidence (09-06), LAB `ready0906-7`.**
   - Add a lazy "Money needing attention" screen from register status and
     Receivables. Combine cashier-owned browser work with permission-scoped
@@ -33,7 +69,7 @@ All notable changes.
     Its retained heap stayed between 21.5 and 22.4 MB; listeners were 570–573.
     Separate online/offline acknowledgement smoke variants also passed. The
     full endurance attempt stopped after two completed cycles when the next
-    offline cycle sampled 693 DOM listeners against a 605 limit. Both durable
+    offline cycle sampled 693 CDP event listeners against a 605 limit. Both durable
     stores were empty and browser errors were zero; the cause of that sample
     remains unverified. The eight-hour gate has not passed.
   - Measurements: no exception-feed requests on startup; real desktop/phone
