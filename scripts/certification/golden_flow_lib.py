@@ -29,7 +29,7 @@ def parse_env_file(text: str) -> dict:
     return out
 
 
-def verdict_from_report(report: dict) -> dict:
+def verdict_from_report(report: dict, *, process_exit: int = 0) -> dict:
     """Pass/fail from a Playwright JSON report.
 
     A SKIPPED run is a FAILURE here: the spec self-skips when
@@ -41,13 +41,16 @@ def verdict_from_report(report: dict) -> dict:
     unexpected = int(stats.get("unexpected") or 0)
     skipped = int(stats.get("skipped") or 0)
     flaky = int(stats.get("flaky") or 0)
-    passed = expected >= 1 and unexpected == 0 and skipped == 0
+    errors = len(report.get("errors") or [])
+    passed = expected >= 1 and unexpected == 0 and skipped == 0 and flaky == 0 and errors == 0 and process_exit == 0
     return {
         "passed": passed,
         "expected": expected,
         "unexpected": unexpected,
         "skipped": skipped,
         "flaky": flaky,
+        "global_errors": errors,
+        "process_exit": process_exit,
         "duration_ms": round(float(stats.get("duration") or 0)),
     }
 
@@ -70,10 +73,12 @@ def run_record(
 ) -> dict:
     """The repo-versioned evidence file, one per run (benchmarks pattern)."""
     return {
+        "scope": "golden-flow-smoke",
+        "release_certified": False,
         "golden_flow_id": golden_flow_id,
         "manifest_id": manifest_id,
         "site": site,
-        "passed": verdict["passed"],
+        "passed": bool(verdict["passed"] and playwright_exit == 0),
         "verdict": verdict,
         "spec": {"path": spec_path, "sha256": spec_sha256, "git_rev": git_rev},
         "playwright_exit": playwright_exit,

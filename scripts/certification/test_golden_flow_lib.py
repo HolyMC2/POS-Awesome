@@ -47,6 +47,16 @@ class TestVerdict(unittest.TestCase):
     def test_empty_report_is_a_failure(self):
         self.assertFalse(verdict_from_report({})["passed"])
 
+    def test_global_error_cannot_certify_a_passing_test(self):
+        report = {"stats": {"expected": 1}, "errors": [{"message": "worker crashed"}]}
+        self.assertFalse(verdict_from_report(report)["passed"])
+
+    def test_retry_only_success_does_not_certify(self):
+        self.assertFalse(verdict_from_report({"stats": {"expected": 1, "flaky": 1}})["passed"])
+
+    def test_nonzero_process_exit_cannot_certify(self):
+        self.assertFalse(verdict_from_report({"stats": {"expected": 1}}, process_exit=1)["passed"])
+
 
 class TestLedgerPayload(unittest.TestCase):
     def _record(self, passed=True):
@@ -77,6 +87,13 @@ class TestLedgerPayload(unittest.TestCase):
         cmd = bench_execute_command("/tmp/compose.yaml", "boat.lab.x", "{}")
         self.assertIn("boat.muelle.certification.record_golden_flow_run", cmd)
         self.assertEqual(cmd[cmd.index("--site") + 1], "boat.lab.x")
+
+    def test_record_rechecks_process_exit(self):
+        record = run_record(site="lab", manifest_id="m", golden_flow_id="g",
+            verdict={"passed": True}, spec_path="s", spec_sha256="h", git_rev="r",
+            playwright_exit=1, started_at="2026-09-06T00:00:00+00:00")
+        self.assertFalse(record["passed"])
+        self.assertEqual(json.loads(ledger_kwargs(record))["passed"], "false")
 
 
 if __name__ == "__main__":

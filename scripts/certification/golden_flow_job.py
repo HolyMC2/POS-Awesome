@@ -27,6 +27,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -57,6 +58,7 @@ def main() -> int:
     ap.add_argument("--runs-dir", default=str(REPO_ROOT / "docs/certification/golden-flow-runs"))
     ap.add_argument("--no-ledger", action="store_true", help="record the run file only")
     args = ap.parse_args()
+    print("Golden-flow SMOKE only. Full release gate: scripts/certification/release_certification.py")
 
     env_path = pathlib.Path(args.env_file)
     if not env_path.exists():
@@ -68,25 +70,22 @@ def main() -> int:
         return 2
 
     started_at = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
-    report_path = FRONTEND / "test-results" / "golden-flow-report.json"
     env = dict(os.environ)
     env.update(creds)
     env["POSA_SMOKE_BASE_URL"] = f"https://{args.site}"
-    env["PLAYWRIGHT_JSON_OUTPUT_NAME"] = str(report_path)
-
-    proc = subprocess.run(
-        ["npx", "playwright", "test", SPEC, "--reporter=json"],
-        cwd=FRONTEND,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
-    if not report_path.exists():
-        print("setup error: no Playwright JSON report produced", file=sys.stderr)
-        print(proc.stdout[-2000:], file=sys.stderr)
-        print(proc.stderr[-2000:], file=sys.stderr)
-        return 2
-    verdict = verdict_from_report(json.loads(report_path.read_text()))
+    # Each invocation owns a fresh report. A crashed runner must never reuse
+    # yesterday's passing file, including overlapping timer/manual runs.
+    with tempfile.TemporaryDirectory(prefix="pos-golden-") as report_dir:
+        report_path = pathlib.Path(report_dir) / "report.json"
+        env["PLAYWRIGHT_JSON_OUTPUT_NAME"] = str(report_path)
+        proc = subprocess.run(
+            ["npx", "playwright", "test", SPEC, "--reporter=json"],
+            cwd=FRONTEND, env=env, capture_output=True, text=True,
+        )
+        if not report_path.exists():
+            print("setup error: no Playwright JSON report produced", file=sys.stderr)
+            return 2
+        verdict = verdict_from_report(json.loads(report_path.read_text()), process_exit=proc.returncode)
 
     spec_text = (FRONTEND / SPEC).read_text()
     git_rev = subprocess.run(
@@ -106,9 +105,11 @@ def main() -> int:
 
     runs_dir = pathlib.Path(args.runs_dir)
     runs_dir.mkdir(parents=True, exist_ok=True)
-    stamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M")
+    stamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     out_path = runs_dir / f"{stamp}-{args.site.split('.')[0]}.json"
-    out_path.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n")
+    # Timer and manual invocations must never overwrite each other's evidence.
+    with out_path.open("x") as output:
+        output.write(json.dumps(record, indent=1, sort_keys=True) + "\n")
     print(f"run record: {out_path}")
     print(f"verdict: {'PASS' if verdict['passed'] else 'FAIL'} {verdict}")
 
