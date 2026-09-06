@@ -271,7 +271,7 @@ import { useInvoiceStore } from "../../stores/invoiceStore";
 import { useOnlineStatus } from "../../composables/core/useOnlineStatus";
 import { usePrintHealthShared } from "../../composables/core/usePrintHealthShared";
 import { useUpdateStore } from "../../stores/updateStore";
-import posLogo from "../pos/pos.png";
+import posLogo from "../../../../../posawesome/public/icons/logo-192.png";
 import NavbarInfoGadgets from "./NavbarInfoGadgets.vue";
 import RegisterStatusLine from "./RegisterStatusLine.vue";
 import { useRegisterFacts } from "./useRegisterFacts";
