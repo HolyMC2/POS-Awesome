@@ -147,7 +147,8 @@ doc_events = {
         "on_submit": ["posawesome.posawesome.api.charge_request_integrity.on_submit",
                       "posawesome.posawesome.api.crm_bridge.on_sales_invoice_submit"],
         "before_cancel": "posawesome.posawesome.api.invoice.before_cancel",
-        "on_cancel": "posawesome.posawesome.api.invoice.on_cancel",
+        "on_cancel": ["posawesome.posawesome.api.invoice.on_cancel",
+                      "posawesome.posawesome.api.charge_request_integrity.on_cancel"],
     },
     "POS Invoice": {
         "validate": "posawesome.posawesome.api.invoice.validate",
@@ -156,7 +157,8 @@ doc_events = {
         "on_submit": ["posawesome.posawesome.api.charge_request_integrity.on_submit",
                       "posawesome.posawesome.api.crm_bridge.on_sales_invoice_submit"],
         "before_cancel": "posawesome.posawesome.api.invoice.before_cancel",
-        "on_cancel": "posawesome.posawesome.api.invoice.on_cancel",
+        "on_cancel": ["posawesome.posawesome.api.invoice.on_cancel",
+                      "posawesome.posawesome.api.charge_request_integrity.on_cancel"],
     },
     "Customer": {
         "validate": "posawesome.posawesome.api.customer.validate",

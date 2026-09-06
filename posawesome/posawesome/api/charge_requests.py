@@ -105,9 +105,8 @@ def get_open_charge_requests(pos_profile):
         "customer",
         "source_label",
         "amount_total",
-        "reference_doctype",
-        "reference_name",
-        "creation",
+        "reference_doctype", "reference_name",
+        "creation", "invoice_doctype", "invoice",
     ]
     # settle_mode (order hub, critique D3): "Source" rows are settled by
     # their reference's own spine — the SPA offers that trigger instead of
@@ -132,8 +131,10 @@ def get_open_charge_requests(pos_profile):
         for row in rows
         if row.customer
     }
+    from .charge_request_integrity import can_release
     for row in rows:
         row["customer_name"] = customer_names.get(row.customer) or row.customer
+        row["can_release"] = can_release(row, pos_profile)
     return rows
 
 

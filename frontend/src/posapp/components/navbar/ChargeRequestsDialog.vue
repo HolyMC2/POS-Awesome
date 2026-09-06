@@ -39,6 +39,9 @@
 								{{ request.customer_name }}
 							</v-list-item-subtitle>
 							<template #append>
+								<v-btn v-if="request.can_release" size="small" variant="tonal" class="mr-2"
+									data-testid="release-charge-draft" :disabled="!!loadingRequest"
+									@click.stop="releaseCandidate = request">{{ __("Release draft") }}</v-btn>
 								<span class="text-subtitle-2">
 									{{ formatAmount(request.amount_total) }}
 								</span>
@@ -62,9 +65,24 @@
 			</v-card-actions>
 		</v-card>
 	</v-dialog>
+	<v-dialog :model-value="!!releaseCandidate" max-width="520" @update:model-value="releaseCandidate = null">
+		<v-card v-if="releaseCandidate" data-testid="release-charge-confirmation">
+			<v-card-title>{{ __("Release unsubmitted charge draft?") }}</v-card-title>
+			<v-card-text>{{ __("The draft is retained and cannot collect this retired request. Saved or processing payments must be reviewed first. Reload the current source quote after release.") }}
+				<p>{{ releaseCandidate.invoice }}</p>
+			</v-card-text>
+			<v-card-actions><v-btn @click="releaseCandidate = null" :disabled="!!loadingRequest">{{ __("Keep draft") }}</v-btn>
+				<v-btn color="warning" variant="outlined" :loading="!!loadingRequest" @click="releaseDraft">{{ __("Release draft") }}</v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
 </template>
 
 <script setup>
+import { isOffline } from "../../../offline/db";
+import { getQueueEntries } from "../../../offline/writeQueue";
+import { getInvoiceOutboxRows } from "../../../offline/invoiceOutbox";
+import { currentQueueOwner } from "../../../offline/queueOwnership";
 import { getShiftTerminalContext } from "../../../offline/shiftTerminal";
 import { computed, ref, watch } from "vue";
 import { useDialogFullscreen } from "../../composables/core/useDialogFullscreen";
@@ -117,6 +135,21 @@ const loading = ref(false);
 const loadingRequest = ref(null);
 const requests = ref([]);
 const errorMessage = ref("");
+const releaseCandidate = ref(null);
+let loadedScope = "";
+let readVersion = 0;
+function currentScope() {
+	const owner = currentQueueOwner();
+	const shift = useUIStore().posOpeningShift;
+	return owner && owner.queue_profile === props.posProfile?.name
+		? JSON.stringify([owner, props.posProfile.name, shift?.name ?? shift, getShiftTerminalContext()]) : "";
+}
+function assertScope(scope) {
+	if (!scope || currentScope() !== scope) {
+		requests.value = []; releaseCandidate.value = null; loadedScope = "";
+		throw new Error(__("The cashier or register changed. Reopen pending charges."));
+	}
+}
 
 function formatAmount(value) {
 	const num = Number(value || 0);
@@ -131,6 +164,8 @@ function formatAmount(value) {
 }
 
 async function refresh() {
+	const version = ++readVersion;
+	const scope = currentScope();
 	errorMessage.value = "";
 	loading.value = true;
 	try {
@@ -138,21 +173,28 @@ async function refresh() {
 			method: "posawesome.posawesome.api.charge_requests.get_open_charge_requests",
 			args: { pos_profile: props.posProfile?.name },
 		});
+		if (version !== readVersion) return;
+		assertScope(scope);
+		loadedScope = scope;
 		requests.value = Array.isArray(r?.message) ? r.message : [];
 	} catch (err) {
+		if (version !== readVersion) return;
 		// Never silent: the cashier must know the list could not load.
 		errorMessage.value =
 			err?.serverMessage || err?.message || __("Could not load pending charges.");
 		requests.value = [];
 	} finally {
-		loading.value = false;
+		if (version === readVersion) loading.value = false;
 	}
 }
 
 async function selectRequest(request) {
+	if (loadingRequest.value) return;
+	const scope = loadedScope;
 	errorMessage.value = "";
 	loadingRequest.value = request.name;
 	try {
+		assertScope(scope);
 		const uiStore = useUIStore();
 		const r = await frappe.call({
 			method: "posawesome.posawesome.api.charge_requests.prepare_charge_request_invoice",
@@ -166,6 +208,7 @@ async function selectRequest(request) {
 				pos_opening_shift: uiStore.posOpeningShift?.name ?? uiStore.posOpeningShift ?? null,
 			},
 		});
+		assertScope(scope);
 		if (r?.message?.already_charged) {
 			useToastStore().show({ title: __("This request has already been charged"),
 				message: r.message.name, color: "info" });
@@ -190,6 +233,46 @@ async function selectRequest(request) {
 	}
 }
 
+async function releaseDraft() {
+	const request = releaseCandidate.value;
+	if (!request || loadingRequest.value) return;
+	const scope = loadedScope;
+	errorMessage.value = "";
+	loadingRequest.value = request.name;
+	try {
+		assertScope(scope);
+		if (isOffline()) throw new Error(__("Reconnect before releasing a charge draft."));
+		const [invoices, payments, outbox] = await Promise.all([
+			getQueueEntries("invoice"), getQueueEntries("payment"), getInvoiceOutboxRows(),
+		]);
+		assertScope(scope);
+		const current = useInvoiceStore().invoiceDoc;
+		const tendered = current?.name === request.invoice && (Number(current.paid_amount || 0) !== 0 ||
+			(current.payments || []).some(row => Number(row.amount || 0) !== 0));
+		if (invoices.length || payments.length || outbox.some(row => row.status !== "acknowledged" || row.server_verified !== true) || tendered)
+			throw new Error(__("Review saved or processing payments before releasing a charge draft."));
+		const ui = useUIStore();
+		const response = await frappe.call({
+			method: "posawesome.posawesome.api.charge_request_integrity.release_charge_request_draft",
+			args: { ...getShiftTerminalContext(), name: request.name, invoice_name: request.invoice,
+				pos_profile: props.posProfile?.name, pos_opening_shift: ui.posOpeningShift?.name ?? ui.posOpeningShift ?? null },
+		});
+		assertScope(scope);
+		if (!response?.message?.released || response.message.invoice !== request.invoice)
+			throw new Error(__("Release could not be verified. Refresh pending charges before retrying."));
+		releaseCandidate.value = null;
+		useToastStore().show({ title: __("Draft released"), message: __("Reload the current source quote before collecting payment."), color: "info" });
+		await refresh();
+	} catch (error) {
+		errorMessage.value = error?.serverMessage || error?.message || __("Could not release this charge draft.");
+		releaseCandidate.value = null;
+	} finally { loadingRequest.value = null; }
+}
+
+watch(() => props.posProfile?.name, () => {
+	requests.value = []; releaseCandidate.value = null; loadedScope = "";
+	if (dialogModel.value) refresh();
+});
 watch(
 	() => dialogModel.value,
 	(open) => {

@@ -190,3 +190,12 @@ class TestMoneyExceptions(unittest.TestCase):
         frappe.db.set_value("Sales Invoice", self.invoice.name, "company", "FOREIGN-COMPANY")
         frappe.db.set_value("POS Invoice Submission Ledger", self.receipt.document.name, "company", "FOREIGN-COMPANY")
         self.assertEqual(self.feed()["rows"], [])
+
+    def test_terminal_callback_failure_stays_visible_without_automatic_action(self):
+        frappe.db.set_value("POS Charge Request", self.fixture.request.name,
+                            {"callback_status": "Needs Review", "callback_next_retry": None})
+        rows = [row for row in self.feed()["rows"] if row["kind"] == "charge_callback"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["status"], "Needs Review")
+        self.assertIn("failed", rows[0]["message_key"])
+        self.assertEqual(rows[0]["actions"], [{"type": "open_document", "doctype": "POS Charge Request", "name": self.fixture.request.name}])

@@ -27,7 +27,7 @@ def charge_callbacks(scope):
         invoice_matches += " OR (c.settle_mode='Source' AND c.pos_profile=%(profile)s AND IFNULL(c.invoice,'')='')"
     records = frappe.db.sql(f"""SELECT c.name,c.modified,c.callback_status,c.invoice_doctype,c.invoice,
         c.customer,c.amount_total,c.currency FROM `tab{doctype}` c
-        WHERE c.company=%(company)s AND c.status='Charged' AND c.callback_status IN ('Pending','Failed')
+        WHERE c.company=%(company)s AND c.status='Charged' AND c.callback_status IN ('Pending','Failed','Needs Review')
           AND (IFNULL(c.pos_profile,'')='' OR c.pos_profile=%(profile)s)
           AND ({invoice_matches}) ORDER BY c.modified DESC,c.name DESC LIMIT %(cap)s""", scope.params, as_dict=True)
     out = []
@@ -40,7 +40,7 @@ def charge_callbacks(scope):
                 continue
             invoice = dict(doctype=record.invoice_doctype, name=record.invoice)
         document = dict(doctype=doctype, name=record.name)
-        message = ("Payment recorded; the source document update failed." if record.callback_status == "Failed"
+        message = ("Payment recorded; the source document update failed." if record.callback_status in ("Failed", "Needs Review")
                    else "Payment recorded; the source document update is pending.")
         entry = row("charge_callback", record, record.callback_status, message, "open_document",
             document=document, invoice=invoice, amount=record.amount_total, currency=record.currency)
