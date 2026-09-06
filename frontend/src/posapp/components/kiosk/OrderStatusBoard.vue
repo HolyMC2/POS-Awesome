@@ -44,7 +44,7 @@
 			</div>
 
 			<footer v-if="deliveredCards.length" class="board__delivered" data-testid="board-delivered">
-				<span class="board__delivered-label">{{ __("Delivered") }}:</span>
+				<span class="board__delivered-label">{{ __("Delivered orders") }}:</span>
 				<span v-for="card in deliveredCards" :key="card.name" class="board__delivered-chip reg-mono">
 					{{ displayFolio(card) }}
 				</span>

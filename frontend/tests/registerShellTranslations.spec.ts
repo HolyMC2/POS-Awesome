@@ -339,6 +339,20 @@ describe("register shell translations", () => {
 	const files = sourceFiles();
 	const translated = translatedSources();
 
+	it("keeps cash and kitchen meanings distinct without duplicate source keys", () => {
+		const rows = readFileSync(ES_CSV, "utf8").split(/\r?\n/).filter(Boolean);
+		const keys = rows.map((row) =>
+			row.startsWith('"')
+				? row.slice(1, row.indexOf('",')).replace(/""/g, '"')
+				: row.slice(0, row.indexOf(",")),
+		);
+		expect(keys.filter((key, index) => keys.indexOf(key) !== index)).toEqual([]);
+		expect(rows).toContain("Change,Cambio");
+		expect(rows).toContain("Delivered,Entregado");
+		expect(rows).toContain("Change station,Cambiar estación");
+		expect(rows).toContain("Delivered orders,Órdenes entregadas");
+	});
+
 	it("scans the surfaces it claims to", () => {
 		// A scan that silently found nothing would pass every other assertion
 		// here forever. Pin the shape so a moved root fails loudly.

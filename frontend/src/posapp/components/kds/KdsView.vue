@@ -66,7 +66,7 @@
 				<span class="kds__count">{{ activeTickets.length }}</span>
 				<span v-if="errorMessage" class="kds__error kds__error--inline">{{ errorMessage }}</span>
 				<button type="button" class="kds__chip" data-testid="kds-change" @click="ready = false">
-					{{ __("Change") }}
+					{{ __("Change station") }}
 				</button>
 			</header>
 
