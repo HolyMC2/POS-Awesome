@@ -71,8 +71,9 @@ export function perfMarkStart(label: string): PerfMarkToken {
 export function perfMarkEnd(
 	label: string,
 	token?: PerfMarkToken | string | null,
+	options: { telemetry?: boolean } = {},
 ): void {
-	if (token && typeof token === "object" && typeof token.startedAt === "number") {
+	if (options.telemetry !== false && token && typeof token === "object" && typeof token.startedAt === "number") {
 		const elapsed = nowMs() - token.startedAt;
 		if (elapsed >= TELEMETRY_SAMPLE_MIN_MS && Math.random() < PAIR_TELEMETRY_SAMPLE) {
 			try {
@@ -127,7 +128,9 @@ export function withPerf<T extends (..._args: any[]) => any>(
 		const startedAt = hasPerformance ? performance.now() : Date.now();
 		const start = perfMarkStart(label);
 		const settle = () => {
-			perfMarkEnd(label, start);
+			// withPerf owns its full-rate event; retain DevTools marks without
+			// also emitting the mark pair's sampled copy of the same operation.
+			perfMarkEnd(label, start, { telemetry: false });
 			const elapsed =
 				(hasPerformance ? performance.now() : Date.now()) - startedAt;
 			if (elapsed >= TELEMETRY_SAMPLE_MIN_MS) {

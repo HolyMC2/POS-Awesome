@@ -8,6 +8,7 @@ from posawesome.posawesome.api.payment_processing.data import (
     get_outstanding_invoices,
     get_unallocated_payments,
 )
+from posawesome.posawesome.api.payment_processing.integrity import authorize_reconciliation, lock_payment_party, run_reconciliation
 
 
 @frappe.whitelist(methods=["POST"])
@@ -27,6 +28,9 @@ def auto_reconcile_customer_invoices(
     if not company:
         frappe.throw(_("Company is required"))
 
+    authorize_reconciliation(company, party_type, customer, pos_profile)
+    lock_payment_party(party_type, customer)
+
     outstanding_invoices = get_outstanding_invoices(
         customer=customer,
         company=company,
@@ -41,6 +45,13 @@ def auto_reconcile_customer_invoices(
         currency=currency,
         party_type=party_type,
     )
+
+    # Current locking reads replace possibly stale reconciliation query rows.
+    for invoice in sorted(outstanding_invoices or [], key=lambda row: row.get("voucher_no") or ""):
+        doctype = invoice.get("voucher_type") or ("Purchase Invoice" if party_type == "Supplier" else "Sales Invoice")
+        document = frappe.get_doc(doctype, invoice.get("voucher_no"), for_update=True)
+        frappe.has_permission(doctype, "read", document.name, throw=True)
+        invoice["outstanding_amount"] = max(flt(document.outstanding_amount), 0)
 
     if not outstanding_invoices:
         return {
@@ -108,7 +119,7 @@ def auto_reconcile_customer_invoices(
         payment_name = payment.get("name")
         if cint(payment.get("is_credit_note")) or payment.get("voucher_type") == "Sales Invoice":
             try:
-                credit_note_doc = frappe.get_doc("Sales Invoice", payment_name)
+                credit_note_doc = frappe.get_doc("Sales Invoice", payment_name, for_update=True)
             except Exception as exc:
                 skipped_payments.append(
                     _("Unable to load Credit Note {0}: {1}").format(payment_name, frappe._(str(exc)))
@@ -192,9 +203,11 @@ def auto_reconcile_customer_invoices(
                 )
                 continue
 
+            frappe.db.savepoint("pos_auto_reconcile")
             try:
-                reconcile_dr_cr_note(note_entries, company)
+                run_reconciliation(reconcile_dr_cr_note, note_entries, company)
             except Exception as exc:
+                frappe.db.rollback(save_point="pos_auto_reconcile")
                 _restore_outstandings(invoice_allocations)
                 skipped_payments.append(
                     _("Failed to reconcile Credit Note {0}: {1}").format(payment_name, frappe._(str(exc)))
@@ -295,9 +308,11 @@ def auto_reconcile_customer_invoices(
                 )
                 continue
 
+            frappe.db.savepoint("pos_auto_reconcile")
             try:
-                reconcile_against_document(entry_list)
+                run_reconciliation(reconcile_against_document, entry_list)
             except Exception as exc:
+                frappe.db.rollback(save_point="pos_auto_reconcile")
                 _restore_outstandings(invoice_allocations)
                 skipped_payments.append(
                     _("Failed to reconcile Journal Entry {0}: {1}").format(payment_name, frappe._(str(exc)))
@@ -328,7 +343,7 @@ def auto_reconcile_customer_invoices(
             continue
 
         try:
-            pe_doc = frappe.get_doc("Payment Entry", payment_name)
+            pe_doc = frappe.get_doc("Payment Entry", payment_name, for_update=True)
         except Exception as exc:
             skipped_payments.append(
                 _("Unable to load Payment Entry {0}: {1}").format(payment_name, frappe._(str(exc)))
@@ -409,9 +424,11 @@ def auto_reconcile_customer_invoices(
             )
             continue
 
+        frappe.db.savepoint("pos_auto_reconcile")
         try:
-            reconcile_against_document(entry_list)
+            run_reconciliation(reconcile_against_document, entry_list)
         except Exception as exc:
+            frappe.db.rollback(save_point="pos_auto_reconcile")
             _restore_outstandings(invoice_allocations)
             skipped_payments.append(
                 _("Failed to reconcile Payment Entry {0}: {1}").format(payment_name, frappe._(str(exc)))

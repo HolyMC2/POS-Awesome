@@ -1,6 +1,7 @@
 import { ref, type Ref } from "vue";
 import { isOffline, saveOfflinePayment } from "../../../../offline/index";
 import { ensurePaymentClientRequestId } from "../../../../offline/idempotency";
+import { getShiftTerminalContext } from "../../../../offline/shiftTerminal";
 // MP-INTEGRATION-POINT: the collect-on-account tool drives the MercadoPago Point
 // terminal through the SAME gate the sale checkout uses (one createPointOrder
 // call site — see mpSingleChargePath.spec).
@@ -193,6 +194,7 @@ export function usePosPaySubmission({
 				);
 
 		const payload = {
+			...getShiftTerminalContext(),
 			customer: party,
 			party,
 			party_type: resolvedPartyType,

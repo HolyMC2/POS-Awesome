@@ -65,6 +65,7 @@
 </template>
 
 <script setup>
+import { getShiftTerminalContext } from "../../../offline/shiftTerminal";
 import { computed, ref, watch } from "vue";
 import { useDialogFullscreen } from "../../composables/core/useDialogFullscreen";
 import { useHostedSheet } from "../../composables/pos/shell/useHostedSheet";
@@ -156,6 +157,7 @@ async function selectRequest(request) {
 		const r = await frappe.call({
 			method: "posawesome.posawesome.api.charge_requests.prepare_charge_request_invoice",
 			args: {
+				...getShiftTerminalContext(),
 				name: request.name,
 				pos_profile: props.posProfile?.name,
 				// The server resolves this with db.exists({"name": ...}), so it
@@ -164,6 +166,12 @@ async function selectRequest(request) {
 				pos_opening_shift: uiStore.posOpeningShift?.name ?? uiStore.posOpeningShift ?? null,
 			},
 		});
+		if (r?.message?.already_charged) {
+			useToastStore().show({ title: __("This request has already been charged"),
+				message: r.message.name, color: "info" });
+			await refresh();
+			return;
+		}
 		if (!r?.message?.name) {
 			throw new Error(__("Server returned no invoice for this request."));
 		}

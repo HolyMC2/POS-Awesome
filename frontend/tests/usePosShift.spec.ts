@@ -29,6 +29,10 @@ vi.mock("../src/offline/bootstrapSnapshot", () => ({
 	createBootstrapSnapshotFromRegisterData: vi.fn(() => ({})),
 }));
 
+const pendingWork = vi.hoisted(() => vi.fn(async () => offlineState.pendingOfflineCount));
+vi.mock("../src/offline/shiftTerminal", () => ({ getTerminalCredentials: () => ({}), getShiftTerminalContext: () => ({}) }));
+vi.mock("../src/offline/shiftQueueGuard", () => ({ getPendingShiftWorkCount: pendingWork }));
+
 import {
 	buildSkippedClosingInvoicesPrompt,
 	usePosShift,
@@ -43,6 +47,7 @@ describe("usePosShift closing warnings", () => {
 		offlineState.pendingOfflineCount = 0;
 		offlineState.offline = false;
 		offlineState.clearOpeningStorage.mockClear();
+		pendingWork.mockReset().mockImplementation(async () => offlineState.pendingOfflineCount);
 		vi.stubGlobal("frappe", {
 			session: { user: "test@example.com" },
 			datetime: { nowdate: () => "2026-04-28" },
@@ -123,6 +128,34 @@ describe("usePosShift closing warnings", () => {
 		const shift = usePosShift();
 		await shift.get_closing_data();
 
+		expect((globalThis as any).frappe.call).not.toHaveBeenCalled();
+	});
+
+	it("checks durable pending work again if money is saved after opening the closing dialog", async () => {
+		const uiStore = useUIStore();
+		uiStore.posOpeningShift = { name: "OPEN-1", pos_profile: "COUNTER" };
+		(globalThis as any).frappe.call = vi.fn(async () => ({ message: { name: "CLOSE-1" } }));
+		const shift = usePosShift();
+		await shift.get_closing_data();
+		expect((globalThis as any).frappe.call).toHaveBeenCalledTimes(1);
+		offlineState.pendingOfflineCount = 1;
+		await shift.submit_closing_pos({ name: "CLOSE-1", pos_opening_shift: "OPEN-1" });
+		expect((globalThis as any).frappe.call).toHaveBeenCalledTimes(1);
+		expect(uiStore.posOpeningShift).not.toBeNull();
+	});
+
+	it.each(["prepare", "submit"])("fails closed when durable storage cannot be read at %s", async (step) => {
+		useUIStore().posOpeningShift = { name: "OPEN-1" };
+		pendingWork.mockRejectedValueOnce(new Error("IndexedDB unavailable"));
+		const shift = usePosShift();
+		if (step === "prepare") await shift.get_closing_data();
+		else await shift.submit_closing_pos({ name: "CLOSE-1", pos_opening_shift: "OPEN-1" });
+		expect((globalThis as any).frappe.call).not.toHaveBeenCalled();
+	});
+
+	it("rechecks connectivity at final submit", async () => {
+		offlineState.offline = true;
+		await usePosShift().submit_closing_pos({ name: "CLOSE-1", pos_opening_shift: "OPEN-1" });
 		expect((globalThis as any).frappe.call).not.toHaveBeenCalled();
 	});
 

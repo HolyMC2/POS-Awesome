@@ -6,7 +6,7 @@ vi.mock("../src/posapp/utils/telemetry", () => ({
 	trackCustomMark: vi.fn(),
 }));
 
-import { perfMarkEnd, perfMarkStart } from "../src/posapp/utils/perf";
+import { perfMarkEnd, perfMarkStart, withPerf } from "../src/posapp/utils/perf";
 import { trackCustomMark } from "../src/posapp/utils/telemetry";
 
 const tracked = trackCustomMark as unknown as ReturnType<typeof vi.fn>;
@@ -40,6 +40,24 @@ describe("perfMark pair ambient telemetry", () => {
 		const token = perfMarkStart("pos:scan-process");
 		perfMarkEnd("pos:scan-process", token);
 		expect(tracked).not.toHaveBeenCalled();
+	});
+
+	it.each([0.05, 0.5])("emits one event per wrapped operation with sample %s", (sample) => {
+		vi.spyOn(Math, "random").mockReturnValue(sample);
+		vi.spyOn(performance, "now").mockReturnValueOnce(1000)
+			.mockReturnValueOnce(1000).mockReturnValue(1010);
+		expect(withPerf("pos:add-item", () => 42)()).toBe(42);
+		expect(tracked).toHaveBeenCalledTimes(1);
+		expect(tracked).toHaveBeenCalledWith("pos:add-item", 10);
+	});
+
+	it("emits one event when a wrapped async operation settles", async () => {
+		vi.spyOn(Math, "random").mockReturnValue(0);
+		vi.spyOn(performance, "now").mockReturnValueOnce(1000)
+			.mockReturnValueOnce(1000).mockReturnValue(1020);
+		await expect(withPerf("pos:load", async () => "loaded")()).resolves.toBe("loaded");
+		expect(tracked).toHaveBeenCalledTimes(1);
+		expect(tracked).toHaveBeenCalledWith("pos:load", 20);
 	});
 
 	it("drops sub-threshold durations", () => {

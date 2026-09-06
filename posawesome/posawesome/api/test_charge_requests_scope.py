@@ -8,6 +8,7 @@ real ``frappe`` module.
 from __future__ import annotations
 
 import importlib.util
+import json
 import pathlib
 import sys
 import types
@@ -38,11 +39,15 @@ class _Invoice(types.SimpleNamespace):
     def __init__(self, doctype):
         super().__init__(doctype=doctype, flags=types.SimpleNamespace(), items=[])
 
+    def update(self, values):
+        self.__dict__.update(values)
+
     def append(self, _fieldname, value):
         self.items.append(value)
 
     def insert(self, **_kwargs):
         self.inserted = True
+        self.name = "DRAFT-1"
 
     def as_dict(self):
         return dict(self.__dict__)
@@ -91,9 +96,11 @@ def _import_charge_requests(scenario=None):
         company="Company A",
         customer="Customer A",
         pos_profile=scenario["request_profile"],
-        items_json="[]",
+        items_json='[ {"item_code": "ITEM", "qty": 1, "rate": 10} ]',
+        settle_mode="Register", invoice=None, invoice_doctype=None, currency="MXN",
     )
-    frappe_module.get_doc = lambda doctype, name: request
+    frappe_module.get_doc = lambda doctype, name, **kwargs: request
+    frappe_module.get_all = lambda *args, **kwargs: []
     frappe_module.new_doc = _Invoice
 
     class _Db:
@@ -105,6 +112,8 @@ def _import_charge_requests(scenario=None):
             return False
 
         def get_value(self, doctype, name, fieldname=None, as_dict=False):
+            if doctype == "POS Profile" and fieldname == "company":
+                return "Company A"
             if doctype == "POS Profile" and fieldname == "posa_use_charge_requests":
                 return scenario["legacy_enabled"]
             if (
@@ -117,15 +126,18 @@ def _import_charge_requests(scenario=None):
             return None
 
     frappe_module.db = _Db()
+    frappe_module.db.set_value = lambda *args, **kwargs: None
     sys.modules["frappe"] = frappe_module
 
     utils_module = types.ModuleType("frappe.utils")
     utils_module.cint = lambda value: int(value or 0)
     sys.modules["frappe.utils"] = utils_module
+    frappe_module.utils = utils_module
 
     scope_module = types.ModuleType("posawesome.posawesome.api._scope")
     scope_module.assert_company = lambda user, company: None
     scope_module.assert_profile = lambda user, profile: None
+    scope_module.assert_customer_in_profile = lambda *args: None
     sys.modules["posawesome.posawesome.api._scope"] = scope_module
 
     vertical_module = types.ModuleType("posawesome.posawesome.api.vertical")
@@ -135,6 +147,20 @@ def _import_charge_requests(scenario=None):
         "capabilities": scenario["capabilities"]
     }
     sys.modules["posawesome.posawesome.api.vertical"] = vertical_module
+
+    terminal = types.ModuleType("posawesome.posawesome.api.shift_terminal")
+    terminal.assert_terminal_access = lambda *args: types.SimpleNamespace(
+        name="SHIFT-1", company="Company A", pos_profile=scenario.get("active_profile", "Profile A"))
+    sys.modules[terminal.__name__] = terminal
+    retry = types.ModuleType("posawesome.posawesome.api.payment_processing.integrity")
+    retry.retry_before_financial_writes = lambda callback, *args: callback(*args)
+    sys.modules[retry.__name__] = retry
+    sys.modules.pop("posawesome.posawesome.api.charge_request_integrity", None)
+    import posawesome.posawesome.api.charge_request_integrity as integrity
+    # Price validation has real-Frappe coverage; this harness isolates scope
+    # and producer warehouse propagation through the actual prepare function.
+    integrity._contract = lambda: types.SimpleNamespace(INVOICE_TYPES=("Sales Invoice", "POS Invoice"),
+        validated_items=lambda raw: json.loads(raw), validate_invoice=lambda *args, **kwargs: None)
 
     sys.modules.pop(MODULE_NAME, None)
     spec = importlib.util.spec_from_file_location(MODULE_NAME, MODULE_PATH)
@@ -181,7 +207,7 @@ class ChargeRequestCapabilityScopeTests(unittest.TestCase):
 class ChargeRequestProfilePinTests(unittest.TestCase):
     def test_prepare_rejects_request_pinned_to_another_profile(self):
         module = _import_charge_requests(
-            {"legacy_enabled": 1, "request_profile": "Profile A"}
+            {"legacy_enabled": 1, "request_profile": "Profile A", "active_profile": "Profile B"}
         )
 
         with self.assertRaises(_PermissionError):
@@ -212,7 +238,7 @@ class ChargeRequestLineWarehouseTests(unittest.TestCase):
             {"legacy_enabled": 1, "request_profile": "Profile A"}
         )
         request = sys.modules["frappe"].get_doc("POS Charge Request", "CHARGE-1")
-        request.get_items = lambda: lines
+        request.items_json = json.dumps(lines)
         return module.prepare_charge_request_invoice("CHARGE-1", "Profile A", "SHIFT-1")
 
     def test_line_warehouse_passes_through(self):

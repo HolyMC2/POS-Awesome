@@ -16,6 +16,22 @@ class POSCashMovement(Document):
         self._validate_accounts()
         self._validate_movement_type_rules()
 
+    def _assert_terminal_write(self):
+        # Direct Desk/API document writes have no browser proof. Reject them
+        # before requesting the opening lock; public services already hold it.
+        grants = getattr(frappe.local, "posa_verified_terminal_generations", None) or {}
+        generation = grants.get(self.pos_opening_shift)
+        if not generation:
+            frappe.throw(_("Manage cash movements from the registered POS terminal."), frappe.PermissionError)
+        from posawesome.posawesome.api.shift_terminal import assert_verified_terminal_generation
+        assert_verified_terminal_generation(self.pos_opening_shift, generation)
+
+    def before_submit(self):
+        self._assert_terminal_write()
+
+    def before_cancel(self):
+        self._assert_terminal_write()
+
     def on_submit(self):
         # Create the backing Journal Entry inside the submit transaction so a
         # failure rolls everything back together. Previously the JE was created
@@ -42,6 +58,7 @@ class POSCashMovement(Document):
             cancel_journal_entry(self.journal_entry)
 
     def on_trash(self):
+        self._assert_terminal_write()
         if self.docstatus != 2:
             frappe.throw(_("Only cancelled POS Cash Movement records can be deleted."))
 

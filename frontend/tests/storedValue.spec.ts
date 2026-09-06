@@ -65,8 +65,8 @@ const VTextFieldStub = defineComponent({
 
 describe("stored value UX", () => {
 	beforeEach(async () => {
-		(window as any).frappe = { _: (value: string) => value };
-		(globalThis as any).frappe = { _: (value: string) => value };
+		(window as any).frappe = { session: { user: "cashier@example.com" }, _: (value: string) => value };
+		(globalThis as any).frappe = { session: { user: "cashier@example.com" }, _: (value: string) => value };
 		(window as any).__ = (value: string) => value;
 		(globalThis as any).__ = (value: string) => value;
 		await clearOfflineInvoices();

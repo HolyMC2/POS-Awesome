@@ -182,9 +182,7 @@ describe("the auto-log never writes on the submit path", () => {
 	const hooks = readServer("../hooks.py");
 
 	it("is wired as an on_submit that enqueues", () => {
-		expect(hooks).toContain(
-			'"on_submit": "posawesome.posawesome.api.crm_bridge.on_sales_invoice_submit"',
-		);
+		expect(hooks).toMatch(/"on_submit":\s*\[[^\]]*"posawesome\.posawesome\.api\.crm_bridge\.on_sales_invoice_submit"/);
 	});
 
 	it("defers the job until the transaction has committed", () => {

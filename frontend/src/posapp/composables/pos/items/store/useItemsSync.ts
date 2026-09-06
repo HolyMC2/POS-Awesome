@@ -1,4 +1,7 @@
 import { ref } from "vue";
+import { fetchAllSyncPages } from "../../../../../offline/sync/pagination";
+import { buildScopeSignature, persistResourceSyncState } from "../../../../../offline/sync/adapters/common";
+import { getSyncResourceState } from "../../../../../offline/sync/syncState";
 import type { Item, POSProfile } from "../../../../types/models";
 import itemService from "../../../../services/itemService";
 import { withRequestTimeout } from "../../../../utils/requestTimeout";
@@ -13,6 +16,9 @@ import {
 	saveItemUOMsBulk,
 	saveItemGroups,
 	getCachedItemGroups,
+	deleteStoredItemsByCodes,
+	removeItemDetailsCacheEntries,
+	removeCachedPriceListItems,
 	refreshBootstrapSnapshotFromCacheState,
 	updateLocalStockCache,
 	setStockCacheReady,
@@ -57,41 +63,35 @@ export function useItemsSync() {
 
 	const itemGroups = ref<string[]>(["ALL"]);
 
+	let itemGroupsRequest = 0;
 	const loadItemGroups = async (posProfile: POSProfile | null) => {
-		try {
-			if (
-				posProfile?.item_groups?.length &&
-				posProfile.item_groups.length > 0
-			) {
-				const groups = ["ALL"];
-				posProfile.item_groups.forEach((element: any) => {
-					if (element.item_group !== "All Item Groups") {
-						groups.push(element.item_group);
-					}
-				});
-				itemGroups.value = groups;
-				saveItemGroups(groups);
-			} else {
-				// Fallback to API
-				const response = await itemService.getItemGroupsData();
-
-				if (response) {
-					const groups = ["ALL"];
-					response.forEach((element) => {
-						groups.push(element.name);
-					});
-					itemGroups.value = groups;
-					saveItemGroups(groups);
-				}
-			}
-		} catch (error) {
-			console.error("Failed to load item groups:", error);
-			const cachedGroups = getCachedItemGroups();
-			if (Array.isArray(cachedGroups) && cachedGroups.length > 0) {
-				itemGroups.value = cachedGroups as string[];
-				saveItemGroups(cachedGroups as string[]);
-			}
+		const request = ++itemGroupsRequest;
+		const scope = JSON.stringify([posProfile?.name || null, posProfile?.modified || null]);
+		const configured = posProfile?.item_groups || [];
+		if (configured.length && !configured.some((row: any) => row.item_group === "All Item Groups")) {
+			const groups = ["ALL", ...configured.map((row: any) => row.item_group).filter(Boolean)];
+			itemGroups.value = groups;
+			saveItemGroups(groups, scope);
+			return;
 		}
+		const cached = getCachedItemGroups(scope);
+		itemGroups.value = Array.isArray(cached) && cached.length ? cached : ["ALL"];
+		if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+		// Hydration resolves immediately. A late response from the old profile
+		// must never overwrite the currently selected profile or its cache.
+		void withRequestTimeout(itemService.getItemGroupsData(), "items.get_items_groups", DELTA_SYNC_TIMEOUT_MS)
+			.then((response) => {
+				if (request !== itemGroupsRequest || !Array.isArray(response)) return;
+				const groups = ["ALL", ...response.map((row) => row.name)];
+				// A warm response commonly repeats the scoped cache. Preserve its
+				// reactive identity and avoid another persistence/snapshot refresh.
+				if (Array.isArray(cached) && cached.length &&
+					groups.length === itemGroups.value.length &&
+					groups.every((group, index) => group === itemGroups.value[index])) return;
+				itemGroups.value = groups;
+				saveItemGroups(groups, scope);
+			})
+			.catch((error) => console.error("Failed to refresh item groups:", error));
 	};
 
 	const persistItemsToStorage = async (
@@ -183,54 +183,50 @@ export function useItemsSync() {
 		itemsMap: Map<string, Item>,
 	) => {
 		const lastSync = getItemsLastSync();
-		if (!lastSync) return { size: 0, count: 0, items: [] };
+		if (!lastSync || !posProfile?.name) return { size: 0, count: 0, items: [] };
 
 		try {
-			// @ts-ignore
-			const deltaCall = frappe.call({
-				method: "posawesome.posawesome.api.items.get_delta_items",
-				args: {
-					pos_profile: JSON.stringify(posProfile),
-					price_list: activePriceList,
-					customer,
-					modified_after: lastSync,
-					limit: DELTA_SYNC_LIMIT,
-				},
-				freeze: false,
+			const priorState = await getSyncResourceState("items");
+			const watermark = priorState?.scopeSignature === buildScopeSignature(posProfile) ? lastSync : null;
+			const response = await fetchAllSyncPages(async (pageCursor) => {
+				const result = await withRequestTimeout<any>(
+					frappe.call({
+						method: "posawesome.posawesome.api.offline_sync.items.sync_items",
+						args: { pos_profile: JSON.stringify(posProfile), price_list: activePriceList,
+							customer, watermark, limit: DELTA_SYNC_LIMIT, paginated: 1, page_cursor: pageCursor },
+						freeze: false,
+					}),
+					"offline_sync.items.sync_items", DELTA_SYNC_TIMEOUT_MS,
+				);
+				return result.message;
 			});
-			const response = await withRequestTimeout<any>(
-				deltaCall,
-				"items.get_delta_items",
-				DELTA_SYNC_TIMEOUT_MS,
-			);
+			const fetchedItems: Item[] = (response.changes || []).map((row) => row.data).filter(Boolean);
 
-			const fetchedItems = Array.isArray(response?.message)
-				? response.message
-				: [];
 			const size = JSON.stringify(fetchedItems).length;
 			let resolvedItems: Item[] = [];
 
 			if (fetchedItems.length > 0) {
+				const saved = await saveItemsBulk(fetchedItems, scope);
+				if (saved && saved.ok === false) throw new Error("Offline item delta write incomplete");
 				updateItemsInPlace(fetchedItems);
-				await saveItemsBulk(fetchedItems, scope);
 				resolvedItems = fetchedItems
 					.map((item) => itemsMap.get(item.item_code))
 					.filter((item): item is Item => !!item);
 
-				// Find the latest modification timestamp
-				let maxModified = "";
-				for (const item of fetchedItems) {
-					if (item.modified && item.modified > maxModified) {
-						maxModified = item.modified;
-					}
-				}
-
-				if (maxModified) {
-					setItemsLastSync(maxModified);
-				}
 			}
+			const deletedItemCodes = (response.deleted || [])
+				.filter((row) => row.key.startsWith("item::"))
+				.map((row) => row.key.slice(6));
+			if (deletedItemCodes.length) {
+				await deleteStoredItemsByCodes(deletedItemCodes, scope);
+				removeItemDetailsCacheEntries(posProfile?.name, deletedItemCodes, activePriceList);
+				removeCachedPriceListItems(deletedItemCodes, activePriceList);
+				for (const code of deletedItemCodes) itemsMap.delete(code);
+			}
+			if (response.next_watermark) setItemsLastSync(response.next_watermark);
+			await persistResourceSyncState({ resourceId: "items", status: "fresh", posProfile, response, watermark });
 
-			return { size, count: fetchedItems.length, items: resolvedItems };
+			return { size, count: fetchedItems.length, items: resolvedItems, deletedItemCodes };
 		} catch (error) {
 			console.error("Failed to refresh modified items:", error);
 			return { size: 0, count: 0, items: [], error };

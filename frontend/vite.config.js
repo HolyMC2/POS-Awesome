@@ -123,9 +123,17 @@ export default defineConfig({
 				// stale across deploys.
 				assetFileNames: "[name]-[hash].[ext]",
 				manualChunks: (id) => {
+					// Shared helpers must not pull an optional tool into startup.
+					if (id.includes("commonjsHelpers")) return "vendor";
 					if (!id.includes("node_modules")) {
 						return undefined;
 					}
+					// The calendar stylesheet is eager for layout stability. Assigning
+					// it to the JS tool chunk would make that entire chunk eager too.
+					if (id.includes("/node_modules/@vuepic/vue-datepicker/") && /\.css(?:\?|$)/.test(id)) return undefined;
+					if (/\/node_modules\/(nunjucks|dompurify)\//.test(id)) return "receipt-vendor";
+					if (/\/node_modules\/(@vuepic\/vue-datepicker|date-fns)\//.test(id)) return "calendar-vendor";
+					if (id.includes("/node_modules/vue-qrcode-reader/")) return "camera-vendor";
 					if (id.includes("vuetify")) {
 						return "vuetify";
 					}

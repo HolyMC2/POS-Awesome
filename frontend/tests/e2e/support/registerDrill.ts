@@ -10,12 +10,56 @@
  *   POSA_GOLDEN_COMPANY      default "Abarrotes La Demo"
  *   POSA_GOLDEN_PROFILE      default "Mostrador Abarrotes"
  */
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type Route } from "@playwright/test";
+import { createHash, randomBytes } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export const BASE_URL = process.env.POSA_SMOKE_BASE_URL;
 export const POS_PATH = process.env.POSA_GOLDEN_PATH || "/app/posapp";
 const COMPANY = process.env.POSA_GOLDEN_COMPANY || "Abarrotes La Demo";
 const PROFILE = process.env.POSA_GOLDEN_PROFILE || "Mostrador Abarrotes";
+
+/** Fresh Playwright contexts represent the same LAB register, not a transfer. */
+export async function installRegisterIdentity(page: Page) {
+	const key = createHash("sha256").update(`${BASE_URL}:${process.env.POSA_SMOKE_USER}`).digest("hex").slice(0, 24);
+	const path = process.env.POSA_TEST_TERMINAL_FILE || join(tmpdir(), `posa-test-terminal-${key}.json`);
+	let identity: { terminal_id: string; terminal_token: string };
+	try {
+		identity = JSON.parse(readFileSync(path, "utf8"));
+	} catch (error: any) {
+		if (error.code !== "ENOENT") throw error;
+		identity = { terminal_id: randomBytes(12).toString("hex"), terminal_token: randomBytes(32).toString("hex") };
+		try { writeFileSync(path, JSON.stringify(identity), { mode: 0o600, flag: "wx" }); }
+		catch (error: any) {
+			if (error.code !== "EEXIST") throw error;
+			identity = JSON.parse(readFileSync(path, "utf8"));
+		}
+	}
+	await page.addInitScript(({ terminal_id, terminal_token }) => {
+		localStorage.setItem("posa_device_identifier", terminal_id);
+		localStorage.setItem("posa_terminal_secret", terminal_token);
+	}, identity);
+}
+
+/** One-time explicit LAB legacy claim; never takes a shift from another device. */
+export async function ensureRegisterOwnership(page: Page) {
+	const changed = await page.evaluate(async () => {
+		const f = (window as any).frappe;
+		const credentials = { terminal_id: localStorage.getItem("posa_device_identifier"),
+			terminal_token: localStorage.getItem("posa_terminal_secret") };
+		const result = await f.call({ method: "posawesome.posawesome.api.shifts.check_opening_shift",
+			args: { user: f.session.user, ...credentials } });
+		const opening = result.message;
+		if (!opening?.pos_opening_shift?.name || opening.terminal_status?.owned) return false;
+		if (opening.terminal_status?.terminal_id) throw new Error("LAB shift belongs to another browser; explicit operator recovery is required.");
+		await f.call({ method: "posawesome.posawesome.api.shift_terminal.claim_terminal",
+			args: { opening_shift: opening.pos_opening_shift.name, ...credentials, acknowledge_legacy: 1 } });
+		return true;
+	});
+	if (changed) await page.reload({ waitUntil: "domcontentloaded" });
+}
 
 export async function login(page: Page) {
 	const user = process.env.POSA_SMOKE_USER;
@@ -56,16 +100,18 @@ export async function openShiftIfAsked(page: Page) {
 
 export function searchBox(page: Page) {
 	return page
-		.locator(".v-input:has-text('Search, scan or browse') input, input[placeholder*='scan']")
+		.locator('[data-perf-tag="item-search"] input')
 		.first();
 }
 
 /** Boot the register: login, open the POS, resume/open the shift. */
 export async function openRegister(page: Page) {
+	await installRegisterIdentity(page);
 	await login(page);
 	await page.goto(POS_PATH, { waitUntil: "domcontentloaded" });
 	await page.waitForTimeout(8_000);
 	await openShiftIfAsked(page);
+	await ensureRegisterOwnership(page);
 	await expect(searchBox(page)).toBeVisible({ timeout: 30_000 });
 }
 
@@ -95,6 +141,37 @@ export async function payCashAndSubmit(page: Page) {
 	}
 	await submit.click();
 	return submit;
+}
+
+/** Drop an acknowledgment only after the upstream confirms a booked sale. */
+export function loseFirstAck(page: Page, afterServerBooked?: () => void) {
+	const submitUrl = "**/api/method/posawesome.posawesome.api.invoices.submit_invoice";
+	const seen: string[] = [];
+	const handler = async (route: Route) => {
+		const body = route.request().postDataJSON() as Record<string, string> | null;
+		const requestId = JSON.parse(body?.invoice || "{}")?.posa_client_request_id || "";
+		expect(requestId, "ACK-loss fixture requires the invoice request id").toMatch(/^inv-/);
+		seen.push(requestId);
+		if (seen.length > 1) return route.continue();
+		const response = await route.fetch();
+		try {
+			expect(response.status(), "ACK-loss fixture: upstream submit must succeed before losing its acknowledgment").toBe(200);
+			const payload = await response.json();
+			expect(payload.message?.docstatus, "ACK-loss fixture: upstream must confirm a submitted invoice").toBe(1);
+			expect(payload.message?.name, "ACK-loss fixture: upstream invoice name is required").toBeTruthy();
+		} catch (error) {
+			// Preserve genuine rejection responses; do not manufacture a lost ACK.
+			await route.fulfill({ response });
+			throw error;
+		}
+		afterServerBooked?.();
+		await route.abort("connectionreset");
+	};
+	return {
+		install: () => page.route(submitUrl, handler),
+		uninstall: () => page.unroute(submitUrl, handler),
+		seen,
+	};
 }
 
 /** The navbar's connectivity word: Online / Offline / Limited / Checking. */

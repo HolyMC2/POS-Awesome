@@ -1,4 +1,5 @@
 import { isOffline } from "../../../../offline/index";
+import { getShiftTerminalContext } from "../../../../offline/shiftTerminal";
 import { _logPriceListDebug, _buildPriceListSnapshot } from "./currency";
 import {
 	_normalizeReturnDocTotals,
@@ -147,6 +148,7 @@ export async function update_invoice(context: any, doc: any) {
 			items_before: _buildPriceListSnapshot(context, doc.items),
 		});
 		const args: Record<string, any> = { data: doc };
+		if (method.endsWith(".invoices.update_invoice")) args.data = { ...doc, ...getShiftTerminalContext() };
 		if (doc.doctype === "Quotation") {
 			// Quotation docs don't carry pos_profile; the server flag gate
 			// (custom_allow_create_quotation) needs it explicitly.
@@ -204,7 +206,7 @@ export async function update_invoice_from_order(context: any, doc: any) {
 		const response = await frappe.call({
 			method: "posawesome.posawesome.api.invoices.update_invoice_from_order",
 			args: {
-				data: doc,
+				data: { ...doc, ...getShiftTerminalContext() },
 			},
 		});
 

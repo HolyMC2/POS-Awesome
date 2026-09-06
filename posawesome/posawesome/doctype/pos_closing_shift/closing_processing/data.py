@@ -17,7 +17,7 @@ def get_cashiers(doctype, txt, searchfield, start, page_len, filters):
 
 
 @frappe.whitelist()
-def get_pos_invoices(pos_opening_shift, doctype=None, submit_printed=1):
+def get_pos_invoices(pos_opening_shift, doctype=None, submit_printed=1, for_update=False):
     # Keep submit_printed in the signature for stale clients, but this
     # whitelisted read must never submit drafts. The closing builder invokes
     # submit_printed_invoices explicitly before recomputing its totals.
@@ -32,31 +32,34 @@ def get_pos_invoices(pos_opening_shift, doctype=None, submit_printed=1):
 		`tab{doctype}`
 	where
 		docstatus = 1 and posa_pos_opening_shift = %s{cond}
+	order by name {"for update" if for_update else ""}
 	""",
         (pos_opening_shift),
         as_dict=1,
     )
 
-    data = [frappe.get_doc(doctype, d.name).as_dict() for d in data]
+    data = [frappe.get_doc(doctype, d.name, **({"for_update": True} if for_update else {})).as_dict() for d in data]
 
     return data
 
 
 @frappe.whitelist()
-def get_payments_entries(pos_opening_shift):
+def get_payments_entries(pos_opening_shift, for_update=False):
     # Audit r2 P1: this whitelisted read exposed cross-profile/company
     # Payment Entry names, amounts, parties and dates for any shift name.
     # Scope it exactly like the hardened get_pos_invoices sibling before
     # touching the table.
     get_scoped_opening_shift(pos_opening_shift)
-    return frappe.get_all(
+    getter = frappe.db.get_values if for_update else frappe.get_all
+    return getter(
         "Payment Entry",
         filters={
             "docstatus": 1,
             "reference_no": pos_opening_shift,
             "payment_type": ["in", ["Receive", "Pay"]],
         },
-        fields=[
+        **({"as_dict": True, "for_update": True} if for_update else {}),
+        **{("fieldname" if for_update else "fields"): [
             "name",
             "mode_of_payment",
             "paid_amount",
@@ -69,5 +72,5 @@ def get_payments_entries(pos_opening_shift):
             "party_type",
             "party",
             "payment_type",
-        ],
+        ]},
     )

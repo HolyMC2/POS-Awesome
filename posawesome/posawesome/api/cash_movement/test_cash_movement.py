@@ -14,6 +14,13 @@ except ImportError:
 
 class TestCashMovementValidation(unittest.TestCase):
     @patch("posawesome.posawesome.api.cash_movement.validation.frappe")
+    def test_shift_is_locked_before_cash_movement_validation(self, mock_frappe):
+        mock_frappe.session.user = "cashier"
+        mock_frappe.get_doc.return_value = SimpleNamespace(docstatus=1, status="Open", user="cashier")
+        validation.get_opening_shift("OPEN-1")
+        mock_frappe.get_doc.assert_called_once_with("POS Opening Shift", "OPEN-1", for_update=True)
+
+    @patch("posawesome.posawesome.api.cash_movement.validation.frappe")
     def test_duplicate_client_request_returns_existing_doc(self, mock_frappe):
         existing_doc = SimpleNamespace(name="POS-CM-.26.-00001")
         mock_frappe.db.get_value.return_value = existing_doc.name
@@ -52,6 +59,33 @@ class TestCashMovementValidation(unittest.TestCase):
 
 
 class TestCashMovementService(unittest.TestCase):
+    def setUp(self):
+        guard = patch("posawesome.posawesome.api.shift_terminal.assert_terminal_access")
+        self.terminal_guard = guard.start()
+        self.addCleanup(guard.stop)
+
+    @patch("posawesome.posawesome.api.cash_movement.service.ensure_owner_or_manager")
+    @patch("posawesome.posawesome.api.cash_movement.service.frappe")
+    def test_cancel_rejects_old_terminal_before_mutation(self, mock_frappe, _owner):
+        movement = SimpleNamespace(pos_opening_shift="OPEN-1", user="cashier")
+        mock_frappe.get_doc.return_value = movement
+        self.terminal_guard.side_effect = PermissionError("old terminal")
+        with self.assertRaisesRegex(PermissionError, "old terminal"):
+            service.cancel_cash_movement("MOVE-1", "device", 2, "secret")
+        self.terminal_guard.assert_called_once_with("OPEN-1", "device", 2, "secret", acting_user="cashier")
+        mock_frappe.get_doc.assert_called_once_with("POS Cash Movement", "MOVE-1")
+
+    @patch("posawesome.posawesome.api.cash_movement.service.ensure_owner_or_manager")
+    @patch("posawesome.posawesome.api.cash_movement.service.frappe")
+    def test_cancel_and_delete_lock_opening_before_movement(self, mock_frappe, _owner):
+        movement = SimpleNamespace(pos_opening_shift="OPEN-1", user="cashier")
+        mock_frappe.get_doc.return_value = movement
+        order = []
+        self.terminal_guard.side_effect = lambda *args, **kwargs: order.append("opening")
+        mock_frappe.get_doc.side_effect = lambda *args, **kwargs: order.append("movement-current" if kwargs.get("for_update") else "movement-read") or movement
+        self.assertIs(service._terminal_movement("MOVE-1", "device", 2, "secret"), movement)
+        self.assertEqual(order, ["movement-read", "opening", "movement-current"])
+
     @patch("posawesome.posawesome.api.cash_movement.service.parse_payload")
     @patch("posawesome.posawesome.api.cash_movement.service.get_opening_shift")
     @patch("posawesome.posawesome.api.cash_movement.service.get_pos_profile")
@@ -365,3 +399,35 @@ class TestResolveSourceCashAccount(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCashMovementTerminalController(unittest.TestCase):
+    def test_direct_document_mutations_have_no_possession_grant(self):
+        from posawesome.posawesome.doctype.pos_cash_movement import pos_cash_movement as controller
+        movement = controller.POSCashMovement.__new__(controller.POSCashMovement)
+        movement.pos_opening_shift = "CLOSED-OPENING"
+        with patch.object(controller, "frappe") as runtime:
+            runtime.local.posa_verified_terminal_generations = {}
+            runtime.PermissionError = PermissionError
+            runtime.throw.side_effect = PermissionError("registered terminal required")
+            for action in [movement.before_submit, movement.before_cancel, movement.on_trash]:
+                with self.subTest(action=action.__name__), self.assertRaises(PermissionError):
+                    action()
+
+    def test_service_grant_revalidates_opening_generation_for_each_mutation(self):
+        from posawesome.posawesome.doctype.pos_cash_movement import pos_cash_movement as controller
+        movement = controller.POSCashMovement.__new__(controller.POSCashMovement)
+        movement.pos_opening_shift = "OPEN-1"
+        movement.docstatus = 2
+        with patch.object(controller, "frappe") as runtime, patch(
+            "posawesome.posawesome.api.shift_terminal.assert_verified_terminal_generation"
+        ) as verify:
+            runtime.local.posa_verified_terminal_generations = {"OPEN-1": 7}
+            for action in [movement.before_submit, movement.before_cancel, movement.on_trash]:
+                action()
+            self.assertEqual(verify.call_count, 3)
+            verify.assert_called_with("OPEN-1", 7)
+            verify.side_effect = PermissionError("shift closed or generation changed")
+            for action in [movement.before_submit, movement.before_cancel, movement.on_trash]:
+                with self.subTest(action=action.__name__), self.assertRaises(PermissionError):
+                    action()

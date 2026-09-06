@@ -141,7 +141,10 @@ def _build_invoice_remarks(invoice_doc):
     if not invoice_doc or not getattr(invoice_doc, "items", None):
         return ""
 
-    lines = []
+    existing = str(invoice_doc.get("remarks") or "")
+    # Preserve the source identity across both foreground and resumed submits.
+    # Rebuild totals each time, so retries cannot append repeated summaries.
+    lines = [existing.split("\n", 1)[0], ""] if existing.startswith("POS Charge Request: ") else []
     for item in invoice_doc.items:
         if item.item_name and item.rate and item.qty:
             total = item.rate * item.qty

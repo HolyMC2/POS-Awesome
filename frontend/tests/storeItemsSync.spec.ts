@@ -35,6 +35,11 @@ vi.mock("../src/offline/index", () => ({
 	setStockCacheReady: offlineMocks.setStockCacheReady,
 }));
 
+const syncStateMocks = vi.hoisted(() => ({ getSyncResourceState: vi.fn(async () => null), setSyncResourceState: vi.fn(async () => {}) }));
+vi.mock("../src/offline/sync/syncState", () => syncStateMocks);
+vi.mock("../src/offline/cache", () => ({ getBootstrapSnapshot: vi.fn(), setBootstrapSnapshot: vi.fn() }));
+
+import itemService from "../src/posapp/services/itemService";
 import { useItemsSync } from "../src/posapp/composables/pos/items/store/useItemsSync";
 
 describe("store useItemsSync background progress", () => {
@@ -234,5 +239,66 @@ describe("store useItemsSync background progress", () => {
 
 		expect(setItems).toHaveBeenCalledTimes(6);
 		expect(updateCachedPaginationFromStorage).toHaveBeenCalledTimes(2);
+	});
+});
+
+
+describe("item group cache hydration", () => {
+	it("preserves the hydrated reference and avoids writes when background groups match", async () => {
+		vi.clearAllMocks();
+		let finish: (groups: any) => void = () => {};
+		const response = new Promise<any>((resolve) => { finish = resolve; });
+		vi.mocked(itemService.getItemGroupsData).mockReturnValueOnce(response);
+		offlineMocks.getCachedItemGroups.mockReturnValueOnce(["ALL", "Cached"] as never[]);
+		const sync = useItemsSync();
+		await sync.loadItemGroups({ name: "POS-1" } as any);
+		const hydrated = sync.itemGroups.value;
+		finish([{ name: "Cached" }]);
+		await response;
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(sync.itemGroups.value).toBe(hydrated);
+		expect(offlineMocks.saveItemGroups).not.toHaveBeenCalled();
+	});
+	it("returns cached groups immediately without awaiting the online refresh", async () => {
+		let finish: (groups: any) => void = () => {};
+		vi.mocked(itemService.getItemGroupsData).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+		offlineMocks.getCachedItemGroups.mockReturnValueOnce(["ALL", "Cached"] as never[]);
+		const sync = useItemsSync();
+		await sync.loadItemGroups({ name: "POS-1" } as any);
+		expect(sync.itemGroups.value).toEqual(["ALL", "Cached"]);
+		finish([{ name: "Fresh" }]);
+		await vi.waitFor(() => expect(sync.itemGroups.value).toEqual(["ALL", "Fresh"]));
+		expect(offlineMocks.saveItemGroups).toHaveBeenCalledWith(["ALL", "Fresh"], JSON.stringify(["POS-1", null]));
+	});
+	it("ignores a late response from a previously selected profile", async () => {
+		let finish: (groups: any) => void = () => {};
+		vi.mocked(itemService.getItemGroupsData).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+		const sync = useItemsSync();
+		await sync.loadItemGroups({ name: "POS-1" } as any);
+		await sync.loadItemGroups({ name: "POS-2", item_groups: [{ item_group: "Restricted" }] } as any);
+		finish([{ name: "Old profile" }]);
+		await Promise.resolve(); await Promise.resolve();
+		expect(sync.itemGroups.value).toEqual(["ALL", "Restricted"]);
+	});
+});
+
+describe("legacy delta pagination migration", () => {
+	it("repairs an old cursor with a full scan and persists only after the last page", async () => {
+		vi.clearAllMocks();
+		offlineMocks.getItemsLastSync.mockReturnValue("2026-09-06 11:00:00" as never);
+		const frappeCall = vi.fn().mockResolvedValueOnce({ message: {
+			changes: [{ key: "item::A", data: { item_code: "A" } }], has_more: true, next_cursor: "page2",
+		} }).mockImplementationOnce(async () => {
+			expect(offlineMocks.saveItemsBulk).not.toHaveBeenCalled();
+			expect(offlineMocks.setItemsLastSync).not.toHaveBeenCalled();
+			return { message: { changes: [{ key: "item::B", data: { item_code: "B" } }], next_watermark: "2026-09-06 12:00:00" } };
+		});
+		(globalThis as any).frappe = { call: frappeCall };
+		const sync = useItemsSync();
+		const result = await sync.refreshModifiedItems({ name: "POS-1" } as any, "Retail", null, "scope", vi.fn(), new Map());
+		expect(result.count).toBe(2);
+		expect(frappeCall.mock.calls[0][0].args.watermark).toBeNull();
+		expect(frappeCall.mock.calls[1][0].args.page_cursor).toBe("page2");
+		expect(offlineMocks.setItemsLastSync).toHaveBeenCalledWith("2026-09-06 12:00:00");
 	});
 });

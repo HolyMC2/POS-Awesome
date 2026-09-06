@@ -10,6 +10,7 @@ from posawesome.posawesome.api.offline_sync.common import (
     _normalize_timestamp,
     _resolve_profile,
     _watermark_floor,
+    _page_window, _page_scope, _changed_keys, _paged_response,
 )
 
 SYNC_SCHEMA_VERSION = "2026-08-12"
@@ -57,6 +58,8 @@ def sync_customers(
     start_after=None,
     limit=200,
     schema_version=None,
+    paginated=0,
+    page_cursor=None,
 ):
     if schema_version and schema_version != SYNC_SCHEMA_VERSION:
         return _build_response(full_resync_required=True)
@@ -64,6 +67,9 @@ def sync_customers(
     profile = _resolve_profile(pos_profile)
     if not profile:
         frappe.throw("pos_profile is required")
+
+    if str(paginated) == "1" or page_cursor:
+        return _sync_customers_page(profile, watermark, page_cursor, limit)
 
     resolved_limit = _coerce_limit(limit)
     fetch_limit = resolved_limit + 1
@@ -108,4 +114,27 @@ def sync_customers(
         deleted=deleted,
         next_watermark=next_watermark,
         has_more=has_more,
+    )
+
+
+def _sync_customers_page(profile, watermark, cursor, limit):
+    limit = _coerce_limit(limit)
+    window = _page_window(watermark, cursor, _page_scope("customers", profile))
+    candidates = _changed_keys("Customer", "name", window, limit + 1)
+    keys = [row["name"] for row in candidates]
+    page_keys = keys[:limit]
+    filters = {"name": ["in", page_keys], "disabled": 0}
+    groups = get_customer_groups(profile)
+    if groups:
+        filters["customer_group"] = ["in", groups]
+    rows = frappe.get_all(
+        "Customer", filters=filters,
+        fields=["name", "modified", "mobile_no", "email_id", "tax_id", "customer_name", "primary_address"],
+        limit_page_length=limit,
+    ) if page_keys else []
+    found = {row["name"] for row in rows}
+    return _paged_response(
+        window, keys, limit,
+        [{"key": f"customer::{row['name']}", "modified": row.get("modified"), "data": row} for row in rows],
+        [{"key": f"customer::{key}"} for key in page_keys if key not in found],
     )

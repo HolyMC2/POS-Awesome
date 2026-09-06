@@ -12,6 +12,7 @@
 							<div class="pay-mode-controls__label">{{ __("Payment Entry Type") }}</div>
 							<v-btn-toggle
 								v-model="paymentEntryType"
+								:disabled="!!lockedParty"
 								mandatory
 								density="comfortable"
 								class="pay-mode-toggle pay-mode-toggle--entry"
@@ -29,6 +30,7 @@
 							<div class="pay-mode-controls__label">{{ __("Party Type") }}</div>
 							<v-btn-toggle
 								v-model="partyType"
+								:disabled="!!lockedParty"
 								mandatory
 								density="comfortable"
 								class="pay-mode-toggle pay-mode-toggle--party"
@@ -112,6 +114,7 @@
 						:selected-count="selected_invoices.length"
 						:loading="invoices_loading"
 						:auto-reconcile-loading="auto_reconcile_loading"
+						:allow-auto-reconcile="allowExistingCredits"
 						:auto-reconcile-summary="auto_reconcile_summary"
 						:party-name="customer_name"
 						:section-title="invoiceSectionTitle"
@@ -127,7 +130,7 @@
 					/>
 
 					<PayUnallocatedTable
-						v-if="showReconciliationSections"
+						v-if="allowExistingCredits"
 						v-model:selected-payments="selected_payments"
 						:payments="unallocated_payments"
 						:pos-profile="pos_profile"
@@ -139,6 +142,10 @@
 						:currency-symbol="currencySymbol"
 						:format-currency="formatCurrency"
 						:payment-row-class="paymentRowClass"
+						:party-type="partyType"
+						:customer="customer_name"
+						:opening-shift="pos_opening_shift"
+						@refunded="handleAdvanceRefunded"
 					/>
 
 					<PayMpesaSection
@@ -214,9 +221,9 @@
 </template>
 
 <script>
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, getCurrentInstance } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, getCurrentInstance, defineAsyncComponent } from "vue";
 import { storeToRefs } from "pinia";
-import VueDatePicker from "@vuepic/vue-datepicker";
+const VueDatePicker = defineAsyncComponent(() => import("@vuepic/vue-datepicker"));
 import format from "../../../format";
 import { normalizeDateForBackend } from "../../../format";
 import Customer from "../customer/Customer.vue";
@@ -244,6 +251,7 @@ import { useCustomersStore } from "../../../stores/customersStore.js";
 import { useUIStore } from "../../../stores/uiStore.js";
 import { useToastStore } from "../../../stores/toastStore.js";
 import { getValidCachedOpeningForCurrentUser } from "../../../utils/openingCache";
+import { getTerminalCredentials } from "../../../../offline/shiftTerminal";
 
 // Composables
 import { usePosPayData } from "../../../composables/pos/payments/usePosPayData";
@@ -255,6 +263,7 @@ import {
 	getAllowedPartyTypes,
 	normalizePartyTypeForPaymentType,
 	shouldShowReconciliationSections,
+	canApplyExistingCredits,
 } from "../../pos_pay/paymentModes";
 
 // Sub-components
@@ -643,6 +652,9 @@ export default {
 		const showReconciliationSections = computed(() =>
 			shouldShowReconciliationSections(paymentEntryType.value, partyType.value),
 		);
+		const allowExistingCredits = computed(() =>
+			canApplyExistingCredits(paymentEntryType.value, partyType.value),
+		);
 		const showMpesaSection = computed(
 			() => isCustomerPartyType.value && paymentEntryType.value === "Receive",
 		);
@@ -872,6 +884,7 @@ export default {
 			try {
 				const r = await frappe.call("posawesome.posawesome.api.shifts.check_opening_shift", {
 					user: frappe.session.user,
+					...getTerminalCredentials(),
 				});
 				if (r.message) {
 					await applyOpeningData(r.message);
@@ -1021,6 +1034,14 @@ export default {
 				queued: isOffline(),
 			});
 			return refreshOutstandingInvoices();
+		}
+		function handleAdvanceRefunded(result) {
+			proxy?.eventBus?.emit("show_message", {
+				title: __("Refund confirmed: {0} {1}", [result.paid_amount, result.paid_currency]),
+				color: "success",
+			});
+			void get_unallocated_payments();
+			void refreshOutstandingInvoices();
 		}
 		function handleInvoiceSelection(item) {
 			toggleInvoiceSelection(item, customer_name, (cust) => {
@@ -1259,6 +1280,7 @@ export default {
 			resolvedPartyLabel,
 			isCustomerPartyType,
 			showReconciliationSections,
+			allowExistingCredits,
 			showMpesaSection,
 			invoiceSectionTitle,
 			paymentSectionTitle,
@@ -1297,6 +1319,7 @@ export default {
 			mpesa_search_mobile,
 			get_outstanding_invoices,
 			get_unallocated_payments,
+			handleAdvanceRefunded,
 			get_draft_mpesa_payments_register,
 			get_pos_profiles,
 			autoReconcile,

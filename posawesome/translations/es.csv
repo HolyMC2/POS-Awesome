@@ -3207,3 +3207,246 @@ Next invoice,Factura siguiente
 Collect the selected invoice,Cobrar la factura seleccionada
 Search a folio or customer,Buscar folio o cliente
 From the capture or a detail,Desde la captura o un detalle
+The sales shown here are saved on this register. Keep this browser’s data and sign in as the original cashier to upload them when online.,Las ventas que aparecen aquí están guardadas en esta caja. Conserva los datos de este navegador e inicia sesión con el usuario que las registró para enviarlas cuando haya conexión.
+Saved work protection,Protección de datos guardados
+Request storage protection,Solicitar protección de almacenamiento
+Saved work needs ownership review,Hay registros guardados cuyo responsable debe verificarse
+Unassigned records are preserved on this device and will not upload under this login. Ask a System Manager to export them and check invoice names and request IDs against the server before replaying. Exporting does not submit or remove records. Do not clear browser data.,Los registros sin usuario asignado se conservan en este dispositivo y no se enviarán con esta sesión. Pide a un administrador del sistema que los exporte y coteje los folios de factura y los identificadores de solicitud con el servidor antes de reenviarlos. Exportar no envía ni elimina registros. No borres los datos del navegador.
+Export for recovery,Exportar para recuperación
+Storage protection has not been checked.,Aún no se ha verificado la protección del almacenamiento.
+Checking browser storage protection…,Verificando la protección del almacenamiento del navegador…
+Automatic storage eviction protection is enabled. Keep syncing saved sales; clearing browser data still removes local records.,La protección contra el borrado automático está activada. Sigue sincronizando las ventas guardadas; borrar los datos del navegador elimina los registros locales.
+Browser storage may be automatically cleared. Request protection and sync saved sales when online.,El navegador puede borrar automáticamente los datos guardados. Solicita protección y sincroniza las ventas cuando haya conexión.
+The browser did not grant storage protection. Saved sales remain on this device; sync them when online and retry protection.,El navegador no concedió protección al almacenamiento. Las ventas guardadas permanecen en este dispositivo; sincronízalas cuando haya conexión y vuelve a solicitar la protección.
+This browser cannot confirm storage protection. Sync saved sales when online and do not clear browser data.,Este navegador no puede confirmar la protección del almacenamiento. Sincroniza las ventas guardadas cuando haya conexión y no borres los datos del navegador.
+Storage protection could not be checked. Retry and keep saved sales syncing when online.,No se pudo verificar la protección del almacenamiento. Vuelve a intentarlo y sigue sincronizando las ventas guardadas cuando haya conexión.
+Saved work could not be checked. Reopen this panel to retry.,No se pudieron revisar los registros guardados. Vuelve a abrir este panel para intentarlo de nuevo.
+Sign in before saving work on this register.,Inicia sesión antes de guardar registros en esta caja.
+The active POS profile changed. Reopen the original register before saving.,Cambió el perfil de punto de venta activo. Vuelve a abrir la caja original antes de guardar.
+This saved work belongs to another session. Sign in to the original cashier and register.,Estos registros guardados pertenecen a otra sesión. Inicia sesión con el usuario y la caja originales.
+A System Manager must recover unassigned saved work.,Un administrador del sistema debe recuperar los registros guardados sin usuario asignado.
+The signed-in user changed.,Cambió el usuario de la sesión.
+
+The opening shift could not be verified. Reopen the closing dialog.,No se pudo verificar el turno abierto. Vuelve a abrir el cierre de caja.
+Cannot close: saved sales or cash movements still need sync or review.,No se puede cerrar: hay ventas o movimientos de caja guardados pendientes de sincronizar o revisar.
+Closing is paused,El cierre está en pausa
+Saved work could not be verified. Reconnect and retry before closing this shift.,No se pudieron verificar los registros guardados. Reconecta y vuelve a intentarlo antes de cerrar el turno.
+Payment amount must be a finite positive number.,El importe del pago debe ser un número positivo y finito.
+Only customer and supplier payments are supported.,Solo se admiten pagos de clientes y proveedores.
+Payment party was not found.,No se encontró el cliente o proveedor del pago.
+Payment reconciliation is not enabled for an authorized POS Profile.,La conciliación de pagos no está habilitada en un perfil de punto de venta autorizado.
+Not permitted to access payments for this party and company.,No tiene permiso para consultar los pagos de este cliente o proveedor y esta empresa.
+Unsupported payment party or direction.,"El tipo de cliente o proveedor, o la dirección del pago, no son válidos."
+Payment account must be an active bank or cash account in this company.,La cuenta del pago debe ser una cuenta bancaria o de caja activa de esta empresa.
+Mode of payment is not available on this POS Profile.,La forma de pago no está disponible en este perfil de punto de venta.
+Payment request was already recorded with different payment methods or amounts.,La solicitud de pago ya se registró con formas de pago o importes diferentes.
+Selected credit note has no available credit.,La nota de crédito seleccionada no tiene crédito disponible.
+Selected payment has the wrong payment direction for reconciliation.,El pago seleccionado tiene una dirección incorrecta para la conciliación.
+An invoice changed while calculating the refund. Please retry.,Una factura cambió mientras se calculaba la devolución. Vuelve a intentarlo.
+Unsupported invoice payment table for a cash refund.,La tabla de pagos de esta factura no admite devoluciones en efectivo.
+Cannot determine the original invoice currency conversion for this refund.,No se puede determinar el tipo de cambio de la factura original para esta devolución.
+Cannot determine the payment currency conversion for this refund.,No se puede determinar el tipo de cambio del pago para esta devolución.
+Unsupported invoice type for a cash refund.,Este tipo de factura no admite devoluciones en efectivo.
+"The original invoice must be submitted and match this return's customer, company and currency.","La factura original debe estar confirmada y tener el mismo cliente, empresa y moneda que esta devolución."
+A previous return has a different currency; reconcile it before issuing another cash refund.,Una devolución anterior tiene una moneda diferente. Concíliala antes de realizar otra devolución en efectivo.
+Cannot refund {0} for this return: only {1} remains refundable on original invoice {2}. Set the paid amount to 0 so the return is recorded as a credit note that reduces the customer's balance.,No se pueden devolver {0}: solo quedan {1} disponibles para devolver de la factura original {2}. Establece el importe pagado en 0 para registrar una nota de crédito que reduzca el saldo del cliente.
+Payment request was already recorded with a different payment direction.,La solicitud de pago ya se registró con una dirección de pago diferente.
+Selected invoice balance does not match the payment direction.,El saldo de la factura seleccionada no corresponde a la dirección del pago.
+Only submitted invoices can receive payments.,Solo las facturas enviadas pueden recibir pagos.
+Selected invoice uses a different party account from this payment.,La factura seleccionada usa una cuenta de cliente o proveedor diferente a la de este pago.
+Refund exceeds the outstanding credit on the selected invoices.,El reembolso supera el crédito pendiente de las facturas seleccionadas.
+This request has already been charged,Esta solicitud ya fue cobrada
+Payment recorded; source update pending,Pago registrado; actualización de origen pendiente
+Selling terminal,Terminal de venta
+This browser owns the shift.,Este navegador tiene asignado el turno.
+This shift must be registered to this browser before selling.,Registra este turno en este navegador antes de vender.
+Previous-browser sales need manager review before this shift can close. Saved work has not been deleted or reassigned.,Un supervisor debe revisar las ventas de navegadores anteriores antes del cierre. Los registros guardados no se borraron ni se reasignaron.
+"Selling is paused after a closing or release attempt. Check the result, then resume only if the shift is still open.",La venta está en pausa después de intentar cerrar o liberar la terminal. Revisa el resultado y reanuda solo si el turno sigue abierto.
+I understand previous browsers may still contain unsynced sales and must be checked.,Entiendo que los navegadores anteriores pueden tener ventas sin sincronizar y deben revisarse.
+Recovery reason or reconciliation record,Motivo de recuperación o constancia de conciliación
+Check terminal status,Revisar estado de la terminal
+Register this browser,Registrar este navegador
+Sync complete — release terminal,Sincronización completa — liberar terminal
+Resume selling,Reanudar ventas
+Manager: transfer to this browser,Supervisor: transferir a este navegador
+Manager: record completed review,Supervisor: registrar revisión completa
+Reconnect to manage this terminal.,Reconecta para administrar esta terminal.
+Sync and review all saved sales and cash movements first.,Primero sincroniza y revisa las ventas y los movimientos de caja guardados.
+Browser storage is unavailable,El almacenamiento del navegador no está disponible
+Allow browser storage and reload before opening this register.,Permite el almacenamiento del navegador y recarga antes de abrir esta caja.
+This browser needs terminal registration. Open Offline Status.,Este navegador necesita registrarse como terminal. Abre Estado sin conexión.
+This shift is no longer open. Refresh the register.,Este turno ya no está abierto. Actualiza la caja.
+This shift belongs to another cashier.,Este turno pertenece a otro cajero.
+This shift is assigned to another browser or its registration changed. Saved work is preserved; open Offline Status for recovery.,Este turno está asignado a otro navegador o cambió su registro. Los registros guardados se conservan; abre Estado sin conexión para recuperarlos.
+Terminal registration changed before submission. Saved work needs review.,El registro de la terminal cambió antes del envío. Deben revisarse los registros guardados.
+Register this browser before changing table orders. Open Offline Status.,Registra este navegador antes de modificar pedidos de mesa. Abre Estado sin conexión.
+The terminal and table order must use the same POS profile.,La terminal y el pedido de mesa deben usar el mismo perfil de punto de venta.
+Only the shift owner or a POS supervisor can manage this terminal.,Solo el cajero del turno o un supervisor de punto de venta puede administrar esta terminal.
+Another browser owns this shift. Release it there or ask a manager to transfer it.,Otro navegador tiene asignado este turno. Libéralo allí o solicita la transferencia a un supervisor.
+Review saved work on previous browsers before claiming this legacy shift.,Revisa los registros guardados en navegadores anteriores antes de registrar este turno existente.
+Sync and review all saved work before releasing this terminal.,Sincroniza y revisa todos los registros guardados antes de liberar esta terminal.
+A POS supervisor must authorize terminal recovery.,Un supervisor de punto de venta debe autorizar la recuperación de la terminal.
+Record a recovery reason and acknowledge that previous browsers may still hold unsynced sales.,Registra el motivo de recuperación y confirma que los navegadores anteriores pueden contener ventas sin sincronizar.
+Record how previous-browser sales were reconciled or accounted for before allowing closure.,Registra cómo se conciliaron o contabilizaron las ventas de navegadores anteriores antes de permitir el cierre.
+Sync and review saved work before resuming this terminal.,Sincroniza y revisa los registros guardados antes de reanudar esta terminal.
+A supervisor must review previous-terminal saved work before closing this shift.,Un supervisor debe revisar los registros guardados de la terminal anterior antes de cerrar este turno.
+Manage terminal registration through Offline Status; direct field changes are not allowed.,Administra el registro de terminales desde Estado sin conexión; no se permiten cambios directos en los campos.
+Open this shift from its selling browser to register the terminal.,Abre este turno desde el navegador de venta para registrar la terminal.
+Opening shifts can only be loaded for the signed-in cashier.,Solo pueden cargarse los turnos del cajero que inició sesión.
+Manager: review saved sales individually,Gerente: revise cada venta guardada
+Existing server invoices will be verified. An unsent sale will post into this open shift using its original request ID:,Se verificarán las facturas existentes en el servidor. Una venta sin enviar se registrará en este turno abierto con su identificador original:
+"I reviewed this sale, its customer, collected money and original request ID.","Revisé esta venta, su cliente, el dinero cobrado y su identificador original."
+Verify or recover this sale,Verificar o recuperar esta venta
+Reconnect to recover saved sales.,Conéctese para recuperar las ventas guardadas.
+A POS supervisor must authorize saved-sale recovery.,Un supervisor del punto de venta debe autorizar la recuperación de ventas guardadas.
+Review this individual sale and record its recovery reason before posting it.,Revise esta venta individual y registre el motivo de recuperación antes de contabilizarla.
+Saved sale has no valid original request ID; export it for manual reconciliation.,La venta guardada no tiene un identificador original válido; expórtela para conciliarla manualmente.
+Recover this sale on an open shift of its original company and POS profile.,Recupere esta venta en un turno abierto de su empresa y perfil de punto de venta originales.
+This request ID already belongs to a different register.,Este identificador de solicitud ya pertenece a otra caja.
+This request ID belongs to a different customer. Saved work remains pending.,Este identificador de solicitud pertenece a otro cliente. El trabajo guardado sigue pendiente.
+This saved sale was cancelled on the server. Review the cancellation instead of posting it again.,Esta venta guardada fue cancelada en el servidor. Revise la cancelación antes de volver a registrarla.
+Recovered sale is not submitted yet. Saved work remains pending for review.,La venta recuperada aún no está contabilizada. El trabajo guardado sigue pendiente de revisión.
+Saved sale is no longer available for recovery.,La venta guardada ya no está disponible para recuperación.
+The signed-in user changed. Saved work was preserved.,Cambió el usuario de la sesión. Se conservó el trabajo guardado.
+Recovered sale was not verified; its saved record was preserved.,No se verificó la venta recuperada; se conservó su registro guardado.
+Saved sale changed during recovery.,La venta guardada cambió durante la recuperación.
+This browser must own the shift before saving work. Open Offline Status to register or recover this terminal.,Este navegador debe tener asignado el turno antes de guardar trabajo. Abra Estado sin conexión para registrar o recuperar esta terminal.
+This terminal is closing or being released. Reconnect and check its status before saving more work.,Esta terminal se está cerrando o liberando. Conéctese y revise su estado antes de guardar más trabajo.
+This historical acknowledgement has no submitted server match. Export it for manual reconciliation.,Esta confirmación histórica no coincide con una factura contabilizada en el servidor. Expórtela para conciliarla manualmente.
+A valid selling exchange rate is required to verify this item's price.,Se requiere un tipo de cambio de venta válido para verificar el precio de este artículo.
+"Ask a supervisor to sign in on this replacement browser, authorize your shift, then sign back in here. Saved sales remain with their original cashier.",Pida a un supervisor que inicie sesión en este navegador de reemplazo y autorice su turno; después vuelva a iniciar sesión aquí. Las ventas guardadas conservan su cajero original.
+Manager: authorize a replacement browser,Gerente: autorizar un navegador de reemplazo
+Select the cashier's open shift. Authorization uses this browser; afterward the cashier must sign in here. Previous browsers cannot submit new sales.,Seleccione el turno abierto del cajero. Se autorizará este navegador; después el cajero debe iniciar sesión aquí. Los navegadores anteriores ya no podrán registrar ventas.
+Cashier shift,Turno del cajero
+Select an open shift,Seleccione un turno abierto
+Authorize this browser for the selected cashier,Autorizar este navegador para el cajero seleccionado
+This browser is authorized. Sign out and let the selected cashier sign in here. Review saved work before closing their shift.,Este navegador está autorizado. Cierre sesión y permita que el cajero seleccionado inicie sesión aquí. Revise el trabajo guardado antes de cerrar su turno.
+Cash movement changed during terminal verification. Refresh and retry.,El movimiento de caja cambió durante la verificación de la terminal. Actualice e intente de nuevo.
+Supervisor: authorize a replacement browser,Supervisor: autorizar un navegador de reemplazo
+Manage cash movements from the registered POS terminal.,Administre los movimientos de caja desde la terminal registrada del punto de venta.
+Company and price-list currencies are required to verify exchange rates.,Se requieren las monedas de la empresa y de la lista de precios para verificar los tipos de cambio.
+The return's original invoice does not match its currency or party.,La factura original de la devolución no coincide con su moneda o cliente.
+An existing POS draft cannot be moved to another company.,Un borrador existente del punto de venta no se puede mover a otra empresa.
+Save the draft in its new currency before submitting payment.,Guarde el borrador en su nueva moneda antes de registrar el pago.
+Refund unused advance,Devolver anticipo no utilizado
+This refund has a saved request. Check or retry it before starting another.,Esta devolución tiene una solicitud guardada. Verifíquela o reinténtela antes de iniciar otra.
+Refund amount,Importe de devolución
+Refund reason,Motivo de devolución
+Cash or bank payout,Salida de efectivo o banco
+Hand out cash only after the refund is confirmed. An uncertain response remains in pending payments.,Entregue el efectivo solo después de confirmar la devolución. Una respuesta incierta permanece en pagos pendientes.
+Review refund,Revisar devolución
+Check or retry refund,Verificar o reintentar devolución
+Confirm refund,Confirmar devolución
+Reconnect to refund an unused advance.,Vuelva a conectarse para devolver un anticipo no utilizado.
+A valid refund quote is required.,Se requiere una cotización válida de la devolución.
+Review the refund before confirming.,Revise la devolución antes de confirmarla.
+Multiple pending refunds need review before another refund.,Revise las devoluciones pendientes antes de iniciar otra.
+Refund is not confirmed. Check pending payments before handing out cash.,La devolución no está confirmada. Revise los pagos pendientes antes de entregar efectivo.
+Review the existing pending refund before starting another.,Revise la devolución pendiente existente antes de iniciar otra.
+Refund confirmed: {0} {1},Devolución confirmada: {0} {1}
+Payments and advances,Pagos y anticipos
+Financial request records can only be changed by the POS transaction processor.,Solo el procesador de transacciones del punto de venta puede modificar los registros de solicitudes financieras.
+A valid request ID is required to reconcile or refund an existing payment.,Se requiere un identificador de solicitud válido para conciliar o reembolsar un pago existente.
+This financial request ID was already used for different transaction details.,Este identificador de solicitud financiera ya se utilizó para una transacción con datos diferentes.
+Only submitted payments and credit notes from this company can be reconciled.,Solo se pueden conciliar pagos y notas de crédito contabilizados de esta empresa.
+Selected payment or credit note has no available balance.,El pago o la nota de crédito seleccionados no tienen saldo disponible.
+No outstanding invoices are available for this reconciliation.,No hay facturas pendientes disponibles para esta conciliación.
+The reconciled balance did not match the requested allocation.,El saldo conciliado no coincide con la asignación solicitada.
+Selected credit note does not belong to this party.,La nota de crédito seleccionada no pertenece a este cliente o proveedor.
+Selected invoice does not match the reconciliation party type.,La factura seleccionada no corresponde al tipo de cliente o proveedor de la conciliación.
+Reconciliation requires submitted invoices using the same party account.,La conciliación requiere facturas contabilizadas que utilicen la misma cuenta del cliente o proveedor.
+Selected payment document does not match the party type.,El documento de pago seleccionado no corresponde al tipo de cliente o proveedor.
+Unsupported POS payment operation.,Operación de pago no admitida por el punto de venta.
+Debit Note,Nota de débito
+Invalid advance refund request.,Solicitud de reembolso de anticipo no válida.
+"Original payment, customer, register, shift and refund method are required.","Se requieren el pago original, cliente, caja, turno y método de reembolso."
+Record a refund reason of 8 to 1000 characters.,Escriba un motivo de reembolso de 8 a 1000 caracteres.
+A valid original refund request ID is required.,Se requiere un identificador válido de la solicitud original de reembolso.
+This payment method requires provider refund confirmation. Choose a manual cash or bank refund method.,Este método requiere confirmación del reembolso por el proveedor. Seleccione un método manual de efectivo o banco.
+This refund payment method is disabled.,Este método de reembolso está deshabilitado.
+The refund shift must belong to the selected POS Profile.,El turno del reembolso debe pertenecer al perfil de punto de venta seleccionado.
+Configure a bank or cash account for this refund method.,Configure una cuenta de banco o efectivo para este método de reembolso.
+Only a submitted customer advance received by the company can be refunded.,Solo se puede reembolsar un anticipo de cliente recibido y confirmado por la empresa.
+The original advance belongs to a different customer or company.,El anticipo original pertenece a otro cliente o empresa.
+The advance account currency or company no longer matches its original payment.,La moneda o empresa de la cuenta del anticipo ya no coincide con el pago original.
+Configure a current buying Currency Exchange rate before refunding this advance.,Configure un tipo de cambio de compra vigente antes de reembolsar este anticipo.
+Refund amount has more decimals than the advance currency allows.,El importe del reembolso tiene más decimales de los permitidos por la moneda del anticipo.
+Refund amount exceeds the current unused advance balance.,El importe del reembolso supera el saldo actual del anticipo sin utilizar.
+The converted refund amount is below the payout currency's smallest unit.,El importe convertido del reembolso es inferior a la unidad mínima de la moneda de pago.
+The original advance and refund could not be matched for reconciliation. Nothing was posted.,No se pudo conciliar el anticipo original con el reembolso. No se registró ningún movimiento.
+The refund allocation differs from the confirmed amount. Nothing was posted.,La asignación del reembolso difiere del importe confirmado. No se registró ningún movimiento.
+The recorded refund changed on the server. Review it before retrying.,El reembolso registrado cambió en el servidor. Revíselo antes de reintentar.
+A refund with this request ID already exists without a completed receipt. Review it before retrying.,Ya existe un reembolso con este identificador sin comprobante de finalización. Revíselo antes de reintentar.
+The refund payout quote changed. Review the new amount before confirming.,Cambió el importe cotizado del reembolso. Revise el nuevo importe antes de confirmar.
+The refund account or amount changed during validation. Nothing was posted.,La cuenta o el importe del reembolso cambió durante la validación. No se registró ningún movimiento.
+The remaining advance balance was not reconciled exactly. Nothing was posted.,El saldo restante del anticipo no se concilió exactamente. No se registró ningún movimiento.
+Unused advance {0}; refund request {1}; cashier {2}. Reason: {3},Anticipo sin utilizar {0}; solicitud de reembolso {1}; cajero {2}. Motivo: {3}
+Advance refund {0}. {1},Reembolso de anticipo {0}. {1}
+Money needing attention,Dinero que necesita atención
+Check the original transaction before taking payment or issuing a refund again.,Revise la operación original antes de volver a cobrar o entregar un reembolso.
+Server records are scoped to the selected register. Local records belong to this browser and cashier.,Los registros del servidor corresponden a la caja seleccionada. Los registros locales pertenecen a este navegador y cajero.
+Reconnect to check server records. Saved work on this browser is shown below.,Conéctese para consultar el servidor. Abajo se muestra el trabajo guardado en este navegador.
+No pending records found in the sources checked.,No se encontraron registros pendientes en las fuentes consultadas.
+This browser,Este navegador
+Server record,Registro del servidor
+Sources checked,Fuentes consultadas
+Saved browser work,Trabajo guardado en el navegador
+Server records,Registros del servidor
+Checked,Consultado
+Could not check,No se pudo consultar
+Not enabled or unavailable,No habilitado o no disponible
+More records need review. This list is limited; open the source records to review the rest.,Hay más registros por revisar. La lista tiene un límite; abra los registros originales para consultar los demás.
+The cashier or register changed. Reopen the exception report.,Cambió el cajero o la caja. Vuelva a abrir el reporte de pendientes.
+Some saved browser work could not be read. Keep this browser's data and retry.,No se pudo leer parte del trabajo guardado. Conserve los datos de este navegador y vuelva a consultar.
+Some server sources could not be checked. This is not an all-clear report.,No se pudieron consultar algunas fuentes del servidor. Este reporte no confirma que todo esté resuelto.
+Server records could not be checked for this register. Refresh or ask a supervisor.,No se pudieron consultar los registros de esta caja. Actualice o solicite ayuda a un supervisor.
+Select a POS profile to check server records. A supervisor can review a profile without an open shift.,Seleccione un perfil POS para consultar el servidor. Un supervisor puede revisar un perfil sin turno abierto.
+Review the source update. Do not take payment for this order again.,Revise la actualización del documento original. No vuelva a cobrar esta orden.
+Review the existing record and its history before retrying. Do not create a replacement transaction.,Revise el registro existente y su historial antes de reintentar. No cree otra operación para sustituirlo.
+Open source record,Abrir registro original
+Review fiscal document,Revisar documento fiscal
+Open payments,Abrir pagos
+Open recargas,Abrir recargas
+Review terminal and saved work,Revisar terminal y trabajo guardado
+Review saved work,Revisar trabajo guardado
+Check all saved work of this type,Consultar o reintentar todo el trabajo guardado de este tipo
+Saved work could not be checked. Keep the original request and review its status before retrying.,No se pudo consultar el trabajo guardado. Conserve la solicitud original y revise su estado antes de reintentar.
+Sign in as the original cashier to review saved work.,Inicie sesión con el cajero original para revisar el trabajo guardado.
+Saved work needs review before it can finish.,El trabajo guardado necesita revisión antes de finalizar.
+Saved on this browser; server confirmation is still pending.,Guardado en este navegador; falta la confirmación del servidor.
+Check the original refund request before handing out cash or starting another refund.,Revise la solicitud de reembolso original antes de entregar efectivo o iniciar otro reembolso.
+Keep the original request. Do not enter this transaction again.,Conserve la solicitud original. No vuelva a capturar esta operación.
+The saved sale needs a verified server confirmation.,La venta guardada necesita una confirmación verificada del servidor.
+Saved sale,Venta guardada
+Invoice submission,Envío de factura
+Saved payment,Pago guardado
+Cash movement,Movimiento de efectivo
+Saved order,Orden guardada
+Paid order follow-up,Seguimiento de orden cobrada
+Payment request,Solicitud de pago
+Payment provider,Proveedor de pagos
+Fiscal document,Documento fiscal
+Money exception,Pendiente de dinero
+Invoice submissions,Envíos de facturas
+Payment requests,Solicitudes de pago
+Fiscal documents,Documentos fiscales
+The exception report could not be verified. Refresh to check again.,No se pudo verificar el reporte de pendientes. Actualice para volver a consultar.
+A valid POS profile and opening shift are required.,Se requiere un perfil POS y un turno de apertura válidos.
+This POS profile is disabled.,Este perfil POS está deshabilitado.
+An active opening shift is required to review money exceptions.,Se requiere un turno abierto para revisar los pendientes de dinero.
+Not permitted to review money exceptions for this opening shift.,No tiene permiso para revisar los pendientes de dinero de este turno.
+Exception list limit must be a whole number.,El límite de la lista de pendientes debe ser un número entero.
+Invoice submitted; payment follow-up needs review.,Factura registrada; es necesario revisar el seguimiento del pago.
+Saved invoice submission needs review before retrying.,El envío de la factura guardada necesita revisión antes de reintentar.
+Payment request needs review; some steps may already be recorded.,La solicitud de pago necesita revisión; algunos pasos podrían estar registrados.
+Payment recorded; the source document update failed.,Pago registrado; falló la actualización del documento original.
+Payment recorded; the source document update is pending.,Pago registrado; la actualización del documento original está pendiente.
+Invoice recorded; fiscal stamping needs review.,Factura registrada; el timbrado fiscal necesita revisión.
+Provider transaction is pending; review its existing status before retrying.,La operación del proveedor está pendiente; revise su estado antes de reintentar.
+Provider transaction is in progress; review its existing status before retrying.,La operación del proveedor está en curso; revise su estado antes de reintentar.
+Provider transaction failed; review the existing transaction.,La operación del proveedor falló; revise la operación existente.
+Provider transaction needs manual review; do not create a replacement payment.,La operación del proveedor necesita revisión manual; no cree otro pago para sustituirla.
+Payment is not fully confirmed. Keep the original request and review pending payments before retrying.,El pago no está confirmado por completo. Conserve la solicitud original y revise los pagos pendientes antes de reintentar.
+Refresh status,Actualizar estado
+Last checked,Última consulta
+Review the existing provider transaction before collecting again.,Revise la operación existente del proveedor antes de volver a cobrar.

@@ -19,6 +19,7 @@ class FakePaymentEntry:
     def __init__(self, name="ACC-PAY-TEST-0001", paid_amount=0):
         self.name = name
         self.paid_amount = paid_amount
+        self.received_amount = paid_amount
         self.amount = paid_amount
         self.references = []
         self.total_allocated_amount = None
@@ -74,12 +75,16 @@ def _install_framework_stubs():
     # @patch(...processor.frappe) mock never reaches it); System Manager makes
     # _is_super short-circuit every assert_profile/assert_company gate.
     frappe_module.get_roles = lambda user=None: ["System Manager"]
+    frappe_module.session = types.SimpleNamespace(user="Administrator")
+    frappe_module.flags = types.SimpleNamespace(ignore_party_validation=False)
+    frappe_module.has_permission = lambda *args, **kwargs: True
     frappe_module.get_list = lambda *args, **kwargs: []
     frappe_module.get_doc = lambda *args, **kwargs: None
-    frappe_module.get_cached_doc = lambda *args, **kwargs: None
+    frappe_module.get_cached_doc = lambda *args, **kwargs: AttrDict(name="Main POS", company="Test Company", disabled=0)
     frappe_module.new_doc = lambda *args, **kwargs: None
     frappe_module.db = types.SimpleNamespace(
-        sql=lambda *args, **kwargs: [], get_value=lambda *args, **kwargs: None
+        sql=lambda *args, **kwargs: [], get_values=lambda *args, **kwargs: [],
+        get_value=lambda *args, **kwargs: "Test Party"
     )
     frappe_module.utils = frappe_utils
 
@@ -143,6 +148,9 @@ def _install_framework_stubs():
     shifts_module.is_demo_pos_site = lambda: True
     shifts_module.assert_shift_not_stale = lambda *args, **kwargs: None
     sys.modules["posawesome.posawesome.api.shifts"] = shifts_module
+    terminal_module = types.ModuleType("posawesome.posawesome.api.shift_terminal")
+    terminal_module.assert_terminal_access = lambda *args, **kwargs: None
+    sys.modules["posawesome.posawesome.api.shift_terminal"] = terminal_module
 
 
 def _install_package_stubs():
@@ -212,6 +220,14 @@ class TestPosPaymentProcessing(unittest.TestCase):
             payment_processing_dir / "reconciliation.py",
         )
 
+    def setUp(self):
+        self.receipt = Mock(response=None)
+        self.receipt.completed.return_value = None
+        receipt_patch = patch("posawesome.posawesome.api.payment_processing.request_ledger.claim_financial_request",
+                              return_value=self.receipt)
+        receipt_patch.start()
+        self.addCleanup(receipt_patch.stop)
+
     @patch("posawesome.posawesome.api.payment_processing.processor.create_payment_entry")
     @patch("posawesome.posawesome.api.payment_processing.processor.frappe")
     def test_process_pos_payment_keeps_new_payment_unallocated_without_selected_invoices(
@@ -254,7 +270,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
         self.assertEqual(fake_payment_entry.references, [])
         self.assertEqual(fake_payment_entry.total_allocated_amount, 0)
         self.assertEqual(fake_payment_entry.unallocated_amount, 100)
-        self.assertEqual(fake_payment_entry.difference_amount, 100)
+        self.assertIsNone(fake_payment_entry.difference_amount)
 
     @patch("posawesome.posawesome.api.payment_processing.processor.create_payment_entry")
     @patch("posawesome.posawesome.api.payment_processing.processor.frappe")
@@ -531,6 +547,8 @@ class TestPosPaymentProcessing(unittest.TestCase):
             }
         )
         mock_frappe.db = types.SimpleNamespace(
+            savepoint=lambda name: None,
+            rollback=lambda **kwargs: None,
             get_default=lambda key: 2,
             has_column=lambda doctype, fieldname: True,
             sql=lambda *args, **kwargs: [],
@@ -548,6 +566,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
                 "party": "Customer 727",
                 "party_type": "Customer",
                 "docstatus": 0,
+                "payment_type": "Receive",
                 "posa_client_request_id": "pay-fixed-draft-001",
             }
         ]
@@ -594,11 +613,12 @@ class TestPosPaymentProcessing(unittest.TestCase):
         mock_frappe.log_error = Mock()
         mock_frappe.msgprint = Mock()
         mock_find_existing_entries.return_value = []
-        mock_frappe.get_doc.side_effect = lambda doctype, name: AttrDict(
+        mock_frappe.get_doc.side_effect = lambda doctype, name, **kwargs: AttrDict(
             {
                 "doctype": doctype,
                 "name": name,
-                "unallocated_amount": 0,
+                "unallocated_amount": 0, "company": "Test Company", "docstatus": 1,
+                "party_type": "Customer", "party": "Customer 727", "payment_type": "Receive",
                 "paid_from": "Cash - TC",
                 "cost_center": "Main - TC",
             }
@@ -633,7 +653,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
         )
 
         self.assertIn(
-            "Payment ACC-PAY-0009 is already fully allocated",
+            "Only submitted payments and credit notes from this company can be reconciled.",
             result["errors"],
         )
 
@@ -660,7 +680,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
                 "posa_client_request_id": "pay-fixed-005",
             }
         ]
-        mock_frappe.get_doc.side_effect = lambda doctype, name: AttrDict(
+        mock_frappe.get_doc.side_effect = lambda doctype, name, **kwargs: AttrDict(
             {
                 "doctype": doctype,
                 "name": name,
@@ -673,6 +693,10 @@ class TestPosPaymentProcessing(unittest.TestCase):
             }
         )
 
+        self.receipt.completed.return_value = {
+            "summary": {"payment_entry": "ACC-PAY-RECON-0001", "allocated_amount": 60},
+            "entry": {"doctype": "Payment Entry", "name": "ACC-PAY-RECON-0001", "docstatus": 1},
+        }
         result = self.processor.process_pos_payment(
             json.dumps(
                 {
@@ -762,6 +786,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
             "pay-fixed-002",
         )
 
+    @patch("posawesome.posawesome.api.payment_processing.allocations.allocate_payment_references")
     @patch("posawesome.posawesome.api.payment_processing.processor.get_account_currency")
     @patch("posawesome.posawesome.api.payment_processing.processor.create_payment_entry")
     @patch("posawesome.posawesome.api.payment_processing.processor.frappe")
@@ -770,6 +795,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
         mock_frappe,
         mock_create_payment_entry,
         mock_get_account_currency,
+        mock_allocate,
     ):
         fake_payment_entry = FakePaymentEntry(paid_amount=100)
         fake_payment_entry.received_amount = 100
@@ -780,12 +806,20 @@ class TestPosPaymentProcessing(unittest.TestCase):
         fake_payment_entry.target_exchange_rate = 1.5
         fake_payment_entry.source_exchange_rate = 1.5
         mock_create_payment_entry.return_value = fake_payment_entry
+        def allocate(*args):
+            fake_payment_entry.append("references", {
+                "reference_name": "SINV-0001", "allocated_amount": 100, "exchange_rate": 1.2,
+            })
+            return 100, 100
+        mock_allocate.side_effect = allocate
         mock_get_account_currency.return_value = "USD"
         mock_frappe._dict.side_effect = lambda value: AttrDict(value)
         mock_frappe.log_error = Mock()
         mock_frappe.msgprint = Mock()
         mock_frappe.get_cached_value.return_value = "USD"
         mock_frappe.db = types.SimpleNamespace(
+            savepoint=lambda name: None,
+            rollback=lambda **kwargs: None,
             get_default=lambda key: 2,
             has_column=lambda doctype, fieldname: True,
             sql=lambda *args, **kwargs: [],
@@ -811,6 +845,8 @@ class TestPosPaymentProcessing(unittest.TestCase):
                 "outstanding_amount": 100,
             }
         )
+
+        mock_frappe.get_doc.return_value = mock_frappe.get_cached_doc.return_value
 
         result = self.processor.process_pos_payment(
             json.dumps(
@@ -864,6 +900,8 @@ class TestPosPaymentProcessing(unittest.TestCase):
         mock_frappe.log_error = Mock()
         mock_frappe.msgprint = Mock()
         mock_frappe.db = types.SimpleNamespace(
+            savepoint=lambda name: None,
+            rollback=lambda **kwargs: None,
             has_column=lambda doctype, fieldname: False,
             sql=lambda *args, **kwargs: [],
             get_value=lambda *args, **kwargs: (
@@ -918,6 +956,8 @@ class TestPosPaymentProcessing(unittest.TestCase):
         mock_frappe.log_error = Mock()
         mock_frappe.msgprint = Mock()
         mock_frappe.db = types.SimpleNamespace(
+            savepoint=lambda name: None,
+            rollback=lambda **kwargs: None,
             has_column=lambda doctype, fieldname: False,
             sql=lambda *args, **kwargs: [],
             get_value=lambda *args, **kwargs: (
@@ -1018,7 +1058,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
             self.assertEqual(filters["customer"], "Customer 727")
             self.assertEqual(filters["company"], "Test Company")
             self.assertEqual(filters["docstatus"], 1)
-            self.assertEqual(filters["outstanding_amount"], (">", 0))
+            self.assertEqual(filters["outstanding_amount"], ("!=", 0))
             self.assertEqual(filters["currency"], "USD")
             self.assertEqual(filters["pos_profile"], "Main POS")
             self.assertIn("outstanding_amount", fields)
@@ -1070,7 +1110,7 @@ class TestPosPaymentProcessing(unittest.TestCase):
             self.assertEqual(filters["supplier"], "SUPP-0001")
             self.assertEqual(filters["company"], "Test Company")
             self.assertEqual(filters["docstatus"], 1)
-            self.assertEqual(filters["outstanding_amount"], (">", 0))
+            self.assertEqual(filters["outstanding_amount"], ("!=", 0))
             self.assertEqual(filters["currency"], "USD")
             self.assertIn("outstanding_amount", fields)
             self.assertEqual(order_by, "posting_date desc, name desc")
@@ -1119,6 +1159,10 @@ class TestPosPaymentProcessing(unittest.TestCase):
         mock_get_party_account.return_value = "Creditors - TC"
 
         def fake_get_list(doctype, filters=None, fields=None, order_by=None, **kwargs):
+            if doctype == "Purchase Invoice":
+                self.assertEqual(filters["supplier"], "SUPP-0001")
+                self.assertEqual(filters["outstanding_amount"], ("<", 0))
+                return []
             self.assertEqual(doctype, "Payment Entry")
             self.assertEqual(filters["party"], "SUPP-0001")
             self.assertEqual(filters["company"], "Test Company")
@@ -1158,6 +1202,23 @@ class TestPosPaymentProcessing(unittest.TestCase):
         self.assertEqual(rows[0].get("party_name"), "Supplier ABC")
         self.assertEqual(rows[0].get("party_type"), "Supplier")
 
+    @patch("posawesome.posawesome.api.payment_processing.data.get_advance_payment_entries_for_regional")
+    @patch("posawesome.posawesome.api.payment_processing.data.frappe")
+    def test_pos_selectable_credits_exclude_regional_journals(self, framework, regional):
+        framework._dict.side_effect = lambda value: AttrDict(value)
+        framework.get_cached_value.return_value = "Customer 727"
+        framework.get_list.side_effect = [[AttrDict(name="PE-direct", unallocated_amount=10)], []]
+        regional.return_value = [
+            AttrDict(reference_type="Journal Entry", reference_name="JE-adjustment", amount=30),
+            AttrDict(reference_type="Payment Entry", reference_name="PE-regional", amount=20),
+            AttrDict(reference_type="Sales Invoice", reference_name="SI-credit", amount=40),
+        ]
+        rows = self.data.get_unallocated_payments(customer="Customer 727", company="Test Company",
+                                                  include_all_currencies=True)
+        self.assertEqual({(row["voucher_type"], row["name"]) for row in rows}, {
+            ("Payment Entry", "PE-direct"), ("Payment Entry", "PE-regional"), ("Sales Invoice", "SI-credit")})
+        framework.db.sql.assert_not_called()
+
     @patch("posawesome.posawesome.api.payment_processing.reconciliation.reconcile_against_document")
     @patch("posawesome.posawesome.api.payment_processing.reconciliation.frappe")
     @patch("posawesome.posawesome.api.payment_processing.reconciliation.get_unallocated_payments")
@@ -1172,6 +1233,8 @@ class TestPosPaymentProcessing(unittest.TestCase):
         mock_frappe._dict.side_effect = lambda value: AttrDict(value)
         mock_frappe.get_doc.return_value = AttrDict(
             {
+                "name": "PINV-0001",
+                "outstanding_amount": 200,
                 "paid_to": "Creditors - TC",
                 "cost_center": "Main - TC",
                 "get": lambda key, default=None: {

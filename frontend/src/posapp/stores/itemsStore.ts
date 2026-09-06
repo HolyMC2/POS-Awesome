@@ -19,7 +19,6 @@ import { useItemsCache } from "../composables/pos/items/store/useItemsCache";
 import { useItemsSearch } from "../composables/pos/items/store/useItemsSearch";
 import {
 	isSearchWorkerEnabled,
-	patchSearchIndex,
 	searchViaWorker,
 	setSearchIndex,
 	type SearchIndexEntry,
@@ -169,13 +168,19 @@ export const useItemsStore = defineStore("items", () => {
 	const {
 		itemsMap,
 		barcodeIndex,
-		updateIndexes,
+		updateIndexes: updateLocalIndexes,
 		resetIndexes,
 		performLocalSearch,
 		filterItemsByGroup,
 		getItemByCode,
 		getItemByBarcode,
 	} = useItemsSearch();
+	let searchIndexVersion = 0;
+	let workerIndexVersion = -1;
+	const updateIndexes = (rows: Item[], profile: POSProfile | null) => {
+		updateLocalIndexes(rows, profile);
+		searchIndexVersion++;
+	};
 
 	// Phase 3: convert the catalog into the lean payload the search
 	// Worker holds. Worker only needs the item_code + the precomputed
@@ -277,6 +282,12 @@ export const useItemsStore = defineStore("items", () => {
 		}
 		return true;
 	};
+	// A worker holding only the visible page must never stand in for a full
+	// IndexedDB search. Mirror lazily, only when the complete catalog is resident.
+	const canUseWorkerSearch = () => isSearchWorkerEnabled() &&
+		!limitSearchEnabled.value && itemsLoaded.value &&
+		!cachedPagination.value.enabled && totalItemCount.value > 0 &&
+		items.value.length >= totalItemCount.value;
 
 	const shouldPersistItems = () => {
 		if (limitSearchEnabled.value) {
@@ -346,12 +357,6 @@ export const useItemsStore = defineStore("items", () => {
 			const tC = performance.now();
 			updateIndexes(items.value, posProfile.value);
 			_sRec("updateIndexes", tC);
-			// Phase 3: mirror the index into the search Worker so the
-			// flag-gated worker path has matching data when it runs.
-			// No-op (cheap) when the flag is off.
-			if (isSearchWorkerEnabled()) {
-				void setSearchIndex(toWorkerIndexEntries(items.value));
-			}
 		} else if (Array.isArray(newItems) && newItems.length) {
 			const additions: Item[] = [];
 			newItems.forEach((item) => {
@@ -368,16 +373,13 @@ export const useItemsStore = defineStore("items", () => {
 			if (additions.length) {
 				items.value = [...items.value, ...additions];
 				updateIndexes(additions, posProfile.value);
-				if (isSearchWorkerEnabled()) {
-					void patchSearchIndex(toWorkerIndexEntries(additions));
-				}
 			}
 		}
 
 		if (Number.isFinite(totalOverride)) {
 			totalItemCount.value = totalOverride!;
 		} else if (!append) {
-			totalItemCount.value = items.value.length;
+			totalItemCount.value = incomingArray.length;
 		}
 
 		if (!searchTerm.value) {
@@ -828,7 +830,7 @@ export const useItemsStore = defineStore("items", () => {
 	const searchItems = async (term: string) => {
 		const previousTerm = searchTerm.value || "";
 		const canRefineSearch =
-			!shouldUseIndexedSearch() &&
+			canUseWorkerSearch() &&
 			term &&
 			previousTerm.length > 0 &&
 			term.length > previousTerm.length &&
@@ -895,7 +897,11 @@ export const useItemsStore = defineStore("items", () => {
 		}
 
 		try {
-			const shouldUseIndexed = shouldUseIndexedSearch();
+			// A first server page can temporarily look like the full catalog.
+			// Compare against the scoped disk cache before choosing its RAM mirror.
+			const useWorker = canUseWorkerSearch() &&
+				await getStoredItemsCountByScopeCompat(getStorageScope()) === items.value.length;
+			const shouldUseIndexed = shouldUseIndexedSearch() && !useWorker;
 			let searchResults: Item[] = [];
 
 			if (shouldUseIndexed) {
@@ -932,6 +938,11 @@ export const useItemsStore = defineStore("items", () => {
 				// fall through to the main-thread filter.
 				let workerCodes: string[] | null = null;
 				if (isSearchWorkerEnabled()) {
+					if (workerIndexVersion !== searchIndexVersion) {
+						const version = searchIndexVersion;
+						await setSearchIndex(toWorkerIndexEntries(items.value));
+						workerIndexVersion = version;
+					}
 					workerCodes = await searchViaWorker(term, itemGroup.value);
 				}
 				if (Array.isArray(workerCodes)) {
@@ -955,7 +966,7 @@ export const useItemsStore = defineStore("items", () => {
 					);
 				}
 
-				if (searchResults.length === 0 && term.length >= 3) {
+				if (searchResults.length === 0 && term.length >= 3 && !canUseWorkerSearch()) {
 					await loadItems({
 						searchValue: term,
 						groupFilter: itemGroup.value,
@@ -1411,7 +1422,7 @@ export const useItemsStore = defineStore("items", () => {
 				? priceListOverride.trim()
 				: activePriceList.value;
 
-		return await syncRefreshModifiedItems(
+		const result = await syncRefreshModifiedItems(
 			posProfile.value,
 			resolvedPriceList,
 			customer.value,
@@ -1419,6 +1430,17 @@ export const useItemsStore = defineStore("items", () => {
 			(updates) => updateItemsInPlace(updates),
 			itemsMap.value,
 		);
+		const deleted = new Set("deletedItemCodes" in result ? result.deletedItemCodes : []);
+		if (deleted.size) {
+			const previousCount = items.value.length;
+			items.value = items.value.filter((item) => !deleted.has(item.item_code));
+			filteredItems.value = filteredItems.value.filter((item) => !deleted.has(item.item_code));
+			totalItemCount.value = Math.max(0, totalItemCount.value - (previousCount - items.value.length));
+			resetIndexes();
+			updateIndexes(items.value, posProfile.value);
+			clearSearchCache();
+		}
+		return result;
 	};
 
 	const updateItemsInPlace = (updates: Item[]) => {

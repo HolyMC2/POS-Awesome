@@ -87,7 +87,7 @@ describe("offline IndexedDB maintenance", () => {
 		await db.table("invoice_outbox").bulkPut([
 			{ client_request_id: "retry-outbox", status: "retrying" },
 			{ client_request_id: "dead-outbox", status: "dead_letter" },
-			{ client_request_id: "acked-outbox", status: "acknowledged" },
+			{ client_request_id: "acked-outbox", status: "acknowledged", server_verified: true },
 		]);
 
 		await expect(getPendingTransactionalWorkCounts()).resolves.toEqual({
@@ -134,6 +134,16 @@ describe("offline IndexedDB maintenance", () => {
 		expect(memory.schema_signature).toBeNull();
 	});
 
+	it("retains historical acknowledgements until server verification through pruning and cache reset", async () => {
+		const oldIso = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
+		await db.table("invoice_outbox").add({ client_request_id: "unverified-old", status: "acknowledged",
+			invoice: { name: "SINV-UNKNOWN" }, created_at: oldIso, acknowledged_at: oldIso });
+		expect((await getPendingTransactionalWorkCounts()).invoiceOutbox).toBe(1);
+		await pruneOfflineStorage();
+		await clearAllCache();
+		expect(await db.table("invoice_outbox").count()).toBe(1);
+	});
+
 	it("prunes terminal outbox rows and stale metadata while retaining active rows", async () => {
 		const oldIso = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
 		const freshIso = new Date().toISOString();
@@ -141,6 +151,7 @@ describe("offline IndexedDB maintenance", () => {
 			{
 				client_request_id: "old-ack",
 				status: "acknowledged",
+				server_verified: true,
 				invoice: {},
 				data: {},
 				created_at: oldIso,

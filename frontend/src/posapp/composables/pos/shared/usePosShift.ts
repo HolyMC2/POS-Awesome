@@ -10,7 +10,6 @@ import {
 	clearOpeningStorage,
 	setTaxTemplate,
 	isOffline,
-	getPendingOfflineInvoiceCount,
 	getBootstrapSnapshot,
 	setBootstrapSnapshot,
 } from "../../../../offline/index";
@@ -18,6 +17,8 @@ import { getValidCachedOpeningForCurrentUser } from "../../../utils/openingCache
 import { resolveStaleShiftNotice } from "../../../components/pos/shift/staleShiftNotice";
 import { createBootstrapSnapshotFromRegisterData } from "../../../../offline/bootstrapSnapshot";
 import { debugLog } from "../../../utils/debug";
+import { getPendingShiftWorkCount } from "../../../../offline/shiftQueueGuard";
+import { getTerminalCredentials, getShiftTerminalContext } from "../../../../offline/shiftTerminal";
 
 declare const __BUILD_VERSION__: string;
 declare const frappe: any;
@@ -180,6 +181,13 @@ export function usePosShift(openDialog?: () => void) {
 	}
 
 	async function check_opening_entry() {
+		let credentials;
+		try { credentials = getTerminalCredentials(); }
+		catch {
+			toastStore.show({ title: translateMessage("Browser storage is unavailable"),
+				message: translateMessage("Allow browser storage and reload before opening this register."), color: "error", timeout: 0 });
+			return;
+		}
 		await initPromise;
 		await checkDbHealth();
 		const cachedOpening = getValidCachedOpeningForCurrentUser(
@@ -193,6 +201,7 @@ export function usePosShift(openDialog?: () => void) {
 		return frappe
 			.call("posawesome.posawesome.api.shifts.check_opening_shift", {
 				user: frappe.session.user,
+				...credentials,
 			})
 			.then((r: any) => {
 				if (r.message) {
@@ -267,7 +276,36 @@ export function usePosShift(openDialog?: () => void) {
 			});
 	}
 
-	function get_closing_data() {
+	async function canCloseWithSavedWork(shift: any, fallbackProfile?: any, fence = false) {
+		if (isOffline()) {
+			toastStore.show({ title: translateMessage("Offline — cannot close shift"),
+				message: translateMessage("Reconnect before closing so every sale is accounted for."), color: "warning" });
+			return false;
+		}
+		try {
+			const pending = await getPendingShiftWorkCount({
+				name: typeof shift === "string" ? shift : shift?.name,
+				user: shift?.user,
+				pos_profile: shift?.pos_profile || fallbackProfile?.name || fallbackProfile,
+			}, fence);
+			if (pending) {
+				toastStore.show({ title: translateMessage("Unsynced sales pending"),
+					message: `${translateMessage("Cannot close: saved sales or cash movements still need sync or review.")} (${pending})`,
+					color: "warning", timeout: 0 });
+				return false;
+			}
+			// The browser may have gone offline while IndexedDB was opening.
+			if (isOffline()) throw new Error("offline");
+			return true;
+		} catch {
+			toastStore.show({ title: translateMessage("Closing is paused"),
+				message: translateMessage("Saved work could not be verified. Reconnect and retry before closing this shift."),
+				color: "error", timeout: 0 });
+			return false;
+		}
+	}
+
+	async function get_closing_data() {
 		const cachedOpeningShift = (getOpeningStorage() as any)
 			?.pos_opening_shift;
 		const resolvedShift =
@@ -290,32 +328,7 @@ export function usePosShift(openDialog?: () => void) {
 			return Promise.resolve();
 		}
 
-		// Unsynced offline sales belong in THIS shift's corte. Closing now
-		// omits them from the totals, and the server rejects a post into a
-		// closed shift (assert_shift_not_stale) — so they would dead-letter.
-		// Block the close until the queue drains. `__` is a Frappe global; guard
-		// it so the composable stays unit-testable.
-		const _t = (s: string): string =>
-			typeof (window as any)?.__ === "function" ? (window as any).__(s) : s;
-		const pendingOffline = getPendingOfflineInvoiceCount();
-		if (pendingOffline > 0) {
-			toastStore.show({
-				title: _t("Unsynced sales pending"),
-				message: `${_t("Cannot close: offline sales not yet synced")}: ${pendingOffline}. ${_t("Wait for sync (or resolve them in Facturas Offline) first.")}`,
-				color: "warning",
-			});
-			return Promise.resolve();
-		}
-		if (isOffline()) {
-			toastStore.show({
-				title: _t("Offline — cannot close shift"),
-				message: _t(
-					"Reconnect before closing so every sale is accounted for.",
-				),
-				color: "warning",
-			});
-			return Promise.resolve();
-		}
+		if (!await canCloseWithSavedWork(resolvedShift, uiStore.posProfile || pos_profile.value)) return;
 
 		return frappe
 			.call(
@@ -414,7 +427,10 @@ export function usePosShift(openDialog?: () => void) {
 			});
 	}
 
-	function submit_closing_pos(data: any) {
+	async function submit_closing_pos(data: any) {
+		const opening = data?.pos_opening_shift || uiStore.posOpeningShift ||
+			pos_opening_shift.value || (getOpeningStorage() as any)?.pos_opening_shift;
+		if (!await canCloseWithSavedWork(opening, data?.pos_profile || uiStore.posProfile || pos_profile.value, true)) return;
 		debugLog("Submitting closing shift", data);
 		const closeStartedAt = Date.now();
 		// Capture the active profile before we null it below so the
@@ -423,11 +439,12 @@ export function usePosShift(openDialog?: () => void) {
 		// the QZ helper would lose `posa_qz_printer_name` /
 		// `posa_closing_shift_print_format`.
 		const activeProfile = pos_profile.value as any;
-		frappe
+		return frappe
 			.call(
 				"posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.submit_closing_shift",
 				{
 					closing_shift: JSON.stringify(data),
+					...getShiftTerminalContext(),
 				},
 			)
 			.then((r: any) => {

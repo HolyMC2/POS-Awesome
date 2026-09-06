@@ -27,14 +27,17 @@ class _Row(dict):
 class _Db:
     def __init__(self):
         self.shift_user = "cashier-a@example.com"
+        self.current_status = "Open"
+        self.locked = False
 
-    def get_value(self, doctype, name, fields, as_dict=False):
+    def get_value(self, doctype, name, fields, as_dict=False, for_update=False):
         if doctype != "POS Opening Shift":
             return None
+        self.locked = for_update
         return _Row(
             period_start_date=datetime.date.today(),
             pos_profile="Main POS",
-            status="Open",
+            status=self.current_status if for_update else "Open",
             docstatus=1,
             user=self.shift_user,
         )
@@ -128,6 +131,26 @@ class ShiftOwnerScopeTests(unittest.TestCase):
         self.shifts.frappe.db.shift_user = "cashier-a@example.com"
 
         self.shifts.assert_shift_not_stale("SHIFT-A")
+        self.assertTrue(self.shifts.frappe.db.locked)
+
+    def test_current_closed_state_wins_over_an_earlier_open_snapshot(self):
+        db = self.shifts.frappe.db
+        db.shift_user = "cashier-a@example.com"
+        db.current_status = "Closed"
+        try:
+            with self.assertRaisesRegex(Exception, "already closed"):
+                self.shifts.assert_shift_not_stale("SHIFT-A")
+            self.assertTrue(db.locked)
+        finally:
+            db.current_status = "Open"
+
+    def test_internal_close_replay_still_holds_the_shared_lock(self):
+        self.shifts.frappe.flags["posa_closing_replay_shift"] = "SHIFT-A"
+        try:
+            self.shifts.assert_shift_not_stale("SHIFT-A")
+            self.assertTrue(self.shifts.frappe.db.locked)
+        finally:
+            self.shifts.frappe.flags.clear()
 
 
 if __name__ == "__main__":

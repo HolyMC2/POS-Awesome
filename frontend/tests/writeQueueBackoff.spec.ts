@@ -24,6 +24,7 @@ async function pushBackoffIntoPast(queueId: number) {
 
 describe("write queue retry backoff", () => {
 	beforeEach(async () => {
+		(globalThis as any).frappe = { session: { user: "cashier@example.com" } };
 		await initPromise;
 		await db.table("write_queue").clear();
 		vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -86,7 +87,7 @@ describe("write queue retry backoff", () => {
 		// Surface: previously write_queue dead-letters were invisible.
 		expect(await getWriteQueueDeadLetterCount()).toBe(1);
 		const rows = await getWriteQueueDeadLetterRows();
-		expect(rows[0].idempotency_key).toBe("payment:pay-1");
+		expect(rows[0].idempotency_key).toContain("payment:pay-1:scope:");
 
 		// Requeue resets it to pending for a fresh drain (replay-safe by crid).
 		const requeued = await requeueWriteQueueDeadLetter(entry.queue_id as number);

@@ -134,3 +134,78 @@ def _resolve_profile(pos_profile=None):
         frappe.throw("POS Profile {0} not found".format(name))
         return None
     return doc.as_dict() if hasattr(doc, "as_dict") else doc
+
+
+def _page_window(watermark, page_cursor, scope):
+    """Pin a scan to one server-time window; keyset position is NOT a watermark.
+
+    A row edited while we page moves above `until` and is picked up next pass.
+    Equal timestamps cannot skip siblings because continuation uses the unique
+    resource key. Old timestamp-only watermarks remain valid starting points.
+    """
+    from frappe.utils import get_datetime, now_datetime
+
+    since = str(get_datetime(watermark)) if watermark else None
+    upper = now_datetime()
+    after = None
+    if page_cursor:
+        try:
+            cursor = json.loads(page_cursor) if isinstance(page_cursor, str) else page_cursor
+            if not isinstance(cursor, dict) or cursor.get("scope") != scope or cursor.get("since") != since:
+                raise ValueError("cursor scope changed")
+            upper = get_datetime(cursor["until"])
+            after = cursor["after"]
+            if not isinstance(after, str) or not after or len(after) > 140:
+                raise ValueError("invalid cursor key")
+            if upper > now_datetime():
+                raise ValueError("future cursor")
+        except (ValueError, TypeError, KeyError):
+            frappe.throw("Invalid offline sync page cursor; restart this sync")
+    return {"since": since, "until": str(upper), "after": after, "scope": scope}
+
+
+def _page_scope(resource, profile, **context):
+    # Changing profile settings during a pass must restart, not combine scopes.
+    return json.dumps(
+        {"resource": resource, "profile": profile.get("name"),
+         "modified": str(profile.get("modified") or ""), **context},
+        sort_keys=True,
+    )
+
+
+def _changed_keys(doctype, key, window, limit, filters=None):
+    filters = [[field, *value] if isinstance(value, list) else [field, "=", value]
+               for field, value in (filters or {}).items()]
+    filters.append(["modified", "<=", window["until"]])
+    if window["since"]:
+        filters.append(["modified", ">", _watermark_floor(window["since"])])
+    if window["after"]:
+        filters.append([key, ">", window["after"]])
+    return frappe.get_all(
+        doctype, filters=filters, fields=[key], group_by=key,
+        order_by=f"{key} asc", limit_page_length=limit,
+    ) or []
+
+
+def _paged_response(window, keys, limit, changes, deleted):
+    has_more = len(keys) > limit
+    response = _build_response(
+        changes=changes, deleted=deleted, has_more=has_more,
+        # Only the END of the complete window is eligible for persistence.
+        next_watermark=window["since"] if has_more else window["until"],
+    )
+    response["next_cursor"] = (
+        json.dumps({**window, "after": keys[limit - 1]}) if has_more else None
+    )
+    return response
+
+
+def _profile_warehouses(profile):
+    warehouse = profile.get("warehouse")
+    if not warehouse:
+        return []
+    if frappe.db.get_value("Warehouse", warehouse, "is_group"):
+        from frappe.utils.nestedset import get_descendants_of
+
+        return get_descendants_of("Warehouse", warehouse) or []
+    return [warehouse]

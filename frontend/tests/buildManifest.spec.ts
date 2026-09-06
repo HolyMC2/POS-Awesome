@@ -44,20 +44,20 @@ describe("build manifest helpers", () => {
 		expect(payload).toEqual({
 			version: "build-2000",
 			assets: {
-				loader: "/assets/posawesome/dist/js/loader-XYZ123.js?v=build-2000",
+				loader: "/assets/posawesome/dist/js/loader-XYZ123.js",
 				posawesome:
-					"/assets/posawesome/dist/js/posawesome-AAA999.js?v=build-2000",
+					"/assets/posawesome/dist/js/posawesome-AAA999.js",
 				css: "/assets/posawesome/dist/js/style-Z9Z9.css?v=build-2000",
 				offlineIndex:
 					"/assets/posawesome/dist/js/offline/index-AbCd1234.js",
 				web_entry:
-					"/assets/posawesome/dist/js/web-entry-WEB456.js?v=build-2000",
+					"/assets/posawesome/dist/js/web-entry-WEB456.js",
 				// Only `posawesome` was in the fixture's bundle, so
 				// only that chunk shows up in the preload list. The
 				// dedicated preload spec below covers ordering +
 				// skip-missing semantics.
 				web_preload: [
-					"/assets/posawesome/dist/js/posawesome-AAA999.js?v=build-2000",
+					"/assets/posawesome/dist/js/posawesome-AAA999.js",
 				],
 				// Every chunk in the fixture, bare, sorted — the SW install
 				// precache (see the dedicated spec below).
@@ -104,11 +104,11 @@ describe("build manifest helpers", () => {
 		// pinia, api, format, db, posawesome, Pos, DefaultLayout,
 		// ItemsSelector. Missing names drop without a gap.
 		expect(payload.assets.web_preload).toEqual([
-			"/assets/posawesome/dist/js/vendor-BBB.js?v=v1",
-			"/assets/posawesome/dist/js/vue-AAA.js?v=v1",
-			"/assets/posawesome/dist/js/pinia-CCC.js?v=v1",
-			"/assets/posawesome/dist/js/api-DDD.js?v=v1",
-			"/assets/posawesome/dist/js/Pos-EEE.js?v=v1",
+			"/assets/posawesome/dist/js/vendor-BBB.js",
+			"/assets/posawesome/dist/js/vue-AAA.js",
+			"/assets/posawesome/dist/js/pinia-CCC.js",
+			"/assets/posawesome/dist/js/api-DDD.js",
+			"/assets/posawesome/dist/js/Pos-EEE.js",
 		]);
 	});
 
@@ -127,6 +127,7 @@ describe("build manifest helpers", () => {
 			"/assets/posawesome/dist/js/Cobro-CCC.js",
 			"/assets/posawesome/dist/js/posawesome-AAA.js",
 			"/assets/posawesome/dist/js/useNetwork-BBB.js",
+			"/assets/posawesome/dist/js/workers/itemWorker.js",
 		]);
 		// Bare on purpose: static imports between chunks resolve to the
 		// un-versioned filename, which is the request the SW has to match.

@@ -163,3 +163,26 @@ describe("cash movement history loading", () => {
 		historySpy.mockRestore();
 	});
 });
+
+
+describe("cash movement terminal proof", () => {
+    it("carries the current proof for create, cancel, duplicate and delete", async () => {
+        const terminal = await import("../src/offline/shiftTerminal");
+        const proof = { terminal_id: "browser-fixture", terminal_generation: 3, terminal_token: "test-proof" };
+        const spy = vi.spyOn(terminal, "getShiftTerminalContext").mockReturnValue(proof);
+        try {
+            for (const method of ["createExpense", "createDeposit", "createCashIn"] as const) {
+                cashMovementService[method]({ amount: 20, pos_opening_shift: "OPEN-1" });
+                expect(api.call).toHaveBeenLastCalledWith(expect.any(String), {
+                    payload: { amount: 20, pos_opening_shift: "OPEN-1", ...proof },
+                });
+            }
+            cashMovementService.cancel("MOVE-1");
+            expect(api.call).toHaveBeenLastCalledWith(expect.stringContaining("cancel_cash_movement"), { name: "MOVE-1", ...proof });
+            cashMovementService.duplicate("MOVE-1");
+            expect(api.call).toHaveBeenLastCalledWith(expect.stringContaining("duplicate_cash_movement"), { name: "MOVE-1", posting_date: undefined, ...proof });
+            cashMovementService.remove("MOVE-1");
+            expect(api.call).toHaveBeenLastCalledWith(expect.stringContaining("delete_cash_movement"), { name: "MOVE-1", ...proof });
+        } finally { spy.mockRestore(); }
+    });
+});

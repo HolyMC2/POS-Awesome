@@ -20,7 +20,7 @@ import {
 } from "../src/offline/writeQueue";
 
 const frappeCall = vi.fn();
-(globalThis as any).frappe = { call: frappeCall };
+(globalThis as any).frappe = { session: { user: "cashier@example.com" }, call: frappeCall };
 
 function invoicePayload(
 	requestId: string,
@@ -67,7 +67,7 @@ describe("offline invoice draft-review lifecycle", () => {
 		await db.table("invoice_outbox").clear();
 		(memory as any).invoice_outbox_mode = "off";
 		(memory as any).manual_offline = false;
-		(memory as any).pos_opening_storage = {};
+		(memory as any).pos_opening_storage = { pos_profile: { name: "Doco Ventas" } };
 		(window as any).serverOnline = true;
 		await refreshAllQueueMemory();
 		frappeCall.mockReset();
@@ -120,6 +120,7 @@ describe("offline invoice draft-review lifecycle", () => {
 	it("routes a capability-version mismatch to draft_review with its audit reason", async () => {
 		(memory as any).pos_opening_storage = {
 			capability_profile: { name: "retail-v2", version: 2 },
+			pos_profile: { name: "Doco Ventas" },
 		};
 		await enqueueWriteQueueEntry(
 			"invoice",

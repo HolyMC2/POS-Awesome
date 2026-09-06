@@ -63,6 +63,28 @@ describe("offline storage ownership", () => {
 		window.localStorage.clear();
 	});
 
+	it("hydrates item groups only for the same profile revision", async () => {
+		const { saveItemGroups, getCachedItemGroups } = await import("../src/offline/cache");
+		saveItemGroups(["ALL", "Restricted"], "profile-a-v1");
+		expect(getCachedItemGroups("profile-a-v1")).toEqual(["ALL", "Restricted"]);
+		expect(getCachedItemGroups("profile-b-v1")).toEqual([]);
+		expect(getCachedItemGroups("profile-a-v2")).toEqual([]);
+		expect(getCachedItemGroups()).toEqual(["ALL", "Restricted"]);
+	});
+
+	it("keeps legacy unscoped group reads compatible without trusting their scope", async () => {
+		const { saveItemGroups, getCachedItemGroups } = await import("../src/offline/cache");
+		saveItemGroups(["ALL", "Legacy"]);
+		expect(getCachedItemGroups()).toEqual(["ALL", "Legacy"]);
+		expect(getCachedItemGroups("profile-a-v1")).toEqual([]);
+	});
+
+	it("propagates a failed scope wipe so sync cannot advance its watermark", async () => {
+		const { clearCustomerStorage } = await import("../src/offline/cache");
+		customersTable.clear.mockRejectedValueOnce(new Error("IndexedDB unavailable"));
+		await expect(clearCustomerStorage()).rejects.toThrow("IndexedDB unavailable");
+	});
+
 	it("routes sync watermarks through memory plus persist instead of direct localStorage", async () => {
 		const {
 			getCustomersLastSync,
@@ -122,4 +144,13 @@ describe("offline storage ownership", () => {
 			}),
 		);
 	});
+	it("rejects failed durable customer deletions so sync cannot advance its watermark", async () => {
+		const { deleteCustomerStorageByNames } = await import("../src/offline/customers");
+		const { memory } = await import("../src/offline/db");
+		memory.customer_storage = [{ name: "CUST-1" }];
+		customersTable.bulkDelete.mockRejectedValueOnce(new Error("disk unavailable"));
+		await expect(deleteCustomerStorageByNames(["CUST-1"])).rejects.toThrow("disk unavailable");
+		expect(memory.customer_storage).toEqual([{ name: "CUST-1" }]);
+	});
+
 });

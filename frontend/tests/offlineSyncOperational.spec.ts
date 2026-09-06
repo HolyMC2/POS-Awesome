@@ -103,7 +103,7 @@ describe("operational offline sync adapters", () => {
 					lastSuccessHash: null,
 					lastError: null,
 					consecutiveFailures: 0,
-					scopeSignature: JSON.stringify({
+					scopeSignature: JSON.stringify({ paging_version: 1,
 						profile: "OLD-POS",
 						company: "Test Co",
 						warehouse: "OLD-WH",
@@ -200,10 +200,11 @@ describe("operational offline sync adapters", () => {
 			expect.objectContaining({
 				resourceId: "items",
 				status: "fresh",
-				scopeSignature: JSON.stringify({
+				scopeSignature: JSON.stringify({ paging_version: 1,
 					profile: "POS-1",
 					company: "Test Co",
 					warehouse: "Main WH",
+					modified: "2026-04-09T10:05:00",
 				}),
 			}),
 		);
@@ -225,7 +226,7 @@ describe("operational offline sync adapters", () => {
 			lastSuccessHash: null,
 			lastError: null,
 			consecutiveFailures: 0,
-			scopeSignature: JSON.stringify({
+			scopeSignature: JSON.stringify({ paging_version: 1,
 				profile: "OLD-POS",
 				company: "Test Co",
 			}),
@@ -280,10 +281,11 @@ describe("operational offline sync adapters", () => {
 			expect.objectContaining({
 				resourceId: "customers",
 				status: "fresh",
-				scopeSignature: JSON.stringify({
+				scopeSignature: JSON.stringify({ paging_version: 1,
 					profile: "POS-1",
 					company: "Test Co",
 					warehouse: null,
+					modified: "2026-04-09T11:00:00",
 				}),
 			}),
 		);
@@ -299,7 +301,7 @@ describe("operational offline sync adapters", () => {
 			lastSuccessHash: null,
 			lastError: null,
 			consecutiveFailures: 0,
-			scopeSignature: JSON.stringify({
+			scopeSignature: JSON.stringify({ paging_version: 1,
 				profile: "POS-1",
 				company: "Test Co",
 				warehouse: "OLD-WH",
@@ -371,10 +373,11 @@ describe("operational offline sync adapters", () => {
 			expect.objectContaining({
 				resourceId: "stock",
 				status: "fresh",
-				scopeSignature: JSON.stringify({
+				scopeSignature: JSON.stringify({ paging_version: 1,
 					profile: "POS-1",
 					company: "Test Co",
 					warehouse: "Main WH",
+					modified: "2026-04-09T12:00:00",
 				}),
 			}),
 		);
@@ -403,7 +406,7 @@ describe("operational offline sync adapters", () => {
 		});
 
 		expect(result.scopeSignature).toBe(
-			JSON.stringify({ profile: "POS-1", company: "Test Co", warehouse: null }),
+			JSON.stringify({ paging_version: 1, profile: "POS-1", company: "Test Co", warehouse: null, modified: "x" }),
 		);
 		expect((result as Record<string, unknown>).response).toBeUndefined();
 	});
@@ -433,10 +436,11 @@ describe("operational offline sync adapters", () => {
 		expect(result.status).toBe("limited");
 		expect(result.watermark).toBeNull();
 		expect(result.scopeSignature).toBe(
-			JSON.stringify({
+			JSON.stringify({ paging_version: 1,
 				profile: "POS-1",
 				company: "Test Co",
 				warehouse: "Main WH",
+				modified: "x",
 			}),
 		);
 		// full_resync must NOT wipe local data (only a scope change does that).

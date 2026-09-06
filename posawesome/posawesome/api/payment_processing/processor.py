@@ -8,9 +8,11 @@ from erpnext.accounts.utils import get_account_currency, reconcile_against_docum
 from erpnext.setup.utils import get_exchange_rate
 from posawesome.posawesome.api.m_pesa import submit_mpesa_payment
 from posawesome.posawesome.api.payment_processing.creation import create_payment_entry
+from posawesome.posawesome.api.payment_processing.integrity import lock_payment_party, payment_amount, run_reconciliation
 from posawesome.posawesome.api.idempotency import (
     find_payment_entries_by_client_request_id,
     normalize_client_request_id,
+    payment_method_request_id,
 )
 from posawesome.posawesome.api._scope import (
     assert_company,
@@ -24,6 +26,10 @@ def _amounts_match(left, right):
 
 
 def _get_entry_amount(entry):
+    if entry.get("payment_type") == "Receive":
+        return flt(entry.get("received_amount"))
+    if entry.get("payment_type") == "Pay":
+        return flt(entry.get("paid_amount"))
     return flt(entry.get("paid_amount")) or flt(entry.get("received_amount"))
 
 
@@ -105,6 +111,14 @@ def _assert_accounting_document_access(
     return document
 
 
+def _selected_payment_doctype(payment, party_type):
+    invoice_type = "Purchase Invoice" if party_type == "Supplier" else "Sales Invoice"
+    doctype = payment.get("voucher_type") or (invoice_type if cint(payment.get("is_credit_note")) else "Payment Entry")
+    if doctype not in ("Payment Entry", invoice_type):
+        frappe.throw(_("Selected payment document does not match the party type."), frappe.PermissionError)
+    return doctype
+
+
 def _assert_selected_accounting_documents(data, company, party, party_type, pos_profile):
     expected_invoice_doctype = "Purchase Invoice" if party_type == "Supplier" else "Sales Invoice"
 
@@ -125,9 +139,8 @@ def _assert_selected_accounting_documents(data, company, party, party_type, pos_
         )
 
     for payment in data.get("selected_payments") or []:
-        is_credit_note = cint(payment.get("is_credit_note")) or payment.get("voucher_type") == "Sales Invoice"
-        doctype = "Sales Invoice" if is_credit_note else "Payment Entry"
-        _assert_accounting_document_access(
+        doctype = _selected_payment_doctype(payment, party_type)
+        document = _assert_accounting_document_access(
             doctype,
             payment.get("name"),
             company,
@@ -135,6 +148,8 @@ def _assert_selected_accounting_documents(data, company, party, party_type, pos_
             party_type,
             pos_profile,
         )
+        if doctype == "Payment Entry" and document.get("payment_type") != ("Pay" if party_type == "Supplier" else "Receive"):
+            frappe.throw(_("Selected payment has the wrong payment direction for reconciliation."), frappe.PermissionError)
 
 
 def _to_public_entry(entry):
@@ -162,7 +177,12 @@ def _to_public_entries(entries):
 
 def _requested_reconciled_amount(payment):
     for fieldname in ("allocated_amount", "amount", "unallocated_amount", "outstanding_amount"):
-        amount = abs(flt(payment.get(fieldname)))
+        value = payment.get(fieldname)
+        if value is None:
+            continue
+        # Invoice balances are signed; selected allocation amounts are not.
+        value = abs(flt(value)) if fieldname == "outstanding_amount" else value
+        amount = payment_amount(value, allow_zero=True)
         if amount > 0:
             return amount
     return 0
@@ -326,13 +346,32 @@ def _partition_completed_reconciliations(selected_payments):
 
 @frappe.whitelist(methods=["POST"])
 def process_pos_payment(payload):
+    operation = json.loads(payload).get("operation")
+    if operation == "refund_customer_advance":
+        from posawesome.posawesome.api.payment_processing.advance_refunds import refund_customer_advance
+        return refund_customer_advance(payload)
+    if operation:
+        frappe.throw(_("Unsupported POS payment operation."))
+    from posawesome.posawesome.api.payment_processing.integrity import retry_before_financial_writes
+
+    return retry_before_financial_writes(_process_pos_payment, payload)
+
+
+def _process_pos_payment(payload):
     data = json.loads(payload)
     data = frappe._dict(data)
     client_request_id = normalize_client_request_id(data.get("client_request_id"))
 
     party = data.get("party") or data.get("customer")
     party_type = data.get("party_type") or "Customer"
-    payment_type = data.get("payment_type") or "Receive"
+    payment_type = data.get("payment_type") or ("Pay" if party_type == "Supplier" else "Receive")
+    allocation_sign = 1 if payment_type == ("Pay" if party_type == "Supplier" else "Receive") else -1
+    if party_type not in ("Customer", "Supplier") or payment_type not in ("Receive", "Pay"):
+        frappe.throw(_("Unsupported payment party or direction."))
+    for method in data.get("payment_methods") or []:
+        method["amount"] = payment_amount(method.get("amount"), allow_zero=True)
+    if data.get("exchange_rate") is not None:
+        payment_amount(data.exchange_rate)
 
     # validate data
     if not party:
@@ -369,6 +408,13 @@ def process_pos_payment(payload):
     selected_mpesa_payments = list(data.selected_mpesa_payments or [])
     selected_payments = list(data.selected_payments or [])
     payment_methods = list(data.payment_methods or [])
+    for index, method in enumerate(payment_methods):
+        method["_client_request_id"] = payment_method_request_id(client_request_id, index)
+    allowed_modes = {row.get("mode_of_payment") for row in (profile.get("payments") or [])}
+    for method in payment_methods:
+        mode = method.get("mode_of_payment")
+        if not mode or (allowed_modes and mode not in allowed_modes):
+            frappe.throw(_("Mode of payment is not available on this POS Profile."), frappe.PermissionError)
 
     if payment_methods and flt(data.total_payment_methods) > 0 and not allow_make_new_payments:
         frappe.throw(_("Creating new payments is not enabled for this POS Profile"), frappe.PermissionError)
@@ -395,11 +441,15 @@ def process_pos_payment(payload):
     # reference_no) so the PE lands in someone else's corte, which closing
     # aggregates by reference_no == pos_opening_shift. Bind it to a submitted,
     # open shift the acting cashier owns before any write.
+    from posawesome.posawesome.api.shift_terminal import assert_terminal_access
+    assert_terminal_access(pos_opening_shift_name, data.get("terminal_id"),
+                           data.get("terminal_generation"), data.pop("terminal_token", None))
     _shift = frappe.db.get_value(
         "POS Opening Shift",
         pos_opening_shift_name,
         ["pos_profile", "company", "status", "docstatus", "user"],
         as_dict=True,
+        for_update=True,
     )
     if not _shift:
         frappe.throw(
@@ -429,8 +479,32 @@ def process_pos_payment(payload):
                 frappe.PermissionError,
             )
 
-    existing_entries = find_payment_entries_by_client_request_id(client_request_id)
+    lock_payment_party(party_type, party)
+    # All source/target locks precede the durable receipt's first write, so
+    # snapshot conflicts can still restart the whole read-only request safely.
+    document_locks = {(row.get("voucher_type") or ("Purchase Invoice" if party_type == "Supplier" else "Sales Invoice"),
+                       row.get("voucher_no") or row.get("name")) for row in data.selected_invoices or []}
+    document_locks.update((_selected_payment_doctype(row, party_type), row.get("name")) for row in selected_payments)
+    for doctype, name in sorted(document_locks, key=lambda pair: (pair[0] == "Payment Entry", pair[0], pair[1] or "")):
+        frappe.get_doc(doctype, name, for_update=True)
+    request = None
+    if selected_payments and flt(data.total_selected_payments) > 0:
+        from posawesome.posawesome.api.payment_processing.request_ledger import claim_financial_request
+        intent = dict(party_type=party_type, party=party, payment_type=payment_type,
+            currency=currency, shift=pos_opening_shift_name, posting_date=data.get("posting_date"),
+            invoices=[(row.get("voucher_type") or ("Purchase Invoice" if party_type == "Supplier" else "Sales Invoice"),
+                       row.get("voucher_no") or row.get("name")) for row in data.selected_invoices or []],
+            payments=[(_selected_payment_doctype(row, party_type), row.get("name"), _requested_reconciled_amount(row))
+                      for row in selected_payments],
+            methods=[{key: row.get(key) for key in ("mode_of_payment", "amount", "bank_account")} for row in payment_methods],
+            mpesa=[row.get("name") for row in selected_mpesa_payments], exchange_rate=data.get("exchange_rate"))
+        request = claim_financial_request("reconciliation", client_request_id, company, profile.name, intent)
+        if request.response is not None:
+            return dict(request.response, replayed=True)
+    existing_entries = find_payment_entries_by_client_request_id(client_request_id, for_update=True)
     for existing_entry in existing_entries:
+        if existing_entry.get("payment_type") != payment_type:
+            frappe.throw(_("Payment request was already recorded with a different payment direction."))
         _assert_accounting_document_access(
             "Payment Entry",
             existing_entry.get("name"),
@@ -456,6 +530,8 @@ def process_pos_payment(payload):
         )
 
     is_replay_attempt = bool(existing_entries)
+    if unmatched_existing_entries:
+        frappe.throw(_("Payment request was already recorded with different payment methods or amounts."))
     if is_replay_attempt:
         # Bind the replay to the SAME invoice set. A retry that reuses the
         # client_request_id but targets different invoices would get the
@@ -478,7 +554,7 @@ def process_pos_payment(payload):
                 )
                 if row.reference_name
             }
-            if referenced_invoices and requested_invoices and not referenced_invoices <= requested_invoices:
+            if referenced_invoices and not referenced_invoices <= requested_invoices:
                 frappe.throw(
                     _(
                         "Payment request {0} was already recorded against different "
@@ -498,7 +574,7 @@ def process_pos_payment(payload):
         pending_mpesa_payments = selected_mpesa_payments
 
     completed_reconciliations, pending_selected_payments = ([], [])
-    if is_replay_attempt and allow_reconcile_payments and data.total_selected_payments > 0:
+    if not request and is_replay_attempt and allow_reconcile_payments and data.total_selected_payments > 0:
         completed_reconciliations, pending_selected_payments = _partition_completed_reconciliations(
             selected_payments
         )
@@ -509,6 +585,15 @@ def process_pos_payment(payload):
         selected_payments,
         completed_reconciliations,
     )
+    if request:
+        for payment in selected_payments:
+            key = _selected_payment_doctype(payment, party_type) + ":" + payment["name"]
+            completed = request.completed(key)
+            if completed:
+                completed_reconciliation_summaries.append(completed["summary"])
+                completed_reconciliations.append(completed["entry"])
+        pending_selected_payments = [payment for payment in pending_selected_payments
+            if not request.completed(_selected_payment_doctype(payment, party_type) + ":" + payment["name"])]
     cached_entries = list(matched_existing_entries) + completed_mpesa_entries + completed_reconciliations
     if (
         existing_entries
@@ -517,33 +602,34 @@ def process_pos_payment(payload):
         and not pending_mpesa_payments
         and not pending_selected_payments
     ):
-        return {
+        replay_response = {
             "new_payments_entry": _to_public_entries(matched_existing_entries),
             "all_payments_entry": _to_public_entries(cached_entries),
             "reconciled_payments": completed_reconciliation_summaries,
             "errors": [],
             "replayed": True,
         }
+        if request:
+            request.finish(replay_response)
+        return replay_response
 
     # prepare invoice list once so allocations can update remaining amounts
     remaining_invoices = []
 
     def add_remaining_invoices(invoices):
+        seen = set()
         for invoice in invoices or []:
             invoice_name = invoice.get("voucher_no") or invoice.get("name")
             voucher_type = invoice.get("voucher_type") or "Sales Invoice"
-            if not invoice_name:
+            if not invoice_name or (voucher_type, invoice_name) in seen:
                 continue
-            outstanding = flt(invoice.get("outstanding_amount"))
-            conversion_rate = flt(invoice.get("conversion_rate")) or 1
-            if outstanding <= 0 and voucher_type == "Sales Invoice":
-                try:
-                    si = frappe.get_doc("Sales Invoice", invoice_name)
-                    outstanding = flt(si.outstanding_amount)
-                    conversion_rate = flt(si.conversion_rate) or 1
-                except Exception:
-                    outstanding = 0
-            if outstanding <= 0:
+            seen.add((voucher_type, invoice_name))
+            document = frappe.get_doc(voucher_type, invoice_name, for_update=True)
+            outstanding = flt(document.outstanding_amount)
+            conversion_rate = flt(document.conversion_rate) or 1
+            if outstanding * allocation_sign < 0:
+                frappe.throw(_("Selected invoice balance does not match the payment direction."))
+            if not outstanding:
                 continue
             remaining_invoices.append(
                 {
@@ -551,7 +637,7 @@ def process_pos_payment(payload):
                     "outstanding_amount": outstanding,
                     "voucher_type": voucher_type,
                     "conversion_rate": conversion_rate,
-                    "due_date": invoice.get("due_date") or invoice.get("posting_date"),
+                    "due_date": document.get("due_date") or document.get("posting_date"),
                 }
             )
 
@@ -571,6 +657,7 @@ def process_pos_payment(payload):
         and data.total_selected_mpesa_payments > 0
     ):
         for mpesa_payment in pending_mpesa_payments:
+            frappe.db.savepoint("pos_mpesa_payment")
             try:
                 new_mpesa_payment = submit_mpesa_payment(
                     mpesa_payment.get("name"), customer, expected_company=company
@@ -578,206 +665,37 @@ def process_pos_payment(payload):
                 new_payments_entry.append(new_mpesa_payment)
                 all_payments_entry.append(new_mpesa_payment)
             except Exception as e:
+                frappe.db.rollback(save_point="pos_mpesa_payment")
                 errors.append(str(e))
 
     # then reconcile selected payments with invoices
     if allow_reconcile_payments and len(pending_selected_payments) > 0 and data.total_selected_payments > 0:
         for pay in pending_selected_payments:
+            frappe.db.savepoint("pos_reconcile_payment")
+            balances_before = [dict(invoice) for invoice in remaining_invoices]
             payment_name = pay.get("name")
-            is_credit_note = cint(pay.get("is_credit_note")) or pay.get("voucher_type") == "Sales Invoice"
-
-            if is_credit_note:
-                try:
-                    credit_note_doc = frappe.get_doc("Sales Invoice", payment_name)
-                    outstanding_credit = abs(flt(credit_note_doc.outstanding_amount))
-                    if outstanding_credit <= 0:
-                        errors.append(_("Credit note {0} is already fully allocated").format(payment_name))
-                        continue
-
-                    total_outstanding = sum(inv["outstanding_amount"] for inv in remaining_invoices)
-                    if total_outstanding <= 0:
-                        errors.append(
-                            _("No outstanding invoices available for allocation of credit note {0}").format(
-                                payment_name
-                            )
-                        )
-                        continue
-
-                    remaining_credit = outstanding_credit
-                    note_entries = []
-                    cost_center = getattr(credit_note_doc, "cost_center", None)
-                    if not cost_center:
-                        try:
-                            cost_center = (
-                                credit_note_doc.items[0].cost_center if credit_note_doc.items else None
-                            )
-                        except Exception:
-                            cost_center = None
-
-                    receivable_account = credit_note_doc.debit_to or get_party_account(
-                        "Customer", customer, company
-                    )
-
-                    for inv in remaining_invoices:
-                        if remaining_credit <= 0:
-                            break
-                        if inv["outstanding_amount"] <= 0:
-                            continue
-
-                        allocation = min(remaining_credit, inv["outstanding_amount"])
-                        if allocation <= 0:
-                            continue
-
-                        note_entries.append(
-                            frappe._dict(
-                                {
-                                    "voucher_type": "Sales Invoice",
-                                    "voucher_no": payment_name,
-                                    "voucher_detail_no": None,
-                                    "against_voucher_type": inv.get("voucher_type") or "Sales Invoice",
-                                    "against_voucher": inv["name"],
-                                    "account": receivable_account,
-                                    "party_type": "Customer",
-                                    "party": customer,
-                                    "dr_or_cr": "credit_in_account_currency",
-                                    "unreconciled_amount": remaining_credit,
-                                    "unadjusted_amount": outstanding_credit,
-                                    "allocated_amount": allocation,
-                                    "difference_amount": 0,
-                                    "difference_account": None,
-                                    "difference_posting_date": None,
-                                    "exchange_rate": flt(credit_note_doc.conversion_rate) or 1,
-                                    "debit_or_credit_note_posting_date": credit_note_doc.posting_date,
-                                    "cost_center": cost_center,
-                                    "currency": credit_note_doc.currency or currency,
-                                }
-                            )
-                        )
-
-                        inv["outstanding_amount"] -= allocation
-                        remaining_credit -= allocation
-
-                    allocated_credit = outstanding_credit - remaining_credit
-                    if allocated_credit <= 0:
-                        errors.append(_("No allocation made for credit note {0}").format(payment_name))
-                        continue
-
-                    reconcile_dr_cr_note(note_entries, company)
-
-                    reconciled_payments.append(
-                        {
-                            "payment_entry": payment_name,
-                            "allocated_amount": allocated_credit,
-                        }
-                    )
-                    all_payments_entry.append(credit_note_doc)
-
-                    if remaining_credit > 0:
-                        errors.append(
-                            _("Credit note {0} still has an unapplied balance of {1}").format(
-                                payment_name,
-                                fmt_money(remaining_credit, currency=credit_note_doc.currency or currency),
-                            )
-                        )
-
-                except Exception as e:
-                    errors.append(str(e))
-                    frappe.log_error(
-                        f"Error allocating credit note {payment_name}: {str(e)}",
-                        "POS Payment Error",
-                    )
-                continue
-
             try:
-                pe_doc = frappe.get_doc("Payment Entry", payment_name)
-                unallocated = flt(pe_doc.unallocated_amount)
-                if unallocated <= 0:
-                    errors.append(_("Payment {0} is already fully allocated").format(payment_name))
-                    continue
-
-                total_outstanding = sum(inv["outstanding_amount"] for inv in remaining_invoices)
-                if total_outstanding <= 0:
-                    errors.append(
-                        _("No outstanding invoices available for allocation of payment {0}").format(
-                            payment_name
-                        )
-                    )
-                    continue
-
-                if unallocated > total_outstanding:
-                    errors.append(
-                        _("Allocation amount for payment {0} exceeds outstanding invoices").format(
-                            payment_name
-                        )
-                    )
-                    continue
-
-                entry_list = []
-                remaining_amount = unallocated
-                for inv in remaining_invoices:
-                    if remaining_amount <= 0:
-                        break
-                    if inv["outstanding_amount"] <= 0:
-                        continue
-                    allocation = min(remaining_amount, inv["outstanding_amount"])
-                    if allocation <= 0:
-                        continue
-                    outstanding_before = inv["outstanding_amount"]
-                    entry_list.append(
-                        frappe._dict(
-                            {
-                                "voucher_type": "Payment Entry",
-                                "voucher_no": payment_name,
-                                "voucher_detail_no": None,
-                                "against_voucher_type": inv.get("voucher_type") or "Sales Invoice",
-                                "against_voucher": inv["name"],
-                                "account": pe_doc.paid_from,
-                                "party_type": "Customer",
-                                "party": customer,
-                                "dr_or_cr": "credit_in_account_currency",
-                                "unreconciled_amount": unallocated,
-                                "unadjusted_amount": unallocated,
-                                "allocated_amount": allocation,
-                                "grand_total": outstanding_before,
-                                "outstanding_amount": outstanding_before,
-                                "exchange_rate": 1,
-                                "due_date": inv.get("due_date"),
-                                "is_advance": 0,
-                                "difference_amount": 0,
-                                "cost_center": pe_doc.cost_center,
-                            }
-                        )
-                    )
-                    inv["outstanding_amount"] -= allocation
-                    remaining_amount -= allocation
-
-                total_allocated = unallocated - remaining_amount
-                if total_allocated <= 0:
-                    errors.append(_("No allocation made for payment {0}").format(payment_name))
-                    continue
-
-                reconcile_against_document(entry_list)
-
-                pe_doc.reload()
-
-                allocated_after = unallocated - flt(pe_doc.unallocated_amount)
-                reconciled_payments.append(
-                    {
-                        "payment_entry": payment_name,
-                        "allocated_amount": allocated_after,
-                    }
-                )
-                all_payments_entry.append(pe_doc)
+                from posawesome.posawesome.api.payment_processing.source_reconciliation import reconcile_source
+                doctype = _selected_payment_doctype(pay, party_type)
+                source = frappe.get_doc(doctype, payment_name, for_update=True)
+                source, allocated = reconcile_source(source, remaining_invoices, company, party_type, party,
+                    _requested_reconciled_amount(pay) or None)
+                summary = {"payment_entry": payment_name, "allocated_amount": allocated}
+                if request:
+                    request.complete_step(doctype + ":" + payment_name,
+                        {"summary": summary, "entry": _to_public_entry(source)})
+                reconciled_payments.append(summary)
+                all_payments_entry.append(source)
             except Exception as e:
+                frappe.db.rollback(save_point="pos_reconcile_payment")
+                remaining_invoices[:] = balances_before
                 errors.append(str(e))
-                frappe.log_error(
-                    f"Error allocating payment {payment_name}: {str(e)}",
-                    "POS Payment Error",
-                )
+                frappe.log_error(f"Error allocating payment {payment_name}: {str(e)}", "POS Payment Error")
 
     # then process the new payments and allocate invoices
     if allow_make_new_payments and len(pending_payment_methods) > 0 and data.total_payment_methods > 0:
         for payment_method in pending_payment_methods:
+            frappe.db.savepoint("pos_new_payment")
             try:
                 amount = flt(payment_method.get("amount"))
                 if not amount:
@@ -801,7 +719,7 @@ def process_pos_payment(payload):
                     reference_date=data.get("reference_date") or posting_date,
                     cost_center=profile.get("cost_center"),
                     submit=0,
-                    client_request_id=client_request_id,
+                    client_request_id=payment_method.get("_client_request_id"),
                     bank_account=payment_method.get("bank_account"),
                 )
 
@@ -830,100 +748,23 @@ def process_pos_payment(payload):
                     or currency
                 )
 
-                # Convert bank amount to party currency ONCE
-                if bank_currency == party_account_currency:
-                    remaining_party = flt(bank_amount, precision)
-                elif bank_currency == company_currency:
-                    comp_to_party = flt(get_exchange_rate(company_currency, party_account_currency, posting_date))
-                    remaining_party = flt(bank_amount * comp_to_party, precision)
-                else:
-                    bank_to_party = flt(get_exchange_rate(bank_currency, party_account_currency, posting_date))
-                    remaining_party = flt(bank_amount * bank_to_party, precision)
+                # The Payment Entry already contains the conversion to party currency.
+                # ERPNext invoice outstanding_amount uses that currency as well.
+                from posawesome.posawesome.api.payment_processing.allocations import allocate_payment_references
 
-                total_allocated = 0
-
-                for inv in remaining_invoices:
-                    if remaining_party <= 0:
-                        break
-                    if inv["outstanding_amount"] <= 0:
-                        continue
-
-                    voucher_type = inv.get("voucher_type") or "Sales Invoice"
-
-                    # Fetch from DB for accurate party-currency amounts (ERPNext pattern)
-                    inv_doc = frappe.get_cached_doc(voucher_type, inv["name"])
-                    inv_currency = inv_doc.currency
-                    inv_conv_rate = flt(inv_doc.conversion_rate)
-
-                    # Get amounts in party account currency
-                    company_currency = getattr(payment_entry, "company_currency", None) or company_currency
-                    party_account_currency = (
-                        getattr(payment_entry, "party_account_currency", None) or party_account_currency
-                    )
-
-                    # Calculate reference details as per ERPNext's get_reference_details
-                    # All amounts must be in party account currency
-                    if inv_currency == party_account_currency:
-                        # Invoice currency matches party account currency
-                        total_amount = flt(inv_doc.rounded_total or inv_doc.grand_total, precision)
-                        outstanding_amount = flt(inv_doc.outstanding_amount, precision)
-                        exchange_rate = inv_conv_rate
-                    elif party_account_currency == company_currency:
-                        # Party account in company currency — use base amounts
-                        total_amount = flt(inv_doc.base_rounded_total or inv_doc.base_grand_total, precision)
-                        outstanding_amount = flt(getattr(inv_doc, 'base_outstanding_amount', 0) or inv_doc.outstanding_amount * inv_conv_rate, precision)
-                        exchange_rate = 1
-                    else:
-                        # Party account in third currency (different from both invoice and company)
-                        inv_to_party = flt(get_exchange_rate(inv_currency, party_account_currency, posting_date))
-                        total_amount = flt((inv_doc.rounded_total or inv_doc.grand_total) * inv_to_party, precision)
-                        outstanding_amount = flt(inv_doc.outstanding_amount * inv_to_party, precision)
-                        exchange_rate = flt(get_exchange_rate(party_account_currency, company_currency, posting_date))
-                    inv_outstanding_party = outstanding_amount
-
-                    inv_total_party = total_amount
-
-                    if inv_outstanding_party <= 0:
-                        continue
-
-                    allocation = min(remaining_party, inv_outstanding_party)
-
-                    if allocation <= 0:
-                        continue
-
-                    payment_entry.append(
-                        "references",
-                        {
-                            "reference_doctype": voucher_type,
-                            "reference_name": inv["name"],
-                            "total_amount": total_amount,
-                            "outstanding_amount": outstanding_amount,
-                            "allocated_amount": allocation,
-                            "exchange_rate": exchange_rate,
-                        },
-                    )
-
-                    remaining_party -= allocation
-                    total_allocated = flt(total_allocated + allocation, precision)
-
-                payment_entry.total_allocated_amount = total_allocated
-
-                # party_amount must be in party currency to match total_allocated (now in party currency)
-                party_amount = (
-                    getattr(payment_entry, "paid_amount", None)
-                    if payment_type == "Receive"
-                    else getattr(payment_entry, "received_amount", None)
+                total_allocated, party_amount = allocate_payment_references(
+                    payment_entry, remaining_invoices, party_type, payment_type,
+                    party_account_currency, precision,
                 )
-                party_amount = flt(party_amount or getattr(payment_entry, "amount", 0) or amount, precision)
+                payment_entry.total_allocated_amount = total_allocated
                 payment_entry.unallocated_amount = flt(party_amount - total_allocated, precision)
-                payment_entry.difference_amount = payment_entry.unallocated_amount
 
                 invoice_exchange_rate = flt(first_inv.get("conversion_rate", 0))
                 ref_names = ", ".join(r.reference_name for r in payment_entry.references)
                 verb = "received" if payment_type == "Receive" else "paid"
                 party_label = "from" if payment_type == "Receive" else "to"
                 party_label_amount = party_amount
-                invoice_type = "Sales Invoice" if payment_type == "Receive" else "Purchase Invoice"
+                invoice_type = "Sales Invoice" if party_type == "Customer" else "Purchase Invoice"
                 reference_no_str = data.get("reference_no") or pos_opening_shift_name
                 reference_date_str = data.get("reference_date") or posting_date
 
@@ -992,15 +833,17 @@ def process_pos_payment(payload):
                         payment_entry.remarks += f"\n{gl_remark}"
 
                 payment_entry.save(ignore_permissions=True)
+                previous_ignore_permissions = frappe.flags.ignore_permissions
                 frappe.flags.ignore_permissions = True
                 try:
                     payment_entry.submit()
                 finally:
-                    frappe.flags.ignore_permissions = False
+                    frappe.flags.ignore_permissions = previous_ignore_permissions
 
                 new_payments_entry.append(payment_entry)
                 all_payments_entry.append(payment_entry)
             except Exception as e:
+                frappe.db.rollback(save_point="pos_new_payment")
                 errors.append(str(e))
                 frappe.log_error(f"Error creating payment entry: {str(e)}", "POS Payment Error")
 
@@ -1043,7 +886,7 @@ def process_pos_payment(payload):
     if len(msg) > 0:
         frappe.msgprint(msg)
 
-    return {
+    response = {
         "new_payments_entry": _to_public_entries(new_payments_entry),
         "all_payments_entry": _to_public_entries(all_payments_entry),
         "reconciled_payments": reconciled_payments,
@@ -1051,3 +894,7 @@ def process_pos_payment(payload):
         "exchange_gain_loss_summary": exchange_gain_loss_summary,
         "net_gain_loss": net_gain_loss,
     }
+
+    if request:
+        request.finish(response, complete=not errors)
+    return response

@@ -26,7 +26,7 @@ export function usePosPaySelection({
 				!currency_filter.value ||
 				invoice_currency === currency_filter.value
 			) {
-				return acc + flt(cur?.outstanding_amount_in_invoice_currency ?? cur?.outstanding_amount ?? 0);
+				return acc + Math.abs(flt(cur?.outstanding_amount_in_invoice_currency ?? cur?.outstanding_amount ?? 0));
 			}
 			return acc;
 		}, 0);

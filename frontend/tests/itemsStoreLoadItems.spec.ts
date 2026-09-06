@@ -10,7 +10,15 @@ const offlineMocks = vi.hoisted(() => ({
 	getStoredItemsCountByScope: vi.fn(async () => 0),
 	getAllStoredItems: vi.fn(async () => []),
 	getCachedPriceListItems: vi.fn(async () => null),
+	searchStoredItems: vi.fn(async () => [] as any[]),
 }));
+
+const workerMocks = vi.hoisted(() => ({
+	isSearchWorkerEnabled: vi.fn(() => false),
+	setSearchIndex: vi.fn(async () => {}),
+	searchViaWorker: vi.fn(async () => ["ITEM-1"] as string[] | null),
+}));
+vi.mock("../src/posapp/composables/pos/items/useSearchWorker", () => workerMocks);
 
 const itemsSyncMocks = vi.hoisted(() => ({
 	primeItemDetailsCache: vi.fn(),
@@ -31,6 +39,7 @@ vi.mock("../src/offline/index", () => ({
 	getStoredItemsCountByScope: offlineMocks.getStoredItemsCountByScope,
 	getAllStoredItems: offlineMocks.getAllStoredItems,
 	getCachedPriceListItems: offlineMocks.getCachedPriceListItems,
+	searchStoredItems: offlineMocks.searchStoredItems,
 }));
 
 vi.mock("../src/posapp/composables/pos/items/store/useItemsCache", () => ({
@@ -155,6 +164,9 @@ import { useItemsStore } from "../src/posapp/stores/itemsStore";
 describe("itemsStore loadItems", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		workerMocks.isSearchWorkerEnabled.mockReturnValue(false);
+		workerMocks.searchViaWorker.mockResolvedValue(["ITEM-1"]);
+		offlineMocks.getStoredItemsCountByScope.mockResolvedValue(0);
 		setActivePinia(createPinia());
 		itemServiceMocks.getItemsData.mockResolvedValue([
 			{
@@ -168,6 +180,51 @@ describe("itemsStore loadItems", () => {
 				item_uoms: [{ uom: "Nos", conversion_factor: 1 }],
 			},
 		]);
+	});
+
+	it("uses the enabled worker for a complete resident catalog without scanning disk", async () => {
+		const store = useItemsStore();
+		await store.initialize({ name: "POS-1", selling_price_list: "Retail", item_groups: [] } as any);
+		workerMocks.isSearchWorkerEnabled.mockReturnValue(true);
+		offlineMocks.getStoredItemsCountByScope.mockResolvedValue(1);
+		expect((await store.searchItems("Item")).map(item => item.item_code)).toEqual(["ITEM-1"]);
+		expect(workerMocks.setSearchIndex).toHaveBeenCalledTimes(1);
+		expect(workerMocks.searchViaWorker).toHaveBeenCalledWith("Item", "ALL");
+		expect(offlineMocks.searchStoredItems).not.toHaveBeenCalled();
+		await store.searchItems("One");
+		expect(workerMocks.setSearchIndex).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not mirror or search a partial catalog in the worker", async () => {
+		workerMocks.isSearchWorkerEnabled.mockReturnValue(true);
+		const store = useItemsStore();
+		await store.initialize({ name: "POS-1", selling_price_list: "Retail", item_groups: [] } as any);
+		offlineMocks.getStoredItemsCountByScope.mockResolvedValue(2000);
+		await store.searchItems("uncached item");
+		expect(offlineMocks.searchStoredItems).toHaveBeenCalled();
+		expect(workerMocks.setSearchIndex).not.toHaveBeenCalled();
+		expect(workerMocks.searchViaWorker).not.toHaveBeenCalled();
+	});
+
+	it("falls back to local results when the worker is unavailable", async () => {
+		const store = useItemsStore();
+		await store.initialize({ name: "POS-1", selling_price_list: "Retail", item_groups: [] } as any);
+		workerMocks.isSearchWorkerEnabled.mockReturnValue(true);
+		workerMocks.searchViaWorker.mockResolvedValue(null);
+		offlineMocks.getStoredItemsCountByScope.mockResolvedValue(1);
+		expect((await store.searchItems("Item")).map(item => item.item_code)).toEqual(["ITEM-1"]);
+	});
+
+	it("refreshes the worker index after catalog replacement", async () => {
+		const store = useItemsStore();
+		await store.initialize({ name: "POS-1", selling_price_list: "Retail", item_groups: [] } as any);
+		workerMocks.isSearchWorkerEnabled.mockReturnValue(true);
+		offlineMocks.getStoredItemsCountByScope.mockResolvedValue(1);
+		await store.searchItems("Item");
+		itemServiceMocks.getItemsData.mockResolvedValue([{ item_code: "ITEM-1", item_name: "Renamed" }]);
+		await store.loadItems({ forceServer: true });
+		await store.searchItems("Renamed");
+		expect(workerMocks.setSearchIndex).toHaveBeenCalledTimes(2);
 	});
 
 	it("primes detail cache directly from get_items responses on first load", async () => {

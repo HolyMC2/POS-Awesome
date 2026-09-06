@@ -1,3 +1,5 @@
+import json
+
 import frappe
 
 from posawesome.posawesome.api.items import get_delta_items, get_items
@@ -7,6 +9,7 @@ from posawesome.posawesome.api.offline_sync.common import (
     _normalize_timestamp,
     _resolve_profile,
     _watermark_floor,
+    _page_window, _page_scope, _changed_keys, _paged_response, _profile_warehouses,
 )
 from posawesome.posawesome.api.utils import (
     expand_item_groups,
@@ -90,6 +93,8 @@ def sync_items(
     start_after=None,
     limit=200,
     schema_version=None,
+    paginated=0,
+    page_cursor=None,
 ):
     if schema_version and schema_version != SYNC_SCHEMA_VERSION:
         return _build_response(full_resync_required=True)
@@ -97,6 +102,9 @@ def sync_items(
     profile = _resolve_profile(pos_profile)
     if not profile:
         frappe.throw("pos_profile is required")
+
+    if str(paginated) == "1" or page_cursor:
+        return _sync_items_page(profile, watermark, page_cursor, limit, price_list, customer)
 
     resolved_limit = _coerce_limit(limit)
     fetch_limit = resolved_limit + 1
@@ -159,4 +167,51 @@ def sync_items(
         deleted=deleted,
         next_watermark=next_watermark,
         has_more=has_more,
+    )
+
+
+def _sync_items_page(profile, watermark, cursor, limit, price_list, customer):
+    from posawesome.posawesome.api.item_processing.search import _build_search_plan, _run_item_query
+
+    limit = _coerce_limit(limit)
+    price_list = price_list or profile.get("selling_price_list")
+    window = _page_window(watermark, cursor, _page_scope("items", profile, price_list=price_list, customer=customer))
+    # Union the next keys from EACH source. Limiting each source to N+1 is
+    # sufficient to find the next N unique keys of the union, including price-
+    # and stock-only edits whose Item.modified never changes.
+    candidates = _changed_keys("Item", "item_code", window, limit + 1)
+    if watermark:
+        if price_list:
+            candidates += _changed_keys("Item Price", "item_code", window, limit + 1, {"price_list": price_list})
+        warehouses = _profile_warehouses(profile)
+        if warehouses:
+            candidates += _changed_keys("Bin", "item_code", window, limit + 1, {"warehouse": ["in", warehouses]})
+    candidate_keys = list({row["item_code"] for row in candidates if row.get("item_code")})
+    # Use the SAME database collation as each keyset predicate. Python's
+    # Unicode sort can disagree on case/accents and skip codes at a boundary.
+    ordered = frappe.get_all(
+        "Item", filters={"item_code": ["in", candidate_keys]}, fields=["item_code", "name"],
+        order_by="item_code asc", limit_page_length=limit + 1,
+    ) if candidate_keys else []
+    keys = [row["item_code"] for row in ordered]
+    page_keys = keys[:limit]
+    rows = []
+    if page_keys:
+        # Reuse the catalog's authority for profile filtering and row shaping
+        # (barcodes, UOMs, tax, variants, price bands, stock and cost visibility).
+        groups = expand_item_groups(get_item_groups(profile.get("name")) or [])
+        # The shared shaper serializes its profile with json.dumps; a real
+        # cached Frappe document contains datetime objects, unlike a client
+        # JSON profile. Normalize through Frappe's serializer first.
+        query_profile = json.loads(frappe.as_json(profile))
+        plan = _build_search_plan(query_profile, "", "", limit, None, None, None, False, False, groups)
+        # Add the page boundary independently. Replacing `item_code` would
+        # discard the catalog's != PROPINA accounting-line exclusion.
+        plan.filters["name"] = ["in", [row["name"] for row in ordered[:limit]]]
+        rows = _run_item_query(query_profile, price_list, customer, plan)
+    found = {row["item_code"] for row in rows}
+    return _paged_response(
+        window, keys, limit,
+        [{"key": f"item::{row['item_code']}", "modified": row.get("modified"), "data": row} for row in rows],
+        [{"key": f"item::{key}"} for key in page_keys if key not in found],
     )

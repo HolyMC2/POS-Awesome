@@ -1,4 +1,4 @@
-import { createApp } from "vue";
+import { createApp, defineAsyncComponent } from "vue";
 
 const printRuntime = document.createElement("script");
 printRuntime.src = "/assets/doco/js/printing_runtime.js?v=20260812a";
@@ -17,7 +17,7 @@ import "@fontsource/roboto/700.css";
 import "@fontsource/roboto/900.css";
 // @ts-ignore
 import Dexie from "dexie/dist/dexie.mjs";
-import VueDatePicker from "@vuepic/vue-datepicker";
+const VueDatePicker = defineAsyncComponent(() => import("@vuepic/vue-datepicker"));
 import "@vuepic/vue-datepicker/dist/main.css";
 import "../../../posawesome/public/css/rtl.css";
 import "../style.css";

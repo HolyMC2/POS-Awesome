@@ -415,7 +415,7 @@ def render_kot_projection(print_format, projection):
 
 
 @frappe.whitelist(methods=["POST"])
-def fire_course(name_or_uid, course_idx=None, client_request_id=None, source_device=None):
+def fire_course(name_or_uid, course_idx=None, client_request_id=None, source_device=None, terminal_context=None):
     """Send the changes since the last fire to the kitchen.
 
     First "Send" fires course 1 with no ceremony; a venue that ignores
@@ -423,6 +423,9 @@ def fire_course(name_or_uid, course_idx=None, client_request_id=None, source_dev
     ``{stations: [{station, printer, lines}], cancellations: [...]}`` — the
     projection the print path renders. Nothing is persisted as a KOT.
     """
+    from posawesome.posawesome.api.shift_terminal import assert_order_terminal
+    preview = get_scoped_order(name_or_uid)
+    assert_order_terminal(preview.pos_profile, terminal_context)
     order = _lock_and_get_scoped_order(name_or_uid)
     assert_tables_capability(order.pos_profile)
 

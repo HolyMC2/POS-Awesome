@@ -19,7 +19,7 @@ function clone<T>(value: T): T {
 }
 
 async function loadWriteQueueModule(seedRows: SeedEntry[]) {
-	const rows = seedRows.map((entry) => clone(entry));
+	const rows = seedRows.map((entry) => ({ ...clone(entry), queue_user: "cashier@example.com", queue_profile: null, idempotency_key: `${entry.idempotency_key}:scope:["cashier@example.com",null]` }));
 	const memory = {
 		offline_invoices: [] as any[],
 		offline_customers: [] as any[],
@@ -108,7 +108,8 @@ async function loadWriteQueueModule(seedRows: SeedEntry[]) {
 				}
 				return genericTable;
 			}),
-			transaction: vi.fn(async (_mode: string, _table: unknown, callback: () => Promise<unknown>) => {
+			transaction: vi.fn(async (_mode: string, ...tablesAndCallback: any[]) => {
+				const callback = tablesAndCallback[tablesAndCallback.length - 1];
 				txActive = true;
 				try {
 					return await callback();
@@ -149,6 +150,7 @@ describe("write queue transaction safety", () => {
 	beforeEach(() => {
 		vi.resetModules();
 		vi.restoreAllMocks();
+		(globalThis as any).frappe = { session: { user: "cashier@example.com" } };
 	});
 
 	it("claims retryable queue entries with the initial ordered read inside the rw transaction", async () => {
@@ -244,7 +246,7 @@ describe("write queue transaction safety", () => {
 		expect(firstTxStates).toEqual([true]);
 		expect(addTxStates).toEqual([true]);
 		expect(sortByTxStates[0]).toBe(false);
-		expect(created.idempotency_key).toBe("invoice:inv-tx-001");
+		expect(created.idempotency_key).toContain("invoice:inv-tx-001:scope:");
 		expect(rows).toHaveLength(1);
 		expect(memory.offline_invoices).toHaveLength(1);
 	});

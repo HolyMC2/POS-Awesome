@@ -1,3 +1,4 @@
+import { ownsQueueEntry } from "./queueOwnership";
 import { checkDbHealth, db, isOffline, memory, persist } from "./db";
 import {
 	claimRetryableQueueEntries,
@@ -84,12 +85,14 @@ export async function syncOfflineCustomers() {
 	let synced = 0;
 
 	for (const entry of claimedEntries) {
+		if (!ownsQueueEntry(entry)) break;
 		const queuedCustomer = entry.payload;
 		try {
 			const result = await frappe.call({
 				method: "posawesome.posawesome.api.customers.create_customer",
 				args: queuedCustomer.args,
 			});
+			if (!ownsQueueEntry(entry)) break;
 			synced += 1;
 			await markWriteQueueEntrySynced(
 				CUSTOMER_ENTITY,
@@ -217,6 +220,7 @@ export async function deleteCustomerStorageByNames(names: string[]) {
 		);
 	} catch (error) {
 		console.error("Failed to delete customers from storage", error);
+		throw error;
 	}
 }
 

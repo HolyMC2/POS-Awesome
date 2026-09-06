@@ -1,4 +1,3 @@
-import renderOfflineInvoiceHTML from "../../offline_print_template";
 import { BRAND } from "../../brand";
 
 interface PrintDebugInfo {
@@ -268,6 +267,7 @@ async function fallbackToOfflinePrint(
 	}
 
 	try {
+		const { default: renderOfflineInvoiceHTML } = await import("../../offline_print_template");
 		const html = await renderOfflineInvoiceHTML(invoiceDoc);
 		if (!html) {
 			return false;

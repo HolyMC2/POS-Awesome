@@ -2,16 +2,14 @@
  * Client wrapper around `workers/searchWorker.ts`.
  *
  * Flag-gated rollout — controlled by `localStorage.posa_search_worker
- * = on`. The default path stays the synchronous `performLocalSearch`
- * call so a broken worker can't blank the items grid. Once telemetry
+ * = on`. Partial catalogs stay on scoped IndexedDB search; complete
+ * resident catalogs can use the worker with a local-filter fallback. Once telemetry
  * confirms the worker shaves real ms off slow-device input lag we
  * flip the default and remove the flag.
  *
  * Lifecycle:
  *   - Worker is spawned lazily on first use.
- *   - Catalog Map is mirrored on the first call AND any time the
- *     caller signals a bulk replace (re-init on shift reload / catalog
- *     refresh).
+ *   - Catalog Map is mirrored lazily before search after the catalog changes.
  *   - Searches resolve via a pending-promises Map keyed by request id.
  *
  * Telemetry: every fulfilled search reports `perf:search-worker` with
@@ -51,11 +49,10 @@ async function getWorker(): Promise<Worker | null> {
 	if (workerPromise) return workerPromise;
 	workerPromise = (async () => {
 		try {
-			const url = new URL(
-				"../../../workers/searchWorker.ts",
-				import.meta.url,
-			);
-			const w = new Worker(url, { type: "module" });
+			// Vite recognizes/transpiles workers only with this direct URL shape.
+			const w = new Worker(new URL(
+				"../../../workers/searchWorker.ts", import.meta.url,
+			), { type: "module" });
 			w.onmessage = (event: MessageEvent) => {
 				const data = event.data || {};
 				if (data.op === "ready") {

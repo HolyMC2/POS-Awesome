@@ -34,6 +34,7 @@
 						@rebuild-offline-data="handleRebuildOfflineDataAction"
 						@clear-cache="handleClearCacheAction"
 						@open-diagnostics="handleOpenOfflineDiagnosticsAction"
+						@open-money-exceptions="openMoneyExceptions"
 					/>
 					<!-- Saldo status chip — sits beside the online indicator. -->
 					<SaldoHoldsBadge :pos-profile="posProfile" />
@@ -136,6 +137,9 @@
 			@deleted="updateAfterDelete"
 			@sync-all="syncPendingInvoices"
 		/>
+		<MoneyExceptionsDialog v-if="showMoneyExceptions" :pos-profile="posProfile"
+			@close="showMoneyExceptions = false" @saved-work="showOfflineInvoices = true"
+			@terminal-status="offlinePanelOpen = true" />
 
 		<!-- Snackbar for notifications -->
 		<v-snackbar
@@ -187,6 +191,7 @@ import { useResponsive } from "../composables/core/useResponsive";
 
 const ServerUsageGadget = defineAsyncComponent(() => import("./navbar/ServerUsageGadget.vue"));
 const DatabaseUsageGadget = defineAsyncComponent(() => import("./navbar/DatabaseUsageGadget.vue"));
+const MoneyExceptionsDialog = defineAsyncComponent(() => import("./pos/payments/exceptions/MoneyExceptionsDialog.vue"));
 
 import { useToastStore } from "../stores/toastStore";
 import { useUIStore } from "../stores/uiStore";
@@ -261,6 +266,7 @@ export default {
 		OfflineInvoicesDialog: OfflineInvoices,
 		ServerUsageGadget,
 		DatabaseUsageGadget,
+		MoneyExceptionsDialog,
 	},
 	props: {
 		posProfile: {
@@ -352,6 +358,7 @@ export default {
 			companyImg: posLogo,
 			showAboutDialog: false,
 			showOfflineInvoices: false,
+			showMoneyExceptions: false,
 			settingsPanelOpen: false,
 			lastSyncTotalsSnapshot: { pending: 0, synced: 0, drafted: 0 },
 			syncNotificationPrimed: false,
@@ -603,6 +610,7 @@ export default {
 			this.eventBus.off("show_message");
 			this.eventBus.off("set_company", this.handleSetCompany);
 			this.eventBus.off("invoice_submission_failed", this.handleInvoiceSubmissionFailed);
+			this.eventBus.off("open_money_exceptions", this.openMoneyExceptions);
 			if (this.employeeSwitchHandler) {
 				this.eventBus.off("open_employee_switch", this.employeeSwitchHandler);
 			}
@@ -767,6 +775,7 @@ export default {
 			if (this.eventBus) {
 				this.eventBus.on("show_message", (data) => this.toastStore.show(data));
 				this.eventBus.on("invoice_submission_failed", this.handleInvoiceSubmissionFailed);
+				this.eventBus.on("open_money_exceptions", this.openMoneyExceptions);
 				this.employeeSwitchHandler = () => this.openEmployeeSwitch();
 				this.lockPosHandler = () => this.lockPosScreen();
 				this.eventBus.on("open_employee_switch", this.employeeSwitchHandler);
@@ -802,6 +811,10 @@ export default {
 		},
 		closeOfflineStatusPanel() {
 			this.offlineSyncStore.setPanelOpen(false);
+		},
+		openMoneyExceptions() {
+			this.closeOfflineStatusPanel();
+			this.showMoneyExceptions = true;
 		},
 		syncPendingInvoices() {
 			this.$emit("sync-invoices");

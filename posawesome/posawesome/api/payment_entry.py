@@ -93,3 +93,15 @@ def process_pos_payment(*args, **kwargs):
     if not any(p.kind == _inspect.Parameter.VAR_KEYWORD for p in _sig.parameters.values()):
         kwargs = {k: v for k, v in kwargs.items() if k in _sig.parameters}
     return _impl(*args, **kwargs)
+
+
+@frappe.whitelist(methods=["POST"])
+def preview_customer_advance_refund(payload):
+    from posawesome.posawesome.api.payment_processing.advance_refunds import preview_customer_advance_refund as _impl
+    return _impl(payload)
+
+
+@frappe.whitelist(methods=["POST"])
+def refund_customer_advance(payload):
+    from posawesome.posawesome.api.payment_processing.advance_refunds import refund_customer_advance as _impl
+    return _impl(payload)

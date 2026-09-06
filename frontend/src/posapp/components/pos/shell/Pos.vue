@@ -2956,9 +2956,14 @@ export default {
 			this.dialog = true;
 		},
 		get_pos_setting() {
-			frappe.db.get_doc("POS Settings", undefined).then((doc) => {
-				this.uiStore.setPosSettings(doc);
-			});
+			return frappe.db.get_doc("POS Settings", undefined)
+				.then((doc) => {
+					this.uiStore.setPosSettings(doc);
+				})
+				.catch((error) => {
+					// Keep the current settings when an optional refresh is unavailable.
+					console.warn("Unable to refresh POS settings", error);
+				});
 		},
 		// handleAddItem removed as ItemsSelector handles pos addition internally
 		handleRegisterPosData(data) {

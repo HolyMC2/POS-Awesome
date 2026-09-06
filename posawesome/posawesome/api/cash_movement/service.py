@@ -38,6 +38,9 @@ def _enforce_shift_access(pos_opening_shift):
 def _create_cash_movement(payload, movement_type):
     data = parse_payload(payload)
     opening_shift_name = data.get("pos_opening_shift") or data.get("pos_opening_shift_name")
+    from posawesome.posawesome.api.shift_terminal import assert_terminal_access
+    assert_terminal_access(opening_shift_name, data.get("terminal_id"),
+                           data.get("terminal_generation"), data.pop("terminal_token", None))
     opening_shift = get_opening_shift(opening_shift_name)
 
     profile_name = data.get("pos_profile") or data.get("pos_profile_name") or opening_shift.pos_profile
@@ -190,10 +193,21 @@ def get_submitted_expenses(pos_opening_shift, limit_start=0, limit_page_length=5
     )
 
 
+def _terminal_movement(name, terminal_id, terminal_generation, terminal_token):
+    from posawesome.posawesome.api.shift_terminal import assert_terminal_access
+    movement = frappe.get_doc("POS Cash Movement", name)
+    ensure_owner_or_manager(movement)
+    assert_terminal_access(movement.pos_opening_shift, terminal_id, terminal_generation, terminal_token,
+                           acting_user=movement.user)
+    current = frappe.get_doc("POS Cash Movement", name, for_update=True)
+    if current.pos_opening_shift != movement.pos_opening_shift or current.user != movement.user:
+        frappe.throw(_("Cash movement changed during terminal verification. Refresh and retry."))
+    return current
+
+
 @frappe.whitelist(methods=["POST"])
-def cancel_cash_movement(name):
-    movement_doc = frappe.get_doc("POS Cash Movement", name)
-    ensure_owner_or_manager(movement_doc)
+def cancel_cash_movement(name, terminal_id=None, terminal_generation=None, terminal_token=None):
+    movement_doc = _terminal_movement(name, terminal_id, terminal_generation, terminal_token)
     if movement_doc.docstatus != 1:
         frappe.throw(_("Only submitted cash movements can be cancelled."))
 
@@ -207,9 +221,8 @@ def cancel_cash_movement(name):
 
 
 @frappe.whitelist(methods=["POST"])
-def delete_cash_movement(name):
-    movement_doc = frappe.get_doc("POS Cash Movement", name)
-    ensure_owner_or_manager(movement_doc)
+def delete_cash_movement(name, terminal_id=None, terminal_generation=None, terminal_token=None):
+    movement_doc = _terminal_movement(name, terminal_id, terminal_generation, terminal_token)
     if movement_doc.docstatus != 2:
         frappe.throw(_("Only cancelled cash movements can be deleted."))
 
@@ -222,7 +235,7 @@ def delete_cash_movement(name):
 
 
 @frappe.whitelist(methods=["POST"])
-def duplicate_cash_movement(name, posting_date=None):
+def duplicate_cash_movement(name, posting_date=None, terminal_id=None, terminal_generation=None, terminal_token=None):
     movement_doc = frappe.get_doc("POS Cash Movement", name)
     ensure_owner_or_manager(movement_doc)
     if movement_doc.docstatus not in (1, 2):
@@ -254,4 +267,6 @@ def duplicate_cash_movement(name, posting_date=None):
         except Exception:
             frappe.throw(_("Invalid posting date."))
 
+    payload.update({key: value for key, value in dict(terminal_id=terminal_id, terminal_generation=terminal_generation,
+                                                    terminal_token=terminal_token).items() if value is not None})
     return _create_cash_movement(payload, movement_doc.movement_type)

@@ -1,4 +1,5 @@
 <template>
+	<Teleport to="body">
 	<transition name="offline-status-panel-fade">
 		<v-card
 			v-if="props.modelValue"
@@ -18,6 +19,8 @@
 				<v-chip size="small" variant="tonal" :color="chipColor" class="offline-status-panel__chip">
 					{{ connectivityLabel }}
 				</v-chip>
+				<button type="button" class="offline-status-panel__close" :aria-label="__('Close')"
+					@click="$emit('update:modelValue', false)">×</button>
 			</div>
 
 			<div class="offline-status-panel__meta">
@@ -30,6 +33,31 @@
 					<strong>{{ cacheUsageLabel }}</strong>
 				</div>
 			</div>
+
+			<div class="offline-status-panel__section" data-test="storage-persistence-status">
+				<div class="offline-status-panel__actions">
+					<button type="button" data-testid="open-money-exceptions" @click="$emit('open-money-exceptions')">{{ __("Money needing attention") }}</button>
+				</div>
+				<div class="offline-status-panel__section-title">{{ __("Saved work protection") }}</div>
+				<div class="offline-status-panel__resource-detail">{{ persistenceMessage }}</div>
+				<div class="offline-status-panel__actions">
+					<button v-if="storagePersistenceStatus !== 'persistent'"
+						type="button" data-test="storage-persistence-request"
+						:disabled="storagePersistenceStatus === 'checking'"
+						@click="checkStoragePersistence(true)">{{ __("Request storage protection") }}</button>
+				</div>
+			</div>
+			<div v-if="legacyRecoveryCount" class="offline-status-panel__warning" data-test="legacy-queue-recovery">
+				<div class="offline-status-panel__warning-title">{{ __("Saved work needs ownership review") }}</div>
+				<div class="offline-status-panel__warning-line">
+					{{ __("Unassigned records are preserved on this device and will not upload under this login. Ask a System Manager to export them and check invoice names and request IDs against the server before replaying. Exporting does not submit or remove records. Do not clear browser data.") }}
+				</div>
+				<div v-if="canRecoverLegacyQueue()" class="offline-status-panel__actions">
+					<button type="button" data-test="legacy-queue-export" @click="exportLegacyRecovery">{{ __("Export for recovery") }}</button>
+				</div>
+			</div>
+			<div v-if="recoveryError" role="alert">{{ recoveryError }}</div>
+			<ShiftTerminalStatus />
 
 			<div
 				v-if="bootstrapWarning.active"
@@ -151,10 +179,15 @@
 			</div>
 		</v-card>
 	</transition>
+	</Teleport>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
+import { checkStoragePersistence, storagePersistenceStatus } from "../../../offline/storagePersistence";
+import { getLegacyQueueRecoveryCount, exportLegacyQueueRecovery } from "../../../offline/writeQueue";
+import { canRecoverLegacyQueue } from "../../../offline/queueOwnership";
+import ShiftTerminalStatus from "./ShiftTerminalStatus.vue";
 import { storeToRefs } from "pinia";
 
 import { useOfflineSyncStore } from "../../stores/offlineSyncStore";
@@ -174,6 +207,7 @@ defineEmits<{
 	(e: "rebuild-offline-data"): void;
 	(e: "clear-cache"): void;
 	(e: "open-diagnostics"): void;
+	(e: "open-money-exceptions"): void;
 }>();
 
 // @ts-ignore
@@ -206,13 +240,44 @@ const chipColor = computed(() => {
 });
 
 const cacheUsageLabel = computed(() => `${summary.value.cacheUsage || 0}%`);
+const legacyRecoveryCount = ref(0);
+const recoveryError = ref("");
+const persistenceMessage = computed(() => __({
+	unknown: "Storage protection has not been checked.",
+	checking: "Checking browser storage protection…",
+	persistent: "Automatic storage eviction protection is enabled. Keep syncing saved sales; clearing browser data still removes local records.",
+	best_effort: "Browser storage may be automatically cleared. Request protection and sync saved sales when online.",
+	denied: "The browser did not grant storage protection. Saved sales remain on this device; sync them when online and retry protection.",
+	unsupported: "This browser cannot confirm storage protection. Sync saved sales when online and do not clear browser data.",
+	error: "Storage protection could not be checked. Retry and keep saved sales syncing when online.",
+}[storagePersistenceStatus.value]));
+watch(() => props.modelValue, async (open) => {
+	if (!open) return;
+	void checkStoragePersistence();
+	try { legacyRecoveryCount.value = await getLegacyQueueRecoveryCount(); }
+	catch { recoveryError.value = __("Saved work could not be checked. Reopen this panel to retry."); }
+}, { immediate: true });
+async function exportLegacyRecovery() {
+	try {
+		const records = await exportLegacyQueueRecovery();
+		const url = URL.createObjectURL(new Blob([JSON.stringify(records, null, 2)], { type: "application/json" }));
+		const link = document.createElement("a");
+		link.href = url;
+		link.download = `pos-saved-work-recovery-${new Date().toISOString().slice(0, 10)}.json`;
+		link.click();
+		setTimeout(() => URL.revokeObjectURL(url), 0);
+	} catch (error) { recoveryError.value = String((error as Error)?.message || error); }
+}
+
 </script>
 
 <style scoped>
 .offline-status-panel {
-	position: absolute;
-	top: calc(100% + 10px);
-	right: 0;
+	/* The navbar clips overflow on desktop too. Keep the panel in the body
+	   and anchor it to the viewport so every recovery control stays usable. */
+	position: fixed;
+	top: 70px;
+	right: 10px;
 	width: min(360px, calc(100vw - 24px));
 	/* The panel opens precisely when sync is failing — lists populated + a
 	   snapshot warning — which is its tallest state. Without a cap it grows
@@ -225,7 +290,7 @@ const cacheUsageLabel = computed(() => `${summary.value.cacheUsage || 0}%`);
 	padding: 16px;
 	display: grid;
 	gap: 14px;
-	z-index: 12;
+	z-index: 2000;
 	border: 1px solid var(--pos-border);
 	box-shadow: 0 18px 40px var(--pos-shadow-dark);
 }
@@ -251,6 +316,18 @@ const cacheUsageLabel = computed(() => `${summary.value.cacheUsage || 0}%`);
 	font-size: 14px;
 	font-weight: 700;
 	color: var(--pos-text-primary);
+}
+
+.offline-status-panel__close {
+	flex-shrink: 0;
+	width: 44px;
+	min-height: 44px;
+	border-radius: 12px;
+	color: var(--pos-text-primary);
+	font-size: 24px;
+}
+.offline-status-panel__close:focus-visible {
+	outline: 2px solid var(--pos-primary);
 }
 
 .offline-status-panel__subtitle,
@@ -352,7 +429,6 @@ const cacheUsageLabel = computed(() => `${summary.value.cacheUsage || 0}%`);
 
 @media (max-width: 767.98px) {
 	.offline-status-panel {
-		right: -12px;
 		width: min(340px, calc(100vw - 20px));
 	}
 }

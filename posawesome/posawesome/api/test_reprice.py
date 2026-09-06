@@ -75,6 +75,7 @@ def _build_frappe_module(scenario: dict) -> types.ModuleType:
         return []
 
     frappe_module.get_all = _get_all
+    frappe_module.get_doc = lambda doctype, name: scenario.get("original_invoice", {})
     frappe_module.log_error = lambda *a, **k: None
     frappe_module.get_traceback = lambda: ""
 
@@ -101,7 +102,7 @@ def _install_pkg_stubs():
 def _install_offers_stub(scenario: dict):
     """Stub posawesome.posawesome.api.offers.get_offers for the free-item
     verification. `offers` in the scenario is the server-authoritative list;
-    absent → import raises → helper fails open (client-trust)."""
+    absent → import raises → the exemption is denied."""
     name = "posawesome.posawesome.api.offers"
     if "offers" not in scenario:
         sys.modules.pop(name, None)
@@ -114,7 +115,18 @@ def _install_offers_stub(scenario: dict):
 def _import_reprice(scenario: dict):
     _install_pkg_stubs()
     sys.modules["frappe"] = _build_frappe_module(scenario)
+    context_module = types.ModuleType("posawesome.posawesome.api.pricing_context")
+    context_module.reference_rate_lookup = lambda invoice, price_list: (
+        lambda line: scenario.get("item_prices", {}).get((line.get("item_code"), price_list)))
+    sys.modules[context_module.__name__] = context_module
     _install_offers_stub(scenario)
+    sys.modules.pop("posawesome.posawesome.api._promotion_eligibility", None)
+    pricing_module = types.ModuleType("posawesome.posawesome.api.pricing_rules")
+    def reconcile(payload):
+        scenario["pricing_payload"] = payload
+        return scenario.get("pricing_result", {"updates": [], "free_lines": []})
+    pricing_module.reconcile_line_prices = reconcile
+    sys.modules[pricing_module.__name__] = pricing_module
     sys.modules.pop("posawesome.posawesome.api._reprice", None)
     spec = importlib.util.spec_from_file_location(
         "posawesome.posawesome.api._reprice",
@@ -439,36 +451,31 @@ class RateBandTests(unittest.TestCase):
         with self.assertRaises(_PermissionError):
             rp.assert_rates_within_band(invoice, profile)
 
-    def test_edit_allowed_bare_zero_rate_passes(self):
-        # Regression: on a rate-edit-ENABLED profile a zero/comp rate is the
-        # operator's prerogative and must NOT be blocked by the zero-rate
-        # guard (which exists only to stop free-invoice fraud on rate-edit-OFF
-        # registers). Was thrown when the guard ran before the allow_edit gate.
+    def test_edit_allowed_bare_zero_rate_still_requires_an_exemption(self):
         rp = _import_reprice(_basic_scenario())
         invoice = {"items": [{"idx": 1, "item_code": "IT-1", "rate": 0}]}
         profile = {"posa_allow_user_to_edit_rate": 1, "selling_price_list": "Doco"}
-        rp.assert_rates_within_band(invoice, profile)
-
-    def test_no_edit_genuine_free_item_zero_rate_passes(self):
-        rp = _import_reprice(_basic_scenario())
-        invoice = {"items": [{
-            "idx": 1, "item_code": "IT-1", "rate": 0, "is_free_item": 1,
-            "price_list_rate": 100.00, "discount_percentage": 100,
-        }]}
-        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
-        rp.enforce_discount_limit(invoice, profile)
-        rp.assert_rates_within_band(invoice, profile)
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(invoice, profile)
 
     def test_no_edit_pricing_rule_zero_rate_passes(self):
-        rp = _import_reprice(_basic_scenario())
+        scenario = _basic_scenario()
+        scenario["offers"] = []
+        scenario["pricing_result"] = {"updates": [
+            {"row_id": "0", "rate": 0, "pricing_rules": ["FREE-RULE"]}
+        ]}
+        rp = _import_reprice(scenario)
         invoice = {"items": [{
-            "idx": 1, "item_code": "IT-2", "rate": 0,
+            "idx": 1, "item_code": "IT-2", "rate": 0, "qty": 1,
             "price_list_rate": 50.00, "discount_percentage": 100,
             "pricing_rules": "FREE-RULE",
         }]}
-        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        profile = {"name": "Doco POS", "posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
         rp.enforce_discount_limit(invoice, profile)
         rp.assert_rates_within_band(invoice, profile)
+        sent = scenario["pricing_payload"]["lines"][0]
+        self.assertEqual(sent["rate"], 50)
+        self.assertNotIn("pricing_rules", sent)
 
     def test_no_edit_pricing_rule_zero_with_tampered_base_raises(self):
         rp = _import_reprice(_basic_scenario())
@@ -511,66 +518,43 @@ class RateBandTests(unittest.TestCase):
             rp.enforce_discount_limit(invoice, profile)
 
     def test_server_granted_free_item_still_passes(self):
-        """The same zero line passes once the server offer set actually grants
-        this item — the legitimate give-product flow is preserved."""
         scenario = _basic_scenario()
-        scenario["offers"] = [
-            {"offer": "Give Product", "give_item": "IT-1"}
-        ]
+        scenario["offers"] = [{"offer": "Give Product", "give_item": "IT-1",
+            "apply_on": "Item Code", "item": "IT-2", "min_qty": 2, "given_qty": 1}]
         rp = _import_reprice(scenario)
-        invoice = {
-            "pos_profile": "Doco POS",
-            "items": [{
-                "idx": 1, "item_code": "IT-1", "rate": 0, "is_free_item": 1,
-                "posa_is_offer": 1, "price_list_rate": 100.00,
-                "discount_percentage": 100,
-            }],
-        }
-        profile = {
-            "name": "Doco POS",
-            "posa_allow_user_to_edit_rate": 0,
-            "selling_price_list": "Doco",
-        }
+        invoice = {"pos_profile": "Doco POS", "items": [
+            {"item_code": "IT-2", "qty": 2, "rate": 50},
+            {"item_code": "IT-1", "qty": 1, "rate": 0, "is_free_item": 1,
+             "price_list_rate": 100, "discount_percentage": 100},
+        ]}
+        profile = {"name": "Doco POS", "posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
         rp.assert_rates_within_band(invoice, profile)
         rp.enforce_discount_limit(invoice, profile)
 
     def test_same_item_offer_grants_cart_item(self):
-        """A 'buy X get X free' (replace_item) offer grants the free line only
-        when the item is in the cart and matches the apply scope."""
         scenario = _basic_scenario()
-        scenario["offers"] = [{
-            "offer": "Give Product",
-            "replace_item": 1,
-            "apply_type": "Item Code",
-            "apply_item_code": "IT-1",
-        }]
+        scenario["offers"] = [{"offer": "Give Product", "replace_item": 1,
+            "apply_on": "Item Code", "item": "IT-1", "given_qty": 1, "min_qty": 1}]
         rp = _import_reprice(scenario)
-        invoice = {
-            "pos_profile": "Doco POS",
-            "items": [{
-                "idx": 1, "item_code": "IT-1", "rate": 0, "is_free_item": 1,
-                "posa_is_offer": 1, "price_list_rate": 100.00,
-                "discount_percentage": 100,
-            }],
-        }
-        profile = {
-            "name": "Doco POS",
-            "posa_allow_user_to_edit_rate": 0,
-            "selling_price_list": "Doco",
-        }
+        invoice = {"pos_profile": "Doco POS", "items": [
+            {"item_code": "IT-1", "qty": 1, "rate": 100},
+            {"item_code": "IT-1", "qty": 1, "rate": 0, "is_free_item": 1,
+             "price_list_rate": 100, "discount_percentage": 100},
+        ]}
+        profile = {"name": "Doco POS", "posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
         rp.assert_rates_within_band(invoice, profile)
 
-    def test_free_marker_fails_open_when_offer_set_unavailable(self):
-        """No server offer context (indeterminate) → preserve prior
-        client-trust so an offers-infra hiccup cannot block the counter."""
-        rp = _import_reprice(_basic_scenario())  # no "offers" key, no name
+    def test_free_marker_is_rejected_when_offer_set_unavailable(self):
+        rp = _import_reprice(_basic_scenario())
         invoice = {"items": [{
-            "idx": 1, "item_code": "IT-1", "rate": 0, "is_free_item": 1,
+            "idx": 1, "item_code": "IT-1", "rate": 0, "is_free_item": 1, "qty": 1,
             "price_list_rate": 100.00, "discount_percentage": 100,
         }]}
-        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
-        rp.assert_rates_within_band(invoice, profile)
-        rp.enforce_discount_limit(invoice, profile)
+        profile = {"name": "Doco POS", "posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(invoice, profile)
+        with self.assertRaises(_PermissionError):
+            rp.enforce_discount_limit(invoice, profile)
 
     def test_no_edit_offer_discount_passes(self):
         # Offer/pricing-rule discount is not a rate edit: declared
@@ -854,14 +838,13 @@ class RateBandOnEditableProfileTests(unittest.TestCase):
         with self.assertRaises(_PermissionError):
             rp.assert_rates_within_band(self._line(400.00), self.EDIT_PROFILE)
 
-    def test_unreadable_flag_fails_open(self):
-        """A site with this code but without the patch cannot read the
-        opt-out. Enforcing anyway would re-block the counter flow the flag
-        exists to unblock, so an unreadable flag counts as flagged."""
+    def test_unreadable_flag_cannot_grant_rate_exemption(self):
         scenario = _basic_scenario()
         scenario["skip_flag_unreadable"] = True
         rp = _import_reprice(scenario)
-        rp.assert_rates_within_band(self._line(400.00), self.EDIT_PROFILE)
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(self._line(400.00), self.EDIT_PROFILE)
+        rp.assert_rates_within_band(self._line(100.00), self.EDIT_PROFILE)
 
     # ---- per-register width ----------------------------------------------
 
@@ -921,11 +904,10 @@ class RateBandOnEditableProfileTests(unittest.TestCase):
         with self.assertRaises(_PermissionError):
             rp.assert_rates_within_band(invoice, self.EDIT_PROFILE)
 
-    def test_zero_rate_stays_the_operators_prerogative(self):
-        # Unchanged since 23ca94e6: comp / warranty lines on an editable
-        # register are not the band's business.
+    def test_zero_rate_cannot_bypass_configured_lower_price_bound(self):
         rp = _import_reprice(_basic_scenario())
-        rp.assert_rates_within_band(self._line(0), self.EDIT_PROFILE)
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(self._line(0), self.EDIT_PROFILE)
 
     def test_item_without_price_master_skips(self):
         rp = _import_reprice(_basic_scenario())

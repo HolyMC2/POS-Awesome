@@ -1,5 +1,5 @@
 import { computed, ref } from "vue";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { usePaymentMethods } from "../src/posapp/composables/pos/payments/usePaymentMethods";
 
@@ -11,6 +11,28 @@ vi.mock("../src/utils/smartTender", () => ({
 }));
 
 describe("usePaymentMethods", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
+	});
+
+	it("retains known M-Pesa modes on a failed optional refresh", async () => {
+		const call = vi.fn(({ error }) => {
+			error(new TypeError("Failed to fetch"));
+			return Promise.resolve(null);
+		});
+		vi.stubGlobal("frappe", { call });
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const methods = usePaymentMethods({
+			invoiceDoc: ref({}), posProfile: ref({ company: "Company" }),
+			stores: { toastStore: {}, uiStore: {} },
+		});
+		methods.mpesa_modes.value = ["M-Pesa"];
+		await methods.get_mpesa_modes();
+		expect(methods.mpesa_modes.value).toEqual(["M-Pesa"]);
+		expect(methods.is_mpesa_c2b_payment({ mode_of_payment: "M-Pesa", type: "Bank", amount: 10 })).toBe(true);
+	});
+
 	it("sets the selected payment method to the post-credit outstanding amount", () => {
 		const invoiceDoc = ref<any>({
 			rounded_total: 500,

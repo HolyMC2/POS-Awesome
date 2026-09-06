@@ -123,15 +123,9 @@
 	   executes top-level code. #}
 	<script src="/assets/frappe/js/lib/jquery/jquery.min.js"></script>
 
-	{# socket.io-client is marked `external` in vite.config.js
-	   (Desk provides `window.io`). Outside Desk we load the
-	   client the socket.io server itself serves at
-	   /socket.io/socket.io.js. DEFERRED (audit): a cold/slow
-	   socketio node process was gating first paint even though
-	   realtime is not needed for render — the frappe-shim reads
-	   `window.io` when realtime first connects and falls back to
-	   a dynamic import if still absent, so the race is covered. #}
-	<script defer src="/socket.io/socket.io.js"></script>
+	{# Realtime is loaded asynchronously by the shim after the application
+	   starts. A deferred classic script here would still block the module
+	   entry behind a slow socket.io server. #}
 
 	{# Entry chunk — installs the frappe-shim + mounts Vue. The chunk
 	   is built by Vite as a separate Rollup input; its hashed URL

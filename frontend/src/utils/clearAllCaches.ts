@@ -4,6 +4,7 @@ const DEFAULT_INDEXED_DB_NAMES = ["posawesome_offline"];
 // allowTransactionalDeletion — otherwise a cache-clear would erase the last
 // local copy of collected money.
 const TRANSACTIONAL_INDEXED_DB_NAMES = ["posawesome_offline"];
+const TERMINAL_IDENTITY_KEYS = new Set(["posa_device_identifier", "posa_terminal_secret"]);
 const POSAWESOME_CACHE_PREFIX = "posawesome-cache-";
 
 async function delay(ms: number) {
@@ -14,9 +15,9 @@ export async function clearLocalStorage(keys: string[] = []) {
 	if (typeof localStorage === "undefined") return;
 	try {
 		if (keys.length) {
-			keys.forEach((k) => localStorage.removeItem(k));
+			keys.filter((key) => !TERMINAL_IDENTITY_KEYS.has(key)).forEach((k) => localStorage.removeItem(k));
 		} else {
-			Object.keys(localStorage).forEach((key) =>
+			Object.keys(localStorage).filter((key) => !TERMINAL_IDENTITY_KEYS.has(key)).forEach((key) =>
 				localStorage.removeItem(key),
 			);
 		}

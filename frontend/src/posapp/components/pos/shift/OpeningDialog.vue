@@ -115,6 +115,10 @@
 								</v-data-table>
 							</v-col>
 						</v-row>
+                        <v-btn variant="text" size="small" @click="showTerminalRecovery = !showTerminalRecovery" data-test="opening-terminal-recovery">
+                            {{ __("Supervisor: authorize a replacement browser") }}
+                        </v-btn>
+                        <ShiftTerminalStatus v-if="showTerminalRecovery" />
 					</v-container>
 				</v-card-text>
 
@@ -174,6 +178,8 @@ import { createBootstrapSnapshotFromRegisterData } from "../../../../offline/boo
 import authService from "../../../services/authService";
 import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import OpeningReadiness from "./OpeningReadiness.vue";
+import ShiftTerminalStatus from "../../navbar/ShiftTerminalStatus.vue";
+import { getTerminalCredentials } from "../../../../offline/shiftTerminal";
 
 defineOptions({
 	name: "OpeningDialog",
@@ -190,6 +196,7 @@ const BUILD_VERSION = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION
 
 const isOpen = ref(props.dialog ? props.dialog : false);
 const is_loading = ref(false);
+const showTerminalRecovery = ref(false);
 // First screen of the shift: it has to be usable on the phone the cashier
 // opened the till with, not an 800px card cropped to a 360px viewport.
 const { dialogProps } = useDialogFullscreen({ maxWidth: "800px", maxHeight: "90vh" });
@@ -321,12 +328,13 @@ function submit_dialog() {
 
 	is_loading.value = true;
 
-	return frappe
+	return Promise.resolve().then(() => frappe
 		.call("posawesome.posawesome.api.shifts.create_opening_voucher", {
 			pos_profile: pos_profile.value,
 			company: company.value,
 			balance_details: payments_methods.value,
-		})
+			...getTerminalCredentials(),
+		}))
 		.then((r) => {
 			if (r.message) {
 				emit("register", r.message);

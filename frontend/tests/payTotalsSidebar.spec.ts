@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { defineComponent, h } from "vue";
-import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
+import { describe, expect, it, vi } from "vitest";
 
 import PayTotalsSidebar from "../src/posapp/components/pos_pay/PayTotalsSidebar.vue";
 
@@ -92,6 +92,10 @@ const VueDatePickerStub = defineComponent({
 	},
 });
 
+// The picker is loaded asynchronously; mock its module so this sidebar test
+// does not depend on resolving the entire calendar library before input.
+vi.mock("@vuepic/vue-datepicker", () => ({ __esModule: true, default: VueDatePickerStub }));
+
 const mountSidebar = (props: Record<string, unknown> = {}) =>
 	mount(PayTotalsSidebar, {
 		props: {
@@ -130,9 +134,6 @@ const mountSidebar = (props: Record<string, unknown> = {}) =>
 				VIcon: BoxStub,
 				VSwitch: VSwitchStub,
 			},
-			stubs: {
-				VueDatePicker: VueDatePickerStub,
-			},
 			config: {
 				globalProperties: {
 					__: (value: string) => value,
@@ -153,14 +154,13 @@ describe("PayTotalsSidebar", () => {
 		);
 	});
 
-	it("normalizes a typed reference date to backend format", () => {
-		const wrapper = mountSidebar();
+	it("normalizes a typed reference date to backend format", async () => {
+		const updateReferenceDate = vi.fn();
+		const wrapper = mountSidebar({ "onUpdate:referenceDate": updateReferenceDate });
+		await flushPromises();
 
-		wrapper.get('[data-test="reference-date-input"]');
-		const normalized = (
-			wrapper.vm as unknown as { updateReferenceDate: (_value: string) => void }
-		).updateReferenceDate("03-04-2026");
-
-		expect(normalized).toBe("2026-04-03");
+		await vi.waitFor(() => expect(wrapper.find('[data-test="reference-date-input"]').exists()).toBe(true));
+		await wrapper.get('[data-test="reference-date-input"]').setValue("03-04-2026");
+		expect(updateReferenceDate).toHaveBeenCalledWith("2026-04-03");
 	});
 });

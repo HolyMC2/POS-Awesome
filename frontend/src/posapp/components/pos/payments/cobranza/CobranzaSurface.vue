@@ -19,6 +19,7 @@
 					{{ __("Back to the list") }}
 				</v-btn>
 				<div class="cobranza__capture-target" data-testid="cobranza-capture-target">
+					<span v-if="!captureTarget">{{ __("Payments and advances") }}</span>
 					<span class="mono">{{ captureTarget?.invoiceName }}</span>
 					<span v-if="captureTarget?.customerName"> · {{ captureTarget.customerName }}</span>
 				</div>
@@ -27,6 +28,13 @@
 		</template>
 
 		<template v-else>
+			<v-btn variant="tonal" data-testid="cobranza-money-exceptions" @click="bus.emit('open_money_exceptions')">
+				{{ __("Money needing attention") }}
+			</v-btn>
+			<v-btn v-if="Number(posProfile?.posa_use_pos_awesome_payments) === 1" variant="tonal"
+				:disabled="offline" data-testid="cobranza-manual-payment" @click="openManualPayment">
+				{{ __("Payments and advances") }}
+			</v-btn>
 			<v-alert
 				v-if="errorMessage"
 				type="error"
@@ -649,6 +657,13 @@ async function collect(row: ReceivableRow) {
 	} finally {
 		collecting.value = false;
 	}
+}
+
+function openManualPayment() {
+	if (offline.value || Number(posProfile.value?.posa_use_pos_awesome_payments) !== 1) return;
+	uiStore.clearPaymentRouteTarget();
+	captureTarget.value = null;
+	step.value = "capture";
 }
 
 function backToWorklist() {

@@ -211,6 +211,7 @@ export async function runSupportedOfflineSyncResource({
 					customer,
 					watermark,
 					schemaVersion,
+					pageCursor,
 				}) =>
 					callOfflineSyncMethod(
 						"posawesome.posawesome.api.offline_sync.items.sync_items",
@@ -220,6 +221,8 @@ export async function runSupportedOfflineSyncResource({
 							customer: customer || null,
 							watermark,
 							schema_version: schemaVersion,
+							paginated: 1,
+							page_cursor: pageCursor,
 						},
 					),
 			});
@@ -231,26 +234,30 @@ export async function runSupportedOfflineSyncResource({
 		case "stock":
 			return syncStockResource({
 				...sharedArgs,
-				fetcher: ({ posProfile, watermark, schemaVersion }) =>
+				fetcher: ({ posProfile, watermark, schemaVersion, pageCursor }) =>
 					callOfflineSyncMethod(
 						"posawesome.posawesome.api.offline_sync.stock.sync_stock",
 						{
 							pos_profile: posProfile,
 							watermark,
 							schema_version: schemaVersion,
+							paginated: 1,
+							page_cursor: pageCursor,
 						},
 					),
 			});
 		case "customers":
 			return syncCustomersResource({
 				...sharedArgs,
-				fetcher: ({ posProfile, watermark, schemaVersion }) =>
+				fetcher: ({ posProfile, watermark, schemaVersion, pageCursor }) =>
 					callOfflineSyncMethod(
 						"posawesome.posawesome.api.offline_sync.customers.sync_customers",
 						{
 							pos_profile: posProfile,
 							watermark,
 							schema_version: schemaVersion,
+							paginated: 1,
+							page_cursor: pageCursor,
 						},
 					),
 			});

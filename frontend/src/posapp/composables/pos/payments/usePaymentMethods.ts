@@ -1,4 +1,5 @@
 import { ref, unref, type Ref, type ComputedRef } from "vue";
+import { getShiftTerminalContext } from "../../../../offline/shiftTerminal";
 // @ts-ignore
 import { getSmartTenderSuggestions } from "../../../../utils/smartTender";
 
@@ -61,7 +62,7 @@ export function usePaymentMethods(options: PaymentMethodsOptions) {
 		const company = unref(posProfile)?.company;
 		if (!company) return;
 
-		frappe.call({
+		return frappe.call({
 			method: "posawesome.posawesome.api.m_pesa.get_mpesa_mode_of_payment",
 			args: { company },
 			async: true,
@@ -71,6 +72,10 @@ export function usePaymentMethods(options: PaymentMethodsOptions) {
 				} else {
 					mpesa_modes.value = [];
 				}
+			},
+			error: (error: unknown) => {
+				// Discovery is optional; retain known modes when offline.
+				console.warn("Unable to refresh M-Pesa payment modes", error);
 			},
 		});
 	};
@@ -337,7 +342,7 @@ export function usePaymentMethods(options: PaymentMethodsOptions) {
 
 			const updateResponse = await frappe.call({
 				method: "posawesome.posawesome.api.invoices.update_invoice",
-				args: { data: argsData },
+				args: { data: { ...argsData, ...getShiftTerminalContext() } },
 			});
 
 			if (updateResponse?.message) {

@@ -80,6 +80,7 @@
  * `order.collectAndDeliver` by sending `orden:collect` back down the bus —
  * the same arm-and-send shape `RecargasDestination` uses for `recharge.submit`.
  */
+import { getShiftTerminalContext } from "../../../../../offline/shiftTerminal";
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 
@@ -295,6 +296,7 @@ async function collect() {
 		const response = await (window as any).frappe.call({
 			method: "posawesome.posawesome.api.charge_requests.prepare_charge_request_invoice",
 			args: {
+				...getShiftTerminalContext(),
 				name: card.name,
 				pos_profile: profile,
 				// The server resolves this with `db.exists({"name": ...})`, so it
@@ -302,6 +304,13 @@ async function collect() {
 				pos_opening_shift: uiStore.posOpeningShift?.name ?? uiStore.posOpeningShift ?? null,
 			},
 		});
+		if (response?.message?.already_charged) {
+			useToastStore().show({ title: __("This request has already been charged"),
+				message: response.message.name, color: "info" });
+			invalidateServiceOrderCounts();
+			emit("close");
+			return;
+		}
 		if (!response?.message?.name) {
 			throw new Error(__("Server returned no invoice for this order."));
 		}

@@ -65,14 +65,16 @@ const PRELOAD_CHUNK_NAMES = [
 	"ItemsSelector", // first-screen grid (lazy but immediate)
 ];
 
-function buildPreloadList(bundle, version) {
+function buildPreloadList(bundle) {
 	const seen = new Set();
 	const out = [];
 	for (const name of PRELOAD_CHUNK_NAMES) {
 		const f = getChunkFileName(bundle, name);
 		if (!f || seen.has(f)) continue;
 		seen.add(f);
-		out.push(toVersionedPublicAssetUrl(f, version));
+		// Match static imports exactly. A query string creates a second module
+		// identity even when the content-hashed filename is identical.
+		out.push(toPublicAssetUrl(f));
 	}
 	return out;
 }
@@ -89,7 +91,9 @@ function buildChunkList(bundle) {
 	const seen = new Set();
 	const out = [];
 	for (const entry of Object.values(bundle || {})) {
-		if (entry?.type !== "chunk" || typeof entry?.fileName !== "string") continue;
+		// Compiled workers are emitted as JS assets rather than chunks. Cache
+		// them too, so the first worker search also works after disconnecting.
+		if (!["chunk", "asset"].includes(entry?.type) || typeof entry?.fileName !== "string") continue;
 		if (!entry.fileName.endsWith(".js") || seen.has(entry.fileName)) continue;
 		seen.add(entry.fileName);
 		out.push(toPublicAssetUrl(entry.fileName));
@@ -108,10 +112,10 @@ export function buildVersionPayload(version, bundle = {}) {
 		version,
 		assets: {
 			loader: loaderFile
-				? toVersionedPublicAssetUrl(loaderFile, version)
+				? toPublicAssetUrl(loaderFile)
 				: toVersionedPublicAssetUrl("loader.js", version),
 			posawesome: posawesomeFile
-				? toVersionedPublicAssetUrl(posawesomeFile, version)
+				? toPublicAssetUrl(posawesomeFile)
 				: toVersionedPublicAssetUrl("posawesome.js", version),
 			css: cssFile
 				? toVersionedPublicAssetUrl(cssFile, version)
@@ -122,12 +126,12 @@ export function buildVersionPayload(version, bundle = {}) {
 			// Web-route entry (Phase 1). Hashed-stable across deploys
 			// of the same git SHA, just like every other entry chunk.
 			web_entry: webEntryFile
-				? toVersionedPublicAssetUrl(webEntryFile, version)
+				? toPublicAssetUrl(webEntryFile)
 				: toVersionedPublicAssetUrl("web-entry.js", version),
 			// Hashed URLs for `<link rel=modulepreload>` in posapp.html.
 			// Ordered roughly by criticality so the browser's network
 			// scheduler hits the boot-blockers first.
-			web_preload: buildPreloadList(bundle, version),
+			web_preload: buildPreloadList(bundle),
 			// Every emitted chunk, for the service worker's install precache.
 			chunks: buildChunkList(bundle),
 		},

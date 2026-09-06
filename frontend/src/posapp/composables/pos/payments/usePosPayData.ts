@@ -1,6 +1,7 @@
 import { ref, type Ref } from "vue";
 import { isOffline, getStoredCustomer } from "../../../../offline/index";
 import { useCustomersStore } from "../../../stores/customersStore.js";
+import { canApplyExistingCredits, matchesInvoiceDirection } from "../../../components/pos_pay/paymentModes";
 
 declare const frappe: any;
 declare const __: (_text: string, _args?: any[]) => string;
@@ -56,6 +57,7 @@ export function usePosPayData({
 		const requestToken = ++outstandingReqToken.value;
 		const requestCustomer = customerName.value;
 		const requestCompany = company.value;
+		const requestPaymentType = paymentType?.value || "Receive";
 
 		if (
 			!customerName.value ||
@@ -97,13 +99,16 @@ export function usePosPayData({
 			if (
 				requestToken !== outstandingReqToken.value ||
 				requestCustomer !== customerName.value ||
-				requestCompany !== company.value
+				requestCompany !== company.value ||
+				resolvedPartyType !== (partyType?.value || "Customer") ||
+				requestPaymentType !== (paymentType?.value || "Receive")
 			) {
 				return;
 			}
 
 			outstanding_invoices.value = Array.isArray(r.message)
-				? r.message
+				? r.message.filter((row: any) => matchesInvoiceDirection(
+					row.outstanding_amount, requestPaymentType, resolvedPartyType))
 				: [];
 		} catch {
 			if (requestToken === outstandingReqToken.value) {
@@ -118,11 +123,16 @@ export function usePosPayData({
 
 	async function get_unallocated_payments() {
 		const resolvedPartyType = partyType?.value || "Customer";
-		if (!posProfile.value.posa_allow_reconcile_payments) return;
+		if (!posProfile.value.posa_allow_reconcile_payments ||
+			!canApplyExistingCredits(paymentType?.value, resolvedPartyType)) {
+			unallocated_payments.value = [];
+			return;
+		}
 		unallocated_payments_loading.value = true;
 		const requestToken = ++unallocatedReqToken.value;
 		const requestCustomer = customerName.value;
 		const requestCompany = company.value;
+		const requestPaymentType = paymentType?.value || "Receive";
 
 		if (
 			!customerName.value ||
@@ -151,7 +161,9 @@ export function usePosPayData({
 			if (
 				requestToken !== unallocatedReqToken.value ||
 				requestCustomer !== customerName.value ||
-				requestCompany !== company.value
+				requestCompany !== company.value ||
+				resolvedPartyType !== (partyType?.value || "Customer") ||
+				requestPaymentType !== (paymentType?.value || "Receive")
 			) {
 				return;
 			}
@@ -237,7 +249,8 @@ export function usePosPayData({
 		options: AutoReconcileOptions = {},
 	) {
 		const resolvedPartyType = partyType?.value || "Customer";
-		if (!posProfile.value.posa_allow_reconcile_payments) return;
+		if (!posProfile.value.posa_allow_reconcile_payments ||
+			!canApplyExistingCredits(paymentType?.value, resolvedPartyType)) return;
 		if (!customerName.value) {
 			frappe.msgprint(__("Please select a party before reconciling."));
 			return;

@@ -492,6 +492,7 @@ export async function clearStoredItems(scope = "") {
 		await filterByScope(db.table("items"), scope).delete();
 	} catch (e) {
 		console.error("Failed to clear stored items", e);
+		throw e;
 	}
 }
 
@@ -599,6 +600,7 @@ export async function deleteStoredItemsByCodes(
 		}
 	} catch (e) {
 		console.error("Failed to delete stored items by code", e);
+		throw e;
 	}
 }
 
@@ -1203,6 +1205,7 @@ export async function clearCustomerStorage() {
 		memory.customer_storage = [];
 	} catch (e) {
 		console.error("Failed to clear customer storage", e);
+		throw e;
 	}
 }
 
@@ -1353,20 +1356,23 @@ export function clearCoupons() {
 }
 
 // Item Groups
-export function saveItemGroups(groups) {
+export function saveItemGroups(groups, scope: string | null = null) {
 	try {
-		memory.item_groups_cache = groups || [];
+		memory.item_groups_cache = scope ? { scope, groups: groups || [] } : groups || [];
 		persist("item_groups_cache");
 		refreshBootstrapSnapshotFromCacheState({
-			itemGroups: memory.item_groups_cache,
+			itemGroups: groups || [],
 		});
 	} catch (e) {
 		console.error("Failed to save item groups", e);
 	}
 }
 
-export function getCachedItemGroups() {
-	return memory.item_groups_cache || [];
+export function getCachedItemGroups(scope: string | null = null) {
+	const cached = memory.item_groups_cache;
+	if (Array.isArray(cached)) return scope ? [] : cached;
+	if (scope && cached?.scope !== scope) return [];
+	return cached?.groups || [];
 }
 
 export function clearItemGroups() {

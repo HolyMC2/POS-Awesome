@@ -32,6 +32,7 @@ export type SyncResponse<T = any> = {
 	deleted?: SyncDeleteRecord[];
 	next_watermark?: string | null;
 	has_more?: boolean;
+	next_cursor?: string | null;
 	schema_version?: string | null;
 	full_resync_required?: boolean;
 };
@@ -64,11 +65,15 @@ export type ResourceSyncResult = {
 
 export function buildScopeSignature(posProfile: SyncScopedProfile) {
 	return JSON.stringify({
+		paging_version: 1,
 		profile: posProfile?.name || null,
 		company: posProfile?.company || null,
 		warehouse: posProfile?.warehouse || null,
+		modified: posProfile?.modified || null,
 	});
 }
+
+export { fetchAllSyncPages } from "../pagination";
 
 export function resolveWatermark(
 	response: SyncResponse,

@@ -7,6 +7,7 @@ from erpnext.accounts.utils import get_account_currency
 from erpnext.setup.utils import get_exchange_rate
 from erpnext.accounts.doctype.bank_account.bank_account import get_party_bank_account
 from posawesome.posawesome.api.idempotency import doctype_supports_client_request_id
+from posawesome.posawesome.api.payment_processing.integrity import payment_amount
 from posawesome.posawesome.api.payment_processing.utils import (
     get_bank_cash_account,
     set_paid_amount_and_received_amount
@@ -30,6 +31,11 @@ def create_payment_entry(
     client_request_id=None,
     bank_account=None,
 ):
+    amount = payment_amount(amount)
+    if party_type not in ("Customer", "Supplier") or payment_type not in ("Receive", "Pay"):
+        frappe.throw(_("Unsupported payment party or direction."))
+    if exchange_rate is not None:
+        exchange_rate = payment_amount(exchange_rate)
     date = nowdate() if not posting_date else posting_date
     party = party or customer
 
@@ -50,6 +56,9 @@ def create_payment_entry(
     bank = get_bank_cash_account(company, mode_of_payment, bank_account=bank_account)
     if not bank:
         frappe.throw(_("Bank/Cash account not found for mode of payment {0}").format(mode_of_payment))
+    account = frappe.get_cached_doc("Account", bank.account)
+    if account.company != company or account.is_group or account.disabled or account.account_type not in ("Bank", "Cash"):
+        frappe.throw(_("Payment account must be an active bank or cash account in this company."), frappe.PermissionError)
 
     # Get exchange rate using the MOP bank account currency
     if exchange_rate and flt(exchange_rate) > 0:

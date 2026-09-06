@@ -533,7 +533,7 @@ export default {
 		getCustomerGroups() {
 			if (this.groups.length > 0) return;
 			const vm = this;
-			frappe.db
+			return frappe.db
 				.get_list("Customer Group", {
 					fields: ["name"],
 					filters: { is_group: 0 },
@@ -546,12 +546,15 @@ export default {
 							vm.groups.push(el.name);
 						});
 					}
+				})
+				.catch((error) => {
+					console.warn("Unable to load customer groups", error);
 				});
 		},
 		getCustomerTerritorys() {
 			if (this.territorys.length > 0) return;
 			const vm = this;
-			frappe.db
+			return frappe.db
 				.get_list("Territory", {
 					fields: ["name"],
 					filters: { is_group: 0 },
@@ -564,11 +567,14 @@ export default {
 							vm.territorys.push(el.name);
 						});
 					}
+				})
+				.catch((error) => {
+					console.warn("Unable to load customer territories", error);
 				});
 		},
 		getGenders() {
 			const vm = this;
-			frappe.db
+			return frappe.db
 				.get_list("Gender", {
 					fields: ["name"],
 					page_length: 10,
@@ -579,6 +585,9 @@ export default {
 							vm.genders.push(el.name);
 						});
 					}
+				})
+				.catch((error) => {
+					console.warn("Unable to load genders", error);
 				});
 		},
 		formatBirthdayOnInput() {

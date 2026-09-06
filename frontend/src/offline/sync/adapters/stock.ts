@@ -7,6 +7,7 @@ import {
 import { getSyncResourceState } from "../syncState";
 import {
 	buildResourceSyncResult,
+	fetchAllSyncPages,
 	buildScopeSignature,
 	persistResourceSyncState,
 	refreshSnapshotFromSync,
@@ -19,12 +20,14 @@ type StockFetcher = (args: {
 	posProfile: SyncScopedProfile;
 	watermark?: string | null;
 	schemaVersion?: string | null;
+	pageCursor?: string | null;
 }) => Promise<SyncResponse>;
 
 type StockSyncArgs = {
 	posProfile: SyncScopedProfile;
 	watermark?: string | null;
 	schemaVersion?: string | null;
+	pageCursor?: string | null;
 	fetcher: StockFetcher;
 };
 
@@ -47,8 +50,7 @@ async function hasStockScopeChanged(posProfile: SyncScopedProfile) {
 	const nextScopeSignature = buildScopeSignature(posProfile);
 	const currentState = await getSyncResourceState("stock");
 	return !!(
-		currentState?.scopeSignature &&
-		currentState.scopeSignature !== nextScopeSignature
+		currentState?.scopeSignature !== nextScopeSignature
 	);
 }
 
@@ -57,11 +59,12 @@ export async function syncStockResource(
 ): Promise<ResourceSyncResult> {
 	const scopeChanged = await hasStockScopeChanged(args.posProfile);
 	const effectiveWatermark = scopeChanged ? null : args.watermark;
-	const response = await args.fetcher({
+	const response = await fetchAllSyncPages((pageCursor) => args.fetcher({
 		posProfile: args.posProfile,
 		watermark: effectiveWatermark,
 		schemaVersion: args.schemaVersion,
-	});
+		pageCursor,
+	}));
 
 	if (response?.full_resync_required) {
 		// Reset the cursor so the next run re-pulls in full instead of

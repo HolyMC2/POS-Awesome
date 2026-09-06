@@ -88,7 +88,7 @@
 			</v-col>
 		</v-row>
 
-		<v-row v-if="posProfile.posa_allow_reconcile_payments && invoices.length && partyName" class="mb-2">
+		<v-row v-if="allowAutoReconcile && posProfile.posa_allow_reconcile_payments && invoices.length && partyName" class="mb-2">
 			<v-col md="4" cols="12" class="pb-1">
 				<v-btn
 					block
@@ -161,6 +161,7 @@ const props = defineProps({
 	selectedCount: Number,
 	loading: Boolean,
 	autoReconcileLoading: Boolean,
+	allowAutoReconcile: { type: Boolean, default: true },
 	autoReconcileSummary: String,
 	partyName: String,
 	sectionTitle: String,

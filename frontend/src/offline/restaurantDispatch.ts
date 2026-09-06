@@ -9,8 +9,9 @@
  *
  * @module offline/restaurantDispatch
  */
-import { isOffline } from "./db";
+import { isOffline, memory } from "./db";
 import { getDeviceIdentifier } from "./deviceIdentity";
+import { getShiftTerminalContext } from "./shiftTerminal";
 import { generateTableOrderRequestId } from "./idempotency";
 import { getStoredTableOrder, putStoredTableOrder } from "./restaurantOrders";
 import { enqueueRestaurantMutation } from "./restaurantQueue";
@@ -104,7 +105,9 @@ export async function dispatchOrderMutation(options: {
 	// Stamped into the STORED args too, not just the live call: on a replay the
 	// origin device is still this one, so the echo it must ignore is still its
 	// own. Every order endpoint accepts source_device.
-	const args = { ...options.args, source_device: getDeviceIdentifier() };
+	const openingShift = memory.pos_opening_storage?.pos_opening_shift?.name;
+	const args = { ...options.args, source_device: getDeviceIdentifier(),
+		...(openingShift ? { terminal_context: { opening_shift: openingShift, ...getShiftTerminalContext() } } : {}) };
 
 	if (isServerReachable()) {
 		try {

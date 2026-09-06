@@ -10,6 +10,7 @@ import {
 import { getSyncResourceState } from "../syncState";
 import {
 	buildResourceSyncResult,
+	fetchAllSyncPages,
 	buildScopeSignature,
 	persistResourceSyncState,
 	refreshSnapshotFromSync,
@@ -23,12 +24,14 @@ type CustomersFetcher = (args: {
 	posProfile: SyncScopedProfile;
 	watermark?: string | null;
 	schemaVersion?: string | null;
+	pageCursor?: string | null;
 }) => Promise<SyncResponse>;
 
 type CustomersSyncArgs = {
 	posProfile: SyncScopedProfile;
 	watermark?: string | null;
 	schemaVersion?: string | null;
+	pageCursor?: string | null;
 	fetcher: CustomersFetcher;
 };
 
@@ -53,8 +56,7 @@ async function hasCustomerScopeChanged(posProfile: SyncScopedProfile) {
 	const nextScopeSignature = buildScopeSignature(posProfile);
 	const currentState = await getSyncResourceState("customers");
 	return !!(
-		currentState?.scopeSignature &&
-		currentState.scopeSignature !== nextScopeSignature
+		currentState?.scopeSignature !== nextScopeSignature
 	);
 }
 
@@ -63,11 +65,12 @@ export async function syncCustomersResource(
 ): Promise<ResourceSyncResult> {
 	const scopeChanged = await hasCustomerScopeChanged(args.posProfile);
 	const effectiveWatermark = scopeChanged ? null : args.watermark;
-	const response = await args.fetcher({
+	const response = await fetchAllSyncPages((pageCursor) => args.fetcher({
 		posProfile: args.posProfile,
 		watermark: effectiveWatermark,
 		schemaVersion: args.schemaVersion,
-	});
+		pageCursor,
+	}));
 
 	if (response?.full_resync_required) {
 		// Reset the cursor so the NEXT run does a full pull; keeping the old

@@ -15,14 +15,17 @@
  *
  * Env: the same POSA_SMOKE_* / POSA_GOLDEN_* variables as the golden lane.
  */
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { CutProxy } from "./support/cutProxy";
 import {
 	BASE_URL,
 	POS_PATH,
 	activeRows,
+	loseFirstAck,
 	login,
+	installRegisterIdentity,
+	ensureRegisterOwnership,
 	openShiftIfAsked,
 	readInvoiceQueue,
 	serverInvoicesByRequestId,
@@ -32,7 +35,6 @@ import {
 
 const ZERO_RATE_ITEM = "Tortilla de maíz (kg)";
 const ZERO_RATE_ITEM_2 = "Leche entera 1 L";
-const SUBMIT_URL = "**/api/method/posawesome.posawesome.api.invoices.submit_invoice";
 
 test.skip(!BASE_URL, "POSA_SMOKE_BASE_URL not set — skipping the phone offline drill.");
 test.describe.configure({ mode: "serial" });
@@ -55,6 +57,7 @@ const card = (page: Page, code: string) => page.locator(`[data-testid="browse-ca
 
 /** Boot the phone register: coarse pointer, login, shift, dock visible. */
 async function openPhoneRegister(page: Page) {
+	await installRegisterIdentity(page);
 	// hasTouch alone does not flip `(pointer: coarse)` in headless Chromium,
 	// and the shell picks the phone chrome by pointer as well as by width.
 	await page.addInitScript(() => {
@@ -79,6 +82,7 @@ async function openPhoneRegister(page: Page) {
 	await page.goto(POS_PATH, { waitUntil: "domcontentloaded" });
 	await page.waitForTimeout(8_000);
 	await openShiftIfAsked(page);
+	await ensureRegisterOwnership(page);
 	await expect(page.locator('[data-testid="mobile-dock"]')).toBeVisible({ timeout: 30_000 });
 }
 
@@ -158,28 +162,6 @@ async function theQueuedSale(page: Page) {
 	return sale;
 }
 
-function loseFirstAck(page: Page, afterServerBooked?: () => void) {
-	const seen: string[] = [];
-	const handler = async (route: Route) => {
-		const body = route.request().postDataJSON() as Record<string, string> | null;
-		let requestId = "";
-		try {
-			requestId = JSON.parse(body?.invoice || "{}")?.posa_client_request_id || "";
-		} catch {
-			/* a body the register did not send as JSON is itself a finding */
-		}
-		seen.push(requestId);
-		if (seen.length > 1) return route.continue();
-		await route.fetch();
-		afterServerBooked?.();
-		await route.abort("connectionreset");
-	};
-	return {
-		install: () => page.route(SUBMIT_URL, handler),
-		uninstall: () => page.unroute(SUBMIT_URL, handler),
-		seen,
-	};
-}
 
 const overlay = (page: Page) => page.locator('[data-testid="offline-overlay"]');
 

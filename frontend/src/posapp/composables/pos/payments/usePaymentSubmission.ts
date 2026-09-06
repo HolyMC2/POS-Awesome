@@ -8,6 +8,7 @@ import {
 	updateLocalStock,
 } from "../../../../offline/index";
 import { ensureInvoiceClientRequestId } from "../../../../offline/idempotency";
+import { getShiftTerminalContext } from "../../../../offline/shiftTerminal";
 import stockCoordinator from "../../../utils/stockCoordinator";
 import { parseBooleanSetting } from "../../../utils/stock";
 import { debugLog } from "../../../utils/debug";
@@ -18,7 +19,7 @@ declare const __: (_str: string, _args?: any[]) => string;
 // Pull-model billing: drafts built from a doco POS Charge Request carry a
 // remarks marker set server-side (charge_requests.prepare_charge_request_invoice).
 // The state rides the document — no client-side ref to race or go stale.
-const CHARGE_REQUEST_MARKER = /POS Charge Request: (\S+)/;
+const CHARGE_REQUEST_MARKER = /^POS Charge Request: ([^\s]+)(?=\s·|\r?\n|$)/;
 
 // SPEC C: cashier-felt sale duration — first add on empty cart → submit
 // response (or hold-parked). Fire-and-forget; telemetry never blocks a sale.
@@ -47,7 +48,7 @@ async function markChargeRequestCharged(
 	attempt = 0,
 ): Promise<void> {
 	try {
-		await frappe.call({
+		const result = await frappe.call({
 			method: "posawesome.posawesome.api.charge_requests.mark_charge_request_charged",
 			args: {
 				name: requestName,
@@ -57,7 +58,8 @@ async function markChargeRequestCharged(
 			},
 		});
 		stores?.toastStore?.show({
-			title: __("Charge request completed"),
+			title: result?.message?.callback_status === "Complete"
+				? __("Charge request completed") : __("Payment recorded; source update pending"),
 			message: `${requestName} → ${invoiceName}`,
 			color: "success",
 		});
@@ -1091,6 +1093,7 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		}
 
 		const data = {
+			...getShiftTerminalContext(),
 			total_change: changeLimit,
 			paid_change: pChange,
 			credit_change: cChange,

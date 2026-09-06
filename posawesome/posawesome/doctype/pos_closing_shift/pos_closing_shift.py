@@ -31,6 +31,16 @@ from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.invoices
 
 class POSClosingShift(Document):
     def validate(self):
+        from posawesome.posawesome.api.shifts import lock_opening_shift
+
+        # Same first lock as cash/payment/invoice posting. Recompute only
+        # after earlier money transactions have committed; keep it to submit.
+        opening = lock_opening_shift(self.pos_opening_shift)
+        if self._action == "submit":
+            from posawesome.posawesome.api.shift_terminal import assert_verified_terminal_generation
+            terminal = assert_verified_terminal_generation(self.pos_opening_shift, self.flags.get("posa_terminal_verified_generation"))
+            if terminal.get("posa_terminal_recovery_pending"):
+                frappe.throw(_("A supervisor must review previous-terminal saved work before closing this shift."))
         user = frappe.get_all(
             "POS Closing Shift",
             filters={
@@ -51,7 +61,7 @@ class POSClosingShift(Document):
                 title=_("Invalid Period"),
             )
 
-        if frappe.db.get_value("POS Opening Shift", self.pos_opening_shift, "status") != "Open":
+        if opening.status != "Open" or int(opening.docstatus) != 1:
             frappe.throw(
                 _("Selected POS Opening Shift should be open."),
                 title=_("Invalid Opening Entry"),
@@ -80,7 +90,7 @@ class POSClosingShift(Document):
             )
             else "Sales Invoice"
         )
-        drafts = get_pending_draft_invoices(self.pos_opening_shift, doctype)
+        drafts = get_pending_draft_invoices(self.pos_opening_shift, doctype, for_update=True)
         if not drafts:
             return
         lines = "<br>".join(
@@ -114,13 +124,13 @@ class POSClosingShift(Document):
             compute_closing_tables,
         )
 
-        opening = frappe.get_doc("POS Opening Shift", self.pos_opening_shift)
+        opening = frappe.get_doc("POS Opening Shift", self.pos_opening_shift, for_update=True)
         # Header fields must match the opening shift, not the payload.
         self.user = opening.user
         self.pos_profile = opening.pos_profile
         self.company = opening.company
 
-        tables = compute_closing_tables(opening.as_dict())
+        tables = compute_closing_tables(opening.as_dict(), for_update=True)
 
         counted = {
             d.mode_of_payment: flt(d.closing_amount)

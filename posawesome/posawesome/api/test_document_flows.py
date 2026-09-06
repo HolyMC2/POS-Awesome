@@ -265,7 +265,13 @@ class TestDocumentFlows(IntegrationTestCase):
 		self.assertEqual(out["docstatus"], 1)
 
 	def test_ledger_prune_keeps_non_final(self):
-		ledger = frappe.get_doc(
+		from posawesome.posawesome.api.ledger_integrity import internal_ledger_write
+
+		def insert_ledger(data):
+			with internal_ledger_write():
+				return frappe.get_doc(data).insert(ignore_permissions=True)
+
+		ledger = insert_ledger(
 			{
 				"doctype": "POS Invoice Submission Ledger",
 				"ledger_key": f"test-prune-{int(time.time() * 1000)}",
@@ -275,8 +281,8 @@ class TestDocumentFlows(IntegrationTestCase):
 				"document_type": "Sales Invoice",
 				"state": "POST_SUBMIT_DONE",
 			}
-		).insert(ignore_permissions=True)
-		stale = frappe.get_doc(
+		)
+		stale = insert_ledger(
 			{
 				"doctype": "POS Invoice Submission Ledger",
 				"ledger_key": f"test-prune-failed-{int(time.time() * 1000)}",
@@ -286,16 +292,23 @@ class TestDocumentFlows(IntegrationTestCase):
 				"document_type": "Sales Invoice",
 				"state": "FAILED",
 			}
-		).insert(ignore_permissions=True)
+		)
+		receipt = insert_ledger({"doctype": "POS Invoice Submission Ledger",
+			"ledger_key": f"test-payment-retention-{int(time.time() * 1000)}",
+			"client_request_id": "test-prune", "company": self.company, "pos_profile": PROFILE,
+			"document_type": "POS Payment Request", "state": "POST_SUBMIT_DONE"})
 		old = add_days(today(), -90)
 		frappe.db.sql(
-			"UPDATE `tabPOS Invoice Submission Ledger` SET modified = %s WHERE name IN (%s, %s)",
-			(old, ledger.name, stale.name),
+			"UPDATE `tabPOS Invoice Submission Ledger` SET modified = %s WHERE name IN (%s, %s, %s)",
+			(old, ledger.name, stale.name, receipt.name),
 		)
 		creation.prune_submission_ledger(days=45)
 		self.assertFalse(frappe.db.exists("POS Invoice Submission Ledger", ledger.name))
 		self.assertTrue(frappe.db.exists("POS Invoice Submission Ledger", stale.name))
-		frappe.delete_doc("POS Invoice Submission Ledger", stale.name, force=True, ignore_permissions=True)
+		self.assertTrue(frappe.db.exists("POS Invoice Submission Ledger", receipt.name))
+		with internal_ledger_write():
+			for name in (stale.name, receipt.name):
+				frappe.delete_doc("POS Invoice Submission Ledger", name, force=True, ignore_permissions=True)
 
 	# ---------- Sales Order ----------
 

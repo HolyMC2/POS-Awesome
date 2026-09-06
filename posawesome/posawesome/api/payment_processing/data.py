@@ -1,4 +1,5 @@
 import frappe
+from posawesome.posawesome.api.payment_processing.integrity import authorize_payment_access
 from frappe import _
 from frappe.utils import nowdate, getdate, flt, cint
 from erpnext.accounts.party import get_party_account
@@ -24,7 +25,7 @@ def _get_open_sales_invoices(
         "customer": customer,
         "company": company,
         "docstatus": 1,
-        "outstanding_amount": (">", 0),
+        "outstanding_amount": ("!=", 0),
     }
     if currency and not include_all_currencies:
         filters["currency"] = currency
@@ -48,6 +49,7 @@ def _get_open_sales_invoices(
             "customer_name",
             "conversion_rate",
             "party_account_currency",
+            "is_return",
         ],
         order_by="posting_date desc, name desc",
     )
@@ -63,7 +65,7 @@ def _get_open_purchase_invoices(
         "supplier": supplier,
         "company": company,
         "docstatus": 1,
-        "outstanding_amount": (">", 0),
+        "outstanding_amount": ("!=", 0),
     }
     if currency and not include_all_currencies:
         filters["currency"] = currency
@@ -84,6 +86,7 @@ def _get_open_purchase_invoices(
             "supplier_name",
             "conversion_rate",
             "party_account_currency",
+            "is_return",
         ],
         order_by="posting_date desc, name desc",
     )
@@ -164,6 +167,7 @@ def get_outstanding_invoices(
 
         if not customer or not company:
             return []
+        authorize_payment_access(company, party_type, customer, pos_profile)
 
         page_start = _coerce_non_negative_int(page_start, default=0)
         page_length = _coerce_non_negative_int(page_length, default=0)
@@ -198,7 +202,7 @@ def get_outstanding_invoices(
 
             outstanding_amount = invoice_outstanding
 
-            if outstanding_amount <= 0:
+            if outstanding_amount == 0:
                 continue
 
             row_currency = invoice.get("currency") or currency
@@ -258,6 +262,7 @@ def get_outstanding_invoices(
                         )
                         or customer_name,
                         "party_type": party_type,
+                        "is_return": cint(invoice.get("is_return")),
                         "conversion_rate": conversion_rate,
                     }
                 )
@@ -276,6 +281,8 @@ def get_outstanding_invoices(
             return normalized_rows[page_start : page_start + page_length]
 
         return normalized_rows
+    except frappe.PermissionError:
+        raise
     except Exception as e:
         frappe.logger().error(f"Error in get_outstanding_invoices: {str(e)}")
         return []
@@ -301,6 +308,7 @@ def get_unallocated_payments(
 
     if not customer or not company:
         return []
+    authorize_payment_access(company, party_type, customer)
 
     label_doctype = "Supplier" if party_type == "Supplier" else "Customer"
     label_field = "supplier_name" if party_type == "Supplier" else "customer_name"
@@ -379,7 +387,8 @@ def get_unallocated_payments(
         payment["party_name"] = payment.get("customer_name")
 
     if party_type == "Supplier":
-        return unallocated_payment
+        unallocated_payment.extend(_credit_note_rows(customer, company, party_type, currency, unallocated_payment))
+        return sorted(unallocated_payment, key=lambda row: (str(row.get("posting_date") or ""), row.get("name")))
 
     # Reconciliation fetch that also includes advances linked to Sales Order,
     # not only Payment Entries with unallocated_amount > 0.
@@ -404,7 +413,9 @@ def get_unallocated_payments(
         reference_name = row.get("reference_name")
         amount = flt(row.get("amount"))
 
-        if not reference_type or not reference_name or amount <= 0:
+        # POS supports receipt advances and invoice credit notes. Journal
+        # adjustments remain available through ERPNext Desk reconciliation.
+        if reference_type not in ("Payment Entry", "Sales Invoice") or not reference_name or amount <= 0:
             continue
 
         key = (reference_type, reference_name)
@@ -414,8 +425,6 @@ def get_unallocated_payments(
         mode_of_payment_label = row.get("mode_of_payment")
         if reference_type == "Sales Invoice":
             mode_of_payment_label = _("Credit Note")
-        elif reference_type == "Journal Entry":
-            mode_of_payment_label = _("Journal Entry")
 
         unallocated_payment.append(
             {
@@ -440,126 +449,7 @@ def get_unallocated_payments(
         )
         existing_keys.add(key)
 
-    journal_conditions = [
-        "je.docstatus = 1",
-        "je.company = %(company)s",
-        "jea.party_type = 'Customer'",
-        "jea.party = %(customer)s",
-        "jea.account = %(party_account)s",
-        "(jea.reference_type IS NULL OR jea.reference_type = '' OR jea.reference_type = 'Sales Order')",
-        "(jea.reference_name IS NULL OR jea.reference_name = '')",
-        "(jea.credit_in_account_currency - jea.debit_in_account_currency) > 0",
-    ]
-    params = {
-        "company": company,
-        "customer": customer,
-        "party_account": party_account,
-    }
-
-    if currency and not include_all_currencies:
-        journal_conditions.append("jea.account_currency = %(currency)s")
-        params["currency"] = currency
-
-    journal_entries = frappe.db.sql(
-        f"""
-            SELECT
-                je.name AS name,
-                je.posting_date AS posting_date,
-                je.remark AS remarks,
-                jea.name AS reference_row,
-                jea.account AS account,
-                jea.account_currency AS currency,
-                (jea.credit_in_account_currency - jea.debit_in_account_currency) AS unallocated_amount,
-                jea.cost_center AS cost_center,
-                jea.exchange_rate AS exchange_rate,
-                jea.is_advance AS is_advance
-            FROM `tabJournal Entry` je
-            INNER JOIN `tabJournal Entry Account` jea ON jea.parent = je.name
-            WHERE {' AND '.join(journal_conditions)}
-            ORDER BY je.posting_date ASC
-        """,
-        params,
-        as_dict=True,
-    )
-
-    for journal in journal_entries:
-        amount = flt(journal.get("unallocated_amount"))
-        if amount <= 0:
-            continue
-
-        key = ("Journal Entry", journal.get("name"))
-        if key in existing_keys:
-            continue
-
-        unallocated_payment.append(
-            {
-                "name": journal.get("name"),
-                "paid_amount": amount,
-                "received_amount": amount,
-                "customer_name": customer_name,
-                "party_name": customer_name,
-                "posting_date": journal.get("posting_date"),
-                "unallocated_amount": amount,
-                "mode_of_payment": _("Journal Entry"),
-                "currency": journal.get("currency") or currency,
-                "voucher_type": "Journal Entry",
-                "is_credit_note": 0,
-                "reference_row": journal.get("reference_row"),
-                "account": journal.get("account") or party_account,
-                "remarks": journal.get("remarks"),
-                "cost_center": journal.get("cost_center"),
-                "exchange_rate": flt(journal.get("exchange_rate")) or 1,
-                "is_advance": journal.get("is_advance"),
-            }
-        )
-        existing_keys.add(key)
-
-    credit_notes = frappe.get_list(
-        "Sales Invoice",
-        filters={
-            "customer": customer,
-            "company": company,
-            "docstatus": 1,
-            "is_return": 1,
-            "outstanding_amount": ("<", 0),
-        },
-        fields=[
-            "name",
-            "posting_date",
-            "customer_name",
-            "return_against",
-            "outstanding_amount",
-            "currency",
-            "conversion_rate",
-            "remarks",
-        ],
-        order_by="posting_date asc",
-    )
-
-    for note in credit_notes:
-        outstanding_credit = abs(flt(note.outstanding_amount or 0))
-        if not outstanding_credit:
-            continue
-
-        unallocated_payment.append(
-            {
-                "name": note.name,
-                "paid_amount": outstanding_credit,
-                "received_amount": outstanding_credit,
-                "customer_name": note.customer_name,
-                "party_name": note.customer_name,
-                "posting_date": note.posting_date,
-                "unallocated_amount": outstanding_credit,
-                "mode_of_payment": _("Credit Note"),
-                "currency": note.currency or currency,
-                "voucher_type": "Sales Invoice",
-                "is_credit_note": 1,
-                "return_against": note.return_against,
-                "reference_invoice": note.return_against,
-                "conversion_rate": note.conversion_rate,
-                "remarks": note.remarks,
-            }
-        )
+    unallocated_payment.extend(_credit_note_rows(customer, company, party_type, currency, unallocated_payment))
 
     unallocated_payment = sorted(
         unallocated_payment,
@@ -570,6 +460,35 @@ def get_unallocated_payments(
     )
 
     return unallocated_payment
+
+
+def _credit_note_rows(party, company, party_type, currency, existing):
+    invoice_type = "Purchase Invoice" if party_type == "Supplier" else "Sales Invoice"
+    party_field = "supplier" if party_type == "Supplier" else "customer"
+    label_field = party_field + "_name"
+    existing_keys = {(row.get("voucher_type"), row.get("name")) for row in existing}
+    notes = frappe.get_list(invoice_type,
+        filters={party_field: party, "company": company, "docstatus": 1,
+                 "is_return": 1, "outstanding_amount": ("<", 0)},
+        fields=["name", "posting_date", label_field, "return_against", "outstanding_amount",
+                "currency", "party_account_currency", "conversion_rate", "remarks"],
+        order_by="posting_date asc")
+    result = []
+    for note in notes:
+        if (invoice_type, note.name) in existing_keys:
+            continue
+        amount = abs(flt(note.outstanding_amount))
+        if not amount:
+            continue
+        result.append(dict(name=note.name, paid_amount=amount, received_amount=amount,
+            customer_name=note.get(label_field), party_name=note.get(label_field), party_type=party_type,
+            posting_date=note.posting_date, unallocated_amount=amount,
+            mode_of_payment=_("Debit Note") if party_type == "Supplier" else _("Credit Note"),
+            currency=note.get("party_account_currency") or note.currency or currency,
+            invoice_currency=note.currency, voucher_type=invoice_type, is_credit_note=1,
+            return_against=note.return_against, reference_invoice=note.return_against,
+            conversion_rate=note.conversion_rate, remarks=note.remarks))
+    return result
 
 
 @frappe.whitelist(methods=["GET", "POST"])

@@ -20,6 +20,8 @@ const TABLE = "invoice_outbox";
 
 async function seedDeadLetter(crid: string) {
 	await db.table(TABLE).add({
+		queue_user: "cashier@example.com",
+		queue_profile: null,
 		client_request_id: crid,
 		resource: "invoice_outbox",
 		status: "dead_letter",
@@ -42,6 +44,7 @@ async function seedDeadLetter(crid: string) {
 
 describe("invoice outbox dead-letter surface", () => {
 	beforeEach(async () => {
+		(globalThis as any).frappe = { session: { user: "cashier@example.com" } };
 		await initPromise;
 		await db.table(TABLE).clear();
 		localStorage.clear();

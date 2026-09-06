@@ -349,6 +349,9 @@ def redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, c
 
 @frappe.whitelist(methods=["GET", "POST"])
 def get_available_credit(customer, company):
+    from posawesome.posawesome.api.payment_processing.integrity import authorize_payment_access
+
+    authorize_payment_access(company, "Customer", customer)
     total_credit = []
 
     outstanding_invoices = frappe.get_all(

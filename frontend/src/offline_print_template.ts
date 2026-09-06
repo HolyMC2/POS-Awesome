@@ -4,8 +4,23 @@ import {
 	memoryInitPromise,
 } from "./offline/index";
 import nunjucks from "nunjucks";
+import DOMPurify from "dompurify";
 
 declare const frappe: any;
+
+function htmlText(value: unknown) {
+	const entities: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+	return String(value ?? "").replace(/[&<>"']/g, (character) => entities[character]!);
+}
+
+function safeReceipt(html: string) {
+	// Receipts retain layout and rich terms, but never active browser content.
+	return "<!DOCTYPE html>" + DOMPurify.sanitize(html, {
+		WHOLE_DOCUMENT: true,
+		FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "base", "meta", "link"],
+		FORBID_ATTR: ["srcdoc"],
+	});
+}
 
 function normaliseTemplate(template: string) {
 	if (!template) return template;
@@ -33,18 +48,8 @@ function computePaidAmount(doc: any) {
 		0,
 	);
 
-	const creditSale =
-		doc.is_credit_sale === true ||
-		doc.is_credit_sale === 1 ||
-		doc.is_credit_sale === "1" ||
-		String(doc.is_credit_sale).toLowerCase() === "yes";
-
-	if (creditSale || paymentsTotal === 0) {
-		return 0;
-	}
-
-	const base = doc.paid_amount ?? doc.grand_total ?? 0;
-	return paymentsTotal || base;
+	// A credit sale can carry a deposit. The credit flag does not erase tender.
+	return paymentsTotal;
 }
 
 function defaultOfflineHTML(invoice: any, terms = "") {
@@ -53,7 +58,7 @@ function defaultOfflineHTML(invoice: any, terms = "") {
 	const itemsRows = (invoice.items || [])
 		.map((it: any) => {
 			const sn = it.serial_no
-				? `<div class="serial">SR.No: ${it.serial_no.replace(/\n/g, ", ")}</div>`
+				? `<div class="serial">SR.No: ${htmlText(String(it.serial_no).replace(/\n/g, ", "))}</div>`
 				: "";
 			const marker =
 				invoice.posa_show_custom_name_marker_on_print &&
@@ -61,14 +66,14 @@ function defaultOfflineHTML(invoice: any, terms = "") {
 					? " (custom)"
 					: "";
 			return `<tr>
-                <td>${it.item_code}${
+                <td>${htmlText(it.item_code)}${
 					it.item_name && it.item_name !== it.item_code
-						? `<div class="item-name">${it.item_name}${marker}</div>`
+						? `<div class="item-name">${htmlText(it.item_name)}${marker}</div>`
 						: ""
 				}${sn}</td>
-                <td class="qty">${it.qty} ${it.uom || ""}</td>
-                <td class="rate">${it.rate}</td>
-                <td class="amount">${it.amount}</td>
+                <td class="qty">${htmlText(it.qty)} ${htmlText(it.uom)}</td>
+                <td class="rate">${htmlText(it.rate)}</td>
+                <td class="amount">${htmlText(it.amount)}</td>
             </tr>`;
 		})
 		.join("");
@@ -76,8 +81,8 @@ function defaultOfflineHTML(invoice: any, terms = "") {
 	const taxesRows = (invoice.taxes || [])
 		.map(
 			(row: any) => `<tr>
-                <td style="width:60%">${row.description}@${row.rate}%</td>
-                <td style="width:40%; text-align:right;">${row.tax_amount}</td>
+                <td style="width:60%">${htmlText(row.description)}@${htmlText(row.rate)}%</td>
+                <td style="width:40%; text-align:right;">${htmlText(row.tax_amount)}</td>
             </tr>`,
 		)
 		.join("");
@@ -85,14 +90,14 @@ function defaultOfflineHTML(invoice: any, terms = "") {
 	const discountRow = invoice.discount_amount
 		? `<tr>
                 <td style="width:60%">Discount</td>
-                <td style="width:40%; text-align:right;">${invoice.discount_amount}</td>
+                <td style="width:40%; text-align:right;">${htmlText(invoice.discount_amount)}</td>
             </tr>`
 		: "";
 
 	const changeRow = invoice.change_amount
 		? `<tr>
                 <td style="width:60%">Change Amount</td>
-                <td style="width:40%; text-align:right;">${invoice.change_amount}</td>
+                <td style="width:40%; text-align:right;">${htmlText(invoice.change_amount)}</td>
             </tr>`
 		: "";
 
@@ -106,7 +111,7 @@ function defaultOfflineHTML(invoice: any, terms = "") {
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Invoice ${invoice.name || ""}</title>
+    <title>Invoice ${htmlText(invoice.name)}</title>
     <style>
         body { font-family: Arial, sans-serif; width: 80mm; margin: 0 auto; padding: 5mm; }
         .header { text-align: center; }
@@ -124,16 +129,16 @@ function defaultOfflineHTML(invoice: any, terms = "") {
 </head>
 <body>
     <div class="header">
-        <h2>${invoice.company || "Invoice"}</h2>
+        <h2>${htmlText(invoice.company || "Invoice")}</h2>
         <p><strong>${invoice.is_duplicate ? "Duplicate" : "Original"}</strong></p>
     </div>
     <div class="info">
-        <div><strong>Invoice:</strong> ${invoice.name || ""}</div>
-        <div><strong>Date:</strong> ${invoice.posting_date || ""} ${invoice.posting_time || ""}</div>
-        <div><strong>Customer:</strong> ${invoice.customer_name || invoice.customer || ""}</div>
-        <div><strong>Mobile:</strong> ${invoice.contact_mobile || ""}</div>
-        <div><strong>Additional Note:</strong> ${invoice.posa_notes || ""}</div>
-        ${invoice.posa_authorization_code ? `<div><strong>Authorization Code:</strong> ${invoice.posa_authorization_code}</div>` : ""}
+        <div><strong>Invoice:</strong> ${htmlText(invoice.name)}</div>
+        <div><strong>Date:</strong> ${htmlText(invoice.posting_date)} ${htmlText(invoice.posting_time)}</div>
+        <div><strong>Customer:</strong> ${htmlText(invoice.customer_name || invoice.customer)}</div>
+        <div><strong>Mobile:</strong> ${htmlText(invoice.contact_mobile)}</div>
+        <div><strong>Additional Note:</strong> ${htmlText(invoice.posa_notes)}</div>
+        ${invoice.posa_authorization_code ? `<div><strong>Authorization Code:</strong> ${htmlText(invoice.posa_authorization_code)}</div>` : ""}
     </div>
     <table class="items">
         <thead>
@@ -152,7 +157,7 @@ function defaultOfflineHTML(invoice: any, terms = "") {
             ${discountRow}
             <tr>
                 <td style="width:60%"><strong>Total</strong></td>
-                <td style="width:40%; text-align:right;">${invoice.grand_total}</td>
+                <td style="width:40%; text-align:right;">${htmlText(invoice.grand_total)}</td>
             </tr>
             <tr>
                 <td style="width:60%">Paid</td>
@@ -189,11 +194,11 @@ export default async function renderOfflineInvoiceHTML(invoice: any) {
 		console.warn(
 			"No offline print template cached; using fallback template",
 		);
-		return defaultOfflineHTML(doc, doc.terms_and_conditions);
+		return safeReceipt(defaultOfflineHTML(doc, doc.terms_and_conditions));
 	}
 
 	try {
-		const env = nunjucks.configure({ autoescape: false });
+		const env = new nunjucks.Environment(null, { autoescape: true });
 		env.addFilter("format_currency", (value: unknown, currency: string) => {
 			const number =
 				typeof value === "number" ? value : parseFloat(String(value));
@@ -218,15 +223,15 @@ export default async function renderOfflineInvoiceHTML(invoice: any) {
 			doc,
 			terms: doc.terms,
 			terms_and_conditions: doc.terms_and_conditions,
-			_: frappe?._ ? frappe._ : (t: string) => t,
+			_: typeof frappe !== "undefined" && frappe?._ ? frappe._ : (t: string) => t,
 			frappe: {
 				db: { get_value: () => "", sql: () => [] },
 				get_list: () => [],
 			},
 		};
-		return env.renderString(template, context);
+		return safeReceipt(env.renderString(template, context));
 	} catch (e) {
 		console.error("Failed to render offline invoice", e);
-		return defaultOfflineHTML(doc, doc.terms_and_conditions);
+		return safeReceipt(defaultOfflineHTML(doc, doc.terms_and_conditions));
 	}
 }

@@ -60,6 +60,7 @@
  */
 
 import { trackApiTiming } from "./telemetry";
+import { makeRealtime } from "./realtime-client";
 
 declare global {
 	interface Window {
@@ -315,7 +316,12 @@ async function frappeCall(
 		});
 	} catch (networkErr) {
 		__emitTiming(false);
-		if (o.error) o.error(networkErr);
+		// Match the HTTP-error contract below: callback-owned failures must
+		// not reject a second, ignored promise after the caller has handled them.
+		if (o.error) {
+			o.error(networkErr);
+			return null;
+		}
 		throw networkErr;
 	}
 
@@ -386,111 +392,6 @@ async function frappeCall(
 	return data;
 }
 
-function makeRealtime() {
-	let socket: any = null;
-	const handlers = new Map<string, Set<(...args: any[]) => void>>();
-
-	async function ensureSocket(): Promise<any> {
-		if (socket) return socket;
-		// Prefer the runtime `window.io` (the socket.io server
-		// auto-serves a matching client at /socket.io/socket.io.js,
-		// which the web-route template loads BEFORE this entry
-		// runs). Fall back to a dynamic import only when running
-		// inside the Desk shell where `io` may not have been
-		// pre-loaded — Vite's `external: ["socket.io-client"]`
-		// keeps the dynamic import out of the bundle.
-		let ioFactory: any = (window as any).io;
-		if (!ioFactory) {
-			try {
-				const mod: any = await import(
-					/* @vite-ignore */ "socket.io-client"
-				);
-				ioFactory = mod.io || mod.default || mod;
-			} catch {
-				console.warn(
-					"[POSA][shim] socket.io-client unavailable; realtime disabled",
-				);
-				return null;
-			}
-		}
-		const siteName =
-			(typeof window !== "undefined" && window.posawesome_site_name) || "";
-		const namespace = siteName ? `/${siteName}` : "";
-		const url = `${window.location.origin}${namespace}`;
-		// Mirror Desk's `socketio_client.js` connection options
-		// (apps/frappe/frappe/public/js/frappe/socketio_client.js).
-		// Earlier this shim forced `transports: ["websocket"]` which
-		// works on Desk's localhost dev server but failed silently
-		// behind nginx/Frappe-Cloud proxies that didn't forward the
-		// WebSocket Upgrade header for the /socket.io/ path → socket
-		// stayed `connected:false` forever, so every realtime event
-		// the SPA waited on timed out (45 s waitForPostSubmitPayments
-		// gap before print). Defaulting transports lets engine.io
-		// negotiate polling-first → WS upgrade, identical to Desk.
-		// No `reconnectionAttempts` cap: socket.io defaults to Infinity (it backs
-		// off exponentially, so it does not hammer), which is what Desk uses. An
-		// earlier cap of 3 (~8s of trying) meant a till in the FOREGROUND on a
-		// wifi whose uplink flaps — navigator.onLine stays true, the tab stays
-		// visible, so no `online`/`visibilitychange` re-arm fires — burned its
-		// three attempts and the socket was dead for the rest of the shift:
-		// waitForInvoiceProcessed then takes its optimistic early-return, submit
-		// errors never toast, and stock broadcasts stop (audit RUNTIME-F3).
-		const ioOpts: Record<string, unknown> = {
-			withCredentials: true,
-		};
-		if (window.location.protocol === "https:") {
-			ioOpts.secure = true;
-		}
-		socket = ioFactory(url, ioOpts);
-		// Re-attach all pending handlers when the socket settles.
-		for (const [event, set] of handlers.entries()) {
-			set.forEach((cb) => socket.on(event, cb));
-		}
-		// Surface connect-time errors. Earlier the silent
-		// `connected:false` state was invisible because no
-		// `connect_error` listener was attached.
-		socket.on("connect_error", (err: any) => {
-			console.warn(
-				"[POSA][shim] socket connect_error:",
-				err?.message || err,
-			);
-		});
-		return socket;
-	}
-
-	return {
-		get socket() {
-			return socket;
-		},
-		on(event: string, cb: (...args: any[]) => void) {
-			let set = handlers.get(event);
-			if (!set) {
-				set = new Set();
-				handlers.set(event, set);
-			}
-			set.add(cb);
-			ensureSocket().then((s) => {
-				if (s) s.on(event, cb);
-			});
-		},
-		off(event: string, cb?: (...args: any[]) => void) {
-			const set = handlers.get(event);
-			if (set) {
-				if (cb) set.delete(cb);
-				else set.clear();
-			}
-			if (socket) {
-				if (cb) socket.off(event, cb);
-				else socket.off(event);
-			}
-		},
-		emit(event: string, ...args: any[]) {
-			ensureSocket().then((s) => {
-				if (s) s.emit(event, ...args);
-			});
-		},
-	};
-}
 
 function makeClient() {
 	return {

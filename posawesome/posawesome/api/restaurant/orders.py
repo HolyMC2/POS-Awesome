@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 
 import frappe
+from posawesome.posawesome.api.shift_terminal import assert_order_terminal
 from frappe import _
 from frappe.utils import cint, flt
 
@@ -178,6 +179,7 @@ def open_table_order(
     customer=None,
     source_device=None,
     new_account=None,
+    terminal_context=None,
 ):
     """Seat a table (or open a named tab). Tapping IS the transition.
 
@@ -195,6 +197,7 @@ def open_table_order(
         assert_profile,
     )
 
+    assert_order_terminal(pos_profile, terminal_context)
     assert_profile(frappe.session.user, pos_profile)
     assert_company(frappe.session.user, company)
     assert_customer_in_profile(frappe.session.user, customer, pos_profile)
@@ -301,6 +304,7 @@ def update_table_order(
     service_type=None,
     customer=None,
     source_device=None,
+    terminal_context=None,
 ):
     """Merge a device's view of the ticket into the server's.
 
@@ -308,6 +312,7 @@ def update_table_order(
     caller asked to drop that were already fired.
     """
     doc = get_scoped_order(name_or_uid)
+    assert_order_terminal(doc.pos_profile, terminal_context)
     assert_tables_capability(doc.pos_profile)
 
     # A retried request must not append its lines a second time. The id of
@@ -351,7 +356,7 @@ def update_table_order(
 
 
 @frappe.whitelist(methods=["POST"])
-def transfer_table_order(name_or_uid, to_table, client_request_id=None, source_device=None):
+def transfer_table_order(name_or_uid, to_table, client_request_id=None, source_device=None, terminal_context=None):
     """Move a ticket to an EMPTY table. Merge is phase 2.
 
     Transfer is trivial precisely because table status is derived: reparent
@@ -359,6 +364,7 @@ def transfer_table_order(name_or_uid, to_table, client_request_id=None, source_d
     a second invisible order for the same party, so it throws.
     """
     doc = get_scoped_order(name_or_uid)
+    assert_order_terminal(doc.pos_profile, terminal_context)
     assert_tables_capability(doc.pos_profile)
 
     if doc.status != OPEN_STATUS:
@@ -398,9 +404,10 @@ def transfer_table_order(name_or_uid, to_table, client_request_id=None, source_d
 
 
 @frappe.whitelist(methods=["POST"])
-def cancel_table_order(name_or_uid, client_request_id=None, source_device=None):
+def cancel_table_order(name_or_uid, client_request_id=None, source_device=None, terminal_context=None):
     """Release the table. Cancelled orders keep their FK for reporting."""
     doc = get_scoped_order(name_or_uid)
+    assert_order_terminal(doc.pos_profile, terminal_context)
     assert_tables_capability(doc.pos_profile)
 
     if doc.status == "Cancelled":

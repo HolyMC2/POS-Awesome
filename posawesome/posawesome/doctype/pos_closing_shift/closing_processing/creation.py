@@ -82,7 +82,7 @@ def normalize_pos_payment_references(closing_shift_doc):
         closing_shift_doc.flags.ignore_mandatory = True
 
 
-def compute_closing_tables(opening_shift, doctype=None):
+def compute_closing_tables(opening_shift, doctype=None, for_update=False):
     """Recompute every server-derivable closing-shift table from DB truth.
 
     `opening_shift` is a dict (POS Opening Shift as_dict or the client's
@@ -115,7 +115,8 @@ def compute_closing_tables(opening_shift, doctype=None):
         or "Cash"
     )
 
-    invoices = get_pos_invoices(opening_shift.get("name"), doctype, submit_printed=0)
+    current_read = {"for_update": True} if for_update else {}
+    invoices = get_pos_invoices(opening_shift.get("name"), doctype, submit_printed=0, **current_read)
 
     pos_transactions = []
     taxes = []
@@ -197,7 +198,7 @@ def compute_closing_tables(opening_shift, doctype=None):
                     )
                 )
 
-    pos_payments = get_payments_entries(opening_shift.get("name"))
+    pos_payments = get_payments_entries(opening_shift.get("name"), **current_read)
 
     for py in pos_payments:
         pos_payments_table.append(build_pos_payment_reference(py))
@@ -217,10 +218,12 @@ def compute_closing_tables(opening_shift, doctype=None):
                 )
             )
 
-    cash_movements = frappe.get_all(
+    cash_getter = frappe.db.get_values if for_update else frappe.get_all
+    cash_movements = cash_getter(
         "POS Cash Movement",
         filters={"pos_opening_shift": opening_shift.get("name"), "docstatus": 1},
-        fields=["movement_type", "amount"],
+        **({"fieldname": ["movement_type", "amount"], "as_dict": True, "for_update": True}
+           if for_update else {"fields": ["movement_type", "amount"]}),
     )
     # Signed: Expense/Deposit remove drawer cash, Cash In (change fund) adds.
     cash_movement_delta = sum(
@@ -296,8 +299,7 @@ def make_closing_shift_from_opening(opening_shift):
     }
 
 
-@frappe.whitelist()
-def submit_closing_shift(closing_shift):
+def _submit_closing_shift(closing_shift, terminal_id=None, terminal_generation=None, terminal_token=None):
     closing_shift = json.loads(closing_shift)
     opening_shift = frappe.get_doc(
         "POS Opening Shift", closing_shift.get("pos_opening_shift")
@@ -312,9 +314,22 @@ def submit_closing_shift(closing_shift):
             frappe.PermissionError,
         )
 
+    from posawesome.posawesome.api.shift_terminal import assert_terminal_access
+    terminal = assert_terminal_access(opening_shift.name, terminal_id, terminal_generation, terminal_token,
+                                      acting_user=opening_shift.user)
+    if terminal.get("posa_terminal_recovery_pending"):
+        frappe.throw(_("A supervisor must review previous-terminal saved work before closing this shift."))
     closing_shift_doc = frappe.get_doc(closing_shift)
+    closing_shift_doc.flags.posa_terminal_verified_generation = terminal.posa_terminal_generation
     closing_shift_doc.flags.ignore_permissions = True
     normalize_pos_payment_references(closing_shift_doc)
     closing_shift_doc.save()
     closing_shift_doc.submit()
     return closing_shift_doc.name
+
+
+@frappe.whitelist(methods=["POST"])
+def submit_closing_shift(closing_shift, terminal_id=None, terminal_generation=None, terminal_token=None):
+    from posawesome.posawesome.api.payment_processing.integrity import retry_before_financial_writes
+    return retry_before_financial_writes(_submit_closing_shift, closing_shift,
+                                         terminal_id, terminal_generation, terminal_token)

@@ -1,3 +1,4 @@
+import { ownsQueueEntry } from "./queueOwnership";
 /**
  * Write queue for table-order mutations.
  *
@@ -377,6 +378,7 @@ export async function syncRestaurantOrders(): Promise<RestaurantDrainTotals> {
 		let orderBlocked = false;
 
 		for (const entry of entries) {
+			if (!ownsQueueEntry(entry)) break;
 			const queueId = Number(entry.queue_id);
 
 			if (orderBlocked) {
@@ -435,6 +437,7 @@ export async function syncRestaurantOrders(): Promise<RestaurantDrainTotals> {
 				// the only copy of any lines another waiter merged in (§6.1).
 				// applyServerOrder normalises both response shapes (order_payload
 				// with `items`, and settle's docname-string `order`).
+				if (!ownsQueueEntry(entry)) break;
 				await applyServerOrder(unwrapMessage(response), payload.order_uid);
 				synced += 1;
 				await markWriteQueueEntrySynced(

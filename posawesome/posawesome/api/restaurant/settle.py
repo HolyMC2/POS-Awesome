@@ -287,9 +287,12 @@ def settle_table_order(
     invoice_payload=None,
     source_device=None,
     tip_amount=0,
+    terminal_context=None,
 ):
     """Materialise + submit the accounting document for an open ticket."""
     order = get_scoped_order(name_or_uid)
+    from posawesome.posawesome.api.shift_terminal import assert_order_terminal
+    terminal = assert_order_terminal(order.pos_profile, terminal_context)
     assert_tables_capability(order.pos_profile)
 
     if order.status == "Settled":
@@ -306,6 +309,8 @@ def settle_table_order(
     payload = _parse_payload(invoice_payload)
     invoice = _build_invoice(order, payload, client_request_id, tip_amount)
     submit_data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    invoice["posa_pos_opening_shift"] = terminal["opening_shift"]
+    submit_data.update({key: terminal[key] for key in ("terminal_id", "terminal_generation", "terminal_token")})
 
     frappe.db.set_value("POS Table Order", order.name, "status", SETTLING_STATUS)
     order.status = SETTLING_STATUS
@@ -321,7 +326,9 @@ def settle_table_order(
         # the document is the till's own draft (`_resumable_till_draft` kept its
         # name above) or one settle mints because the payload named nothing we
         # could verify.
-        draft = creation.update_invoice(json.dumps(invoice, default=str))
+        draft = creation.update_invoice(json.dumps({**invoice, **{
+            key: terminal[key] for key in ("terminal_id", "terminal_generation", "terminal_token")
+        }}, default=str))
         invoice["name"] = (draft or {}).get("name")
         result = creation.submit_invoice(json.dumps(invoice, default=str), json.dumps(submit_data, default=str))
     except Exception:

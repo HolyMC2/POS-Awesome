@@ -1,5 +1,9 @@
 import { checkDbHealth, db, initPromise, memory, persist, safeBulkPut } from "./db";
 
+import { assertQueueOwner, captureQueueOwner, ownsQueueEntry, type QueueOwner } from "./queueOwnership";
+import { refreshQueueMemory } from "./writeQueue";
+import { assertTerminalEnqueueAllowed, stampTerminalPayload } from "./shiftTerminal";
+
 type AnyRecord = Record<string, any>;
 
 export type InvoiceOutboxMode = "off" | "dual_write" | "coordinator";
@@ -10,7 +14,7 @@ export type InvoiceOutboxStatus =
 	| "acknowledged"
 	| "dead_letter";
 
-export interface InvoiceOutboxEntry {
+export interface InvoiceOutboxEntry extends Partial<QueueOwner> {
 	outbox_id?: number;
 	client_request_id: string;
 	resource?: "invoice_outbox";
@@ -25,6 +29,10 @@ export interface InvoiceOutboxEntry {
 	last_error: string | null;
 	invoice_name: string | null;
 	acknowledged_at: string | null;
+	/** Old acknowledgements are not proof of a submitted server document. */
+	server_verified?: boolean;
+	/** Recovery may verify existing identity, but must never create a sale. */
+	reconcile_only?: boolean;
 	// operator-driven dead-letter requeues (SPEC A); no auto-retry cap
 	requeue_count?: number;
 }
@@ -88,25 +96,31 @@ function getClientRequestId(entry: AnyRecord) {
 }
 
 export async function enqueueInvoiceOutboxEntry(entry: AnyRecord) {
+	const owner = captureQueueOwner(entry);
 	await ensureOutboxReady();
+	assertQueueOwner(owner);
 	const cleanEntry = cloneSerializable(entry);
+	stampTerminalPayload(cleanEntry);
 	const clientRequestId = getClientRequestId(cleanEntry);
 	if (!clientRequestId) {
 		throw new Error("Invoice outbox entry requires a client_request_id");
 	}
 
 	const table = db.table(TABLE);
-	return db.transaction("rw", table, async () => {
+	return db.transaction("rw", table, db.table("keyval"), async () => {
+		await assertTerminalEnqueueAllowed(cleanEntry);
 		const existing = (await table
 			.where("client_request_id")
 			.equals(clientRequestId)
 			.first()) as InvoiceOutboxEntry | undefined;
 		if (existing) {
+			assertQueueOwner(existing);
 			return existing;
 		}
 
 		const timestamp = nowIso();
 		const outboxEntry: InvoiceOutboxEntry = {
+			...owner,
 			client_request_id: clientRequestId,
 			resource: "invoice_outbox",
 			status: "pending",
@@ -121,6 +135,7 @@ export async function enqueueInvoiceOutboxEntry(entry: AnyRecord) {
 			invoice_name: null,
 			acknowledged_at: null,
 		};
+		assertQueueOwner(owner);
 		const outboxId = await table.add(outboxEntry);
 		return { ...outboxEntry, outbox_id: outboxId };
 	});
@@ -135,7 +150,8 @@ export async function getInvoiceOutboxRows(
 		.orderBy("created_at")
 		.toArray()) as InvoiceOutboxEntry[];
 	return rows.filter(
-		(row) => options.includeTerminal || !TERMINAL_STATUSES.has(row.status),
+		(row) => ownsQueueEntry(row) && (options.includeTerminal ||
+			(row.status === "acknowledged" && row.server_verified !== true) || !TERMINAL_STATUSES.has(row.status)),
 	);
 }
 
@@ -156,7 +172,7 @@ export async function getDeadLetterRows() {
 		.table(TABLE)
 		.orderBy("created_at")
 		.toArray()) as InvoiceOutboxEntry[];
-	return rows.filter((row) => row.status === "dead_letter");
+	return rows.filter((row) => ownsQueueEntry(row) && row.status === "dead_letter");
 }
 
 export async function getDeadLetterCount() {
@@ -167,7 +183,7 @@ export async function requeueDeadLetterEntry(clientRequestId: string) {
 	await ensureOutboxReady();
 	const rows = (await db.table(TABLE).toArray()) as InvoiceOutboxEntry[];
 	const row = rows.find(
-		(r) => r.client_request_id === clientRequestId && r.status === "dead_letter",
+		(r) => ownsQueueEntry(r) && r.client_request_id === clientRequestId && r.status === "dead_letter",
 	);
 	if (!row) return null;
 	const updated: InvoiceOutboxEntry = {
@@ -179,6 +195,7 @@ export async function requeueDeadLetterEntry(clientRequestId: string) {
 		// keep retry history visible; the operator loop has no auto-retry cap
 		requeue_count: Number((row as AnyRecord).requeue_count || 0) + 1,
 	} as InvoiceOutboxEntry;
+	assertQueueOwner(updated);
 	await safeBulkPut(TABLE, [updated]);
 	return updated;
 }
@@ -194,11 +211,15 @@ export async function exportDeadLetterEntry(clientRequestId: string) {
 		retry_count: row.retry_count,
 		last_error: row.last_error,
 		created_at: row.created_at,
+		invoice_name: row.invoice_name,
+		reconcile_only: row.reconcile_only === true,
 	});
 }
 
 function shouldAttempt(row: InvoiceOutboxEntry) {
+	if (row.status === "acknowledged" && row.server_verified !== true) return true;
 	if (TERMINAL_STATUSES.has(row.status)) return false;
+	if (row.status === "syncing" && Date.now() - Date.parse(row.updated_at) < 5 * 60_000) return false;
 	if (!row.next_retry_at) return true;
 	const nextRetryAt = Date.parse(row.next_retry_at);
 	return !Number.isFinite(nextRetryAt) || nextRetryAt <= Date.now();
@@ -220,6 +241,7 @@ function markOutboxAcknowledged(
 		resource: "invoice_outbox" as const,
 		updated_at: timestamp,
 		acknowledged_at: timestamp,
+		server_verified: true,
 		last_error: null,
 		next_retry_at: null,
 		nextAttemptAt: null,
@@ -258,33 +280,56 @@ export async function syncInvoiceOutboxResource(
 	) => Promise<any>,
 ) {
 	await ensureOutboxReady();
-	const rows = await getInvoiceOutboxRows();
 	let acknowledged = 0;
 	let failed = 0;
 	const claimTimestamp = nowIso();
-	const attemptRows = rows.filter((row) => shouldAttempt(row));
-	const claimedRows: InvoiceOutboxEntry[] = attemptRows.map((row) => ({
-		...row,
-		resource: "invoice_outbox" as const,
-		status: "syncing" as InvoiceOutboxStatus,
-		updated_at: claimTimestamp,
-		nextAttemptAt: row.next_retry_at || null,
-	}));
-	if (claimedRows.length) {
-		await safeBulkPut(TABLE, claimedRows);
-	}
+	const table = db.table(TABLE);
+	const claimedRows = await db.transaction("rw", table, async () => {
+		const rows = await table.orderBy("created_at").toArray() as InvoiceOutboxEntry[];
+		const claimed: InvoiceOutboxEntry[] = [];
+		for (const row of rows) {
+			if (!ownsQueueEntry(row) || !shouldAttempt(row)) continue;
+			const next: InvoiceOutboxEntry = {
+				...row, resource: "invoice_outbox", status: "syncing",
+				reconcile_only: row.reconcile_only === true || (row.status === "acknowledged" && row.server_verified !== true),
+				updated_at: claimTimestamp, nextAttemptAt: row.next_retry_at || null,
+			};
+			await table.put(next);
+			claimed.push(next);
+		}
+		return claimed;
+	});
 	const finalRows: InvoiceOutboxEntry[] = [];
 
 	for (const claimed of claimedRows) {
+		if (!ownsQueueEntry(claimed)) break;
 		try {
+			const documentType = claimed.invoice?.doctype || "Sales Invoice";
+			if (claimed.reconcile_only && (!claimed.invoice?.company || !claimed.invoice?.pos_profile)) {
+				throw new Error("Saved acknowledgement is missing company or POS profile; manager review is required");
+			}
 			const response = await callOfflineSyncMethod(
-				"posawesome.posawesome.api.offline_sync.invoices.submit_invoice_outbox_entry",
-				{
+				`posawesome.posawesome.api.offline_sync.invoices.${claimed.reconcile_only ? "reconcile_invoice_outbox_entry" : "submit_invoice_outbox_entry"}`,
+				claimed.reconcile_only ? {
+					client_request_id: claimed.client_request_id,
+					company: claimed.invoice.company,
+					pos_profile: claimed.invoice.pos_profile,
+					document_type: documentType,
+				} : {
 					client_request_id: claimed.client_request_id,
 					invoice: claimed.invoice,
 					data: claimed.data,
 				},
 			);
+			if (claimed.reconcile_only && (response?.client_request_id !== claimed.client_request_id ||
+				!response?.invoice?.name || response.invoice.doctype !== documentType ||
+				(claimed.invoice_name && response.invoice.name !== claimed.invoice_name))) {
+				throw new Error("Reconciled invoice identity does not match saved work; manager review is required");
+			}
+			const docstatus = response?.invoice?.docstatus ?? response?.docstatus;
+			if (Number(docstatus) !== 1) {
+				throw new Error("Invoice outbox document is not submitted; sync or review is still required");
+			}
 			if (response?.acknowledged || response?.invoice || response?.name) {
 				finalRows.push(markOutboxAcknowledged(claimed, response || {}));
 				acknowledged += 1;
@@ -297,7 +342,27 @@ export async function syncInvoiceOutboxResource(
 		}
 	}
 	if (finalRows.length) {
-		await safeBulkPut(TABLE, finalRows);
+		const queue = db.table("write_queue");
+		await db.transaction("rw", table, queue, async () => {
+			const mirrors = await queue.where("entity_type").equals("invoice").toArray();
+			for (const result of finalRows) {
+				const current = await table.get(result.outbox_id);
+				if (current && ownsQueueEntry(current) && current.status === "syncing" &&
+					current.updated_at === claimTimestamp) {
+					await table.put(result);
+					if (result.status !== "acknowledged") continue;
+					// Coordinator mode writes both queues. Complete the same request
+					// atomically, so a successful sale cannot remain pending forever.
+					for (const mirror of mirrors) {
+						if (!ownsQueueEntry(mirror) || mirror.queue_user !== result.queue_user ||
+							mirror.queue_profile !== result.queue_profile ||
+							mirror.payload?.invoice?.posa_client_request_id !== result.client_request_id) continue;
+						await queue.put({ ...mirror, status: "synced", last_error: null, next_attempt_at: null });
+					}
+				}
+			}
+		});
+		await refreshQueueMemory("invoice");
 	}
 
 	const pending = await getPendingInvoiceOutboxCount();

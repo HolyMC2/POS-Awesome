@@ -1,9 +1,12 @@
+import { ownsQueueEntry } from "./queueOwnership";
 import { isOffline } from "./db";
 import { syncOfflineCustomers } from "./customers";
 import {
 	claimRetryableQueueEntries,
 	clearWriteQueueEntries,
 	deleteWriteQueueEntryByIndex,
+	deleteWriteQueueEntry,
+	getQueueEntries,
 	enqueueWriteQueueEntry,
 	getQueuedPayloadCount,
 	getQueuedPayloadSnapshots,
@@ -19,7 +22,7 @@ const PAYMENT_ENTITY: OfflineEntityType = "payment";
 function prepareOfflinePaymentEntry(entry: AnyRecord) {
 	const nextEntry = JSON.parse(JSON.stringify(entry));
 
-	if (nextEntry?.args?.payload?.pos_profile) {
+	if (nextEntry?.args?.payload?.pos_profile && typeof nextEntry.args.payload.pos_profile === "object") {
 		const profile = nextEntry.args.payload.pos_profile;
 		nextEntry.args.payload.pos_profile = {
 			posa_use_pos_awesome_payments:
@@ -50,6 +53,59 @@ export async function saveOfflinePayment(entry: AnyRecord) {
 
 export function getOfflinePayments() {
 	return getQueuedPayloadSnapshots(PAYMENT_ENTITY);
+}
+
+export async function getPendingAdvanceRefund(originalPayment: string) {
+	const entries = await getQueueEntries(PAYMENT_ENTITY);
+	const matches = entries.filter((entry) => entry.payload?.args?.payload?.operation === "refund_customer_advance"
+		&& entry.payload.args.payload.original_payment_entry === originalPayment);
+	if (matches.length > 1) throw new Error(__("Multiple pending refunds need review before another refund."));
+	return matches[0] || null;
+}
+
+function verifyPaymentResult(result: AnyRecord) {
+	// The processor deliberately returns HTTP 200 for partial failures so
+	// successful tenders can commit. HTTP success alone cannot acknowledge
+	// the queued intent: its original ID must survive for the remaining work.
+	const submitted = (entry: AnyRecord) => entry && typeof entry.name === "string" &&
+		entry.name.length > 0 && Number(entry.docstatus) === 1;
+	if (!result || !Array.isArray(result.errors) || result.errors.length ||
+		!Array.isArray(result.new_payments_entry) || !Array.isArray(result.all_payments_entry) ||
+		!Array.isArray(result.reconciled_payments) || !result.all_payments_entry.length ||
+		!result.all_payments_entry.every(submitted) || !result.new_payments_entry.every(submitted) ||
+		!result.reconciled_payments.every((entry: AnyRecord) => entry &&
+			typeof entry.payment_entry === "string" && entry.payment_entry.length > 0 &&
+			Number.isFinite(Number(entry.allocated_amount)) && Number(entry.allocated_amount) > 0)) {
+		throw new Error(__("Payment is not fully confirmed. Keep the original request and review pending payments before retrying."));
+	}
+}
+
+function verifyAdvanceRefundResult(payload: AnyRecord, result: AnyRecord) {
+	if (Number(result?.docstatus) !== 1 || !result?.refund_payment_entry ||
+		result?.client_request_id !== payload.client_request_id ||
+		result?.original_payment_entry !== payload.original_payment_entry ||
+		!Number.isFinite(Number(result?.refunded_amount)) ||
+		Math.abs(Number(result.refunded_amount) - Number(payload.amount)) > 0.0001) {
+		throw new Error(__("Refund is not confirmed. Check pending payments before handing out cash."));
+	}
+}
+
+/** Persist the confirmed intent before HTTP; an uncertain result keeps its ID. */
+export async function submitAdvanceRefund(payload: AnyRecord) {
+	if (isOffline()) throw new Error(__("Reconnect to refund an unused advance."));
+	const pending = await getPendingAdvanceRefund(payload.original_payment_entry);
+	if (pending && pending.payload.args.payload.client_request_id !== payload.client_request_id) {
+		throw new Error(__("Review the existing pending refund before starting another."));
+	}
+	const entry = pending || await saveOfflinePayment({ args: { payload } });
+	const saved = entry.payload.args.payload;
+	const response = await frappe.call({
+		method: "posawesome.posawesome.api.payment_entry.process_pos_payment",
+		args: { payload: saved },
+	});
+	verifyAdvanceRefundResult(saved, response?.message);
+	await deleteWriteQueueEntry(PAYMENT_ENTITY, Number(entry.queue_id));
+	return response.message;
 }
 
 export async function clearOfflinePayments() {
@@ -83,11 +139,17 @@ export async function syncOfflinePayments() {
 	let synced = 0;
 
 	for (const entry of claimedEntries) {
+		if (!ownsQueueEntry(entry)) break;
 		try {
-			await frappe.call({
+			const response = await frappe.call({
 				method: "posawesome.posawesome.api.payment_entry.process_pos_payment",
 				args: entry.payload.args,
 			});
+			if (entry.payload.args?.payload?.operation === "refund_customer_advance") {
+				verifyAdvanceRefundResult(entry.payload.args.payload, response?.message);
+			} else {
+				verifyPaymentResult(response?.message);
+			}
 			synced += 1;
 			await markWriteQueueEntrySynced(
 				PAYMENT_ENTITY,

@@ -4,6 +4,10 @@ import {
 	ensurePaymentClientRequestId,
 } from "./idempotency";
 
+import { checkStoragePersistence } from "./storagePersistence";
+import { assertTerminalEnqueueAllowed, stampTerminalPayload } from "./shiftTerminal";
+import { assertQueueOwner, captureQueueOwner, ownsQueueEntry, canRecoverLegacyQueue, queueOwnershipError, type QueueOwner } from "./queueOwnership";
+
 type AnyRecord = Record<string, any>;
 
 export type OfflineEntityType =
@@ -22,7 +26,9 @@ export type OfflineQueueStatus =
 	| "resolved"
 	| "synced";
 
-export interface OfflineQueueEntry {
+export interface OfflineQueueEntry extends Partial<QueueOwner> {
+	/** Enqueue result only; never persisted. False means an existing request was reused. */
+	queue_created?: boolean;
 	queue_id?: number;
 	entity_type: OfflineEntityType;
 	resource?: OfflineEntityType;
@@ -336,6 +342,8 @@ function toPublicSnapshot(entry: OfflineQueueEntry) {
 	return {
 		...cloneSerializable(entry.payload),
 		queue_id: entry.queue_id,
+		queue_user: entry.queue_user,
+		queue_profile: entry.queue_profile,
 		entity_type: entry.entity_type,
 		created_at: entry.created_at,
 		last_attempt_at: entry.last_attempt_at,
@@ -387,6 +395,7 @@ export async function getQueueEntries(
 		.sortBy("created_at")) as OfflineQueueEntry[];
 
 	return rows.filter((row) => {
+		if (!ownsQueueEntry(row)) return false;
 		if (options.statuses?.length) {
 			return options.statuses.includes(row.status);
 		}
@@ -413,21 +422,26 @@ export async function refreshAllQueueMemory() {
 async function enqueueWriteQueueEntryInternal(
 	entityType: OfflineEntityType,
 	payload: AnyRecord,
-	options: { idempotencyKey?: string } = {},
+	options: { idempotencyKey?: string; owner?: QueueOwner | null } = {},
 ) {
+	const owner = options.owner === undefined ? captureQueueOwner(payload) : options.owner;
 	const normalizedPayload = normalizePayload(entityType, payload);
-	const idempotencyKey =
-		options.idempotencyKey || deriveIdempotencyKey(entityType, normalizedPayload);
+	if (owner && entityType !== "customer") stampTerminalPayload(normalizedPayload);
+	const baseKey = options.idempotencyKey || deriveIdempotencyKey(entityType, normalizedPayload);
+	const idempotencyKey = owner ? `${baseKey}:scope:${JSON.stringify([owner.queue_user, owner.queue_profile])}` : `legacy:${baseKey}`;
 
 	const table = db.table(WRITE_QUEUE_TABLE);
-	const queuedEntry = await db.transaction("rw", table, async () => {
+	const queuedEntry = await db.transaction("rw", table, db.table("keyval"), async () => {
+		if (owner) assertQueueOwner(owner);
+		if (owner && entityType !== "customer") await assertTerminalEnqueueAllowed(normalizedPayload);
 		const existing = (await table
 			.where("idempotency_key")
 			.equals(idempotencyKey)
 			.first()) as OfflineQueueEntry | undefined;
 
 		if (existing) {
-			if (isCustomerUpdateKey(entityType, idempotencyKey)) {
+			if (owner) assertQueueOwner(existing);
+			if (isCustomerUpdateKey(entityType, baseKey)) {
 				const coalescedEntry = buildCoalescedQueueEntry(
 					existing,
 					normalizedPayload,
@@ -446,10 +460,11 @@ async function enqueueWriteQueueEntryInternal(
 				return coalescedEntry;
 			}
 
-			return existing;
+			return { ...existing, queue_created: false };
 		}
 
 		const entry: OfflineQueueEntry = {
+			...(owner || {}),
 			entity_type: entityType,
 			resource: entityType,
 			payload: normalizedPayload,
@@ -463,10 +478,13 @@ async function enqueueWriteQueueEntryInternal(
 		};
 
 		const queueId = await table.add(entry);
-		return { ...entry, queue_id: queueId };
+		return { ...entry, queue_id: queueId, queue_created: true };
 	});
 
-	await refreshQueueMemory(entityType);
+	if (owner) {
+		await refreshQueueMemory(entityType);
+		void checkStoragePersistence(true);
+	}
 	return queuedEntry;
 }
 
@@ -475,8 +493,10 @@ export async function enqueueWriteQueueEntry(
 	payload: AnyRecord,
 	options: { idempotencyKey?: string } = {},
 ) {
+	const owner = captureQueueOwner(payload);
 	await ensureOfflineQueueReady();
-	return enqueueWriteQueueEntryInternal(entityType, payload, options);
+	assertQueueOwner(owner);
+	return enqueueWriteQueueEntryInternal(entityType, payload, { ...options, owner });
 }
 
 export async function deleteWriteQueueEntry(
@@ -484,7 +504,13 @@ export async function deleteWriteQueueEntry(
 	queueId: number,
 ) {
 	await ensureOfflineQueueReady();
-	await db.table(WRITE_QUEUE_TABLE).delete(queueId);
+	const table = db.table(WRITE_QUEUE_TABLE);
+	await db.transaction("rw", table, async () => {
+		const row = await table.get(queueId);
+		if (!row || row.entity_type !== entityType || !ownsQueueEntry(row)) return;
+		if (entityType === "invoice" && isActiveStatus(row.status)) return;
+		await table.delete(queueId);
+	});
 	await refreshQueueMemory(entityType);
 }
 
@@ -509,11 +535,19 @@ export async function clearWriteQueueEntries(
 		includeSynced: options.includeSynced ?? true,
 	});
 	const queueIds = entries
+		.filter((entry) => entityType !== "invoice" || !isActiveStatus(entry.status))
 		.map((entry) => entry.queue_id)
 		.filter((queueId): queueId is number => Number.isFinite(Number(queueId)));
 
 	if (queueIds.length) {
-		await db.table(WRITE_QUEUE_TABLE).bulkDelete(queueIds);
+		const table = db.table(WRITE_QUEUE_TABLE);
+		await db.transaction("rw", table, async () => {
+			for (const queueId of queueIds) {
+				const row = await table.get(queueId);
+				if (row && row.entity_type === entityType && ownsQueueEntry(row) &&
+					(entityType !== "invoice" || !isActiveStatus(row.status))) await table.delete(queueId);
+			}
+		});
 	}
 
 	await refreshQueueMemory(entityType);
@@ -533,7 +567,7 @@ export async function claimRetryableQueueEntries(entityType: OfflineEntityType) 
 			.sortBy("created_at")) as OfflineQueueEntry[];
 
 		for (const entry of entries) {
-			if (!isRetryableStatus(entry.status)) {
+			if (!ownsQueueEntry(entry) || !isRetryableStatus(entry.status)) {
 				continue;
 			}
 
@@ -579,7 +613,7 @@ async function updateClaimedQueueEntry(
 	const table = db.table(WRITE_QUEUE_TABLE);
 	const updated = await db.transaction("rw", table, async () => {
 		const current = (await table.get(queueId)) as OfflineQueueEntry | undefined;
-		if (!current) {
+		if (!current || !ownsQueueEntry(current)) {
 			return false;
 		}
 
@@ -727,7 +761,7 @@ export async function updateQueuedPayloads(
 			.sortBy("created_at")) as OfflineQueueEntry[];
 
 		for (const entry of entries) {
-			if (!isActiveStatus(entry.status)) {
+			if (!ownsQueueEntry(entry) || !isActiveStatus(entry.status)) {
 				continue;
 			}
 			const nextPayload = normalizePayload(entityType, updater(cloneSerializable(entry.payload)));
@@ -751,7 +785,11 @@ export async function migrateLegacyOfflineQueues() {
 
 		if (legacyEntries.length) {
 			for (const legacyEntry of legacyEntries) {
-				await enqueueWriteQueueEntryInternal(config.entityType, legacyEntry);
+				// Historic payload owners can be invoice creators, not the cashier
+				// who queued them. Preserve without assigning the current login.
+				await enqueueWriteQueueEntryInternal(config.entityType, legacyEntry, {
+					owner: null, idempotencyKey: `${config.entityType}:${stableStringify(legacyEntry)}`,
+				});
 			}
 		}
 
@@ -807,7 +845,7 @@ export async function requeueWriteQueueDeadLetter(queueId: number) {
 	const table = db.table(WRITE_QUEUE_TABLE);
 	const requeued = await db.transaction("rw", table, async () => {
 		const current = (await table.get(queueId)) as OfflineQueueEntry | undefined;
-		if (!current || current.status !== "dead_letter") {
+		if (!current || !ownsQueueEntry(current) || current.status !== "dead_letter") {
 			return null;
 		}
 		// Replay-safe: every money path dedupes server-side by
@@ -858,7 +896,7 @@ export async function resolveWriteQueueDraftReview(queueId: number) {
 	const table = db.table(WRITE_QUEUE_TABLE);
 	const resolved = await db.transaction("rw", table, async () => {
 		const current = (await table.get(queueId)) as OfflineQueueEntry | undefined;
-		if (!current || current.status !== "draft_review") {
+		if (!current || !ownsQueueEntry(current) || current.status !== "draft_review") {
 			return null;
 		}
 		const next: OfflineQueueEntry = {
@@ -880,7 +918,7 @@ export async function requeueWriteQueueDraftReview(queueId: number) {
 	const table = db.table(WRITE_QUEUE_TABLE);
 	const requeued = await db.transaction("rw", table, async () => {
 		const current = (await table.get(queueId)) as OfflineQueueEntry | undefined;
-		if (!current || current.status !== "draft_review") {
+		if (!current || !ownsQueueEntry(current) || current.status !== "draft_review") {
 			return null;
 		}
 		// submit_invoice adopts the fallback draft by posa_client_request_id,
@@ -905,10 +943,32 @@ export async function requeueWriteQueueDraftReview(queueId: number) {
 export function getQueuedPayloadSnapshots(entityType: OfflineEntityType) {
 	const snapshots = memory[getMemoryKey(entityType)];
 	return Array.isArray(snapshots)
-		? snapshots.map((snapshot) => cloneSerializable(snapshot))
+		? snapshots.filter(ownsQueueEntry).map((snapshot) => cloneSerializable(snapshot))
 		: [];
 }
 
 export function getQueuedPayloadCount(entityType: OfflineEntityType) {
-	return (memory[getMemoryKey(entityType)] || []).length;
+	return getQueuedPayloadSnapshots(entityType).length;
+}
+
+/** Legacy sales stay durable and quarantined until an administrator reconciles them. */
+export async function getLegacyQueueRecoveryCount() {
+	await ensureOfflineQueueReady();
+	const rows = await db.table(WRITE_QUEUE_TABLE).toArray();
+	const outbox = await db.table("invoice_outbox").toArray();
+	return rows.filter((row) => !row.queue_user && isActiveStatus(row.status)).length +
+		outbox.filter((row) => !row.queue_user && !(row.status === "acknowledged" && row.server_verified === true)).length;
+}
+
+export async function exportLegacyQueueRecovery() {
+	if (!canRecoverLegacyQueue()) throw queueOwnershipError("A System Manager must recover unassigned saved work.");
+	await ensureOfflineQueueReady();
+	if (!canRecoverLegacyQueue()) throw queueOwnershipError("The signed-in user changed.");
+	const rows = await db.table(WRITE_QUEUE_TABLE).toArray();
+	const outbox = await db.table("invoice_outbox").toArray();
+	if (!canRecoverLegacyQueue()) throw queueOwnershipError("The signed-in user changed.");
+	return cloneSerializable({
+		write_queue: rows.filter((row) => !row.queue_user && isActiveStatus(row.status)),
+		invoice_outbox: outbox.filter((row) => !row.queue_user && !(row.status === "acknowledged" && row.server_verified === true)),
+	});
 }

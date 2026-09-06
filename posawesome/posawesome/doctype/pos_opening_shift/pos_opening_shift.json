@@ -24,6 +24,10 @@
   "posa_contract_version",
   "posa_contract_fingerprint",
   "posa_effective_contract",
+  "posa_terminal_id",
+  "posa_terminal_generation",
+  "posa_terminal_token_hash",
+  "posa_terminal_recovery_pending",
   "section_break_9",
   "amended_from"
  ],
@@ -153,14 +157,50 @@
    "read_only": 1
   },
   {
-  "allow_on_submit": 1,
-  "fieldname": "pos_closing_shift",
-  "fieldtype": "Data",
-  "label": "POS Closing Shift",
-  "read_only": 0,
-  "read_only_depends_on": "eval:doc.docstatus==1"
- }
-],
+   "allow_on_submit": 1,
+   "fieldname": "pos_closing_shift",
+   "fieldtype": "Data",
+   "label": "POS Closing Shift",
+   "read_only": 0,
+   "read_only_depends_on": "eval:doc.docstatus==1"
+  },
+  {
+   "fieldname": "posa_terminal_id",
+   "fieldtype": "Data",
+   "label": "Selling Terminal",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1,
+   "hidden": 0
+  },
+  {
+   "fieldname": "posa_terminal_generation",
+   "fieldtype": "Int",
+   "label": "Terminal Generation",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1,
+   "hidden": 0
+  },
+  {
+   "fieldname": "posa_terminal_token_hash",
+   "fieldtype": "Data",
+   "label": "Terminal Credential Hash",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "posa_terminal_recovery_pending",
+   "fieldtype": "Check",
+   "label": "Terminal Recovery Pending",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1,
+   "hidden": 0
+  }
+ ],
  "is_submittable": 1,
  "links": [],
  "modified": "2022-11-22 15:04:30.555123",

@@ -88,6 +88,14 @@ def _import_creation(scenario):
 
     frappe_module.get_doc = _get_doc
     sys.modules["frappe"] = frappe_module
+    terminal_module = types.ModuleType("posawesome.posawesome.api.shift_terminal")
+    class TerminalRow(dict):
+        posa_terminal_generation = 1
+    terminal_module.assert_terminal_access = lambda *args, **kwargs: TerminalRow()
+    sys.modules[terminal_module.__name__] = terminal_module
+    retry_module = types.ModuleType("posawesome.posawesome.api.payment_processing.integrity")
+    retry_module.retry_before_financial_writes = lambda callback, *args: callback(*args)
+    sys.modules[retry_module.__name__] = retry_module
 
     utils_module = types.ModuleType("frappe.utils")
     utils_module.flt = lambda value: float(value or 0)

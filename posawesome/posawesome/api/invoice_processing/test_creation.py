@@ -4,6 +4,7 @@ import pathlib
 import sys
 import types
 import unittest
+from unittest.mock import patch
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
 
@@ -194,6 +195,14 @@ def _install_dependency_stubs():
     processing_utils.get_latest_rate = lambda *_args, **_kwargs: (1, "2026-03-21")
     sys.modules["posawesome.posawesome.api.invoice_processing.utils"] = processing_utils
 
+    pricing_context = types.ModuleType("posawesome.posawesome.api.pricing_context")
+    def apply_exchange_rates(doc, profile=None):
+        rates = {"conversion_rate": 1, "plc_conversion_rate": 1}
+        doc.update(rates)
+        return rates
+    pricing_context.apply_invoice_exchange_rates = apply_exchange_rates
+    sys.modules[pricing_context.__name__] = pricing_context
+
     stock_module = types.ModuleType("posawesome.posawesome.api.invoice_processing.stock")
     stock_module._strip_client_freebies_from_payload = lambda *_args, **_kwargs: None
     stock_module._validate_stock_on_invoice = lambda *_args, **_kwargs: None
@@ -219,6 +228,9 @@ def _install_dependency_stubs():
     shifts_module = types.ModuleType("posawesome.posawesome.api.shifts")
     shifts_module.assert_shift_not_stale = lambda *_args, **_kwargs: None
     sys.modules["posawesome.posawesome.api.shifts"] = shifts_module
+    terminal_module = types.ModuleType("posawesome.posawesome.api.shift_terminal")
+    terminal_module.assert_verified_terminal_generation = lambda *args: None
+    sys.modules[terminal_module.__name__] = terminal_module
 
     payments_module = types.ModuleType("posawesome.posawesome.api.payments")
     payments_module.redeeming_customer_credit = lambda *_args, **_kwargs: None
@@ -247,6 +259,9 @@ def _load_module():
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
+    # This harness isolates ledger/payment behavior. Possession enforcement is
+    # exercised against real Frappe by doco.docoutils.test_charge_delivery.
+    module._verify_invoice_terminal = lambda invoice, data: 1
     return module
 
 
@@ -533,6 +548,7 @@ class TestUpdateInvoiceDraftAuthorization(unittest.TestCase):
         scope_module = types.ModuleType(self.scope_module_name)
         scope_module.assert_profile = assert_profile
         scope_module.assert_company = assert_company
+        scope_module.assert_customer_in_profile = lambda *_args: None
         sys.modules[self.scope_module_name] = scope_module
 
         employees_module = types.ModuleType(self.employees_module_name)
@@ -632,6 +648,25 @@ class TestUpdateInvoiceDraftAuthorization(unittest.TestCase):
             ],
         )
 
+    def test_existing_draft_cannot_change_company_after_scope_checks(self):
+        draft = self._fetch_draft("cashier-y@example.com")
+        payload = self._incoming_payload()
+        payload["company"] = "Another Company"
+        with self.assertRaisesRegex(Exception, "cannot be moved to another company"):
+            self.creation._get_mutable_invoice_doc(payload, "Sales Invoice")
+        self.assertEqual(draft.company, "Y Company")
+        self.assertEqual(draft.customer, "CUST-X")
+
+    def test_submit_currency_change_requires_an_explicit_draft_update(self):
+        draft = self._fetch_draft("cashier-y@example.com")
+        draft.currency = "USD"
+        payload = dict(self._incoming_payload(), currency="MXN")
+        with self.assertRaisesRegex(Exception, "Save the draft in its new currency"):
+            self.creation._get_mutable_invoice_doc(payload, "Sales Invoice", allow_currency_change=False)
+        self.assertEqual(draft.currency, "USD")
+        self.creation._get_mutable_invoice_doc(payload, "Sales Invoice")
+        self.assertEqual(draft.currency, "MXN")
+
     def test_assigned_pos_supervisor_can_mutate_another_owners_draft(self):
         draft = self._fetch_draft("cashier-x@example.com")
         self.is_supervisor = True
@@ -643,6 +678,47 @@ class TestUpdateInvoiceDraftAuthorization(unittest.TestCase):
 
         self.assertIs(result, draft)
         self.assertEqual(result.customer, "CUST-Y")
+
+    def _submit_until_authorized(self):
+        class Authorized(Exception):
+            pass
+
+        with patch.object(self.creation, "_deduplicate_free_items", side_effect=Authorized), \
+             patch.object(self.creation, "_get_or_create_submission_ledger", return_value=None), \
+             patch.object(self.creation, "find_invoice_by_client_request_id", return_value=None):
+            with self.assertRaises(Authorized):
+                self.creation.submit_invoice(json.dumps(self._incoming_payload()), "{}")
+
+    def test_submit_rejects_other_owner_before_mutating_draft(self):
+        draft = self._fetch_draft("cashier-x@example.com")
+        with self.assertRaises(self.frappe.PermissionError):
+            self._submit_until_authorized()
+        self.assertEqual(draft.customer, "CUST-X")
+
+    def test_submit_checks_stored_profile_before_accepting_payload(self):
+        draft = self._fetch_draft("cashier-y@example.com", pos_profile="X POS")
+        with self.assertRaises(self.frappe.PermissionError):
+            self._submit_until_authorized()
+        self.assertEqual(draft.pos_profile, "X POS")
+        self.assertEqual(draft.customer, "CUST-X")
+
+    def test_submit_checks_stored_company_before_accepting_payload(self):
+        draft = self._fetch_draft("cashier-y@example.com", company="X Company")
+        with self.assertRaises(self.frappe.PermissionError):
+            self._submit_until_authorized()
+        self.assertEqual(draft.company, "X Company")
+        self.assertEqual(draft.customer, "CUST-X")
+
+    def test_submit_accepts_draft_owner(self):
+        draft = self._fetch_draft("cashier-y@example.com")
+        self._submit_until_authorized()
+        self.assertEqual(draft.customer, "CUST-Y")
+
+    def test_submit_accepts_supervisor_assigned_to_stored_profile(self):
+        draft = self._fetch_draft("cashier-x@example.com")
+        self.is_supervisor = True
+        self._submit_until_authorized()
+        self.assertEqual(draft.customer, "CUST-Y")
 
 
 @unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
@@ -1360,6 +1436,7 @@ class TestManualPostingDatePreservation(unittest.TestCase):
     def _build_invoice_doc(self, **overrides):
         base = {
             "doctype": "Sales Invoice",
+            "owner": self.frappe.session.user,
             "name": None,
             "pos_profile": "Main POS",
             "company": "Test Company",
@@ -1592,6 +1669,13 @@ class TestManualPostingDatePreservation(unittest.TestCase):
         self.assertEqual(draft.docstatus, 0)
 
     def test_submit_invoice_normalizes_existing_return_draft_payments_before_save(self):
+        # This fixture exercises normalization only; posted payment allocation
+        # accounting has its own focused refund unit and real-document gates.
+        refund_limit = patch(
+            "posawesome.posawesome.api.invoice_processing.refunds.refundable_cash", return_value=90
+        )
+        refund_limit.start()
+        self.addCleanup(refund_limit.stop)
         invoice_doc = self._build_invoice_doc(
             name="ACC-SINV-RETURN-0001",
             is_return=1,
@@ -1751,6 +1835,7 @@ class TestInvoiceIdempotency(unittest.TestCase):
         invoice_doc = FakeDoc(
             doctype="Sales Invoice",
             name="ACC-SINV-NEW-0001",
+            owner=self.frappe.session.user,
             docstatus=0,
             pos_profile="Main POS",
             company="Test Company",
@@ -1805,6 +1890,7 @@ class TestInvoiceIdempotency(unittest.TestCase):
         invoice_doc = FakeDoc(
             doctype="Sales Invoice",
             name="ACC-SINV-NEW-0002",
+            owner=self.frappe.session.user,
             docstatus=0,
             pos_profile="Main POS",
             company="Test Company",

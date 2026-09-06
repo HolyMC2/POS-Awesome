@@ -55,6 +55,11 @@ def set_line_discount_accounts(doc):
 
 
 def before_submit(doc, method):
+    if doc.get("posa_pos_opening_shift"):
+        from posawesome.posawesome.api.shift_terminal import assert_verified_terminal_generation
+        verified = getattr(frappe.local, "posa_verified_terminal_generations", {})
+        generation = verified.get(doc.posa_pos_opening_shift)
+        assert_verified_terminal_generation(doc.posa_pos_opening_shift, generation)
     add_loyalty_point(doc)
     create_sales_order(doc)
     update_coupon(doc, "used")
@@ -116,13 +121,15 @@ def delete_invoice_submission_ledger_entries_for_invoice(doctype, invoice_name):
         pluck="name",
     )
 
-    for ledger_name in ledger_names:
-        frappe.delete_doc(
-            SUBMISSION_LEDGER_DOCTYPE,
-            ledger_name,
-            force=True,
-            ignore_permissions=True,
-        )
+    from posawesome.posawesome.api.ledger_integrity import internal_ledger_write
+    with internal_ledger_write():
+        for ledger_name in ledger_names:
+            frappe.delete_doc(
+                SUBMISSION_LEDGER_DOCTYPE,
+                ledger_name,
+                force=True,
+                ignore_permissions=True,
+            )
 
 
 def cancel_posawesome_credit_journal_entries(doc):

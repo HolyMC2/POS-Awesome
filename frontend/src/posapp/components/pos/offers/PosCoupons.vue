@@ -181,7 +181,7 @@ export default {
 		setActiveGiftCoupons() {
 			if (!this.customer) return;
 			const vm = this;
-			frappe.call({
+			return frappe.call({
 				method: "posawesome.posawesome.api.offers.get_active_gift_coupons",
 				args: {
 					customer: vm.customer,
@@ -194,6 +194,10 @@ export default {
 							vm.add_coupon(coupon_code, { silentDuplicate: true });
 						});
 					}
+				},
+				error: (error) => {
+					// A failed lookup must never grant an unverified coupon.
+					console.warn("Unable to load active gift coupons", error);
 				},
 			});
 		},

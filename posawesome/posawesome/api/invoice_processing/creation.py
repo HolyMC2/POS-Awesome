@@ -14,7 +14,6 @@ from posawesome.posawesome.api.invoice_processing.utils import (
     _resolve_effective_price_list,
     _build_invoice_remarks,
     _set_return_valid_upto,
-    get_latest_rate,
 )
 from posawesome.posawesome.api.invoice_processing.stock import (
     _strip_client_freebies_from_payload,
@@ -37,7 +36,6 @@ from posawesome.posawesome.api.idempotency import (
 )
 import json
 import hashlib
-from frappe.utils import money_in_words
 from frappe.utils.background_jobs import enqueue
 
 
@@ -169,6 +167,12 @@ def _get_submission_ledger(client_request_id, company, pos_profile, document_typ
 
 
 def _save_submission_ledger(ledger_doc):
+    from posawesome.posawesome.api.ledger_integrity import internal_ledger_write
+    with internal_ledger_write():
+        return _persist_submission_ledger(ledger_doc)
+
+
+def _persist_submission_ledger(ledger_doc):
     if not ledger_doc:
         return None
 
@@ -907,7 +911,7 @@ def _clear_stale_party_fields_for_customer_change(
     return invoice_doc
 
 
-def _get_mutable_invoice_doc(data, doctype):
+def _get_mutable_invoice_doc(data, doctype, *, allow_currency_change=True):
     invoice_name = (data or {}).get("name")
     if not invoice_name:
         return frappe.get_doc(data)
@@ -982,6 +986,11 @@ def _get_mutable_invoice_doc(data, doctype):
         )
         return frappe.get_doc(fresh_payload)
 
+    if data.get("company") and invoice_doc.get("company") != data["company"]:
+        frappe.throw(_("An existing POS draft cannot be moved to another company."))
+    if (not allow_currency_change and data.get("currency")
+            and invoice_doc.get("currency") != data["currency"]):
+        frappe.throw(_("Save the draft in its new currency before submitting payment."))
     invoice_doc.update(data)
     invoice_doc = _clear_stale_party_fields_for_customer_change(
         invoice_doc,
@@ -1199,14 +1208,14 @@ def _guard_return_cash_refund(invoice_doc):
     if refund <= 0:
         return
 
-    original_paid = flt(
-        frappe.db.get_value(invoice_doc.doctype, return_against, "paid_amount")
-    )
-    tolerance = 1.0 / (10 ** (cint(invoice_doc.precision("paid_amount")) or 2))
-    if refund > original_paid + tolerance:
+    from posawesome.posawesome.api.invoice_processing.refunds import refundable_cash
+
+    original_paid = refundable_cash(invoice_doc)
+    precision = cint(invoice_doc.precision("paid_amount")) or 2
+    if flt(refund, precision) > flt(original_paid, precision):
         frappe.throw(
             _(
-                "Cannot refund {0} for this return: only {1} was paid on the "
+                "Cannot refund {0} for this return: only {1} remains refundable on "
                 "original invoice {2}. Set the paid amount to 0 so the return is "
                 "recorded as a credit note that reduces the customer's balance."
             ).format(
@@ -1271,7 +1280,27 @@ def _resolve_payload_pos_profile(payload):
 
 @frappe.whitelist(methods=["POST"])
 def update_invoice(data):
-    currency_cache = {}
+    from posawesome.posawesome.api.payment_processing.integrity import retry_before_financial_writes
+    return retry_before_financial_writes(_update_invoice, data)
+
+
+def _verify_invoice_terminal(invoice, context):
+    """Consume possession proof; only the verified generation may be persisted."""
+    from posawesome.posawesome.api.shift_terminal import assert_terminal_access
+
+    context.pop("_verified_terminal_generation", None)
+    proof = {key: context.pop(key, None) for key in
+             ("terminal_id", "terminal_generation", "terminal_token")}
+    shift = invoice.get("posa_pos_opening_shift")
+    if not shift:
+        frappe.throw(_("An open POS shift is required to save or submit this invoice."))
+    row = assert_terminal_access(shift, **proof)
+    if row.company != invoice.get("company") or row.pos_profile != invoice.get("pos_profile"):
+        frappe.throw(_("The invoice must match its opening shift company and POS Profile."))
+    return row.posa_terminal_generation
+
+
+def _update_invoice(data):
     data = json.loads(data)
     client_request_id = extract_invoice_client_request_id(data)
     if not doctype_supports_client_request_id(data.get("doctype") or "Sales Invoice"):
@@ -1284,6 +1313,7 @@ def update_invoice(data):
     if pos_profile and not data.get("pos_profile"):
         # heal the payload so the saved row carries the profile again
         data["pos_profile"] = pos_profile
+    _verify_invoice_terminal(data, data)
     # Scope: payload's pos_profile + company + customer must all be in
     # the caller's POS Profile membership (REVIEW2/03 §2.3 §10 PR-1).
     # This is the central trust gate — without it, a cashier could send
@@ -1401,9 +1431,6 @@ def update_invoice(data):
         invoice_doc.selling_price_list = effective_price_list
 
     selected_currency = data.get("currency")
-    price_list_currency = data.get("price_list_currency")
-    if not price_list_currency and invoice_doc.get("selling_price_list"):
-        price_list_currency = frappe.db.get_value("Price List", invoice_doc.selling_price_list, "currency")
 
     # Preserve provided item names for manual overrides
     overrides = {d.idx: {"item_name": d.item_name} for d in invoice_doc.items}
@@ -1472,84 +1499,15 @@ def update_invoice(data):
     # belongs on submit_invoice only, where payments must match.
     # See REVIEW2/03 §3.3 — original spec targeted "submit" path.
 
-    company_currency = (
-        frappe.get_cached_value("Company", invoice_doc.company, "default_currency") or invoice_doc.currency
-    )
-
-    # Ensure selected currency is preserved after set_missing_values
+    # Currency inputs are labels, never authority for ledger exchange rates.
     if selected_currency:
         invoice_doc.currency = selected_currency
-    price_list_currency = price_list_currency or company_currency
-
-    conversion_rate = 1
+    from posawesome.posawesome.api.pricing_context import apply_invoice_exchange_rates
+    rates = apply_invoice_exchange_rates(invoice_doc, profile_doc_for_caps)
+    conversion_rate = rates["conversion_rate"]
     exchange_rate_date = invoice_doc.posting_date
-    if invoice_doc.currency != company_currency:
-        conversion_rate, exchange_rate_date = get_latest_rate(
-            invoice_doc.currency,
-            company_currency,
-            cache=currency_cache,
-        )
-        if not conversion_rate:
-            frappe.throw(
-                _(
-                    "Unable to find exchange rate for {0} to {1}. Please create a Currency Exchange record manually"
-                ).format(invoice_doc.currency, company_currency)
-            )
-
-        plc_conversion_rate = 1
-        if price_list_currency != invoice_doc.currency:
-            plc_conversion_rate, _ignored = get_latest_rate(
-                price_list_currency,
-                invoice_doc.currency,
-                cache=currency_cache,
-            )
-            if not plc_conversion_rate:
-                frappe.throw(
-                    _(
-                        "Unable to find exchange rate for {0} to {1}. Please create a Currency Exchange record manually"
-                    ).format(price_list_currency, invoice_doc.currency)
-                )
-
-        invoice_doc.conversion_rate = conversion_rate
-        invoice_doc.plc_conversion_rate = plc_conversion_rate
-        invoice_doc.price_list_currency = price_list_currency
-
-        # Update rates and amounts for all items using multiplication
-        for item in invoice_doc.items:
-            if item.price_list_rate:
-                item.base_price_list_rate = flt(
-                    item.price_list_rate * (conversion_rate / plc_conversion_rate),
-                    item.precision("base_price_list_rate"),
-                )
-            if item.rate:
-                item.base_rate = flt(item.rate * conversion_rate, item.precision("base_rate"))
-            if item.amount:
-                item.base_amount = flt(item.amount * conversion_rate, item.precision("base_amount"))
-
-        # Update payment amounts
-        for payment in invoice_doc.payments:
-            payment.amount, payment.base_amount = _resolve_payment_amounts(payment, conversion_rate)
-
-        # Update invoice level amounts
-        invoice_doc.base_total = flt(invoice_doc.total * conversion_rate, invoice_doc.precision("base_total"))
-        invoice_doc.base_net_total = flt(
-            invoice_doc.net_total * conversion_rate,
-            invoice_doc.precision("base_net_total"),
-        )
-        invoice_doc.base_grand_total = flt(
-            invoice_doc.grand_total * conversion_rate,
-            invoice_doc.precision("base_grand_total"),
-        )
-        invoice_doc.base_rounded_total = flt(
-            invoice_doc.rounded_total * conversion_rate,
-            invoice_doc.precision("base_rounded_total"),
-        )
-        invoice_doc.base_in_words = money_in_words(invoice_doc.base_rounded_total, company_currency)
-
-        # Update data to be sent back to frontend
-        data["conversion_rate"] = conversion_rate
-        data["plc_conversion_rate"] = plc_conversion_rate
-        data["exchange_rate_date"] = exchange_rate_date
+    for payment in invoice_doc.payments:
+        payment.amount, payment.base_amount = _resolve_payment_amounts(payment, conversion_rate)
 
     inclusive = frappe.get_cached_value("POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive")
     if invoice_doc.get("taxes"):
@@ -1582,8 +1540,17 @@ def update_invoice(data):
 
 @frappe.whitelist(methods=["POST"])
 def submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
+    from posawesome.posawesome.api.payment_processing.integrity import retry_before_financial_writes
+    return retry_before_financial_writes(
+        _submit_invoice, invoice, data, submit_in_background, pos_profile
+    )
+
+
+def _submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
     data = json.loads(data)
     invoice = json.loads(invoice)
+    terminal_proof = {key: data.get(key) for key in
+                      ("terminal_id", "terminal_generation", "terminal_token")}
     client_request_id = extract_invoice_client_request_id(invoice, data)
     _sanitize_delivery_dates(invoice)
     _apply_manual_posting_controls(invoice)
@@ -1598,6 +1565,9 @@ def submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
     pos_profile = _resolve_payload_pos_profile(invoice) or pos_profile
     if pos_profile and not invoice.get("pos_profile"):
         invoice["pos_profile"] = pos_profile
+    data["_verified_terminal_generation"] = _verify_invoice_terminal(invoice, data)
+    for key in ("terminal_id", "terminal_generation", "terminal_token", "_verified_terminal_generation"):
+        invoice.pop(key, None)
     # Scope — must match update_invoice. submit re-validates because
     # the request is independent (a caller can submit without an
     # intervening update; e.g. retry-on-failure) and we don't want
@@ -1693,7 +1663,7 @@ def submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
     if not invoice_name or not frappe.db.exists(doctype, invoice_name):
         if client_request_id:
             invoice["posa_client_request_id"] = client_request_id
-        created = update_invoice(json.dumps(invoice))
+        created = update_invoice(json.dumps({**invoice, **terminal_proof}))
         invoice_name = created.get("name")
         invoice_doc = frappe.get_doc(doctype, invoice_name)
         _reapply_payload_payments(invoice_doc, invoice)
@@ -1701,9 +1671,15 @@ def submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
         # Prevent TimestampMismatchError by relying on server-side timestamp
         if "modified" in invoice:
             del invoice["modified"]
-        invoice_doc = frappe.get_doc(doctype, invoice_name)
-        invoice_doc.update(invoice)
+        # Authorize the stored row before accepting any client field changes,
+        # just as autosave does (including owner / assigned-supervisor checks).
+        invoice_doc = _get_mutable_invoice_doc(invoice, doctype, allow_currency_change=False)
 
+    from posawesome.posawesome.api.pricing_context import apply_invoice_exchange_rates
+    profile_doc_for_caps_submit = (
+        frappe.get_cached_doc("POS Profile", pos_profile) if pos_profile else None
+    )
+    apply_invoice_exchange_rates(invoice_doc, profile_doc_for_caps_submit)
     set_invoice_client_request_id(invoice_doc, client_request_id)
     if ledger_doc:
         _update_submission_ledger(
@@ -1847,9 +1823,6 @@ def submit_invoice(invoice, data, submit_in_background=False, pos_profile=None):
         assert_payments_match_grand_total,
         assert_rates_within_band,
         enforce_discount_limit,
-    )
-    profile_doc_for_caps_submit = (
-        frappe.get_cached_doc("POS Profile", pos_profile) if pos_profile else None
     )
     enforce_discount_limit(invoice_doc, profile_doc_for_caps_submit)
     assert_rates_within_band(invoice_doc, profile_doc_for_caps_submit)
@@ -2045,12 +2018,14 @@ def prune_submission_ledger(days: int = 45):
     count = frappe.db.sql(
         """SELECT COUNT(*) FROM `tabPOS Invoice Submission Ledger`
            WHERE state = 'POST_SUBMIT_DONE'
+             AND document_type IN ('Sales Invoice', 'POS Invoice')
              AND modified < %s""",
         (cutoff,),
     )[0][0]
     frappe.db.sql(
         """DELETE FROM `tabPOS Invoice Submission Ledger`
            WHERE state = 'POST_SUBMIT_DONE'
+             AND document_type IN ('Sales Invoice', 'POS Invoice')
              AND modified < %s""",
         (cutoff,),
     )
@@ -2189,6 +2164,10 @@ def submit_in_background_job(kwargs):
         assert_shift_not_stale(
             invoice_doc.get("posa_pos_opening_shift"), acting_user=user
         )
+        from posawesome.posawesome.api.shift_terminal import assert_verified_terminal_generation
+        assert_verified_terminal_generation(
+            invoice_doc.get("posa_pos_opening_shift"), data.get("_verified_terminal_generation")
+        )
         profile_for_caps = (
             frappe.get_cached_doc("POS Profile", invoice_doc.get("pos_profile"))
             if invoice_doc.get("pos_profile")
@@ -2199,6 +2178,8 @@ def submit_in_background_job(kwargs):
             enforce_discount_limit,
         )
 
+        from posawesome.posawesome.api.pricing_context import apply_invoice_exchange_rates
+        apply_invoice_exchange_rates(invoice_doc, profile_for_caps)
         enforce_discount_limit(invoice_doc, profile_for_caps)
         assert_rates_within_band(invoice_doc, profile_for_caps)
 

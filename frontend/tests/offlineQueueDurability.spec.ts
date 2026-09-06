@@ -33,6 +33,7 @@ describe("offline write queue durability", () => {
 		memory.pos_opening_storage = null;
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		(globalThis as any).frappe = {
+			session: { user: "cashier@example.com" },
 			call: vi.fn(),
 		};
 	});
@@ -112,7 +113,7 @@ describe("offline write queue durability", () => {
 
 		expect(queued).toHaveLength(1);
 		expect(dbRows).toHaveLength(1);
-		expect(dbRows[0]?.idempotency_key).toBe("invoice:inv-fixed-queue-001");
+		expect(dbRows[0]?.idempotency_key).toContain("invoice:inv-fixed-queue-001:scope:");
 	});
 
 	it("blocks offline stock-updating invoices when local stock is insufficient", async () => {
@@ -233,7 +234,7 @@ describe("offline write queue durability", () => {
 
 		expect(queued).toHaveLength(1);
 		expect(dbRows).toHaveLength(1);
-		expect(dbRows[0]?.idempotency_key).toBe("payment:pay-fixed-queue-001");
+		expect(dbRows[0]?.idempotency_key).toContain("payment:pay-fixed-queue-001:scope:");
 	});
 
 	it("tracks retry metadata and moves exhausted entries to dead letter", async () => {
@@ -311,8 +312,9 @@ describe("offline write queue durability", () => {
 		const dbRows = await db.table("write_queue").toArray();
 		const legacyRow = await db.table("queue").get("offline_invoices");
 
-		expect(queued).toHaveLength(1);
-		expect(queued[0]?.invoice?.name).toBe("LEGACY-SINV-0001");
+		expect(queued).toHaveLength(0);
+		expect(dbRows[0]?.payload.invoice?.name).toBe("LEGACY-SINV-0001");
+		expect(dbRows[0]?.queue_user).toBeUndefined();
 		expect(dbRows).toHaveLength(1);
 		expect(dbRows[0]?.entity_type).toBe("invoice");
 		expect(legacyRow?.value || []).toEqual([]);

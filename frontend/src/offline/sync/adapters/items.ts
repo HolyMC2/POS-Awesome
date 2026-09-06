@@ -14,6 +14,7 @@ import {
 import { getSyncResourceState } from "../syncState";
 import {
 	buildResourceSyncResult,
+	fetchAllSyncPages,
 	buildScopeSignature,
 	persistResourceSyncState,
 	refreshSnapshotFromSync,
@@ -29,6 +30,7 @@ type ItemsFetcher = (args: {
 	customer?: string | null;
 	watermark?: string | null;
 	schemaVersion?: string | null;
+	pageCursor?: string | null;
 }) => Promise<SyncResponse>;
 
 type ItemsSyncArgs = {
@@ -37,6 +39,7 @@ type ItemsSyncArgs = {
 	customer?: string | null;
 	watermark?: string | null;
 	schemaVersion?: string | null;
+	pageCursor?: string | null;
 	fetcher: ItemsFetcher;
 };
 
@@ -66,8 +69,7 @@ async function hasItemScopeChanged(posProfile: SyncScopedProfile) {
 	for (const resourceId of ["items", "item_prices"] as const) {
 		const currentState = await getSyncResourceState(resourceId);
 		if (
-			currentState?.scopeSignature &&
-			currentState.scopeSignature !== nextScopeSignature
+			currentState?.scopeSignature !== nextScopeSignature
 		) {
 			return true;
 		}
@@ -98,13 +100,14 @@ export async function syncItemsResource(
 	const scopeChanged = await hasItemScopeChanged(args.posProfile);
 	const effectiveWatermark = scopeChanged ? null : args.watermark;
 	const storageScope = buildItemStorageScope(args.posProfile);
-	const response = await args.fetcher({
+	const response = await fetchAllSyncPages((pageCursor) => args.fetcher({
 		posProfile: args.posProfile,
 		priceList: args.priceList || null,
 		customer: args.customer || null,
 		watermark: effectiveWatermark,
 		schemaVersion: args.schemaVersion,
-	});
+		pageCursor,
+	}));
 
 	if (response?.full_resync_required) {
 		// Reset the cursor so the next run re-pulls in full instead of

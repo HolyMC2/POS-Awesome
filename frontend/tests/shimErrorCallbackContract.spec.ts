@@ -10,6 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { installFrappeShim } from "../src/posapp/utils/frappe-shim";
+import api from "../src/posapp/services/api";
 
 describe("frappe-shim error-callback contract", () => {
 	beforeEach(() => {
@@ -79,5 +80,36 @@ describe("frappe-shim error-callback contract", () => {
 				// no `error:` cb — caller wants the promise-rejection signal
 			}),
 		).rejects.toThrow(/HTTP 500/);
+	});
+
+	it("handles a network failure once through the error callback without calling success", async () => {
+		const failure = new TypeError("Failed to fetch");
+		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(failure));
+		const error = vi.fn();
+		const callback = vi.fn();
+		await expect((window as any).frappe.call({ method: "pos.test", error, callback })).resolves.toBeNull();
+		expect(error).toHaveBeenCalledOnce();
+		expect(error).toHaveBeenCalledWith(failure);
+		expect(callback).not.toHaveBeenCalled();
+	});
+
+	it("preserves awaited network rejection when no error callback owns it", async () => {
+		const failure = new TypeError("Failed to fetch");
+		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(failure));
+		await expect((window as any).frappe.call("pos.test", {})).rejects.toBe(failure);
+	});
+
+	it("retains API envelope failure and awaited API rejection through the real shim", async () => {
+		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+		expect(await api.callEnvelope("pos.test")).toMatchObject({ ok: false, error: { retryable: true } });
+		await expect(api.call("pos.test")).rejects.toThrow("Failed to fetch");
+		// Allow ignored internal promises to settle: Vitest must see no unhandled error.
+		await new Promise((resolve) => setTimeout(resolve, 0));
+	});
+
+	it("does not swallow defects thrown by an error callback", async () => {
+		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+		const defect = new Error("callback defect");
+		await expect((window as any).frappe.call({ method: "pos.test", error: () => { throw defect; } })).rejects.toBe(defect);
 	});
 });

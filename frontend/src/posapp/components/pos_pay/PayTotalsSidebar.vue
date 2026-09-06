@@ -402,8 +402,8 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
-import VueDatePicker from "@vuepic/vue-datepicker";
+import { computed, ref, watch, defineAsyncComponent } from "vue";
+const VueDatePicker = defineAsyncComponent(() => import("@vuepic/vue-datepicker"));
 import { normalizeDateForBackend } from "../../format";
 
 const flt = (value, precision) => {

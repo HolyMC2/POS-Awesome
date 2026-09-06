@@ -23,7 +23,7 @@
 			</v-col>
 		</v-row>
 		<v-data-table
-			:headers="headers"
+			:headers="tableHeaders"
 			:items="payments"
 			item-key="name"
 			class="elevation-1 mt-0"
@@ -58,13 +58,20 @@
 					>{{ currencySymbol(item.currency) }} {{ formatCurrency(item.unallocated_amount) }}</span
 				>
 			</template>
+			<template v-slot:item.refund="{ item }">
+				<v-btn v-if="allowRefund && !item.is_credit_note && Number(item.unallocated_amount) > 0"
+					size="small" variant="text" @click.stop="refundPayment = item">{{ __("Refund unused advance") }}</v-btn>
+			</template>
 		</v-data-table>
+		<AdvanceRefundDialog v-if="refundPayment" :payment="refundPayment" :pos-profile="posProfile"
+			:opening-shift="openingShift" :customer="customer" @close="refundPayment = null" @refunded="emit('refunded', $event)" />
 		<v-divider></v-divider>
 	</div>
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import AdvanceRefundDialog from "./AdvanceRefundDialog.vue";
 
 const __ = (text) => (window.__ ? window.__(text) : text);
 
@@ -80,9 +87,17 @@ const props = defineProps({
 	currencySymbol: Function,
 	formatCurrency: Function,
 	paymentRowClass: Function,
+	partyType: String,
+	customer: String,
+	openingShift: Object,
 });
 
-const emit = defineEmits(["update:selectedPayments"]);
+const emit = defineEmits(["update:selectedPayments", "refunded"]);
+const refundPayment = ref(null);
+const allowRefund = computed(() => props.partyType === "Customer" && props.posProfile?.posa_allow_make_new_payments);
+const tableHeaders = computed(() => allowRefund.value
+	? [...(props.headers || []), { title: __("Actions"), key: "refund", sortable: false }]
+	: props.headers);
 
 const internalSelectedPayments = computed({
 	get: () => props.selectedPayments,

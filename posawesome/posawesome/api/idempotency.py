@@ -1,3 +1,5 @@
+import hashlib
+
 import frappe
 
 
@@ -59,14 +61,29 @@ def find_invoice_by_client_request_id(client_request_id, preferred_doctype=None)
     return None
 
 
-def find_payment_entries_by_client_request_id(client_request_id):
+def payment_request_prefix(client_request_id):
+    digest = hashlib.sha256(client_request_id.encode("utf-8")).hexdigest()
+    return "pos-payment:" + digest + ":"
+
+
+def payment_method_request_id(client_request_id, index):
+    # Preserve the historical first entry while giving split tenders their own
+    # unique keys. The common hashed prefix makes every sibling discoverable.
+    if not client_request_id or index == 0:
+        return client_request_id
+    return payment_request_prefix(client_request_id) + str(index)
+
+
+def find_payment_entries_by_client_request_id(client_request_id, *, for_update=False):
     if not client_request_id or not doctype_supports_client_request_id("Payment Entry"):
         return []
 
-    rows = frappe.get_list(
-        "Payment Entry",
-        filters={"posa_client_request_id": client_request_id},
-        fields=[
+    # A retry waiting on the party lock must see the previous commit even if
+    # earlier permission reads established a repeatable-read snapshot.
+    reader = frappe.db.get_values if for_update else frappe.get_list
+    options = {"for_update": True, "as_dict": True} if for_update else {}
+    query = dict(
+        **{("fieldname" if for_update else "fields"): [
             "name",
             "paid_amount",
             "received_amount",
@@ -74,9 +91,17 @@ def find_payment_entries_by_client_request_id(client_request_id):
             "mode_of_payment",
             "party",
             "party_type",
+            "payment_type",
             "docstatus",
             "posa_client_request_id",
-        ],
+        ]},
         order_by="creation asc",
+        **options,
     )
-    return list(rows or [])
+    rows = reader("Payment Entry", filters={"posa_client_request_id": client_request_id}, **query)
+    rows = list(rows or []) + list(reader(
+        "Payment Entry",
+        filters={"posa_client_request_id": ["like", payment_request_prefix(client_request_id) + "%"]},
+        **query,
+    ) or [])
+    return list({row.get("name"): row for row in rows}.values())

@@ -5,6 +5,8 @@ import types
 import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 class FakeChildRow(dict):
@@ -63,6 +65,10 @@ class FakePaymentEntry:
 
 
 def _install_stubs():
+    for name in ("posawesome", "posawesome.posawesome", "posawesome.posawesome.api"):
+        package = types.ModuleType(name)
+        package.__path__ = [str(REPO_ROOT.joinpath(*name.split(".")))]
+        sys.modules[name] = package
     frappe_module = types.ModuleType("frappe")
     frappe_utils = types.ModuleType("frappe.utils")
     accounts_party = types.ModuleType("erpnext.accounts.party")
@@ -77,6 +83,7 @@ def _install_stubs():
     reconcile_calls = []
 
     frappe_utils.nowdate = lambda: "2026-03-26"
+    frappe_utils.cint = lambda value: int(value or 0)
     frappe_utils.flt = lambda value, precision=None: round(float(value or 0), precision or 2)
 
     frappe_module._ = lambda text: text
@@ -84,6 +91,9 @@ def _install_stubs():
     frappe_module.throw = lambda message: (_ for _ in ()).throw(Exception(message))
     frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
     frappe_module.flags = types.SimpleNamespace(ignore_account_permission=False)
+    frappe_module.session = types.SimpleNamespace(user="Administrator")
+    frappe_module.get_roles = lambda user: ["System Manager"]
+    frappe_module.has_permission = lambda *args, **kwargs: True
     frappe_module.get_value = lambda *args, **kwargs: "Main - CC"
     frappe_module.db = types.SimpleNamespace(
         get_value=lambda *args, **kwargs: None,
@@ -147,6 +157,9 @@ def _install_stubs():
     accounts_utils.reconcile_against_document = _reconcile_against_document
 
     accounts_party.get_party_bank_account = lambda *args, **kwargs: None
+    bank_account_module = types.ModuleType("erpnext.accounts.doctype.bank_account.bank_account")
+    bank_account_module.get_party_bank_account = accounts_party.get_party_bank_account
+    sys.modules[bank_account_module.__name__] = bank_account_module
     payment_request_module.get_dummy_message = lambda *_args, **_kwargs: ""
     payment_request_module.get_existing_payment_request_amount = lambda *_args, **_kwargs: 0
     utilities_module.ensure_child_doctype = lambda *_args, **_kwargs: None

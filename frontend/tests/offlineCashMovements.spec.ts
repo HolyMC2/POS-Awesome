@@ -23,6 +23,7 @@ describe("offline cash movements", () => {
 		memory.offline_cash_movements = [];
 		localStorage.clear();
 		(globalThis as any).frappe = {
+			session: { user: "cashier@example.com" },
 			call: vi.fn(),
 		};
 	});

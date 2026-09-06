@@ -76,7 +76,7 @@ def get_opening_dialog_data():
 
 
 @frappe.whitelist(methods=["POST"])
-def create_opening_voucher(pos_profile, company, balance_details):
+def create_opening_voucher(pos_profile, company, balance_details, terminal_id=None, terminal_token=None):
     # Tenant boundary: profile/company come straight from the client and the
     # insert below runs with ignore_permissions. get_opening_dialog_data only
     # OFFERS assigned profiles — nothing stopped a crafted call from opening
@@ -85,6 +85,10 @@ def create_opening_voucher(pos_profile, company, balance_details):
     assert_company(frappe.session.user, company)
 
     balance_details = json.loads(balance_details)
+
+    # Serialize the empty-check and insert: two browsers may otherwise both
+    # open a shift for the same cashier before either transaction commits.
+    frappe.db.get_value("User", frappe.session.user, "name", for_update=True)
 
     # One open shift per user. Multiple concurrent open shifts (same or
     # different POS Profiles) silently break cash reconciliation:
@@ -132,10 +136,14 @@ def create_opening_voucher(pos_profile, company, balance_details):
     new_pos_opening.posa_effective_contract = snapshot_json
     new_pos_opening.posa_contract_fingerprint = fingerprint
     new_pos_opening.posa_contract_version = version
+    from .shift_terminal import bind_new_shift
+    bind_new_shift(new_pos_opening, terminal_id, terminal_token)
     new_pos_opening.insert(ignore_permissions=True)
 
     data = {}
     data["pos_opening_shift"] = new_pos_opening.as_dict()
+    from .shift_terminal import _status
+    data["terminal_status"] = _status(new_pos_opening, terminal_id, terminal_token)
     update_opening_shift_data(data, new_pos_opening.pos_profile)
     return data
 
@@ -162,7 +170,9 @@ def is_shift_stale(opening_shift) -> bool:
 
 
 @frappe.whitelist(methods=["GET", "POST"])
-def check_opening_shift(user):
+def check_opening_shift(user, terminal_id=None, terminal_token=None):
+    if user != frappe.session.user:
+        frappe.throw(_("Opening shifts can only be loaded for the signed-in cashier."), frappe.PermissionError)
     open_vouchers = frappe.db.get_all(
         "POS Opening Shift",
         filters={
@@ -178,6 +188,8 @@ def check_opening_shift(user):
     if len(open_vouchers) > 0:
         data = {}
         data["pos_opening_shift"] = frappe.get_doc("POS Opening Shift", open_vouchers[0]["name"])
+        from .shift_terminal import _status
+        data["terminal_status"] = _status(data["pos_opening_shift"], terminal_id, terminal_token)
         update_opening_shift_data(data, open_vouchers[0]["pos_profile"])
         # Single source of truth for Desk AND the /posapp web route: the SPA
         # routes a stale shift straight into the closing flow, and
@@ -213,6 +225,22 @@ def _profile_force_close_stale_shift(pos_profile):
     )
 
 
+def lock_opening_shift(pos_opening_shift):
+    """Current-read the opening row; hold until the caller commits/rolls back.
+
+    Money and closing paths acquire this before party, invoice, ledger or
+    payment locks. A second close/post then observes the committed shift state.
+    """
+    row = frappe.db.get_value(
+        "POS Opening Shift", pos_opening_shift,
+        ["name", "period_start_date", "pos_profile", "company", "status", "docstatus", "user", "pos_closing_shift"],
+        as_dict=True, for_update=True,
+    )
+    if not row:
+        frappe.throw(_("POS Opening Shift {0} was not found").format(pos_opening_shift))
+    return row
+
+
 def assert_shift_not_stale(pos_opening_shift, acting_user=None):
     """Backstop for the stale-shift gate at invoice-submit time.
 
@@ -235,6 +263,7 @@ def assert_shift_not_stale(pos_opening_shift, acting_user=None):
     if not pos_opening_shift:
         return
     acting_user = acting_user or frappe.session.user
+    row = lock_opening_shift(pos_opening_shift)
     # Internal delegated-close replay (submit_printed_invoices): a shift's own
     # printed drafts are being flushed INTO the shift being closed. The caller
     # already passed get_scoped_opening_shift (owner or closing supervisor) and
@@ -242,14 +271,6 @@ def assert_shift_not_stale(pos_opening_shift, acting_user=None):
     # that guard LIVE selling do not apply. Bound to the shift name so an
     # unrelated shift in a replayed payload is still gated.
     if frappe.flags.get("posa_closing_replay_shift") == pos_opening_shift:
-        return
-    row = frappe.db.get_value(
-        "POS Opening Shift",
-        pos_opening_shift,
-        ["period_start_date", "pos_profile", "status", "docstatus", "user"],
-        as_dict=True,
-    )
-    if not row:
         return
     # Demos never hard-block a sale (shared login + nightly golden restore make
     # a corte mismatch harmless), so they skip the ownership bind too — a seeded

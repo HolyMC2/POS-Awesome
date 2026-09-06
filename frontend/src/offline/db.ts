@@ -32,8 +32,8 @@
  * `db` table queries directly. Domain queue modules (`invoices`, `payments`, etc.)
  * and sync adapters import `db`, `memory`, and `persist` from this file.
  * `checkDbHealth` is called defensively before every IndexedDB operation
- * elsewhere in the layer; it will reopen, or delete and recreate, the database
- * on detected corruption.
+ * elsewhere in the layer; it reopens the database when possible and preserves
+ * unreadable databases for recovery rather than deleting unsynced work.
  */
 import Dexie from "dexie/dist/dexie.mjs";
 
@@ -772,6 +772,7 @@ export async function pruneOfflineStorage(
 						// copy of real money collected offline — never delete it on a
 						// timer; it must survive until an operator resolves it.
 						row.status === "acknowledged" &&
+						row.server_verified === true &&
 						isOlderThan(row.acknowledged_at || row.updated_at || row.created_at, cutoff),
 				)
 				.map((row) => row.outbox_id)
@@ -1001,71 +1002,9 @@ export function toggleManualOffline() {
 }
 
 export async function clearAllCache() {
-	try {
-		if (db.isOpen()) {
-			await db.close();
-		}
-		await Dexie.delete("posawesome_offline");
-		await db.open();
-	} catch (e) {
-		console.error("Failed to clear IndexedDB cache", e);
-	}
-
-	if (typeof localStorage !== "undefined") {
-		Object.keys(localStorage).forEach((key) => {
-			if (key.startsWith("posa_")) {
-				localStorage.removeItem(key);
-			}
-		});
-	}
-
-	// Reset memory state
-	memory.offline_invoices = [];
-	memory.offline_customers = [];
-	memory.offline_payments = [];
-	memory.offline_cash_movements = [];
-	memory.invoice_outbox_mode = "off";
-	memory.pos_last_sync_totals = { pending: 0, synced: 0, drafted: 0 };
-	memory.uom_cache = {};
-	memory.offers_cache = [];
-	memory.customer_balance_cache = {};
-	memory.local_stock_cache = {};
-	memory.stock_cache_ready = false;
-	memory.stock_cache_synced_at = null;
-	memory.customer_storage = [];
-	memory.items_last_sync = null;
-	memory.customers_last_sync = null;
-	memory.payment_methods_last_sync = null;
-	memory.pos_opening_storage = null;
-	memory.opening_dialog_storage = null;
-	memory.sales_persons_storage = [];
-	memory.price_list_cache = {};
-	memory.item_details_cache = {};
-	memory.tax_template_cache = {};
-	memory.tax_inclusive = false;
-	memory.manual_offline = false;
-	memory.item_groups_cache = [];
-	memory.coupons_cache = {};
-	memory.bootstrap_snapshot = null;
-	memory.bootstrap_snapshot_status = null;
-	memory.bootstrap_limited_mode = false;
-	// PII / financial caches previously left in RAM after the IDB wipe — on a
-	// shared terminal the next persist() re-wrote the prior customer's
-	// stored-value balances, gift-card codes and addresses back into the
-	// freshly-cleared DB. Reset them to their defaults too.
-	for (const key of [
-		"stored_value_snapshot_cache",
-		"gift_card_snapshot_cache",
-		"customer_addresses_cache",
-		"exchange_rate_cache",
-		"currency_options_cache",
-		"price_list_meta_cache",
-		"delivery_charges_cache",
-		"payment_method_currency_cache",
-		"schema_signature",
-	]) {
-		resetMemoryKey(key);
-	}
+	// A cache reset must never erase durable sales, including another cashier's
+	// work and legacy rows awaiting ownership recovery.
+	await clearDerivedOfflineCaches();
 }
 
 export async function forceClearAllCache() {
@@ -1146,7 +1085,7 @@ export async function getPendingTransactionalWorkCounts() {
 			.table("invoice_outbox")
 			.filter(
 				(row: AnyRecord) =>
-					!["acknowledged", "resolved"].includes(row.status),
+					!(row.status === "acknowledged" && row.server_verified === true) && row.status !== "resolved",
 			)
 			.count(),
 	]);
@@ -1204,13 +1143,10 @@ export async function repairDbAfterFailedHealthCheck(error?: unknown) {
 			return false;
 		}
 		if (isCorruptionError(reopenError) || isCorruptionError(error)) {
-			try {
-				await Dexie.delete("posawesome_offline");
-				await db.open();
-				return true;
-			} catch (recreateError) {
-				console.error("DB recreate failed", recreateError);
-			}
+			// A database that cannot be read cannot be proven free of pending
+			// sales. Leave it intact for recovery instead of deleting evidence.
+			setOfflineStorageDegraded(true);
+			console.error("Offline database needs recovery; saved work was preserved.");
 		}
 	}
 	return false;

@@ -1,3 +1,4 @@
+import { ownsQueueEntry } from "./queueOwnership";
 import { isOffline, memory, persist } from "./db";
 import { syncOfflineCustomers } from "./customers";
 import { reduceCacheUsage } from "./cache";
@@ -57,9 +58,17 @@ function draftReasonFromError(error: unknown) {
 function buildDraftFallbackPayload(
 	invoice: AnyRecord,
 	priorDraftName: unknown,
+	terminalContext?: AnyRecord,
 ): AnyRecord {
 	const name = String(priorDraftName || "").trim();
-	return name ? { ...invoice, name } : invoice;
+	const payload = { ...invoice };
+	// Submit receives this proof in its separate data argument. update_invoice
+	// accepts one payload, so carry the original queued proof into that object.
+	// Never grant an old sale the current browser's registration or generation.
+	for (const field of ["terminal_id", "terminal_generation", "terminal_token"]) {
+		if (terminalContext?.[field] !== undefined) payload[field] = terminalContext[field];
+	}
+	return name ? { ...payload, name } : payload;
 }
 
 const asBoolean = (value: any): boolean => {
@@ -349,8 +358,10 @@ export async function saveOfflineInvoice(entry: AnyRecord) {
 	);
 
 	if (
+		createdEntry.queue_created === true &&
+		ownsQueueEntry(createdEntry) &&
 		entry.invoice?.items &&
-		shouldValidateOfflineInvoiceStock(entry.invoice)
+		shouldValidateOfflineInvoiceStock({ ...entry.invoice, is_return: 0 })
 	) {
 		updateLocalStock(entry.invoice.items);
 	}
@@ -464,6 +475,7 @@ export async function syncOfflineInvoices() {
 		const currentCapabilityVersion = getOfflineCapabilityVersion();
 
 		for (const entry of claimedEntries) {
+			if (!ownsQueueEntry(entry)) break;
 			const queuedInvoice = entry.payload;
 			// Capability version guard (plan C7): an invoice built under a
 			// different capability payload than the register now runs must
@@ -485,6 +497,7 @@ export async function syncOfflineInvoices() {
 				// (the response was lost, not the write). Drafting it then would
 				// mint an orphan carrying the same posa_client_request_id — a
 				// double-bill the moment that draft is submitted from Desk.
+				if (!ownsQueueEntry(entry)) break;
 				if (await reconcileAlreadySubmitted(queuedInvoice.invoice)) {
 					synced += 1;
 					await markWriteQueueEntrySynced(
@@ -495,12 +508,14 @@ export async function syncOfflineInvoices() {
 					continue;
 				}
 				try {
+					if (!ownsQueueEntry(entry)) break;
 					const draftResponse = await frappe.call({
 						method: "posawesome.posawesome.api.invoices.update_invoice",
 						args: {
 							data: buildDraftFallbackPayload(
 								queuedInvoice.invoice,
 								entry.draft_invoice_name,
+								queuedInvoice.data,
 							),
 						},
 					});
@@ -549,6 +564,7 @@ export async function syncOfflineInvoices() {
 				// invoice (double-bill if that draft is later submitted from
 				// Desk). Reconcile by request-id first: if the sale already
 				// exists submitted, mark synced instead of drafting.
+				if (!ownsQueueEntry(entry)) break;
 				if (await reconcileAlreadySubmitted(queuedInvoice.invoice)) {
 					synced += 1;
 					await markWriteQueueEntrySynced(
@@ -563,12 +579,14 @@ export async function syncOfflineInvoices() {
 					error,
 				);
 				try {
+					if (!ownsQueueEntry(entry)) break;
 					const draftResponse = await frappe.call({
 						method: "posawesome.posawesome.api.invoices.update_invoice",
 						args: {
 							data: buildDraftFallbackPayload(
 								queuedInvoice.invoice,
 								entry.draft_invoice_name,
+								queuedInvoice.data,
 							),
 						},
 					});

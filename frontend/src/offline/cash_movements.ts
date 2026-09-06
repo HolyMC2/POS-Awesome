@@ -1,3 +1,4 @@
+import { ownsQueueEntry } from "./queueOwnership";
 import { isOffline } from "./db";
 import {
 	claimRetryableQueueEntries,
@@ -92,6 +93,7 @@ export async function syncOfflineCashMovements() {
 	let synced = 0;
 
 	for (const entry of claimedEntries) {
+		if (!ownsQueueEntry(entry)) break;
 		try {
 			await frappe.call({
 				method: resolveMethod(entry.payload),

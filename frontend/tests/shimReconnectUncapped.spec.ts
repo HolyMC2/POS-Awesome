@@ -5,7 +5,7 @@
 // exponential backoff, matching Desk. Source-pinned: the ioOpts object must not
 // set reconnectionAttempts.
 import { describe, expect, it } from "vitest";
-import shimSource from "../src/posapp/utils/frappe-shim.ts?raw";
+import shimSource from "../src/posapp/utils/realtime-client.ts?raw";
 
 describe("the realtime shim does not cap reconnection", () => {
 	it("passes no reconnectionAttempts to socket.io (defaults to Infinity)", () => {

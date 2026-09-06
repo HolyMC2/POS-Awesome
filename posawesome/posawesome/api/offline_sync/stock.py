@@ -7,6 +7,7 @@ from posawesome.posawesome.api.offline_sync.common import (
     _normalize_timestamp,
     _resolve_profile,
     _watermark_floor,
+    _page_window, _page_scope, _changed_keys, _paged_response, _profile_warehouses,
 )
 
 SYNC_SCHEMA_VERSION = "2026-08-12"
@@ -74,6 +75,8 @@ def sync_stock(
     start_after=None,
     limit=200,
     schema_version=None,
+    paginated=0,
+    page_cursor=None,
 ):
     if schema_version and schema_version != SYNC_SCHEMA_VERSION:
         return _build_response(full_resync_required=True)
@@ -81,6 +84,9 @@ def sync_stock(
     profile = _resolve_profile(pos_profile)
     if not profile:
         frappe.throw("pos_profile is required")
+
+    if str(paginated) == "1" or page_cursor:
+        return _sync_stock_page(profile, watermark, page_cursor, limit)
 
     resolved_limit = _coerce_limit(limit)
     fetch_limit = resolved_limit + 1
@@ -128,4 +134,21 @@ def sync_stock(
         deleted=[],
         next_watermark=next_watermark,
         has_more=has_more,
+    )
+
+
+def _sync_stock_page(profile, watermark, cursor, limit):
+    limit = _coerce_limit(limit)
+    window = _page_window(watermark, cursor, _page_scope("stock", profile))
+    warehouses = _profile_warehouses(profile)
+    rows = _changed_keys("Bin", "item_code", window, limit + 1, {"warehouse": ["in", warehouses]}) if warehouses else []
+    keys = [row["item_code"] for row in rows]
+    warehouse = profile.get("warehouse")
+    stock_rows = [{"item_code": code, "warehouse": warehouse} for code in keys[:limit]]
+    stock_map = get_bulk_stock_availability(stock_rows) if stock_rows else {}
+    return _paged_response(
+        window, keys, limit,
+        [{"key": f"stock::{row['item_code']}", "data": {
+            **row, "actual_qty": stock_map.get((row["item_code"], warehouse, ""), 0.0),
+        }} for row in stock_rows], [],
     )

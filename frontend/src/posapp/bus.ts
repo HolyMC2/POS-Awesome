@@ -162,6 +162,7 @@ export type Events = {
 	 * everything and must not pull the shell's module graph in behind it.
 	 */
 	open_destination: string;
+	open_money_exceptions: void;
 	toggle_catalog_drawer: void; // Alt+B → the catalogue beside the sale
 	/**
 	 * The band's `recharge.submit` pressed while Recargas is the hosted

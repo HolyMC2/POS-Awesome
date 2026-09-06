@@ -164,7 +164,7 @@ export function updateLocalStock(items: AnyRecord[]) {
 			// Don't create new entries without knowing the actual stock
 			if (stockCache[key]) {
 				// Reduce quantity by sold amount
-				const soldQty = Math.abs(item.qty || 0);
+				const soldQty = stockQuantity(item);
 				stockCache[key].actual_qty = Math.max(
 					0,
 					stockCache[key].actual_qty - soldQty,
@@ -277,7 +277,7 @@ export function updateLocalStockWithActualQuantities(
 				}
 
 				// Now reduce quantity by sold amount
-				const soldQty = Math.abs(invoiceItem.qty || 0);
+				const soldQty = stockQuantity(invoiceItem);
 				stockCache[key].actual_qty = Math.max(
 					0,
 					stockCache[key].actual_qty - soldQty,
@@ -290,6 +290,15 @@ export function updateLocalStockWithActualQuantities(
 	} catch (e) {
 		console.error("Failed to update local stock with actual quantities", e);
 	}
+}
+
+function stockQuantity(item: AnyRecord): number {
+	// Bin.actual_qty is in stock UOM. Preserve the sign: a return restores
+	// stock, while a box sale consumes qty × conversion_factor stock units.
+	const quantity = Number(
+		item.stock_qty ?? Number(item.qty || 0) * Number(item.conversion_factor ?? 1),
+	);
+	return Number.isFinite(quantity) ? quantity : 0;
 }
 
 export function getLocalStockCache() {

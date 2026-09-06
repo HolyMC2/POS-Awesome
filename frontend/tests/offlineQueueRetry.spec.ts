@@ -61,7 +61,7 @@ beforeEach(async () => {
 	memory.local_stock_cache = {};
 	syncPendingInvoices.mockClear();
 	vi.spyOn(console, "error").mockImplementation(() => {});
-	(globalThis as any).frappe = { call: vi.fn() };
+	(globalThis as any).frappe = { session: { user: "cashier@example.com" }, call: vi.fn() };
 });
 
 describe("Reintentar reuses the drain that already exists", () => {

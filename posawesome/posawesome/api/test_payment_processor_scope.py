@@ -42,6 +42,7 @@ class _FakePaymentEntry:
         self.doctype = "Payment Entry"
         self.name = "ACC-PAY-TEST-0001"
         self.paid_amount = amount
+        self.paid_from = self.paid_to = "Debtors - A"
         self.received_amount = amount
         self.amount = amount
         self.paid_to_account_currency = "MXN"
@@ -169,7 +170,7 @@ def _install_frappe(scenario):
 
     frappe.get_all = get_all
 
-    def get_cached_doc(doctype, name):
+    def get_cached_doc(doctype, name, **kwargs):
         if doctype == "POS Profile":
             document = scenario["profiles"].get(name)
         else:
@@ -197,7 +198,9 @@ def _install_frappe(scenario):
                 for name in scenario["assigned_profiles"]
             ]
 
-        def get_value(self, doctype, name, fieldname=None, as_dict=False):
+        def get_value(self, doctype, name, fieldname=None, as_dict=False, for_update=False):
+            if doctype in ("Customer", "Supplier"):
+                return name
             if doctype == "POS Opening Shift":
                 shift = scenario.get("opening_shift")
                 if not shift or shift.get("name") != name:
@@ -210,6 +213,12 @@ def _install_frappe(scenario):
 
         def get_default(self, fieldname):
             return 2
+
+        def savepoint(self, name):
+            scenario.setdefault("savepoints", []).append(name)
+
+        def rollback(self, save_point=None):
+            scenario.setdefault("rollbacks", []).append(save_point)
 
     frappe.db = _Db()
 
@@ -249,6 +258,13 @@ def _install_dependencies():
         reconciliation,
     )
 
+    payment_core = types.ModuleType("erpnext.accounts.doctype.payment_entry.payment_entry")
+    def reference_details(doctype, name, *args):
+        document = sys.modules["frappe"].get_doc(doctype, name)
+        return _AttrDict(total_amount=document.get("grand_total"), exchange_rate=document.get("conversion_rate"), account="Debtors - A")
+    payment_core.get_reference_details = reference_details
+    _install_module("erpnext.accounts.doctype.payment_entry.payment_entry", payment_core)
+
     accounts_utils = types.ModuleType("erpnext.accounts.utils")
     accounts_utils.get_account_currency = lambda account: "MXN"
     accounts_utils.reconcile_against_document = lambda *args, **kwargs: None
@@ -268,11 +284,15 @@ def _install_dependencies():
     _install_module("posawesome.posawesome.api.payment_processing.creation", creation)
 
     idempotency = types.ModuleType("posawesome.posawesome.api.idempotency")
+    idempotency.payment_method_request_id = lambda value, index: value if not value or not index else f"{value}-{index}"
     idempotency.normalize_client_request_id = lambda value: (value or "").strip() or None
-    idempotency.find_payment_entries_by_client_request_id = lambda value: []
+    idempotency.find_payment_entries_by_client_request_id = lambda value, **kwargs: []
     _install_module("posawesome.posawesome.api.idempotency", idempotency)
 
     shifts = types.ModuleType("posawesome.posawesome.api.shifts")
+    terminal = types.ModuleType("posawesome.posawesome.api.shift_terminal")
+    terminal.assert_terminal_access = lambda *args, **kwargs: None
+    _install_module("posawesome.posawesome.api.shift_terminal", terminal)
     shifts.is_demo_pos_site = lambda: False
     _install_module("posawesome.posawesome.api.shifts", shifts)
 
@@ -282,6 +302,8 @@ def _load_processor(scenario):
     _install_frappe(scenario)
     _install_dependencies()
     sys.modules.pop("posawesome.posawesome.api._scope", None)
+    sys.modules.pop("posawesome.posawesome.api.payment_processing.integrity", None)
+    sys.modules.pop("posawesome.posawesome.api.payment_processing.allocations", None)
     sys.modules.pop("posawesome.posawesome.api.payment_processing.processor", None)
     spec = importlib.util.spec_from_file_location(
         "posawesome.posawesome.api.payment_processing.processor",

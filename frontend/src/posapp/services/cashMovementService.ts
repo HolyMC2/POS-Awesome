@@ -1,4 +1,5 @@
 import api from "./api";
+import { getShiftTerminalContext } from "../../offline/shiftTerminal";
 
 const baseMethod = "posawesome.posawesome.api.cash_movement.service";
 
@@ -11,15 +12,15 @@ const cashMovementService = {
 	},
 
 	createExpense(payload: Record<string, any>) {
-		return api.call(`${baseMethod}.create_pos_expense`, { payload });
+		return api.call(`${baseMethod}.create_pos_expense`, { payload: { ...getShiftTerminalContext(), ...payload } });
 	},
 
 	createDeposit(payload: Record<string, any>) {
-		return api.call(`${baseMethod}.create_cash_deposit`, { payload });
+		return api.call(`${baseMethod}.create_cash_deposit`, { payload: { ...getShiftTerminalContext(), ...payload } });
 	},
 
 	createCashIn(payload: Record<string, any>) {
-		return api.call(`${baseMethod}.create_cash_in`, { payload });
+		return api.call(`${baseMethod}.create_cash_in`, { payload: { ...getShiftTerminalContext(), ...payload } });
 	},
 
 	getShiftMovements(args: {
@@ -42,15 +43,15 @@ const cashMovementService = {
 	},
 
 	cancel(name: string) {
-		return api.call(`${baseMethod}.cancel_cash_movement`, { name });
+		return api.call(`${baseMethod}.cancel_cash_movement`, { name, ...getShiftTerminalContext() });
 	},
 
 	duplicate(name: string, posting_date?: string) {
-		return api.call(`${baseMethod}.duplicate_cash_movement`, { name, posting_date });
+		return api.call(`${baseMethod}.duplicate_cash_movement`, { name, posting_date, ...getShiftTerminalContext() });
 	},
 
 	remove(name: string) {
-		return api.call(`${baseMethod}.delete_cash_movement`, { name });
+		return api.call(`${baseMethod}.delete_cash_movement`, { name, ...getShiftTerminalContext() });
 	},
 };
 

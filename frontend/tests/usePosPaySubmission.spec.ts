@@ -7,6 +7,10 @@ vi.mock("../src/offline/index", () => ({
 	isOffline: vi.fn(() => false),
 	saveOfflinePayment: vi.fn(),
 }));
+vi.mock("../src/offline/shiftTerminal", () => ({
+	getShiftTerminalContext: () => ({ terminal_id: "test-terminal", terminal_generation: 7,
+		terminal_token: "test-possession-proof" }),
+}));
 
 // MP-INTEGRATION-POINT: the collect flow instantiates the terminal gate + reads
 // the cashier. Mock both so the composable runs without Pinia / a component, and
@@ -105,6 +109,10 @@ describe("usePosPaySubmission", () => {
 		});
 
 		await processPayment();
+		expect((globalThis as any).frappe.call).toHaveBeenCalledWith(expect.objectContaining({
+			args: { payload: expect.objectContaining({ terminal_id: "test-terminal",
+				terminal_generation: 7, terminal_token: "test-possession-proof" }) },
+		}));
 
 		expect(autoReconcile).toHaveBeenCalledTimes(1);
 		expect(autoReconcile).toHaveBeenCalledWith(null, {

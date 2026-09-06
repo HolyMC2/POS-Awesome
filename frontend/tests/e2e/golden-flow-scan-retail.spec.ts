@@ -22,6 +22,7 @@
  * Product 2 status covers converging a bare tenant).
  */
 import { expect, test, type Page } from "@playwright/test";
+import { installRegisterIdentity, ensureRegisterOwnership } from "./support/registerDrill";
 
 const BASE_URL = process.env.POSA_SMOKE_BASE_URL;
 const POS_PATH = process.env.POSA_GOLDEN_PATH || "/app/posapp";
@@ -88,7 +89,7 @@ async function openShiftIfAsked(page: Page) {
 	await expect(dialog).toBeHidden({ timeout: 30_000 });
 }
 
-async function addItem(page: Page, term: string, rowText: string) {
+async function addItem(page: Page, term: string, rowText: string, expectedQty = 1) {
 	const box = page
 		.locator(".v-input:has-text('Search, scan or browse') input, input[placeholder*='scan']")
 		.first();
@@ -103,7 +104,11 @@ async function addItem(page: Page, term: string, rowText: string) {
 	const drawer = page.locator('[data-testid="catalog-drawer-panel"]');
 	const scope = (await drawer.isVisible().catch(() => false)) ? drawer : page;
 	await scope.getByText(rowText, { exact: false }).first().click();
-	await page.waitForTimeout(800);
+	const cartRow = page.locator('[data-pos-keyboard-target="cart-row"]')
+		.filter({ has: page.getByText(rowText, { exact: true }) });
+	await expect(cartRow, `Item did not enter the basket; verify fixture stock for ${rowText}`).toHaveCount(1);
+	await expect.poll(async () => Number(await cartRow.locator('[data-pos-keyboard-target="cart-qty"]').innerText()))
+		.toBe(expectedQty);
 	await box.fill("");
 }
 
@@ -111,18 +116,17 @@ test("scan-retail golden flow: shift → mixed basket → cash → submitted tax
 	page,
 }) => {
 	test.setTimeout(240_000);
+	await installRegisterIdentity(page);
 	await login(page);
 	await page.goto(POS_PATH, { waitUntil: "domcontentloaded" });
 	await page.waitForTimeout(8_000);
 	await openShiftIfAsked(page);
+	await ensureRegisterOwnership(page);
 
 	await addItem(page, "Tortilla", ZERO_RATE_ITEM);
-	await addItem(page, "Tortilla", ZERO_RATE_ITEM); // duplicate scan → qty 2
+	await addItem(page, "Tortilla", ZERO_RATE_ITEM, 2); // duplicate scan → qty 2
 	await addItem(page, "Leche entera", ZERO_RATE_ITEM_2);
 	await addItem(page, "Detergente", TAXED_ITEM);
-
-	// Duplicate-scan quantity behaviour (§4.1): one row, qty 2.
-	await expect(page.getByText("2.00").first()).toBeVisible({ timeout: 10_000 });
 
 	await page.getByRole("button", { name: /^pay$/i }).first().click();
 	// Cash prefills the exact total (change 0) — completing the sale is the
@@ -141,18 +145,26 @@ test("scan-retail golden flow: shift → mixed basket → cash → submitted tax
 		await page.getByRole("button", { name: /^pay$/i }).first().click();
 		await submit.waitFor({ state: "visible", timeout: 30_000 });
 	}
+	const submission = page.waitForResponse((response) =>
+		/posawesome\.posawesome\.api\.invoices?\.submit_invoice/.test(response.url()) &&
+		response.request().method() === "POST",
+	);
 	await submit.click();
+	const submitted = await submission;
+	expect(submitted.ok(), "the sale submission failed").toBeTruthy();
+	const submittedInvoice = (await submitted.json()).message;
+	expect(submittedInvoice?.name, "submission did not identify its invoice").toBeTruthy();
 
 	// Next basket ready: the cart empties without a reload.
 	await expect(page.getByText("No items in cart")).toBeVisible({ timeout: 30_000 });
 
-	// Server-side truth, not UI truth: the newest submitted POS invoice
-	// carries the basket and a NON-ZERO tax total (the 16% line's IVA).
+	// Verify this run's exact invoice; another sale must not satisfy the gate.
 	const list = await page.request.get(
 		"/api/method/frappe.client.get_list?" +
 			new URLSearchParams({
 				doctype: "Sales Invoice",
-				filters: JSON.stringify({ docstatus: 1, is_pos: 1 }),
+				filters: JSON.stringify({ name: submittedInvoice.name, docstatus: 1,
+					is_pos: 1, company: COMPANY, pos_profile: PROFILE }),
 				fields: JSON.stringify([
 					"name",
 					"grand_total",
@@ -166,7 +178,8 @@ test("scan-retail golden flow: shift → mixed basket → cash → submitted tax
 	expect(list.ok()).toBeTruthy();
 	const invoice = (await list.json()).message?.[0];
 	expect(invoice, "no submitted POS invoice found after the flow").toBeTruthy();
-	expect(Number(invoice.total_qty)).toBeGreaterThanOrEqual(4);
+	expect(invoice.name).toBe(submittedInvoice.name);
+	expect(Number(invoice.total_qty)).toBe(4);
 	expect(
 		Number(invoice.total_taxes_and_charges),
 		"16% line sold UNTAXED — the company sales-template half is missing " +

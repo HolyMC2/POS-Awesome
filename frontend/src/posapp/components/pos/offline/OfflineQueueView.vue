@@ -46,7 +46,7 @@
 				<p class="offline-queue__promise">
 					{{
 						__(
-							"Everything is saved on this register and uploads by itself as soon as the signal returns. No ticket is lost and nobody has to write anything on paper.",
+							"The sales shown here are saved on this register. Keep this browser’s data and sign in as the original cashier to upload them when online.",
 						)
 					}}
 				</p>

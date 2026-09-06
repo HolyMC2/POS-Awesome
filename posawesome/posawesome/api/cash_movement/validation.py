@@ -19,7 +19,8 @@ def get_opening_shift(opening_shift_name):
     if not opening_shift_name:
         frappe.throw(_("POS Opening Shift is required."))
 
-    opening_shift = frappe.get_doc("POS Opening Shift", opening_shift_name)
+    # First write-path lock, shared with final closing and payment posting.
+    opening_shift = frappe.get_doc("POS Opening Shift", opening_shift_name, for_update=True)
     if opening_shift.docstatus != 1 or opening_shift.status != "Open":
         frappe.throw(_("POS Opening Shift must be submitted and open."))
     if opening_shift.user != frappe.session.user:

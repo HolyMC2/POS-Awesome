@@ -64,11 +64,13 @@ import {
 import { memory } from "../src/offline/db";
 
 const frappeCall = vi.fn();
-(globalThis as any).frappe = { call: frappeCall };
+(globalThis as any).frappe = { session: { user: "cashier@example.com" }, call: frappeCall };
 
 function entry() {
 	return {
 		queue_id: 1,
+		queue_user: "cashier@example.com",
+		queue_profile: null,
 		last_attempt_at: "2026-07-11T10:00:00Z",
 		payload: {
 			invoice: {
@@ -186,6 +188,50 @@ describe("syncOfflineInvoices — ack-miss does not orphan a duplicate", () => {
 			{ invoiceName: null, reason: "validation failed" },
 		);
 		expect(totals).toMatchObject({ synced: 0, drafted: 1 });
+	});
+});
+
+describe("draft fallback preserves the queued terminal proof", () => {
+	it.each([false, true])("forwards original proof on capability mismatch=%s without changing the queue", async (mismatch) => {
+		const queued = { ...entry(), draft_invoice_name: "EXISTING-DRAFT" };
+		const proof = { terminal_id: "original-terminal", terminal_generation: 7,
+			terminal_token: "original-fixture-proof" };
+		queued.payload.data = { ...proof, posa_capability_version: 1 };
+		const savedPayload = JSON.parse(JSON.stringify(queued.payload));
+		(memory as any).pos_opening_storage = {
+			capability_profile: { name: "p", version: mismatch ? 2 : 1 },
+			terminal_status: { terminal_id: "current-terminal", terminal_generation: 9 },
+		};
+		claimRetryableQueueEntries.mockResolvedValueOnce([queued]);
+		frappeCall.mockImplementation(async ({ method }: any) => {
+			if (method.endsWith("submit_invoice")) throw new Error("validation failed");
+			if (method.endsWith("reconcile_invoice_outbox_entry")) return { message: { acknowledged: false } };
+			return { message: { name: "EXISTING-DRAFT" } };
+		});
+
+		await syncOfflineInvoices();
+
+		const fallback = frappeCall.mock.calls.find(([call]) => call.method.endsWith("update_invoice"))?.[0];
+		expect(fallback.args.data).toEqual({ ...queued.payload.invoice, name: "EXISTING-DRAFT", ...proof });
+		expect(queued.payload).toEqual(savedPayload);
+		expect(markWriteQueueEntryDrafted).toHaveBeenCalledOnce();
+	});
+
+	it("retains the sale for recovery when the server rejects its original terminal generation", async () => {
+		const queued = entry();
+		queued.payload.data = { terminal_id: "original-terminal", terminal_generation: 7,
+			terminal_token: "original-fixture-proof" };
+		(memory as any).pos_opening_storage = { terminal_status: { terminal_generation: 9 } };
+		claimRetryableQueueEntries.mockResolvedValueOnce([queued]);
+		frappeCall.mockImplementation(async ({ method, args }: any) => {
+			if (method.endsWith("reconcile_invoice_outbox_entry")) return { message: { acknowledged: false } };
+			if (method.endsWith("update_invoice")) expect(args.data.terminal_generation).toBe(7);
+			throw new Error("Terminal registration changed");
+		});
+		await syncOfflineInvoices();
+		expect(markWriteQueueEntryFailed).toHaveBeenCalledOnce();
+		expect(markWriteQueueEntryDrafted).not.toHaveBeenCalled();
+		expect(markWriteQueueEntrySynced).not.toHaveBeenCalled();
 	});
 });
 
