@@ -119,6 +119,60 @@ class TerminalTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "no longer open"):
             self.verify()
 
+    def test_lost_resume_reply_replays_once_without_restoring_old_money_access(self):
+        first = self.api.resume_terminal("OPEN-1", self.device, 1, self.secret, 1)
+        for _ in range(3):
+            replay = self.api.resume_terminal("OPEN-1", self.device, 1, self.secret, 1)
+            self.assertEqual(replay, first)
+        self.assertEqual(self.row.posa_terminal_generation, 2)
+        self.assertEqual(len(self.audit), 1)
+        with self.assertRaisesRegex(Exception, "another browser"):
+            self.verify(generation=1)
+        with self.assertRaisesRegex(Exception, "Saved work needs review"):
+            self.api.assert_verified_terminal_generation("OPEN-1", 1)
+        self.verify(generation=2)
+
+    def test_resume_replay_rejects_missing_drain_wrong_secret_or_other_cashier(self):
+        self.api.resume_terminal("OPEN-1", self.device, 1, self.secret, 1)
+        for drained, secret, user in [(0, self.secret, self.row.user),
+                                      (1, "x" * 64, self.row.user),
+                                      (1, self.secret, "other@example.com")]:
+            self.api.frappe.session.user = user
+            with self.assertRaises(Exception):
+                self.api.resume_terminal("OPEN-1", self.device, 1, secret, drained)
+        self.assertEqual(self.row.posa_terminal_generation, 2)
+        self.assertEqual(len(self.audit), 1)
+
+    def test_only_latest_actual_resume_can_replay_not_transfer_with_same_credentials(self):
+        self.api.resume_terminal("OPEN-1", self.device, 1, self.secret, 1)
+        self.api.resume_terminal("OPEN-1", self.device, 2, self.secret, 1)
+        with self.assertRaises(Exception):
+            self.api.resume_terminal("OPEN-1", self.device, 1, self.secret, 1)
+        self.manager = True
+        self.api.transfer_terminal("OPEN-1", self.device, self.secret, "Reviewed this browser", 1)
+        with self.assertRaises(Exception):
+            self.api.resume_terminal("OPEN-1", self.device, 3, self.secret, 1)
+        self.assertEqual(self.row.posa_terminal_generation, 4)
+        self.assertEqual(self.row.posa_terminal_resume_from_generation, 0)
+
+    def test_lost_release_reply_is_reconciled_by_status_without_releasing_a_new_owner(self):
+        self.api.resume_terminal("OPEN-1", self.device, 1, self.secret, 1)
+        self.api.release_terminal("OPEN-1", self.device, 2, self.secret, 1)
+        status = self.api.get_terminal_status("OPEN-1", self.device, self.secret)
+        self.assertFalse(status["owned"])
+        self.assertEqual(status["terminal_id"], "")
+        self.assertEqual(self.row.posa_terminal_resume_from_generation, 0)
+        self.api.claim_terminal("OPEN-1", "device-B-123456789", "b" * 64)
+        with self.assertRaises(Exception):
+            self.api.release_terminal("OPEN-1", self.device, 2, self.secret, 1)
+        self.assertEqual(self.row.posa_terminal_id, "device-B-123456789")
+
+    def test_closed_shift_cannot_replay_previously_successful_resume(self):
+        self.api.resume_terminal("OPEN-1", self.device, 1, self.secret, 1)
+        self.row.status = "Closed"
+        with self.assertRaisesRegex(Exception, "no longer open"):
+            self.api.resume_terminal("OPEN-1", self.device, 1, self.secret, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

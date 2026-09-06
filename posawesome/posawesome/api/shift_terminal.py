@@ -116,6 +116,7 @@ def bind_new_shift(row, terminal_id, terminal_token):
     row.flags.posa_binding_new_terminal = True
     row.posa_terminal_id = terminal_id
     row.posa_terminal_generation = 1
+    row.posa_terminal_resume_from_generation = 0
     row.posa_terminal_token_hash = token_hash
     row.posa_terminal_recovery_pending = 0
 
@@ -142,6 +143,7 @@ def claim_terminal(opening_shift, terminal_id, terminal_token, acknowledge_legac
         frappe.throw(_("Review saved work on previous browsers before claiming this legacy shift."))
     values = {"posa_terminal_id": terminal_id, "posa_terminal_token_hash": token_hash,
               "posa_terminal_generation": cint(row.get("posa_terminal_generation")) + 1,
+              "posa_terminal_resume_from_generation": 0,
               "posa_terminal_recovery_pending": cint(legacy or row.get("posa_terminal_recovery_pending"))}
     frappe.db.set_value("POS Opening Shift", row.name, values)
     row.update(values)
@@ -155,6 +157,7 @@ def release_terminal(opening_shift, terminal_id, terminal_generation, terminal_t
     if not cint(drained) or row.get("posa_terminal_recovery_pending"):
         frappe.throw(_("Sync and review all saved work before releasing this terminal."))
     values = {"posa_terminal_id": "", "posa_terminal_token_hash": "",
+              "posa_terminal_resume_from_generation": 0,
               "posa_terminal_generation": cint(row.get("posa_terminal_generation")) + 1}
     frappe.db.set_value("POS Opening Shift", row.name, values)
     row.update(values)
@@ -174,6 +177,7 @@ def transfer_terminal(opening_shift, terminal_id, terminal_token, reason, acknow
     terminal_id, token_hash = _credentials(terminal_id, terminal_token)
     values = {"posa_terminal_id": terminal_id, "posa_terminal_token_hash": token_hash,
               "posa_terminal_generation": cint(row.get("posa_terminal_generation")) + 1,
+              "posa_terminal_resume_from_generation": 0,
               "posa_terminal_recovery_pending": 1}
     frappe.db.set_value("POS Opening Shift", row.name, values)
     row.update(values)
@@ -198,12 +202,27 @@ def resolve_terminal_recovery(opening_shift, reason, acknowledge_saved_work=0):
 @frappe.whitelist(methods=["POST"])
 def resume_terminal(opening_shift, terminal_id, terminal_generation, terminal_token, drained=0):
     """Fence off a possibly delayed close before this browser resumes selling."""
-    row = assert_terminal_access(opening_shift, terminal_id, terminal_generation, terminal_token)
+    row = _load(opening_shift)
+    _open(row)
+    if row.user != frappe.session.user:
+        frappe.throw(_("This shift belongs to another cashier."), frappe.PermissionError)
     if not cint(drained):
         frappe.throw(_("Sync and review saved work before resuming this terminal."))
-    generation = cint(row.posa_terminal_generation) + 1
-    frappe.db.set_value("POS Opening Shift", row.name, "posa_terminal_generation", generation)
-    row.posa_terminal_generation = generation
+    generation = cint(row.posa_terminal_generation)
+    requested = cint(terminal_generation)
+    # Only this recovery endpoint may recognize the request whose reply was
+    # lost. Possession must still match the CURRENT binding. Transfers/claims
+    # clear the marker, even if they happen to reuse the same ID and secret.
+    replay = (requested > 0 and requested == cint(row.get("posa_terminal_resume_from_generation"))
+              and generation == requested + 1)
+    if not _matches(row, terminal_id, generation, terminal_token) or (requested != generation and not replay):
+        frappe.throw(_("This shift is assigned to another browser or its registration changed. Saved work is preserved; open Offline Status for recovery."), frappe.PermissionError)
+    if replay:
+        return _status(row, terminal_id, terminal_token)
+    values = {"posa_terminal_generation": generation + 1,
+              "posa_terminal_resume_from_generation": generation}
+    frappe.db.set_value("POS Opening Shift", row.name, values)
+    row.update(values)
     _audit(row, "resumed; previous close credentials revoked")
     return _status(row, terminal_id, terminal_token)
 

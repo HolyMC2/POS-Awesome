@@ -28,6 +28,7 @@
   "posa_terminal_generation",
   "posa_terminal_token_hash",
   "posa_terminal_recovery_pending",
+  "posa_terminal_resume_from_generation",
   "section_break_9",
   "amended_from"
  ],
@@ -199,11 +200,21 @@
    "allow_on_submit": 1,
    "no_copy": 1,
    "hidden": 0
+  },
+  {
+   "fieldname": "posa_terminal_resume_from_generation",
+   "fieldtype": "Int",
+   "label": "Terminal Resume From Generation",
+   "default": "0",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "no_copy": 1,
+   "hidden": 1
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2022-11-22 15:04:30.555123",
+ "modified": "2026-09-06 23:50:00.000000",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "POS Opening Shift",

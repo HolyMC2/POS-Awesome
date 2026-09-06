@@ -12,14 +12,23 @@ from posawesome.posawesome.api.status_updater import StatusUpdater
 
 class POSOpeningShift(StatusUpdater):
     def validate(self):
-        terminal_fields = ("posa_terminal_id", "posa_terminal_generation", "posa_terminal_token_hash", "posa_terminal_recovery_pending")
+        self._validate_terminal_fields()
+        self.validate_pos_profile_and_cashier()
+        self.set_status()
+
+    def before_update_after_submit(self):
+        # Frappe bypasses validate() for submitted-document edits. The normal
+        # Desk save path must not become a second terminal-management API.
+        self._validate_terminal_fields()
+
+    def _validate_terminal_fields(self):
+        terminal_fields = ("posa_terminal_id", "posa_terminal_generation", "posa_terminal_token_hash",
+                           "posa_terminal_recovery_pending", "posa_terminal_resume_from_generation")
         previous = self.get_doc_before_save()
         if previous and any(self.get(field) != previous.get(field) for field in terminal_fields):
             frappe.throw(_("Manage terminal registration through Offline Status; direct field changes are not allowed."))
-        if self.is_new() and self.get("posa_terminal_id") and not self.flags.get("posa_binding_new_terminal"):
+        if self.is_new() and any(self.get(field) for field in terminal_fields) and not self.flags.get("posa_binding_new_terminal"):
             frappe.throw(_("Open this shift from its selling browser to register the terminal."))
-        self.validate_pos_profile_and_cashier()
-        self.set_status()
 
     def validate_pos_profile_and_cashier(self):
         if self.company != frappe.db.get_value("POS Profile", self.pos_profile, "company"):
