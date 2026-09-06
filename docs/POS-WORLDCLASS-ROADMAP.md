@@ -790,6 +790,26 @@ move the program forward.
 
 ### Foundation 0 — Baseline and release gate
 
+Execution update (2026-09-06, LAB `ready0906-4`): hardening now exercises the public repair
+checkout seam, terminal ownership/manager recovery, current-price/FX guards,
+concurrent close/payment/charge operations and durable source callbacks. The
+register policy is one selling browser per open shift, with separate shifts
+for independent registers and audited supervisor transfer for replacement.
+The browser identity survives ordinary logout/cache cleanup; old queued work
+retains its original identity and must be reconciled rather than restamped.
+
+The completion candidate also adds protected financial request receipts,
+supplier credit-note reconciliation and quoted unused-advance refunds. Native
+accounting and ordinary-cashier browser checks verify partial refund balances
+and allocation links; twelve sale/offline drills and desktop/mobile recovery
+control checks pass. Payment capture preserves terminal ownership, and the
+recovery panel is reachable outside the navbar on both screen sizes. Passing
+these checks does not by itself promote the offering to certified. Reference-device
+printer/scanner/drawer checks, eight-hour soak, enabled fiscal/payment-provider
+canaries and tenant upgrade/rollback acceptance remain explicit gates. The
+Scan Retail + Repair Retail commitment and restaurant beta boundary above
+still apply; mapped giros are not implicitly certified.
+
 Execution status (2026-08-13): **restaurant Wave 0 complete**. The UI/UX and
 exception-state contract is recorded in
 [`RESTAURANT_UX_MAP.md`](RESTAURANT_UX_MAP.md); dirty/free, empty-order and
