@@ -281,8 +281,12 @@ scheduler_events = {
 
 # Override standard DocTypes with custom classes
 override_doctype_class = {
-    "POS Invoice": "posawesome.posawesome.overrides.pos_invoice.CustomPOSInvoice",
     "POS Invoice Merge Log": "posawesome.posawesome.overrides.pos_invoice_merge_log.CustomPOSInvoiceMergeLog",
+}
+
+# Compose shift validation with fiscal/vertical overrides selected by Frappe v16.
+extend_doctype_class = {
+    "POS Invoice": ["posawesome.posawesome.overrides.pos_invoice.POSOpeningShiftMixin"],
 }
 
 # exempt linked doctypes from being automatically cancelled

@@ -2,11 +2,9 @@
 
 from erpnext.accounts.doctype.pos_invoice.pos_invoice import POSInvoice as ERPNextPOSInvoice
 
-from posawesome.posawesome.api.invoice import validate_shift
 
-
-class CustomPOSInvoice(ERPNextPOSInvoice):
-    """Override ERPNext POS Invoice to respect POS Awesome opening shifts."""
+class POSOpeningShiftMixin:
+    """Compose POS shift validation with the installed fiscal invoice controller."""
 
     def validate_pos_opening_entry(self):
         """Allow POS invoices when a POS Awesome shift is open.
@@ -18,9 +16,13 @@ class CustomPOSInvoice(ERPNextPOSInvoice):
         """
 
         if getattr(self, "posa_pos_opening_shift", None):
-            # Use existing shift validation from POS Awesome
+            from posawesome.posawesome.api.invoice import validate_shift
             validate_shift(self)
             return
 
         # No POS Awesome shift - use ERPNext's validation
         super().validate_pos_opening_entry()
+
+
+class CustomPOSInvoice(POSOpeningShiftMixin, ERPNextPOSInvoice):
+    """Legacy import compatibility; Frappe registers the mixin, not this class."""
