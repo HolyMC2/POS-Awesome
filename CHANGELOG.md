@@ -4,7 +4,7 @@ All notable changes.
 
 ## Unreleased
 
-- **POS review corrections (09-06); production pending.**
+- **POS review corrections (09-06), LAB `review0906-3`; production pending.**
   - Make terminal resume retries return the first successful generation after
     a lost response. Persist protected resume provenance; ordinary money
     requests still require the current generation. Protect terminal fields
@@ -25,16 +25,29 @@ All notable changes.
     current locked source quote before preparation and submission.
   - Prepare POS Invoices with profile-derived zero tender rows. Preserve the
     source currency and use native receivable and server exchange-rate rules.
+  - Compose POS opening-shift validation through Frappe's controller extension
+    hook. The Mexican compliance controller retains its fiscal methods while
+    ordinary POSAwesome shifts can submit POS Invoices without creating an
+    unrelated ERPNext opening entry. Invoices without a POSAwesome shift keep
+    native ERPNext opening validation.
   - Verification: 5,438 frontend tests in 475 files, type-check and production
-    build passed (`review0906-3`). 36 native charge/Taller/exception regressions
-    passed in 42.7 seconds with fixture rollback, including cancel/amend,
+    build passed (`review0906-3`). 41 native charge/Taller/exception/controller
+    regressions passed in 54.6 seconds with fixture rollback, including cancel/amend,
     changed-quote release/reload, zero-tender POS Invoice and USD preparation.
+    Four composition cases also passed on DEMO. Both actual LAB tenants use
+    the fiscal controller; an isolated resolver case verifies the native base.
     Also passed: 77 focused backend checks, six native terminal/recovery cases,
     22 closing-fence/recovery frontend checks and six translation checks.
     Installed Frappe already maps database error
     1020 to the existing read-only retry; no broad retry was added. Native
     manager recovery preserves a parked sale's original request and posts it
     once after a terminal generation change.
+  - Final-bundle read-only LAB smoke passed at 1440px and 390px. The public
+    manifest and browser-loaded entry/CSS hashes match the local build.
+    Register status fits and opens/closes with zero page errors or attempted
+    money writes; the original terminal generation is unchanged. Pending
+    Charges is disabled for that profile, so its release dialog is covered
+    by component/native tests, not this browser smoke.
   - Eight-hour endurance remains unverified. Native invoice-first locks and
     source-first callback locks can contend; a two-connection cancellation/
     delivery deadlock drill remains outstanding. No generic financial write
