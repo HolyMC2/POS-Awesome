@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   backend:
-    name: Python lint and Frappe tests
+    name: Python lint, install smoke and standalone tests
     runs-on: ubuntu-22.04
     services:
       mariadb:
@@ -98,8 +98,10 @@ jobs:
       - name: Install POS Awesome
         run: cd frappe-bench && bench --site example.com install-app posawesome
 
-      # Full standalone stub suite (not just offline_sync): every test_*.py
-      # under api/ that fakes frappe in sys.modules. Bench-only modules guard
-      # their frappe import and skip themselves here.
+      # Every API test file runs in a separate interpreter: many fixtures replace
+      # frappe/package modules. Native missing-Frappe skips stay explicit; see
+      # docs/testing/backend.md for the separate real-bench execution lane.
       - name: POS Awesome standalone unit suite
-        run: python -m unittest discover -s posawesome/posawesome/api -p "test_*.py"
+        run: |
+          python -m unittest discover -s scripts -p "test_run_backend_tests.py" -v
+          python scripts/run_backend_tests.py

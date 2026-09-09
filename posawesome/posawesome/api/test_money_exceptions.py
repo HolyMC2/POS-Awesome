@@ -4,7 +4,13 @@ import unittest
 import uuid
 from unittest.mock import patch
 
-import frappe
+# Standalone CI has no Frappe; native bench runs must retain every assertion.
+try:
+    import frappe
+except ModuleNotFoundError as error:
+    if error.name != "frappe":
+        raise
+    raise unittest.SkipTest("native Frappe suite - run in an initialized test bench") from None
 
 from posawesome.posawesome.api.money_exceptions import get_money_exceptions, Scope
 from posawesome.posawesome.api.ledger_integrity import internal_ledger_write

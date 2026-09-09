@@ -8,6 +8,17 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 Original status labels are retained; this section also contains changes reported as deployed.
 
+- **Backend CI fixture isolation (2026-09-09, local verification).**
+  Run every API test file in its own interpreter to prevent fake Frappe/package
+  modules from leaking between fixtures. Repair obsolete fixture contracts and
+  assert both ordered invoice-cancellation hooks. Keep missing-Frappe native
+  skips explicit and document the separate v16 execution lane. Verified all
+  832 standalone cases on Python 3.10/3.14 (31 explicit skips), four runner
+  regressions, and all 36 native cases with rollback-only fixtures in the Doco
+  lab mirror. Changes cover workflows, test files, and the new runner; runtime
+  code and assets are unchanged. No migration, build or runtime rollout needed.
+  See [backend test lanes](docs/testing/backend.md).
+
 - **Self-contained offline fallback (2026-09-09, release candidate).**
   Remove the obsolete fixed-name POS CSS URL from `posawesome/www/offline.html`
   and render its disconnected icon inline. The cached page keeps its existing

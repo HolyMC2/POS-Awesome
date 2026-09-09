@@ -21,8 +21,12 @@ class PaymentIntegrityTests(unittest.TestCase):
         self.integrity = sys.modules["posawesome.posawesome.api.payment_processing.integrity"]
         self.receipt = Mock(response=None)
         self.receipt.completed.return_value = None
-        receipt_patch = patch("posawesome.posawesome.api.payment_processing.request_ledger.claim_financial_request",
-                              return_value=self.receipt)
+        # The harness recreates parent packages for each scenario. A cached
+        # leaf module need not remain an attribute of that new parent on 3.10.
+        receipt_patch = patch.object(
+            importlib.import_module("posawesome.posawesome.api.payment_processing.request_ledger"),
+            "claim_financial_request", return_value=self.receipt,
+        )
         receipt_patch.start()
         self.addCleanup(receipt_patch.stop)
 
@@ -181,7 +185,8 @@ class PaymentIntegrityTests(unittest.TestCase):
         self.scenario["documents"][("Payment Entry", payment.name)] = payment
         payload = harness._payload()
         payload.update(party="SUPP-1", party_type="Supplier", payment_type="Pay", selected_invoices=[{"voucher_type": "Purchase Invoice", "voucher_no": invoice.name}], selected_payments=[{"name": payment.name}], total_selected_payments=25)
-        with patch("posawesome.posawesome.api.payment_processing.source_reconciliation.reconcile_source",
+        with patch.object(importlib.import_module("posawesome.posawesome.api.payment_processing.source_reconciliation"),
+                          "reconcile_source",
                    return_value=(payment, 25)) as reconcile:
             result = self.processor.process_pos_payment(json.dumps(payload))
         self.assertEqual(result["errors"], [])
@@ -198,7 +203,8 @@ class PaymentIntegrityTests(unittest.TestCase):
         def allocate(*args):
             payment.unallocated_amount = 40
             return payment, 20
-        with patch("posawesome.posawesome.api.payment_processing.source_reconciliation.reconcile_source",
+        with patch.object(importlib.import_module("posawesome.posawesome.api.payment_processing.source_reconciliation"),
+                          "reconcile_source",
                    side_effect=allocate) as reconcile:
             result = self.processor.process_pos_payment(json.dumps(payload))
         self.assertEqual(result["errors"], [])

@@ -1671,9 +1671,10 @@ class TestManualPostingDatePreservation(unittest.TestCase):
     def test_submit_invoice_normalizes_existing_return_draft_payments_before_save(self):
         # This fixture exercises normalization only; posted payment allocation
         # accounting has its own focused refund unit and real-document gates.
-        refund_limit = patch(
-            "posawesome.posawesome.api.invoice_processing.refunds.refundable_cash", return_value=90
-        )
+        # The package stubs are replaced between fixtures; patch the loaded
+        # module directly rather than walking stale parent attributes on 3.10.
+        from posawesome.posawesome.api.invoice_processing import refunds
+        refund_limit = patch.object(refunds, "refundable_cash", return_value=90)
         refund_limit.start()
         self.addCleanup(refund_limit.stop)
         invoice_doc = self._build_invoice_doc(

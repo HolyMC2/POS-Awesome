@@ -4,7 +4,13 @@ import unittest
 import uuid
 from unittest.mock import patch
 
-import frappe
+# Standalone CI has no Frappe; native bench runs must retain every assertion.
+try:
+    import frappe
+except ModuleNotFoundError as error:
+    if error.name != "frappe":
+        raise
+    raise unittest.SkipTest("native Frappe suite - run in an initialized test bench") from None
 
 
 class TestPricingContext(unittest.TestCase):
@@ -305,6 +311,8 @@ class TestPricingContext(unittest.TestCase):
                 create_pos_invoice_instead_of_sales_invoice=0,
                 posa_allow_submissions_in_background_job=0,
                 posa_allow_user_to_edit_rate=0,
+                # This fixture tests return FX; do not inherit a tenant's return policy.
+                posa_allow_return=1,
             )
         )
         profile.set("customer_groups", [])

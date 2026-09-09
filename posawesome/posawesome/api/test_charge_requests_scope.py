@@ -98,6 +98,7 @@ def _import_charge_requests(scenario=None):
         pos_profile=scenario["request_profile"],
         items_json='[ {"item_code": "ITEM", "qty": 1, "rate": 10} ]',
         settle_mode="Register", invoice=None, invoice_doctype=None, currency="MXN",
+        reference_doctype="Source Document", reference_name="SOURCE-1",
     )
     frappe_module.get_doc = lambda doctype, name, **kwargs: request
     frappe_module.get_all = lambda *args, **kwargs: []
@@ -160,7 +161,13 @@ def _import_charge_requests(scenario=None):
     # Price validation has real-Frappe coverage; this harness isolates scope
     # and producer warehouse propagation through the actual prepare function.
     integrity._contract = lambda: types.SimpleNamespace(INVOICE_TYPES=("Sales Invoice", "POS Invoice"),
+        lock_request=lambda name: request,
         validated_items=lambda raw: json.loads(raw), validate_invoice=lambda *args, **kwargs: None)
+    pricing = types.ModuleType("posawesome.posawesome.api.pricing_context")
+    # Exchange-rate validation has its own real ERPNext suite; this fixture
+    # exercises authorization and preserves the producer's warehouse fields.
+    pricing.apply_invoice_exchange_rates = lambda invoice, profile: None
+    sys.modules[pricing.__name__] = pricing
 
     sys.modules.pop(MODULE_NAME, None)
     spec = importlib.util.spec_from_file_location(MODULE_NAME, MODULE_PATH)

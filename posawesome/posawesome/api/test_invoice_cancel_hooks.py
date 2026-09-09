@@ -1,5 +1,6 @@
 import importlib.util
 import pathlib
+import runpy
 import sys
 import types
 import unittest
@@ -13,6 +14,16 @@ INVOICES_API_PATH = REPO_ROOT / "posawesome" / "posawesome" / "api" / "invoices.
 
 
 def _install_invoice_api_stubs():
+    # Import leaf controllers without executing the broad API facade, whose
+    # unrelated endpoint dependencies are outside this cancellation fixture.
+    for name, directory in (
+        ("posawesome", REPO_ROOT / "posawesome"),
+        ("posawesome.posawesome", REPO_ROOT / "posawesome" / "posawesome"),
+        ("posawesome.posawesome.api", REPO_ROOT / "posawesome" / "posawesome" / "api"),
+    ):
+        package = types.ModuleType(name)
+        package.__path__ = [str(directory)]
+        sys.modules[name] = package
     frappe_module = types.ModuleType("frappe")
     frappe_utils_module = types.ModuleType("frappe.utils")
     frappe_model_module = types.ModuleType("frappe.model")
@@ -101,16 +112,18 @@ _UNDER_BENCH = callable(getattr(sys.modules.get("frappe"), "init", None))
 @unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
 class TestInvoiceCancelHooks(unittest.TestCase):
     def test_sales_invoice_cancel_hook_restores_gift_cards(self):
-        hooks = HOOKS_PATH.read_text()
-
-        self.assertIn('"Sales Invoice": {', hooks)
-        self.assertIn('"on_cancel": "posawesome.posawesome.api.invoice.on_cancel"', hooks)
+        hooks = runpy.run_path(str(HOOKS_PATH))["doc_events"]
+        self.assertEqual(hooks["Sales Invoice"]["on_cancel"], [
+            "posawesome.posawesome.api.invoice.on_cancel",
+            "posawesome.posawesome.api.charge_request_integrity.on_cancel",
+        ])
 
     def test_pos_invoice_cancel_hook_restores_gift_cards(self):
-        hooks = HOOKS_PATH.read_text()
-
-        self.assertIn('"POS Invoice": {', hooks)
-        self.assertIn('"on_cancel": "posawesome.posawesome.api.invoice.on_cancel"', hooks)
+        hooks = runpy.run_path(str(HOOKS_PATH))["doc_events"]
+        self.assertEqual(hooks["POS Invoice"]["on_cancel"], [
+            "posawesome.posawesome.api.invoice.on_cancel",
+            "posawesome.posawesome.api.charge_request_integrity.on_cancel",
+        ])
 
     def test_cancel_hook_deletes_matching_submission_ledger_entries(self):
         state = _install_invoice_api_stubs()
