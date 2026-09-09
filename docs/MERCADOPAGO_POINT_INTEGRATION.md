@@ -39,11 +39,22 @@ Manager/User, Sales Manager/User (cashiers). Call via `frappe.call`.
 |---|---|---|---|
 | `create_point_order` | POST | `pos_invoice` (str, optional — pass the invoice name so it auto-matches), `amount` (number, required), `terminal_id` (str, optional — defaults to Settings) | `{ ok, order: { name, order_status, mp_order_id, error_message } }` |
 | `point_order_status` | GET | `order` (the order `name` from create) | `{ order_status, error, payment: { status, amount_gross } | null }` |
-| `cancel_point_order` | POST | `order` | `{ ok }` (only while `created`/`at_terminal`) |
+| `cancel_point_order` | POST | `order` | `{ ok }` — `{ ok: false, reason: "not_cancelable", order_status }` once the order is no longer `created`/`at_terminal` |
 | `list_enabled_terminals` | GET | — | `[ { terminal_id, pos_id, store_id, operating_mode } ]` |
 
 **`order_status`** lifecycle: `Local Draft → created → at_terminal → processing →
 finished` (terminal), or `expired` / `canceled` / `error`.
+
+`error` also covers a **declined card** at the terminal (MP order `failed`: wrong
+PIN, issuer reject, insufficient funds…) and an **unconfirmed outcome** (MP
+`action_required`); in both cases `error` (the status endpoint's `error` field)
+carries MP's `status_detail`, e.g. `rejected_by_issuer`, `check_on_terminal`. A
+retry for the same invoice creates a **new** order: `create_point_order` re-checks
+a cached active order with MP before reusing it and only reuses one that is still
+in flight or already paid (`finished`). `cancel_point_order` on an order that is
+no longer at the terminal returns `{ ok: false, reason: "not_cancelable" }`
+instead of raising. Any `order_status` outside `Local Draft` / `created` /
+`at_terminal` / `processing` is an outcome — never keep polling on it.
 
 **On `finished`**, read `payment.status`:
 - `Approved` → success (charge captured). Proceed to finalize the sale.
