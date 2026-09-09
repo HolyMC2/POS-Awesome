@@ -1,6 +1,38 @@
 import frappe
 from frappe import _
-from frappe.utils import nowdate, flt
+from frappe.utils import escape_html, fmt_money, nowdate, flt
+
+
+def _validate_cash_in_balance(je, source_account):
+    """Explain an insufficient safe balance before ERPNext's generic GL error."""
+    if frappe.get_cached_value("Account", source_account, "balance_must_be") != "Debit":
+        return
+
+    # Match ERPNext's all-date, non-cancelled GL balance in company currency.
+    # je.save() has calculated exchange rates and rounded the debit/credit rows.
+    balance = flt(frappe.db.sql(
+        """SELECT COALESCE(SUM(debit) - SUM(credit), 0)
+        FROM `tabGL Entry` WHERE account = %s AND is_cancelled = 0""",
+        (source_account,),
+    )[0][0])
+    requested = sum(
+        flt(row.credit) - flt(row.debit)
+        for row in je.accounts if row.account == source_account
+    )
+    if balance - requested < 0:
+        currency = frappe.get_cached_value("Company", je.company, "default_currency")
+        frappe.throw(
+            _("Insufficient balance in {0}. Recorded balance: {1}. Requested: {2}.").format(
+                escape_html(source_account),
+                fmt_money(balance, currency=currency),
+                fmt_money(requested, currency=currency),
+            ) + " " + _(
+                "Cash In takes money from the configured safe. If the cash came from home or "
+                "another source, ask a manager to record that source and the cash received "
+                "in the drawer. Otherwise, check for a missing safe deposit before retrying."
+            ),
+            title=_("Insufficient safe balance"),
+        )
 
 
 def create_journal_entry(
@@ -58,6 +90,10 @@ def create_journal_entry(
     from posawesome.posawesome.api._perms import account_perm_bypass
     with account_perm_bypass():
         je.save()
+        if movement_type == "Cash In":
+            _validate_cash_in_balance(je, source_account)
+        # ERPNext's submission validations remain authoritative, including any
+        # balance changes after the explanatory check above.
         je.submit()
     return je.name
 
