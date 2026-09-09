@@ -8,6 +8,13 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 Original status labels are retained; this section also contains changes reported as deployed.
 
+- **Self-contained offline fallback (2026-09-09, release candidate).**
+  Remove the obsolete fixed-name POS CSS URL from `posawesome/www/offline.html`
+  and render its disconnected icon inline. The cached page keeps its existing
+  styles and explanation without a network stylesheet or icon-font dependency.
+  Verified offline-page resource checks against the existing service-worker
+  fallback path. Template-only; existing SPA bundles remain valid, no migration.
+
 - **Coordinated POS integration (2026-09-09, LAB validated; release candidate).**
   Preserve the deployed Cash In guidance and both development/production
   histories while adding MercadoPago terminal-outcome handling: a completed

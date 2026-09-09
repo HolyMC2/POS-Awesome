@@ -80,16 +80,29 @@
 				}
 			}
 		</style>
-		<link rel="stylesheet" href="/assets/posawesome/dist/js/posawesome.css" />
+		<!-- Keep the cached fallback independent of network styles and icon fonts. -->
 	</head>
 
 	<body>
 		<div class="container">
-			<div class="icon mdi mdi-wifi-off"></div>
+			<div class="icon" aria-hidden="true">
+				<svg
+					width="1em"
+					height="1em"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+				>
+					<path
+						d="M3 3l18 18M2 8a16 16 0 0 1 3-2M9 4a16 16 0 0 1 13 4M5 12a11 11 0 0 1 4-2M13 10a11 11 0 0 1 6 2M8 16a6 6 0 0 1 7-1"
+					/>
+					<circle cx="12" cy="20" r="1" fill="currentColor" stroke="none" />
+				</svg>
+			</div>
 			<h1>You are offline</h1>
-			<p>
-				Muelle POS está en modo offline. Puedes seguir trabajando con funciones limitadas.
-			</p>
+			<p>Muelle POS está en modo offline. Puedes seguir trabajando con funciones limitadas.</p>
 
 			<div class="info">
 				<p><strong>Available in offline mode:</strong></p>
