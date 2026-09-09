@@ -30,6 +30,9 @@ declare const frappe: any;
 
 const POLL_MS = 2000;
 const TIMEOUT_MS = 15 * 60 * 1000;
+// Connector statuses that mean "still in flight at the terminal" — the only
+// ones worth another poll tick. Everything else is an outcome.
+const IN_FLIGHT_STATUSES = ["Local Draft", "created", "at_terminal", "processing"];
 
 type Phase = "idle" | "sending" | "choosing" | "waiting" | "processing" | "approved" | "failed";
 
@@ -224,6 +227,14 @@ export function useMpPointSaleGate(opts: MpPointSaleGateOptions) {
 				return;
 			}
 			if (s === "expired" || s === "canceled" || s === "error") {
+				terminalFailed((st && st.error) || __("No se completó el cobro"));
+				return;
+			}
+			// Any other status the connector can return (`refunded`, one added
+			// later) is an outcome, not "still waiting". Spinning on it left the
+			// cashier with only «Cancelar venta» and no way to re-push (prod
+			// 2026-09-08, declined PIN) — fail fast so «Reintentar» appears.
+			if (s && !IN_FLIGHT_STATUSES.includes(s)) {
 				terminalFailed((st && st.error) || __("No se completó el cobro"));
 				return;
 			}

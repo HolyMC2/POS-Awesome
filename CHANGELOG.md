@@ -4,6 +4,18 @@ All notable changes.
 
 ## Unreleased
 
+- **Coordinated POS integration (2026-09-09, LAB validated; release candidate).**
+  Preserve the deployed Cash In guidance and both development/production
+  histories while adding MercadoPago terminal-outcome handling: a completed
+  unsuccessful outcome stops polling, displays its reason, and offers retry.
+  Changed files: `frontend/src/posapp/composables/pos/payments/useMpPointSaleGate.ts`,
+  `frontend/tests/mpPointSaleGateStatus.spec.ts`, and
+  `docs/MERCADOPAGO_POINT_INTEGRATION.md`. Verified 81 targeted frontend tests,
+  strict type checking, production build/artifact checks, and 48 mocked cash,
+  safe-transfer and closing tests in `doco-mirror.lab.xoloitzcuintles.com` after
+  matching its full POS Python source hash to this candidate. No real payment
+  was sent. Deployment requires the rebuilt SPA; no migration or data changes.
+
 - **Cash In balance guidance (2026-09-08).** Insufficient safe funds now show
   the source account, recorded balance and requested amount in Spanish, with
   guidance for cash brought from home or another source. The check uses the
