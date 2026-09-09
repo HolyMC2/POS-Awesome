@@ -2162,6 +2162,9 @@ CHARGE,COBRAR
 Cash In (Change Fund),Entrada de Efectivo (Fondo de Cambio)
 Submit Cash In,Enviar Entrada de Efectivo
 Cash In is disabled for this POS Profile.,La entrada de efectivo está deshabilitada para este perfil POS.
+Insufficient safe balance,Saldo insuficiente en la caja fuerte
+Insufficient balance in {0}. Recorded balance: {1}. Requested: {2}.,Saldo insuficiente en {0}. Saldo registrado: {1}. Importe solicitado: {2}.
+"Cash In takes money from the configured safe. If the cash came from home or another source, ask a manager to record that source and the cash received in the drawer. Otherwise, check for a missing safe deposit before retrying.","Esta entrada retira dinero de la caja fuerte configurada. Si el efectivo vino de casa u otro origen, pide a un encargado que registre ese origen y el efectivo recibido en la caja. Si vino de la caja fuerte, revisa si falta registrar un depósito antes de reintentar."
 Cash In moves money from this account into the register drawer.,La entrada de efectivo mueve dinero de esta cuenta al cajón de la caja.
 Back Office Cash Account is required for this movement.,Se requiere cuenta de efectivo de oficina para este movimiento.
 Source and target accounts cannot be the same for this movement.,Las cuentas de origen y destino no pueden ser iguales para este movimiento.
