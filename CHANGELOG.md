@@ -4,6 +4,15 @@ All notable changes.
 
 ## Unreleased
 
+- **Cash In balance guidance (2026-09-08).** Insufficient safe funds now show
+  the source account, recorded balance and requested amount in Spanish, with
+  guidance for cash brought from home or another source. The check uses the
+  saved journal's rounded company-currency amounts and preserves ERPNext's
+  submission validation. Account mappings and movement types are unchanged.
+  Verified with 48 focused tests and rollback-only lab journal checks: a
+  $130 withdrawal from $130 succeeds; a $1,000 request fails cleanly.
+  Deployment needs a Python reload and translation cache refresh; no migration.
+
 - **POS review corrections (09-06), LAB `review0906-3`; production pending.**
   - Make terminal resume retries return the first successful generation after
     a lost response. Persist protected resume provenance; ordinary money
