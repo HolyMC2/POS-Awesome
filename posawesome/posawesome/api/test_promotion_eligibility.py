@@ -3,6 +3,7 @@
 import importlib.util
 import pathlib
 import sys
+import types
 import unittest
 from unittest.mock import patch
 
@@ -136,6 +137,121 @@ class PromotionEligibilityTests(unittest.TestCase):
             {"item_code": "IT-1", "rate": 0, "qty": 1, "pricing_rules": "Free Rule"}]}
         self.check(True)
         self.line["qty"] = 2
+        self.check(False)
+
+    # ---- Give Product with the gift picked from apply_item_group ----
+
+    def group_gift_offer(self, **overrides):
+        offer = {"name": "Mica de regalo", "offer": "Give Product",
+                 "apply_on": "Item Code", "item": "IT-2", "min_qty": 2,
+                 "apply_type": "Item Group", "apply_item_group": "Micas", "given_qty": 1}
+        offer.update(overrides)
+        self.scenario["offers"] = [offer]
+        self.scenario["item_meta"] = [{"item_code": "IT-1", "item_group": "Micas"},
+                                      {"item_code": "IT-2", "item_group": "Celulares"}]
+        self.line["is_free_item"] = 1
+        self.invoice["items"].insert(0, {"item_code": "IT-2", "qty": 2, "rate": 50})
+        return offer
+
+    def install_coupon_check(self, coupon_offer):
+        module = types.ModuleType("posawesome.posawesome.doctype.pos_coupon.pos_coupon")
+        module.check_coupon_code = lambda code, customer=None, company=None: (
+            {"coupon": {"pos_offer": coupon_offer}, "msg": "Apply"} if coupon_offer
+            else {"coupon": None, "msg": "Sorry, this coupon code's validity has expired"})
+        self.addCleanup(sys.modules.pop, module.__name__, None)
+        sys.modules[module.__name__] = module
+
+    def test_group_gift_accepts_an_item_from_the_group(self):
+        self.group_gift_offer()
+        self.check(True)
+
+    def test_group_gift_accepts_a_descendant_group(self):
+        self.group_gift_offer(apply_item_group="Accesorios")
+        self.scenario["group_descendants"] = {"Accesorios": ["Micas", "Fundas"]}
+        self.check(True)
+
+    def test_group_gift_narrows_to_the_exact_group_when_the_tree_is_unreadable(self):
+        self.group_gift_offer(apply_item_group="Accesorios")
+        self.scenario["group_tree_unreadable"] = True
+        self.check(False)
+
+    def test_group_gift_rejects_an_item_outside_the_group(self):
+        self.group_gift_offer()
+        self.scenario["item_meta"][0]["item_group"] = "Cargadores"
+        self.check(False)
+
+    def test_group_gift_ignores_a_client_group_claim(self):
+        self.group_gift_offer()
+        self.scenario["item_meta"][0]["item_group"] = "Cargadores"
+        self.line["item_group"] = "Micas"
+        self.check(False)
+
+    def test_group_gift_ignores_a_stale_item_code_on_the_offer(self):
+        self.group_gift_offer(apply_item_code="IT-1")
+        self.scenario["item_meta"][0]["item_group"] = "Cargadores"
+        self.check(False)
+
+    def test_group_gift_respects_the_price_ceiling(self):
+        self.group_gift_offer(less_then=150)
+        self.check(True)
+        self.scenario["offers"][0]["less_then"] = 100
+        self.check(False)
+
+    def test_group_gift_under_a_ceiling_needs_a_known_price(self):
+        self.group_gift_offer(less_then=150)
+        self.scenario["item_prices"][("IT-1", "Doco")] = 0.0
+        harness._import_reprice(self.scenario)
+        eligibility = importlib.import_module("posawesome.posawesome.api._promotion_eligibility")
+        self.assertEqual(eligibility.eligible_free_lines(self.invoice, self.profile, "Doco"), set())
+        self.scenario["offers"][0]["less_then"] = 0
+        harness._import_reprice(self.scenario)
+        eligibility = importlib.import_module("posawesome.posawesome.api._promotion_eligibility")
+        self.assertEqual(eligibility.eligible_free_lines(self.invoice, self.profile, "Doco"), {id(self.line)})
+
+    def test_group_gift_respects_given_qty(self):
+        self.group_gift_offer()
+        self.line["qty"] = 2
+        self.check(False)
+        self.scenario["offers"][0]["given_qty"] = 2
+        self.check(True)
+
+    def test_group_gift_allowance_is_shared_across_picked_items(self):
+        self.group_gift_offer()
+        self.scenario["item_meta"].append({"item_code": "IT-3", "item_group": "Micas"})
+        self.scenario["item_prices"][("IT-3", "Doco")] = 80.0
+        self.invoice["items"].append(dict(self.line, item_code="IT-3"))
+        self.check(False)
+        self.scenario["offers"][0]["given_qty"] = 2
+        self.check(True)
+
+    def test_group_gift_requires_the_purchase_threshold(self):
+        self.group_gift_offer()
+        self.invoice["items"][0]["qty"] = 1
+        self.check(False)
+
+    def test_group_gift_must_be_free_under_the_offer_price_rule(self):
+        self.group_gift_offer(discount_type="Discount Percentage", discount_percentage=50)
+        self.check(False)
+
+    def test_group_gift_needs_a_currently_valid_offer(self):
+        # get_offers is the server's validity filter (disabled, dates, company,
+        # profile, warehouse): an offer it does not return grants nothing.
+        self.group_gift_offer()
+        self.scenario["offers"] = []
+        self.check(False)
+
+    def test_coupon_group_gift_requires_a_valid_coupon_for_that_offer(self):
+        self.group_gift_offer(coupon_based=1)
+        self.invoice.update(customer="CUST-1", company="Grupo Doco",
+                            posa_coupons=[{"coupon_code": "GC-A", "coupon": "GC-A"}])
+        self.install_coupon_check("Mica de regalo")
+        self.check(True)
+        self.install_coupon_check("Otra oferta")
+        self.check(False)
+        self.install_coupon_check(None)
+        self.check(False)
+        self.invoice["posa_coupons"] = []
+        self.install_coupon_check("Mica de regalo")
         self.check(False)
 
     def test_offer_lookup_failure_never_grants_exemption(self):

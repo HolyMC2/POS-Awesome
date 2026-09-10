@@ -45,6 +45,45 @@ def _matches(offer, row, metadata):
     return False
 
 
+def _item_group_scope(group):
+    """The group and its descendants, as ERPNext pricing rules apply them.
+
+    An unreadable tree narrows the scope to the exact group; it never widens it.
+    """
+    scope = {group}
+    try:
+        scope.update(frappe.db.get_descendants("Item Group", group) or [])
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "POSAwesome gift item group lookup")
+    return scope
+
+
+def _group_gift_codes(offer, candidates, metadata, prices):
+    """Item codes a Give Product offer lets the cashier pick from its item group.
+
+    The offer names ``apply_item_group`` instead of one item, so a gift is
+    authorized by server metadata: the item's group, its price below
+    ``less_then`` when that ceiling is set, and the offer's own price rule.
+    Every zero-price row of a code must qualify for the code to qualify.
+    """
+    group = offer.get("apply_item_group")
+    if not group:
+        return set()
+    scope = _item_group_scope(group)
+    ceiling = flt(offer.get("less_then"))
+    verdicts = {}
+    for row in candidates:
+        code = _get(row, "item_code")
+        price = prices.get(id(row), 0)
+        fits = (
+            metadata.get(code, {}).get("item_group") in scope
+            and (ceiling <= 0 or 0 < price < ceiling)
+            and _zero_price(offer, price, default_free=True)
+        )
+        verdicts[code] = verdicts.get(code, True) and fits
+    return {code for code, fits in verdicts.items() if code and fits}
+
+
 def _coupon_allowed(offer, invoice):
     if not flt(offer.get("coupon_based")):
         return True
@@ -109,6 +148,9 @@ def eligible_free_lines(invoice, profile, price_list):
     prices = {id(row): flt(reference_rate(row)) for row in lines}
     allowed = set()
     budgets = {}
+    # Item-group gifts: one quantity allowance shared by every code the offer
+    # lets the cashier pick, instead of a per-code budget.
+    group_pools = []
 
     from posawesome.posawesome.api.offers import get_offers
 
@@ -139,17 +181,25 @@ def eligible_free_lines(invoice, profile, price_list):
                 if _zero_price(offer, price) and row in candidates:
                     allowed.add(id(row))
             continue
-        give_code = offer.get("give_item") or offer.get("apply_item_code")
-        if offer.get("replace_item"):
-            give_code = offer.get("item") or offer.get("apply_item_code")
-        elif offer.get("replace_cheapest_item"):
-            give_code = _get(min(qualifying, key=lambda row: prices.get(id(row), 0)), "item_code")
         budget = flt(offer.get("given_qty") or 1)
         if flt(offer.get("is_recursive")):
             factor = max(qty - flt(offer.get("apply_recursion_over")), 0) / (flt(offer.get("recurse_for")) or 1)
             budget *= math.floor(factor) if flt(offer.get("round_free_qty")) else factor
+        if budget <= 0:
+            continue
+        if offer.get("replace_item"):
+            give_code = offer.get("item") or offer.get("apply_item_code")
+        elif offer.get("replace_cheapest_item"):
+            give_code = _get(min(qualifying, key=lambda row: prices.get(id(row), 0)), "item_code")
+        elif offer.get("apply_type") == "Item Group":
+            codes = _group_gift_codes(offer, candidates, metadata, prices)
+            if codes:
+                group_pools.append({"codes": codes, "remaining": budget})
+            continue
+        else:
+            give_code = offer.get("give_item") or offer.get("apply_item_code")
         given_rows = [row for row in candidates if _get(row, "item_code") == give_code]
-        if give_code and budget > 0 and given_rows and all(
+        if give_code and given_rows and all(
             _zero_price(offer, prices.get(id(row), 0), default_free=True) for row in given_rows
         ):
             budgets[give_code] = budgets.get(give_code, 0) + budget
@@ -197,8 +247,19 @@ def eligible_free_lines(invoice, profile, price_list):
 
     # Aggregate all giveaway quantities before granting any line: splitting a
     # gift into several rows must not multiply the offer's quantity allowance.
-    for code, budget in budgets.items():
-        rows = [row for row in candidates if _get(row, "item_code") == code and id(row) not in allowed]
-        if sum(_quantity(row) for row in rows) <= budget + 0.000001:
-            allowed.update(id(row) for row in rows)
+    # A code spends its own budget first; the rest must fit the remaining
+    # allowance of item-group offers that list the code, or no row is granted.
+    pending = [row for row in candidates if id(row) not in allowed]
+    for code in dict.fromkeys(_get(row, "item_code") for row in pending):
+        rows = [row for row in pending if _get(row, "item_code") == code]
+        need = sum(_quantity(row) for row in rows) - budgets.get(code, 0)
+        if need > 0.000001:
+            pools = [pool for pool in group_pools if code in pool["codes"]]
+            if sum(pool["remaining"] for pool in pools) + 0.000001 < need:
+                continue
+            for pool in pools:
+                spent = min(pool["remaining"], need)
+                pool["remaining"] -= spent
+                need -= spent
+        allowed.update(id(row) for row in rows)
     return allowed

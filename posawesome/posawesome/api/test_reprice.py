@@ -67,6 +67,11 @@ def _build_frappe_module(scenario: dict) -> types.ModuleType:
                     return rates.get((item_code, price_list))
             return None
 
+        def get_descendants(self, doctype, name):
+            if scenario.get("group_tree_unreadable"):
+                raise RuntimeError("Item Group tree unavailable")
+            return scenario.get("group_descendants", {}).get(name, [])
+
     frappe_module.db = _Db()
 
     def _get_all(doctype, filters=None, fields=None, **kwargs):
