@@ -1,10 +1,43 @@
-"""Family payer regression: an explicit appointment Patient is authoritative."""
+"""Family payer identity, exercised both without a bench and with real Frappe.
 
+The standalone lane reuses the invoice cancellation fixture's import stubs;
+the actual invoice module and all four identity assertions run in both lanes.
+An installed framework's missing dependency remains an import failure.
+"""
+
+from pathlib import Path
+import runpy
+import sys
 import unittest
 from unittest.mock import patch
 
-import frappe
+try:
+    import frappe
+except ModuleNotFoundError as error:
+    if error.name != "frappe":
+        raise
+    fixture = runpy.run_path(str(Path(__file__).with_name("test_invoice_cancel_hooks.py")))
+    fixture["_install_invoice_api_stubs"]()
+    frappe = sys.modules["frappe"]
+
+    class _Dict(dict):
+        __getattr__ = dict.get
+        __setattr__ = dict.__setitem__
+
+    class _ValidationError(Exception):
+        pass
+
+    def _throw(message):
+        raise _ValidationError(message)
+
+    frappe._dict = _Dict
+    frappe.ValidationError = _ValidationError
+    frappe.throw = _throw
+    fixture["_load_invoice_api_module"]()
+
 from posawesome.posawesome.api.invoice import set_patient
+
+invoice_api = sys.modules["posawesome.posawesome.api.invoice"]
 
 
 class TestInvoicePatientIdentity(unittest.TestCase):
@@ -24,7 +57,7 @@ class TestInvoicePatientIdentity(unittest.TestCase):
 
     def test_shared_customer_does_not_select_first_patient(self):
         invoice = frappe._dict(patient=None, customer="GUARDIAN", company="CLINIC")
-        with patch("posawesome.posawesome.api.invoice.get_company_domain", return_value="Healthcare"), \
+        with patch.object(invoice_api, "get_company_domain", return_value="Healthcare"), \
                 patch.object(frappe, "get_all", return_value=[frappe._dict(name="CHILD-1"), frappe._dict(name="CHILD-2")]) as query:
             set_patient(invoice)
         self.assertIsNone(invoice.patient)
@@ -32,7 +65,11 @@ class TestInvoicePatientIdentity(unittest.TestCase):
 
     def test_single_patient_customer_retains_legacy_autofill(self):
         invoice = frappe._dict(patient=None, customer="SOLO", company="CLINIC")
-        with patch("posawesome.posawesome.api.invoice.get_company_domain", return_value="Healthcare"), \
+        with patch.object(invoice_api, "get_company_domain", return_value="Healthcare"), \
                 patch.object(frappe, "get_all", return_value=[frappe._dict(name="ONLY-PATIENT")]):
             set_patient(invoice)
         self.assertEqual(invoice.patient, "ONLY-PATIENT")
+
+
+if __name__ == "__main__":
+    unittest.main()
