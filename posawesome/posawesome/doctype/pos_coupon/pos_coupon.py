@@ -116,6 +116,11 @@ def check_coupon_code(coupon_code, customer=None, company=None):
         return res
 
     if customer and coupon.one_use:
+        # one_use limits reuse of THIS coupon by this customer, not coupon use
+        # in general: a customer may hold one gift card per offer. A row counts
+        # as a use only when its offer was applied, matching `used` in
+        # update_coupon_code_count; the register attaches every active gift
+        # card to the customer's sales and persists the unapplied rows too.
         count = frappe.db.count(
             "POS Coupon Detail",
             filters={
@@ -123,6 +128,8 @@ def check_coupon_code(coupon_code, customer=None, company=None):
                 "parenttype": "Sales Invoice",
                 "docstatus": 1,
                 "customer": customer,
+                "coupon": coupon.name,
+                "applied": 1,
             },
         )
         if count > 0:
