@@ -139,6 +139,12 @@ def prepare(name, pos_profile, pos_opening_shift, terminal_id=None,
     for line in _contract().validated_items(request.items_json):
         doc.append("items", {key: line[key] for key in
                    ("item_code", "qty", "rate", "uom", "warehouse", "description") if line.get(key) is not None})
+    # Source controllers own their privileged identity/billing references.
+    # Never forward those fields from caller-controlled items_json.
+    source = frappe.get_doc(request.reference_doctype, request.reference_name, for_update=True)
+    prepare_source = getattr(source, "prepare_pos_charge_request_invoice", None)
+    if callable(prepare_source):
+        prepare_source(request, doc)
     from posawesome.posawesome.api.pricing_context import apply_invoice_exchange_rates
     profile = frappe.get_doc("POS Profile", pos_profile)
     apply_invoice_exchange_rates(doc, profile)

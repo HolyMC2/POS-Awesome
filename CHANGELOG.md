@@ -8,6 +8,16 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 Original status labels are retained; this section also contains changes reported as deployed.
 
+- **Clinic charge identity (2026-09-10, private canary verified).** Preserve an
+  explicitly selected Patient after validating its billing Customer; a shared
+  family payer no longer selects an arbitrary patient. Trusted charge sources
+  prepare and validate their own native references without widening client
+  invoice fields. Verified scoped tests, native partial collection/credit/amendment
+  and competing cashiers with the coordinated Clínica/Doco package. Python-only
+  POS change, no POS schema or frontend build; deploy/rollback the compatible
+  source contract together. Exact commits and proof are in the clinic release
+  manifest and [billing validation](../clinica/clinica/billing/VALIDATION.md).
+
 - **Backend CI fixture isolation (2026-09-09, local verification).**
   Run every API test file in its own interpreter to prevent fake Frappe/package
   modules from leaking between fixtures. Repair obsolete fixture contracts and

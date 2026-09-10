@@ -267,6 +267,28 @@ class ChargeRequestLineWarehouseTests(unittest.TestCase):
         # profile default at validate, exactly as before this fix.
         self.assertNotIn("warehouse", by_code["LABOR"])
 
+    def test_caller_cannot_forward_privileged_clinical_references(self):
+        invoice = self._prepare_with_lines([{
+            "item_code": "CONSULT", "qty": 1, "rate": 150,
+            "patient": "PATIENT-WRONG", "appointment": "APPOINTMENT-WRONG",
+            "reference_dt": "Patient Appointment", "reference_dn": "APPOINTMENT-WRONG",
+        }])
+        for field in ("patient", "appointment", "reference_dt", "reference_dn"):
+            self.assertNotIn(field, invoice["items"][0])
+            self.assertNotIn(field, invoice)
+
+    def test_only_stored_source_controller_can_prepare_identity(self):
+        module = _import_charge_requests({"legacy_enabled": 1})
+        request = sys.modules["frappe"].get_doc("POS Charge Request", "CHARGE-1")
+        calls = []
+        def prepare_source(stored_request, invoice):
+            calls.append(stored_request.name)
+            invoice.patient = "PATIENT-EXACT"
+        request.prepare_pos_charge_request_invoice = prepare_source
+        invoice = module.prepare_charge_request_invoice("CHARGE-1", "Profile A", "SHIFT-1")
+        self.assertEqual(calls, ["CHARGE-1"])
+        self.assertEqual(invoice["patient"], "PATIENT-EXACT")
+
 
 
 

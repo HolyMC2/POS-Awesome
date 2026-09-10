@@ -289,11 +289,18 @@ def update_coupon(doc, transaction_type):
 
 
 def set_patient(doc):
+    # Clinical sources may bill a guardian/family Customer shared by several
+    # Patients. Preserve an explicit identity after checking its payer; never
+    # select an arbitrary family member for an ordinary healthcare sale.
+    if doc.get("patient"):
+        if frappe.db.get_value("Patient", doc.patient, "customer") != doc.customer:
+            frappe.throw(_("The selected Patient does not belong to this invoice's Customer."))
+        return
     domain = get_company_domain(doc.company)
     if domain != "Healthcare":
         return
-    patient_list = frappe.get_all("Patient", filters={"customer": doc.customer}, page_length=1)
-    if len(patient_list) > 0:
+    patient_list = frappe.get_all("Patient", filters={"customer": doc.customer}, page_length=2)
+    if len(patient_list) == 1:
         doc.patient = patient_list[0].name
 
 
