@@ -692,10 +692,15 @@ export default {
 				}
 			}
 
-			// Promotion consent covers WhatsApp and email, so it needs both.
+			// Promotion consent covers WhatsApp and email, so it needs both. A
+			// toast, not frappe.throw: a throw from this async handler reaches
+			// the cashier prefixed as an unexpected error.
 			const wantsPromotions = this.marketingOptInAvailable && this.marketing_opt_in;
 			if (wantsPromotions && !(String(this.mobile_no || "").trim() && String(this.email_id || "").trim())) {
-				frappe.throw(__("Mobile number and email are required to register for promotions"));
+				this.toastStore.show({
+					title: __("Mobile number and email are required to register for promotions"),
+					color: "error",
+				});
 				return;
 			}
 

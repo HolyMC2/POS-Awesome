@@ -62,6 +62,7 @@ vi.mock("../src/posapp/components/pos/cfdi/CustomerFiscalFields.vue", () => ({
 import UpdateCustomer from "../src/posapp/components/pos/dialogs/customer/UpdateCustomer.vue";
 import { saveOfflineCustomer } from "../src/offline/index";
 import { useCustomersStore } from "../src/posapp/stores/customersStore";
+import { useToastStore } from "../src/posapp/stores/toastStore";
 import { useUIStore } from "../src/posapp/stores/uiStore";
 
 const LABEL = "Register for promotions — agrees to receive promotions by WhatsApp and email";
@@ -216,12 +217,17 @@ describe("customer quick-create promotion consent", () => {
 
 	it("ticked, it requires both a mobile and an email", async () => {
 		const wrapper = await mountDialog({ customer_marketing_opt_in: true });
+		const toast = vi.spyOn(useToastStore(), "show");
 		await type(wrapper, "Customer Name *", "Ana Pérez");
 		await type(wrapper, "Mobile No", "6691234567");
 		await wrapper.find(`${CHECKBOX} input`).setValue(true);
-		await submit(wrapper).catch(() => undefined);
-		expect(frappe.throw).toHaveBeenCalledWith(REQUIRED);
+		await submit(wrapper);
+		// A toast the cashier can read, not a throw that surfaces as an
+		// unexpected error; the dialog stays open with what was typed.
+		expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: REQUIRED, color: "error" }));
+		expect(frappe.throw).not.toHaveBeenCalled();
 		expect(frappe.call).not.toHaveBeenCalled();
+		expect(wrapper.find('input[data-label="Customer Name *"]').exists()).toBe(true);
 	});
 
 	it("ticked with both channels, the online create sends consent", async () => {
