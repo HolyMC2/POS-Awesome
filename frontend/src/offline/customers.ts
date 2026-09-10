@@ -52,6 +52,24 @@ export async function updateOfflineInvoicesCustomer(
 	}
 }
 
+/**
+ * The arguments a queued customer write is replayed with.
+ *
+ * Promotion consent travels as 0/1 when the dialog recorded it. An entry
+ * queued without it omits the key, so the server leaves stored consent as is.
+ */
+export function customerReplayArgs(args: AnyRecord = {}) {
+	const replay: AnyRecord = { ...args };
+	const consent = replay.marketing_opt_in;
+	if (consent === undefined || consent === null || consent === "") {
+		delete replay.marketing_opt_in;
+	} else {
+		replay.marketing_opt_in =
+			consent === true || consent === 1 || consent === "1" || consent === "true" ? 1 : 0;
+	}
+	return replay;
+}
+
 export function getOfflineCustomers() {
 	return getQueuedPayloadSnapshots(CUSTOMER_ENTITY);
 }
@@ -90,7 +108,7 @@ export async function syncOfflineCustomers() {
 		try {
 			const result = await frappe.call({
 				method: "posawesome.posawesome.api.customers.create_customer",
-				args: queuedCustomer.args,
+				args: customerReplayArgs(queuedCustomer.args),
 			});
 			if (!ownsQueueEntry(entry)) break;
 			synced += 1;

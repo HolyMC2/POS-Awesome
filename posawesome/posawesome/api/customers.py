@@ -240,6 +240,9 @@ def get_customer_info(customer=None, company=None):
     # «Cliente desde …» on the contact view. The field was always on the doc
     # and never on the wire.
     res["creation"] = customer.creation
+    if customer_marketing_opt_in_available():
+        # Lets the update dialog show stored consent instead of an unticked box.
+        res["marketing_opt_in"] = _as_flag(customer.get("marketing_opt_in"))
     res["customer_group_price_list"] = frappe.get_value(
         "Customer Group", customer.customer_group, "default_price_list"
     )
@@ -305,6 +308,42 @@ def get_customer_info(customer=None, company=None):
     return res
 
 
+def _customer_has_field(fieldname):
+    try:
+        return bool(frappe.get_meta("Customer").has_field(fieldname))
+    except Exception:
+        return False
+
+
+def customer_marketing_opt_in_available():
+    """Whether an installed app has added promotion consent to Customer."""
+    return _customer_has_field("marketing_opt_in")
+
+
+def _as_flag(value):
+    if isinstance(value, str):
+        return 1 if value.strip().lower() in ("1", "true", "yes", "on") else 0
+    return 1 if value else 0
+
+
+def _apply_marketing_opt_in(customer_doc, marketing_opt_in, mobile_no, email_id):
+    """Record promotion consent on the Customer when the field exists.
+
+    ``None`` means the caller did not send the flag (a client or queued
+    offline entry from before it existed), so stored consent is left as is.
+    Consent covers WhatsApp and email, so it needs both a mobile and an email.
+    """
+    if marketing_opt_in in (None, "") or not customer_marketing_opt_in_available():
+        return
+    opted_in = _as_flag(marketing_opt_in)
+    if opted_in and not (cstr(mobile_no).strip() and cstr(email_id).strip()):
+        frappe.throw(_("Mobile number and email are required to register for promotions"))
+    previously_opted_in = _as_flag(customer_doc.get("marketing_opt_in"))
+    customer_doc.marketing_opt_in = opted_in
+    if opted_in and not previously_opted_in and _customer_has_field("marketing_opt_in_source"):
+        customer_doc.marketing_opt_in_source = "Mostrador"
+
+
 @frappe.whitelist(methods=["POST"])
 def create_customer(
     customer_name,
@@ -324,6 +363,7 @@ def create_customer(
     address_line1=None,
     city=None,
     country=None,
+    marketing_opt_in=None,
 ):
     _assert_customer_write_allowed(pos_profile_doc, company=company)
     pos_profile = _load_json_arg(pos_profile_doc)
@@ -370,6 +410,7 @@ def create_customer(
             else:
                 customer.territory = "All Territories"
 
+            _apply_marketing_opt_in(customer, marketing_opt_in, mobile_no, email_id)
             customer.save()
 
             if address_line1 or city:
@@ -411,6 +452,7 @@ def create_customer(
         customer_doc.posa_birthday = formatted_birthday
         customer_doc.customer_type = customer_type
         customer_doc.gender = gender
+        _apply_marketing_opt_in(customer_doc, marketing_opt_in, mobile_no, email_id)
         customer_doc.save()
 
         # ensure contact details are synced correctly

@@ -3473,4 +3473,6 @@ Only the owning cashier can release this register's unsubmitted draft.,Solo el c
 A completed charge cannot be released.,No se puede liberar un cobro completado.
 This draft contains a payment intent. Review saved payments before releasing it.,Este borrador contiene una intención de pago. Revise los pagos guardados antes de liberarlo.
 Submission or payment processing has started. Review the original transaction before releasing it.,La confirmación o el procesamiento del pago ya comenzó. Revise la operación original antes de liberarlo.
+Register for promotions — agrees to receive promotions by WhatsApp and email,Registrar para promociones — acepta recibir promociones por WhatsApp y correo
+Mobile number and email are required to register for promotions,Para registrar en promociones se requieren celular y correo
 Cashier released unsubmitted draft {0}; the draft is retained and cannot collect this retired request.,El cajero liberó el borrador sin confirmar {0}; el borrador se conserva y ya no podrá cobrar esta solicitud retirada.

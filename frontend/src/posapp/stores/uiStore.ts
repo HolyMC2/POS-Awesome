@@ -265,6 +265,7 @@ export const useUIStore = defineStore("ui", () => {
   // Resolved capability payload — a sibling of the opening data (plan C7),
   // NOT a field on the profile doc. verticalStore reads this.
   const capabilityPayload = ref<Record<string, any> | null>(null);
+  const customerMarketingOptIn = ref(false);
   const companyDoc = ref<any>(null);
   const posOpeningShift = ref<any>(null);
 
@@ -312,11 +313,15 @@ export const useUIStore = defineStore("ui", () => {
     company?: any;
     pos_opening_shift?: any;
     capability_profile?: Record<string, any> | null;
+    customer_marketing_opt_in?: boolean;
   }) {
     if (data.pos_profile) posProfile.value = data.pos_profile;
     if (data.stock_settings) stockSettings.value = data.stock_settings;
     if (data.company) companyDoc.value = data.company;
     if (data.pos_opening_shift) posOpeningShift.value = data.pos_opening_shift;
+    // Whether the Customer doctype carries promotion consent (a field another
+    // app adds). An opening payload from before the key existed hides it.
+    customerMarketingOptIn.value = Boolean(data.customer_marketing_opt_in);
     // The capability payload is a sibling of the opening data (plan C7).
     // Always assign — an opening with no preset carries null, which must
     // reset any prior preset rather than linger.
@@ -521,6 +526,7 @@ export const useUIStore = defineStore("ui", () => {
     closeOrders,
     posProfile,
     stockSettings,
+    customerMarketingOptIn,
     companyDoc,
     posOpeningShift,
     lastInvoiceId,

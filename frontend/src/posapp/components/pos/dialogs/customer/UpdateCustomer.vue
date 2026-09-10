@@ -117,6 +117,16 @@
 									class="pos-themed-input"
 								></v-select>
 							</v-col>
+							<v-col v-if="marketingOptInAvailable" cols="12">
+								<v-checkbox
+									v-model="marketing_opt_in"
+									data-testid="customer-marketing-opt-in"
+									density="compact"
+									color="primary"
+									hide-details
+									:label="__('Register for promotions — agrees to receive promotions by WhatsApp and email')"
+								></v-checkbox>
+							</v-col>
 							<v-col cols="6">
 								<v-text-field
 									density="compact"
@@ -235,10 +245,10 @@ import { isOffline, saveOfflineCustomer } from "../../../../../offline/index";
 import { getCustomerFiscal, saveCustomerFiscal } from "../../../../api/cfdi";
 import CustomerFiscalFields from "../../cfdi/CustomerFiscalFields.vue";
 import { useCfdiStore } from "../../../../stores/cfdiStore";
-import { useCustomersStore } from "../../../../stores/customersStore.js";
-import { useUIStore } from "../../../../stores/uiStore.js";
+import { useCustomersStore } from "../../../../stores/customersStore";
+import { useUIStore } from "../../../../stores/uiStore";
 import { storeToRefs } from "pinia";
-import { useToastStore } from "../../../../stores/toastStore.js";
+import { useToastStore } from "../../../../stores/toastStore";
 
 export default {
 	components: { CustomerFiscalFields },
@@ -281,6 +291,10 @@ export default {
 		genders: [],
 		customer_type: "Individual",
 		gender: "",
+		// Promotion consent. Offered only when the Customer doctype has the
+		// field; `marketingOptInKnown` marks an update that loaded its value.
+		marketing_opt_in: false,
+		marketingOptInKnown: false,
 		loyalty_points: null,
 		loyalty_program: null,
 		// CFDI fiscal companion fields — saved via save_customer_fiscal after
@@ -395,6 +409,9 @@ export default {
 		cfdiEnabled() {
 			return Boolean(this.pos_profile && this.pos_profile.posa_cfdi_enable_stamping);
 		},
+		marketingOptInAvailable() {
+			return Boolean(this.uiStore.customerMarketingOptIn);
+		},
 	},
 	methods: {
 		resetFiscal() {
@@ -495,7 +512,8 @@ export default {
 				this.address_line1 ||
 				this.email_id ||
 				this.referral_code ||
-				this.birthday
+				this.birthday ||
+				this.marketing_opt_in
 			) {
 				this.confirmDialog = true;
 			} else {
@@ -512,6 +530,8 @@ export default {
 			this.clear_customer();
 		},
 		clear_customer() {
+			this.marketing_opt_in = false;
+			this.marketingOptInKnown = false;
 			this.customer_name = "";
 			this.tax_id = "";
 			this.mobile_no = "";
@@ -672,6 +692,13 @@ export default {
 				}
 			}
 
+			// Promotion consent covers WhatsApp and email, so it needs both.
+			const wantsPromotions = this.marketingOptInAvailable && this.marketing_opt_in;
+			if (wantsPromotions && !(String(this.mobile_no || "").trim() && String(this.email_id || "").trim())) {
+				frappe.throw(__("Mobile number and email are required to register for promotions"));
+				return;
+			}
+
 			// Create args object to use in callback. With the CFDI section
 			// active the RFC lives in the fiscal group, not the plain field.
 			const args = {
@@ -696,6 +723,11 @@ export default {
 				pos_profile_doc: JSON.stringify(vm.pos_profile),
 				method: this.customer_id ? "update" : "create",
 			};
+			// Sent when ticked, or when an update loaded the stored value (so
+			// unticking withdraws it). Otherwise stored consent stays as it is.
+			if (this.marketingOptInAvailable && (this.marketing_opt_in || this.marketingOptInKnown)) {
+				apiArgs.marketing_opt_in = this.marketing_opt_in ? 1 : 0;
+			}
 
 			const customersStore = useCustomersStore();
 
@@ -836,6 +868,10 @@ export default {
 						this.loyalty_points = data.loyalty_points;
 						this.loyalty_program = data.loyalty_program;
 						this.gender = data.gender;
+						// get_customer_info sends consent only when the field exists.
+						this.marketingOptInKnown =
+							data.marketing_opt_in !== undefined && data.marketing_opt_in !== null;
+						this.marketing_opt_in = Boolean(Number(data.marketing_opt_in || 0));
 					} else {
 						// Setup for new customer
 						this.clear_customer();
