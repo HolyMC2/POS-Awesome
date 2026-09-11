@@ -316,4 +316,48 @@ describe("customer quick-create promotion consent", () => {
 		await submit(wrapper);
 		expect(sentArgs()).not.toHaveProperty("marketing_opt_in");
 	});
+
+	const cached = (consent: number) => ({
+		name: "Ana Pérez",
+		customer_name: "Ana Pérez",
+		mobile_no: "6691234567",
+		email_id: "ana@example.com",
+		customer_group: "Individual",
+		territory: "Mexico",
+		marketing_opt_in: consent,
+	});
+
+	it("an untouched checkbox from a stale cached copy never withdraws consent", async () => {
+		// The copy says 0 while the server may hold 1 (offline cache, a customer
+		// registered elsewhere since): sending the 0 would withdraw consent.
+		const wrapper = await mountDialog({ customer_marketing_opt_in: true }, cached(0));
+		await submit(wrapper);
+		expect(sentArgs()).toMatchObject({ method: "update" });
+		expect(sentArgs()).not.toHaveProperty("marketing_opt_in");
+	});
+
+	it("stored consent left as it is sends nothing", async () => {
+		const wrapper = await mountDialog({ customer_marketing_opt_in: true }, cached(1));
+		expect((wrapper.find(`${CHECKBOX} input`).element as HTMLInputElement).checked).toBe(true);
+		await submit(wrapper);
+		expect(sentArgs()).not.toHaveProperty("marketing_opt_in");
+	});
+
+	it("ticking and unticking again in the same dialog sends nothing", async () => {
+		const wrapper = await mountDialog({ customer_marketing_opt_in: true }, cached(0));
+		const input = wrapper.find(`${CHECKBOX} input`);
+		await input.setValue(true);
+		await input.setValue(false);
+		await submit(wrapper);
+		expect(sentArgs()).not.toHaveProperty("marketing_opt_in");
+	});
+
+	it("offline, an untouched update queues no consent", async () => {
+		m.offline = true;
+		const wrapper = await mountDialog({ customer_marketing_opt_in: true }, cached(0));
+		await submit(wrapper);
+		expect(frappe.call).not.toHaveBeenCalled();
+		expect(vi.mocked(saveOfflineCustomer).mock.calls[0]?.[0]).toMatchObject({ args: { method: "update" } });
+		expect(vi.mocked(saveOfflineCustomer).mock.calls[0]?.[0].args).not.toHaveProperty("marketing_opt_in");
+	});
 });

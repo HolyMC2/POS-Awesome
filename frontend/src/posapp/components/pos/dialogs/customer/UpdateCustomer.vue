@@ -299,10 +299,11 @@ export default {
 		genders: [],
 		customer_type: "Individual",
 		gender: "",
-		// Promotion consent. Offered only when the Customer doctype has the
-		// field; `marketingOptInKnown` marks an update that loaded its value.
+		// Promotion consent. Offered only when the Customer field exists and is
+		// not hidden. `marketingOptInInitial` is the value the dialog opened
+		// with: consent is sent only when the cashier changed it here.
 		marketing_opt_in: false,
-		marketingOptInKnown: false,
+		marketingOptInInitial: false,
 		loyalty_points: null,
 		loyalty_program: null,
 		// CFDI fiscal companion fields — saved via save_customer_fiscal after
@@ -547,7 +548,7 @@ export default {
 		},
 		clear_customer() {
 			this.marketing_opt_in = false;
-			this.marketingOptInKnown = false;
+			this.marketingOptInInitial = false;
 			this.customer_name = "";
 			this.tax_id = "";
 			this.mobile_no = "";
@@ -744,9 +745,13 @@ export default {
 				pos_profile_doc: JSON.stringify(vm.pos_profile),
 				method: this.customer_id ? "update" : "create",
 			};
-			// Sent when ticked, or when an update loaded the stored value (so
-			// unticking withdraws it). Otherwise stored consent stays as it is.
-			if (this.marketingOptInAvailable && (this.marketing_opt_in || this.marketingOptInKnown)) {
+			// Sent only when the cashier changed it in this dialog. An untouched
+			// checkbox from a stale or offline copy of the customer must never
+			// overwrite, and so withdraw, the consent stored on the server.
+			if (
+				this.marketingOptInAvailable &&
+				Boolean(this.marketing_opt_in) !== Boolean(this.marketingOptInInitial)
+			) {
 				apiArgs.marketing_opt_in = this.marketing_opt_in ? 1 : 0;
 			}
 
@@ -890,9 +895,9 @@ export default {
 						this.loyalty_program = data.loyalty_program;
 						this.gender = data.gender;
 						// get_customer_info sends consent only when the field exists.
-						this.marketingOptInKnown =
-							data.marketing_opt_in !== undefined && data.marketing_opt_in !== null;
+						// Remember what the dialog opened with; see submit_dialog.
 						this.marketing_opt_in = Boolean(Number(data.marketing_opt_in || 0));
+						this.marketingOptInInitial = this.marketing_opt_in;
 					} else {
 						// Setup for new customer
 						this.clear_customer();
