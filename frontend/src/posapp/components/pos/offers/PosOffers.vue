@@ -107,9 +107,9 @@
 
 <script>
 import format from "../../../format";
-import { useCustomersStore } from "../../../stores/customersStore.js";
-import { useUIStore } from "../../../stores/uiStore.js";
-import { useToastStore } from "../../../stores/toastStore.js";
+import { useCustomersStore } from "../../../stores/customersStore";
+import { useUIStore } from "../../../stores/uiStore";
+import { useToastStore } from "../../../stores/toastStore";
 import { storeToRefs } from "pinia";
 export default {
 	mixins: [format],
@@ -280,7 +280,9 @@ export default {
 							newOffer.give_item = giveItems[0].item_code;
 						}
 					}
-					this.pos_offers.push(newOffer);
+					// Reassign, never push: the pos_offers watcher is shallow, and
+					// it drives the offer counters and the invoice re-evaluation.
+					this.pos_offers = [...this.pos_offers, newOffer];
 					this.toastStore.show({
 						title: __("New Offer Available"),
 						color: "warning",

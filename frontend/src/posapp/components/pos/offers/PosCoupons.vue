@@ -74,9 +74,9 @@
 </template>
 
 <script>
-import { useCustomersStore } from "../../../stores/customersStore.js";
-import { useToastStore } from "../../../stores/toastStore.js";
-import { useUIStore } from "../../../stores/uiStore.js";
+import { useCustomersStore } from "../../../stores/customersStore";
+import { useToastStore } from "../../../stores/toastStore";
+import { useUIStore } from "../../../stores/uiStore";
 import { storeToRefs } from "pinia";
 import { getCachedCoupons, saveCoupons } from "../../../../offline/index";
 
@@ -164,15 +164,21 @@ export default {
 						} else {
 							vm.new_coupon = null;
 							const coupon = res.coupon;
-							if (!vm.posa_coupons) vm.posa_coupons = [];
-							vm.posa_coupons.push({
-								coupon: coupon.name,
-								coupon_code: coupon.coupon_code,
-								type: coupon.coupon_type,
-								applied: 0,
-								pos_offer: coupon.pos_offer,
-								customer: coupon.customer || vm.customer,
-							});
+							// Reassign, never push: the posa_coupons watcher is
+							// shallow, and it is what hands coupons to the invoice's
+							// offer evaluation and the counters. A pushed coupon
+							// never surfaced its coupon-based offer.
+							vm.posa_coupons = [
+								...(vm.posa_coupons || []),
+								{
+									coupon: coupon.name,
+									coupon_code: coupon.coupon_code,
+									type: coupon.coupon_type,
+									applied: 0,
+									pos_offer: coupon.pos_offer,
+									customer: coupon.customer || vm.customer,
+								},
+							];
 						}
 					}
 				},
