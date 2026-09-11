@@ -124,8 +124,16 @@
 									density="compact"
 									color="primary"
 									hide-details
-									:label="__('Register for promotions — agrees to receive promotions by WhatsApp and email')"
+									:label="__('Register for promotions')"
 								></v-checkbox>
+								<!-- The consent the cashier reads aloud: the wording the
+								     owning app put on the field, else a generic line. -->
+								<div
+									class="text-caption text-medium-emphasis ms-10"
+									data-testid="customer-marketing-opt-in-consent"
+								>
+									{{ marketingOptInConsent }}
+								</div>
 							</v-col>
 							<v-col cols="6">
 								<v-text-field
@@ -411,6 +419,14 @@ export default {
 		},
 		marketingOptInAvailable() {
 			return Boolean(this.uiStore.customerMarketingOptIn);
+		},
+		marketingOptInConsent() {
+			// Customer.marketing_opt_in's description from the opening payload,
+			// which the offline snapshot keeps; generic wording when it is empty.
+			return (
+				String(this.uiStore.customerMarketingOptInDescription || "").trim() ||
+				__("Agrees to receive promotions by WhatsApp and email")
+			);
 		},
 	},
 	methods: {

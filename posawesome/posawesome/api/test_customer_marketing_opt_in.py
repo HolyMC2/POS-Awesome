@@ -197,5 +197,34 @@ class CustomerInfoTests(unittest.TestCase):
         self.assertNotIn("marketing_opt_in", self.info(_Frappe(fields=(), existing=existing)))
 
 
+class ConsentWordingTests(unittest.TestCase):
+    """The opening payload carries the owning app's consent wording."""
+
+    def consent(self, field=None, error=False):
+        def get_meta(doctype):
+            if error:
+                raise RuntimeError("meta unavailable")
+            return types.SimpleNamespace(get_field=lambda name: field if name == "marketing_opt_in" else None)
+
+        with mock.patch.object(customers, "frappe", types.SimpleNamespace(get_meta=get_meta)):
+            return customers.customer_marketing_consent()
+
+    def test_the_field_description_is_the_consent_text(self):
+        field = types.SimpleNamespace(description="  Consentimiento explícito para recibir promociones.  ")
+        self.assertEqual(
+            self.consent(field),
+            {"available": True, "description": "Consentimiento explícito para recibir promociones."},
+        )
+
+    def test_a_field_without_description_leaves_the_wording_to_the_register(self):
+        self.assertEqual(self.consent(types.SimpleNamespace(description=None)), {"available": True, "description": ""})
+
+    def test_no_field_offers_no_consent(self):
+        self.assertEqual(self.consent(None), {"available": False, "description": ""})
+
+    def test_unreadable_meta_offers_no_consent(self):
+        self.assertEqual(self.consent(error=True), {"available": False, "description": ""})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -320,6 +320,24 @@ def customer_marketing_opt_in_available():
     return _customer_has_field("marketing_opt_in")
 
 
+def customer_marketing_consent():
+    """The consent customer quick-create offers, read from Customer meta.
+
+    The app that adds `marketing_opt_in` owns its wording: the field's
+    description is the consent text the cashier reads to the customer. The
+    description is empty when the field has none, and the register then shows
+    its own generic text.
+    """
+    try:
+        field = frappe.get_meta("Customer").get_field("marketing_opt_in")
+    except Exception:
+        field = None
+    return {
+        "available": bool(field),
+        "description": cstr(getattr(field, "description", None) or "").strip(),
+    }
+
+
 def _as_flag(value):
     if isinstance(value, str):
         return 1 if value.strip().lower() in ("1", "true", "yes", "on") else 0

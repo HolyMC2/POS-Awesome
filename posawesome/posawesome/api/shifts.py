@@ -328,14 +328,14 @@ def update_opening_shift_data(data, pos_profile):
     data["capability_profile"] = shift_effective_capability_payload(
         pos_profile, user=shift_user
     )
-    # Promotion consent is a Customer field another app may add. Rides the
-    # offline snapshot so customer quick-create knows whether to offer it.
-    try:
-        data["customer_marketing_opt_in"] = bool(
-            frappe.get_meta("Customer").has_field("marketing_opt_in")
-        )
-    except Exception:
-        data["customer_marketing_opt_in"] = False
+    # Promotion consent is a Customer field another app may add, worded in its
+    # description. Rides the offline snapshot so customer quick-create offers it
+    # with the same wording without a server call.
+    from posawesome.posawesome.api.customers import customer_marketing_consent
+
+    consent = customer_marketing_consent()
+    data["customer_marketing_opt_in"] = consent["available"]
+    data["customer_marketing_opt_in_description"] = consent["description"]
     if data["pos_profile"].get("posa_language"):
         frappe.local.lang = data["pos_profile"].posa_language
     data["company"] = frappe.get_doc("Company", data["pos_profile"].company)

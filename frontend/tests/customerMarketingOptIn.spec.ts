@@ -65,9 +65,12 @@ import { useCustomersStore } from "../src/posapp/stores/customersStore";
 import { useToastStore } from "../src/posapp/stores/toastStore";
 import { useUIStore } from "../src/posapp/stores/uiStore";
 
-const LABEL = "Register for promotions — agrees to receive promotions by WhatsApp and email";
+const LABEL = "Register for promotions";
+const GENERIC_CONSENT = "Agrees to receive promotions by WhatsApp and email";
+const CAMPAIGN_CONSENT = "Consentimiento explícito para recibir promociones por WhatsApp y correo.";
 const REQUIRED = "Mobile number and email are required to register for promotions";
 const CHECKBOX = '[data-testid="customer-marketing-opt-in"]';
+const CONSENT = '[data-testid="customer-marketing-opt-in-consent"]';
 
 const pass = (name: string) =>
 	defineComponent({
@@ -197,22 +200,45 @@ describe("customer quick-create promotion consent", () => {
 		const wrapper = await mountDialog({});
 		expect(wrapper.find('input[data-label="Customer Name *"]').exists()).toBe(true);
 		expect(wrapper.find(CHECKBOX).exists()).toBe(false);
+		expect(wrapper.find(CONSENT).exists()).toBe(false);
 	});
 
-	it("an opening payload without the key hides a previously offered checkbox", () => {
+	it("an opening payload without the keys hides a previously offered checkbox", () => {
 		const ui = useUIStore();
-		ui.setRegisterData({ customer_marketing_opt_in: true });
+		ui.setRegisterData({ customer_marketing_opt_in: true, customer_marketing_opt_in_description: CAMPAIGN_CONSENT });
 		expect(ui.customerMarketingOptIn).toBe(true);
+		expect(ui.customerMarketingOptInDescription).toBe(CAMPAIGN_CONSENT);
 		ui.setRegisterData({ pos_profile: { name: "Doco Ventas" } as never });
 		expect(ui.customerMarketingOptIn).toBe(false);
+		expect(ui.customerMarketingOptInDescription).toBe("");
 	});
 
-	it("is offered unticked when the field exists", async () => {
+	it("is offered unticked with the short label and generic consent when the field has no description", async () => {
 		const wrapper = await mountDialog({ customer_marketing_opt_in: true });
 		const checkbox = wrapper.find(CHECKBOX);
 		expect(checkbox.exists()).toBe(true);
 		expect(checkbox.text()).toBe(LABEL);
 		expect((checkbox.find("input").element as HTMLInputElement).checked).toBe(false);
+		expect(wrapper.find(CONSENT).text()).toBe(GENERIC_CONSENT);
+	});
+
+	it("shows the field description as the consent text under the short label", async () => {
+		const wrapper = await mountDialog({
+			customer_marketing_opt_in: true,
+			customer_marketing_opt_in_description: CAMPAIGN_CONSENT,
+		});
+		expect(wrapper.find(CHECKBOX).text()).toBe(LABEL);
+		expect(wrapper.find(CONSENT).text()).toBe(CAMPAIGN_CONSENT);
+	});
+
+	it("offline, the cached opening payload still supplies the wording", async () => {
+		m.offline = true;
+		const wrapper = await mountDialog({
+			customer_marketing_opt_in: true,
+			customer_marketing_opt_in_description: CAMPAIGN_CONSENT,
+		});
+		expect(wrapper.find(CONSENT).text()).toBe(CAMPAIGN_CONSENT);
+		expect(frappe.call).not.toHaveBeenCalled();
 	});
 
 	it("ticked, it requires both a mobile and an email", async () => {
