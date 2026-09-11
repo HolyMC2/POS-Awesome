@@ -8,6 +8,28 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 Original status labels are retained; this section also contains changes reported as deployed.
 
+- **Registration promos: gift offers, coupons and consent (2026-09-10, lab
+  verification).** Branch `feat/registration-promos-20260910`, not pushed.
+  POS Coupon `one_use` limits reuse of that coupon (its applied rows) instead of
+  any coupon the customer used (`d2d9151db`). A Give Product offer with
+  `apply_type` Item Group accepts a gift from `apply_item_group` or a
+  descendant, below `less_then`, within `given_qty`, with the offer's purchase,
+  coupon and validity checks; anything else is still rejected (`83a498858`).
+  Coupons and offers added in the register reach the sale again: since
+  `5006a5b54` a typed coupon or a customer's gift cards never surfaced a
+  coupon-based offer (`4a9cfbdb4`). Submitting a sale redeems the coupon rows
+  whose offer it carries, so gift cards are counted as used (`5283d3296`).
+  Customer quick-create shows a consent checkbox when another app adds
+  `Customer.marketing_opt_in`, requires mobile and email when ticked, and writes
+  the flag (and `marketing_opt_in_source` = Mostrador when that field exists)
+  online and on offline replay (`98c70ab6b`, `d38ac9f19`). Verified on the Doco
+  lab mirror: item-group gift sales ACC-SINV-2026-03228 (before the redemption
+  fix), 03229 and 03230 (second gift card redeemed after the first), and the
+  checkbox with a temporary custom field. Python and SPA change, no migration:
+  deploy needs the SPA build and a worker restart. A Give Product offer must set
+  a discount (for example Discount Percentage 100) for the register to price the
+  gift at zero; the Desk form requires it, scripts must set it.
+
 - **Clinic charge identity (2026-09-10, private canary verified).** Preserve an
   explicitly selected Patient after validating its billing Customer; a shared
   family payer no longer selects an arbitrary patient. Trusted charge sources
