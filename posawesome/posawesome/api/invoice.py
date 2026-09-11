@@ -282,6 +282,16 @@ def make_sales_order(source_name, target_doc=None, ignore_permissions=True):
 
 
 def update_coupon(doc, transaction_type):
+    if flt(doc.get("is_return")):
+        # A return (POS return or Desk credit note) copies the sale's coupon
+        # rows, applied flags included. It is not a use of the coupon and its
+        # cancellation releases none: only the original sale counts, and
+        # cancelling that sale releases the use. Clear the copied flags before
+        # submit so the return never reads as a redemption.
+        if transaction_type == "used":
+            for coupon in getattr(doc, "posa_coupons", []) or []:
+                coupon.applied = 0
+        return
     if transaction_type == "used":
         # The register's `applied` flag does not reliably reach the saved rows,
         # so redeem the rows whose offer the sale carries and persist the flag

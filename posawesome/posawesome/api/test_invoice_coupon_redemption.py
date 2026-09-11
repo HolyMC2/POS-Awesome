@@ -102,5 +102,58 @@ class UpdateCouponTests(unittest.TestCase):
         self.assertEqual([row.applied for row in sale.posa_coupons], [0, 1])
 
 
+@unittest.skipIf(hooks_harness._UNDER_BENCH, "standalone stub test - run with python3 directly")
+class ReturnCouponTests(unittest.TestCase):
+    """A return copies the sale's coupon rows; it is never a use of the coupon."""
+
+    def setUp(self):
+        hooks_harness._install_invoice_api_stubs()
+        self.counted = []
+        stub = sys.modules["posawesome.posawesome.doctype.pos_coupon.pos_coupon"]
+        stub.update_coupon_code_count = lambda name, kind: self.counted.append((name, kind))
+        stub.redeemed_coupon_rows = real_coupons.redeemed_coupon_rows
+        self.invoice = hooks_harness._load_invoice_api_module()
+
+    def pos_return(self):
+        # What the POS return builder and make_sales_return both copy from a
+        # gift-card sale: the coupon row as applied and the offer on the line.
+        return _Record(
+            is_return=1,
+            return_against="ACC-SINV-GIFT",
+            posa_coupons=[_Record(coupon="GC-Mica", pos_offer="Mica", applied=1)],
+            items=[_Record(item_code="IT-2", qty=-1, posa_offers='["Mica"]'),
+                   _Record(item_code="IT-1", qty=-1, posa_offers=None)],
+            posa_offers=[],
+        )
+
+    def desk_credit_note(self):
+        note = self.pos_return()
+        note.posa_offers = [_Record(offer_name="Mica", row_id="Mica", offer_applied=1)]
+        return note
+
+    def test_submitting_a_pos_return_counts_no_use_and_clears_the_copied_flag(self):
+        note = self.pos_return()
+        self.invoice.update_coupon(note, "used")
+        self.assertEqual(self.counted, [])
+        self.assertEqual([row.applied for row in note.posa_coupons], [0])
+
+    def test_submitting_a_desk_credit_note_counts_no_use(self):
+        note = self.desk_credit_note()
+        self.invoice.update_coupon(note, "used")
+        self.assertEqual(self.counted, [])
+        self.assertEqual([row.applied for row in note.posa_coupons], [0])
+
+    def test_cancelling_a_return_releases_no_use(self):
+        note = self.desk_credit_note()
+        self.invoice.update_coupon(note, "cancelled")
+        self.assertEqual(self.counted, [])
+
+    def test_cancelling_the_original_sale_still_releases_its_use(self):
+        sale = _Record(is_return=0, posa_coupons=[_Record(coupon="GC-Mica", pos_offer="Mica", applied=1)],
+                       items=[_Record(item_code="IT-2", posa_offers='["Mica"]')], posa_offers=[])
+        self.invoice.update_coupon(sale, "cancelled")
+        self.assertEqual(self.counted, [("GC-Mica", "cancelled")])
+
+
 if __name__ == "__main__":
     unittest.main()
