@@ -206,5 +206,66 @@ class RedeemedRowsTests(unittest.TestCase):
         self.assertEqual(self.redeemed(sale, lookup={"GC-A": "Mica"}), ["GC-A"])
 
 
+class _CountingDb(types.SimpleNamespace):
+    """A POS Coupon table that answers the guarded UPDATEs like MariaDB."""
+
+    def __init__(self, used, maximum_use, exists=True):
+        super().__init__(statements=[], row={"coupon_code": "GC-A", "used": used, "maximum_use": maximum_use},
+                         exists=exists, _cursor=types.SimpleNamespace(rowcount=0))
+
+    def sql(self, query, params):
+        statement = " ".join(query.split())
+        self.statements.append(statement)
+        row, changed = self.row, 0
+        if self.exists and "+ 1" in statement and (not row["maximum_use"] or row["used"] < row["maximum_use"]):
+            row["used"] += 1
+            changed = 1
+        elif self.exists and "- 1" in statement and row["used"] > 0:
+            row["used"] -= 1
+            changed = 1
+        self._cursor.rowcount = changed
+
+    def get_value(self, doctype, name, fields, as_dict=False):
+        return types.SimpleNamespace(**self.row) if self.exists else None
+
+
+class UseCountTests(unittest.TestCase):
+    """Counting a use never saves (and so never re-validates) the coupon."""
+
+    def count(self, db, kind):
+        fake = types.SimpleNamespace(db=db, throw=lambda message: (_ for _ in ()).throw(Exception(message)))
+        with mock.patch.object(coupons, "frappe", fake):
+            coupons.update_coupon_code_count("GC-A", kind)
+
+    def test_a_use_is_one_guarded_increment(self):
+        db = _CountingDb(used=0, maximum_use=1)
+        self.count(db, "used")
+        self.assertEqual(db.row["used"], 1)
+        self.assertEqual(len(db.statements), 1)
+        self.assertIn("< maximum_use", db.statements[0])
+
+    def test_an_exhausted_coupon_is_refused_with_the_fix(self):
+        db = _CountingDb(used=1, maximum_use=1)
+        with self.assertRaises(Exception) as refused:
+            self.count(db, "used")
+        self.assertIn("Coupon GC-A has no uses left (1 of 1 used)", str(refused.exception))
+        self.assertEqual(db.row["used"], 1)
+
+    def test_an_unlimited_coupon_keeps_counting(self):
+        db = _CountingDb(used=7, maximum_use=0)
+        self.count(db, "used")
+        self.assertEqual(db.row["used"], 8)
+
+    def test_cancel_releases_one_use_and_never_goes_negative(self):
+        db = _CountingDb(used=1, maximum_use=1)
+        self.count(db, "cancelled")
+        self.count(db, "cancelled")
+        self.assertEqual(db.row["used"], 0)
+        self.assertIn("> 0", db.statements[-1])
+
+    def test_a_deleted_coupon_does_not_fail_the_sale(self):
+        self.count(_CountingDb(used=0, maximum_use=1, exists=False), "used")
+
+
 if __name__ == "__main__":
     unittest.main()

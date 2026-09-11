@@ -198,21 +198,42 @@ def redeemed_coupon_rows(doc):
     return redeemed
 
 
-def update_coupon_code_count(coupon_name, transaction_type):
-    coupon = frappe.get_doc("POS Coupon", coupon_name)
-    if coupon:
-        if transaction_type == "used":
-            if coupon.maximum_use and coupon.used >= coupon.maximum_use:
-                frappe.throw(
-                    _("{0} Coupon used are {1}. Allowed quantity is exhausted").format(
-                        coupon.coupon_code, coupon.used
-                    )
-                )
-            else:
-                coupon.used = coupon.used + 1
-                coupon.save(ignore_permissions=True)
+def _affected_rows():
+    return getattr(getattr(frappe.db, "_cursor", None), "rowcount", 0) or 0
 
-        elif transaction_type == "cancelled":
-            if coupon.used > 0:
-                coupon.used = coupon.used - 1
-                coupon.save(ignore_permissions=True)
+
+def update_coupon_code_count(coupon_name, transaction_type):
+    """Count or release one use of a coupon with a single guarded UPDATE.
+
+    Only the counter changes. Saving the coupon document re-ran its validation,
+    so a paid sale failed whenever its POS Offer had since been disabled or
+    edited. The WHERE clause keeps two sales from taking the last use.
+
+    There is no reliable marker of an offline-synced sale on the server, so an
+    exhausted coupon is refused on every submit, with the reason and the fix.
+    """
+    if not coupon_name:
+        return
+    if transaction_type == "used":
+        frappe.db.sql(
+            """UPDATE `tabPOS Coupon` SET used = IFNULL(used, 0) + 1
+            WHERE name = %s AND (IFNULL(maximum_use, 0) = 0 OR IFNULL(used, 0) < maximum_use)""",
+            (coupon_name,),
+        )
+        if _affected_rows():
+            return
+        coupon = frappe.db.get_value(
+            "POS Coupon", coupon_name, ["coupon_code", "used", "maximum_use"], as_dict=True
+        )
+        if not coupon:
+            return
+        frappe.throw(
+            _(
+                "Coupon {0} has no uses left ({1} of {2} used). Remove it from this sale or raise its maximum use in POS Coupon."
+            ).format(coupon.coupon_code, coupon.used, coupon.maximum_use)
+        )
+    elif transaction_type == "cancelled":
+        frappe.db.sql(
+            "UPDATE `tabPOS Coupon` SET used = used - 1 WHERE name = %s AND IFNULL(used, 0) > 0",
+            (coupon_name,),
+        )
