@@ -142,5 +142,69 @@ class OneUseTests(unittest.TestCase):
         self.assertIsNone(self.check("PROMO", history, customer="CUST-1", coupon_rows=[promo])["coupon"])
 
 
+class _Row(dict):
+    __getattr__ = dict.get
+
+
+class RedeemedRowsTests(unittest.TestCase):
+    """Which coupon rows a sale consumes when it is submitted."""
+
+    def redeemed(self, sale, lookup=None):
+        fake = types.SimpleNamespace(
+            db=types.SimpleNamespace(get_value=lambda doctype, name, field: (lookup or {}).get(name))
+        )
+        with mock.patch.object(coupons, "frappe", fake):
+            return [row["coupon"] for row in coupons.redeemed_coupon_rows(_Row(sale))]
+
+    def sale(self, coupons_rows, items=None, offers=None):
+        return {
+            "posa_coupons": [_Row(row) for row in coupons_rows],
+            "items": [_Row(item) for item in (items or [])],
+            "posa_offers": [_Row(offer) for offer in (offers or [])],
+        }
+
+    def test_a_client_flagged_row_is_redeemed(self):
+        sale = self.sale([{"coupon": "GC-A", "pos_offer": "Mica", "applied": 1}])
+        self.assertEqual(self.redeemed(sale), ["GC-A"])
+
+    def test_a_line_carrying_the_offer_redeems_an_unflagged_row(self):
+        # What the lab register saved: applied stayed 0, the purchase line
+        # carried the gift offer in its posa_offers JSON.
+        sale = self.sale(
+            [{"coupon": "GC-B", "pos_offer": "Funda", "applied": 0},
+             {"coupon": "GC-A", "pos_offer": "Mica", "applied": 0}],
+            items=[{"item_code": "IT-2", "posa_offers": '["Mica"]'}, {"item_code": "IT-1", "posa_offers": None}],
+        )
+        self.assertEqual(self.redeemed(sale), ["GC-A"])
+
+    def test_an_applied_offer_row_redeems_its_coupon(self):
+        sale = self.sale(
+            [{"coupon": "GC-A", "pos_offer": "Mica", "applied": 0}],
+            offers=[{"offer_name": "Mica", "row_id": "Mica", "offer_applied": 1}],
+        )
+        self.assertEqual(self.redeemed(sale), ["GC-A"])
+
+    def test_an_offer_row_that_was_not_applied_redeems_nothing(self):
+        sale = self.sale(
+            [{"coupon": "GC-A", "pos_offer": "Mica", "applied": 0}],
+            offers=[{"offer_name": "Mica", "row_id": "Mica", "offer_applied": 0}],
+        )
+        self.assertEqual(self.redeemed(sale), [])
+
+    def test_attached_gift_cards_without_their_offer_stay_unredeemed(self):
+        sale = self.sale(
+            [{"coupon": "GC-A", "pos_offer": "Mica", "applied": 0}],
+            items=[{"item_code": "IT-2", "posa_offers": "[]"}, {"item_code": "IT-3", "posa_offers": "not json"}],
+        )
+        self.assertEqual(self.redeemed(sale), [])
+
+    def test_a_row_without_its_offer_reads_it_from_the_coupon(self):
+        sale = self.sale(
+            [{"coupon": "GC-A", "pos_offer": None, "applied": 0}],
+            items=[{"item_code": "IT-2", "posa_offers": ["Mica"]}],
+        )
+        self.assertEqual(self.redeemed(sale, lookup={"GC-A": "Mica"}), ["GC-A"])
+
+
 if __name__ == "__main__":
     unittest.main()

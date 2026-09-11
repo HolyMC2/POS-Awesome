@@ -149,6 +149,55 @@ def validate_coupon_code(coupon_code, customer=None, company=None):
         return res
 
 
+def _offer_ids(value):
+    import json
+
+    if isinstance(value, str):
+        try:
+            value = json.loads(value) if value.strip() else []
+        except ValueError:
+            return set()
+    if not isinstance(value, (list, tuple)):
+        return set()
+    return {str(entry) for entry in value if entry}
+
+
+def _flag(value):
+    try:
+        return int(float(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def redeemed_coupon_rows(doc):
+    """Coupon rows a sale being submitted actually redeemed.
+
+    The register attaches every active gift card to the customer's sale, and
+    its `applied` flag does not reliably reach the saved rows. A row counts as
+    redeemed when it is flagged applied, or when the sale carries its offer: an
+    applied `posa_offers` row, or an item whose `posa_offers` lists the offer.
+    Unrelated gift cards on the sale are left unredeemed.
+    """
+    carried = set()
+    for offer in doc.get("posa_offers") or []:
+        if _flag(offer.get("offer_applied")):
+            carried.update(str(key) for key in (offer.get("row_id"), offer.get("offer_name")) if key)
+    for item in doc.get("items") or []:
+        carried |= _offer_ids(item.get("posa_offers"))
+
+    redeemed = []
+    for row in doc.get("posa_coupons") or []:
+        if _flag(row.get("applied")):
+            redeemed.append(row)
+            continue
+        offer = row.get("pos_offer")
+        if not offer and row.get("coupon"):
+            offer = frappe.db.get_value("POS Coupon", row.get("coupon"), "pos_offer")
+        if offer and str(offer) in carried:
+            redeemed.append(row)
+    return redeemed
+
+
 def update_coupon_code_count(coupon_name, transaction_type):
     coupon = frappe.get_doc("POS Coupon", coupon_name)
     if coupon:

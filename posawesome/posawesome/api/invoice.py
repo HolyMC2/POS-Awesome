@@ -282,9 +282,18 @@ def make_sales_order(source_name, target_doc=None, ignore_permissions=True):
 
 
 def update_coupon(doc, transaction_type):
-    for coupon in getattr(doc, "posa_coupons", []):
-        if not coupon.applied:
-            continue
+    if transaction_type == "used":
+        # The register's `applied` flag does not reliably reach the saved rows,
+        # so redeem the rows whose offer the sale carries and persist the flag
+        # (this runs before submit): one_use and cancellation both read it.
+        from posawesome.posawesome.doctype.pos_coupon.pos_coupon import redeemed_coupon_rows
+
+        rows = redeemed_coupon_rows(doc)
+        for coupon in rows:
+            coupon.applied = 1
+    else:
+        rows = [coupon for coupon in getattr(doc, "posa_coupons", []) if coupon.applied]
+    for coupon in rows:
         update_coupon_code_count(coupon.coupon, transaction_type)
 
 
