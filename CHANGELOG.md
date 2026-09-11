@@ -25,7 +25,18 @@ Original status labels are retained; this section also contains changes reported
   online and on offline replay (`98c70ab6b`, `d38ac9f19`). The dialog keeps a
   short label and shows the field's description as the consent text, or a
   generic line when it is empty; the opening payload carries it, so the offline
-  dialog shows the same wording (`a6a1d54d4`). Verified on the Doco
+  dialog shows the same wording (`a6a1d54d4`). Review fixes: a POS return or
+  Desk credit note never counts or releases a coupon use and clears the copied
+  applied flags (`d6f17fffd`); coupon uses count with one guarded UPDATE, so a
+  disabled offer no longer fails a paid sale, and an exhausted coupon is refused
+  with its reason, offline replays included, since the server has no reliable
+  offline marker (`54b97dc2a`); consent is offered only while the field is
+  visible, and Mostrador is set only when the Select offers it (`43db8f022`);
+  the dialog sends consent only when the cashier changed it (`efbd4ec71`).
+  Lab: credit note ACC-SINV-2026-03231 of an exhausted gift-card sale,
+  disabled-offer sale ACC-SINV-2026-03232 counted and then cancelled back to
+  zero. The register cannot pay a POS return: its band stays disabled on a
+  negative total. Verified on the Doco
   lab mirror: item-group gift sales ACC-SINV-2026-03228 (before the redemption
   fix), 03229 and 03230 (second gift card redeemed after the first), and the
   checkbox with a temporary custom field. Python and SPA change, no migration:
