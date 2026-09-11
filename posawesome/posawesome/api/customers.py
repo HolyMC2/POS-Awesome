@@ -332,9 +332,12 @@ def customer_marketing_consent():
         field = frappe.get_meta("Customer").get_field("marketing_opt_in")
     except Exception:
         field = None
+    # The owning app hides the field while no registration program is active;
+    # a hidden field is not offered, online or from the offline snapshot.
+    available = bool(field) and not _as_flag(getattr(field, "hidden", 0))
     return {
-        "available": bool(field),
-        "description": cstr(getattr(field, "description", None) or "").strip(),
+        "available": available,
+        "description": cstr(getattr(field, "description", None) or "").strip() if available else "",
     }
 
 
@@ -358,8 +361,29 @@ def _apply_marketing_opt_in(customer_doc, marketing_opt_in, mobile_no, email_id)
         frappe.throw(_("Mobile number and email are required to register for promotions"))
     previously_opted_in = _as_flag(customer_doc.get("marketing_opt_in"))
     customer_doc.marketing_opt_in = opted_in
-    if opted_in and not previously_opted_in and _customer_has_field("marketing_opt_in_source"):
-        customer_doc.marketing_opt_in_source = "Mostrador"
+    if opted_in and not previously_opted_in and _counter_source_allowed():
+        customer_doc.marketing_opt_in_source = COUNTER_SOURCE
+
+
+COUNTER_SOURCE = "Mostrador"
+
+
+def _counter_source_allowed():
+    """Whether `marketing_opt_in_source` exists and can hold the counter source.
+
+    A Select only takes one of its options; saving any other value would fail
+    the customer save.
+    """
+    try:
+        field = frappe.get_meta("Customer").get_field("marketing_opt_in_source")
+    except Exception:
+        return False
+    if not field:
+        return False
+    if getattr(field, "fieldtype", None) != "Select":
+        return True
+    options = [option.strip() for option in cstr(getattr(field, "options", None) or "").split("\n")]
+    return COUNTER_SOURCE in options
 
 
 @frappe.whitelist(methods=["POST"])

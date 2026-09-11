@@ -73,9 +73,17 @@ class _Customer(dict):
         self["saved"] = True
 
 
+SOURCE_OPTIONS = "\nMostrador\nTienda en línea\nWhatsApp\nMessenger\nImportado"
+
+
 class _Frappe(types.SimpleNamespace):
-    def __init__(self, fields=("marketing_opt_in", "marketing_opt_in_source"), existing=None):
+    def __init__(self, fields=("marketing_opt_in", "marketing_opt_in_source"), existing=None, source_field=None):
         self_ = self
+        definitions = {
+            "marketing_opt_in": types.SimpleNamespace(fieldtype="Check", hidden=0, description=""),
+            "marketing_opt_in_source": source_field
+            or types.SimpleNamespace(fieldtype="Select", options=SOURCE_OPTIONS, hidden=0),
+        }
 
         def get_doc(doctype, name=None):
             if isinstance(doctype, dict):
@@ -84,7 +92,10 @@ class _Frappe(types.SimpleNamespace):
             return existing
 
         super().__init__(
-            get_meta=lambda doctype: types.SimpleNamespace(has_field=lambda field: field in fields),
+            get_meta=lambda doctype: types.SimpleNamespace(
+                has_field=lambda field: field in fields,
+                get_field=lambda field: definitions.get(field) if field in fields else None,
+            ),
             get_doc=get_doc,
             db=types.SimpleNamespace(exists=lambda *args, **kwargs: False,
                                      get_value=lambda *args, **kwargs: None),
@@ -224,6 +235,24 @@ class ConsentWordingTests(unittest.TestCase):
 
     def test_unreadable_meta_offers_no_consent(self):
         self.assertEqual(self.consent(error=True), {"available": False, "description": ""})
+
+    def test_a_hidden_field_is_not_offered(self):
+        # doco_marketing hides the field while no registration program is active.
+        field = types.SimpleNamespace(hidden=1, description="Consentimiento de la campaña.")
+        self.assertEqual(self.consent(field), {"available": False, "description": ""})
+
+
+class CounterSourceTests(unittest.TestCase):
+    def test_source_is_not_set_when_the_select_lacks_the_counter_option(self):
+        select = types.SimpleNamespace(fieldtype="Select", options="\nTienda en línea\nWhatsApp", hidden=0)
+        customer = _create(_Frappe(source_field=select), marketing_opt_in=1)
+        self.assertEqual(customer["marketing_opt_in"], 1)
+        self.assertNotIn("marketing_opt_in_source", customer)
+
+    def test_a_free_text_source_field_takes_the_counter(self):
+        data = types.SimpleNamespace(fieldtype="Data", options=None, hidden=0)
+        customer = _create(_Frappe(source_field=data), marketing_opt_in=1)
+        self.assertEqual(customer["marketing_opt_in_source"], COUNTER)
 
 
 if __name__ == "__main__":
