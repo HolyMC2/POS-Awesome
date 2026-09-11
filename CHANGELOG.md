@@ -22,7 +22,10 @@ Original status labels are retained; this section also contains changes reported
   Customer quick-create shows a consent checkbox when another app adds
   `Customer.marketing_opt_in`, requires mobile and email when ticked, and writes
   the flag (and `marketing_opt_in_source` = Mostrador when that field exists)
-  online and on offline replay (`98c70ab6b`, `d38ac9f19`). Verified on the Doco
+  online and on offline replay (`98c70ab6b`, `d38ac9f19`). The dialog keeps a
+  short label and shows the field's description as the consent text, or a
+  generic line when it is empty; the opening payload carries it, so the offline
+  dialog shows the same wording (`a6a1d54d4`). Verified on the Doco
   lab mirror: item-group gift sales ACC-SINV-2026-03228 (before the redemption
   fix), 03229 and 03230 (second gift card redeemed after the first), and the
   checkbox with a temporary custom field. Python and SPA change, no migration:
