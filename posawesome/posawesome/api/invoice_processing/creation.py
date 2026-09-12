@@ -36,6 +36,7 @@ from posawesome.posawesome.api.idempotency import (
 )
 import json
 import hashlib
+import logging
 from frappe.utils.background_jobs import enqueue
 
 
@@ -51,6 +52,76 @@ RETURN_OUTSTANDING_MESSAGE_MARKERS = (
     "Updating the outstanding to this invoice.",
     "Update Outstanding for Self",
 )
+
+
+def _posa_site_logger():
+    """`frappe.logger("posawesome")` for the CURRENT site, forced to pass INFO.
+
+    Resolved per call, never captured at import (verified on the lab backend
+    2026-09-12):
+
+    * Frappe caches one logger and its file handlers per `<module>-<site>`
+      pair and writes into `sites/<site>/logs/posawesome.log`. A logger bound at
+      import time sends every later line to whichever tenant's context imported
+      this module first on the shared bench.
+    * `frappe/utils/logger.py` sets `default_log_level` to ERROR unless
+      `frappe._dev_server`; `DEV_SERVER` is unset on the lab and on cell-0 and
+      `log_level` is absent from common_site_config.json, so a `.warning()` on
+      a freshly resolved logger writes ZERO bytes. Raise it to INFO.
+
+    Returns None when Frappe cannot hand one out (stub harness, no site).
+    """
+    logger_factory = getattr(frappe, "logger", None)
+    if not callable(logger_factory):
+        return None
+    try:
+        logger = logger_factory("posawesome")
+    except Exception:
+        return None
+    level = getattr(logger, "level", None)
+    set_level = getattr(logger, "setLevel", None)
+    if isinstance(level, int) and level > logging.INFO and callable(set_level):
+        set_level(logging.INFO)
+    return logger
+
+
+def _posa_warn(scope, msg, exc=None, **fields):
+    """One JSON breadcrumb on the rotating `posawesome` logs.
+
+    LOGGING_MAP section 6: never `except: pass` on a money path — log at least
+    the scope, the site, the document name and the exception class. Deliberately
+    NOT an Error Log row: these fire inside handlers that already wrote one for
+    the real failure, and a second row per event is how a funnel becomes a
+    storm. Kept local to this module (not imported from api.utilities) so the
+    six standalone stub harnesses that fake `api.utilities` keep working.
+
+    Never raises and never changes control flow: the caller's own money
+    decision must be byte-identical with and without this call.
+    """
+    logger = _posa_site_logger()
+    if logger is None:
+        return
+    entry = {
+        "app": "posawesome",
+        "scope": scope,
+        "site": str(getattr(getattr(frappe, "local", None), "site", "") or "unknown-site"),
+        "msg": str(msg or "")[:500],
+    }
+    request_id = getattr(getattr(frappe, "local", None), "request_id", None)
+    if request_id:
+        entry["rid"] = str(request_id)
+    if exc is not None:
+        entry["err"] = type(exc).__name__
+        entry["err_msg"] = str(exc)[:300]
+    for key, value in fields.items():
+        if value is not None:
+            entry[key] = str(value)[:200]
+    try:
+        logger.warning(json.dumps(entry, ensure_ascii=True, default=str, sort_keys=True))
+    except Exception:
+        # The logger itself failed. There is nothing left to report with, and
+        # the caller is mid-recovery on a submitted invoice.
+        return
 
 
 def _posa_publish_dual(event, message, user=None, doctype=None, docname=None,
@@ -464,8 +535,22 @@ def process_post_submit_payments_job(kwargs):
                 ledger_doc = _get_submission_ledger_by_name(ledger_name)
                 if ledger_doc:
                     _mark_ledger_failed(ledger_doc, error_msg)
-            except Exception:
-                pass
+            except Exception as ledger_exc:
+                # MONEY PATH. The invoice is already submitted; this is the
+                # ledger bookkeeping of a failed post-submit payment run. Flow
+                # is unchanged on purpose — raising here would replace the real
+                # error with the bookkeeping error and skip the operator's
+                # realtime failure event — but a FAILED row that was never
+                # written is exactly what makes a stuck payment invisible, so
+                # it is no longer silent (LOGGING_MAP G9).
+                _posa_warn(
+                    "post_submit_payments_job.mark_ledger_failed",
+                    "could not mark submission ledger FAILED",
+                    ledger_exc,
+                    invoice=invoice,
+                    ledger=ledger_name,
+                    original_error=error_msg,
+                )
         frappe.log_error(f"POS Post Submit Payment Processing Failed for {invoice}: {error_msg}")
         user = kwargs.get("user")
         if user and hasattr(frappe, "publish_realtime"):
@@ -2280,8 +2365,20 @@ def submit_in_background_job(kwargs):
                 ledger_doc = _get_submission_ledger_by_name(ledger_name)
                 if ledger_doc:
                     _mark_ledger_failed(ledger_doc, error_msg)
-            except Exception:
-                pass
+            except Exception as ledger_exc:
+                # MONEY PATH, same contract as the post-submit job above: the
+                # durable ledger row is what `recover_stuck_holds` and
+                # repair_invoice_submission read, so failing to mark it FAILED
+                # is the difference between a recoverable submission and a
+                # silent one. Control flow deliberately unchanged.
+                _posa_warn(
+                    "background_submit_job.mark_ledger_failed",
+                    "could not mark submission ledger FAILED",
+                    ledger_exc,
+                    invoice=invoice,
+                    ledger=ledger_name,
+                    original_error=error_msg,
+                )
         frappe.log_error(f"POS Background Submission Failed for {invoice}: {error_msg}")
         from posawesome.posawesome.api.metrics import background_submit, submit_failure
         background_submit("error")
@@ -2295,8 +2392,19 @@ def submit_in_background_job(kwargs):
                 text=f"Background submit failed: {error_msg[:500]}",
             )
             frappe.db.commit()
-        except Exception:
-            pass
+        except Exception as comment_exc:
+            # Best-effort evidence on a money path: the Comment is the Desk-side
+            # explanation of a stuck draft, not the record of the failure (the
+            # Error Log row above is). Flow unchanged — the realtime failure
+            # event below must still reach the terminal.
+            _posa_warn(
+                "background_submit_job.add_comment",
+                "could not annotate the stuck draft",
+                comment_exc,
+                invoice=invoice,
+                doctype=doctype,
+                original_error=error_msg,
+            )
         # Dual-publish so the web-route SPA hears the failure too.
         # `invoice` here is the invoice name string (from kwargs at the
         # top of submit_in_background_job). `doctype` is captured at

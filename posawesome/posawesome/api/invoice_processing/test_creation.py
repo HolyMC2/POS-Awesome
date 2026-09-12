@@ -1,7 +1,11 @@
 import importlib.util
 import json
+import logging
+import os
 import pathlib
+import shutil
 import sys
+import tempfile
 import types
 import unittest
 from unittest.mock import patch
@@ -119,7 +123,28 @@ def _install_framework_stubs():
 
     frappe_module.throw = _throw
     frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
-    frappe_module.log_error = lambda *args, **kwargs: None
+    log_error_calls = []
+
+    def _log_error(*args, **kwargs):
+        log_error_calls.append({"args": args, "kwargs": kwargs})
+        return None
+
+    frappe_module.log_error = _log_error
+    frappe_module._log_error_calls = log_error_calls
+
+    # The money-path recovery handlers log their own best-effort misses as JSON
+    # breadcrumbs on the rotating app logger (creation._posa_warn / LOGGING_MAP
+    # G9) instead of `except: pass`. Capture them so a test can assert the
+    # invoice outcome is unchanged AND the miss is no longer silent.
+    logger_warnings = []
+
+    class _FakeLogger:
+        def warning(self, message, *args):
+            logger_warnings.append(message % args if args else message)
+
+    frappe_module.logger = lambda *args, **kwargs: _FakeLogger()
+    frappe_module._logger_warnings = logger_warnings
+    frappe_module.local = types.SimpleNamespace(site="doco-mirror.lab.xoloitzcuintles.com")
 
     # The P0 profile gates (posting date, returns, customer credit) read
     # these flags via get_cached_value; the stub profile has every gated
@@ -2615,6 +2640,230 @@ class TestUpdateInvoiceRequestIdAdoption(unittest.TestCase):
         self.assertEqual(len(self.created_payloads), 1)
         self.assertEqual(result["posa_client_request_id"], "req-123")
         self.assertEqual(result["docstatus"], 0)
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class TestMoneyPathRecoveryLogging(unittest.TestCase):
+    """LOGGING_MAP G9: the three recovery handlers in this module used to
+    `except: pass`.
+
+    They run AFTER a money failure — marking the durable submission ledger
+    FAILED, annotating the stuck draft — so their control flow must not change:
+    raising there would replace the real error with the bookkeeping error and
+    skip the terminal's realtime failure event. These tests pin both halves: the
+    invoice outcome is byte-identical whether the recovery step succeeds or
+    blows up, and the blow-up is no longer silent.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.frappe, cls.enqueue_calls = _install_framework_stubs()
+        _install_dependency_stubs()
+        _install_package_stubs()
+        metrics_module = types.ModuleType("posawesome.posawesome.api.metrics")
+        metrics_module.background_submit = lambda *_a, **_k: None
+        metrics_module.submit_failure = lambda *_a, **_k: None
+        sys.modules[metrics_module.__name__] = metrics_module
+        cls.creation = _load_module()
+
+    def setUp(self):
+        self.enqueue_calls.clear()
+        self.frappe._publish_realtime_calls.clear()
+        self.frappe._log_error_calls.clear()
+        self.frappe._logger_warnings.clear()
+        self.frappe._savepoint_calls.clear()
+        self._saved = {
+            "get_doc": self.frappe.get_doc,
+            "get_submission_ledger_by_name": self.creation._get_submission_ledger_by_name,
+            "mark_ledger_failed": self.creation._mark_ledger_failed,
+        }
+        self.ledger_doc = FakeDoc(name="POSSL-0001", state="SUBMITTED")
+        self.creation._get_submission_ledger_by_name = lambda name: self.ledger_doc
+
+    def tearDown(self):
+        self.frappe.get_doc = self._saved["get_doc"]
+        self.creation._get_submission_ledger_by_name = self._saved["get_submission_ledger_by_name"]
+        self.creation._mark_ledger_failed = self._saved["mark_ledger_failed"]
+
+    def _observed_outcome(self):
+        """Everything the terminal and the operator can see, minus breadcrumbs."""
+        return {
+            "rollbacks": [call for call in self.frappe._savepoint_calls if call[0] == "rollback"],
+            "error_logs": [call["args"] for call in self.frappe._log_error_calls],
+            "events": [
+                (call["args"][0], call["kwargs"].get("user"), call["kwargs"].get("docname"))
+                for call in self.frappe._publish_realtime_calls
+            ],
+        }
+
+    def _run_post_submit_job(self, mark_ledger_failed):
+        self.creation._mark_ledger_failed = mark_ledger_failed
+
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("payment entry insert exploded")
+
+        self.frappe.get_doc = _boom
+        self.creation.process_post_submit_payments_job(
+            {
+                "invoice": "ACC-SINV-2026-03224",
+                "doctype": "Sales Invoice",
+                "data": {"paid_change": 4},
+                "ledger_name": "POSSL-0001",
+                "user": "cajero@example.com",
+            }
+        )
+        return self._observed_outcome()
+
+    def test_post_submit_job_outcome_is_unchanged_when_marking_the_ledger_fails(self):
+        marked = []
+        healthy = self._run_post_submit_job(
+            lambda ledger_doc, error: marked.append((ledger_doc.name, error))
+        )
+        self.assertEqual(marked, [("POSSL-0001", "payment entry insert exploded")])
+        self.assertEqual(self.frappe._logger_warnings, [])
+
+        self.setUp()
+
+        def _raise(_ledger_doc, _error):
+            raise RuntimeError("ledger row is locked")
+
+        broken = self._run_post_submit_job(_raise)
+
+        # The money-visible outcome is identical: same rollback, same Error Log,
+        # same dual-published failure event to the terminal.
+        self.assertEqual(broken, healthy)
+        self.assertEqual(len(broken["rollbacks"]), 1)
+        self.assertEqual(len(broken["error_logs"]), 1)
+        self.assertIn("payment entry insert exploded", broken["error_logs"][0][0])
+        self.assertEqual(
+            [event[0] for event in broken["events"]],
+            ["pos_post_submit_payments_failed", "pos_post_submit_payments_failed"],
+        )
+
+    def test_post_submit_ledger_failure_names_scope_site_document_and_error(self):
+        def _raise(_ledger_doc, _error):
+            raise RuntimeError("ledger row is locked")
+
+        self._run_post_submit_job(_raise)
+
+        self.assertEqual(len(self.frappe._logger_warnings), 1)
+        entry = json.loads(self.frappe._logger_warnings[0])
+        self.assertEqual(entry["app"], "posawesome")
+        self.assertEqual(entry["scope"], "post_submit_payments_job.mark_ledger_failed")
+        self.assertEqual(entry["site"], "doco-mirror.lab.xoloitzcuintles.com")
+        self.assertEqual(entry["invoice"], "ACC-SINV-2026-03224")
+        self.assertEqual(entry["ledger"], "POSSL-0001")
+        self.assertEqual(entry["err"], "RuntimeError")
+        self.assertEqual(entry["err_msg"], "ledger row is locked")
+        self.assertEqual(entry["original_error"], "payment entry insert exploded")
+
+    def _run_background_submit_job(self, mark_ledger_failed):
+        self.creation._mark_ledger_failed = mark_ledger_failed
+
+        def _boom(*_args, **_kwargs):
+            raise RuntimeError("submit exploded")
+
+        self.frappe.get_doc = _boom
+        self.creation.submit_in_background_job(
+            {
+                "invoice": "ACC-SINV-2026-03225",
+                "doctype": "Sales Invoice",
+                "data": {},
+                "ledger_name": "POSSL-0001",
+                "user": "cajero@example.com",
+            }
+        )
+        return self._observed_outcome()
+
+    def test_background_submit_outcome_is_unchanged_when_marking_the_ledger_fails(self):
+        healthy = self._run_background_submit_job(lambda ledger_doc, error: None)
+        healthy_warnings = list(self.frappe._logger_warnings)
+
+        self.setUp()
+
+        def _raise(_ledger_doc, _error):
+            raise RuntimeError("ledger row is locked")
+
+        broken = self._run_background_submit_job(_raise)
+
+        self.assertEqual(broken, healthy)
+        self.assertEqual(len(broken["error_logs"]), 1)
+        self.assertIn("submit exploded", broken["error_logs"][0][0])
+        self.assertEqual(
+            [event[0] for event in broken["events"]],
+            ["pos_invoice_submit_error", "pos_invoice_submit_error"],
+        )
+        scopes = [json.loads(line)["scope"] for line in self.frappe._logger_warnings]
+        # the add_comment miss is reported in both runs; only the ledger miss differs
+        self.assertIn("background_submit_job.add_comment", scopes)
+        self.assertIn("background_submit_job.mark_ledger_failed", scopes)
+        self.assertEqual(
+            [json.loads(line)["scope"] for line in healthy_warnings],
+            ["background_submit_job.add_comment"],
+        )
+
+    def test_stuck_draft_annotation_failure_is_reported_with_the_original_error(self):
+        self._run_background_submit_job(lambda ledger_doc, error: None)
+
+        entries = [json.loads(line) for line in self.frappe._logger_warnings]
+        comment_entry = next(e for e in entries if e["scope"] == "background_submit_job.add_comment")
+        self.assertEqual(comment_entry["invoice"], "ACC-SINV-2026-03225")
+        self.assertEqual(comment_entry["doctype"], "Sales Invoice")
+        self.assertEqual(comment_entry["original_error"], "submit exploded")
+        self.assertIn("err", comment_entry)
+
+    def test_warn_helper_never_raises_without_a_logger(self):
+        saved = self.frappe.logger
+        del self.frappe.logger
+        try:
+            self.creation._posa_warn("scope.without.logger", "nothing to write with")
+        finally:
+            self.frappe.logger = saved
+
+    def test_money_path_breadcrumb_reaches_the_log_file(self):
+        """Frappe hands out module loggers at ERROR off a dev server
+        (`default_log_level` in frappe/utils/logger.py; `DEV_SERVER` unset on the
+        lab and on cell-0), so a `.warning()` on a freshly resolved logger writes
+        nothing. Use a REAL logger handed out at ERROR and assert the ledger miss
+        lands on disk."""
+        tmpdir = tempfile.mkdtemp(prefix="posa-creation-log-")
+        path = os.path.join(tmpdir, "posawesome.log")
+        logger = logging.getLogger("posa-creation-test")
+        logger.handlers = []
+        logger.propagate = False
+        handler = logging.FileHandler(path)
+        handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
+        logger.addHandler(handler)
+        logger.setLevel(logging.ERROR)
+        resolved = []
+
+        def _factory(name, *_args, **_kwargs):
+            resolved.append(name)
+            return logger
+
+        saved = self.frappe.logger
+        self.frappe.logger = _factory
+        try:
+
+            def _raise(_ledger_doc, _error):
+                raise RuntimeError("ledger row is locked")
+
+            self._run_post_submit_job(_raise)
+        finally:
+            self.frappe.logger = saved
+            handler.close()
+            logger.removeHandler(handler)
+
+        with open(path, encoding="utf-8") as handle:
+            lines = [line for line in handle.read().splitlines() if line.strip()]
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+        self.assertEqual(resolved, ["posawesome"], "the logger is resolved per call")
+        self.assertEqual(len(lines), 1, "a WARNING at the ERROR default writes nothing")
+        entry = json.loads(lines[0][len("WARNING ") :])
+        self.assertEqual(entry["scope"], "post_submit_payments_job.mark_ledger_failed")
+        self.assertEqual(entry["invoice"], "ACC-SINV-2026-03224")
+        self.assertEqual(logger.level, logging.INFO)
 
 
 if __name__ == "__main__":

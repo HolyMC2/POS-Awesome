@@ -8,6 +8,45 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 Original status labels are retained; this section also contains changes reported as deployed.
 
+- **POS client-error funnel guard and named swallowers (2026-09-12, lab
+  verification, not committed).** Closes gaps G8 and the posawesome half of G9
+  in `boat/docs/LOGGING_MAP.md`. `api/utilities.py::log_client_error` now bounds
+  the browser-error funnel server side: a signature dedupe (kind plus the
+  message with ids, row numbers and bundle hashes normalised away, file, line)
+  writes one Error Log row per signature per site per 10 minutes and counts
+  repeats in `frappe.cache()`, rolling `[xN]` into the row it already wrote at
+  most once every 30 seconds; an insert budget of 20 per site per minute; and a
+  storm latch that drops further inserts for an hour behind exactly one row
+  reading `client error storm: dropped N in the last hour`. The body is capped
+  at 64 KB before `json.loads`, the stored row is capped again, the guard's own
+  failure is latched to one row per site per hour instead of the old
+  unconditional second `frappe.log_error`, and nothing raises back to the
+  browser. Tunables sit in one block above the endpoint, mirroring
+  `boat/boat/muelle/incidents.py`. The payload now carries the site and
+  `frappe.local.request_id` when present. The eleven `except: pass` swallowers
+  in `api/utilities.py` (8) and `api/invoice_processing/creation.py` (3) now log
+  a JSON breadcrumb on the rotating `posawesome` logs with scope, site,
+  document and exception class; the two money-path handlers that mark a
+  submission ledger FAILED and annotate a stuck draft keep their control flow
+  byte-identical, pinned by tests. Those breadcrumbs go through a
+  `_posa_site_logger()` helper in both files, modelled on saldo's
+  `_site_logger()`: Frappe caches one logger and its file handlers per
+  `<module>-<site>` pair, and off a dev server it hands them out at ERROR
+  (`DEV_SERVER` unset and no `log_level` on the lab and on cell-0), so a plain
+  `frappe.logger("posawesome").warning(...)` resolved once at import writes zero
+  bytes and can also pin one tenant's lines to another tenant's file. The helper
+  resolves per call and raises that site's logger to INFO once. Measured on the
+  lab: level 40 as handed out, 0 bytes written, then level 20 and the line lands
+  in both `logs/posawesome.log` and `sites/<site>/logs/posawesome.log`. The
+  estate-wide alternative (`log_level` in common_site_config.json) is a decision
+  for Marco and was not set. Lab drill on the Doco mirror: 773 calls wrote
+  6 rows (200 identical errors became 1 row titled `[x201]`, 40 id-bearing
+  variants of one bug became 1 row), and 531 distinct signatures wrote 21 (20
+  budgeted plus one storm row titled `POS Client Error Storm [dropped x511]`).
+  Backend suite 929 tests over 92 files, 0 failures, 31 skips (baseline 893 over
+  91). Pure Python, no migration, no SPA build: deploy is a source pull plus a
+  worker restart.
+
 - **Registration promos: gift offers, coupons and consent (2026-09-10, lab
   verification).** Branch `feat/registration-promos-20260910`, not pushed.
   POS Coupon `one_use` limits reuse of that coupon (its applied rows) instead of
