@@ -8,6 +8,27 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 Original status labels are retained; this section also contains changes reported as deployed.
 
+- **The server-side bundle batch hint is removed from the submit path
+  (2026-09-12, lab verification, not committed).** Supersedes the repair in the
+  entry below, per the wave-3 decision record: `api/utilities.py` loses both
+  `set_batch_nos_for_bundels` and `pick_batch_for_packed_item`, and
+  `invoice_processing/creation.py` no longer calls either on submit. On ERPNext
+  16 a packed (Product Bundle) row's batches are allocated by ERPNext itself
+  through a Serial and Batch Bundle: submit clears `packed_items.batch_no`, the
+  allocation is identical with the pick disabled, and one row can split across
+  batches, which that single field cannot express. So the hint wrote a value
+  nothing read, and its `throw` branch could only refuse sales ERPNext completes
+  correctly. ~97 lines leave a money path. The bench proof moved with it:
+  `api/test_bundle_batch_native.py` now asserts that the draft carries no hint
+  and that the sale still submits, allocates from the right batch, moves the
+  component out of the profile warehouse, skips an expired batch and splits a
+  line larger than any single batch. The standalone stub suite for the deleted
+  functions is replaced by `api/test_utilities_global_resolution.py`, which keeps
+  the guard that matters — every `LOAD_GLOBAL` in `utilities.py` must resolve
+  after import, the bug class the CI ruff selection (`E9,F63,F7`, no F821) cannot
+  see — and pins the two retired names as retired. No migration, no fixtures; no
+  behaviour change for an invoice without packed rows.
+
 - **Bundle batch crash on submit, dark MP Point audit line, offline-queue
   failures reported (2026-09-12, lab verification, not committed).** Wave 2 of
   the `boat/docs/LOGGING_MAP.md` audit: the section 7 `set_batch_nos_for_bundels`

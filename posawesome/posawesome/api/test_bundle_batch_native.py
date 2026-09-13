@@ -1,17 +1,32 @@
 """End-to-end proof that a POS sale of a Product Bundle with a batch-tracked
-component submits, and that its packed row leaves with a batch assigned.
+component submits, and that ERPNext allocates the component's batches itself.
 
-This is the path `api/utilities.py::set_batch_nos_for_bundels` exists for, and
-the path that used to die: the function referenced `get_batch_no`,
-`get_batch_qty`, `flt` and `_` without importing any of them, and
-`invoice_processing/creation.py` calls it with `throw=True` on every submit.
-The loop body is only reached when the invoice has `packed_items` whose
-component Item `has_batch_no`, so the sale failed with a NameError on exactly
-the rarest configuration and nothing else noticed.
+POS Awesome writes NO batch hint for packed (Product Bundle) rows. It used to:
+`api/utilities.py::set_batch_nos_for_bundels`, called from
+`invoice_processing/creation.py` with `throw=True` on every submit, picked a
+batch and wrote it into `packed_items.batch_no`. Two measurements on the lab
+bench (erpnext 16.32.0, 2026-09-12) retired it:
+
+* submit moves the allocation into a Serial and Batch Bundle, points the packed
+  row at that bundle and CLEARS the row's own `batch_no` - the hint is
+  discarded, and the allocation was byte-identical with the pick disabled;
+* one row can split across batches (3 units out of batches of 1 and 20), which
+  a single `batch_no` field cannot express, so the function's `throw` branch
+  could only ever refuse sales ERPNext completes correctly.
+
+Before that it had never run at all: it referenced `get_batch_no`,
+`get_batch_qty`, `flt` and `_` without importing any of them, so from the 2025
+refactor onward this sale died with a NameError on exactly the rarest
+configuration and nothing else noticed. So these tests are the standing proof
+for the REMOVAL: the configuration that used to crash now submits, allocates,
+moves stock, skips expired batches and splits - all of it ERPNext's own work.
 
 Bench-runnable (IntegrationTestCase); skips when the site lacks fixtures. The
-stub-harness unit coverage is in test_bundle_batch_assignment.py; this module is
-the real-bench half named in docs/testing/backend.md.
+standalone guard that the hint stays retired (and that nothing in utilities.py
+reads an undefined global) is `test_utilities_global_resolution.py`; this module
+is the real-bench half, and it SKIPS in the standalone lane
+(`scripts/run_backend_tests.py`), so it has to be invoked on a site explicitly.
+It is not yet in the native-suite loop in docs/testing/backend.md; run it with:
 
 	docker compose exec -T backend bench --site <site> run-tests \\
 	  --module posawesome.posawesome.api.test_bundle_batch_native
@@ -45,7 +60,7 @@ BUNDLE_ITEM = "POSA-TEST-BUNDLE"
 RATE = 25.0
 
 
-class TestBundleBatchAssignment(IntegrationTestCase):
+class TestBundleBatchAllocation(IntegrationTestCase):
 	def setUp(self):
 		if not frappe.db.exists("POS Profile", PROFILE):
 			self.skipTest(f"no {PROFILE} profile on this site")
@@ -320,11 +335,12 @@ class TestBundleBatchAssignment(IntegrationTestCase):
 	def _allocated_batches(self, invoice_name):
 		"""(batch_no, qty) the submitted invoice actually consumed.
 
-		`packed_items.batch_no` is only the pre-submit carrier: on submit v16
-		moves the allocation into a Serial and Batch Bundle, points the row at
-		it and CLEARS the row's own `batch_no`. The bundle (and the Stock Ledger
-		Entry beside it) is where the truth lives, so that is what these tests
-		assert on.
+		Never assert on `packed_items.batch_no`: on submit v16 moves the
+		allocation into a Serial and Batch Bundle, points the row at that bundle
+		and CLEARS the row's own `batch_no` - it is empty afterwards whether or
+		not anything wrote it first, which is exactly why the hint was pointless.
+		The bundle (and the Stock Ledger Entry beside it) is where the truth
+		lives, so that is what these tests assert on.
 		"""
 		allocated = []
 		for row in frappe.get_doc("Sales Invoice", invoice_name).packed_items:
@@ -339,15 +355,53 @@ class TestBundleBatchAssignment(IntegrationTestCase):
 	# ---------- tests ----------
 
 	def test_selling_a_bundle_with_a_batch_tracked_component_submits(self):
-		"""The regression: this submit raised NameError on every attempt.
+		"""The configuration that used to crash, now with no hint on the path.
 
-		`set_batch_nos_for_bundels` is called with `throw=True` from
-		`creation.py`, referencing four names its module never imported, and the
-		loop body is only reached by exactly this configuration.
+		`set_batch_nos_for_bundels` used to run here with `throw=True`,
+		referencing four names its module never imported; the loop body was
+		reached by exactly this configuration and nothing else. Both the call and
+		the function are gone, so this asserts what is left: ERPNext allocates
+		the batch on its own.
 		"""
 		batch = self._receive_stock(qty=10)
 
 		result = self._sell_bundle("bundle-batch")
+
+		self.assertEqual(result["docstatus"], 1)
+		self.assertEqual(self._allocated_batches(result["name"]), [(batch, -1.0)])
+
+	def test_no_batch_hint_is_written_before_submit_and_the_sale_still_allocates(self):
+		"""The removal itself: the draft's packed row is untouched by POS Awesome.
+
+		This is the assertion the hint would break. While
+		`set_batch_nos_for_bundels` existed, the draft that came back from
+		`update_invoice` carried `batch_no` = the batch it picked. It must be
+		empty now, and the submit that follows must still allocate that same
+		batch - which is the whole argument for deleting the hint rather than
+		repairing it.
+
+		`use_serial_batch_fields` is deliberately NOT asserted: ERPNext's own
+		`make_packing_list` already sets it to 1 on every packed row (measured on
+		the lab, 2026-09-12, on a draft built with no hint on the path), so it
+		says nothing about who wrote what. `batch_no` is the only field the hint
+		owned.
+		"""
+		batch = self._receive_stock(qty=10)
+
+		payload = self._payload("bundle-batch-no-hint")
+		created = self._autosave(payload)
+		name = created.get("name")
+		self._invoices.append(name)
+
+		draft = frappe.get_doc("Sales Invoice", name)
+		self.assertEqual(len(draft.packed_items), 1, "ERPNext did not pack the bundle")
+		packed = draft.packed_items[0]
+		self.assertEqual(packed.item_code, self.component)
+		self.assertFalse(packed.batch_no, f"a server-side batch hint is back: {packed.batch_no}")
+		self.assertIsNone(packed.serial_and_batch_bundle)
+
+		payload["name"] = name
+		result = creation.submit_invoice(json.dumps(payload), json.dumps(self._data()))
 
 		self.assertEqual(result["docstatus"], 1)
 		self.assertEqual(self._allocated_batches(result["name"]), [(batch, -1.0)])
@@ -380,11 +434,12 @@ class TestBundleBatchAssignment(IntegrationTestCase):
 		self.assertNotIn(expired, [batch for batch, _qty in allocated])
 
 	def test_a_line_larger_than_any_single_batch_still_sells(self):
-		"""Split across batches, rather than a pick that refuses the sale.
+		"""Split across batches - the shape no single `batch_no` can express.
 
-		`pick_batch_for_packed_item` finds nothing that covers 3 units, so it
-		leaves the row empty on purpose and ERPNext's bundle allocation splits
-		the line. Throwing there would cost a sale ERPNext completes correctly.
+		No single batch covers 3 units, so the retired hint would have found
+		nothing to write, and its pre-rewrite `throw` behaviour would have
+		refused this sale outright. ERPNext's own bundle allocation splits the
+		line instead. This is the leg that decided the removal.
 		"""
 		small = self._receive_stock(qty=1)
 		big = self._receive_stock(qty=20)
@@ -401,3 +456,55 @@ class TestBundleBatchAssignment(IntegrationTestCase):
 		self.assertEqual(result["docstatus"], 1)
 		allocated = dict(self._allocated_batches(result["name"]))
 		self.assertEqual(allocated, {small: -1.0, big: -2.0})
+
+	def test_a_short_batch_named_on_the_packed_row_is_still_refused(self):
+		"""The one branch the removal dropped is covered by the stock guard.
+
+		`set_batch_nos_for_bundels` had a second branch: when a packed row
+		ALREADY carried a `batch_no`, it compared `get_batch_qty` against the row
+		and `frappe.throw`-ed if the named batch could not cover it. That branch
+		was reachable - the SPA sends `packed_items[].batch_no`
+		(`invoice_utils/document.ts`), and ERPNext's `make_packing_list` keeps an
+		existing packed row's `batch_no` across a save (it never writes that field
+		itself: see the TODO in erpnext's `update_packed_item_stock_data`). So the
+		first half of this test proves the value survives, and the second half
+		proves what refuses it now.
+
+		`_validate_stock_on_invoice`, which runs where the hint used to sit,
+		already walks `packed_items` as well as `items` and refuses per batch and
+		warehouse. Its refusal is strictly better than the deleted one: a JSON
+		body with item, warehouse, batch, requested and available qty, instead of
+		a prose message.
+		"""
+		batch = self._receive_stock(qty=1)
+
+		payload = self._payload("bundle-batch-short-preset")
+		payload["items"][0]["qty"] = 3
+		payload["payments"][0]["amount"] = RATE * 3
+		payload["payments"][0]["base_amount"] = RATE * 3
+		created = self._autosave(payload)
+		name = created.get("name")
+		self._invoices.append(name)
+
+		draft = frappe.get_doc("Sales Invoice", name)
+		draft.packed_items[0].batch_no = batch
+		draft.flags.ignore_permissions = True
+		draft.save()
+
+		reloaded = frappe.get_doc("Sales Invoice", name)
+		self.assertEqual(reloaded.packed_items[0].batch_no, batch, "preset batch did not survive the save")
+		self.assertEqual(reloaded.packed_items[0].qty, 3.0)
+
+		payload["name"] = name
+		with self.assertRaises(frappe.ValidationError) as refusal:
+			creation.submit_invoice(json.dumps(payload), json.dumps(self._data()))
+
+		reported = json.loads(str(refusal.exception))["errors"]
+		self.assertEqual(len(reported), 1)
+		self.assertEqual(reported[0]["batch_no"], batch)
+		self.assertEqual(reported[0]["item_code"], self.component)
+		self.assertEqual(reported[0]["warehouse"], self.warehouse)
+		self.assertEqual(reported[0]["requested_qty"], 3.0)
+		self.assertEqual(reported[0]["available_qty"], 1.0)
+		self.assertEqual(reported[0]["policy"], "block")
+		self.assertEqual(frappe.db.get_value("Sales Invoice", name, "docstatus"), 0)

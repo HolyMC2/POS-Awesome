@@ -25,7 +25,7 @@ from posawesome.posawesome.api.invoice_processing.stock import (
     _collect_stock_errors,
 )
 from posawesome.posawesome.api.payment_processing.utils import get_bank_cash_account as get_bank_account
-from posawesome.posawesome.api.utilities import ensure_child_doctype, set_batch_nos_for_bundels
+from posawesome.posawesome.api.utilities import ensure_child_doctype
 from posawesome.posawesome.api.payments import redeeming_customer_credit
 from posawesome.posawesome.api.idempotency import (
     extract_invoice_client_request_id,
@@ -1925,9 +1925,14 @@ def _submit_invoice(invoice, data, submit_in_background=False, pos_profile=None)
         customer_credit=flt(data.get("redeemed_customer_credit")),
     )
 
-    # posa_auto_set_batch is enforced client-side (useItemAddition.ts);
-    # the server only auto-sets batches for bundles.
-    set_batch_nos_for_bundels(invoice_doc, "warehouse", throw=True)
+    # posa_auto_set_batch is enforced client-side (useItemAddition.ts). Packed
+    # (Product Bundle) rows carry NO server-side batch hint: ERPNext v16
+    # allocates the component itself on submit through a Serial and Batch
+    # Bundle, clears `packed_items.batch_no`, and can split one row across
+    # batches, which that single field cannot express. Measured on the lab
+    # 2026-09-12: the allocation is byte-identical with and without a hint, so
+    # the hint could only ever refuse sales ERPNext completes correctly.
+    # test_bundle_batch_native.py is the standing proof.
 
     _validate_stock_on_invoice(invoice_doc)
 

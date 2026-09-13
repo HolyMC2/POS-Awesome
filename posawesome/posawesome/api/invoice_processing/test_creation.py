@@ -245,7 +245,6 @@ def _install_dependency_stubs():
 
     utilities_module = types.ModuleType("posawesome.posawesome.api.utilities")
     utilities_module.ensure_child_doctype = lambda *_args, **_kwargs: None
-    utilities_module.set_batch_nos_for_bundels = lambda *_args, **_kwargs: None
     sys.modules["posawesome.posawesome.api.utilities"] = utilities_module
 
     # submit_invoice lazily imports shifts.assert_shift_not_stale; the real
