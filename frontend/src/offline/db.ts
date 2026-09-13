@@ -41,6 +41,7 @@ import {
 	initPersistWorker,
 	postPersist,
 } from "./persistWorkerBridge";
+import { reportOfflineFailure } from "../posapp/utils/errorReporting";
 
 type AnyRecord = Record<string, any>;
 
@@ -499,6 +500,13 @@ try {
 		console.warn(
 			"[posa][offline] IndexedDB upgrade is blocked by another open POS tab/window. Close the other tab; this one will fall back to Limited mode.",
 		);
+		// Limited mode means this register cannot queue a sale offline, so the
+		// next network drop loses sales. Nobody outside the tab knew (G10).
+		reportOfflineFailure(
+			"offline.db.upgrade_blocked",
+			new Error("IndexedDB upgrade blocked by another open POS tab"),
+			{ reason: "upgrade_blocked" },
+		);
 	});
 } catch (err) {
 	console.warn("[posa][offline] Could not attach Dexie blocked handler", err);
@@ -538,6 +546,13 @@ function enterOfflineDbVersionLimitedMode(error: unknown) {
 		"[posa][offline] IndexedDB belongs to a newer app version. Reload this tab; continuing in Limited mode without changing offline data.",
 		error,
 	);
+	// A stale tab after a deploy: this register is in Limited mode until it
+	// reloads, and cannot queue a sale in the meantime. Worth a row: it tells
+	// the fleet a deploy left registers behind (see the service-worker note in
+	// feedback_sw_cache_blocks_fixes).
+	reportOfflineFailure("offline.db.version_incompatible", error, {
+		reason: "newer_app_version",
+	});
 }
 
 try {
@@ -604,6 +619,11 @@ export async function ensureOfflineDbOpen(): Promise<EnsureOfflineDbOpenResult> 
 			return { ok: false, reopened: false, error };
 		}
 		console.error("[posa][offline] Failed to reopen IndexedDB", error);
+		// Degraded storage: queued sales cannot be read or written until this
+		// succeeds, so a sale taken now may never reach the queue.
+		reportOfflineFailure("offline.db.reopen_failed", error, {
+			reason: "reopen_failed",
+		});
 		offlineStorageDegraded = true;
 		return { ok: false, reopened: false, error };
 	}
@@ -658,6 +678,11 @@ export const initPromise = new Promise<void>((resolve) => {
 				return;
 			}
 			console.error("Failed to initialize offline DB", e);
+			// The register boots into Limited mode: no offline queue at all, so
+			// every sale taken during the next network drop is lost.
+			reportOfflineFailure("offline.db.init_failed", e, {
+				reason: "init_failed",
+			});
 			offlineStorageDegraded = true;
 			memory.bootstrap_limited_mode = true;
 		} finally {
@@ -1147,6 +1172,12 @@ export async function repairDbAfterFailedHealthCheck(error?: unknown) {
 			// sales. Leave it intact for recovery instead of deleting evidence.
 			setOfflineStorageDegraded(true);
 			console.error("Offline database needs recovery; saved work was preserved.");
+			// The strongest signal in this file: a corrupt store may be holding
+			// unsynced sales that only a human can get out. It must not live
+			// exclusively in one operator's console.
+			reportOfflineFailure("offline.db.corrupt", reopenError, {
+				reason: "needs_recovery",
+			});
 		}
 	}
 	return false;

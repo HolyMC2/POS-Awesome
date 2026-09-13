@@ -8,6 +8,69 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 Original status labels are retained; this section also contains changes reported as deployed.
 
+- **Bundle batch crash on submit, dark MP Point audit line, offline-queue
+  failures reported (2026-09-12, lab verification, not committed).** Wave 2 of
+  the `boat/docs/LOGGING_MAP.md` audit: the section 7 `set_batch_nos_for_bundels`
+  and `mp_point` findings, plus gap G10.
+  - `api/utilities.py::set_batch_nos_for_bundels` referenced `get_batch_no`,
+    `get_batch_qty`, `flt` and `_` without importing any of them, and
+    `invoice_processing/creation.py` calls it with `throw=True` on every POS
+    submit. Only an invoice with packed (Product Bundle) rows whose component
+    Item is batch-tracked reaches the loop body, so that sale failed with a
+    NameError and nothing else did. `git log -S` places the loss in `742e831dc`
+    (Api refactor #469, 2025-06-26), which copied the function out of
+    `api/posapp.py` and left its
+    `from erpnext.stock.doctype.batch.batch import get_batch_no, get_batch_qty`
+    behind; `5dc4a4819` then deleted `posapp.py` and the only working copy with
+    it. `get_batch_no` cannot simply be imported back: ERPNext's Serial and
+    Batch Bundle rewrite changed it to `get_batch_no(bundle_id)` returning a
+    {batch: qty} map (installed erpnext 16.32.0), so the old positional call
+    would be a TypeError. The auto-pick now uses
+    `get_batch_qty(item_code=..., warehouse=...)`, the same v15+ pick the return
+    path already uses in `invoice_processing/stock.py`. It is also deliberately
+    non-blocking: measured on the lab, ERPNext allocates the component itself on
+    submit through a Serial and Batch Bundle, clears `packed_items.batch_no` and
+    ignores what this function wrote — with the pick disabled the allocation was
+    identical, and the bundle can split one line across batches, which a single
+    `batch_no` cannot express. A row no single batch can cover therefore logs a
+    breadcrumb and leaves the allocation to ERPNext instead of refusing a sale
+    ERPNext completes. Also fixes `get_language_info`, which called a
+    `_validate_language_code` that was never written: the endpoint raised
+    NameError on its first statement, answered "Failed to get language info" for
+    every request and wrote one Error Log row per call. The validator also bounds
+    a value that is interpolated into a translations path.
+  - `api/mp_audit.py::log_mp_override` reported every supervisor override of the
+    MercadoPago Point sale gate through `frappe.logger("mp_point")`, its own
+    logger name at ERROR, so no override was ever logged and the invoice Comment
+    was the only trace. It now goes through `_posa_warn`, which resolves the
+    shared `posawesome` logger per call and raises that site's level to INFO
+    once. Verified on the lab: level 40 as handed out, the file grew 1118 → 1519
+    bytes, and the JSON line landed with scope `mp_override`, the user, the
+    invoice and the request id.
+  - The offline queue's failure branches now also report through
+    `posapp/utils/errorReporting.ts` as kind `offline_error` (gap G10): a sale
+    that could not be serialised into the queue, a replay the server refused, a
+    capability-version mismatch drafted for review, an entry dead-lettered
+    because its draft fallback failed too (one of those branches had no console
+    line at all), IndexedDB init / reopen / upgrade-blocked / newer-version /
+    corruption, and a persist whose worker write and main-thread fallback both
+    failed. Informational `console.log` is untouched by design. The payload is a
+    scope, an error name and message, and a closed set of scalars (queue length,
+    client request id, queue row id, entity type, key, reason) — no customer
+    data; the scope travels as `filename`, which is part of the server-side
+    dedupe signature, so one recurring failure is one row with a count. Volume
+    is bounded by the wave-1 guard, not by the client.
+  - Backend suite 956 tests over 95 files, 0 failures, 32 skips (baseline 929
+    over 92). Frontend 5,484 tests over 482 files, `vue-tsc --noEmit` and eslint
+    clean, `vite build` green. Lab drill on the Doco mirror: the bundle+batch
+    sale submits and its Serial and Batch Bundle names the picked batch; the
+    override line is on disk; the endpoint accepted `offline_error` over real
+    HTTP and wrote one row, with the second identical signature deduped. Rows,
+    guard keys and fixtures removed afterwards. Deploy is a source pull plus a
+    worker restart for the Python half; the offline reporting is SPA code and
+    needs the built `dist` pushed, so registers will not report until their
+    service worker serves the new chunks.
+
 - **POS client-error funnel guard and named swallowers (2026-09-12, lab
   verification, not committed).** Closes gaps G8 and the posawesome half of G9
   in `boat/docs/LOGGING_MAP.md`. `api/utilities.py::log_client_error` now bounds

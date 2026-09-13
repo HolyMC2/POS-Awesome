@@ -23,6 +23,7 @@ import {
 	markWriteQueueEntrySynced,
 	type OfflineEntityType,
 } from "./writeQueue";
+import { reportOfflineFailure } from "../posapp/utils/errorReporting";
 
 type AnyRecord = Record<string, any>;
 
@@ -311,7 +312,13 @@ function prepareOfflineInvoiceEntry(entry: AnyRecord) {
 	try {
 		cleanEntry = JSON.parse(JSON.stringify(entry));
 	} catch (error) {
+		// The sale never reaches the queue: nothing durable exists after this
+		// throw, so the console was the only record it ever happened (G10).
 		console.error("Failed to serialize offline invoice", error);
+		reportOfflineFailure("offline.invoice.serialize", error, {
+			clientId: entry?.invoice?.posa_client_request_id,
+			queueLength: getPendingOfflineInvoiceCount(),
+		});
 		throw error;
 	}
 
@@ -492,6 +499,21 @@ export async function syncOfflineInvoices() {
 					`Offline invoice built under capability v${stampedVersion} ` +
 						`but register now runs v${currentCapabilityVersion} — drafting for review`,
 				);
+				// The sale is DELAYED, not lost: it becomes a draft somebody has
+				// to reconcile. Nothing outside this operator's console said so.
+				reportOfflineFailure(
+					"offline.invoice.capability_mismatch",
+					new Error(
+						`built under capability v${stampedVersion}, register runs v${currentCapabilityVersion}`,
+					),
+					{
+						clientId: queuedInvoice?.invoice?.posa_client_request_id,
+						queueId: entry.queue_id,
+						entityType: INVOICE_ENTITY,
+						queueLength: claimedEntries.length,
+						reason: "capability_version_mismatch",
+					},
+				);
 				// Ack-miss check FIRST, for the same reason as the submit-failure
 				// path below: this entry may already exist submitted server-side
 				// (the response was lost, not the write). Drafting it then would
@@ -532,6 +554,26 @@ export async function syncOfflineInvoices() {
 						},
 					);
 				} catch (draftError) {
+					// Silent until now, not even a console line: the review
+					// draft for a capability-mismatched sale could not be
+					// written, so the entry dead-letters and the sale is
+					// recoverable only by hand.
+					console.error(
+						"Failed to draft capability-mismatched invoice",
+						draftError,
+					);
+					reportOfflineFailure(
+						"offline.invoice.dead_letter",
+						draftError,
+						{
+							clientId:
+								queuedInvoice?.invoice?.posa_client_request_id,
+							queueId: entry.queue_id,
+							entityType: INVOICE_ENTITY,
+							queueLength: claimedEntries.length,
+							reason: "capability_draft_failed",
+						},
+					);
 					await markWriteQueueEntryFailed(
 						INVOICE_ENTITY,
 						Number(entry.queue_id),
@@ -578,6 +620,16 @@ export async function syncOfflineInvoices() {
 					"Failed to submit invoice, saving as draft",
 					error,
 				);
+				// The replay reached the server and the server refused it (the
+				// retryable classes were already handled above, and the ack-miss
+				// case just returned). The sale is delayed behind a draft.
+				reportOfflineFailure("offline.invoice.replay_rejected", error, {
+					clientId: queuedInvoice?.invoice?.posa_client_request_id,
+					queueId: entry.queue_id,
+					entityType: INVOICE_ENTITY,
+					queueLength: claimedEntries.length,
+					reason: draftReasonFromError(error),
+				});
 				try {
 					if (!ownsQueueEntry(entry)) break;
 					const draftResponse = await frappe.call({
@@ -606,6 +658,21 @@ export async function syncOfflineInvoices() {
 					console.error(
 						"Failed to save invoice as draft",
 						draftError,
+					);
+					// Last resort failed too: the entry goes to the dead letter
+					// and the sale is now only recoverable by hand. The single
+					// most important line in this file to have off-device.
+					reportOfflineFailure(
+						"offline.invoice.dead_letter",
+						draftError,
+						{
+							clientId:
+								queuedInvoice?.invoice?.posa_client_request_id,
+							queueId: entry.queue_id,
+							entityType: INVOICE_ENTITY,
+							queueLength: claimedEntries.length,
+							reason: "draft_fallback_failed",
+						},
 					);
 					await markWriteQueueEntryFailed(
 						INVOICE_ENTITY,

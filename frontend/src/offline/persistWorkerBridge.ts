@@ -21,6 +21,8 @@
  * @module offline/persistWorkerBridge
  */
 
+import { reportOfflineFailure } from "../posapp/utils/errorReporting";
+
 export const PERSIST_WORKER_URL =
 	"/assets/posawesome/dist/js/posapp/workers/itemWorker.js";
 
@@ -73,6 +75,17 @@ function clearPending(key: string) {
 	pendingWrites.delete(key);
 }
 
+/**
+ * The worker write failed AND the main-thread fallback failed too, so this
+ * value is gone: both durable paths for one offline write are exhausted. When
+ * the key is a queue store, that is a sale that will not be there on resume.
+ * Every caller already logged to the console; this is the off-device half
+ * (LOGGING_MAP G10).
+ */
+function reportLostPersist(key: string, error: unknown, reason: string) {
+	reportOfflineFailure("offline.persist.lost", error, { key, reason });
+}
+
 function handleMessage(event: MessageEvent) {
 	const data = (event?.data || {}) as {
 		type?: string;
@@ -97,6 +110,7 @@ function handleMessage(event: MessageEvent) {
 					data.key,
 					error,
 				);
+				reportLostPersist(data.key, error, "worker_nack_fallback_failed");
 			}
 		}
 		return;
@@ -141,6 +155,7 @@ function flushPendingToFallback() {
 			fallbackWriter(key, entry.value);
 		} catch (error) {
 			console.error("[posa][offline] persist fallback failed", key, error);
+			reportLostPersist(key, error, "worker_died_fallback_failed");
 		}
 	}
 }
@@ -205,6 +220,7 @@ export function postPersist(key: string, value: unknown): boolean {
 					key,
 					error,
 				);
+				reportLostPersist(key, error, "ack_timeout_fallback_failed");
 			}
 		}
 	}, PERSIST_ACK_TIMEOUT_MS);

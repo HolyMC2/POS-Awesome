@@ -4,7 +4,11 @@ import {
 	recoverFromChunkLoadError,
 } from "./chunkLoadRecovery";
 
-type ErrorKind = "window_error" | "unhandled_rejection" | "vue_error";
+type ErrorKind =
+	| "window_error"
+	| "unhandled_rejection"
+	| "vue_error"
+	| "offline_error";
 
 interface ClientErrorPayload {
 	kind: ErrorKind;
@@ -174,6 +178,78 @@ function reportGlobalError(
 	}
 
 	submitClientError(payload);
+}
+
+/**
+ * Context for an offline-queue failure. Deliberately a closed set of scalars:
+ * these lines end up in `tabError Log`, so nothing that identifies a customer,
+ * and nothing unbounded, may travel here.
+ */
+export interface OfflineFailureContext {
+	/** Entries still waiting in the write queue, if the caller knows. */
+	queueLength?: number;
+	/** `posa_client_request_id` — the sale's client id, not a customer id. */
+	clientId?: string;
+	/** Write-queue row id. */
+	queueId?: number | string;
+	/** Write-queue entity ("invoice", "customer", …). */
+	entityType?: string;
+	/** IndexedDB / localStorage key or store name involved. */
+	key?: string;
+	/** Short machine-readable reason, e.g. "upgrade_blocked". */
+	reason?: string;
+}
+
+const OFFLINE_CONTEXT_KEYS: (keyof OfflineFailureContext)[] = [
+	"queueLength",
+	"clientId",
+	"queueId",
+	"entityType",
+	"key",
+	"reason",
+];
+
+/**
+ * Report one offline-queue failure through the same funnel as the global
+ * handlers (LOGGING_MAP gap G10).
+ *
+ * Only for branches that LOSE OR DELAY A SALE: a queued invoice that could not
+ * be persisted, replayed or was dropped to the dead letter, an IndexedDB open
+ * or upgrade failure, a replay the server refused. Informational `console.log`
+ * stays console-only by design.
+ *
+ * `scope` is a stable dotted identifier ("offline.invoice.serialize") and is
+ * sent as the payload's `filename`, which is part of the server-side dedupe
+ * signature — so one recurring failure groups into one `tabError Log` row with
+ * a count, rather than a row per occurrence
+ * (`api/utilities.py::log_client_error`). Never throws: reporting a lost sale
+ * must not itself break the recovery path that is still trying to save it.
+ */
+export function reportOfflineFailure(
+	scope: string,
+	error: unknown,
+	context: OfflineFailureContext = {},
+): void {
+	try {
+		const name = error instanceof Error ? error.name : typeof error;
+		const parts: string[] = [];
+		for (const key of OFFLINE_CONTEXT_KEYS) {
+			const value = context[key];
+			if (value !== undefined && value !== null && value !== "") {
+				parts.push(`${key}=${clip(value, 120)}`);
+			}
+		}
+
+		reportGlobalError("offline_error", {
+			message: `${clip(scope, 120)}: ${clip(name, 80)}: ${clip(getErrorMessage(error), 500)}`,
+			stack: getErrorStack(error),
+			filename: scope,
+			info: parts.join(" "),
+		});
+	} catch {
+		// A breadcrumb is never worth failing the caller that was only
+		// reporting a miss.
+	}
 }
 
 export function installGlobalErrorHandlers(app: App) {

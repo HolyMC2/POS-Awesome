@@ -61,7 +61,31 @@ def log_mp_override(invoice_name=None, doctype="Sales Invoice", note=None):
 
     # Always leave a server-log line too (survives even if the draft is
     # later deleted before submit).
-    frappe.logger("mp_point").warning(
-        "MP-OVERRIDE user=%s invoice=%s note=%s", user, invoice_name, note
+    #
+    # This used to be `frappe.logger("mp_point").warning(...)`, which wrote
+    # nothing anywhere: `mp_point` is its own logger name, created at level
+    # ERROR because DEV_SERVER is unset and `log_level` is absent from
+    # common_site_config.json on the lab and on cell-0, so every override went
+    # unlogged and the Comment was the only trace after all (LOGGING_MAP
+    # section 7, w5 residual R5c). `_posa_warn` resolves the shared
+    # `posawesome` logger per call, raises that site's level to INFO once, and
+    # emits one JSON line carrying app/scope/site/rid — so overrides land in
+    # sites/<site>/logs/posawesome.log with everything else this app reports,
+    # under one logger name instead of a third one nothing greps. The
+    # MP-OVERRIDE token is kept in the message for existing greps. Imported
+    # lazily: api.utilities is a heavy module and several standalone test
+    # harnesses replace it wholesale.
+    from .utilities import _posa_warn
+
+    _posa_warn(
+        "mp_override",
+        "MP-OVERRIDE Point sale finalized without terminal confirmation",
+        user=user,
+        invoice=invoice_name,
+        target_doctype=doctype,
+        note=note,
+        # A string, not the bool: `_posa_warn` runs every field through
+        # `_clip_text`, whose `cstr(value or "")` would render False as "".
+        comment="written" if logged else "skipped",
     )
     return {"logged": logged}

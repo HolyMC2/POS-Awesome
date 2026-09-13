@@ -259,15 +259,93 @@ def add_taxes_from_tax_template(item, parent_doc):
                 tax_row.db_insert()
 
 
+def pick_batch_for_packed_item(row, warehouse, qty):
+    """First batch in `warehouse` that can cover `qty` for one packed (bundle) row.
+
+    ERPNext's `batch.get_batch_no` no longer answers an
+    (item_code, warehouse, qty) question: the Serial and Batch Bundle rewrite
+    changed it to `get_batch_no(bundle_id)`, which maps an existing bundle to
+    its {batch: qty}. Verified against the installed erpnext on the lab bench
+    (16.32.0, `erpnext/stock/doctype/batch/batch.py:459`), so importing it back
+    into this module would only trade the NameError for a TypeError.
+
+    `get_batch_qty(item_code=..., warehouse=...)` is the v15+ replacement: it
+    returns the warehouse's batches already ordered by Stock Settings'
+    `pick_serial_and_batch_based_on` (FIFO / Expiry / LIFO), and already drops
+    expired ones. Same pick the return path uses, see
+    `invoice_processing/stock.py::_auto_set_return_batches`. The expiry check
+    below is belt-and-braces over that: cheap, local, and independent of how
+    `get_auto_batch_nos` is configured.
+
+    Returns the chosen `batch_no`, or None when no SINGLE batch covers `qty` -
+    never raises. See `set_batch_nos_for_bundels` for why None is not an error.
+    """
+    from erpnext.stock.doctype.batch.batch import get_batch_qty
+    from frappe.utils import flt, getdate, nowdate
+
+    precision = row.precision("qty")
+    today = getdate(nowdate())
+
+    for batch in get_batch_qty(item_code=row.item_code, warehouse=warehouse) or []:
+        batch_no = batch.get("batch_no")
+        if not batch_no:
+            continue
+        if flt(batch.get("qty"), precision) < flt(qty, precision):
+            continue
+        expiry_date = frappe.db.get_value("Batch", batch_no, "expiry_date")
+        if expiry_date and getdate(expiry_date) < today:
+            continue
+        return batch_no
+
+    return None
+
+
 def set_batch_nos_for_bundels(doc, warehouse_field, throw=False):
-    """Automatically select `batch_no` for outgoing items in item table"""
+    """Best-effort `batch_no` for outgoing packed (Product Bundle) rows.
+
+    `throw` is accepted for the caller's existing signature
+    (`invoice_processing/creation.py` passes `throw=True`) and deliberately no
+    longer gates the auto-pick. Measured on the lab bench 2026-09-12, selling a
+    bundle whose component is batch-tracked: ERPNext allocates the component
+    itself on submit through a Serial and Batch Bundle, CLEARS
+    `packed_items.batch_no`, and ignores whatever this function put there. With
+    the pick disabled entirely the allocation was byte-identical (a 3-unit line
+    against batches of 1 and 20 became -1 / -2 either way), and the bundle can
+    split across batches, which one `batch_no` field cannot even express.
+
+    So refusing the sale when no single batch covers the line would block
+    sales ERPNext completes correctly - a worse outcome than the NameError this
+    function shipped with, since the point of repairing it is to let those sales
+    through. An unfillable row therefore leaves `batch_no` empty, logs one
+    breadcrumb, and lets ERPNext allocate. The pre-set-batch branch below keeps
+    its original control flow: a batch somebody chose explicitly that cannot
+    cover the row is still worth surfacing.
+    """
+    from erpnext.stock.doctype.batch.batch import get_batch_qty
+    from frappe import _
+    from frappe.utils import flt
+
     for d in doc.packed_items:
         qty = d.get("stock_qty") or d.get("transfer_qty") or d.get("qty") or 0
         has_batch_no = frappe.db.get_value("Item", d.item_code, "has_batch_no")
         warehouse = d.get(warehouse_field, None)
         if has_batch_no and warehouse and qty > 0:
             if not d.batch_no:
-                d.batch_no = get_batch_no(d.item_code, warehouse, qty, throw, d.serial_no)
+                # v15+ honours a hand-set batch_no on the row only with this
+                # flag on, otherwise it expects a Serial and Batch Bundle.
+                d.use_serial_batch_fields = 1
+                picked = pick_batch_for_packed_item(d, warehouse, qty)
+                if picked:
+                    d.batch_no = picked
+                else:
+                    _posa_warn(
+                        "bundle_batch.no_single_batch",
+                        "no single batch covers the packed row; leaving it to ERPNext allocation",
+                        item_code=d.item_code,
+                        warehouse=warehouse,
+                        qty=qty,
+                        row=d.idx,
+                    )
             else:
                 batch_qty = get_batch_qty(batch_no=d.batch_no, warehouse=warehouse)
                 if flt(batch_qty, d.precision("qty")) < flt(qty, d.precision("qty")):
@@ -1069,6 +1147,32 @@ def set_current_user_language(lang_code):
     except Exception as e:
         frappe.log_error(f"Error setting language: {str(e)}")
         return {"success": False, "message": "Failed to set language"}
+
+
+_LANGUAGE_CODE_RE = re.compile(r"^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})?$")
+
+
+def _validate_language_code(lang_code):
+    """(is_valid, error_message) for a caller-supplied language code.
+
+    `get_language_info` has called this since the language panel landed, but
+    the function itself was never written, so the endpoint raised NameError on
+    its first statement, answered "Failed to get language info" for every
+    request and wrote one `tabError Log` row per call. The shape check matters
+    on its own: the code is interpolated into a translations path just below,
+    so an unvalidated value is a traversal probe on a whitelisted endpoint.
+    Membership is checked against the same list `set_current_user_language`
+    uses, keeping the two endpoints' notion of "supported" identical.
+    """
+    if not isinstance(lang_code, str) or not _LANGUAGE_CODE_RE.match(lang_code.strip()):
+        return False, "Invalid language code"
+
+    lang_code = lang_code.strip()
+    valid_codes = [lang["code"] for lang in get_available_languages()]
+    if lang_code not in valid_codes:
+        return False, f"Language '{lang_code}' is not supported"
+
+    return True, None
 
 
 @frappe.whitelist(methods=["GET", "POST"])
