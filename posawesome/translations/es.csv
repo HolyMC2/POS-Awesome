@@ -3936,3 +3936,8 @@ Checking…,Consultando…
 The drawer belongs to another register.,La caja pertenece a otro punto de venta.
 Bag {0},Bolsa {0}
 Open the first one,Abrir el primero
+A handover note is required for a blind count or when counted cash differs from the expected amount.,Agrega una nota de entrega para un conteo ciego o cuando el efectivo contado difiera del esperado.
+Enable cash movements and cash deposits on the POS Profile before enabling cash custody.,Activa los movimientos y depósitos de efectivo en el perfil POS antes de habilitar la custodia.
+Set the POS Profile cash movement maximum to zero before enabling cash custody; closing must transfer the complete drawer count.,Establece el máximo por movimiento de efectivo en cero antes de habilitar la custodia; el cierre debe transferir todo el efectivo contado.
+The drawer account must match the cash Mode of Payment account for this company.,La cuenta del cajón debe coincidir con la cuenta de la forma de pago en efectivo de esta empresa.
+This bag seal is already used on this site. Choose a new seal.,Este sello de bolsa ya se utilizó en el sitio. Elige un sello nuevo.
