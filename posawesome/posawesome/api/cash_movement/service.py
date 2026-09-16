@@ -47,6 +47,9 @@ def _create_cash_movement(payload, movement_type):
     profile_doc = get_pos_profile(profile_name)
 
     validate_company_consistency(opening_shift, profile_doc)
+    if movement_type in {"Cash In", "Deposit"} and frappe.db.table_exists("POS Cash Safe") and frappe.db.exists("POS Cash Safe", {"pos_profile": profile_doc.name, "enabled": 1}) and not getattr(frappe.local, "cash_custody_posting", False):
+        frappe.throw(_("Use Cash custody to receive or return a bag for this register."))
+
     ensure_feature_enabled(profile_doc)
     ensure_movement_allowed(profile_doc, movement_type)
 

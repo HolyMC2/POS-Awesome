@@ -53,9 +53,9 @@ test("every rail destination keeps the shell", async ({ page }) => {
 	// destination reported identical measurements and none of the clicks landed.
 	// Named, in order, because the order matters — the wizard sits ON TOP.
 	const preamble = [
-		{ name: /^close$/i, what: "printer wizard" },
-		{ name: /^set up later$/i, what: "printer wizard (defer)" },
-		{ name: /^dismiss$/i, what: "service-worker update sheet" },
+		{ name: /^(close|cerrar)$/i, what: "printer wizard" },
+		{ name: /^(set up later|configurar después)$/i, what: "printer wizard (defer)" },
+		{ name: /^(dismiss|descartar)$/i, what: "service-worker update sheet" },
 	];
 	const cleared: string[] = [];
 	for (let pass = 0; pass < 3; pass++) {

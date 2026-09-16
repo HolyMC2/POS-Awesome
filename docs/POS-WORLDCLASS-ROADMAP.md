@@ -367,10 +367,22 @@ These are certified separately when enabled; the presence of a button is not
 certification.
 
 ERPNext remains owner of purchasing, receiving, stock reconciliation,
-accounting close and inventory transfers. POS exposes only the cashier boundary:
-stock confidence, count/adjustment escalation, pickup/fulfillment state and a
-deep link or task handoff. Appointment, clinical, repair and delivery source
-records remain owned by their vertical apps.
+accounting close and inventory transfers. POS exposes the authorized cashier
+boundary, including the supplier delivery receiving journey below, while
+reusing those canonical records and validations. Appointment, clinical,
+repair and delivery source records remain owned by their vertical apps.
+
+### Supplier delivery receiving — owner direction 2026-09-15
+
+Planned complete journey: **expected-delivery queue → supplier/order lookup →
+physical quantity and condition check → Purchase Receipt → immediate or deferred
+placement → supplier receipt → preserved sale or queue**. Receiving does not
+imply supplier payment. Suggested cajones require actual placement confirmation.
+
+The [complete receiving plan](POS-SUPPLIER-RECEIVING.md) defines no-order and
+partial deliveries, exception approvals, stock/location ownership, evidence,
+idempotency, offline/timeout recovery, print failures, corrections, implementation
+slices and Doco/Mumu acceptance gates. Status: planned; not deployed.
 
 ---
 

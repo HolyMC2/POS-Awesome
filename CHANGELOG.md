@@ -6,6 +6,19 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 ## Unreleased
 
+- **2026-09-15 · lab verified · Cash custody UI/UX crew pass (uncommitted candidate).** Three Opus workers improved cashier queues, denomination counts/closing allocation, supervisor Desk actions and print evidence; primary integration fixed recovery, in-flight save and invalid-input issues. Spanish copy, 48px count targets, separate one-label bag tags and full handover sheets. Full frontend suite 5,579 passing, final print/Desk checks, responsive browser journeys and real lost-response/close/bank journeys with reconciled ledgers. [Review and evidence](docs/POS-CASH-CUSTODY-UX-REVIEW.md). No additional schema migration; production rollout pending. UI rollback preserves the custody records and journals described in the core custody entry below.
+
+- **2026-09-15 · lab verified · Cash custody (uncommitted candidate).** Opt-in safe/register workflow with sealed float/takings bags, denomination evidence, drawer handover, independent discrepancy review, bank transit and receipt, and Desk/print actions. Financial commands retain retry IDs and serialize safe reservations; legacy registers remain unchanged. Requires guarded DocType migration and explicit safe/account configuration. Evidence and setup: [Cash custody](docs/POS-CASH-CUSTODY.md). Production rollout pending; preserve custody records/journals during rollback and use compensating corrections after any real activity.
+
+- **2026-09-15 · local development · Taller → POS handoff.** `/posapp?taller_order=…`
+  opens Pending Charges for that exact Repair Order after the register/shift is ready.
+  A persistent return link restores Taller's billing tab; unsupported registers explain
+  the restriction. Queue reads retain company/profile permissions and filter before
+  pagination; opening the link never claims or pays a request, and loading refuses to
+  overwrite an occupied cart. Files: `NavbarMenu.vue`, `ChargeRequestsDialog.vue`,
+  `utils/tallerHandoff.ts`, `api/charge_requests.py`, and focused frontend/scope tests.
+  No schema migration; not deployed. Rollback: revert these source changes and rebuild.
+
 Original status labels are retained; this section also contains changes reported as deployed.
 
 - **The server-side bundle batch hint is removed from the submit path

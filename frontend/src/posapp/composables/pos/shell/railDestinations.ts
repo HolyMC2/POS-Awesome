@@ -68,6 +68,7 @@ export const RAIL_DESTINATION_IDS = [
 	"barcode",
 	"giftCards",
 	"dashboard",
+	"cashCustody",
 	"closing",
 ] as const;
 
@@ -475,6 +476,10 @@ export const RAIL_DESTINATIONS: readonly RailDestination[] = [
 		group: "tools",
 		hint: "Today, the shift and each cashier",
 	},
+	{ id: "cashCustody", label: "Cash custody", icon: "mdi-safe", badgeSource: null, gate: null,
+	  shortcutActionId: null, offlineAvailability: "blocked", backedBy: null, group: "tools",
+	  hint: "Float bags, safe handovers and cash counts" },
+
 	{
 		id: "closing",
 		label: "Close Shift",

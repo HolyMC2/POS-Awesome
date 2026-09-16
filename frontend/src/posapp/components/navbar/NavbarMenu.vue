@@ -1,4 +1,11 @@
 <template>
+	<a v-if="tallerContext" :href="tallerContext.returnUrl" target="_blank" rel="noopener"
+		class="d-inline-flex align-center justify-center flex-shrink-0" style="width:44px;height:44px"
+		:aria-label="`${__('Back to Taller')} · ${tallerContext.order}`" :title="`${__('Back to Taller')} · ${tallerContext.order}`"
+		data-testid="return-to-taller"><v-icon>mdi-arrow-left</v-icon></a>
+	<v-snackbar :model-value="!!(tallerContext && posProfile?.name && !externalDocumentCheckout)" :timeout="10000">
+		{{ __("This register does not accept Taller charge requests. Return to the order or choose its assigned register.") }}
+	</v-snackbar>
 	<v-menu
 		v-model="menuOpen"
 		:min-width="isMobile ? 240 : 220"
@@ -40,6 +47,11 @@
 			:class="{ 'menu-card-compact--settings': activePanel === 'settings' }"
 			elevation="12"
 		>
+			<div v-if="tallerContext" class="pa-3">
+				<p class="text-caption">Taller · {{ tallerContext.order }}</p>
+				<v-btn v-if="externalDocumentCheckout" variant="text" @click="menuOpen = false; showChargeRequestsDialog = true">{{ __("Taller charge") }}</v-btn>
+				<p v-else class="text-caption">{{ __("This register does not accept Taller charge requests.") }}</p>
+			</div>
 			<div class="menu-header-compact">
 				<button
 					v-if="activePanel === 'settings'"
@@ -289,7 +301,7 @@
 
 	<QzTrayDialog v-model="showQzTrayDialog" />
 	<QzTestPrintDialog v-model="showQzTestPrintDialog" />
-	<ChargeRequestsDialog v-model="showChargeRequestsDialog" :pos-profile="posProfile" />
+	<ChargeRequestsDialog v-model="showChargeRequestsDialog" :pos-profile="posProfile" :taller-order="tallerContext?.order || ''" />
 	<FacturacionDialog v-model="showFacturacionDialog" :pos-profile="posProfile" />
 	<!-- «Guardar cotización». Behind `v-if`, not `v-model` alone: the dialog
 	     reads the CART, so its setup builds the invoice store, and mounting it
@@ -344,6 +356,7 @@ import { storeToRefs } from "pinia";
 import QzTrayDialog from "./QzTrayDialog.vue";
 import QzTestPrintDialog from "../settings/QzTestPrintDialog.vue";
 import ChargeRequestsDialog from "./ChargeRequestsDialog.vue";
+import { tallerHandoff } from "../../utils/tallerHandoff";
 import FacturacionDialog from "../pos/cfdi/FacturacionDialog.vue";
 import SaveQuotationDialog from "../pos/flows/cotizaciones/SaveQuotationDialog.vue";
 
@@ -403,6 +416,8 @@ export default {
 			printHealthWizardOffered: false,
 			printHealthToasted: false,
 			showChargeRequestsDialog: false,
+			tallerContext: tallerHandoff(window.location.search),
+			tallerHandoffOpened: false,
 			showSaveQuotationDialog: false,
 			saveQuotationHandler: null,
 			showFacturacionDialog: false,
@@ -438,6 +453,14 @@ export default {
 		stopPrintHealthMonitor();
 	},
 	watch: {
+		tallerHandoffReady: {
+			immediate: true,
+			handler(ready) {
+				if (!ready || this.tallerHandoffOpened) return;
+				this.tallerHandoffOpened = true;
+				this.showChargeRequestsDialog = true;
+			},
+		},
 		printHealthLevel: {
 			handler(level) {
 				this.handlePrintHealth(level);
@@ -457,6 +480,9 @@ export default {
 		},
 	},
 	computed: {
+		tallerHandoffReady() {
+			return !!(this.tallerContext && this.externalDocumentCheckout && this.posProfile?.name && this.uiStore.posOpeningShift);
+		},
 		externalDocumentCheckout() {
 			// Capability OR legacy flag (verticalStore resolver) — surfaces
 			// the charge-request pull-model (taller Repair Order → cart).

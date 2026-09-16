@@ -186,12 +186,12 @@ doc_events = {
     },
     "Bin": {
         "after_insert": [
-            "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
             "posawesome.posawesome.api.item_fetchers.clear_stock_caches",
+            "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
         ],
         "on_update": [
-            "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
             "posawesome.posawesome.api.item_fetchers.clear_stock_caches",
+            "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
         ],
     },
     "Stock Ledger Entry": {
@@ -614,3 +614,28 @@ fixtures = [
         ],
     },
 ]
+
+# Cash custody records retain the POS profile/company boundary in Desk and REST.
+permission_query_conditions = globals().get("permission_query_conditions", {}) | {
+    "POS Cash Safe": "posawesome.posawesome.api.cash_custody.documents.safe_query",
+    "POS Cash Bag": "posawesome.posawesome.api.cash_custody.documents.bag_query",
+    "POS Cash Count": "posawesome.posawesome.api.cash_custody.documents.count_query",
+    "POS Cash Custody Event": "posawesome.posawesome.api.cash_custody.documents.event_query",
+}
+has_permission = globals().get("has_permission", {}) | {
+    name: "posawesome.posawesome.api.cash_custody.documents.permitted"
+    for name in ("POS Cash Safe", "POS Cash Bag", "POS Cash Count", "POS Cash Custody Event")
+}
+
+# Custody ledger history is corrected with new entries, never cancelled underneath a bag.
+doc_events.setdefault("Journal Entry", {}).setdefault("before_cancel", [])
+_custody_cancel_hooks = doc_events["Journal Entry"]["before_cancel"]
+if isinstance(_custody_cancel_hooks, str):
+    _custody_cancel_hooks = [_custody_cancel_hooks]
+doc_events["Journal Entry"]["before_cancel"] = [*_custody_cancel_hooks, "posawesome.posawesome.api.cash_custody.documents.protect_journal"]
+
+doc_events.setdefault("POS Profile", {}).setdefault("validate", [])
+_custody_profile_hooks = doc_events["POS Profile"]["validate"]
+if isinstance(_custody_profile_hooks, str):
+    _custody_profile_hooks = [_custody_profile_hooks]
+doc_events["POS Profile"]["validate"] = [*_custody_profile_hooks, "posawesome.posawesome.api.cash_custody.documents.protect_profile"]

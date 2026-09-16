@@ -228,10 +228,17 @@ class TestPOSClosingShift(unittest.TestCase):
         # dict-to-namespace behavior so the attribute asserts below see values.
         mock_frappe._dict.side_effect = lambda d=None, **kw: SimpleNamespace(**(d or kw))
 
-        result = invoices.submit_printed_invoices("POS-OPEN-1", "Sales Invoice")
+        # Exercise skip selection; replay itself now goes through the hardened
+        # invoice submission API, not invoice_doc.submit(). Scope has its own tests.
+        result = []
+        with patch.object(invoices, "_submit_printed_invoice", return_value={"docstatus": 1}) as replay:
+            invoices._submit_printed_invoices_inner(
+                mock_frappe.get_all.return_value, "Sales Invoice", result
+            )
+            replay.assert_called_once_with(regular_invoice, "Sales Invoice")
 
         cancelled_return.submit.assert_not_called()
-        regular_invoice.submit.assert_called_once_with()
+        regular_invoice.submit.assert_not_called()
         mock_frappe.log_error.assert_called_once()
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].invoice, "SINV-RET-0001")
@@ -277,10 +284,17 @@ class TestPOSClosingShift(unittest.TestCase):
         )
         mock_frappe._dict.side_effect = lambda d=None, **kw: SimpleNamespace(**(d or kw))
 
-        result = invoices.submit_printed_invoices("POS-OPEN-1", "Sales Invoice")
+        # Exercise skip selection; replay itself now goes through the hardened
+        # invoice submission API, not invoice_doc.submit(). Scope has its own tests.
+        result = []
+        with patch.object(invoices, "_submit_printed_invoice", return_value={"docstatus": 1}) as replay:
+            invoices._submit_printed_invoices_inner(
+                mock_frappe.get_all.return_value, "Sales Invoice", result
+            )
+            replay.assert_called_once_with(clean_invoice, "Sales Invoice")
 
         held_saldo.submit.assert_not_called()
-        clean_invoice.submit.assert_called_once_with()
+        clean_invoice.submit.assert_not_called()
         mock_frappe.log_error.assert_called_once()
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].invoice, "SINV-SALDO-1")

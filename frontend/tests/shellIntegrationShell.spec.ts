@@ -284,3 +284,23 @@ describe("shell integration — Riel y Cajón", () => {
 		expect(vm.comboSuggestions).toEqual([]);
 	});
 });
+
+describe("new shift landing", () => {
+	it("registers the new shift before returning to Sale and replacing the old URL", async () => {
+		const order: string[] = [];
+		const data = { pos_profile: { name: "Doco Ventas" }, pos_opening_shift: { name: "NEW-SHIFT" } };
+		const context: any = {
+			get_offers: vi.fn(),
+			uiStore: { setRegisterData: vi.fn(() => order.push("registered")) },
+			$nextTick: (fn: () => void) => Promise.resolve().then(fn),
+			onBandPrimary: vi.fn(() => order.push("sale")),
+			$router: { replace: vi.fn(() => order.push("route")) },
+		};
+		(Pos as any).methods.handleRegisterPosData.call(context, data);
+		await Promise.resolve();
+		expect(context.pos_opening_shift.name).toBe("NEW-SHIFT");
+		expect(context.onBandPrimary).toHaveBeenCalledWith("sale.return");
+		expect(context.$router.replace).toHaveBeenCalledWith("/pos");
+		expect(order).toEqual(["registered", "sale", "route"]);
+	});
+});

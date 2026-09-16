@@ -47,6 +47,12 @@ describe("the shell keeps the floating copies down while the rail hosts them", (
 		expect(shell).toContain('@band="onHostedBand"');
 		expect(shell).toContain('eventBus.emit("recharge:submit")');
 	});
+
+	it("accepts the custody band and forwards its action only to its own destination", () => {
+		expect(shell).toMatch(/HOSTED_BAND_KINDS = \[[^\]]*"custody"/);
+		expect(shell).toContain('if (actionId === "custody.primary")');
+		expect(shell).toContain('if (hostedDestinationId.value === "cashCustody") eventBus.emit("custody:primary")');
+	});
 });
 
 describe("a loaded draft lands on the sale", () => {

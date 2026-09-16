@@ -86,17 +86,9 @@ def clear_stock_caches(doc=None, method=None):
     enrichment cache site-wide. Batch docs carry no warehouse → batch kind
     flushed globally. No doc at all (manual call) → flush all three kinds.
     """
-    cache = frappe.cache()
-
-    def _drop(kind: str, scope: str = ""):
-        prefix = f"posa_fetch:{kind}:v1:{scope + ':' if scope else ''}"
-        try:
-            cache.delete_keys(prefix)
-        except Exception:
-            # Cache invalidation must never break the triggering write
-            frappe.log_error(frappe.get_traceback(), "POSAwesome stock cache clear failed")
-
     warehouse = getattr(doc, "warehouse", None) if doc is not None else None
+    scopes = [""]
+    kinds = _STOCK_KINDS
     if warehouse:
         scopes = [warehouse]
         try:
@@ -105,17 +97,31 @@ def clear_stock_caches(doc=None, method=None):
             scopes.extend(get_ancestors_of("Warehouse", warehouse) or [])
         except Exception:
             pass
-        for kind in _STOCK_KINDS:
-            for scope in scopes:
-                _drop(kind, scope)
-        return
+    elif doc is not None and getattr(doc, "doctype", "") == "Batch":
+        kinds = ("batch",)
 
-    if doc is not None and getattr(doc, "doctype", "") == "Batch":
-        _drop("batch")
-        return
+    # Capture scope now: document objects can change before the transaction ends.
+    prefixes = tuple(
+        f"posa_fetch:{kind}:v1:{scope + ':' if scope else ''}"
+        for kind in kinds for scope in scopes
+    )
 
-    for kind in _STOCK_KINDS:
-        _drop(kind)
+    def invalidate():
+        cache = frappe.cache()
+        for prefix in prefixes:
+            try:
+                cache.delete_keys(prefix)
+            except Exception:
+                # Cache invalidation must never break the triggering write.
+                frappe.log_error(frappe.get_traceback(), "POSAwesome stock cache clear failed")
+
+    # Preserve read-your-writes, then discard any values filled while other
+    # connections still saw the old stock. Rollback must discard values read
+    # from this transaction too. Manual cache clears remain immediate only.
+    invalidate()
+    if doc is not None:
+        frappe.db.after_commit.add(invalidate)
+        frappe.db.after_rollback.add(invalidate)
 
 
 def _fetch_item_prices(

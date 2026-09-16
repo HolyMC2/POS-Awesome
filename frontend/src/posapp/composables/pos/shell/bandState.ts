@@ -39,7 +39,17 @@ export type BandKind =
 	| "queued"
 	| "floorAccount"
 	| "tableSale"
-	| "hostedContext";
+	| "hostedContext"
+	| "selectedDraft"
+	/**
+	 * Cash custody publishes its own: the money on that screen is a counted bag
+	 * or an unconfirmed transfer, never the sale behind the sheet, so
+	 * `hostedContext`'s «BACK TO SALE · $0.00» was the wrong number AND the
+	 * wrong verb. Resolved by `CashCustodyView`, not here — the state depends on
+	 * server records, permissions and an open form, none of which a pure
+	 * function of the register's money can see.
+	 */
+	| "custody";
 
 /**
  * Stable action ids, decoupled from key bindings so the shortcuts engine
@@ -56,7 +66,16 @@ export type BandActionId =
 	| "offline.keepSelling"
 	| "floor.chargeAccount"
 	| "table.saveAndReturn"
-	| "sale.return";
+	| "sale.return"
+	| "draft.loadSelected"
+	/**
+	 * ONE id for the whole custody screen. Which action it means — confirm this
+	 * form, receive that bag, retry the unconfirmed transfer — is decided by the
+	 * surface that published the state and answered through the bus, exactly as
+	 * `draft.loadSelected` is: the shell forwards the press, it does not know
+	 * what the cash records currently allow.
+	 */
+	| "custody.primary";
 
 export interface BandAction {
 	id: BandActionId;

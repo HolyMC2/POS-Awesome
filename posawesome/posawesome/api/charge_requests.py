@@ -93,7 +93,7 @@ def _assert_request_profile(request, pos_profile: str):
 
 
 @frappe.whitelist(methods=["GET", "POST"])
-def get_open_charge_requests(pos_profile):
+def get_open_charge_requests(pos_profile, taller_order=None):
     """Open requests visible to this profile: same company, and either
     unpinned or pinned to this exact profile."""
     _assert_feature(pos_profile)
@@ -115,9 +115,14 @@ def get_open_charge_requests(pos_profile):
     has_settle_mode = frappe.db.has_column(CHARGE_REQUEST_DOCTYPE, "settle_mode")
     if has_settle_mode:
         fields.append("settle_mode")
+    # Narrow before pagination, retaining company/profile scope. A deep link
+    # must find its order even when more than 100 other repairs are queued.
+    filters = {"status": "Open", "company": company}
+    if taller_order:
+        filters.update(reference_doctype="Repair Order", reference_name=str(taller_order))
     rows = frappe.get_all(
         CHARGE_REQUEST_DOCTYPE,
-        filters={"status": "Open", "company": company},
+        filters=filters,
         or_filters=[["pos_profile", "is", "not set"], ["pos_profile", "=", pos_profile]],
         fields=fields,
         order_by="creation asc",

@@ -20,13 +20,19 @@
 			@update:date-to="publishFilters(dateFrom, $event)"
 		/>
 
-		<InvoiceLedgerFigures
+		<v-alert v-if="loadError" type="error" variant="tonal" role="alert" class="ledger-surface__error">
+			{{ loadError }}
+			<div>{{ __("Retry to reload this list. Your saved work has not been changed.") }}</div>
+			<v-btn :loading="loading" @click="$emit('retry')">{{ __("Retry") }}</v-btn>
+		</v-alert>
+
+		<InvoiceLedgerFigures v-if="!loadError"
 			:figures="figures"
 			:format-currency="formatCurrency"
 			:currency-symbol="currencySymbol"
 		/>
 
-		<div class="ledger-surface__body">
+		<div v-if="!loadError" class="ledger-surface__body">
 			<InvoiceLedgerTable
 				ref="tableRef"
 				:rows="visibleRows"
@@ -88,7 +94,9 @@
  * its filter state (`historySearch`, `historyDateFrom`, …). The engine loads,
  * filters, paginates and submits exactly as it did.
  */
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import type { BandState } from "../../../../composables/pos/shell/bandState";
+import { translate as __ } from "./ledgerText";
 
 import InvoiceLedgerFigures from "./InvoiceLedgerFigures.vue";
 import InvoiceLedgerHeader from "./InvoiceLedgerHeader.vue";
@@ -138,6 +146,8 @@ const props = withDefaults(
 		dateFrom: string;
 		dateTo: string;
 		loading?: boolean;
+		loadError?: string;
+		actionBusy?: boolean;
 		/** `selectedInvoiceDetail` — the whole document `viewInvoice` fetched. */
 		detail: Record<string, any> | null;
 		/** `employeeStore.terminalEmployees` and `.currentCashier`. */
@@ -167,6 +177,8 @@ const props = withDefaults(
 		destinationId: null,
 		profileName: null,
 		loading: false,
+		loadError: "",
+		actionBusy: false,
 		employees: () => [],
 		currentCashier: null,
 		currencySymbol: "",
@@ -180,6 +192,8 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
+	retry: [];
+	band: [BandState | null];
 	/** The tab the engine should be on. */
 	tab: [string];
 	/** Every filter field this surface writes, in one shape. */
@@ -406,6 +420,27 @@ const onDraftAction = (action: string) => {
 	if (raw) emit("draftAction", { invoice: raw, action });
 };
 
+// The selected draft owns the main action; the shell only forwards the press.
+const eventBus = inject<any>("eventBus", null);
+const draftPrimary = computed(() => {
+	const raw = selectedRow.value?.raw;
+	return raw ? props.draftActionsFor(raw)[0] : undefined;
+});
+const draftBand = computed<BandState | null>(() => segment.value !== "drafts" ? null : ({
+	kind: "selectedDraft",
+	tone: "neutral",
+	value: Number(selectedRow.value?.raw?.grand_total || 0),
+	labelKey: selectedRow.value ? "Selected draft" : "Select a draft to continue",
+	primaryAction: { id: "draft.loadSelected", labelKey: draftPrimary.value ? props.draftActionLabel(draftPrimary.value) : "Load Draft" },
+	primaryEnabled: Boolean(draftPrimary.value && !props.loading && !props.loadError && !props.actionBusy),
+}));
+watch(draftBand, (state) => emit("band", state), { immediate: true });
+const activateDraft = () => {
+	if (draftBand.value?.primaryEnabled && draftPrimary.value) onDraftAction(draftPrimary.value);
+};
+onMounted(() => eventBus?.on("ledger:primary", activateDraft));
+onBeforeUnmount(() => eventBus?.off("ledger:primary", activateDraft));
+
 /* ---- staying in step with the engine ----------------------------------- */
 
 // Today read and found empty: fall back to the latest rows, once.
@@ -459,6 +494,10 @@ defineExpose({ focusRing: () => tableRef.value?.focusRing?.() });
 	min-height: 0;
 	padding: 16px;
 	background: var(--reg-surface-sunken, #f8f9fa);
+}
+
+.ledger-surface__error {
+	flex: 0 0 auto;
 }
 
 .ledger-surface__body {

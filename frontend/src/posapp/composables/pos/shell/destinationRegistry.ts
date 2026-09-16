@@ -406,6 +406,9 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 		badgeSource: null,
 		surface: "page",
 	},
+	{ id: "cashCustody", labelKey: "Cash custody", kind: "sheet", path: "/cash-custody", capability: null,
+	  profileFlag: null, offline: "online_required", shortcutActionId: null, badgeSource: null, surface: "page" },
+
 	{
 		id: "closing",
 		labelKey: "Close Shift",
@@ -515,6 +518,7 @@ export const SHEET_COMPONENTS: Record<string, () => Promise<unknown>> = {
 	// Not a dialog: `CashMovementView` is a plain view, so it renders straight
 	// into the surface with no overlay in between. That is also why it never
 	// reached the `useDialogFullscreen` seam and kept its modal-body geometry.
+	cashCustody: () => import("../../../components/pos/custody/CashCustodyView.vue"),
 	expense: () => import("../../../components/pos/cash/CashMovementView.vue"),
 	closing: () => import("../../../components/pos/shell/ClosingDialog.vue"),
 	// Tools: plain views, rendered straight into a scrolling page surface.

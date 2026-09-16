@@ -366,5 +366,23 @@ class ChargeRequestWarehouseReassertTests(unittest.TestCase):
         self.assertEqual(invoice.items[0].warehouse, "Sellable - GD")
 
 
+class TallerQueueFilterTests(unittest.TestCase):
+    def test_exact_order_filter_keeps_company_profile_scope_before_pagination(self):
+        from unittest.mock import Mock
+        module = _import_charge_requests({"legacy_enabled": 1})
+        module.frappe.db.has_column = lambda *args: False
+        module.frappe.get_all = Mock(return_value=[])
+        module.assert_company = Mock()
+        module.assert_profile = Mock()
+        self.assertEqual(module.get_open_charge_requests("Profile A", "RO-123"), [])
+        module.assert_profile.assert_called_once_with("cashier@example.com", "Profile A")
+        module.assert_company.assert_called_once_with("cashier@example.com", "Company A")
+        options = module.frappe.get_all.call_args.kwargs
+        self.assertEqual(options["filters"], {"status": "Open", "company": "Company A",
+                         "reference_doctype": "Repair Order", "reference_name": "RO-123"})
+        self.assertEqual(options["or_filters"], [["pos_profile", "is", "not set"], ["pos_profile", "=", "Profile A"]])
+        self.assertEqual(options["limit_page_length"], 100)
+
+
 if __name__ == "__main__":
     unittest.main()

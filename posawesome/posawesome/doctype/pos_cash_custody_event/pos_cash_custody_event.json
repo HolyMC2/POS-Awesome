@@ -1,0 +1,131 @@
+{
+ "doctype": "DocType",
+ "name": "POS Cash Custody Event",
+ "module": "POSAwesome",
+ "autoname": "hash",
+ "field_order": [
+  "safe",
+  "company",
+  "pos_profile",
+  "currency",
+  "request_id",
+  "fingerprint",
+  "action",
+  "actor",
+  "bag",
+  "cash_count",
+  "amount",
+  "result_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "safe",
+   "label": "Safe",
+   "fieldtype": "Link",
+   "options": "POS Cash Safe",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "label": "Company",
+   "fieldtype": "Link",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "pos_profile",
+   "label": "Pos Profile",
+   "fieldtype": "Link",
+   "options": "POS Profile",
+   "reqd": 1
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "request_id",
+   "label": "Request Id",
+   "fieldtype": "Data",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "fingerprint",
+   "label": "Fingerprint",
+   "fieldtype": "Data",
+   "reqd": 1
+  },
+  {
+   "fieldname": "action",
+   "label": "Action",
+   "fieldtype": "Data",
+   "reqd": 1
+  },
+  {
+   "fieldname": "actor",
+   "label": "Actor",
+   "fieldtype": "Link",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "bag",
+   "label": "Bag",
+   "fieldtype": "Link",
+   "options": "POS Cash Bag"
+  },
+  {
+   "fieldname": "cash_count",
+   "label": "Cash Count",
+   "fieldtype": "Link",
+   "options": "POS Cash Count"
+  },
+  {
+   "fieldname": "amount",
+   "label": "Amount",
+   "fieldtype": "Currency"
+  },
+  {
+   "fieldname": "result_json",
+   "label": "Result Json",
+   "fieldtype": "Long Text",
+   "reqd": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "POS User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "POS Awesome Supervisor",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "track_changes": 1,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}

@@ -30,7 +30,8 @@ const gates = (overrides: Partial<RailGateMap> = {}): RailGateMap => ({
 	...overrides,
 });
 
-const idsOf = (destinations: readonly { id: string }[]) => destinations.map((d) => d.id);
+const idsOf = (destinations: readonly { id: string }[]) =>
+	destinations.map((d) => d.id);
 
 describe("rail destination registry", () => {
 	it("stays pure — no Vue, no store, no i18n global", () => {
@@ -38,7 +39,10 @@ describe("rail destination registry", () => {
 		// resolvable server-side into a §9.1 artifact. An import of vue or of
 		// a store is what quietly ends that.
 		const source = readFileSync(
-			resolve(process.cwd(), "src/posapp/composables/pos/shell/railDestinations.ts"),
+			resolve(
+				process.cwd(),
+				"src/posapp/composables/pos/shell/railDestinations.ts",
+			),
 			"utf8",
 		);
 		expect(source).not.toMatch(/from "vue"/);
@@ -76,6 +80,7 @@ describe("rail destination registry", () => {
 			"barcode",
 			"giftCards",
 			"dashboard",
+			"cashCustody",
 			"closing",
 		]);
 	});
@@ -85,16 +90,24 @@ describe("rail destination registry", () => {
 		// routes it, the dock draws it, Alt+B reaches it) but with no rail
 		// entry. Everything the rail DOES draw must be in the union, in the
 		// union's order.
-		const drawable = [...RAIL_DESTINATION_IDS].filter((id) => id !== "browse");
+		const drawable = [...RAIL_DESTINATION_IDS].filter(
+			(id) => id !== "browse",
+		);
 		expect(idsOf(RAIL_DESTINATIONS)).toEqual(drawable);
-		expect(new Set(RAIL_DESTINATION_IDS).size).toBe(RAIL_DESTINATION_IDS.length);
+		expect(new Set(RAIL_DESTINATION_IDS).size).toBe(
+			RAIL_DESTINATION_IDS.length,
+		);
 	});
 
 	it("puts only the session control in the footer group", () => {
 		const visible = visibleRailDestinations(gates());
-		expect(idsOf(railDestinationsInGroup(visible, "footer"))).toEqual(["closing"]);
+		expect(idsOf(railDestinationsInGroup(visible, "footer"))).toEqual([
+			"closing",
+		]);
 		// Recarga is a selling destination and belongs above the spacer.
-		expect(idsOf(railDestinationsInGroup(visible, "primary"))).toContain("recharge");
+		expect(idsOf(railDestinationsInGroup(visible, "primary"))).toContain(
+			"recharge",
+		);
 	});
 
 	it("looks a destination up by id and misses cleanly", () => {
@@ -117,20 +130,30 @@ describe("rail capability gating", () => {
 		expect(idsOf(cafeteria)).not.toContain("recharge");
 		// Salón sits right after Cobranza — with Menú off the rail, a
 		// table-service operator reaches the floor two steps from the top.
-		expect(idsOf(cafeteria).slice(0, 3)).toEqual(["sale", "payments", "floor"]);
+		expect(idsOf(cafeteria).slice(0, 3)).toEqual([
+			"sale",
+			"payments",
+			"floor",
+		]);
 	});
 
 	it("removes a gated destination entirely rather than disabling it", () => {
-		const withoutRepair = visibleRailDestinations(gates({ externalDocumentCheckout: false }));
+		const withoutRepair = visibleRailDestinations(
+			gates({ externalDocumentCheckout: false }),
+		);
 		expect(idsOf(withoutRepair)).not.toContain("serviceOrder");
 	});
 
 	it("honours posa_hide_closing_shift by dropping the footer entry", () => {
-		expect(idsOf(visibleRailDestinations(gates({ closingShift: false })))).not.toContain("closing");
+		expect(
+			idsOf(visibleRailDestinations(gates({ closingShift: false }))),
+		).not.toContain("closing");
 	});
 
 	it("hides Cotizaciones on a register that does not quote", () => {
-		expect(idsOf(visibleRailDestinations(gates({ quotations: false })))).not.toContain("quotations");
+		expect(
+			idsOf(visibleRailDestinations(gates({ quotations: false }))),
+		).not.toContain("quotations");
 		expect(idsOf(visibleRailDestinations(gates()))).toContain("quotations");
 	});
 
@@ -150,10 +173,19 @@ describe("rail capability gating", () => {
 			resolve(process.cwd(), "src/posapp/components/pos/shell/Pos.vue"),
 			"utf8",
 		);
-		const literal = shell.match(/const railGates = computed\(\(\) => \(\{([\s\S]*?)\}\)\);/);
-		expect(literal, "Pos.vue no longer declares a `railGates` computed").toBeTruthy();
-		const answered = [...literal![1].matchAll(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*:/gm)].map((m) => m[1]);
-		const declared = [...new Set(RAIL_DESTINATIONS.map((d) => d.gate).filter(Boolean))];
+		const literal = shell.match(
+			/const railGates = computed\(\(\) => \(\{([\s\S]*?)\}\)\);/,
+		);
+		expect(
+			literal,
+			"Pos.vue no longer declares a `railGates` computed",
+		).toBeTruthy();
+		const answered = [
+			...literal![1].matchAll(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*:/gm),
+		].map((m) => m[1]);
+		const declared = [
+			...new Set(RAIL_DESTINATIONS.map((d) => d.gate).filter(Boolean)),
+		];
 		expect(declared.length).toBeGreaterThan(0);
 		for (const gate of declared) {
 			expect(
@@ -183,6 +215,7 @@ describe("rail capability gating", () => {
 			"lots",
 			"purchase",
 			"barcode",
+			"cashCustody",
 		]);
 	});
 });
@@ -190,14 +223,19 @@ describe("rail capability gating", () => {
 describe("rail offline contract", () => {
 	it("declares an availability for every destination", () => {
 		for (const destination of RAIL_DESTINATIONS) {
-			expect(["available", "queued", "cachedReadOnly", "blocked"]).toContain(
-				destination.offlineAvailability,
-			);
+			expect([
+				"available",
+				"queued",
+				"cachedReadOnly",
+				"blocked",
+			]).toContain(destination.offlineAvailability);
 		}
 	});
 
 	it("never blocks the sale — selling offline is the product promise", () => {
-		expect(getRailDestination("sale")?.offlineAvailability).toBe("available");
+		expect(getRailDestination("sale")?.offlineAvailability).toBe(
+			"available",
+		);
 		expect(isOfflineBlocked(getRailDestination("sale")!)).toBe(false);
 	});
 
@@ -219,8 +257,11 @@ describe("rail offline contract", () => {
 	// The registry now carries `backedBy` naming the module behind each claim,
 	// so the next reader can check rather than trust.
 	it("dims only the surfaces that would lie without a server", () => {
-		const blocked = RAIL_DESTINATIONS.filter(isOfflineBlocked).map((d) => d.id);
+		const blocked = RAIL_DESTINATIONS.filter(isOfflineBlocked).map(
+			(d) => d.id,
+		);
 		expect(blocked.sort()).toEqual([
+			"cashCustody",
 			"closing",
 			// The board reads print batches; a stale kitchen is the seating
 			// chart's lie applied to tickets.
@@ -249,14 +290,18 @@ describe("rail offline contract", () => {
 			"barcode",
 			"giftCards",
 			"dashboard",
+			"cashCustody",
 		]);
 		// Gated = absent, not disabled (R3): a cashier never sees Tablero, a
 		// profile without gift cards never sees Monedero.
-		const cashier = visibleRailDestinations(gates({ dashboard: false, giftCards: false }));
+		const cashier = visibleRailDestinations(
+			gates({ dashboard: false, giftCards: false }),
+		);
 		expect(idsOf(railDestinationsInGroup(cashier, "tools"))).toEqual([
 			"lots",
 			"purchase",
 			"barcode",
+			"cashCustody",
 		]);
 		// Every tool explains itself in the flyout; no pill ever needs to.
 		for (const tool of railDestinationsInGroup(visible, "tools")) {
@@ -280,7 +325,10 @@ describe("rail offline contract", () => {
 		// measured one. `queued` and `cachedReadOnly` assert that specific code
 		// exists to make them true, so they must say which code.
 		for (const destination of RAIL_DESTINATIONS) {
-			if (destination.offlineAvailability === "queued" || destination.offlineAvailability === "cachedReadOnly") {
+			if (
+				destination.offlineAvailability === "queued" ||
+				destination.offlineAvailability === "cachedReadOnly"
+			) {
 				expect(
 					destination.backedBy,
 					`${destination.id} claims "${destination.offlineAvailability}" without naming the module that delivers it`,
@@ -321,7 +369,9 @@ describe("rail shortcut binding", () => {
 	it("mints no synonym for a behavior that already had an id", () => {
 		// One behavior, one permanent id (§17.3). A second id for "open
 		// drafts" would split the cheat sheet and escape conflict detection.
-		const ids = RAIL_DESTINATIONS.map((d) => d.shortcutActionId).filter(Boolean);
+		const ids = RAIL_DESTINATIONS.map((d) => d.shortcutActionId).filter(
+			Boolean,
+		);
 		expect(new Set(ids).size).toBe(ids.length);
 	});
 
@@ -335,7 +385,9 @@ describe("rail vocabulary", () => {
 	it("routes only genuinely renamed nouns through the preset resolver", () => {
 		// A noun every giro calls the same thing must not go through t(), or
 		// the preset label map becomes a second translation layer.
-		const vocabulary = RAIL_DESTINATIONS.filter((d) => d.vocabulary).map((d) => d.id);
+		const vocabulary = RAIL_DESTINATIONS.filter((d) => d.vocabulary).map(
+			(d) => d.id,
+		);
 		// `browse` ("Menú") left the rail; `floor` ("Salón") and `comandas`
 		// (a giro may call them "Tickets" or "KOTs") are the renamed nouns
 		// still drawn.
@@ -371,7 +423,9 @@ describe("rail id vocabulary — the single list T4 and T5 import", () => {
 			"queued",
 		]);
 		for (const destination of RAIL_DESTINATIONS) {
-			expect(RAIL_OFFLINE_ATTR_VALUES).toContain(destination.offlineAvailability);
+			expect(RAIL_OFFLINE_ATTR_VALUES).toContain(
+				destination.offlineAvailability,
+			);
 		}
 	});
 });

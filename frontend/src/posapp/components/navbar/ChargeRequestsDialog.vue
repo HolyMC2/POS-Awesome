@@ -7,6 +7,10 @@
 			</v-card-title>
 
 			<v-card-text>
+				<v-alert v-if="activeTallerOrder" type="info" variant="tonal" class="mb-3">
+					{{ __("Taller order") }}: {{ activeTallerOrder }}. {{ __("Select its request to collect payment.") }}
+					<v-btn variant="text" @click="activeTallerOrder = ''; refresh()">{{ __("Show all charges") }}</v-btn>
+				</v-alert>
 				<v-alert
 					v-if="errorMessage"
 					type="error"
@@ -26,6 +30,7 @@
 						<v-list-item
 							v-for="request in requests"
 							:key="request.name"
+							data-testid="charge-request-row"
 							:disabled="loadingRequest === request.name"
 							@click="selectRequest(request)"
 						>
@@ -49,7 +54,7 @@
 						</v-list-item>
 					</v-list>
 					<div v-else class="text-body-2 text-medium-emphasis py-6 text-center">
-						{{ __("No pending charges. Requests from repairs and other modules appear here.") }}
+						{{ activeTallerOrder ? __("No pending charge for this order at this register. If already paid, return to Taller and refresh payment; otherwise check the request and assigned register.") : __("No pending charges. Requests from repairs and other modules appear here.") }}
 					</div>
 				</template>
 			</v-card-text>
@@ -94,6 +99,7 @@ import { useToastStore } from "../../stores/toastStore";
 const props = defineProps({
 	modelValue: { type: Boolean, default: false },
 	posProfile: { type: Object, default: () => ({}) },
+	tallerOrder: { type: String, default: "" },
 });
 // `close` is only emitted while hosted as the rail's Orden de servicio
 // destination (see `useHostedSheet`); the navbar copy uses `update:modelValue`.
@@ -131,6 +137,8 @@ const dialogModel = computed({
 	},
 });
 
+const activeTallerOrder = ref(props.tallerOrder);
+watch(() => props.tallerOrder, value => { activeTallerOrder.value = value; });
 const loading = ref(false);
 const loadingRequest = ref(null);
 const requests = ref([]);
@@ -171,7 +179,7 @@ async function refresh() {
 	try {
 		const r = await frappe.call({
 			method: "posawesome.posawesome.api.charge_requests.get_open_charge_requests",
-			args: { pos_profile: props.posProfile?.name },
+			args: { pos_profile: props.posProfile?.name, ...(activeTallerOrder.value ? { taller_order: activeTallerOrder.value } : {}) },
 		});
 		if (version !== readVersion) return;
 		assertScope(scope);
@@ -188,6 +196,17 @@ async function refresh() {
 	}
 }
 
+// Checking before and after preparation also preserves edits made while the
+// server is answering; the prepared request remains available for an explicit retry.
+function assertTallerCartAvailable() {
+ const store = useInvoiceStore();
+ const doc = store.invoiceDoc;
+ if (props.tallerOrder && ((store.items?.length || 0) > 0 || (doc?.items?.length || 0) > 0 ||
+  Number(doc?.paid_amount || 0) !== 0 || (doc?.payments || []).some(row => Number(row.amount || 0) !== 0))) {
+  throw new Error(__("Save or finish the current sale before loading the Taller charge."));
+ }
+}
+
 async function selectRequest(request) {
 	if (loadingRequest.value) return;
 	const scope = loadedScope;
@@ -195,6 +214,7 @@ async function selectRequest(request) {
 	loadingRequest.value = request.name;
 	try {
 		assertScope(scope);
+		assertTallerCartAvailable();
 		const uiStore = useUIStore();
 		const r = await frappe.call({
 			method: "posawesome.posawesome.api.charge_requests.prepare_charge_request_invoice",
@@ -218,6 +238,7 @@ async function selectRequest(request) {
 		if (!r?.message?.name) {
 			throw new Error(__("Server returned no invoice for this request."));
 		}
+		assertTallerCartAvailable();
 		useInvoiceStore().triggerLoadInvoice(r.message);
 		useToastStore().show({
 			title: __("Charge loaded"),
@@ -278,5 +299,6 @@ watch(
 	(open) => {
 		if (open) refresh();
 	},
+	{ immediate: true },
 );
 </script>

@@ -1,10 +1,13 @@
-import { ref } from "vue";
+import { useClosingFlowStore } from "../../../stores/closingFlowStore";
+import { ref, toRef } from "vue";
 
 declare const frappe: any;
 
 export function useClosingShift(eventBus: any) {
 	const closingDialog = ref(false);
-	const dialog_data = ref<any>({});
+	const flow = useClosingFlowStore();
+	const __ = (text: string) => (window as any).__?.(text) || text;
+	const dialog_data = toRef(flow, "draft");
 	const overview = ref<any>(null);
 	const overviewLoading = ref(false);
 	const pos_profile = ref("");
@@ -257,6 +260,16 @@ export function useClosingShift(eventBus: any) {
 	};
 
 	const submitDialog = () => {
+		if (flow.submitting || flow.preparing || flow.completed) return false;
+		if (!dialog_data.value.pos_opening_shift) {
+			flow.error = __("Load the closing details before continuing.");
+			return false;
+		}
+		if (!flow.terminalReady) { flow.error = __("Check this browser and complete the saved-sales review above before closing."); return false; }
+		if (flow.reviewBlocked || (flow.reviewRequired && !flow.reviewAccepted)) {
+			flow.error = __("Review the unfinished sales above before closing.");
+			return false;
+		}
 		const payments =
 			dialog_data.value.payment_reconciliation ||
 			dialog_data.value.payments ||
@@ -265,12 +278,12 @@ export function useClosingShift(eventBus: any) {
 			isNaN(parseFloat(p.closing_amount)),
 		);
 		if (invalid) {
+			flow.error = __("Enter a closing amount for every payment method. Use 0 when there were no payments.");
 			return false;
 		}
 		if (eventBus) {
 			eventBus.emit("submit_closing_pos", dialog_data.value);
 		}
-		closingDialog.value = false;
 		return true;
 	};
 

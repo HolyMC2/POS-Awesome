@@ -20,10 +20,10 @@ const Btn = defineComponent({ props: ["disabled", "loading"], setup: (p, {slots}
 const wrappers: VueWrapper[] = [];
 const row = { name: "PCR-1", invoice: "INV-1", can_release: true, amount_total: 10 };
 const mutations = () => m.call.mock.calls.filter(([args]) => args.method.includes("release_charge"));
-async function open() {
+async function open(extraProps = {}) {
  const components: Record<string, any> = {VBtn:Btn};
  for(const name of ["VDialog", "VCard", "VCardTitle", "VCardText", "VCardActions", "VAlert", "VList", "VListItem", "VListItemTitle", "VListItemSubtitle", "VIcon", "VSpacer", "VProgressCircular"])components[name]=Box;
- const w = mount(Dialog, { props: { posProfile: { name: "COUNTER" } }, global: { components } }); wrappers.push(w);
+ const w = mount(Dialog, { props: { posProfile: { name: "COUNTER" }, ...extraProps }, global: { components } }); wrappers.push(w);
  await w.setProps({modelValue:true}); await flushPromises(); return w;
 }
 async function release(w: VueWrapper) {
@@ -65,4 +65,30 @@ describe("charge draft release",()=>{
   const w=await open();m.call.mockResolvedValue({message:{}});await release(w);
   expect(w.text()).toContain("Release could not be verified");expect(m.toast).not.toHaveBeenCalled();
  });
+});
+
+describe("Taller contextual queue", () => {
+ it("narrows the read to the source order without preparing an invoice", async () => {
+  await open({tallerOrder:"RO-123"});
+  expect(m.call).toHaveBeenCalledTimes(1);
+  expect(m.call).toHaveBeenCalledWith(expect.objectContaining({args:{pos_profile:"COUNTER",taller_order:"RO-123"}}));
+  expect(m.load).not.toHaveBeenCalled();
+ });
+ it("keeps an existing cart when a contextual request is selected", async () => {
+  m.invoice = {items:[{item_code:"UNSAVED",qty:1}]};
+  const w = await open({tallerOrder:"RO-123"});
+  await w.get('[data-testid="charge-request-row"]').trigger("click"); await flushPromises();
+  expect(m.call).toHaveBeenCalledTimes(1);
+  expect(m.load).not.toHaveBeenCalled();
+  expect(w.text()).toContain("Save or finish the current sale");
+ });
+});
+
+it("allows leaving the order filter while keeping the return context", async () => {
+ const w = await open({tallerOrder:"RO-123"});
+ const all = w.findAll("button").find(button => button.text() === "Show all charges")!;
+ await all.trigger("click"); await flushPromises();
+ expect(m.call.mock.calls.at(-1)![0].args).toEqual({pos_profile:"COUNTER"});
+ expect(w.props("tallerOrder")).toBe("RO-123");
+ expect(m.load).not.toHaveBeenCalled();
 });

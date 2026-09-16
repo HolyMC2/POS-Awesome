@@ -172,6 +172,9 @@ export type Events = {
 	 * `RecargasDestination.vue`.
 	 */
 	"recharge:submit": void;
+	/** Activate the selected draft through the invoice ledger. */
+	"ledger:primary": void;
+	"custody:primary": void;
 	open_mpesa_payments: { company: string; mode_of_payment: string; customer: string };
 	set_mpesa_payment: Record<string, any>;
 	open_ClosingDialog: Record<string, any>;

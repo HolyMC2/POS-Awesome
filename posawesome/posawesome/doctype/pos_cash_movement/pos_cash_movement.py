@@ -28,9 +28,13 @@ class POSCashMovement(Document):
 
     def before_submit(self):
         self._assert_terminal_write()
+        if self.movement_type in {"Cash In", "Deposit"} and frappe.db.table_exists("POS Cash Safe") and frappe.db.exists("POS Cash Safe", {"pos_profile":self.pos_profile,"enabled":1}) and not getattr(frappe.local,"cash_custody_posting",False):
+            frappe.throw(_("Use Cash custody for this safe transfer."))
 
     def before_cancel(self):
         self._assert_terminal_write()
+        if frappe.db.table_exists("POS Cash Bag") and (frappe.db.exists("POS Cash Bag", {"cash_movement":self.name}) or frappe.db.exists("POS Cash Bag", {"receipt_movement":self.name})):
+            frappe.throw(_("This movement has cash custody evidence. Return the cash through a new counted bag transfer; do not cancel its history."))
 
     def on_submit(self):
         # Create the backing Journal Entry inside the submit transaction so a

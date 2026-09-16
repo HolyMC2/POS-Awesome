@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { shallowMount } from "@vue/test-utils";
 
+import { useUIStore } from "../src/posapp/stores/uiStore";
 import NavbarMenu from "../src/posapp/components/navbar/NavbarMenu.vue";
 import { useEmployeeStore } from "../src/posapp/stores/employeeStore";
 
@@ -87,6 +88,35 @@ describe("NavbarMenu action surfaces", () => {
 				},
 			},
 		});
+
+ it("waits for the register and shift, then opens only the requested Taller queue once", async () => {
+  window.history.replaceState({}, "", "/posapp?taller_order=RO-123");
+  const ui = useUIStore();
+  const wrapper = mountMenu();
+  await flushPromises();
+  expect((wrapper.vm as any).showChargeRequestsDialog).toBe(false);
+  ui.posProfile = {name:"Main POS",posa_use_charge_requests:1} as any;
+  await flushPromises();
+  expect((wrapper.vm as any).showChargeRequestsDialog).toBe(false);
+  ui.posOpeningShift = {name:"SHIFT"};
+  await flushPromises();
+  const dialog = wrapper.findComponent({name:"ChargeRequestsDialog"});
+  expect(dialog.props("modelValue")).toBe(true);
+  expect(dialog.props("tallerOrder")).toBe("RO-123");
+  expect(wrapper.get('[data-testid="return-to-taller"]').attributes("href")).toBe("/taller/orders/RO-123?tab=cobro");
+  (wrapper.vm as any).showChargeRequestsDialog = false;
+  ui.posOpeningShift = {name:"SHIFT-2"}; await flushPromises();
+  expect(dialog.props("modelValue")).toBe(false);
+  wrapper.unmount(); window.history.replaceState({}, "", "/");
+ });
+ it("explains an unsupported register without opening a charge dialog", async () => {
+  window.history.replaceState({}, "", "/posapp?taller_order=RO-123");
+  const wrapper = mountMenu(); await flushPromises();
+  expect((wrapper.vm as any).externalDocumentCheckout).toBe(false);
+  expect((wrapper.vm as any).tallerContext.order).toBe("RO-123");
+  expect((wrapper.vm as any).showChargeRequestsDialog).toBe(false);
+  wrapper.unmount(); window.history.replaceState({}, "", "/");
+ });
 
 	it("keeps cashier actions in quick actions and moves offline data tools out of the menu", async () => {
 		const employeeStore = useEmployeeStore();

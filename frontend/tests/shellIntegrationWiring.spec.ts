@@ -24,6 +24,22 @@ const shell = () =>
 	);
 
 describe("the shell mounts what wave 1 built", () => {
+	it("starts a newly created shift on Sale and clears the previous destination URL", () => {
+		const handler = shell().match(/handleRegisterPosData\(data\) \{([\s\S]*?)\n\t\t\},/)?.[1] || "";
+		expect(handler).toContain("this.uiStore.setRegisterData(data)");
+		expect(handler).toContain('this.onBandPrimary("sale.return")');
+		expect(handler).toContain('this.$router.replace(data.cash_custody_enabled ? "/cash-custody" : "/pos")');
+	});
+	it("routes the notification to the closing destination and hides the sale band there", () => {
+		const handler = shell().match(/const closeStaleShiftNow = \(\) => \{([\s\S]*?)\n\t\t\};/)?.[1];
+		expect(handler).toContain('destinationRouting.activate("closing", "shortcut")');
+		expect(handler).not.toContain("get_closing_data");
+		expect(shell()).toContain('v-show="railVisible && hostedDestinationId !== \'closing\'"');
+		const layout = readFileSync(fileURLToPath(new URL("../src/posapp/layouts/DefaultLayout.vue", import.meta.url)), "utf8");
+		expect(layout).not.toContain("<ClosingDialog");
+		expect(layout).toContain('router.push("/closing")');
+	});
+
 	it.each([
 		["RegisterRail", "./rail/RegisterRail.vue"],
 		["CatalogDrawer", "./drawer/CatalogDrawer.vue"],

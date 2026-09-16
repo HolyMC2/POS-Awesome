@@ -29,6 +29,7 @@ vi.mock("../src/posapp/services/qzTray", () => ({
 	printDocumentViaQz: vi.fn(),
 }));
 
+import * as documentSources from "../src/posapp/utils/documentSources";
 import InvoiceManagement from "../src/posapp/components/pos/flows/InvoiceManagement.vue";
 
 describe("InvoiceManagement supervisor scope", () => {
@@ -284,5 +285,32 @@ describe("InvoiceManagement supervisor scope", () => {
 		expect(context.initializeSupervisorProfileScope).toHaveBeenCalledTimes(1);
 		expect(context.loadSupervisorPosProfiles).toHaveBeenCalledTimes(1);
 		expect(context.refreshAll).toHaveBeenCalledTimes(1);
+	});
+});
+
+
+describe("draft requests keep their source when responses arrive out of order", () => {
+	it("does not replace order rows with a late invoice response", async () => {
+		let finishInvoice!: (records: any[]) => void;
+		let finishOrder!: (records: any[]) => void;
+		vi.spyOn(documentSources, "fetchDocumentSourceRecords")
+			.mockImplementationOnce(() => new Promise((resolve) => { finishInvoice = resolve; }))
+			.mockImplementationOnce(() => new Promise((resolve) => { finishOrder = resolve; }));
+		const context: any = {
+			posProfile: { name: "Doco Ventas" }, currentDraftSource: "invoice",
+			currentInvoiceDoctype: "Sales Invoice", draftRecordsBySource: {},
+			listRequests: {}, loading: false, isSupervisorScope: () => false,
+			uiStore: { setInvoiceManagementDraftSource: vi.fn() }, toastStore: { show: vi.fn() },
+		};
+		const first = (InvoiceManagement as any).methods.loadDrafts.call(context);
+		context.currentDraftSource = "order";
+		const second = (InvoiceManagement as any).methods.loadDrafts.call(context);
+		finishOrder([{ name: "ORDER-1" }]);
+		await second;
+		finishInvoice([{ name: "INVOICE-1" }]);
+		await first;
+		expect(context.draftRecordsBySource.order).toEqual([{ name: "ORDER-1" }]);
+		expect(context.uiStore.setInvoiceManagementDraftSource).toHaveBeenLastCalledWith("order");
+		expect(context.loading).toBe(false);
 	});
 });

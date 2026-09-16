@@ -9,7 +9,7 @@
 				data-testid="denomination-decrement"
 				:aria-label="decrementLabel"
 				:disabled="count <= 0"
-				@click="emit('update:count', count - 1)"
+				@click="step(-1)"
 			>
 				−
 			</button>
@@ -25,6 +25,7 @@
 				autocomplete="off"
 				:aria-label="countLabel"
 				:value="count"
+				:aria-invalid="invalid ? 'true' : 'false'"
 				@input="onInput"
 			/>
 			<button
@@ -32,7 +33,7 @@
 				class="denom-row__step"
 				data-testid="denomination-increment"
 				:aria-label="incrementLabel"
-				@click="emit('update:count', count + 1)"
+				@click="step(1)"
 			>
 				+
 			</button>
@@ -45,6 +46,7 @@
 		>
 			{{ subtotalLabel }}
 		</span>
+		<small v-if="invalid" class="denom-row__error" role="alert">{{ invalidLabel }}</small>
 	</div>
 </template>
 
@@ -61,7 +63,14 @@
  * Labels arrive as props rather than being translated here so the whole card
  * carries one `__` shim instead of three.
  */
-defineProps<{
+import { computed, ref } from "vue";
+const invalid = ref(false);
+const invalidLabel = computed(
+	() =>
+		(window as any).__?.("Enter a whole number of notes or coins.") ||
+		"Enter a whole number of notes or coins.",
+);
+const props = defineProps<{
 	/** Face value in minor units — the row's identity for tests and the parent. */
 	faceMinor: number;
 	faceLabel: string;
@@ -74,21 +83,36 @@ defineProps<{
 
 const emit = defineEmits<{ (_event: "update:count", _count: number): void }>();
 
+function step(delta: number) {
+	const next = props.count + delta;
+	if (!Number.isSafeInteger(next) || next < 0) return;
+	invalid.value = false;
+	emit("update:count", next);
+}
+
 const onInput = (event: Event) => {
 	const target = event.target as HTMLInputElement;
-	// Strip rather than reject: a barcode gun or a fat finger puts a stray
-	// character in the box, and refusing the whole entry loses the digits the
-	// cashier did mean.
-	const digits = target.value.replace(/\D/g, "");
-	const next = digits ? Number(digits) : 0;
-	// `:value`-bound, so a rejected character would sit on screen until the next
-	// reactive write. Push the accepted value back.
+	// Never turn 2.5 notes into 25, or -1 into 1: preserve the last valid count.
+	const raw = target.value;
+	const next = raw ? Number(raw) : 0;
+	if (!/^\d*$/.test(raw) || !Number.isSafeInteger(next)) {
+		invalid.value = true;
+		target.value = String(props.count);
+		return;
+	}
+	invalid.value = false;
 	target.value = String(next);
 	emit("update:count", next);
 };
 </script>
 
 <style scoped>
+.denom-row__error {
+	grid-column: 1 / -1;
+	color: var(--pos-error, #b42318);
+	font-size: 12px;
+	padding-bottom: 4px;
+}
 .denom-row {
 	display: grid;
 	grid-template-columns: 58px 1fr 84px;

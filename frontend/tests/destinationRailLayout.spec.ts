@@ -150,26 +150,9 @@ describe("Gasto's geometry is its own, not a utility that may not exist", () => 
 });
 
 describe("the corte, hosted beside the rail", () => {
-	it("still refuses to draw a second band when a shell owns the lane", () => {
-		const corte = read(CORTE);
-		expect(corte).toContain("const bandOwnsAction = computed(() => !destinationSurface);");
-		// !movilCorte joined the guard in movil round 3: on phones MovilCorte
-		// carries its own primary inside the dialog, and the band stands down
-		// exactly as it does when a shell owns the lane.
-		expect(corte).toContain(
-			'<div v-if="!movilCorte && bandOwnsAction && bandState" class="closing-band">',
-		);
-	});
-
-	it("keeps the DIFFERENCE on screen when the band is not its to draw", () => {
-		// It is the number the whole screen exists to produce, and the artboard
-		// prints it beside «Debe haber» and «Contado». A summary line, not a
-		// band: no accent, no second primary — Submit keeps the one accent.
-		const corte = read(CORTE);
-		expect(corte).toContain('data-testid="closing-difference"');
-		expect(corte).toContain('data-money-role="difference"');
-		expect(corte).toContain("__(bandState.labelKey)");
-		expect(corte).not.toMatch(/closing-difference[\s\S]{0,400}<ActionBand/);
+	it("owns its closing band while the shell hides the sale band", () => {
+		expect(read(CORTE)).toContain('<div v-if="bandState" class="closing-band">');
+		expect(read("../src/posapp/components/pos/shell/Pos.vue")).toContain('v-show="railVisible && hostedDestinationId !== \'closing\'"');
 	});
 
 	it("removes its OWN listener and not everybody's", () => {
@@ -183,10 +166,8 @@ describe("the corte, hosted beside the rail", () => {
 		expect(corte).not.toContain('eventBus.off("open_ClosingDialog");');
 	});
 
-	it("stands the floating copy down while the shell is showing the corte", () => {
-		const corte = read(CORTE);
-		expect(corte).toContain("const hostedCorteCount = ref(0)");
-		expect(corte).toContain("if (!isHosted && hostedCorteCount.value > 0)");
+	it("has no competing floating copy in the layout", () => {
+		expect(read("../src/posapp/layouts/DefaultLayout.vue")).not.toContain("<ClosingDialog");
 	});
 
 	it("relays its band state to the shell boundary instead of dead-ending", () => {

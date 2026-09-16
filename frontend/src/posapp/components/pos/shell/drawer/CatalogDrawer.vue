@@ -112,6 +112,8 @@
 					type="button"
 					class="catalog-drawer__close"
 					:aria-label="__('Close catalogue')"
+					:title="__('Close catalogue') + ' (Esc)'"
+					aria-keyshortcuts="Escape"
 					data-testid="catalog-drawer-close"
 					@click="requestClose"
 				>
@@ -183,17 +185,6 @@
 				<slot></slot>
 			</div>
 
-			<!--
-				Always rendered: the "Esc closes" affordance is a promise the
-				artboard footer makes on every state of this panel.
-			-->
-			<footer v-show="!hideChrome" class="catalog-drawer__footer">
-				<span v-if="footerHint" class="catalog-drawer__hint">{{ footerHint }}</span>
-				<div class="catalog-drawer__spacer"></div>
-				<span class="catalog-drawer__chip catalog-drawer__chip--muted mono">{{
-					__("Esc closes")
-				}}</span>
-			</footer>
 		</aside>
 	</div>
 </template>
@@ -233,7 +224,6 @@ const props = withDefaults(
 		 * teleported search header live inside it), so only the chrome goes.
 		 */
 		hideChrome?: boolean;
-		footerHint?: string | null;
 		/**
 		 * What the slotted selector is drawing. Anchored only: a card grid earns
 		 * a wider column, a list does not. Defaults to `list` so a caller that
@@ -250,7 +240,6 @@ const props = withDefaults(
 		showsScrim: false,
 		transitionDurationMs: 0,
 		canAnchor: false,
-		footerHint: null,
 		itemsView: "list",
 	},
 );
@@ -738,31 +727,6 @@ defineExpose({ focusableChildren });
 	overflow: hidden;
 }
 
-.catalog-drawer__footer {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 9px 14px;
-	border-top: 1px solid var(--reg-divider-soft, #f2f4f7);
-	background: var(--reg-surface-sunken, #fcfdfe);
-	flex: none;
-}
-
-.catalog-drawer__hint {
-	font-size: 11px;
-	color: var(--reg-text-muted, #9aa2ae);
-}
-
-/*
- * The footer promises "Esc cierra", and inline is the one presentation that
- * cannot keep it: a phone has no Esc key, and the row it costs comes straight
- * off the grid. Hidden rather than removed from the template — the panel is
- * the same panel in all three presentations, and only this promise changes.
- */
-.catalog-drawer-layer--inline .catalog-drawer__footer {
-	display: none;
-}
-
 .mono {
 	font-family: "Roboto Mono", ui-monospace, monospace;
 	font-variant-numeric: tabular-nums;
@@ -796,9 +760,6 @@ defineExpose({ focusableChildren });
 		height: 40px;
 	}
 
-	.catalog-drawer__footer {
-		padding: 2px 14px;
-	}
 
 	.catalog-drawer :deep(.items-selector-shell .dynamic-padding) {
 		padding: 4px;

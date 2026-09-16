@@ -24,47 +24,15 @@
 				sized by the card's flex chain, so Vuetify's own `overflow-y`
 				on this element simply never has anything to scroll.
 			-->
-			<!-- The phone's corte (MovilCorte, artboard MovilCorte.dc.html):
-			     chrome inside this dialog. The dialog keeps fetch, figures and
-			     submitDialog; the screen counts, asks for the note the
-			     artboard's business rule demands, and hands back one intent. -->
-			<v-card-text v-if="movilCorte" class="pa-0 white-background closing-body">
-				<MovilCorte
-					:register-label="dialog_data.pos_profile || ''"
-					:cashier-name="dialog_data.user || ''"
-					:period-start="dialog_data.period_start_date || ''"
-					:period-end="dialog_data.period_end_date || ''"
-					:shift-open="true"
-					:currency="drawerCurrency"
-					:expected="expectedCash"
-					:breakdown="expectedBreakdown"
-					:initial-counted="initialCountedCash"
-					:takings="Number(dialog_data.grand_total) || 0"
-					:tickets-uploaded="shiftTicketCount ?? 0"
-					:open-drafts="shiftOpenDrafts ?? 0"
-					:note="closingNote"
-					:format-currency="formatCurrencyWithSymbolForDrawer"
-					@update:counted="onMovilCounted"
-					@update:note="onMovilNote"
-					@close-shift="onMovilCloseShift"
-				/>
-			</v-card-text>
-
-			<v-card-text v-else class="pa-0 white-background closing-body">
-				<div class="closing-layout" :class="{ 'closing-layout--no-count': !cashRow }">
-					<!-- The shift's headline figures stay ON SCREEN: they are what
-					     the count is being checked against. -->
-					<ShiftInsightTiles
-						class="closing-layout__tiles"
-						:primary-insights="primaryInsights"
-						:secondary-insights="secondaryInsights"
-					/>
-
+			<v-card-text class="pa-0 white-background closing-body">
+				<ClosingReview v-if="!dialog_data.pos_opening_shift" :prepared="false" @retry="retryPreparation" @drafts="reviewDrafts" @sync="syncSavedWork" />
+				<div v-if="dialog_data.pos_opening_shift" class="closing-layout" :class="{ 'closing-layout--no-count': !cashRow, 'closing-layout--custody': custodyEnabled }">
 					<!-- Counting the drawer is the ACT this screen exists for, so
 					     it holds its own column and never scrolls away from the
 					     difference band below it. -->
 					<div v-if="cashRow" class="closing-layout__count">
-						<DrawerCount
+						<CashClosingAllocation :profile="dialog_data.pos_profile" :opening="dialog_data.pos_opening_shift" :currency="drawerCurrency" :expected="showsExpected ? expectedCash : undefined" @enabled="custodyEnabled=$event" @prepared="dialog_data.cash_custody=$event" @counted="onDrawerCounted" @note="closingNote=$event" />
+						<DrawerCount v-if="!custodyEnabled"
 							:currency="drawerCurrency"
 							:expected="expectedCash"
 							:breakdown="expectedBreakdown"
@@ -82,6 +50,7 @@
 					     `v-show`, so an inspection in progress survives the
 					     fold. -->
 					<div class="closing-layout__detail">
+						<ClosingReview :prepared="Boolean(dialog_data.pos_opening_shift)" @retry="retryPreparation" @drafts="reviewDrafts" @sync="syncSavedWork" />
 						<PaymentReconciliation
 							:payments="dialog_data.payment_reconciliation"
 							:headers="headers"
@@ -90,6 +59,7 @@
 							:format-currency="formatCurrency"
 							:format-float="formatFloat"
 						/>
+						<DifferenceNote v-if="movilCorte && showsExpected && !custodyEnabled" v-model="closingNote" :gate="noteGate" :tolerance-label="formatCurrencyWithSymbolForDrawer(noteGate.tolerance)" />
 						<button
 							type="button"
 							class="closing-overview-toggle"
@@ -124,22 +94,14 @@
 				</div>
 			</v-card-text>
 
-			<v-divider v-if="!movilCorte"></v-divider>
+			<v-divider></v-divider>
+			<p v-if="submitHint" class="closing-submit-hint" role="status" data-testid="closing-submit-hint">{{ submitHint }}</p>
 
-			<!-- One number, one action (§17.7 invariant 1). On the corte that
-			     number is the DIFFERENCE, and `resolveBandState` decides it —
-			     this screen feeds it `expected` and `counted` and computes no
-			     competing total of its own.
-
-			     Mounted only when nothing else owns the lane. At `/closing` the
-			     dialog IS the screen and there is no shell band; hosted as a rail
-			     destination, `DESTINATION_SURFACE` is injected and the shell's
-			     band is already on screen, so a second one here would be two
-			     numbers and two accents. -->
-			<div v-if="!movilCorte && bandOwnsAction && bandState" class="closing-band">
+			<!-- The closing screen owns its footer; the shell hides the sale band. -->
+			<div v-if="bandState" class="closing-band">
 				<ActionBand
 					:state="bandState"
-					:format-currency="formatCurrency"
+					:format-currency="formatCurrencyWithSymbolForDrawer"
 					@primary="submitDialog"
 				>
 					<template #breakdown>
@@ -156,58 +118,12 @@
 							}}</span>
 						</div>
 					</template>
+					<template #actions><button type="button" class="closing-back" :disabled="closingFlow.submitting" @click="dismissCorte">{{ __("Back") }}</button></template>
 				</ActionBand>
 			</div>
 
-			<!-- Hosted as a rail destination the shell already owns the band
-			     lane, so the corte does not draw a second one — but the
-			     DIFFERENCE is the number this whole screen exists to produce,
-			     and the artboard prints it beside «Debe haber» and «Contado».
-			     So it stays, as a summary line rather than a band: no accent,
-			     no second primary, same strings `resolveBandState` already
-			     names. -->
-			<div
-				v-else-if="!movilCorte && bandState"
-				class="closing-difference"
-				:class="`closing-difference--${bandState.tone}`"
-				data-testid="closing-difference"
-			>
-				<div class="closing-difference__row">
-					<span>{{ __("Expected in drawer") }}</span>
-					<span class="reg-mono" data-money-role="expected">{{
-						formatCurrencyWithSymbolForDrawer(expectedCash)
-					}}</span>
-				</div>
-				<div class="closing-difference__row">
-					<span>{{ __("Counted") }}</span>
-					<span class="reg-mono" data-money-role="counted">{{
-						formatCurrencyWithSymbolForDrawer(countedCash)
-					}}</span>
-				</div>
-				<div class="closing-difference__row closing-difference__row--total">
-					<span>{{ __(bandState.labelKey) }}</span>
-					<span
-						class="reg-mono"
-						data-money-role="difference"
-						data-testid="closing-difference-value"
-						>{{ formatCurrencyWithSymbolForDrawer(bandState.value) }}</span
-					>
-				</div>
-			</div>
-
-			<v-card-actions v-if="!movilCorte" class="dialog-actions-container">
+			<v-card-actions v-if="!bandState" class="dialog-actions-container">
 				<v-spacer></v-spacer>
-				<!-- The corte is a destination now, not a dialog over the sale, so
-				     "the primary action of this screen" is answerable: submitting
-				     the close. It carries the one accent (§17.7 invariant 2).
-				     Closing is a dismissal, not a destructive act — it was red for
-				     emphasis, which is the colour spending this invariant exists
-				     to stop, so it drops to neutral text.
-
-				     Green mattered most here. This screen's own band tints amber
-				     when the count differs from expected, and a green SUBMIT
-				     beside an amber difference taught the cashier that green is a
-				     button colour rather than a signal. -->
 				<v-btn
 					variant="text"
 					@click="dismissCorte"
@@ -215,15 +131,13 @@
 					size="large"
 				>
 					<v-icon start>mdi-close-circle-outline</v-icon>
-					<span>{{ __("Close") }}</span>
+					<span>{{ __("Back") }}</span>
 				</v-btn>
-				<!-- Yielded when the band is up, the same way InvoiceSummary
-				     yields to it on the sale screen: CERRAR TURNO and Submit are
-				     the same act, and two of them would be two accents on one
-				     screen. Same handler either way — the submission path does
-				     not fork. -->
+				<!-- Cashless and blind-count profiles still need an explicit close action. -->
 				<v-btn
-					v-if="!bandOwnsAction"
+					v-if="!bandState"
+					:disabled="!canSubmit"
+					:loading="closingFlow.submitting"
 					color="primary"
 					variant="flat"
 					data-testid="closing-submit"
@@ -233,7 +147,7 @@
 					elevation="2"
 				>
 					<v-icon start>mdi-check-circle-outline</v-icon>
-					<span>{{ __("Submit") }}</span>
+					<span>{{ __("Close shift") }}</span>
 				</v-btn>
 			</v-card-actions>
 		</v-card>
@@ -251,46 +165,36 @@ import { useClosingSummary } from "../../../composables/pos/closing/useClosingSu
 import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import { resolveBandState } from "../../../composables/pos/shell/bandState";
 
+import { useClosingFlowStore } from "../../../stores/closingFlowStore";
+import ClosingReview from "../closing/ClosingReview.vue";
 import ClosingHeader from "../closing/ClosingHeader.vue";
-import ShiftInsightTiles from "../closing/ShiftInsightTiles.vue";
 import ShiftOverview from "../closing/ShiftOverview.vue";
 import PaymentReconciliation from "../closing/PaymentReconciliation.vue";
+import CashClosingAllocation from "../custody/CashClosingAllocation.vue";
 import DrawerCount from "../closing/DrawerCount.vue";
-import MovilCorte from "../mobile/closing/MovilCorte.vue";
+import DifferenceNote from "../mobile/closing/DifferenceNote.vue";
+import { evaluateNoteGate } from "../mobile/closing/differenceNote";
+import { denominationsFor } from "../closing/denominations";
 import ActionBand from "./band/ActionBand.vue";
 import { useResponsive } from "../../../composables/core/useResponsive";
 import { DESTINATION_SURFACE } from "./destinations/surfaceContext";
-
-/**
- * How many copies of the corte are currently on screen AS A DESTINATION.
- *
- * There is always one `<ClosingDialog />` in `DefaultLayout`, because the
- * navbar's «Close shift» has to work from `/reports` and `/payments` too,
- * where there is no rail to host anything. Once the corte is also a rail
- * destination, the shell mounts a second copy inside `DestinationHost` — and
- * both hear the same `open_ClosingDialog` on the same bus, which would put a
- * floating modal on top of the hosted surface.
- *
- * Module scope rather than a store because it is not state anybody outside
- * this component may ask about: it exists for exactly one rule, stated once —
- * while the shell is showing the corte, the floating copy stands down.
- */
-const hostedCorteCount = ref(0);
 
 export default {
 	name: "ClosingDialog",
 	components: {
 		ClosingHeader,
-		ShiftInsightTiles,
+		ClosingReview,
 		ShiftOverview,
 		PaymentReconciliation,
 		DrawerCount,
-		MovilCorte,
+		CashClosingAllocation,
+		DifferenceNote,
 		ActionBand,
 	},
 	emits: ["band", "close"],
 	setup(_props, { emit }) {
 		const uiStore = useUIStore();
+		const closingFlow = useClosingFlowStore();
 		const eventBus = inject("eventBus");
 		const __ = window.__ || ((t) => t);
 
@@ -319,7 +223,7 @@ export default {
 			pos_profile,
 			closeDialog,
 			fetchOverview,
-			submitDialog,
+			submitDialog: submitClosingDraft,
 		} = useClosingShift(eventBus);
 
 		// Formatters
@@ -358,13 +262,13 @@ export default {
 				sortable: true,
 			},
 			{
-				title: __("Opening Amount"),
+				title: __("Opening"),
 				align: "end",
 				sortable: true,
 				value: "opening_amount",
 			},
 			{
-				title: __("Closing Amount"),
+				title: __("Counted"),
 				value: "closing_amount",
 				align: "end",
 				sortable: true,
@@ -372,13 +276,13 @@ export default {
 		];
 		const extendedHeaders = [
 			{
-				title: __("Expected Amount (In Company Currency)"),
+				title: __("Expected"),
 				value: "expected_amount",
 				align: "end",
 				sortable: false,
 			},
 			{
-				title: __("Difference (In Company Currency)"),
+				title: __("Difference"),
 				value: "difference",
 				align: "end",
 				sortable: false,
@@ -419,7 +323,8 @@ export default {
 		);
 
 		const expectedCash = computed(() => Number(cashRow.value?.expected_amount) || 0);
-		const countedCash = computed(() => Number(cashRow.value?.closing_amount) || 0);
+		const custodyEnabled = ref(false);
+	const countedCash = computed(() => Number(cashRow.value?.closing_amount) || 0);
 
 		/**
 		 * A figure the doc already carried. Only ever read at mount — after that
@@ -473,14 +378,53 @@ export default {
 			reconciliationRows.value.every((row) => !isNaN(parseFloat(row?.closing_amount))),
 		);
 
+		const responsive = useResponsive();
+		const movilCorte = computed(() => responsive.isCompact.value);
+		const closingNote = ref(dialog_data.value.posa_difference_note || "");
+		const noteGate = computed(() => evaluateNoteGate({
+			difference: countedCash.value - expectedCash.value,
+			takings: Number(dialog_data.value.grand_total) || 0,
+			note: closingNote.value,
+			minorPerMajor: denominationsFor(drawerCurrency.value).minorPerMajor,
+		}));
+		watch(closingNote, (note) => { dialog_data.value.posa_difference_note = note; });
+		const canSubmit = computed(() => Boolean(dialog_data.value.pos_opening_shift) && (!custodyEnabled.value || Boolean(dialog_data.value.cash_custody)) && reconciliationIsValid.value &&
+			closingFlow.terminalReady && !closingFlow.preparing && !closingFlow.submitting && !closingFlow.completed &&
+			!closingFlow.reviewBlocked && (!closingFlow.reviewRequired || closingFlow.reviewAccepted) &&
+			(!movilCorte.value || !showsExpected.value || noteGate.value.canClose));
+
+		const submitHint = computed(() => {
+			if (closingFlow.submitting) return __("Closing shift…");
+			if (closingFlow.preparing) return __("Loading shift totals and checking saved work…");
+			if (!dialog_data.value.pos_opening_shift) return __("Load the closing details before continuing.");
+			if (!closingFlow.terminalReady) return __("Complete the browser review above before closing.");
+			if (closingFlow.reviewBlocked) return __("Finish or delete the listed drafts, then reload closing details.");
+			if (closingFlow.reviewRequired && !closingFlow.reviewAccepted) return __("Confirm the unfinished-sales review above.");
+			if (custodyEnabled.value && !dialog_data.value.cash_custody) return __("Save the current count and allocate its exact total before closing.");
+			if (!reconciliationIsValid.value) return __("Enter a closing amount for every payment method. Use 0 when there were no payments.");
+			if (movilCorte.value && showsExpected.value && !noteGate.value.canClose) return __("Add a note explaining the cash difference before closing.");
+			return "";
+		});
+
+		const submitDialog = () => {
+			if (!canSubmit.value) { closingFlow.error = submitHint.value; return false; }
+			if (movilCorte.value && showsExpected.value && !noteGate.value.canClose) {
+				closingFlow.error = __("Add a note explaining the cash difference before closing.");
+				return false;
+			}
+			return submitClosingDraft();
+		};
+
 		const bandState = computed(() => {
 			if (!cashRow.value || !showsExpected.value) return null;
-			return resolveBandState({
+			const state = resolveBandState({
 				kind: "closing",
 				expected: expectedCash.value,
 				counted: countedCash.value,
-				canClose: reconciliationIsValid.value,
+				canClose: canSubmit.value,
 			});
+			state.primaryAction.labelKey = closingFlow.submitting ? "Closing shift…" : "Close shift";
+			return state;
 		});
 
 		// Published upward whether or not we render a band ourselves, so a shell
@@ -490,7 +434,6 @@ export default {
 		// Injected only when DestinationHost is rendering us; absent for the
 		// floating copy `DefaultLayout` keeps for the routes with no rail.
 		const destinationSurface = inject(DESTINATION_SURFACE, null);
-		const bandOwnsAction = computed(() => !destinationSurface);
 		const isHosted = Boolean(destinationSurface);
 
 		/**
@@ -501,6 +444,7 @@ export default {
 		 * never a hardcoded sale.
 		 */
 		const dismissCorte = () => {
+			if (closingFlow.submitting) return;
 			closeDialog();
 			emit("close");
 		};
@@ -519,63 +463,24 @@ export default {
 			overview.value ? Number(overview.value.draft_invoices?.count) || 0 : null,
 		);
 
-		// ---- MovilCorte (round 3 of the mobile wiring) -------------------
-		// On phones the corte renders the movil screen INSIDE this dialog:
-		// the dialog keeps owning fetch, figures and submitDialog — the
-		// screen is chrome, exactly as its own header promises. The note is
-		// the artboard's «Nota del faltante» business rule; it rides the
-		// closing doc's posa_difference_note straight through
-		// submit_closing_shift's get_doc(payload).
-		const responsive = useResponsive();
-		// The compact band (< 1100), matching the shell's movil boundary —
-		// a portrait tablet gets the movil corte, not the desk band.
-		const movilCorte = computed(() => responsive.isCompact.value);
-		const closingNote = ref("");
-		watch(closingDialog, (open) => {
-			if (open) {
-				closingNote.value = "";
-			}
-		});
-		const onMovilCounted = (amount) => onDrawerCounted(amount);
-		const onMovilNote = (note) => {
-			closingNote.value = String(note ?? "");
-		};
-		const onMovilCloseShift = (payload = {}) => {
-			onDrawerCounted(Number(payload.counted) || 0);
-			closingNote.value = String(payload.note ?? closingNote.value ?? "");
-			if (dialog_data.value) {
-				dialog_data.value.posa_difference_note = closingNote.value;
-			}
-			submitDialog();
-		};
+		const syncSavedWork = () => eventBus?.emit("run_menu_action", { id: "sync-offline-sales" });
+		const retryPreparation = () => eventBus?.emit("open_shift_details");
+		const reviewDrafts = () => eventBus?.emit("open_destination", "drafts");
+		watch(() => [closingFlow.completed, closingFlow.submitting], ([done, busy]) => { if (done && !busy) dismissCorte(); });
 
 		const handleKeydown = (event) => {
 			if (event.key === "Escape" && closingDialog.value) {
-				closeDialog();
+				dismissCorte();
 			}
 		};
 
 		const handleOpenClosingDialog = (data) => {
-			// The floating copy stands down while the shell is showing the
-			// corte as a destination — one act must not open two screens.
-			if (!isHosted && hostedCorteCount.value > 0) {
-				return;
-			}
 			closingDialog.value = true;
 			dialog_data.value = data;
 			fetchOverview(data.pos_opening_shift, pos_profile.value?.currency);
 		};
 
-		// A floating copy that was ALREADY up when the rail opened the corte
-		// steps aside rather than sitting over it.
-		watch(hostedCorteCount, (hosted) => {
-			if (hosted > 0 && !isHosted && closingDialog.value) {
-				closeDialog();
-			}
-		});
-
 		onMounted(() => {
-			headers.value = [...baseHeaders];
 			window.addEventListener("keydown", handleKeydown);
 
 			if (eventBus) {
@@ -585,14 +490,14 @@ export default {
 			}
 
 			if (isHosted) {
-				hostedCorteCount.value += 1;
 				// The corte cannot be drawn from nothing: the closing shift is
 				// PREPARED server-side (`make_closing_shift_from_opening`,
 				// which also submits printed drafts and can refuse). The shell
 				// already answers `open_shift_details` with exactly that call,
 				// so the destination asks for it instead of forking the flow —
 				// the rail and the navbar close the same shift the same way.
-				if (eventBus && !closingDialog.value) {
+				if (eventBus) {
+					closingDialog.value = true;
 					eventBus.emit("open_shift_details");
 				}
 			}
@@ -600,9 +505,6 @@ export default {
 
 		onBeforeUnmount(() => {
 			window.removeEventListener("keydown", handleKeydown);
-			if (isHosted) {
-				hostedCorteCount.value = Math.max(0, hostedCorteCount.value - 1);
-			}
 			if (eventBus) {
 				// Always pass the handler: a bare `off("open_ClosingDialog")`
 				// removes EVERY listener for the event, so the hosted copy
@@ -620,8 +522,7 @@ export default {
 					if (!pos_profile.value.hide_expected_amount) {
 						headers.value = [...baseHeaders, ...extendedHeaders];
 					} else {
-						headers.value = [...baseHeaders];
-					}
+								}
 				}
 			},
 			{ deep: true, immediate: true },
@@ -629,6 +530,12 @@ export default {
 
 		return {
 			uiStore,
+			closingFlow,
+			canSubmit,
+			submitHint,
+			retryPreparation,
+			syncSavedWork,
+			reviewDrafts,
 			eventBus,
 			dialogProps,
 			closingDialog,
@@ -651,17 +558,16 @@ export default {
 			drawerCurrency,
 			expectedCash,
 			countedCash,
+			custodyEnabled,
 			initialCountedCash,
 			expectedBreakdown,
 			onDrawerCounted,
 			formatCurrencyWithSymbolForDrawer,
 			bandState,
-			bandOwnsAction,
 			movilCorte,
 			closingNote,
-			onMovilCounted,
-			onMovilNote,
-			onMovilCloseShift,
+			noteGate,
+			showsExpected,
 			shiftTicketCount,
 			shiftOpenDrafts,
 			shouldShowCompanyEquivalent: summary.shouldShowCompanyEquivalent,
@@ -677,36 +583,7 @@ export default {
 </script>
 
 <style scoped>
-/* The difference, when the shell owns the band lane. A summary line, not a
- * second band: it carries no accent and no primary action, so §17.7's one
- * accent per screen still lands on the corte's Submit. */
-.closing-difference {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	padding: 10px 16px;
-	font-size: 13px;
-	border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-}
-
-.closing-difference__row {
-	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: 16px;
-}
-
-.closing-difference__row--total {
-	font-weight: 700;
-	font-size: 15px;
-	margin-top: 2px;
-}
-
-/* Amber is STATE here, exactly as in the band: a count that does not match is
- * an exception whether it is short or over. Never emphasis. */
-.closing-difference--warning .closing-difference__row--total {
-	color: rgb(var(--v-theme-warning));
-}
+.closing-submit-hint { margin: 0; padding: 8px 16px 0; font-size: 13px; line-height: 1.4; }
 
 .closing-dialog-card {
 	border-radius: 16px;
@@ -720,9 +597,14 @@ export default {
  * own scroll came to own the whole corte.
  */
 .closing-body {
+	overflow-y: auto;
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
+	/* The corte is 1100px floating and ~1330px full-bleed inside the destination
+	   host, on the same 1440px screen. The columns below therefore answer to the
+	   width THIS body has, never to the window. */
+	container: closing-body / inline-size;
 }
 
 /*
@@ -736,16 +618,15 @@ export default {
  */
 .closing-layout {
 	display: grid;
-	grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+	grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
 	/* `auto auto`, not fr rows with per-column scrollports: three scrollbars
 	 * on one corte was the report (Marco, 08-23). The columns size to their
 	 * content — the count never scrolls, the reconciliation never scrolls —
 	 * and with the overview folded (its default) the whole corte fits with
 	 * NO scrollbar. Open the disclosure and the BODY scrolls: one scroll,
 	 * with the difference band and the actions pinned outside it. */
-	grid-template-rows: auto auto;
+	grid-template-rows: auto;
 	grid-template-areas:
-		"tiles tiles"
 		"count detail";
 	gap: 16px;
 	padding: 16px;
@@ -758,10 +639,43 @@ export default {
  * that from the server's own figures, not from a label — so the column goes
  * with it rather than standing there empty beside the evidence.
  */
+/*
+ * Custody closing, wide: count · bags · payment evidence, three readable
+ * columns across the surface. `CashClosingAllocation` makes the first two out
+ * of the count area — it queries `corte-count` below — so the area is sized to
+ * carry both, and the evidence keeps enough width for the reconciliation's six
+ * columns instead of the empty half-screen the live capture showed.
+ */
+.closing-layout--custody { grid-template-columns: minmax(690px, 1.2fr) minmax(360px, 1fr); }
+
+/* Room enough for the reconciliation's six columns to stand without its own
+   sideways scroll; the count area keeps everything above that. */
+@container closing-body (min-width: 1500px) {
+	.closing-layout--custody { grid-template-columns: minmax(690px, 1fr) minmax(660px, 0.9fr); }
+}
+
+/*
+ * Under ~1280px of body the three columns cannot all be read: 1.2fr of it is
+ * under the 686px the count workspace needs to split, so a two-column corte
+ * would be the tall single count again beside a starved table. The corte
+ * stacks instead — the review that can block the close first, then the count
+ * with its bags side by side across the FULL width, then the payment evidence
+ * — and the body's one scroll carries it. Same shape the phone already uses.
+ */
+@container closing-body (max-width: 1279.98px) {
+	.closing-layout--custody {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.closing-layout--custody .closing-layout__detail { display: contents; }
+	.closing-layout--custody .closing-layout__detail > :not(.closing-review) { order: 2; }
+	.closing-layout--custody .closing-layout__count { order: 1; }
+	.closing-layout--custody :deep(.closing-review) { order: 0; }
+}
 .closing-layout--no-count {
 	grid-template-columns: minmax(0, 1fr);
 	grid-template-areas:
-		"tiles"
 		"detail";
 }
 
@@ -774,6 +688,10 @@ export default {
    you retype. */
 .closing-layout__count {
 	grid-area: count;
+	min-inline-size: 0;
+	/* What the custody workspace measures itself against: the area it was
+	   given, which is not the window and not the card. */
+	container: corte-count / inline-size;
 }
 
 /* Content-sized like the count. Its tall half — the seven overview tables —
@@ -814,13 +732,19 @@ export default {
 	}
 
 	.closing-layout {
+		display: flex;
+		flex-direction: column;
 		grid-template-columns: minmax(0, 1fr);
-		grid-template-rows: auto auto auto;
+		grid-template-rows: auto auto;
 		grid-template-areas:
-			"tiles"
 			"count"
 			"detail";
 	}
+
+	.closing-layout__detail { display: contents; }
+	.closing-layout__detail > :not(.closing-review) { order: 2; }
+	.closing-layout__count { order: 1; }
+	.closing-layout :deep(.closing-review) { order: 0; }
 
 	.closing-layout__count,
 	.closing-layout__detail {
@@ -853,7 +777,7 @@ export default {
    the sale screen's summary grid (59c5fe1ad). */
 .closing-band {
 	flex: none;
-	padding: 12px 24px 0;
+	padding: 12px 16px;
 }
 
 @media (max-width: 599.98px) {
@@ -861,6 +785,11 @@ export default {
 		padding: 8px 10px 0;
 	}
 }
+
+.closing-band :deep(.action-band) { min-height: 100px; }
+.closing-band :deep(.action-band__primary) { min-height: 56px; }
+.closing-back { padding: 10px 16px; min-height: 44px; border: 1px solid currentColor; border-radius: 8px; }
+.closing-back:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 3px; }
 
 .closing-band__row {
 	display: flex;
@@ -887,5 +816,15 @@ export default {
 
 .submit-action-btn {
 	margin-left: 16px;
+}
+
+@media (max-width: 599.98px) {
+	.closing-band :deep(.action-band) { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px; min-height: 0; }
+	.closing-band :deep(.action-band__divider), .closing-band :deep(.action-band__spacer), .closing-band :deep(.action-band__context) { display: none; }
+	.closing-band :deep(.action-band__number) { font-size: 28px; }
+	.closing-band :deep(.action-band__primary) { grid-column: 2; grid-row: 1; min-height: 48px; height: auto; min-width: 110px; padding: 8px 12px; font-size: 16px; }
+	.closing-band :deep(.action-band__breakdown) { grid-column: 1; grid-row: 2; font-size: 11px; }
+	.closing-band :deep(.action-band__actions) { grid-column: 2; grid-row: 2; justify-content: end; }
+	.closing-back { padding: 6px 12px; min-height: 36px; }
 }
 </style>

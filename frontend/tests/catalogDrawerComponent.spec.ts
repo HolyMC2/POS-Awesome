@@ -113,9 +113,10 @@ describe("rendering", () => {
 		wrapper.unmount();
 	});
 
-	it("always promises Esc, because the artboard footer does", () => {
+	it("keeps Escape discoverable on the close button without a footer", () => {
 		const wrapper = mountDrawer();
-		expect(wrapper.find(".catalog-drawer__footer").text()).toContain("Esc");
+		expect(wrapper.find(".catalog-drawer__footer").exists()).toBe(false);
+		expect(wrapper.find('[data-testid="catalog-drawer-close"]').attributes("aria-keyshortcuts")).toBe("Escape");
 		wrapper.unmount();
 	});
 });

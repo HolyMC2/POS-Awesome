@@ -66,6 +66,12 @@ class POSClosingShift(Document):
                 _("Selected POS Opening Shift should be open."),
                 title=_("Invalid Opening Entry"),
             )
+        if frappe.db.table_exists("POS Cash Safe") and frappe.db.exists("POS Cash Safe", {"pos_profile":self.pos_profile,"enabled":1}):
+            if not self.get("cash_count"):
+                frappe.throw(_("A saved cash custody count is required to close this drawer."))
+            evidence = frappe.get_doc("POS Cash Count",self.cash_count)
+            if evidence.opening_shift != self.pos_opening_shift or evidence.state not in {"Final","Exception","Reviewed"}:
+                frappe.throw(_("The drawer count is not finalized for this shift."))
         self._block_on_stranded_drafts()
         self.enforce_server_truth()
         self.update_payment_reconciliation()
@@ -159,10 +165,16 @@ class POSClosingShift(Document):
         opening_entry.pos_closing_shift = self.name
         opening_entry.set_status()
         self.delete_draft_invoices()
-        opening_entry.save()
+        # The closing has already validated ownership, scope and terminal access.
+        # Cashiers need not have generic edit permission on submitted openings.
+        opening_entry.save(ignore_permissions=True)
         # link invoices with this closing shift so ERPNext can block edits
         _set_closing_entry_invoices(self)
         consolidate_closing_shift_invoices(self)
+
+    def before_cancel(self):
+        if self.get("cash_count"):
+            frappe.throw(_("This closing has cash custody transfers. Record corrections through new counted transfers and discrepancy review."))
 
     def on_cancel(self):
         if frappe.db.exists("POS Opening Shift", self.pos_opening_shift):

@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
+import mitt from "mitt";
 
 import InvoiceLedgerHeader from "../src/posapp/components/pos/flows/ledger/InvoiceLedgerHeader.vue";
 import InvoiceLedgerPanel from "../src/posapp/components/pos/flows/ledger/InvoiceLedgerPanel.vue";
@@ -490,5 +491,41 @@ describe("the surface lands where the rail sent it and speaks only in intents", 
 
 		await wrapper.find('[data-testid="ledger-action-return"]').trigger("click");
 		expect(spies.onReturn.mock.calls[0][0]).toMatchObject({ name: "B-1" });
+	});
+});
+
+
+describe("selected draft owns the main register action", () => {
+	it("publishes the selected amount and loads that same draft through the existing action", async () => {
+		const eventBus = mitt();
+		const onBand = vi.fn();
+		const onDraftAction = vi.fn();
+		const draft = row({ name: "DRAFT-1", grand_total: 140, docstatus: 0 });
+		const wrapper = mount(InvoiceLedgerSurface, {
+			props: surfaceProps({
+				destinationId: "drafts", activeTab: "drafts", dateFrom: "", dateTo: "",
+				collections: collections({ drafts: { page: [draft], total: 1, loaded: [draft] } }),
+				draftActionsFor: () => ["invoice_load_draft"],
+				draftActionLabel: () => "Load Draft", onBand, onDraftAction,
+			}),
+			global: { provide: { eventBus } },
+		});
+		await nextTick();
+		await wrapper.find('[data-testid="ledger-row"]').trigger("click");
+		expect(onBand).toHaveBeenLastCalledWith(expect.objectContaining({
+			kind: "selectedDraft", value: 140, primaryEnabled: true,
+			primaryAction: { id: "draft.loadSelected", labelKey: "Load Draft" },
+		}));
+		eventBus.emit("ledger:primary");
+		expect(onDraftAction).toHaveBeenCalledWith({ invoice: draft, action: "invoice_load_draft" });
+		await wrapper.setProps({ actionBusy: true });
+		eventBus.emit("ledger:primary");
+		expect(onDraftAction).toHaveBeenCalledTimes(1);
+		await wrapper.setProps({ actionBusy: false, loadError: "Cannot load drafts" });
+		eventBus.emit("ledger:primary");
+		expect(onDraftAction).toHaveBeenCalledTimes(1);
+		wrapper.unmount();
+		eventBus.emit("ledger:primary");
+		expect(onDraftAction).toHaveBeenCalledTimes(1);
 	});
 });

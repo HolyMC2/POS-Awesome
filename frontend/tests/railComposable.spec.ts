@@ -22,19 +22,29 @@ const ALL_GATES: RailGateMap = {
 function makeContext(overrides: Partial<Record<string, unknown>> = {}) {
 	const navigate = vi.fn();
 	const state = {
-		gates: ref<RailGateMap>({ ...ALL_GATES, ...((overrides.gates as object) || {}) }),
-		activeDestinationId: ref((overrides.activeDestinationId as string) ?? "sale"),
+		gates: ref<RailGateMap>({
+			...ALL_GATES,
+			...((overrides.gates as object) || {}),
+		}),
+		activeDestinationId: ref(
+			(overrides.activeDestinationId as string) ?? "sale",
+		),
 		shiftOpen: ref((overrides.shiftOpen as boolean) ?? true),
 		offline: ref((overrides.offline as boolean) ?? false),
-		serviceOrderOpenCount: ref((overrides.serviceOrderOpenCount as number) ?? 0),
-		floorOpenOrdersCount: ref((overrides.floorOpenOrdersCount as number) ?? 0),
+		serviceOrderOpenCount: ref(
+			(overrides.serviceOrderOpenCount as number) ?? 0,
+		),
+		floorOpenOrdersCount: ref(
+			(overrides.floorOpenOrdersCount as number) ?? 0,
+		),
 		draftInvoicesCount: ref((overrides.draftInvoicesCount as number) ?? 0),
 	};
 
 	const ctx: RegisterRailContext = {
 		__: (key: string) => key,
 		// Stands in for a cafetería preset's label map.
-		t: (key: string) => (key === "Browse" ? "Menú" : key === "Floor" ? "Salón" : key),
+		t: (key: string) =>
+			key === "Browse" ? "Menú" : key === "Floor" ? "Salón" : key,
 		gates: state.gates,
 		activeDestinationId: state.activeDestinationId,
 		shiftOpen: state.shiftOpen,
@@ -50,7 +60,8 @@ function makeContext(overrides: Partial<Record<string, unknown>> = {}) {
 	return { ctx, state, navigate, rail: useRegisterRail(ctx) };
 }
 
-const byId = (items: readonly { id: string }[], id: string) => items.find((i) => i.id === id)!;
+const byId = (items: readonly { id: string }[], id: string) =>
+	items.find((i) => i.id === id)!;
 
 describe("useRegisterRail — labels", () => {
 	it("routes renamed nouns through the preset resolver and the rest through __()", () => {
@@ -87,7 +98,9 @@ describe("useRegisterRail — badges", () => {
 	it("announces the count in words, never by colour alone", () => {
 		const { rail, state } = makeContext();
 		state.serviceOrderOpenCount.value = 4;
-		expect(byId(rail.items.value, "serviceOrder").ariaLabel).toBe("Service Order — 4");
+		expect(byId(rail.items.value, "serviceOrder").ariaLabel).toBe(
+			"Service Order — 4",
+		);
 	});
 });
 
@@ -100,11 +113,16 @@ describe("useRegisterRail — shift gate (§5.1)", () => {
 
 	it("says why, so the state is not just a grey column", () => {
 		const { rail } = makeContext({ shiftOpen: false });
-		expect(byId(rail.items.value, "sale").ariaLabel).toContain("Shift not open");
+		expect(byId(rail.items.value, "sale").ariaLabel).toContain(
+			"Shift not open",
+		);
 	});
 
 	it("lights nothing while the shift is closed", () => {
-		const { rail } = makeContext({ shiftOpen: false, activeDestinationId: "sale" });
+		const { rail } = makeContext({
+			shiftOpen: false,
+			activeDestinationId: "sale",
+		});
 		expect(rail.items.value.some((item) => item.active)).toBe(false);
 	});
 
@@ -122,11 +140,14 @@ describe("useRegisterRail — shift gate (§5.1)", () => {
 describe("useRegisterRail — offline", () => {
 	it("dims only the destinations that need a server to be truthful", () => {
 		const { rail } = makeContext({ offline: true });
-		const dimmed = rail.items.value.filter((item) => item.dimmed).map((item) => item.id);
+		const dimmed = rail.items.value
+			.filter((item) => item.dimmed)
+			.map((item) => item.id);
 		// Tracks the registry's audited values (see railDestinations.spec.ts):
 		// `floor` is queued, not blocked — a waiter with no signal keeps taking
 		// orders — and `drafts` is blocked, because nothing caches them.
 		expect(dimmed.sort()).toEqual([
+			"cashCustody",
 			"closing",
 			"comandas",
 			"dashboard",
@@ -154,7 +175,9 @@ describe("useRegisterRail — offline", () => {
 		const { rail, navigate } = makeContext({ offline: true });
 		expect(rail.activate("invoices")).toBe(false);
 		expect(navigate).not.toHaveBeenCalled();
-		expect(byId(rail.items.value, "invoices").ariaLabel).toContain("Needs connection");
+		expect(byId(rail.items.value, "invoices").ariaLabel).toContain(
+			"Needs connection",
+		);
 	});
 
 	it("dims nothing while online", () => {
@@ -183,14 +206,18 @@ describe("useRegisterRail — keyboard", () => {
 		press(rail, "ArrowUp");
 		// The ring is the PILLS: tools live in the "More" flyout, which owns
 		// its own focus, so the wrap lands on the last pill (Corte).
-		expect(rail.focusedIndex.value).toBe(rail.keyboardItems.value.length - 1);
+		expect(rail.focusedIndex.value).toBe(
+			rail.keyboardItems.value.length - 1,
+		);
 		expect(rail.keyboardItems.value.at(-1)?.id).toBe("closing");
 	});
 
 	it("jumps with Home and End", () => {
 		const { rail } = makeContext();
 		press(rail, "End");
-		expect(rail.focusedIndex.value).toBe(rail.keyboardItems.value.length - 1);
+		expect(rail.focusedIndex.value).toBe(
+			rail.keyboardItems.value.length - 1,
+		);
 		press(rail, "Home");
 		expect(rail.focusedIndex.value).toBe(0);
 	});
@@ -216,7 +243,9 @@ describe("useRegisterRail — keyboard", () => {
 		// Skipping disabled entries would move the rail under the operator's
 		// fingers when the connection drops.
 		const { rail } = makeContext({ offline: true });
-		const invoicesIndex = rail.items.value.findIndex((item) => item.id === "invoices");
+		const invoicesIndex = rail.items.value.findIndex(
+			(item) => item.id === "invoices",
+		);
 		rail.focusIndex(invoicesIndex);
 		expect(rail.focusedIndex.value).toBe(invoicesIndex);
 		expect(rail.activateFocused()).toBe(false);
@@ -225,7 +254,12 @@ describe("useRegisterRail — keyboard", () => {
 	it("clamps a stale focus index when the rail shrinks", () => {
 		const { rail, state } = makeContext();
 		rail.focusIndex(rail.items.value.length - 1);
-		state.gates.value = { ...ALL_GATES, floor: false, saldo: false, closingShift: false };
+		state.gates.value = {
+			...ALL_GATES,
+			floor: false,
+			saldo: false,
+			closingShift: false,
+		};
 		// activateFocused clamps before reading, so a shrunk rail cannot throw.
 		expect(() => rail.activateFocused()).not.toThrow();
 		expect(rail.focusedIndex.value).toBeLessThan(rail.items.value.length);
@@ -235,15 +269,21 @@ describe("useRegisterRail — keyboard", () => {
 describe("useRegisterRail — groups", () => {
 	it("splits render groups without losing an entry", () => {
 		const { rail } = makeContext();
-		expect(rail.footerItems.value.map((item) => item.id)).toEqual(["closing"]);
+		expect(rail.footerItems.value.map((item) => item.id)).toEqual([
+			"closing",
+		]);
 		expect(
-			rail.primaryItems.value.length + rail.toolsItems.value.length + rail.footerItems.value.length,
+			rail.primaryItems.value.length +
+				rail.toolsItems.value.length +
+				rail.footerItems.value.length,
 		).toBe(rail.items.value.length);
 		// The keyboard ring is the pills; every tool is off it and in the flyout.
-		expect(rail.keyboardItems.value.length + rail.toolsItems.value.length).toBe(
-			rail.items.value.length,
-		);
-		expect(rail.keyboardItems.value.some((item) => item.group === "tools")).toBe(false);
+		expect(
+			rail.keyboardItems.value.length + rail.toolsItems.value.length,
+		).toBe(rail.items.value.length);
+		expect(
+			rail.keyboardItems.value.some((item) => item.group === "tools"),
+		).toBe(false);
 	});
 
 	it("the More pill wears the active tool, and nothing when a pill is active", () => {
@@ -270,12 +310,16 @@ describe("useRegisterRail — groups", () => {
 			"barcode",
 			"giftCards",
 			"dashboard",
+			"cashCustody",
 		]);
 	});
 
 	it("reacts to a computed gate source", () => {
 		const saldo = ref(true);
-		const gates = computed<RailGateMap>(() => ({ ...ALL_GATES, saldo: saldo.value }));
+		const gates = computed<RailGateMap>(() => ({
+			...ALL_GATES,
+			saldo: saldo.value,
+		}));
 		const rail = useRegisterRail({
 			__: (k) => k,
 			t: (k) => k,
@@ -286,8 +330,12 @@ describe("useRegisterRail — groups", () => {
 			counts: {},
 			navigate: vi.fn(),
 		});
-		expect(rail.items.value.some((item) => item.id === "recharge")).toBe(true);
+		expect(rail.items.value.some((item) => item.id === "recharge")).toBe(
+			true,
+		);
 		saldo.value = false;
-		expect(rail.items.value.some((item) => item.id === "recharge")).toBe(false);
+		expect(rail.items.value.some((item) => item.id === "recharge")).toBe(
+			false,
+		);
 	});
 });

@@ -455,7 +455,7 @@
 				     Hidden the band keeps its targets alive; the cashier still
 				     sees exactly one total. -->
 				<ActionBand
-					v-show="railVisible"
+					v-show="railVisible && hostedDestinationId !== 'closing'"
 					:state="bandState"
 					:format-currency="formatCurrency"
 					@primary="onBandPrimary"
@@ -464,7 +464,12 @@
 					     read off the resolved band rather than off the store, so
 					     the buttons cannot outlive the band that explains them
 					     (Cobro takes the band over and these go with it). -->
-					<template v-if="bandState.kind === 'tableSale'" #actions>
+					<template v-if="bandState.kind === 'selectedDraft'" #actions>
+						<button type="button" class="action-band__secondary" @click="onBandPrimary('sale.return')">
+							{{ __("Back to sale") }}
+						</button>
+					</template>
+					<template v-else-if="bandState.kind === 'tableSale'" #actions>
 						<button
 							type="button"
 							class="action-band__secondary"
@@ -802,6 +807,10 @@ export default {
 			shift.submit_closing_pos(data);
 		};
 		const handleOpenShiftDetails = () => {
+			if (hostedDestinationId.value !== "closing") {
+				destinationRouting.activate("closing", "shortcut");
+				return;
+			}
 			shift.get_closing_data();
 		};
 		// E4: the stale-shift strip's state. Dismissal is session-local on
@@ -814,7 +823,7 @@ export default {
 				!dialog.value,
 		);
 		const closeStaleShiftNow = () => {
-			shift.get_closing_data();
+			destinationRouting.activate("closing", "shortcut");
 		};
 		const offers = useOffers();
 		const uiStore = useUIStore();
@@ -1393,7 +1402,7 @@ export default {
 		// one and keeps its own Submit; adopting it here without an action
 		// behind `shift.close` would show a button that does nothing.
 		const hostedBandState = ref(null);
-		const HOSTED_BAND_KINDS = ["recharge", "balanceDue", "change", "shortfall"];
+		const HOSTED_BAND_KINDS = ["recharge", "balanceDue", "change", "shortfall", "selectedDraft", "custody"];
 		const onHostedBand = (state) => {
 			hostedBandState.value =
 				state && HOSTED_BAND_KINDS.includes(state.kind) ? state : null;
@@ -2159,6 +2168,14 @@ export default {
 		};
 
 		const onBandPrimary = (actionId) => {
+			if (actionId === "custody.primary") {
+				if (hostedDestinationId.value === "cashCustody") eventBus.emit("custody:primary");
+				return;
+			}
+			if (actionId === "draft.loadSelected") {
+				if (invoiceManagementHosted.value) eventBus.emit("ledger:primary");
+				return;
+			}
 			if (actionId === "sale.pay") {
 				triggerInvoicePay();
 				return;
@@ -2973,6 +2990,11 @@ export default {
 
 			// Update Store
 			this.uiStore.setRegisterData(data);
+			// A newly created shift starts a fresh cashier task, regardless of the old route.
+			this.$nextTick(() => {
+				this.onBandPrimary("sale.return");
+				this.$router.replace(data.cash_custody_enabled ? "/cash-custody" : "/pos");
+			});
 		},
 		closeOpeningDialog() {
 			this.dialog = false;

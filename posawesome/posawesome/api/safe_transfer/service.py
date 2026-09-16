@@ -48,6 +48,9 @@ def _get_profile(pos_profile):
 
 
 def _ensure_enabled(profile):
+    if frappe.db.table_exists("POS Cash Safe") and frappe.db.exists("POS Cash Safe", {"pos_profile": profile.name, "enabled": 1}):
+        frappe.throw(_("Use Cash custody to dispatch and confirm bank bags for this safe."))
+
     if not profile.get("posa_enable_safe_transfer"):
         frappe.throw(_("Safe transfers are not enabled for this POS Profile."))
     if not profile.get("posa_back_office_cash_account"):

@@ -30,6 +30,9 @@
 					:date-from="historyDateFrom"
 					:date-to="historyDateTo"
 					:loading="loading"
+					:load-error="activeListError"
+					:action-busy="draftActionBusy"
+					@retry="refreshActiveTab"
 					:detail="selectedInvoiceDetail"
 					:employees="employeeStore.terminalEmployees"
 					:current-cashier="currentCashier"
@@ -50,21 +53,21 @@
 							total: filteredHistoryInvoices.length,
 							pageNo: tabPages.history,
 							pageCount: historyPageCount,
-							loaded: !loading && posProfile ? historyInvoices : null,
+							loaded: !listRequests.history?.pending && !listRequests.history?.error && posProfile ? historyInvoices : null,
 						},
 						partial: {
 							page: paginatedUnpaidInvoices,
 							total: filteredUnpaidInvoices.length,
 							pageNo: tabPages.partial,
 							pageCount: partialPageCount,
-							loaded: !loading && posProfile ? unpaidInvoices : null,
+							loaded: !listRequests.partial?.pending && !listRequests.partial?.error && posProfile ? unpaidInvoices : null,
 						},
 						drafts: {
 							page: paginatedDraftInvoices,
 							total: filteredDraftInvoices.length,
 							pageNo: tabPages.drafts,
 							pageCount: draftsPageCount,
-							loaded: !loading && posProfile ? draftRecords : null,
+							loaded: !listRequests.drafts?.pending && !listRequests.drafts?.error && posProfile ? draftRecords : null,
 						},
 						returns: {
 							page: paginatedReturnInvoices,
@@ -74,6 +77,7 @@
 							loaded: null,
 						},
 					}"
+					@band="$emit('band', $event)"
 					@tab="activeTab = $event"
 					@filters="
 						historySearch = $event.search;
@@ -207,6 +211,11 @@
 				<v-divider />
 
 				<v-card-text class="invoice-management-card__body">
+					<v-alert v-if="activeListError" type="error" variant="tonal" role="alert" class="mb-3">
+						{{ activeListError }}
+						<div>{{ __("Retry to reload this list. Your saved work has not been changed.") }}</div>
+						<v-btn :loading="loading" @click="refreshActiveTab">{{ __("Retry") }}</v-btn>
+					</v-alert>
 					<v-window v-model="activeTab">
 						<v-window-item value="history">
 							<div class="filter-grid mb-4">
@@ -323,7 +332,7 @@
 								<span>{{ __("Loading invoice history...") }}</span>
 							</div>
 
-							<div v-else-if="!filteredHistoryInvoices.length" class="empty-state">
+							<div v-else-if="!activeListError && !filteredHistoryInvoices.length" class="empty-state">
 								<v-icon size="42" color="medium-emphasis"
 									>mdi-receipt-text-clock-outline</v-icon
 								>
@@ -701,7 +710,7 @@
 								<span>{{ __("Loading unpaid invoices...") }}</span>
 							</div>
 
-							<div v-else-if="!filteredUnpaidInvoices.length" class="empty-state">
+							<div v-else-if="!activeListError && !filteredUnpaidInvoices.length" class="empty-state">
 								<v-icon size="42" color="success">mdi-cash-check</v-icon>
 								<div class="empty-state__title">{{ __("No unpaid invoices") }}</div>
 								<div class="empty-state__subtitle">
@@ -968,7 +977,7 @@
 								<span>{{ __(currentDraftSourceOption.loadingLabel) }}</span>
 							</div>
 
-							<div v-else-if="!filteredDraftInvoices.length" class="empty-state">
+							<div v-else-if="!activeListError && !filteredDraftInvoices.length" class="empty-state">
 								<v-icon size="42" :color="currentDraftSourceOption.color">{{
 									currentDraftSourceOption.icon
 								}}</v-icon>
@@ -1169,7 +1178,7 @@
 								<span>{{ __("Loading return invoices...") }}</span>
 							</div>
 
-							<div v-else-if="!filteredReturnInvoices.length" class="empty-state">
+							<div v-else-if="!activeListError && !filteredReturnInvoices.length" class="empty-state">
 								<v-icon size="42" color="error">mdi-backup-restore</v-icon>
 								<div class="empty-state__title">{{ __("No return invoices found") }}</div>
 								<div class="empty-state__subtitle">
@@ -1511,6 +1520,7 @@ import { notifyQzPrintFallback, printDocumentViaQz } from "../../../services/qzT
 import { useHostedSheet } from "../../../composables/pos/shell/useHostedSheet";
 import { isOffline } from "../../../../offline/index";
 import DocumentSourceSelector from "../shared/DocumentSourceSelector.vue";
+import { beginInvoiceListRequest } from "../../../utils/invoiceListRequests";
 import InvoiceLedgerSurface from "./ledger/InvoiceLedgerSurface.vue";
 import {
 	canDeleteDocumentSourceRecord,
@@ -1536,7 +1546,7 @@ export default {
 	},
 	// `close` is only ever emitted while hosted as a rail destination — see
 	// `useHostedSheet`. The floating modal closes itself through the store.
-	emits: ["close"],
+	emits: ["close", "band"],
 	setup(_props, { emit }) {
 		const uiStore = useUIStore();
 		const invoiceStore = useInvoiceStore();
@@ -1620,6 +1630,8 @@ export default {
 		activeTab: "history",
 		viewMode: "card",
 		loading: false,
+		listRequests: {},
+		draftActionBusy: false,
 		pageSize: TAB_PAGE_SIZE,
 		tabPages: {
 			history: 1,
@@ -1706,6 +1718,10 @@ export default {
 		],
 	}),
 	computed: {
+		activeListError() {
+			const key = this.activeTab === "returns" ? "history" : this.activeTab;
+			return this.listRequests[key]?.error || "";
+		},
 		currentInvoiceDoctype() {
 			return this.posProfile?.create_pos_invoice_instead_of_sales_invoice
 				? "POS Invoice"
@@ -2565,7 +2581,7 @@ export default {
 		},
 		async loadUnpaidInvoices() {
 			if (!this.posProfile?.name) return void (this.unpaidInvoices = []);
-			this.loading = true;
+			const request = beginInvoiceListRequest(this, "partial");
 			try {
 				const filters = this.buildInvoiceFilters({
 					is_return: 0,
@@ -2581,14 +2597,16 @@ export default {
 						limit_page_length: 0,
 					},
 				});
+				if (!request.current()) return;
 				this.unpaidInvoices = Array.isArray(message)
 					? message.map((entry) => ({ ...entry, doctype: this.currentInvoiceDoctype }))
 					: [];
 			} catch (error) {
+				if (!request.current()) return;
+				request.fail(__("Unable to fetch unpaid invoices"));
 				console.error("Error loading unpaid invoices:", error);
-				this.toastStore.show({ title: __("Unable to fetch unpaid invoices"), color: "error" });
 			} finally {
-				this.loading = false;
+				request.finish();
 			}
 		},
 		async loadHistory() {
@@ -2599,7 +2617,7 @@ export default {
 				this.repairCandidateScopeReady = false;
 				return;
 			}
-			this.loading = true;
+			const request = beginInvoiceListRequest(this, "history");
 			try {
 				const filters = this.buildInvoiceFilters();
 				const doctypes =
@@ -2627,18 +2645,20 @@ export default {
 						return Array.isArray(message) ? message.map((entry) => ({ ...entry, doctype })) : [];
 					}),
 				);
+				if (!request.current()) return;
 				this.historyInvoices = results.flat();
 				if (typeof this.refreshRepairCandidates === "function") {
 					await this.refreshRepairCandidates(this.historyInvoices);
 				}
 			} catch (error) {
+				if (!request.current()) return;
+				request.fail(__("Unable to fetch invoice history"));
 				console.error("Error loading invoice history:", error);
-				this.toastStore.show({ title: __("Unable to fetch invoice history"), color: "error" });
 				this.repairCandidateInvoiceNames = [];
 				this.repairedChangeAllocationInvoiceNames = [];
 				this.repairCandidateScopeReady = false;
 			} finally {
-				this.loading = false;
+				request.finish();
 			}
 		},
 		async loadDrafts() {
@@ -2646,10 +2666,11 @@ export default {
 				this.draftRecordsBySource[this.currentDraftSource] = [];
 				return;
 			}
-			this.loading = true;
+			const source = this.currentDraftSource;
+			const request = beginInvoiceListRequest(this, "drafts");
 			try {
 				const records = await fetchDocumentSourceRecords({
-					source: this.currentDraftSource,
+					source,
 					posOpeningShift: this.posOpeningShift,
 					posProfile: this.posProfile,
 					currentInvoiceDoctype: this.currentInvoiceDoctype,
@@ -2661,16 +2682,18 @@ export default {
 					resolveCashierProfileScope: () => this.posProfile?.name || null,
 					resolveCashierScope: () => this.currentCashier?.user || null,
 				});
+				if (!request.current()) return;
 				this.draftRecordsBySource = {
 					...this.draftRecordsBySource,
-					[this.currentDraftSource]: records,
+					[source]: records,
 				};
-				this.uiStore.setInvoiceManagementDraftSource(this.currentDraftSource);
+				if (this.currentDraftSource === source) this.uiStore.setInvoiceManagementDraftSource(source);
 			} catch (error) {
+				if (!request.current()) return;
+				request.fail(__("Unable to fetch documents"));
 				console.error("Error loading source records:", error);
-				this.toastStore.show({ title: __("Unable to fetch documents"), color: "error" });
 			} finally {
-				this.loading = false;
+				request.finish();
 			}
 		},
 		async viewInvoice(invoice) {
@@ -2698,8 +2721,14 @@ export default {
 		 * (deleting a draft leaves the sheet up), so that is the cue.
 		 */
 		async runLedgerDraftAction(invoice, action) {
-			await this.runDraftAction(invoice, action);
-			this.landOnSaleIfClosed();
+			if (this.draftActionBusy) return;
+			this.draftActionBusy = true;
+			try {
+				await this.runDraftAction(invoice, action);
+				this.landOnSaleIfClosed();
+			} finally {
+				this.draftActionBusy = false;
+			}
 		},
 		/** Same cue for Devolver: the return lines went to the cart, the sheet
 		 * closed, the cashier belongs on the sale with them. */

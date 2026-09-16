@@ -1,78 +1,28 @@
 <template>
-	<v-card
-		class="cards mb-0 mt-3 dynamic-padding"
-		:class="{ 'cards--with-mobile-offset': reserveBottomDockSpace }"
-	>
-		<v-row no-gutters align="center" justify="center" class="dynamic-spacing-sm">
-			<!-- Side by side from md up (08-30): stacked full-width, these two
-			     ate 92px of a short tablet's pinned catalog while the item grid
-			     collapsed to nothing. Two ~200px selects read fine, and phones
-			     (cols=12) keep the stack. -->
-			<v-col
-				cols="12"
-				:md="posProfile.posa_px_enable_price_list_dropdown !== false ? 6 : 12"
-				class="mb-2 pe-md-1"
-			>
-				<v-select
-					:items="itemsGroup"
-					:label="frappe._('Items Group')"
-					density="compact"
-					variant="solo"
-					hide-details
-					:model-value="modelValue"
-					@update:model-value="$emit('update:modelValue', $event)"
-				></v-select>
-			</v-col>
-			<v-col cols="12" md="6" class="mb-2 ps-md-1" v-if="posProfile.posa_px_enable_price_list_dropdown !== false">
-				<v-text-field
-					density="compact"
-					variant="solo"
-					color="primary"
-					:label="frappe._('Price List')"
-					hide-details
-					:model-value="activePriceList"
-					readonly
-				></v-text-field>
-			</v-col>
-			<v-col cols="12" sm="4" class="dynamic-margin-xs">
-				<v-btn-toggle
-					:model-value="itemsView"
-					@update:model-value="$emit('update:itemsView', $event)"
-					color="primary"
-					group
-					density="compact"
-					rounded
-					class="view-toggle-btn"
-				>
-					<v-btn size="small" value="list">{{ __("List") }}</v-btn>
-					<v-btn size="small" value="card">{{ __("Card") }}</v-btn>
-				</v-btn-toggle>
-			</v-col>
-			<v-col cols="6" sm="4" class="dynamic-margin-xs">
-				<v-btn
-					size="small"
-					block
-					color="warning"
-					variant="text"
-					@click="$emit('open-offers')"
-					class="action-btn-consistent"
-				>
-					{{ offersCount }} {{ __("Offers") }}
+	<v-card class="cards catalog-toolbar" :class="{ 'cards--with-mobile-offset': reserveBottomDockSpace }">
+		<div class="catalog-toolbar__controls">
+			<v-select class="catalog-toolbar__group" :items="itemsGroup" :label="frappe._('Items Group')"
+				density="compact" variant="outlined" hide-details :model-value="modelValue"
+				@update:model-value="$emit('update:modelValue', $event)" />
+			<v-text-field v-if="posProfile.posa_px_enable_price_list_dropdown !== false"
+				class="catalog-toolbar__price" density="compact" variant="outlined"
+				:label="frappe._('Price List')" hide-details :model-value="activePriceList" readonly />
+			<v-btn-toggle :model-value="itemsView" @update:model-value="$emit('update:itemsView', $event)"
+				mandatory color="primary" density="compact" class="view-toggle-btn" :aria-label="__('View')">
+				<v-btn size="small" value="list" :aria-label="__('List')" :title="__('List')">
+					<v-icon icon="mdi-format-list-bulleted" size="20" />
 				</v-btn>
-			</v-col>
-			<v-col cols="6" sm="4" class="dynamic-margin-xs">
-				<v-btn
-					size="small"
-					block
-					color="primary"
-					variant="text"
-					@click="$emit('open-coupons')"
-					class="action-btn-consistent"
-				>
-					{{ couponsCount }} {{ __("Coupons") }}
+				<v-btn size="small" value="card" :aria-label="__('Card')" :title="__('Card')">
+					<v-icon icon="mdi-view-grid-outline" size="20" />
 				</v-btn>
-			</v-col>
-		</v-row>
+			</v-btn-toggle>
+			<v-btn size="small" variant="text" class="catalog-toolbar__action" @click="$emit('open-offers')">
+				{{ offersCount }} {{ __('Offers') }}
+			</v-btn>
+			<v-btn size="small" variant="text" class="catalog-toolbar__action" @click="$emit('open-coupons')">
+				{{ couponsCount }} {{ __('Coupons') }}
+			</v-btn>
+		</div>
 	</v-card>
 </template>
 
@@ -95,93 +45,48 @@ defineEmits(["update:modelValue", "update:itemsView", "open-offers", "open-coupo
 </script>
 
 <style scoped>
-.action-btn-consistent {
-	height: 36px !important;
-	margin-top: var(--dynamic-xs) !important;
-	padding: var(--pos-space-2) var(--pos-space-3) !important;
-	transition: var(--transition-normal) !important;
-	border-radius: var(--pos-radius-sm) !important;
-	text-transform: none !important;
-	font-weight: 600 !important;
-}
-
-.action-btn-consistent:hover {
-	background-color: rgba(var(--v-theme-primary), 0.1) !important;
-	transform: none !important;
-}
-
-.view-toggle-btn {
-	height: 36px;
-	/* The toggle lives in a sm=4 column that measures ~116px inside the
-	 * anchored drawer — narrower than its two buttons' natural width, which
-	 * overflowed the column and grew a horizontal scrollbar under LIST/CARD.
-	 * Fit the column instead: the group takes the column's width and the
-	 * buttons split it, shrinking their padding before anything scrolls. */
-	width: 100%;
-	min-width: 0;
-	overflow: hidden;
-	border: 1px solid var(--pos-border-light);
-	border-radius: var(--pos-radius-sm);
-}
-
-.view-toggle-btn :deep(.v-btn) {
-	flex: 1 1 50%;
-	min-width: 0;
-	padding: 0 var(--pos-space-2);
-}
-
-.dynamic-padding {
-	padding: var(--dynamic-sm);
-}
-
-.dynamic-spacing-sm {
-	padding: var(--dynamic-sm) !important;
-}
-
-.cards {
-	background-color: var(--pos-surface-muted) !important;
-	margin-top: var(--dynamic-sm) !important;
-	padding: var(--dynamic-sm) !important;
+.catalog-toolbar {
+	container-type: inline-size;
+	background: var(--pos-surface-muted) !important;
 	border: 1px solid var(--pos-border-light);
 	border-radius: var(--pos-radius-md) !important;
 	box-shadow: none !important;
-	position: sticky;
-	bottom: 0;
-	z-index: 7;
+	margin-top: 6px !important;
+	padding: 8px !important;
+	flex: 0 0 auto;
 	min-width: 0;
-	overflow: visible;
 }
-
-.cards--with-mobile-offset {
-	margin-bottom: calc(var(--bottom-safe-space) + 6px) !important;
+.catalog-toolbar__controls {
+	display: flex;
+	align-items: center;
+	gap: 6px;
 }
-
-@media (max-width: 1099px) {
-	.cards {
-		position: static;
-	}
+.catalog-toolbar__group,
+.catalog-toolbar__price {
+	flex: 1 1 130px;
+	min-width: 0;
 }
-
-@media (max-width: 767.98px) {
-	.dynamic-padding {
-		padding: var(--dynamic-xs);
-	}
-
-	.dynamic-spacing-sm {
-		padding: var(--dynamic-xs) !important;
-	}
-
-	.action-btn-consistent {
-		padding: var(--dynamic-xs) !important;
-		font-size: 0.875rem !important;
-		min-height: 42px !important;
-	}
+.catalog-toolbar :deep(.v-field__input) {
+	min-height: 36px;
+	padding-top: 6px;
+	padding-bottom: 6px;
+	font-size: 12px;
 }
-
-@media (max-width: 480px) {
-	.cards {
-		padding: var(--dynamic-xs) !important;
-		position: static;
-	}
+.catalog-toolbar :deep(.v-field__outline .v-label) { font-size: 11px; }
+.catalog-toolbar .view-toggle-btn { flex: 0 0 auto; height: 36px; }
+.catalog-toolbar .view-toggle-btn :deep(.v-btn) { min-width: 36px; padding: 0 8px; }
+.catalog-toolbar .catalog-toolbar__action {
+	flex: 0 0 auto;
+	min-width: 0;
+	padding: 0 6px;
+	height: 36px;
+	font-size: 12px;
+	text-transform: none;
+}
+.cards--with-mobile-offset { margin-bottom: calc(var(--bottom-safe-space) + 6px) !important; }
+@container (max-width: 559px) {
+	.catalog-toolbar__controls { flex-wrap: wrap; }
+	.catalog-toolbar__group, .catalog-toolbar__price { flex-basis: calc(50% - 6px); }
+	.catalog-toolbar__action { flex-grow: 1 !important; }
 }
 </style>

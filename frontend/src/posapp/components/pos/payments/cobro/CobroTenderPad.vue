@@ -423,27 +423,30 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onPhysicalKey));
 	gap: var(--reg-space-xs, 5px);
 }
 
-/* Hosted in the band's context lane the presets have a fixed width and one
-   row to spend: a chip that does not fit wraps onto a second row that the
-   32px clip never shows, so the lane ends on a whole chip instead of a
-   «1,40» cut mid-figure (measured at 1195×741). */
+/* Keep two touch-sized rows visible in the band. Narrow registers can
+   scroll the remaining suggestions without hiding an amount mid-button. */
 .cobro-pad__presets--band {
-	flex-wrap: wrap;
-	row-gap: 40px;
-	max-height: 32px;
-	overflow: hidden;
+	flex: 1 1 0;
+	min-width: 0;
+	gap: 8px;
+	max-height: 104px;
+	overflow-y: auto;
+	scroll-snap-type: y mandatory;
 }
 
 .cobro-pad__preset {
-	min-height: 32px;
-	padding: 0 var(--reg-space-md, 10px);
+	min-height: 48px;
+	min-width: 64px;
+	padding: 0 14px;
 	border-radius: var(--reg-radius-sm, 10px);
 	border: 1px solid var(--reg-border-soft, #e6e9ee);
 	background: var(--reg-surface-sunken, #f8f9fa);
 	color: var(--reg-text-primary, #212121);
-	font-size: 13px;
+	font-size: 16px;
 	font-weight: 600;
 	cursor: pointer;
+	touch-action: manipulation;
+	scroll-snap-align: start;
 }
 
 .cobro-pad__preset:disabled {
@@ -465,15 +468,6 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onPhysicalKey));
 	background: var(--reg-tone-neutral-divider, #eceff3);
 }
 
-/* In the band the shortcuts are a single non-wrapping line: the lane gives way
-   before the figure and the primary do (`.action-band__breakdown` is
-   `flex: 0 1 auto; overflow: hidden`), and a row that wrapped there would push
-   the band's own height. */
-.action-band .cobro-pad__presets {
-	flex-wrap: nowrap;
-	overflow: hidden;
-}
-
 /*
  * THE DENSE DESK TIER — Marco's iPad-class window (1195×741, 1143×656).
  * The same query the rest of the register switches on; `denseDeskTier.spec.ts`
@@ -481,6 +475,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onPhysicalKey));
  * key height, which is the whole argument of this column.
  */
 @media (min-width: 1100px) and (max-height: 820px) {
+	.cobro-pad__presets--band { max-height: 48px; }
 	.cobro-pad {
 		gap: var(--reg-space-sm, 6px);
 		padding: var(--reg-space-sm, 8px);

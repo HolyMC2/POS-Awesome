@@ -119,6 +119,59 @@ class TestItemFetchers(unittest.TestCase):
         _install_stubs()
         cls.module = _load_module()
 
+    def test_serial_cache_refilled_during_cancel_is_cleared_after_commit(self):
+        from unittest.mock import patch
+
+        cache = {}
+        callbacks = []
+        rollbacks = []
+        visible_serials = []
+        warehouse = "Shop A"
+        other_key = self.module._fetch_cache_key("serial", ("Shop B", ("PHONE",)), "Shop B")
+        cache[other_key] = ["unrelated"]
+        fake_cache = types.SimpleNamespace(
+            get_value=lambda key: cache.get(key),
+            set_value=lambda key, value, **kw: cache.__setitem__(key, value),
+            delete_keys=lambda prefix: [cache.pop(k) for k in list(cache) if k.startswith(prefix)],
+        )
+        fake_db = types.SimpleNamespace(
+            after_commit=types.SimpleNamespace(add=callbacks.append),
+            after_rollback=types.SimpleNamespace(add=rollbacks.append),
+        )
+        with patch.object(self.module.frappe, "cache", return_value=fake_cache), patch.object(
+            self.module.frappe, "db", fake_db
+        ), patch.object(self.module, "_fetch_serials", side_effect=lambda *args: list(visible_serials)):
+            self.assertEqual(self.module.get_serials(warehouse, ["PHONE"]), [])
+            self.module.clear_stock_caches(AttrDict(warehouse=warehouse))
+            # Another register refills the empty list before cancellation commits.
+            self.assertEqual(self.module.get_serials(warehouse, ["PHONE"]), [])
+            visible_serials.append({"serial_no": "RETURNED-PHONE"})
+            self.assertTrue(callbacks, "stock invalidation must run after commit")
+            for callback in callbacks:
+                callback()
+            self.assertEqual(self.module.get_serials(warehouse, ["PHONE"]), visible_serials)
+            self.assertEqual(cache[other_key], ["unrelated"])
+            # A failed transaction must also discard data cached from its writes.
+            visible_serials.clear()
+            self.assertTrue(rollbacks)
+            for callback in rollbacks:
+                callback()
+            self.assertEqual(self.module.get_serials(warehouse, ["PHONE"]), [])
+
+    def test_bin_cache_invalidation_is_registered_before_stock_notification(self):
+        import ast
+
+        tree = ast.parse((REPO_ROOT / "posawesome" / "hooks.py").read_text())
+        events = next(ast.literal_eval(node.value) for node in tree.body
+                      if isinstance(node, ast.Assign)
+                      and any(isinstance(t, ast.Name) and t.id == "doc_events" for t in node.targets))
+        for event in ("after_insert", "on_update"):
+            handlers = events["Bin"][event]
+            self.assertLess(
+                handlers.index("posawesome.posawesome.api.item_fetchers.clear_stock_caches"),
+                handlers.index("posawesome.posawesome.stock_realtime.publish_bin_stock_change"),
+            )
+
     def test_get_bom_costs_prefers_item_default_bom(self):
         meta_rows = [
             AttrDict({"name": "ITEM-001", "default_bom": "BOM-DEFAULT"}),
