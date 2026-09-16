@@ -90,3 +90,13 @@ Temporary QA users were disabled and sessions cleared after verification; both Q
 ### UI/UX crew follow-up
 
 The cashier, counting and supervisor surfaces received an Opus crew pass followed by primary review, real lab journeys and ledger checks. See [the UI/UX review and evidence](POS-CASH-CUSTODY-UX-REVIEW.md). Counts retain their saved/edited state, unconfirmed actions replay safely, invalid amounts are not silently rewritten, and bag labels are separate from full handover sheets. This follow-up is lab verified and is not a production rollout.
+
+## Release activation checks — 2026-09-16
+
+Enabling custody requires cash movements and deposits enabled, no per-movement
+maximum, and the same company cash account for both the payment method and drawer.
+The movement maximum is protected while custody is active. Seal IDs are unique
+across the entire site; duplicate IDs receive a clear refusal. Blind closings
+require a handover note before final submission. Existing profiles are not opted
+in by migration. Supervisor actions retain the existing closing-supervisor role
+policy; review staff roles before enabling custody for a register.

@@ -14,6 +14,17 @@ class CustodyRecord(Document):
         frappe.throw(_('Cash custody history cannot be deleted. Record a correction instead.'))
 
 
+def validate_custody_routing(profile, company, drawer):
+    if not profile.get('posa_enable_cash_movement') or not profile.get('posa_allow_cash_deposit'):
+        frappe.throw(_('Enable cash movements and cash deposits on the POS Profile before enabling cash custody.'))
+    if float(profile.get('posa_cash_movement_max_amount') or 0) != 0:
+        frappe.throw(_('Set the POS Profile cash movement maximum to zero before enabling cash custody; closing must transfer the complete drawer count.'))
+    cash_account = frappe.db.get_value('Mode of Payment Account',
+        {'parent': profile.get('posa_cash_mode_of_payment') or 'Cash', 'company': company}, 'default_account')
+    if not cash_account or cash_account != drawer:
+        frappe.throw(_('The drawer account must match the cash Mode of Payment account for this company.'))
+
+
 class CashSafe(Document):
     def validate(self):
         from posawesome.posawesome.api.cash_movement.validation import resolve_source_cash_account
@@ -27,6 +38,8 @@ class CashSafe(Document):
             frappe.throw(_('Choose the Back Office Cash Account configured on this POS Profile.'))
         accounts = [self.safe_account, self.transit_account, self.bank_account, self.variance_account,
                     resolve_source_cash_account({}, profile)]
+        if self.enabled:
+            validate_custody_routing(profile, self.company, accounts[-1])
         if len(set(accounts)) != len(accounts):
             frappe.throw(_('Drawer, safe, transit, bank and variance accounts must be distinct.'))
         for name in accounts:
@@ -125,6 +138,7 @@ def protect_profile(doc, method=None):
         return
     fields = ['company', 'posa_default_source_account', 'posa_back_office_cash_account',
               'posa_cash_mode_of_payment', 'posa_allowed_source_accounts',
-              'posa_allow_source_account_override', 'posa_enable_cash_movement', 'posa_allow_cash_deposit']
+              'posa_allow_source_account_override', 'posa_enable_cash_movement', 'posa_allow_cash_deposit',
+              'posa_cash_movement_max_amount']
     if any(previous.get(field) != doc.get(field) for field in fields):
         frappe.throw(_('This register has active cash custody. Reconcile its cash before changing drawer or safe routing.'))

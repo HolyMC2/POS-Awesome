@@ -146,7 +146,7 @@
 					class="cash-closing__hint"
 					:class="{ 'cash-closing__hint--warn': noteMissing }"
 				>
-					{{ __("A note is required when the counted cash differs from the expected amount.") }}
+					{{ __("A handover note is required for a blind count or when counted cash differs from the expected amount.") }}
 				</p>
 
 				<!-- A save whose answer never arrived. Replaying the SAVED request
@@ -385,7 +385,7 @@
  *
  * The server owns the money. `finalize_drawer` refuses a bag total that is not
  * exactly the saved count, a non-positive bag, a seal outside
- * `[A-Za-z0-9_-]{3,80}` (unique across the whole safe), a stale `modified`, and
+ * `[A-Za-z0-9_-]{3,80}` (unique across the whole site), a stale `modified`, and
  * a missing reason for a variance. None of that is relaxed here — this screen
  * only makes each refusal visible while the cash is still in the cashier's
  * hands, instead of after they pressed «Close shift».
@@ -562,7 +562,9 @@ const expectedAmount = computed(() => Number(props.expected) || 0);
 const difference = computed(() =>
 	showsExpected.value ? (cents(counted.value) - cents(expectedAmount.value)) / 100 : 0,
 );
-const noteMissing = computed(() => difference.value !== 0 && note.value.trim().length < 8);
+const noteMissing = computed(() =>
+	(!showsExpected.value || difference.value !== 0) && note.value.trim().length < 8,
+);
 
 const isManual = computed(() => count.value?.source === "manual");
 const manualAmountInvalid = computed(
@@ -574,7 +576,7 @@ const manualReasonInvalid = computed(
 
 const sealOf = (bag?: Bag) => String(bag?.seal || "").trim();
 
-/** The one refusal a cashier cannot see coming: seals are unique per safe. */
+/** The one refusal a cashier cannot see coming: seals are unique across the site. */
 const sealProblem = (index: number) => {
 	const bag = bags.value[index];
 	const seal = sealOf(bag);

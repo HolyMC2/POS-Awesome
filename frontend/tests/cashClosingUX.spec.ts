@@ -921,6 +921,18 @@ describe("primary integration count safeguards", () => {
 		).toContain("Unsaved changes");
 		expect(last(onPrepared)).toBeNull();
 	});
+	it("requires a handover note before preparing a blind closing", async () => {
+		context = { bags: [], counts: [drawerDraft(500, { note: "" })] };
+		const { wrapper, onPrepared } = await mountAllocation({ expected: null });
+		await save(wrapper);
+		await wrapper.find(".cash-closing__field--seal input").setValue("BLIND-1");
+		await wrapper.vm.$nextTick();
+		expect(last(onPrepared)).toBeNull();
+		expect(wrapper.find('[data-testid="cash-closing-todo"]').text()).toContain("Add a note");
+		await wrapper.find('[data-testid="cash-closing-note"]').setValue("Counted and sealed for handover");
+		await wrapper.vm.$nextTick();
+		expect(last(onPrepared)).not.toBeNull();
+	});
 	it("does not reveal an expected zero for a blind count", async () => {
 		const { wrapper } = await mountAllocation({ expected: null });
 		expect(wrapper.find('[data-money-role="expected"]').exists()).toBe(

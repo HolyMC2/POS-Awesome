@@ -105,6 +105,8 @@ def new_bag(safe, data, counted, state, movement=None):
     seal = str(data.get('seal') or '').strip()
     if not re.fullmatch(r'[A-Za-z0-9_-]{3,80}', seal):
         frappe.throw(_('Enter a unique bag seal using 3–80 letters, digits or hyphens.'))
+    if frappe.db.exists('POS Cash Bag', {'seal': seal}):
+        frappe.throw(_('This bag seal is already used on this site. Choose a new seal.'))
     if counted['total_minor'] <= 0:
         frappe.throw(_('A cash bag must contain a positive amount.'))
     purpose = data.get('purpose', 'Float')
