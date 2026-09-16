@@ -1,3 +1,4 @@
+import process from "node:process";
 // Real lab server and isolated test accounts. No mocked business endpoints.
 import {chromium,expect} from '@playwright/test';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';

@@ -1,3 +1,4 @@
+import process from "node:process";
 // Run from frontend: node tests/visual/check-closing-layout.mjs
 //
 // What the custody corte does with the width it is given. Real components,

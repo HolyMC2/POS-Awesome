@@ -1,3 +1,4 @@
+import process from "node:process";
 // Real UI components; simulated server. Live ledger proof uses tests/e2e/cash-custody-*-lab.mjs.
 import { chromium, expect } from "@playwright/test";
 import { createServer } from "vite";

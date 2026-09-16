@@ -1,3 +1,4 @@
+import process from "node:process";
 import {chromium,expect} from '@playwright/test';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 const fixture=JSON.parse(await readFile(process.env.CUSTODY_FIXTURE || '/tmp/custody-browser-fixture.json','utf8'));

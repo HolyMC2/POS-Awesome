@@ -519,10 +519,9 @@ export default {
 			(profile) => {
 				if (profile) {
 					pos_profile.value = profile;
-					if (!pos_profile.value.hide_expected_amount) {
-						headers.value = [...baseHeaders, ...extendedHeaders];
-					} else {
-								}
+					headers.value = pos_profile.value.hide_expected_amount
+						? [...baseHeaders]
+						: [...baseHeaders, ...extendedHeaders];
 				}
 			},
 			{ deep: true, immediate: true },

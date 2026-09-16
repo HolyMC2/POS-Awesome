@@ -1,3 +1,4 @@
+import process from "node:process";
 // Run from frontend: node tests/visual/check-closing.mjs
 // Starts a localhost-only preview. All server responses come from the fixture.
 import { chromium, expect } from "@playwright/test";
