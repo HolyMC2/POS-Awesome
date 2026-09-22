@@ -423,6 +423,14 @@ test("mobile catalogue names, menu dismissal and invoice return stay usable", as
 		await page.keyboard.press("Escape");
 		await expect(page.getByTestId("ledger-sheet")).toBeHidden();
 		await expect(row).toBeFocused();
+		await page.keyboard.press("Enter");
+		await expect(panel).toBeVisible();
+		await expect(panel.locator(".ledger-panel__ticket")).toContainText(
+			(await row.getAttribute("data-ledger-row"))!,
+		);
+		await page.keyboard.press("Escape");
+		await expect(page.getByTestId("ledger-sheet")).toBeHidden();
+		await expect(row).toBeFocused();
 		await expect(query).toHaveValue("ACC-SINV");
 		expect(
 			Math.abs(

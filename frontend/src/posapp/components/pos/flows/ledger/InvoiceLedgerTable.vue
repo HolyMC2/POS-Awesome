@@ -199,15 +199,22 @@ const countLabel = computed(() => {
 });
 
 const onKeydown = (event: KeyboardEvent) => {
+	// Closing a phone sheet clears selection but returns focus to its row.
+	const focusedName = event.target instanceof Element
+		? event.target.closest("[data-ledger-row]")?.getAttribute("data-ledger-row")
+		: null;
+	const activeIndex = props.selectedIndex >= 0
+		? props.selectedIndex
+		: focusedName ? props.rows.findIndex((row) => row.name === focusedName) : -1;
 	if (event.key === "Enter") {
-		const row = props.rows[props.selectedIndex];
+		const row = props.rows[activeIndex];
 		if (row) {
 			event.preventDefault();
-			emit("open", { row, index: props.selectedIndex });
+			emit("open", { row, index: activeIndex });
 		}
 		return;
 	}
-	const target = nextIndex(event.key, props.selectedIndex, props.rows.length);
+	const target = nextIndex(event.key, activeIndex, props.rows.length);
 	if (target === null) return;
 	event.preventDefault();
 	emit("select", target);

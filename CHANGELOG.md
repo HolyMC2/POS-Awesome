@@ -13,6 +13,7 @@ Original status labels are retained; this section also contains changes reported
   The navigation drawer has a 44px close button. Invoice search uses phone-sized
   inputs; ticket details keep their identifier and close action visible, contain
   focus, and return to the same list row without losing the filter or scroll.
+  Enter and arrow keys continue from that returned row.
   Short screens scroll the entire ticket sheet. Frontend only; no migration.
   Rollback: restore the previous POS asset manifest and matching bundles.
 
