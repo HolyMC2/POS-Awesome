@@ -35,6 +35,7 @@
 			<div v-if="!editorMode && floors.length" class="floor-view__modes" :aria-label="verticalStore.t('Floor')">
 				<button type="button" :aria-pressed="viewMode === 'kanban'" data-test="floor-view-list" @click="floorStore.setViewMode('kanban')"><v-icon icon="mdi-view-list-outline" size="18" />{{ verticalStore.t("List view") }}</button>
 				<button type="button" :aria-pressed="viewMode === 'plan'" :disabled="!canShowPlan" data-test="floor-view-plan" @click="floorStore.setViewMode('plan')"><v-icon icon="mdi-floor-plan" size="18" />{{ verticalStore.t(canShowPlan ? "Plan view" : "Plan needs a wider screen") }}</button>
+				<button v-if="!floorStore.tabOrders.length" type="button" data-test="tabs-rail-new" @click="openJump('tab')"><v-icon icon="mdi-plus" size="18" />{{ verticalStore.t("New tab") }}</button>
 			</div>
 			<!-- Two verbs stay on the bar; the rest move behind a labelled menu.
 			     Five icon-only buttons taught nobody what they did and left the
@@ -94,7 +95,7 @@
 		</header>
 
 
-		<TabsRail show-new :compact="!wide" @open="openTabOrder" @new-tab="openJump('tab')" />
+		<TabsRail v-if="floorStore.tabOrders.length || !floors.length" show-new :compact="!wide" @open="openTabOrder" @new-tab="openJump('tab')" />
 
 		<p v-if="floorStore.error" class="floor-view__error" role="alert">{{ floorStore.error }}</p>
 

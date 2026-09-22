@@ -137,6 +137,19 @@ for (const [width, height] of sizes) {
 			await expect(plan).toBeDisabled();
 			await expect(search).toBeVisible();
 		}
+		if (height < 600) {
+			await page.evaluate(() => {
+				const floor = (window as any).__mesasFixture.floor;
+				floor.orders = floor.orders.filter((order: any) => order.table);
+				floor.activeOrder = null;
+			});
+			await page.locator('[data-test="floor-view-list"]').click();
+			await expect(page.locator('[data-test="tabs-rail-new"]')).toBeVisible();
+			const toggle = page.locator('[data-test="floor-filters-toggle"]');
+			if (await toggle.getAttribute("aria-expanded") === "true") await toggle.click();
+			await page.locator(".floor-view").evaluate(el => { el.scrollTop = 0; });
+			await expect(page.locator(".floor-kanban__card").first()).toBeInViewport({ ratio: 0.5 });
+		}
 		expect(errors).toEqual([]);
 	});
 }
