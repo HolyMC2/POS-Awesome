@@ -31,6 +31,11 @@
 					<span v-if="floor.total" class="floor-view__floor-count">{{ floor.busy }}/{{ floor.total }}</span>
 				</button>
 			</div>
+
+			<div v-if="!editorMode && floors.length" class="floor-view__modes" :aria-label="verticalStore.t('Floor')">
+				<button type="button" :aria-pressed="viewMode === 'kanban'" data-test="floor-view-list" @click="floorStore.setViewMode('kanban')"><v-icon icon="mdi-view-list-outline" size="18" />{{ verticalStore.t("List view") }}</button>
+				<button type="button" :aria-pressed="viewMode === 'plan'" :disabled="!canShowPlan" data-test="floor-view-plan" @click="floorStore.setViewMode('plan')"><v-icon icon="mdi-floor-plan" size="18" />{{ verticalStore.t(canShowPlan ? "Plan view" : "Plan needs a wider screen") }}</button>
+			</div>
 			<!-- Two verbs stay on the bar; the rest move behind a labelled menu.
 			     Five icon-only buttons taught nobody what they did and left the
 			     floor switcher so little width that "Salón Principal" rendered
@@ -68,7 +73,6 @@
 						/>
 					</template>
 					<v-list density="compact" class="floor-view__menu">
-
 						<v-list-item
 							v-if="viewMode === 'plan' && !editorMode && wide"
 							prepend-icon="mdi-fit-to-page-outline"
@@ -89,10 +93,6 @@
 			</div>
 		</header>
 
-		<div v-if="!editorMode && floors.length" class="floor-view__modes" :aria-label="verticalStore.t('Floor')">
-			<button type="button" :aria-pressed="viewMode === 'kanban'" data-test="floor-view-list" @click="floorStore.setViewMode('kanban')"><v-icon icon="mdi-view-list-outline" size="18" />{{ verticalStore.t("List view") }}</button>
-			<button type="button" :aria-pressed="viewMode === 'plan'" :disabled="!canShowPlan" data-test="floor-view-plan" @click="floorStore.setViewMode('plan')"><v-icon icon="mdi-floor-plan" size="18" />{{ verticalStore.t(canShowPlan ? "Plan view" : "Plan needs a wider screen") }}</button>
-		</div>
 
 		<TabsRail show-new :compact="!wide" @open="openTabOrder" @new-tab="openJump('tab')" />
 

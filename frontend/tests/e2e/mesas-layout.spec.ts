@@ -28,6 +28,7 @@ for (const [width, height] of sizes) {
 				page.locator('[data-test="floor-view-list"]'),
 			).toHaveAttribute("aria-pressed", "true");
 		await page.locator('[data-test="floor-view-list"]').click();
+		if (height < 600) await expect(page.locator(".floor-kanban__card").first()).toBeInViewport({ ratio: 0.5 });
 		const search = page.locator('[data-test="floor-search"]');
 		await search.fill("sofia");
 		await expect(page.locator(".floor-kanban__card")).toHaveCount(1);
@@ -50,6 +51,8 @@ for (const [width, height] of sizes) {
 		}
 		await expect(search).toHaveValue("sofia");
 		await search.fill("");
+		const toggle = page.locator('[data-test="floor-filters-toggle"]');
+		if (await toggle.isVisible()) await toggle.click();
 		await page.locator('[data-test="floor-filter-cleaning"]').click();
 		await expect(page.locator(".floor-kanban__card")).toHaveCount(1);
 		await expect(page.locator("button button")).toHaveCount(0);

@@ -1,11 +1,14 @@
 <template>
 	<div class="floor-kanban">
 		<div class="floor-kanban__finder">
+			<div class="floor-kanban__search-row">
 			<label class="floor-kanban__search">
 				<v-icon icon="mdi-magnify" size="20" />
 				<input :aria-label="searchLabel" v-model="query" type="search" :placeholder="searchLabel" data-test="floor-search" />
 			</label>
-			<div class="floor-kanban__filters" :aria-label="verticalStore.t('Status')">
+			<button v-if="shortScreen" type="button" class="floor-kanban__filter-toggle" :aria-expanded="filtersOpen" data-test="floor-filters-toggle" @click="filtersOpen = !filtersOpen"><v-icon icon="mdi-filter-variant" size="18" />{{ status === 'all' ? verticalStore.t('Filter') : filters.find(choice => choice.key === status)?.title }}</button>
+			</div>
+			<div v-if="!shortScreen || filtersOpen" class="floor-kanban__filters" :aria-label="verticalStore.t('Status')">
 				<button v-for="choice in filters" :key="choice.key" type="button" :aria-pressed="status === choice.key" :data-test="`floor-filter-${choice.key}`" @click="status = choice.key">{{ choice.title }} <span>{{ choice.count }}</span></button>
 			</div>
 		</div>
@@ -71,6 +74,7 @@
  * to next needs a number.
  */
 import { computed, ref } from "vue";
+import { useResponsive } from "../../composables/core/useResponsive";
 import { useFloorStore, type TableRow } from "../../stores/floorStore";
 import { useVerticalStore } from "../../stores/verticalStore";
 import { useFormat } from "../../format";
@@ -83,6 +87,9 @@ const verticalStore = useVerticalStore();
 const { formatCurrency } = useFormat();
 const { now } = useFloorClock();
 
+const { windowHeight } = useResponsive();
+const shortScreen = computed(() => windowHeight.value < 600);
+const filtersOpen = ref(false);
 const query = ref("");
 const status = ref("all");
 const searchLabel = computed(() => verticalStore.t("Search tables or accounts"));
@@ -229,6 +236,10 @@ function onTap(row: KanbanRow) {
 </script>
 
 <style scoped>
+.floor-kanban__search-row { display: flex; align-items: stretch; gap: 6px; }
+.floor-kanban__search-row .floor-kanban__search { flex: 1; }
+.floor-kanban__filter-toggle { display: flex; align-items: center; gap: 4px; max-width: 45%; min-height: 44px; padding: 6px 10px; border: 1px solid var(--pos-border); border-radius: 8px; color: var(--pos-text-primary); font-size: 13px; }
+
 .floor-kanban__finder {
 	flex: none;
 	display: grid;
