@@ -120,7 +120,7 @@
 				:available-width="panelWidth"
 				@done="floorStore.setEditorMode(false)"
 			/>
-			<template v-else-if="!activeFloorTables.length">
+			<template v-else-if="!activeFloorTables.length && viewMode === 'plan'">
 				<div class="floor-view__blank">
 					<v-icon icon="mdi-table-furniture" size="32" />
 					<p class="floor-view__blank-text">{{ emptyFloorLabel }}</p>
@@ -136,7 +136,7 @@
 				:selected-table="selectedTableName"
 				@open="askTable"
 			/>
-			<FloorKanban v-else @open="askTable" />
+			<FloorKanban v-else :selected-table="selectedTableName" @open="askTable" @edit="floorStore.setEditorMode(true)" />
 
 			<!-- The mesa sheet: the whole answer for the table under the finger,
 			     beside the room instead of over it. Only where the stage is the
@@ -147,13 +147,15 @@
 				class="floor-view__sheet"
 				:table="mesaSheetTable"
 				:orders="selectedTableOrders"
-				:selected-uid="selectedAccountUid"
+				:selected-uid="selectedAccount?.order_uid || null"
+				:show-charge="!ownsBand"
 				:firing="firing"
 				:releasing="releasing"
 				@select="pickAccount"
 				@add-items="sheetAddItems"
 				@fire="sheetFire"
 				@view="sheetView"
+				@charge="chargeSelectedAccount"
 				@transfer="sheetTransfer"
 				@release="sheetRelease"
 				@open="sheetOpenTable"
@@ -286,13 +288,13 @@
  * usable proxy for the room this component actually has, and a media query
  * here would put a side rail on a 500px column.
  */
-import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import FloorEditor from "./FloorEditor.vue";
 import FloorKanban from "./FloorKanban.vue";
 import FloorPlan from "./FloorPlan.vue";
 import JumpPad from "./JumpPad.vue";
 import MesaSheet from "./MesaSheet.vue";
-import TableActionSheet, { type TableSheetAction } from "./TableActionSheet.vue";
+import TableActionSheet, { type AccountSheetAction, type TableSheetAction } from "./TableActionSheet.vue";
 import TableTicketPanel from "./TableTicketPanel.vue";
 import TabsRail from "./TabsRail.vue";
 import { resolveCanvas, resolveTableLayout } from "./floorGeometry";
@@ -540,7 +542,7 @@ const floorBandState = computed<BandState>(() =>
 		kind: "floorAccount",
 		total: Number(selectedAccount.value?.total) || 0,
 		accountLabel: selectedAccountLabel.value,
-		chargeable: Number(selectedAccount.value?.items_count) > 0,
+		chargeable: Number(selectedAccount.value?.items_count) > 0 && selectedAccount.value?.status !== "Settling",
 	}),
 );
 
@@ -815,7 +817,12 @@ function floorActionEnd(startedAt: number) {
  * question is the sheet BESIDE the room; otherwise it is the modal, unchanged.
  * Either way the tile creates nothing on its own.
  */
-function askTable(table: TableRow) {
+async function askTable(table: TableRow) {
+	if (table.floor !== floorStore.activeFloor) {
+		floorStore.setActiveFloor(table.floor);
+		// Let the floor-change watcher clear the old selection before selecting this result.
+		await nextTick();
+	}
 	if (stage.value && panelWidth.value >= STAGE_SHEET_MIN_PANEL) {
 		selectTable(table);
 		return;
@@ -1007,12 +1014,14 @@ async function onSheetAction(action: TableSheetAction, table: TableRow) {
 /** A table with split accounts never routes through openOrCreate: that server
  * helper deliberately chooses the oldest order, while the operator has just
  * named the exact account they mean. Hydrate and open that row directly. */
-async function openSelectedOrder(row: OrderRow) {
+async function openSelectedOrder(row: OrderRow, action: AccountSheetAction = "view") {
 	const startedAt = floorActionStart();
 	const order = await floorStore.resumeOrder(row);
 	if (order) {
 		floorActionEnd(startedAt);
-		bus.emit("floor_order_opened", { order_uid: order.order_uid });
+		if (action === "charge") chargeActiveOrder();
+		else if (action === "add-items") goToItems();
+		else bus.emit("floor_order_opened", { order_uid: order.order_uid });
 	}
 }
 

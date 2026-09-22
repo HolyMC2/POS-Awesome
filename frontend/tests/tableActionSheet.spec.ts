@@ -199,7 +199,11 @@ describe("TableActionSheet", () => {
 
 		expect(actionIds(wrapper)).toEqual([
 			"table-sheet-order-ord-a",
+			"table-sheet-add-ord-a",
+			"table-sheet-charge-ord-a",
 			"table-sheet-order-ord-b",
+			"table-sheet-add-ord-b",
+			"table-sheet-charge-ord-b",
 			// A third party can still open their own cuenta from the picker.
 			"table-sheet-new-account",
 		]);
@@ -208,6 +212,36 @@ describe("TableActionSheet", () => {
 
 		await wrapper.find("[data-test='table-sheet-order-ord-b']").trigger("click");
 		expect(selected).toEqual([orders.value[1]]);
+	});
+
+	it.each(["add-items", "charge"])("routes %s directly to the named split account", async (action) => {
+		orders.value = [
+			{ order_uid: "ord-a", tab_name: "Sofía", total: 0, items_count: 0 },
+			{ order_uid: "ord-b", tab_name: "Diego", total: 80, items_count: 1 },
+		];
+		const onOrder = vi.fn(), onClose = vi.fn();
+		const wrapper = mount(TableActionSheet, {
+			props: { modelValue: true, table: table(), onOrder, "onUpdate:modelValue": onClose },
+			global: { components: { VDialog: PassThrough, VCard: PassThrough, VIcon: IconStub } },
+		});
+		expect(wrapper.find('[data-test="table-sheet-charge-ord-a"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="table-sheet-charge-ord-b"]').attributes("aria-label")).toContain("Diego · $80.00");
+		await wrapper.find(`[data-test="table-sheet-${action === "charge" ? "charge" : "add"}-ord-b"]`).trigger("click");
+		expect(onOrder).toHaveBeenCalledWith(orders.value[1], action);
+		expect(onClose).toHaveBeenCalledWith(false);
+		expect(wrapper.find("button button").exists()).toBe(false);
+	});
+
+	it("explains queued payment and withholds duplicate account actions", () => {
+		orders.value = [{ order_uid: "queued", status: "Settling", total: 80, items_count: 1 }];
+		const single = mountSheet(table());
+		expect(single.text()).toContain("Payment queued — waiting for connection");
+		expect(actionIds(single)).toEqual(["table-sheet-new-account"]);
+		orders.value.push({ order_uid: "open", status: "Open", total: 50, items_count: 1 });
+		const split = mountSheet(table());
+		expect(split.find('[data-test="table-sheet-order-queued"]').attributes("disabled")).toBeDefined();
+		expect(split.find('[data-test="table-sheet-charge-queued"]').exists()).toBe(false);
+		expect(split.find('[data-test="table-sheet-charge-open"]').exists()).toBe(true);
 	});
 
 	it("reports the picked verb with its table, then closes itself", async () => {

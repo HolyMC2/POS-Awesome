@@ -40,15 +40,21 @@ for (const [width, height] of sizes) {
 			await expect(
 				sheet.locator('[data-test="table-sheet-charge"]'),
 			).toHaveCount(0);
-			await page.getByTestId("table-sheet-close").click();
+			const charge = sheet.locator('[data-test="table-sheet-charge-order-2"]');
+			await expect(charge).toHaveAttribute("aria-label", /Familia de la terraza/);
+			await charge.click();
+			await expect(sheet).toBeHidden();
 		} else {
 			await expect(
 				page.locator('[data-test="mesa-sheet"]'),
 			).toBeVisible();
-			await expect(
-				page.locator('[data-test="mesa-sheet-new-account"]'),
-			).toBeVisible();
+			await expect(page.locator('[data-test="mesa-sheet-new-account"]')).toBeVisible();
+			await page.locator('[data-test="mesa-sheet-account-order-2"]').click();
+			await page.locator('[data-test="mesa-sheet-charge"]').click();
 		}
+		await expect.poll(() => page.evaluate(() => (window as any).__mesasFixture.intents.some((intent: any) => intent.type === "request_invoice_payment"))).toBe(true);
+		expect(await page.evaluate(() => (window as any).__mesasFixture.floor.activeOrder.order_uid)).toBe("order-2");
+		expect(await page.evaluate(() => (window as any).__mesasFixture.intents.filter((intent: any) => intent.type === "resume").map((intent: any) => intent.uid))).toEqual(["order-2"]);
 		await expect(search).toHaveValue("sofia");
 		await search.fill("");
 		const toggle = page.locator('[data-test="floor-filters-toggle"]');
@@ -150,6 +156,22 @@ for (const [width, height] of sizes) {
 			await page.locator(".floor-view").evaluate(el => { el.scrollTop = 0; });
 			await expect(page.locator(".floor-kanban__card").first()).toBeInViewport({ ratio: 0.5 });
 		}
+		await page.locator('[data-test="floor-view-list"]').click();
+		await search.fill("Mesa 17");
+		await expect(page.locator(".floor-kanban__card")).toHaveCount(1);
+		await expect(page.locator(".floor-kanban__card")).toContainText("Terraza con nombre largo");
+		await page.locator(".floor-kanban__card").click();
+		await expect.poll(() => page.evaluate(() => (window as any).__mesasFixture.floor.activeFloor)).toBe("floor-1");
+		if (width < 900) {
+			await expect(page.locator('[data-test="table-sheet-open"]')).toBeVisible();
+			await page.getByTestId("table-sheet-close").click();
+		} else await expect(page.locator('[data-test="mesa-sheet"]')).toContainText("Mesa 17");
+		await expect(search).toHaveValue("Mesa 17");
+		await page.evaluate(() => (window as any).__mesasFixture.floor.setActiveFloor("floor-2"));
+		await search.fill("");
+		await expect(page.locator(".floor-kanban__no-results")).toContainText("Edit floor plan");
+		await search.fill("sofia");
+		await expect(page.locator(".floor-kanban__card")).toHaveCount(1);
 		expect(errors).toEqual([]);
 	});
 }

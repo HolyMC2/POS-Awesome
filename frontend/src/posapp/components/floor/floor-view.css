@@ -368,3 +368,9 @@
 @media (max-width: 639px) {
 	.floor-view__bar .floor-view__modes { order: 1; flex-basis: 100%; }
 }
+
+@media (max-height: 599px) {
+	.floor-view__bar { padding-block: 2px; }
+	.floor-view--compact :deep(.tabs-rail) { padding-block: 2px; }
+	.floor-view--compact :deep(.floor-kanban__finder) { padding-block: 4px; }
+}

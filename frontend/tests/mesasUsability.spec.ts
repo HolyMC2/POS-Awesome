@@ -13,17 +13,14 @@ const orders = [
 		unsent_count: 1,
 	},
 ];
+const tables = [table, { ...table, name: "table-dirty", table_label: "Patio", needs_cleaning: 1 },
+	{ ...table, name: "table-terrace", floor: "terrace" },
+	{ ...table, name: "table-disabled", is_active: 0 }];
 vi.mock("../src/posapp/stores/floorStore", () => ({
 	useFloorStore: () => ({
-		activeFloorTables: [
-			table,
-			{
-				...table,
-				name: "table-dirty",
-				table_label: "Patio",
-				needs_cleaning: 1,
-			},
-		],
+		activeFloorTables: tables.slice(0, 2),
+		tables,
+		floors: [{ name: "salon", floor_name: "Salón" }, { name: "terrace", floor_name: "Terraza" }],
 		ordersForTable: (name: string) => (name === table.name ? orders : []),
 		unsentCountForTable: () => 1,
 		transferOrder: null,
@@ -97,6 +94,25 @@ describe("finding tables", () => {
 		expect(wrapper.findAll(".floor-kanban__card")).toHaveLength(1);
 		await wrapper.find(".floor-kanban__card").trigger("click");
 		expect(onOpen).toHaveBeenCalledWith(table);
+		wrapper.unmount();
+	});
+	it("searches other floors, names the location, and excludes inactive tables", async () => {
+		const onOpen = vi.fn();
+		const wrapper = mount(FloorKanban, { global, props: { onOpen } });
+		await wrapper.find("input").setValue("terraza");
+		expect(wrapper.findAll(".floor-kanban__card")).toHaveLength(1);
+		expect(wrapper.find(".floor-kanban__card").text()).toContain("Terraza");
+		await wrapper.find(".floor-kanban__card").trigger("click");
+		expect(onOpen).toHaveBeenCalledWith(tables[2]);
+		await wrapper.find("input").setValue("12");
+		expect(wrapper.findAll(".floor-kanban__card")).toHaveLength(2);
+		wrapper.unmount();
+	});
+	it("names the party on the card and marks the selected table", () => {
+		const wrapper = mount(FloorKanban, { global, props: { selectedTable: table.name } });
+		const card = wrapper.find('[data-test="kanban-card-12"]');
+		expect(card.text()).toContain("Sofía Hernández");
+		expect(card.attributes("aria-pressed")).toBe("true");
 		wrapper.unmount();
 	});
 	it("filters cleaning tables and recovers from a search with no results", async () => {

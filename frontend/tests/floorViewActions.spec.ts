@@ -110,6 +110,8 @@ vi.mock("../src/posapp/components/floor/TableActionSheet.vue", async () => {
 					h("button", { "data-test": "sheet-new-account", onClick: () => emit("action", "new-account", props.table) }),
 					h("button", { "data-test": "sheet-charge", onClick: () => emit("action", "charge", props.table) }),
 					h("button", { "data-test": "sheet-release", onClick: () => emit("action", "release", props.table) }),
+					h("button", { "data-test": "sheet-split-charge", onClick: () => emit("order", { ...order, order_uid: "ord-b" }, "charge") }),
+					h("button", { "data-test": "sheet-split-add", onClick: () => emit("order", { ...order, order_uid: "ord-b" }, "add-items") }),
 					h("button", { "data-test": "sheet-order", onClick: () => emit("order", {
 						order_uid: "ord-a", table: "tbl-4", tab_name: "Familia A", total: 120,
 						items_count: 2, unsent_count: 0, modified: "2026-08-13 11:45:00",
@@ -195,6 +197,34 @@ describe("FloorView action routing", () => {
 		await wrapper.find("[data-test='sheet-add']").trigger("click");
 
 		expect(floorStore.openOrCreate).toHaveBeenCalledWith(expect.objectContaining({ name: table.name }));
+		expect(eventBus.emit).toHaveBeenCalledWith("set_selector_view", "items");
+	});
+
+	it("waits for the exact split account before requesting payment", async () => {
+		let hydrate!: (value: any) => void;
+		floorStore.resumeOrder.mockImplementationOnce(() => new Promise(resolve => { hydrate = resolve; }));
+		const { wrapper, eventBus } = mountFloor();
+		await wrapper.find('[data-test="sheet-split-charge"]').trigger("click");
+		expect(floorStore.resumeOrder).toHaveBeenCalledWith(expect.objectContaining({ order_uid: "ord-b" }));
+		expect(floorStore.openOrCreate).not.toHaveBeenCalled();
+		expect(eventBus.emit).not.toHaveBeenCalledWith("request_invoice_payment");
+		hydrate({ ...order, order_uid: "ord-b" });
+		await flushPromises();
+		expect(eventBus.emit).toHaveBeenCalledWith("request_invoice_payment");
+	});
+	it("does not request payment when the selected account cannot be resumed", async () => {
+		floorStore.resumeOrder.mockResolvedValueOnce(null as any);
+		const { wrapper, eventBus } = mountFloor();
+		await wrapper.find('[data-test="sheet-split-charge"]').trigger("click");
+		await flushPromises();
+		expect(eventBus.emit).not.toHaveBeenCalledWith("request_invoice_payment");
+	});
+	it("adds products to the chosen split account", async () => {
+		const { wrapper, eventBus } = mountFloor();
+		await wrapper.find('[data-test="sheet-split-add"]').trigger("click");
+		await flushPromises();
+		expect(floorStore.resumeOrder).toHaveBeenCalledWith(expect.objectContaining({ order_uid: "ord-b" }));
+		expect(floorStore.openOrCreate).not.toHaveBeenCalled();
 		expect(eventBus.emit).toHaveBeenCalledWith("set_selector_view", "items");
 	});
 

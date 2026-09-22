@@ -27,23 +27,28 @@
 						`floor-kanban__card--${row.age}`,
 						{
 							'floor-kanban__card--occupied': row.occupied,
+							'floor-kanban__card--selected': row.table.name === selectedTable,
 							'floor-kanban__card--blocked': transferActive && row.occupied,
 							'floor-kanban__card--target': transferActive && !row.occupied,
 							'floor-kanban__card--pending': row.pending,
 						},
 					]"
+					:aria-pressed="row.table.name === selectedTable"
 					:disabled="transferActive && row.occupied"
 					:data-test="`kanban-card-${row.table.table_label}`"
 					@click="onTap(row)"
 				>
 					<span class="floor-kanban__card-top">
 						<strong class="floor-kanban__label">{{ row.table.table_label }}</strong>
-						<span v-if="row.occupied" class="floor-kanban__total">{{ row.totalLabel }}</span>
+						<span v-if="row.accountCount > 1" class="floor-kanban__total">{{ row.accountCount }} {{ verticalStore.t("open accounts") }}</span>
+						<span v-else-if="row.occupied" class="floor-kanban__total">{{ row.totalLabel }}</span>
 						<span v-if="row.unsent" class="floor-kanban__badge">
 							<v-icon icon="mdi-silverware-variant" size="12" />
 							{{ row.unsent }} {{ verticalStore.t("not sent to the kitchen") }}
 						</span>
 					</span>
+					<span v-if="row.accountNames" class="floor-kanban__accounts">{{ row.accountNames }}</span>
+					<span v-if="query.trim()" class="floor-kanban__location">{{ row.floorLabel }}</span>
 					<span class="floor-kanban__meta">
 						<span v-for="chip in row.chips" :key="chip.key" class="floor-kanban__chip" :class="chip.tone ? `floor-kanban__chip--${chip.tone}` : ''">
 							<v-icon :icon="chip.icon" size="13" />
@@ -55,8 +60,14 @@
 				<p v-if="!column.rows.length" class="floor-kanban__empty">{{ column.empty }}</p>
 			</section>
 			<div v-if="!visibleColumns.length" class="floor-kanban__no-results" role="status">
-				<p>{{ verticalStore.t("No results found") }}</p>
-				<button type="button" @click="query = ''; status = 'all'">{{ verticalStore.t("Clear filters") }}</button>
+				<template v-if="query.trim() || status !== 'all'">
+					<p>{{ verticalStore.t("No results found") }}</p>
+					<button type="button" @click="query = ''; status = 'all'">{{ verticalStore.t("Clear filters") }}</button>
+				</template>
+				<template v-else>
+					<p>{{ verticalStore.t("No tables yet — edit your floor plan to add some") }}</p>
+					<button type="button" @click="emit('edit')">{{ verticalStore.t("Edit floor plan") }}</button>
+				</template>
 			</div>
 		</div>
 	</div>
@@ -80,7 +91,9 @@ import { useVerticalStore } from "../../stores/verticalStore";
 import { useFormat } from "../../format";
 import { ageStep, formatIdleShort, idleMinutes, useFloorClock, type AgeStep } from "./floorClock";
 
-const emit = defineEmits<{ (event: "open", table: TableRow): void }>();
+defineProps<{ selectedTable?: string | null }>();
+
+const emit = defineEmits<{ (event: "open", table: TableRow): void; (event: "edit"): void }>();
 
 const floorStore = useFloorStore();
 const verticalStore = useVerticalStore();
@@ -109,11 +122,19 @@ interface KanbanRow {
 	pending: boolean;
 	age: AgeStep;
 	totalLabel: string;
+	accountCount: number;
+	accountNames: string;
+	floorLabel: string;
 	chips: Chip[];
 }
 
+// A search can find a party anywhere in the room's configured floors.
+// With no query, the list remains the selected floor's service queue.
+const sourceTables = computed(() => query.value.trim()
+	? floorStore.tables.filter((table) => table.is_active !== 0)
+	: floorStore.activeFloorTables);
 const rows = computed<KanbanRow[]>(() =>
-	floorStore.activeFloorTables.map((table) => {
+	sourceTables.value.map((table) => {
 		const tableOrders = floorStore.ordersForTable(table.name);
 		const occupied = tableOrders.length > 0;
 		const total = tableOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
@@ -130,6 +151,9 @@ const rows = computed<KanbanRow[]>(() =>
 		const pending = tableOrders.some((order) => order.pending_sync);
 
 		const chips: Chip[] = [];
+		if (tableOrders.some((order) => order.status === "Settling")) {
+			chips.push({ key: "settling", icon: "mdi-cash-register", text: verticalStore.t("Payment queued — waiting for connection"), tone: "warm" });
+		}
 		if (occupied) {
 			chips.push({
 				key: "lines",
@@ -176,7 +200,10 @@ const rows = computed<KanbanRow[]>(() =>
 			unsent: floorStore.unsentCountForTable(table.name),
 			pending,
 			age: occupied ? ageStep(idle) : "fresh",
-			totalLabel: total ? formatCurrency(total) : "",
+			totalLabel: formatCurrency(total),
+			accountCount: tableOrders.length,
+			accountNames: tableOrders.map((order) => order.tab_name || order.order_uid.slice(0, 6)).join(" · "),
+			floorLabel: floorStore.floors.find((floor) => floor.name === table.floor)?.floor_name || "",
 			chips,
 		};
 	}),
@@ -220,6 +247,7 @@ const visibleColumns = computed(() => {
 		.filter((column) => status.value === "all" || column.key === status.value)
 		.map((column) => ({ ...column, rows: column.rows.filter((row) => !needle || normalize([
 			row.table.table_label,
+			row.floorLabel,
 			...floorStore.ordersForTable(row.table.name).map((order) => order.tab_name || ""),
 		].join(" ")).includes(needle)) }))
 		.filter((column) => column.rows.length > 0);
@@ -389,6 +417,10 @@ function onTap(row: KanbanRow) {
 .floor-kanban__card:hover:not(:disabled) {
 	border-color: var(--pos-primary);
 }
+
+.floor-kanban__accounts { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.floor-kanban__location { font-size: 12px; color: var(--pos-text-secondary); overflow-wrap: anywhere; }
+.floor-kanban__card--selected { outline: 2px solid var(--pos-primary); outline-offset: -2px; background: var(--pos-primary-container); }
 
 .floor-kanban__card--occupied {
 	border-inline-start-color: var(--pos-primary);

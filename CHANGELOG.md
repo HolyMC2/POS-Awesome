@@ -6,6 +6,15 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 ## Unreleased
 
+- **Mesas finding and account actions (2026-09-22, lab release candidate).**
+  Search finds tables and account names across floors and shows each result's
+  location. Cards name the parties, identify split accounts and mark the selected
+  table. Split accounts offer their own Add items and Charge actions, hydrating
+  the exact chosen order before handing off to payment. Queued payments explain
+  the connection wait and withhold repeat actions. Compact landscape spacing
+  preserves room for tables. Frontend and one Spanish translation only; no
+  migration. Restore prior assets and translations together to roll back.
+
 - **Mesas workflow polish (2026-09-22, lab release candidate).** Compact floors
   start with readable searchable tables and occupied/free/cleaning filters.
   Floor switching and named accounts fit without sideways scrolling; list/map
