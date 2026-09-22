@@ -1,6 +1,7 @@
 import { ref, getCurrentInstance, inject } from "vue";
 import { useToastStore } from "../../../stores/toastStore.js";
 import { useUIStore } from "../../../stores/uiStore.js";
+import { useClosingFlowStore } from "../../../stores/closingFlowStore";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
 import {
 	initPromise,
@@ -149,6 +150,11 @@ export function usePosShift(openDialog?: () => void) {
 	const buildVersion =
 		typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : null;
 	const toastStore = useToastStore();
+	const closingFlow = useClosingFlowStore();
+	const reportClosingError = (notice: any) => {
+		closingFlow.error = notice.message || notice.title;
+		toastStore.show(notice);
+	};
 	const uiStore = useUIStore();
 
 	const pos_profile = ref<any>(null);
@@ -278,7 +284,7 @@ export function usePosShift(openDialog?: () => void) {
 
 	async function canCloseWithSavedWork(shift: any, fallbackProfile?: any, fence = false) {
 		if (isOffline()) {
-			toastStore.show({ title: translateMessage("Offline — cannot close shift"),
+			reportClosingError({ title: translateMessage("Offline — cannot close shift"),
 				message: translateMessage("Reconnect before closing so every sale is accounted for."), color: "warning" });
 			return false;
 		}
@@ -289,23 +295,30 @@ export function usePosShift(openDialog?: () => void) {
 				pos_profile: shift?.pos_profile || fallbackProfile?.name || fallbackProfile,
 			}, fence);
 			if (pending) {
-				toastStore.show({ title: translateMessage("Unsynced sales pending"),
+				reportClosingError({ title: translateMessage("Unsynced sales pending"),
 					message: `${translateMessage("Cannot close: saved sales or cash movements still need sync or review.")} (${pending})`,
 					color: "warning", timeout: 0 });
 				return false;
 			}
 			// The browser may have gone offline while IndexedDB was opening.
-			if (isOffline()) throw new Error("offline");
+			if (isOffline()) throw new Error(translateMessage("Reconnect before closing so every sale is accounted for."));
 			return true;
-		} catch {
-			toastStore.show({ title: translateMessage("Closing is paused"),
-				message: translateMessage("Saved work could not be verified. Reconnect and retry before closing this shift."),
+		} catch (error) {
+			// Terminal ownership and storage failures need different recovery.
+			// Keep the guard's actionable reason instead of hiding it behind a retry.
+			const reason = error instanceof Error ? error.message.replace(/<[^>]+>/g, "").trim() : "";
+			reportClosingError({ title: translateMessage("Closing is paused"),
+				message: reason || translateMessage("Saved work could not be verified. Reconnect and retry before closing this shift."),
 				color: "error", timeout: 0 });
 			return false;
 		}
 	}
 
 	async function get_closing_data() {
+		if (closingFlow.preparing || closingFlow.submitting) return;
+		const previousDraft = closingFlow.draft;
+		closingFlow.$reset();
+		closingFlow.preparing = true;
 		const cachedOpeningShift = (getOpeningStorage() as any)
 			?.pos_opening_shift;
 		const resolvedShift =
@@ -314,10 +327,11 @@ export function usePosShift(openDialog?: () => void) {
 			cachedOpeningShift ||
 			null;
 		if (!resolvedShift) {
+			closingFlow.preparing = false;
 			// Words, not silence (2026-08-25): a refused close with no reason
 			// reads as a dead button — the movil roast's audit found exactly
 			// this shape swallowing a press with nothing on screen.
-			toastStore.show({
+			reportClosingError({
 				title: typeof (window as any)?.__ === "function" ? (window as any).__("No open shift") : "No open shift",
 				message:
 					typeof (window as any)?.__ === "function"
@@ -328,7 +342,11 @@ export function usePosShift(openDialog?: () => void) {
 			return Promise.resolve();
 		}
 
-		if (!await canCloseWithSavedWork(resolvedShift, uiStore.posProfile || pos_profile.value)) return;
+		if (previousDraft.pos_opening_shift === resolvedShift.name) closingFlow.draft = previousDraft;
+		if (!await canCloseWithSavedWork(resolvedShift, uiStore.posProfile || pos_profile.value)) {
+			closingFlow.preparing = false;
+			return;
+		}
 
 		return frappe
 			.call(
@@ -336,9 +354,18 @@ export function usePosShift(openDialog?: () => void) {
 				{ opening_shift: resolvedShift },
 			)
 			.then((r: any) => {
+				if (!r.message) throw new Error(translateMessage("The server returned no closing details. Try loading them again."));
 				if (r.message) {
 					const response = normalizeClosingShiftPreparationResponse(r.message);
 					const closingShift = response.closing_shift;
+					if (closingShift && previousDraft.pos_opening_shift === closingShift.pos_opening_shift) {
+						// Reload server totals after reviewing drafts without losing the drawer count.
+						for (const row of closingShift.payment_reconciliation || []) {
+							const counted = previousDraft.payment_reconciliation?.find((old: any) => old.mode_of_payment === row.mode_of_payment);
+							if (counted) row.closing_amount = counted.closing_amount;
+						}
+						closingShift.posa_difference_note = previousDraft.posa_difference_note;
+					}
 					const skippedPrintedInvoices = Array.isArray(response.skipped_printed_invoices)
 						? response.skipped_printed_invoices
 						: [];
@@ -348,7 +375,7 @@ export function usePosShift(openDialog?: () => void) {
 					if (!closingShift) {
 						// Same rule: the server answered but carried no closing
 						// draft — say so instead of eating the press.
-						toastStore.show({
+						reportClosingError({
 							title:
 								typeof (window as any)?.__ === "function"
 									? (window as any).__("Could not prepare closing")
@@ -362,42 +389,11 @@ export function usePosShift(openDialog?: () => void) {
 						return;
 					}
 
-					if (skippedPrintedInvoices.length) {
-						const confirmed = window.confirm(
-							buildSkippedClosingInvoicesPrompt(skippedPrintedInvoices),
-						);
-						if (!confirmed) {
-							return;
-						}
-					}
-
-					if (pendingDrafts.length) {
-						if (response.drafts_will_be_deleted) {
-							// Profile purges drafts at close — make that explicit
-							// and let the closer back out.
-							const confirmed = window.confirm(
-								buildPendingDraftsPrompt(pendingDrafts),
-							);
-							if (!confirmed) {
-								return;
-							}
-						} else {
-							// Closing would throw server-side (stranded drafts).
-							// Stop here with the actionable list instead of
-							// letting the submit fail later.
-							const details = pendingDrafts
-								.slice(0, 5)
-								.map((d) => (d?.owner ? `${d?.name} (${d.owner})` : d?.name))
-								.join(", ");
-							toastStore.show({
-								title: __("Draft invoices block closing"),
-								message: `${__("Submit or delete these drafts first — a supervisor can see them in Invoice Management:")} ${details}${pendingDrafts.length > 5 ? "…" : ""}`,
-								color: "error",
-								timeout: 0,
-							});
-							return;
-						}
-					}
+					// Review belongs beside the counts, not in browser confirmation popups.
+					closingFlow.pendingDrafts = pendingDrafts.map((draft) => ({ ...draft, name: draft.name || "" }));
+					closingFlow.skippedInvoices = skippedPrintedInvoices;
+					closingFlow.deletesDrafts = Boolean(response.drafts_will_be_deleted);
+					closingFlow.draft = closingShift;
 
 					eventBus?.emit("open_ClosingDialog", closingShift);
 				}
@@ -418,136 +414,171 @@ export function usePosShift(openDialog?: () => void) {
 					translateMessage("Could not prepare closing shift.");
 				message = String(message).replace(/<[^>]+>/g, "").trim();
 				console.error("Error preparing closing shift", err);
-				toastStore.show({
+				reportClosingError({
 					title: translateMessage("Could not close shift"),
 					message,
 					color: "error",
 					timeout: 12000,
 				});
-			});
+			}).finally(() => { closingFlow.preparing = false; });
 	}
 
 	async function submit_closing_pos(data: any) {
-		const opening = data?.pos_opening_shift || uiStore.posOpeningShift ||
-			pos_opening_shift.value || (getOpeningStorage() as any)?.pos_opening_shift;
-		if (!await canCloseWithSavedWork(opening, data?.pos_profile || uiStore.posProfile || pos_profile.value, true)) return;
-		debugLog("Submitting closing shift", data);
-		const closeStartedAt = Date.now();
-		// Capture the active profile before we null it below so the
-		// closing-ticket print can still reach the configured printer
-		// + format. After clear, `pos_profile.value` flips to null and
-		// the QZ helper would lose `posa_qz_printer_name` /
-		// `posa_closing_shift_print_format`.
-		const activeProfile = pos_profile.value as any;
-		return frappe
-			.call(
-				"posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.submit_closing_shift",
-				{
-					closing_shift: JSON.stringify(data),
-					...getShiftTerminalContext(),
-				},
-			)
-			.then((r: any) => {
-				debugLog("Submit result", r);
-				// SPEC C: corte friction — server round-trip of the close.
-				import("../../../utils/telemetry")
-					.then(({ track }) =>
-						track("pos:shift_close_ms", Date.now() - closeStartedAt, {
-							payments: (data?.payment_reconciliation || []).length,
-						}),
-					)
-					.catch(() => {});
-				if (r.message) {
-					// Auto-print the cierre-de-caja ticket BEFORE the
-					// state-clear runs. Fire-and-forget — print failure
-					// must not block the close (the doc is already
-					// submitted in the DB). Operator can re-print from
-					// Desk if QZ Tray was down.
-					const closingShiftName = r.message;
-					const printFormat = activeProfile?.posa_closing_shift_print_format;
-					if (printFormat && closingShiftName) {
-						// Dynamic import keeps qzTray out of the
-						// non-print hot path (its bundle pulls
-						// signing crypto + ESC/POS helpers).
-						import("../../../services/qzTray")
-							.then(({ printDocumentViaQz }) =>
-								printDocumentViaQz({
-									doctype: "POS Closing Shift",
-									name: closingShiftName,
-									printFormat,
-									letterhead: activeProfile?.letter_head || null,
-									noLetterhead: activeProfile?.letter_head ? "0" : "1",
-									printerName:
-										activeProfile?.posa_qz_printer_name || undefined,
-								}),
-							)
-							.catch((err) => {
-								console.warn(
-									"[POSA] Closing-shift auto-print failed:",
-									err,
-								);
-								toastStore.show({
-									title: translateMessage("Close-shift ticket print failed"),
-									message:
-										translateMessage("Shift was closed correctly. Re-print from Desk if needed."),
-									color: "warning",
-									timeout: 8000,
-								});
+		if (closingFlow.submitting || closingFlow.completed) return;
+		closingFlow.submitting = true;
+		closingFlow.error = "";
+		try {
+			const opening = data?.pos_opening_shift || uiStore.posOpeningShift ||
+				pos_opening_shift.value || (getOpeningStorage() as any)?.pos_opening_shift;
+			if (!await canCloseWithSavedWork(opening, data?.pos_profile || uiStore.posProfile || pos_profile.value, true)) return;
+			debugLog("Submitting closing shift", data);
+			const closeStartedAt = Date.now();
+			// Capture the active profile before we null it below so the
+			// closing-ticket print can still reach the configured printer
+			// + format. After clear, `pos_profile.value` flips to null and
+			// the QZ helper would lose `posa_qz_printer_name` /
+			// `posa_closing_shift_print_format`.
+			const activeProfile = pos_profile.value as any;
+			return await frappe
+				.call(
+					"posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.submit_closing_shift",
+					{
+						closing_shift: JSON.stringify(data),
+						...getShiftTerminalContext(),
+					},
+				)
+				.then((r: any) => {
+					if (!r?.message) throw new Error(translateMessage("The server did not confirm closure. Check the shift status before trying again."));
+					return r;
+				})
+				.catch(async (failure: unknown) => {
+					// A dropped response does not mean the transaction rolled back.
+					// Read the submitted document; never repeat the write automatically.
+					const openingName = typeof opening === "string" ? opening : opening?.name;
+					if (openingName) {
+						try {
+							const result = await frappe.call("frappe.client.get_value", {
+								doctype: "POS Closing Shift",
+								filters: { pos_opening_shift: openingName, docstatus: 1 },
+								fieldname: ["name", "docstatus", "pos_opening_shift"],
 							});
+							const closed = result?.message;
+							if (closed?.name && closed.docstatus === 1 && closed.pos_opening_shift === openingName)
+								return { message: closed.name };
+						} catch { /* Keep the original failure and the cashier's count. */ }
 					}
-					pos_profile.value = null;
-					pos_opening_shift.value = null;
-					uiStore.posOpeningShift = null;
-					staleShiftEnforced.value = false;
-					clearOpeningStorage();
-					useInvoiceStore().clear();
-					toastStore.show({
-						title: translateMessage("POS Shift Closed"),
-						color: "success",
-					});
-					check_opening_entry();
-				}
-			})
-			.catch((err: unknown) => {
-				console.error("Failed to submit closing shift", err);
-				// Surface the Frappe error to the operator. Without this
-				// the close-shift button silently no-ops, leaving the
-				// operator confused — e.g. ERPNext throws
-				// "missing valuation rate for items …" but until this
-				// catch wired the toast, the error only landed in the
-				// browser console + bench error log. Closing the shift
-				// is a quasi-financial event; silent failure is the
-				// worst possible UX.
-				const anyErr = err as any;
-				let message = "";
-				// Frappe puts user-facing exception messages in
-				// `_server_messages` (JSON-encoded array of objects).
-				const sm = anyErr?._server_messages || anyErr?.responseJSON?._server_messages;
-				if (sm) {
-					try {
-						const parsed = JSON.parse(sm);
-						if (Array.isArray(parsed) && parsed.length) {
-							const first = parsed[0];
-							const obj = typeof first === "string" ? JSON.parse(first) : first;
-							message = obj?.message || obj?.title || String(first);
+					throw failure;
+				})
+				.then((r: any) => {
+					debugLog("Submit result", r);
+					// SPEC C: corte friction — server round-trip of the close.
+					import("../../../utils/telemetry")
+						.then(({ track }) =>
+							track("pos:shift_close_ms", Date.now() - closeStartedAt, {
+								payments: (data?.payment_reconciliation || []).length,
+							}),
+						)
+						.catch(() => {});
+					if (r.message) {
+						closingFlow.completed = true;
+						// Auto-print the cierre-de-caja ticket BEFORE the
+						// state-clear runs. Fire-and-forget — print failure
+						// must not block the close (the doc is already
+						// submitted in the DB). Operator can re-print from
+						// Desk if QZ Tray was down.
+						const closingShiftName = r.message;
+						const printFormat = activeProfile?.posa_closing_shift_print_format;
+						if (printFormat && closingShiftName) {
+							// Dynamic import keeps qzTray out of the
+							// non-print hot path (its bundle pulls
+							// signing crypto + ESC/POS helpers).
+							import("../../../services/qzTray")
+								.then(({ printDocumentViaQz }) =>
+									printDocumentViaQz({
+										doctype: "POS Closing Shift",
+										name: closingShiftName,
+										printFormat,
+										letterhead: activeProfile?.letter_head || null,
+										noLetterhead: activeProfile?.letter_head ? "0" : "1",
+										printerName:
+											activeProfile?.posa_qz_printer_name || undefined,
+									}),
+								)
+								.catch((err) => {
+									console.warn(
+										"[POSA] Closing-shift auto-print failed:",
+										err,
+									);
+									toastStore.show({
+										title: translateMessage("Close-shift ticket print failed"),
+										message:
+											translateMessage("Shift was closed correctly. Re-print from Desk if needed."),
+										color: "warning",
+										timeout: 8000,
+									});
+								});
 						}
-					} catch {
-						message = String(sm);
+						pos_profile.value = null;
+						pos_opening_shift.value = null;
+						uiStore.posOpeningShift = null;
+						staleShiftEnforced.value = false;
+						clearOpeningStorage();
+						useInvoiceStore().clear();
+						toastStore.show({
+							title: translateMessage("POS Shift Closed"),
+							color: "success",
+						});
+						check_opening_entry();
 					}
-				}
-				if (!message) {
-					message = anyErr?.message || anyErr?.exc || String(err) || translateMessage("Close-shift failed.");
-				}
-				// Strip HTML — Frappe throws sometimes include <strong>/
-				// <br/> markup that toastStore renders as plain text.
-				message = message.replace(/<[^>]+>/g, "").trim();
-				toastStore.show({
-					title: translateMessage("Could not close shift"),
-					message,
-					color: "error",
-					timeout: 12000,
+				})
+				.catch((err: unknown) => {
+					console.error("Failed to submit closing shift", err);
+					// Surface the Frappe error to the operator. Without this
+					// the close-shift button silently no-ops, leaving the
+					// operator confused — e.g. ERPNext throws
+					// "missing valuation rate for items …" but until this
+					// catch wired the toast, the error only landed in the
+					// browser console + bench error log. Closing the shift
+					// is a quasi-financial event; silent failure is the
+					// worst possible UX.
+					const anyErr = err as any;
+					let message = "";
+					// Frappe puts user-facing exception messages in
+					// `_server_messages` (JSON-encoded array of objects).
+					const sm = anyErr?._server_messages || anyErr?.responseJSON?._server_messages;
+					if (sm) {
+						try {
+							const parsed = JSON.parse(sm);
+							if (Array.isArray(parsed) && parsed.length) {
+								const first = parsed[0];
+								const obj = typeof first === "string" ? JSON.parse(first) : first;
+								message = obj?.message || obj?.title || String(first);
+							}
+						} catch {
+							message = String(sm);
+						}
+					}
+					if (!message) {
+						message = anyErr?.message || anyErr?.exc || String(err) || translateMessage("Close-shift failed.");
+					}
+					// Strip HTML — Frappe throws sometimes include <strong>/
+					// <br/> markup that toastStore renders as plain text.
+					message = message.replace(/<[^>]+>/g, "").trim();
+					if (/NetworkError|Failed to fetch|Load failed|network request failed/i.test(message)) {
+						message = translateMessage("Connection lost. The shift may already be closed, but its status could not be confirmed. Your count is preserved. Reconnect and retry; the server will check the shift before closing it.");
+					}
+					reportClosingError({
+						title: translateMessage("Could not close shift"),
+						message,
+						color: "error",
+						timeout: 12000,
+					});
 				});
-			});
+		} catch (error) {
+			reportClosingError({ title: translateMessage("Could not close shift"),
+				message: error instanceof Error ? error.message : translateMessage("Check the shift status and try again."), color: "error" });
+		} finally { closingFlow.submitting = false; }
+
 	}
 
 	return {

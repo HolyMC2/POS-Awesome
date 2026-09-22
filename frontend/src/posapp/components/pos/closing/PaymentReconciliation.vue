@@ -1,10 +1,10 @@
 <template>
 	<div class="reconciliation-section">
 		<div class="table-header mb-4">
-			<h4 class="text-h6 text-grey-darken-2 mb-1">
+			<h4 class="text-h6 closing-payment-title mb-1">
 				{{ __("Payment Reconciliation") }}
 			</h4>
-			<p class="text-body-2 text-grey">
+			<p class="text-body-2 closing-payment-subtitle">
 				{{ __("Verify closing amounts for each payment method") }}
 			</p>
 		</div>
@@ -182,4 +182,7 @@ const varianceClass = (item) => {
 	background-color: rgba(var(--v-theme-on-surface), 0.05);
 	opacity: 0.7;
 }
+
+.closing-payment-title { color: var(--pos-text-primary); }
+.closing-payment-subtitle { color: var(--pos-text-secondary); }
 </style>

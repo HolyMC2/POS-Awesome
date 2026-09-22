@@ -1,0 +1,170 @@
+{
+ "doctype": "DocType",
+ "name": "POS Cash Count",
+ "module": "POSAwesome",
+ "autoname": "CASH-COUNT-.#####",
+ "field_order": [
+  "safe",
+  "company",
+  "pos_profile",
+  "currency",
+  "scope",
+  "opening_shift",
+  "bag",
+  "counted_by",
+  "state",
+  "count_json",
+  "amount",
+  "expected_amount",
+  "difference",
+  "note",
+  "reviewed_by",
+  "review_note",
+  "journal_entry",
+  "closing_shift"
+ ],
+ "fields": [
+  {
+   "fieldname": "safe",
+   "label": "Safe",
+   "fieldtype": "Link",
+   "options": "POS Cash Safe",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "label": "Company",
+   "fieldtype": "Link",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "pos_profile",
+   "label": "Pos Profile",
+   "fieldtype": "Link",
+   "options": "POS Profile",
+   "reqd": 1
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "scope",
+   "label": "Scope",
+   "fieldtype": "Select",
+   "options": "Drawer\nSafe\nBag",
+   "reqd": 1
+  },
+  {
+   "fieldname": "opening_shift",
+   "label": "Opening Shift",
+   "fieldtype": "Link",
+   "options": "POS Opening Shift"
+  },
+  {
+   "fieldname": "bag",
+   "label": "Bag",
+   "fieldtype": "Link",
+   "options": "POS Cash Bag"
+  },
+  {
+   "fieldname": "counted_by",
+   "label": "Counted By",
+   "fieldtype": "Link",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "state",
+   "label": "State",
+   "fieldtype": "Select",
+   "options": "Draft\nFinal\nException\nReviewed",
+   "reqd": 1
+  },
+  {
+   "fieldname": "count_json",
+   "label": "Count Json",
+   "fieldtype": "Long Text",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amount",
+   "label": "Amount",
+   "fieldtype": "Currency"
+  },
+  {
+   "fieldname": "expected_amount",
+   "label": "Expected Amount",
+   "fieldtype": "Currency"
+  },
+  {
+   "fieldname": "difference",
+   "label": "Difference",
+   "fieldtype": "Currency"
+  },
+  {
+   "fieldname": "note",
+   "label": "Note",
+   "fieldtype": "Small Text"
+  },
+  {
+   "fieldname": "reviewed_by",
+   "label": "Reviewed By",
+   "fieldtype": "Link",
+   "options": "User"
+  },
+  {
+   "fieldname": "review_note",
+   "label": "Review Note",
+   "fieldtype": "Small Text"
+  },
+  {
+   "fieldname": "journal_entry",
+   "label": "Journal Entry",
+   "fieldtype": "Link",
+   "options": "Journal Entry"
+  },
+  {
+   "fieldname": "closing_shift",
+   "label": "Closing Shift",
+   "fieldtype": "Link",
+   "options": "POS Closing Shift"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "POS User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "POS Awesome Supervisor",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "track_changes": 1,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}

@@ -29,6 +29,7 @@
 								</v-alert>
 							</v-col>
 						</v-row>
+						<v-alert v-if="custodyEnabled" type="info" variant="tonal">{{ __("Open the empty drawer with zero cash. Next, receive and count its float bag in Cash custody; that receipt records the starting funds.") }}</v-alert>
 						<v-row>
 							<!-- Company and POS Profile in same row for space efficiency -->
 							<v-col cols="12" md="6" class="form-field">
@@ -197,6 +198,7 @@ const BUILD_VERSION = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION
 const isOpen = ref(props.dialog ? props.dialog : false);
 const is_loading = ref(false);
 const showTerminalRecovery = ref(false);
+const custodyEnabled = ref(false);
 // First screen of the shift: it has to be usable on the phone the cashier
 // opened the till with, not an 800px card cropped to a 360px viewport.
 const { dialogProps } = useDialogFullscreen({ maxWidth: "800px", maxHeight: "90vh" });
@@ -263,6 +265,15 @@ watch(company, (val) => {
 			pos_profile.value = "";
 		}
 	});
+});
+
+watch(pos_profile, async (profile) => {
+ custodyEnabled.value = false;
+ if (!profile) return;
+ try {
+  const r = await frappe.call({method:"posawesome.posawesome.api.cash_custody.service.availability",args:{pos_profile:profile}});
+  if(pos_profile.value===profile) custodyEnabled.value=Boolean(r.message?.enabled);
+ } catch { /* Opening endpoint remains authoritative if connectivity fails. */ }
 });
 
 watch(pos_profile, (val) => {

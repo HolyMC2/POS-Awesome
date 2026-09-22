@@ -109,6 +109,34 @@ describe("POS shell dock tabs", () => {
 		}
 	});
 
+	it.each(["coupons", "offers", "items"])("reveals %s immediately when requested from another workspace", async (view) => {
+		const ui = useUIStore();
+		ui.posOpeningShift = { name: "SHIFT-1" } as any;
+		ui.posProfile = { name: "Doco", company: "Doco", currency: "MXN" } as any;
+		const bus = makeBus();
+		const wrapper = mountShell(bus), vm = wrapper.vm as any;
+		vm.hostedDestinationId = "payments";
+		ui.setHostedDestination("payments");
+		bus.emit("set_selector_view", view);
+		await nextTick();
+		expect(vm.hostedDestinationId).toBeNull();
+		expect(ui.activeView).toBe(view);
+		expect(vm.compactPanel).toBe("selector");
+		wrapper.unmount();
+	});
+	it("returns to the visible cart from the workspace dock", async () => {
+		const ui = useUIStore();
+		ui.posOpeningShift = { name: "SHIFT-1" } as any;
+		ui.posProfile = { name: "Doco", company: "Doco", currency: "MXN" } as any;
+		const wrapper = mountShell(), vm = wrapper.vm as any;
+		vm.hostedDestinationId = "cashCustody";
+		vm.showInvoicePanel();
+		await nextTick();
+		expect(vm.hostedDestinationId).toBeNull();
+		expect(vm.compactPanel).toBe("invoice");
+		wrapper.unmount();
+	});
+
 	it("narrows the dock to the ids a capability preset names", () => {
 		useUIStore().setCapabilityPayload({
 			name: "coffee-quickserve",

@@ -150,6 +150,7 @@ const LEGACY_DESTINATION_ROUTE_META: Record<
 	{ title: string; loadingMessage: string; requiresSupervisor?: true }
 > = {
 	expense: { title: "Cash Movement", loadingMessage: "Loading cash movement..." },
+	cashCustody: { title: "Cash custody", loadingMessage: "Loading cash custody..." },
 	closing: { title: "Close Shift", loadingMessage: "Loading close shift..." },
 	// The tools group (2026-08-22): five more pages that used to mount alone.
 	// Renamed with the surface (COBRANZA_GOLDEN_FLOW): `/payments` opens the

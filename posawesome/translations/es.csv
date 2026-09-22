@@ -3487,3 +3487,452 @@ Plan needs a wider screen,Plano en pantalla amplia
 Tabs without a table,Cuentas sin mesa
 Filter,Filtrar
 Payment queued — waiting for connection,Cobro en cola — esperando conexión
+"Count the drawer, review unfinished sales, then close.","Cuenta la caja, revisa las ventas pendientes y cierra el turno."
+Back from closing,Volver sin cerrar el turno
+Checking this browser and the open shift…,Verificando este navegador y el turno abierto…
+This browser is ready to close the shift.,Este navegador está listo para cerrar el turno.
+Review saved sales before closing,Revisa las ventas guardadas antes de cerrar
+This browser is registered. A supervisor still needs to record how sales from previous browsers were checked.,Este navegador ya está registrado. Falta que un supervisor registre cómo revisó las ventas de los navegadores anteriores.
+"Another browser owns this shift. Finish syncing there, or have a supervisor review its saved sales and authorize this browser here. The previous browser will no longer be able to submit sales.","El turno está registrado en otro navegador. Termina de sincronizar ahí, o pide a un supervisor que revise sus ventas guardadas y autorice este navegador aquí. El navegador anterior ya no podrá enviar ventas."
+"This older shift has no registered browser. A supervisor can check previous-browser sales and register this browser here, in one step.","Este turno anterior no tiene un navegador registrado. Un supervisor puede revisar las ventas de los navegadores anteriores y registrar este navegador aquí, en un solo paso."
+I checked previous browsers and accounted for their saved sales and cash movements.,Revisé los navegadores anteriores y comprobé sus ventas guardadas y movimientos de caja.
+How was the saved work checked?,¿Cómo se revisaron las ventas y los movimientos guardados?
+Record review and prepare this browser,Registrar revisión y preparar este navegador
+Describe the review (at least 8 characters),Describe la revisión (mínimo 8 caracteres)
+Loading shift totals and checking saved work…,Cargando los totales del turno y verificando el trabajo guardado…
+Closing needs attention,El cierre requiere atención
+"Your entered amounts stay here. Resolve the problem, then try closing again.",Los importes que ingresaste se conservan aquí. Resuelve el problema e intenta cerrar de nuevo.
+Sync saved work,Sincronizar trabajo guardado
+Reload closing details,Actualizar datos del cierre
+Unfinished sales,Ventas pendientes
+These unprinted drafts will be deleted only when the shift closes successfully:,Estos borradores sin imprimir se eliminarán únicamente cuando se cierre el turno correctamente:
+Finish or delete these drafts before closing. They cannot be left on a closed shift:,Termina o elimina estos borradores antes de cerrar. No pueden quedar pendientes en un turno cerrado:
+These printed invoices were excluded from closing and will remain drafts for review:,Estas facturas impresas se excluyeron del cierre y seguirán como borradores para revisión:
+Review drafts,Revisar borradores
+I reviewed these sales and agree to the changes listed above when closing.,Revisé estas ventas y acepto los cambios indicados arriba al cerrar el turno.
+Opening,Apertura
+Expected,Esperado
+"Connect to the internet, then check again. Your count stays on this screen.",Conéctate a internet y verifica de nuevo. Tu conteo se conserva en esta pantalla.
+The open shift could not be found. Reload the register and try again.,No se encontró el turno abierto. Recarga la caja e intenta de nuevo.
+Connect to the internet before recording the review.,Conéctate a internet antes de registrar la revisión.
+The shift changed. Check its status before continuing.,El turno cambió. Verifica su estado antes de continuar.
+Check this browser and complete the saved-sales review above before closing.,Verifica este navegador y completa la revisión de ventas guardadas de arriba antes de cerrar.
+Review the unfinished sales above before closing.,Revisa las ventas pendientes de arriba antes de cerrar.
+Enter a closing amount for every payment method. Use 0 when there were no payments.,Ingresa el importe de cierre de cada forma de pago. Usa 0 si no hubo pagos.
+The server returned no closing details. Try loading them again.,El servidor no devolvió los datos del cierre. Intenta cargarlos de nuevo.
+The server did not confirm closure. Check the shift status before trying again.,El servidor no confirmó el cierre. Verifica el estado del turno antes de intentar de nuevo.
+Check the shift status and try again.,Verifica el estado del turno e intenta de nuevo.
+Closing shift…,Cerrando turno…
+Add a note explaining the cash difference before closing.,Agrega una nota explicando la diferencia de caja antes de cerrar.
+Load the closing details before continuing.,Carga los datos del cierre antes de continuar.
+Complete the browser review above before closing.,Completa la revisión del navegador de arriba antes de cerrar.
+"Finish or delete the listed drafts, then reload closing details.",Termina o elimina los borradores indicados y actualiza los datos del cierre.
+Confirm the unfinished-sales review above.,Confirma la revisión de ventas pendientes de arriba.
+The previous browser released this shift after syncing. You can register this browser and continue closing.,El navegador anterior liberó este turno después de sincronizar. Puedes registrar este navegador y continuar el cierre.
+A supervisor must authorize a transfer or review saved sales. Your cashier account cannot approve that review.,Un supervisor debe autorizar el cambio de navegador o revisar las ventas guardadas. Tu cuenta de cajero no puede aprobar esa revisión.
+"If the original browser is available, sync and review its saved work there, then release the terminal. Return here and check again.","Si el navegador original está disponible, sincroniza y revisa los registros guardados allí; después libera la terminal. Vuelve aquí y revisa de nuevo."
+"Otherwise, ask a supervisor to sign in on this same browser, open Offline Status, and select this cashier’s shift under replacement-browser authorization.","Si no está disponible, pide a un supervisor que inicie sesión en este mismo navegador, abra Estado fuera de línea y seleccione el turno de este cajero en la autorización de navegador de reemplazo."
+"After the supervisor authorizes this browser and records the saved-sales review, sign back in as the original cashier and return to Close Shift.","Cuando el supervisor autorice este navegador y registre la revisión de ventas guardadas, vuelve a iniciar sesión como el cajero original y abre Cerrar turno."
+Open terminal recovery,Abrir recuperación de terminal
+Register this browser and continue,Registrar este navegador y continuar
+"Connection lost. The shift may already be closed, but its status could not be confirmed. Your count is preserved. Reconnect and retry; the server will check the shift before closing it.","Se perdió la conexión. Es posible que el turno ya esté cerrado, pero no se pudo confirmar. Tu conteo se conserva. Reconecta y vuelve a intentar; el servidor revisará el turno antes de cerrarlo."
+Cash custody,Control de efectivo
+POS Cash Safe,Caja fuerte POS
+POS Cash Bag,Bolsa de efectivo POS
+POS Cash Count,Arqueo de efectivo POS
+POS Cash Custody Event,Movimiento de custodia POS
+Safe balance,Saldo de caja fuerte
+Loose cash available,Efectivo sin asignar
+Bank deposits in transit,Depósitos bancarios en tránsito
+Bags,Bolsas
+Counts and exceptions,Arqueos y diferencias
+Prepare float bag,Preparar bolsa de fondo
+Return bag to safe,Entregar bolsa a caja fuerte
+Count safe,Contar caja fuerte
+Receive into drawer,Recibir en gaveta
+Verify bag,Verificar bolsa
+Return to loose safe cash,Devolver a efectivo sin asignar
+Send to bank,Enviar al banco
+Confirm bank receipt,Confirmar depósito bancario
+Return undeposited bag,Devolver bolsa no depositada
+Review difference,Revisar diferencia
+Bag seal / ID,Folio del sello o bolsa
+Float,Fondo de caja
+Takings,Recaudación
+Unverified,Por verificar
+Disputed,Con diferencia
+In Transit,En tránsito
+Deposited,Depositada
+Unpacked,Abierta en caja fuerte
+Count cash,Contar efectivo
+Enter a manual total,Ingresar total manual
+Counted amount,Importe contado
+Why was the total overridden?,¿Por qué se ingresó un total manual?
+Manual count,Conteo manual
+Prepared by,Preparó
+Counted by,Contó
+Bank receipt reference,Referencia del comprobante bancario
+Reason / handover note,Motivo o nota de entrega
+Confirm cash action,Confirmar movimiento
+Cash action recorded.,Movimiento de efectivo registrado.
+Count and return the drawer,Contar y entregar la gaveta
+Save drawer count,Guardar arqueo de gaveta
+Saved count,Arqueo guardado
+Unsaved changes,Cambios sin guardar
+Bags going into the safe,Bolsas que se entregan a caja fuerte
+Cash in this bag,Efectivo en esta bolsa
+Remove bag,Quitar bolsa
+Add another bag,Agregar otra bolsa
+Allocated,Asignado
+Difference / handover note,Nota de diferencia o entrega
+Save the current count and allocate its exact total before closing.,Guarda el arqueo actual y asigna su importe exacto a las bolsas antes de cerrar.
+Count saved and bags allocated. Complete the payment reconciliation and close the shift.,Arqueo guardado y bolsas asignadas. Revisa los medios de pago y cierra el turno.
+"Save the count, then allocate all cash to sealed bags. Closing records the count and returns those bags to the safe together.",Guarda el arqueo y distribuye todo el efectivo en bolsas selladas. El cierre registra el arqueo y la entrega a caja fuerte juntos.
+Count the money received. A mismatch records an exception and does not add cash to your drawer.,"Cuenta el dinero recibido. Si hay diferencia, se registra para revisión sin agregar efectivo a tu gaveta."
+"Count all physical safe cash, including sealed bags. Exclude money in transit to the bank.","Cuenta todo el efectivo físico en la caja fuerte, incluidas las bolsas selladas. Excluye el dinero en tránsito al banco."
+Count differs. The bag is held for supervisor review; drawer cash was not changed.,Hay una diferencia. La bolsa queda pendiente de revisión del supervisor; el efectivo de la gaveta no cambió.
+No cash bags yet. A supervisor can prepare the first float from the safe.,Aún no hay bolsas. Un supervisor puede preparar el primer fondo desde la caja fuerte.
+Retry unconfirmed action,Reintentar movimiento sin confirmar
+A cash action has an unconfirmed result. Retry it before moving the money again.,Hay un movimiento de efectivo sin confirmar. Reinténtalo antes de volver a mover el dinero.
+Submitted cash actions remain in the audit trail. A failed connection can be retried without recording the transfer twice.,"Los movimientos confirmados quedan en el historial. Si falla la conexión, puedes reintentar sin registrar la transferencia dos veces."
+A POS supervisor must perform this action.,Esta acción requiere un supervisor POS.
+Another person must verify the bag. You cannot verify your own count.,Otra persona debe verificar la bolsa. No puedes verificar tu propio conteo.
+Use Cash custody to receive or return a bag for this register.,Usa Control de efectivo para recibir o entregar una bolsa de esta caja.
+Cash custody is not configured for this register. Ask a manager to configure its safe.,Esta caja no tiene configurado el control de efectivo. Pide al encargado que configure su caja fuerte.
+Bag totals must equal the saved drawer count. The drawer must end at zero.,La suma de las bolsas debe coincidir con el arqueo guardado. La gaveta debe quedar vacía.
+Another supervisor must review your own discrepancy.,Otro supervisor debe revisar tu propia diferencia.
+Close the existing shift before enabling cash custody.,Cierra el turno actual antes de activar el control de efectivo.
+Saved cash recovery details cannot be read. Keep this browser’s data and ask a supervisor to review cash history before continuing.,No se pueden leer los datos para recuperar el movimiento. Conserva los datos de este navegador y pide a un supervisor que revise el historial de efectivo antes de continuar.
+This browser cannot save cash recovery details. No cash action was sent. Enable browser storage and retry.,Este navegador no puede guardar los datos de recuperación. No se envió ningún movimiento de efectivo. Habilita el almacenamiento del navegador y vuelve a intentar.
+A previous cash action has an unconfirmed result. Use Retry unconfirmed action before starting a different action.,Hay un movimiento anterior sin confirmar. Usa Reintentar movimiento sin confirmar antes de iniciar uno diferente.
+Allow pop-ups to print cash custody evidence.,Permite las ventanas emergentes para imprimir el comprobante de efectivo.
+A bag label is only available for a cash bag.,La etiqueta solo está disponible para una bolsa de efectivo.
+A closing can return at most 20 bags.,Un cierre puede devolver como máximo 20 bolsas.
+A difference becomes an exception for an independent review.,Las diferencias quedan pendientes de revisión por otra persona.
+A mismatch records an exception and does not add cash to your drawer. A supervisor reviews it.,"Si el conteo no coincide, se registra la diferencia sin agregar efectivo a tu caja. Un supervisor la revisará."
+A note is required when the counted cash differs from the expected amount.,Agrega una nota cuando el efectivo contado no coincida con lo esperado.
+A supervisor recounts or reviews this bag. Drawer cash was not changed.,Un supervisor debe volver a contar o revisar esta bolsa. El efectivo de tu caja no cambió.
+A supervisor recounts the bag or reviews the difference.,Un supervisor debe volver a contar la bolsa o revisar la diferencia.
+A supervisor reviews this difference. The cash stays where it is until then.,"Un supervisor revisará esta diferencia. Mientras tanto, el efectivo permanece donde está."
+"Add at least one denomination, or enter a manual total with a reason.",Agrega al menos una denominación o captura un total manual con su motivo.
+Allocate the remaining {0}.,Distribuye los {0} restantes.
+Another person verifies or receives it. You cannot verify your own bag.,Otra persona debe verificar o recibir la bolsa. No puedes verificar la que tú preparaste.
+Another supervisor must review a difference you counted.,Otro supervisor debe revisar la diferencia de tu conteo.
+Another supervisor must settle a bag you counted.,Otro supervisor debe resolver la diferencia de la bolsa que tú contaste.
+At least 8 characters.,Al menos 8 caracteres.
+At least 8 characters. This reason stays in the audit trail.,Al menos 8 caracteres. El motivo quedará en el historial.
+Awaiting a bank receipt,Pendiente de comprobante bancario
+Bag,Bolsa
+Bag is on the way to the bank.,La bolsa está en camino al banco.
+Bag received into your drawer.,Bolsa recibida en tu caja.
+"Bag totals are recorded custody evidence, not the ledger balance. Open Cash custody in POS or the safe ledger for balances.",Estos totales corresponden a las bolsas registradas. Consulta los saldos en Custodia de efectivo del POS o en el libro de la caja fuerte.
+Bag unpacked. Its cash is loose safe funds again.,Bolsa abierta. Su efectivo vuelve a estar disponible sin embolsar en la caja fuerte.
+Bag verified and available in the safe.,Bolsa verificada y disponible en la caja fuerte.
+Bags in transit waiting for a bank receipt,Bolsas en tránsito pendientes de comprobante bancario
+Bags waiting for your independent count,Bolsas pendientes de tu verificación
+Bags you can count and receive into the drawer,Bolsas que puedes contar y recibir en tu caja
+Bank handling and unpacking are supervisor actions.,Los envíos al banco y la apertura de bolsas requieren un supervisor.
+Bank receipt recorded. The deposit left the transit account.,Comprobante bancario registrado. El depósito salió de la cuenta de efectivo en tránsito.
+Browser storage is unavailable. Save the drawer count before leaving this screen.,El almacenamiento del navegador no está disponible. Guarda el conteo antes de salir de esta pantalla.
+Cash bag handover,Entrega de bolsa de efectivo
+Cash count evidence,Comprobante de conteo de efectivo
+Cash custody could not be checked. Retry before closing.,No se pudo comprobar la custodia de efectivo. Reintenta antes de cerrar.
+"Cash custody is off for this register. Enable it with no open shift and a reconciled, empty drawer account; cash actions stay unavailable until then.",La custodia de efectivo está desactivada en esta caja. Actívala sin turnos abiertos y con la cuenta de caja conciliada y en cero; las acciones de efectivo estarán disponibles después.
+Cash custody queues,Pendientes de custodia de efectivo
+Cash sealed and returned to the safe.,Efectivo embolsado y devuelto a la caja fuerte.
+Choose a cash bag or count.,Selecciona una bolsa o un conteo de efectivo.
+Choose a handover slip or a bag label.,Selecciona un comprobante de entrega o una etiqueta de bolsa.
+Close shift could not be opened from here. Use the Close Shift destination.,No se pudo abrir el cierre desde aquí. Usa Cerrar turno en el menú lateral.
+Completed,Completados
+Confirm the bank receipt,Confirmar el comprobante bancario
+Continue in Close shift,Continuar en Cerrar turno
+Copy the reference printed on the bank deposit slip.,Copia la referencia que aparece en el comprobante de depósito bancario.
+Correction journal,Póliza de ajuste
+Count evidence,Detalle del conteo
+Count the drawer,Cuenta el efectivo de la caja
+Count the safe,Contar la caja fuerte
+Counted notes and coins,Billetes y monedas contados
+Custody active,Custodia activa
+Declared amount,Importe declarado
+Denomination,Denominación
+Denominations,Denominaciones
+Deposit slip or bank confirmation number.,Número del comprobante de depósito o de la confirmación bancaria.
+Describe the reason in 8 to 1000 characters.,Explica el motivo usando entre 8 y 1000 caracteres.
+Difference note,Nota sobre la diferencia
+Difference reviewed and posted.,Diferencia revisada y contabilizada.
+Differences waiting for your review,Diferencias pendientes de tu revisión
+Drawer cash limit,Límite de efectivo en caja
+Drawer open,Caja abierta
+Each bag needs its own seal.,Cada bolsa necesita un sello diferente.
+Edit denomination count,Editar conteo por denominación
+Enter an amount with at most two decimals.,Captura un importe con un máximo de dos decimales.
+Every bag must hold more than zero.,Cada bolsa debe contener un importe mayor que cero.
+Explain the difference,Explica la diferencia
+Explain the manual count override (at least 8 characters).,Explica por qué capturaste el total manualmente (al menos 8 caracteres).
+Filter the queue,Filtrar pendientes
+Float bag prepared and reserved in the safe.,Bolsa de fondo preparada y reservada en la caja fuerte.
+Float for the next drawer,Fondo para el siguiente turno
+Fully allocated,Todo el efectivo está distribuido
+Give every bag its own seal.,Asigna un sello diferente a cada bolsa.
+Handover note,Nota de entrega
+Hide smaller denominations,Ocultar denominaciones menores
+Hide the bag count,Ocultar conteo de la bolsa
+"It can start a drawer, go to the bank, or be unpacked into loose safe cash.","Puede recibirse en una caja, enviarse al banco o abrirse para disponer del efectivo en la caja fuerte."
+It must be verified again before it can move.,Debe verificarse de nuevo antes de moverla.
+Ledger balance to reconcile,Saldo contable por conciliar
+Linked records,Documentos relacionados
+Listed notes and coins add up to {0}; the declared total was entered manually.,Los billetes y monedas detallados suman {0}; el total declarado se capturó manualmente.
+Loading the custody queue…,Cargando los pendientes de custodia…
+Needs me,Requiere mi atención
+Next,Siguiente paso
+No bag is ready for you. Ask a supervisor to prepare a float bag from the safe.,No hay bolsas listas para ti. Pide a un supervisor que prepare un fondo desde la caja fuerte.
+No bag matches this filter or search.,Ninguna bolsa coincide con este filtro o búsqueda.
+No count is recorded for this bag yet.,Esta bolsa aún no tiene un conteo registrado.
+No count matches this filter or search.,Ningún conteo coincide con este filtro o búsqueda.
+No counts recorded yet for this safe.,Esta caja fuerte aún no tiene conteos registrados.
+No denomination detail was recorded for this count.,Este conteo no tiene detalle de denominaciones.
+No difference,Sin diferencia
+No open drawer,Sin caja abierta
+No reason was recorded.,No se registró un motivo.
+None selected,Sin seleccionar
+Not active,Inactiva
+Not reserved by a sealed bag,Disponible sin embolsar
+Not verified yet,Pendiente de verificación
+Nothing is waiting. Seal and return drawer cash whenever the drawer holds more than it should.,No hay pendientes. Embolsa y devuelve el excedente cuando la caja tenga demasiado efectivo.
+Open your register shift before receiving or returning cash.,Abre tu turno antes de recibir o devolver efectivo.
+Open your register shift first.,Primero abre tu turno de caja.
+Open your register shift to move cash between the drawer and the safe.,Abre tu turno para mover efectivo entre tu caja y la caja fuerte.
+Open your register shift to receive this bag into a drawer.,Abre tu turno para recibir esta bolsa en tu caja.
+Over,Sobrante
+Over by,Sobran
+Over by {0},Sobran {0}
+Post the difference and close the review,Contabilizar la diferencia y terminar la revisión
+Prepare a float bag from the safe,Preparar un fondo desde la caja fuerte
+Prepare a new bag with a new seal when the cash moves again.,Prepara una bolsa con un sello nuevo cuando vuelvas a mover el efectivo.
+Prepare the bag,Preparar la bolsa
+Preparing…,Preparando…
+Print count evidence,Imprimir comprobante del conteo
+Print the evidence if the bank copy needs it.,Imprime el comprobante para acompañar la copia bancaria si hace falta.
+Purpose,Destino
+Put the remaining cash in this bag,Poner el efectivo restante en esta bolsa
+Reason / handover note (optional),Motivo o nota de entrega (opcional)
+Receive and count this bag into your drawer,Contar y recibir esta bolsa en tu caja
+Receive into the drawer,Recibir en la caja
+Record,Documento
+Record the bank receipt,Registrar el comprobante bancario
+Record the bank receipt reference when the deposit is confirmed.,Registra la referencia del comprobante cuando el banco confirme el depósito.
+Record the safe count,Registrar el conteo de la caja fuerte
+Record the verification count,Registrar el conteo de verificación
+Refreshing…,Actualizando…
+Remaining {0},Faltan {0}
+Return the bag contents to loose safe cash,Devolver el contenido de la bolsa al efectivo disponible de la caja fuerte
+Return the bag to the safe,Devolver la bolsa a la caja fuerte
+Return the contents to loose safe cash,Devolver el contenido al efectivo disponible de la caja fuerte
+Return the undeposited bag to the safe,Devolver a la caja fuerte la bolsa no depositada
+Return this cash to the safe,Devolver este efectivo a la caja fuerte
+Review,Revisión
+Review the counted difference,Revisar la diferencia del conteo
+Safe,Caja fuerte
+Safe count recorded.,Conteo de la caja fuerte registrado.
+Save the drawer count before allocating the bags.,Guarda el conteo de la caja antes de distribuirlo en bolsas.
+Save the drawer count.,Guarda el conteo de la caja.
+Saved recovery information for this register could not be read. Check the cash records in Desk before repeating any cash action.,No se pudo leer la información de recuperación de esta caja. Revisa los movimientos en Desk antes de repetir una acción de efectivo.
+Seal drawer cash and return it to the safe,Embolsar el efectivo de caja y devolverlo a la caja fuerte
+"Search by seal, state or person","Buscar por sello, estado o persona"
+"Search counts by scope, shift or person","Buscar conteos por tipo, turno o persona"
+Select a bag or a count from the queue to see its custody trail and the actions allowed now.,Selecciona una bolsa o un conteo para ver su historial y las acciones disponibles.
+Select a register to manage its cash.,Selecciona una caja para administrar su efectivo.
+Sell as usual. Return the drawer to the safe in sealed bags at closing.,"Continúa vendiendo. Al cerrar el turno, devuelve el efectivo a la caja fuerte en bolsas selladas."
+Send the bag to the bank,Enviar la bolsa al banco
+Short,Faltante
+Short by,Faltan
+Show all bags,Mostrar todas las bolsas
+Show all counts,Mostrar todos los conteos
+Show smaller denominations,Mostrar denominaciones menores
+Smaller denominations,Denominaciones menores
+Start a cash task,Acciones de efectivo
+State,Estado
+Suggested float,Fondo sugerido
+Takings for the bank,Ingresos para depositar en el banco
+The bag queue could not be loaded. Open the cash bag list to review it.,No se pudieron cargar las bolsas. Abre la lista de bolsas de efectivo para revisarlas.
+The bags hold {0} more than the counted cash.,Las bolsas contienen {0} más que el efectivo contado.
+The cash action could not be completed.,No se pudo completar la acción de efectivo.
+The cash action was refused and nothing was recorded. Correct the details and confirm again.,La acción fue rechazada y no se registró. Corrige los datos y confirma de nuevo.
+The cash custody queue could not be loaded.,No se pudieron cargar los pendientes de custodia de efectivo.
+The connection failed before the result was known. Do not move the cash again — use Retry unconfirmed action above.,La conexión falló antes de confirmar el resultado. No vuelvas a mover el efectivo; usa Reintentar acción sin confirmar arriba.
+The counts for this bag could not be loaded.,No se pudieron cargar los conteos de esta bolsa.
+The drawer count could not be saved.,No se pudo guardar el conteo de caja.
+The evidence could not be prepared. The custody record is unchanged; printing is not the cash transaction.,No se pudo preparar el comprobante. El movimiento de efectivo ya registrado no cambia por un error de impresión.
+The evidence could not be printed. The cash record is unchanged.,No se pudo imprimir el comprobante. El movimiento de efectivo no cambió.
+The original counts stay as evidence.,Los conteos originales se conservan como comprobante.
+The retry did not complete.,No se pudo completar el reintento.
+The review posts the difference between the cash account and the cash over/short account. The original count stays unchanged.,La revisión contabiliza la diferencia entre la cuenta de efectivo y la cuenta de sobrantes o faltantes. El conteo original se conserva.
+The server did not confirm this action. Retry sends the same request; it never records the transfer twice. Do not move the cash again.,El servidor no confirmó la acción. Reintentar envía la misma solicitud sin registrar el movimiento dos veces. No vuelvas a mover el efectivo.
+The stored count evidence could not be read here. Open the record in Desk.,No se pudo leer el detalle del conteo aquí. Abre el documento en Desk.
+The stored count evidence could not be read. Print the record or ask a supervisor to review its history.,No se pudo leer el detalle del conteo. Imprime el documento o pide a un supervisor que revise su historial.
+This action has an unconfirmed result from an earlier attempt. Retry checks the same request; it never records the transfer twice.,Esta acción tiene un intento anterior sin confirmar. Reintentar comprueba la misma solicitud sin registrar el movimiento dos veces.
+This bag is closed evidence. Print it or open the record for the full history.,Esta bolsa ya terminó su recorrido. Imprime el comprobante o abre el documento para ver todo el historial.
+This browser blocked the print window. The custody record is saved; print it again when the printer is ready.,El navegador bloqueó la ventana de impresión. El movimiento está guardado; vuelve a imprimir cuando la impresora esté lista.
+This is more than the unallocated safe cash. Verify a deposit or unpack an available bag first.,El importe supera el efectivo disponible sin embolsar. Primero verifica una entrega o abre una bolsa disponible.
+This seal already belongs to another bag.,Este sello ya pertenece a otra bolsa.
+Unconfirmed cash action,Acción de efectivo sin confirmar
+Undeposited bag returned to the safe.,Bolsa no depositada devuelta a la caja fuerte.
+"Use 3 to 80 letters, digits, hyphens or underscores.","Usa de 3 a 80 letras, números, guiones o guiones bajos."
+"Use the printed seal. 3–80 letters, digits or hyphens; each package needs a new one.","Usa el sello impreso. De 3 a 80 letras, números o guiones; cada bolsa necesita uno nuevo."
+Verified by,Verificado por
+Verified takings ready to leave for the bank,Ingresos verificados listos para enviar al banco
+Verify another person's bag count,Verificar el conteo de otra persona
+What needs you now,Lo que requiere tu atención
+Write this seal on the physical bag. Each bag keeps its own unique seal.,Escribe este sello en la bolsa física. Cada bolsa debe tener un sello único.
+You counted this bag. Another person must verify or receive it.,Tú contaste esta bolsa. Otra persona debe verificarla o recibirla.
+You see the counts you recorded. A supervisor sees every count of this safe.,Ves los conteos que registraste. Un supervisor puede ver todos los conteos de esta caja fuerte.
+Your drawer decreased by this amount. A supervisor verifies the bag.,Tu caja disminuyó por este importe. Un supervisor debe verificar la bolsa.
+Your saved count could not be loaded. Retry before you count again.,No se pudo cargar tu conteo guardado. Reintenta antes de volver a contar.
+"guidance, not a sales block",referencia para el manejo de efectivo
+"A cashier can receive it from Cash custody, or a supervisor can send it to the bank or return it to loose safe cash.",Un cajero puede recibirla desde Custodia de efectivo; un supervisor puede enviarla al banco o abrirla para disponer del efectivo.
+A supervisor reviews the difference on the latest count. The bag becomes available again once the correction is posted.,Un supervisor revisa la diferencia del último conteo. La bolsa vuelve a estar disponible cuando se contabiliza el ajuste.
+A supervisor who did not perform this count reviews the difference and posts the correction.,Un supervisor que no realizó el conteo revisa la diferencia y contabiliza el ajuste.
+Another person counts this bag and verifies or receives it. Nobody can verify a bag they prepared.,Otra persona debe contar esta bolsa para verificarla o recibirla. Nadie puede verificar una bolsa que preparó.
+Another person must count this bag before it can be used or sent to the bank.,Otra persona debe contar esta bolsa antes de usarla o enviarla al banco.
+Available in the safe,Disponible en la caja fuerte
+Awaiting independent verification,Pendiente de verificación por otra persona
+Awaiting verification,Pendiente de verificación
+Bag count,Conteo de bolsa
+Bank deposit journal,Póliza del depósito bancario
+Bank run details: who takes the bag and where,Detalles del envío: quién lleva la bolsa y a dónde
+Bank transit journal,Póliza de efectivo en tránsito
+Cash bag,Bolsa de efectivo
+Cash moves to the bank transit account until you record the bank receipt.,El efectivo pasa a la cuenta en tránsito hasta que registres el comprobante bancario.
+Closing shift,Cierre de turno
+Closing the shift records this count as final evidence.,"Al cerrar el turno, este conteo queda como comprobante definitivo."
+Complete the highlighted fields before confirming.,Completa los campos señalados antes de confirmar.
+Confirm deposit,Confirmar depósito
+"Confirm the bank receipt, or return the undeposited bag if the trip failed.",Confirma el comprobante bancario o devuelve la bolsa si no se pudo depositar.
+Count every note and coin in the safe,Cuenta todos los billetes y monedas de la caja fuerte
+Count the bag yourself. A matching count makes it available; a difference disputes it.,"Cuenta la bolsa personalmente. Si coincide, queda disponible; si hay diferencia, queda pendiente de revisión."
+Count the cash going into the bag,Cuenta el efectivo que pondrás en la bolsa
+Count the cash you are sealing,Cuenta el efectivo que vas a embolsar
+Count the cash you are sealing into this bag. Preparation reserves loose safe cash; it does not create money. Another person verifies or receives it.,Cuenta el efectivo que pondrás en esta bolsa. Prepararla reserva efectivo disponible de la caja fuerte. Otra persona debe verificarla o recibirla.
+Count the cash you received,Cuenta el efectivo que recibiste
+Count the sealed cash independently. A difference holds the bag for supervisor review and changes no drawer cash.,"Cuenta el efectivo de forma independiente. Si hay diferencia, la bolsa queda pendiente del supervisor y el efectivo de caja no cambia."
+"Counted by a second person. It can start a drawer, go to the bank, or be unpacked.","Contada por otra persona. Puede recibirse en una caja, enviarse al banco o abrirse."
+Counted on,Fecha del conteo
+Delivered by,Entregado por
+Deposited at the bank,Depositada en el banco
+Difference pending review,Diferencia pendiente de revisión
+Difference reviewed,Diferencia revisada
+Difference to review,Diferencia por revisar
+Disputed count,Conteo con diferencia
+Drawer deposit movement,Movimiento de salida de caja
+Drawer receipt movement,Movimiento de entrada a caja
+Final count,Conteo definitivo
+Final evidence,Comprobante definitivo
+Held for review,Retenida para revisión
+Held for supervisor review,Retenida para revisión del supervisor
+In the drawer,En la caja
+In transit to the bank,En tránsito al banco
+Independent verification count,Conteo de verificación independiente
+Issued to a drawer,Entregada a una caja
+No count of yours is recorded for this bag. Counts by other people are visible to supervisors.,No tienes conteos registrados para esta bolsa. Los supervisores pueden ver los conteos de otras personas.
+On the way to the bank,En camino al banco
+Opening shift,Apertura de turno
+Opens this bag back into loose safe cash. The seal is consumed; a new package needs a new seal.,Abre esta bolsa para disponer del efectivo en la caja fuerte. El sello queda usado; una nueva bolsa necesita otro sello.
+Optional. It is printed on the handover slip.,Opcional. Aparece en el comprobante de entrega.
+Post the difference and close the review. The counts stay as recorded evidence.,Contabiliza la diferencia y termina la revisión. Los conteos se conservan como comprobantes.
+Preparation reserves cash that is already in the safe. It does not create money.,La preparación reserva efectivo que ya está en la caja fuerte.
+Prepare bag,Preparar bolsa
+Prepared on,Fecha de preparación
+Received by,Recibido por
+Receiving shift,Turno receptor
+Record review,Registrar revisión
+Record safe count,Registrar conteo de la caja fuerte
+Record verification,Registrar verificación
+Records the bag as in transit to the bank. Cash moves from the safe to the transit account until you confirm the bank receipt.,Registra la bolsa en tránsito al banco. El efectivo pasa de la caja fuerte a la cuenta en tránsito hasta confirmar el comprobante bancario.
+Records the bank receipt reference. Cash moves from the transit account to the bank account.,Registra la referencia del comprobante. El efectivo pasa de la cuenta en tránsito a la cuenta bancaria.
+Required when your count differs from the balance recorded in the ledger.,Obligatorio cuando tu conteo no coincide con el saldo contable.
+Required when your count differs from the sealed amount.,Obligatorio cuando tu conteo no coincide con el importe de la bolsa.
+Return bag,Devolver bolsa
+Return to safe cash,Devolver al efectivo disponible
+Returned to loose safe cash,Devuelta al efectivo disponible
+Review decision and reason,Decisión de revisión y motivo
+Reviewed by,Revisado por
+Safe count,Conteo de caja fuerte
+Saved draft,Borrador guardado
+Saved draft count,Borrador de conteo guardado
+The bag comes back to the safe and must be verified again before it moves.,La bolsa regresa a la caja fuerte y debe verificarse de nuevo antes de moverla.
+The bag left for the bank. Record the bank receipt once the deposit is done.,La bolsa salió al banco. Registra el comprobante cuando se realice el depósito.
+The bank receipt is recorded. This bag is closed evidence.,El comprobante bancario está registrado. Esta bolsa queda como evidencia definitiva.
+The cash went back to loose safe funds. This bag is closed evidence.,El efectivo volvió a estar disponible sin embolsar. Esta bolsa queda como evidencia definitiva.
+The cashier returns this cash at closing as counted takings.,El cajero devuelve este efectivo contado al cerrar el turno.
+The counts did not match. A supervisor recounts or reviews the difference.,Los conteos no coincidieron. Un supervisor debe volver a contar o revisar la diferencia.
+The drawer decreases by the counted amount and the sealed bag waits for verification in the safe.,Tu caja disminuye por el importe contado y la bolsa queda en la caja fuerte pendiente de verificación.
+The sealed bag is consumed. Its cash returns to unallocated safe funds.,La bolsa se da por terminada. Su efectivo vuelve a estar disponible sin embolsar en la caja fuerte.
+The trip failed and the cash is back in the safe. The bag must be verified again before it can leave.,No se pudo realizar el depósito y el efectivo regresó a la caja fuerte. Debe verificarse de nuevo antes de salir.
+This cash is in the drawer. It returns to the safe as a sealed bag at closing.,"Este efectivo está en la caja. Al cerrar, se devuelve a la caja fuerte en una bolsa sellada."
+This posts transit cash to the bank account with the deposit reference.,Contabiliza el efectivo en tránsito en la cuenta bancaria con la referencia del depósito.
+Verified in safe,Verificada en caja fuerte
+Why is the bag coming back undeposited?,¿Por qué regresa la bolsa sin depositar?
+Why is this cash going back to loose safe funds?,¿Por qué se devuelve este efectivo a los fondos disponibles de la caja fuerte?
+Safe balances,Saldos de la caja fuerte
+Resolve the unconfirmed cash action before starting another task.,Resuelve la acción de efectivo sin confirmar antes de comenzar otra tarea.
+Finish or cancel your current cash action before choosing another.,Termina o cancela la acción de efectivo actual antes de elegir otra.
+"The cash action was saved, but the screen could not refresh. Refresh the record; do not move the cash again.","La acción de efectivo se guardó, pero la pantalla no pudo actualizarse. Actualiza el documento; no vuelvas a mover el efectivo."
+Enter a whole number of notes or coins.,Captura una cantidad entera de billetes o monedas.
+View,Vista
+"Open the empty drawer with zero cash. Next, receive and count its float bag in Cash custody; that receipt records the starting funds.","Abre la caja vacía con cero efectivo. Después, cuenta y recibe su bolsa de fondo en Custodia de efectivo; esa recepción registra el fondo inicial."
+"Float bags, safe handovers and cash counts","Fondos, entregas a caja fuerte y conteos de efectivo"
+Print handover,Imprimir comprobante de entrega
+Print bag label,Imprimir etiqueta de bolsa
+Checking this drawer count with the register…,Verificando este conteo con la caja…
+Discard the unsent form,Descartar el formulario sin enviar
+Keep my count and save it over that version,Conservar mi conteo y guardarlo sobre esa versión
+Keep my count as a new count,Conservar mi conteo como uno nuevo
+Keeping your count starts a new count. Nothing already recorded is overwritten.,Al conservar tu conteo se inicia uno nuevo. No se reemplaza lo ya registrado.
+Load the register's count,Cargar el conteo guardado en la caja
+Loading replaces the count and note on this screen. Your bags stay as they are.,Al cargarlo se reemplazan el conteo y la nota de esta pantalla. Tus bolsas se conservan.
+Reconcile this drawer count with the register before closing.,Revisa este conteo contra el guardado en la caja antes de cerrar.
+Retry the unconfirmed cash action before choosing how to continue.,Reintenta la operación de efectivo sin confirmar antes de elegir cómo continuar.
+"Review both counts, then choose which one to keep. Nothing is sent until you save.",Revisa ambos conteos y elige cuál conservar. No se envía nada hasta que guardes.
+The register already holds a saved count for this shift.,La caja ya tiene un conteo guardado para este turno.
+The register no longer holds your saved count.,Tu conteo guardado ya no está disponible en la caja.
+The register's count,Conteo guardado en la caja
+This count was already completed on the register.,Este conteo ya se finalizó en la caja.
+This drawer count changed on the register.,El conteo guardado en la caja cambió.
+Your count on this screen,Tu conteo en esta pantalla
+Your saved count could not be checked with the register. Retry before closing.,No se pudo verificar tu conteo guardado con la caja. Reintenta antes de cerrar.
+Your unsent cash form is still saved on this device. It reopens when the custody queue loads again.,Tu formulario de efectivo sin enviar sigue guardado en este dispositivo. Se abrirá cuando vuelva a cargar la lista de custodia.
+Your unsent cash form is still saved. It reopens once the unconfirmed cash action is resolved.,Tu formulario de efectivo sin enviar sigue guardado. Se abrirá cuando se resuelva la operación sin confirmar.
+Your unsent cash form was restored. Nothing was sent — check it and confirm.,Se recuperó tu formulario de efectivo sin enviar. No se envió nada; revísalo y confirma.
+"An unsent cash form was saved on this device, but it no longer matches the cash records. It was not reopened and nothing was sent.","Hay un formulario de efectivo sin enviar guardado en este dispositivo, pero ya no coincide con los registros. No se abrió ni se envió nada."
+This browser cannot keep your unsent cash form. Nothing was sent. Finish this action now or write the count down before leaving this screen.,Este navegador no puede guardar tu formulario de efectivo sin enviar. No se envió nada. Termina la operación o anota el conteo antes de salir de esta pantalla.
+Discard the damaged saved form,Descartar el formulario guardado dañado
+The saved copy of this cash form could not be removed from this browser. Do not send another cash action from this device until a supervisor checks the cash records in Desk.,No se pudo eliminar la copia guardada de este formulario. No envíes otra operación de efectivo desde este dispositivo hasta que un supervisor revise los registros en el escritorio.
+The damaged saved cash form could not be removed from this browser. Ask a supervisor to check the cash records in Desk.,No se pudo eliminar el formulario de efectivo dañado. Pide a un supervisor que revise los registros en el escritorio.
+Discard the damaged saved cash form before sending a cash action.,Descarta el formulario de efectivo dañado antes de enviar una operación.
+"This browser will not release the saved copy of this form, so no cash action was sent and no cash moved. Reopen the browser and try again.",El navegador no permite eliminar la copia guardada de este formulario. No se envió ninguna operación ni se movió efectivo. Vuelve a abrir el navegador e inténtalo de nuevo.
+Discard the damaged saved cash form before starting another cash task.,Descarta el formulario de efectivo dañado antes de iniciar otra tarea.
+"Copy or discard the unsent cash form kept from before, then start the new task.",Copia o descarta el formulario de efectivo anterior sin enviar y después inicia la nueva tarea.
+"An unsent cash form saved on this device could not be read. It was left untouched and no new work is being saved over it. Check the cash records in Desk, then discard it here.",No se pudo leer el formulario de efectivo sin enviar guardado en este dispositivo. Se conservó intacto y no se está reemplazando. Revisa los registros en el escritorio y después descártalo aquí.
+All pending work is shown. Completed history here is limited to the most recent records.,Se muestra todo lo pendiente. El historial finalizado de esta pantalla se limita a los registros más recientes.
+Open full cash history,Abrir el historial completo de efectivo
+Enter a whole number of history rows.,Ingresa un número entero de registros del historial.
+Expected drawer cash is above its limit.,El efectivo esperado en caja supera su límite.
+Expected in the drawer,Esperado en caja
+Suggested return,Devolución sugerida
+"This is what the system expects, not a count. Count the cash you actually take out.","Esto es lo que espera el sistema, no un conteo. Cuente el efectivo que realmente retire."
+Expected drawer cash is within its limit.,El efectivo esperado en caja está dentro de su límite.
+The drawer cash check is unavailable. Nothing was counted or moved.,No se puede consultar el efectivo en caja. No se contó ni se movió nada.
+Checking…,Consultando…
+The drawer belongs to another register.,La caja pertenece a otro punto de venta.
+Bag {0},Bolsa {0}
+Open the first one,Abrir el primero
+Workspace actions,Acciones del espacio de trabajo
+Switch workspace,Cambiar de espacio de trabajo
+Workspace,Espacio de trabajo
+Receive cash from safe,Recibir efectivo de caja fuerte
+Choose a bag or count to see its next step.,Elige una bolsa o un conteo para ver el siguiente paso.
+Sealed bag,Bolsa sellada
+Float bag,Bolsa de fondo de caja
+Bank,Banco
+Back to cash queue,Volver a bolsas y conteos
+Details and history,Detalles e historial

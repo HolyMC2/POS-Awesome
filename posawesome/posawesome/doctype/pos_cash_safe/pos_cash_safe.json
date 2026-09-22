@@ -1,0 +1,112 @@
+{
+ "doctype": "DocType",
+ "name": "POS Cash Safe",
+ "module": "POSAwesome",
+ "autoname": "CASH-SAFE-.#####",
+ "field_order": [
+  "title",
+  "enabled",
+  "pos_profile",
+  "company",
+  "currency",
+  "safe_account",
+  "transit_account",
+  "bank_account",
+  "variance_account",
+  "float_target",
+  "drawer_limit"
+ ],
+ "fields": [
+  {
+   "fieldname": "title",
+   "label": "Title",
+   "fieldtype": "Data",
+   "reqd": 1
+  },
+  {
+   "fieldname": "enabled",
+   "label": "Enabled",
+   "fieldtype": "Check",
+   "default": "0"
+  },
+  {
+   "fieldname": "pos_profile",
+   "label": "Pos Profile",
+   "fieldtype": "Link",
+   "options": "POS Profile",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "company",
+   "label": "Company",
+   "fieldtype": "Link",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "safe_account",
+   "label": "Safe Account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "transit_account",
+   "label": "Transit Account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "bank_account",
+   "label": "Bank Account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "variance_account",
+   "label": "Variance Account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "float_target",
+   "label": "Float Target",
+   "fieldtype": "Currency",
+   "default": "1000"
+  },
+  {
+   "fieldname": "drawer_limit",
+   "label": "Drawer Limit",
+   "fieldtype": "Currency",
+   "default": "5000"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "create": 1,
+   "write": 1
+  }
+ ],
+ "track_changes": 1,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}

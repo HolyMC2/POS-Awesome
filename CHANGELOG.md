@@ -6,6 +6,24 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 ## Unreleased
 
+
+- **Cash custody workspace and contextual dock (2026-09-22, doco-mirror candidate).**
+  Includes the existing cash-custody foundation: sealed bags, denomination counts,
+  independent verification, safe/drawer movements, bank handoffs and recoverable
+  closing allocation. Employees start from their pending queue, open a focused
+  count/transfer with explicit source and destination, and return without losing
+  filters. Unsent forms and unconfirmed requests retain their existing recovery.
+  Compact workspaces replace sale controls with their own action and a return to
+  sale. Coupon/offer/catalogue shortcuts dismiss the covering workspace immediately.
+  Subtle arrival and press feedback respects reduced motion. Closing has one
+  canonical surface; blind-count profiles reset their reconciliation headers.
+  Source: `fix/pos-responsive-20260922`. Lab already has the custody schema and
+  backend; this rollout publishes assets and additive Spanish translations only.
+  Fresh sites require guarded migration for the four custody DocTypes and closing
+  evidence link. Restore prior assets/translations for the lab UI rollback;
+  preserve financial records and custody backend/schema. Evidence:
+  `~/muelle-releases/pos-cash-workspace-20260922/`.
+
 - **Mesas finding and account actions (2026-09-22, lab release candidate).**
   Search finds tables and account names across floors and shows each result's
   location. Cards name the parties, identify split accounts and mark the selected

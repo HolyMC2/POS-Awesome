@@ -37,6 +37,10 @@ class POSSafeTransfer(Document):
         self._validate_amount()
         self._validate_accounts()
 
+    def before_submit(self):
+        if frappe.db.table_exists("POS Cash Safe") and frappe.db.exists("POS Cash Safe", {"pos_profile":self.pos_profile,"enabled":1}):
+            frappe.throw(_("Use Cash custody to dispatch and confirm bank bags for this safe."))
+
     def on_submit(self):
         if not self.journal_entry:
             cost_center = frappe.db.get_value(

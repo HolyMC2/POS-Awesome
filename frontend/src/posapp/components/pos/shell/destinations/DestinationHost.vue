@@ -231,9 +231,11 @@ const refusalBody = computed(() => {
 		case "offline":
 			// Naming the destination matters: the same screen appears for
 			// Devolución, Recarga and Corte, and they fail for different reasons.
-			return props.t(
-				"{0} talks to the server every time it runs, so it stays closed until this register is back online.",
-			).replace("{0}", label.value);
+			return props
+				.t(
+					"{0} talks to the server every time it runs, so it stays closed until this register is back online.",
+				)
+				.replace("{0}", label.value);
 		case "shift_closed":
 			return props.t(
 				"The shift is the envelope around everything else. Open it and the whole rail comes alive.",
@@ -247,7 +249,19 @@ const refusalBody = computed(() => {
 </script>
 
 <style scoped>
+@keyframes workspace-arrive {
+	from {
+		opacity: 0.3;
+		transform: translateY(5px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
 .destination-host {
+	animation: workspace-arrive 160ms ease-out;
 	display: flex;
 	flex-direction: column;
 	/* Same height-chain discipline as the register columns: fill the parent,
@@ -288,8 +302,7 @@ const refusalBody = computed(() => {
 @media (max-width: 1099.98px) {
 	.destination-host {
 		height: calc(
-			var(--viewport-height, 100vh) - var(--bottom-safe-space, 0px) -
-				var(--destination-host-top, 0px)
+			var(--viewport-height, 100vh) - var(--bottom-safe-space, 0px) - var(--destination-host-top, 0px)
 		);
 	}
 }
@@ -351,5 +364,10 @@ const refusalBody = computed(() => {
 	color: #667085;
 	max-width: 46ch;
 	margin: 0 0 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+	.destination-host {
+		animation: none;
+	}
 }
 </style>

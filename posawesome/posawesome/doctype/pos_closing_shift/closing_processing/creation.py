@@ -319,12 +319,16 @@ def _submit_closing_shift(closing_shift, terminal_id=None, terminal_generation=N
                                       acting_user=opening_shift.user)
     if terminal.get("posa_terminal_recovery_pending"):
         frappe.throw(_("A supervisor must review previous-terminal saved work before closing this shift."))
+    from posawesome.posawesome.api.cash_custody.service import finalize_drawer, link_closed_count
+    finalize_drawer(closing_shift, dict(terminal_id=terminal_id, terminal_generation=terminal_generation,
+                                        terminal_token=terminal_token))
     closing_shift_doc = frappe.get_doc(closing_shift)
     closing_shift_doc.flags.posa_terminal_verified_generation = terminal.posa_terminal_generation
     closing_shift_doc.flags.ignore_permissions = True
     normalize_pos_payment_references(closing_shift_doc)
     closing_shift_doc.save()
     closing_shift_doc.submit()
+    link_closed_count(closing_shift_doc)
     return closing_shift_doc.name
 
 

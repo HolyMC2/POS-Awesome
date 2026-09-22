@@ -33,7 +33,8 @@
   "column_break_16",
   "taxes",
   "section_break_14",
-  "amended_from"
+  "amended_from",
+  "cash_count"
  ],
  "fields": [
   {
@@ -204,6 +205,14 @@
   {
    "fieldname": "section_break_if3m1",
    "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "cash_count",
+   "label": "Drawer Count Evidence",
+   "fieldtype": "Link",
+   "options": "POS Cash Count",
+   "read_only": 1,
+   "no_copy": 1
   }
  ],
  "is_submittable": 1,

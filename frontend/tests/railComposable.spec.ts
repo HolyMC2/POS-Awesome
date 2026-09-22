@@ -127,6 +127,7 @@ describe("useRegisterRail — offline", () => {
 		// `floor` is queued, not blocked — a waiter with no signal keeps taking
 		// orders — and `drafts` is blocked, because nothing caches them.
 		expect(dimmed.sort()).toEqual([
+			"cashCustody",
 			"closing",
 			"comandas",
 			"dashboard",
@@ -270,6 +271,7 @@ describe("useRegisterRail — groups", () => {
 			"barcode",
 			"giftCards",
 			"dashboard",
+			"cashCustody",
 		]);
 	});
 

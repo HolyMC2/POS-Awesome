@@ -76,6 +76,7 @@ describe("rail destination registry", () => {
 			"barcode",
 			"giftCards",
 			"dashboard",
+			"cashCustody",
 			"closing",
 		]);
 	});
@@ -183,6 +184,7 @@ describe("rail capability gating", () => {
 			"lots",
 			"purchase",
 			"barcode",
+			"cashCustody",
 		]);
 	});
 });
@@ -221,6 +223,7 @@ describe("rail offline contract", () => {
 	it("dims only the surfaces that would lie without a server", () => {
 		const blocked = RAIL_DESTINATIONS.filter(isOfflineBlocked).map((d) => d.id);
 		expect(blocked.sort()).toEqual([
+			"cashCustody",
 			"closing",
 			// The board reads print batches; a stale kitchen is the seating
 			// chart's lie applied to tickets.
@@ -249,6 +252,7 @@ describe("rail offline contract", () => {
 			"barcode",
 			"giftCards",
 			"dashboard",
+			"cashCustody",
 		]);
 		// Gated = absent, not disabled (R3): a cashier never sees Tablero, a
 		// profile without gift cards never sees Monedero.
@@ -257,6 +261,7 @@ describe("rail offline contract", () => {
 			"lots",
 			"purchase",
 			"barcode",
+			"cashCustody",
 		]);
 		// Every tool explains itself in the flyout; no pill ever needs to.
 		for (const tool of railDestinationsInGroup(visible, "tools")) {

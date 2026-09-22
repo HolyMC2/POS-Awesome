@@ -22,6 +22,10 @@ import { createVuetify } from "vuetify";
  *      act, and two of them would be two accents (§17.7 invariant 2).
  */
 
+vi.mock("../src/posapp/components/pos/closing/ClosingRecovery.vue", () => ({
+	default: { template: '<div />', mounted() { this.$emit("ready", true); } },
+}));
+
 import ClosingDialog from "../src/posapp/components/pos/shell/ClosingDialog.vue";
 import { DESTINATION_SURFACE } from "../src/posapp/components/pos/shell/destinations/surfaceContext";
 
@@ -134,6 +138,17 @@ afterEach(() => {
 });
 
 describe("the counted figure lands where the close reads it", () => {
+	it("submits from the visible Close shift button", async () => {
+		const { wrapper } = await mountDialog();
+		const submitted = vi.fn();
+		(wrapper.vm as any).eventBus.on("submit_closing_pos", submitted);
+		const button = inDialog('[data-testid="band-primary"]') as HTMLButtonElement;
+		expect(button).toBeTruthy();
+		button.click();
+		await nextTick();
+		expect(submitted).toHaveBeenCalledOnce();
+	});
+
 	it("writes the cash row's closing_amount, and touches no other row", async () => {
 		const { data } = await mountDialog();
 
@@ -221,59 +236,35 @@ describe("one action, not two", () => {
 		expect(inDialog('[data-testid="closing-submit"]')).toBeNull();
 	});
 
-	it("keeps Submit and mounts no band when a shell already owns the lane", async () => {
+	it("uses the same closing footer when hosted by the shell", async () => {
 		await mountDialog({ hosted: true });
 
-		expect(inDialog('[data-testid="action-band"]')).toBeNull();
-		expect(inDialog('[data-testid="closing-submit"]')).toBeTruthy();
+		expect(inDialog('[data-testid="action-band"]')).toBeTruthy();
+		expect(inDialog('[data-testid="closing-submit"]')).toBeNull();
 	});
 });
 
-describe("the phone's corte (movil round 3)", () => {
-	it("renders MovilCorte inside the dialog at phone width, desktop body and band standing down", async () => {
-		window.innerWidth = 390;
+describe("one responsive closing screen", () => {
+	it.each([390, 900, 1440])("keeps payment reconciliation and one footer at %spx", async (width) => {
+		window.innerWidth = width;
 		await mountDialog();
-
-		expect(inDialog('[data-testid="movil-corte"]')).toBeTruthy();
-		expect(inDialog('[data-testid="movil-corte-primary"]')).toBeTruthy();
-		// One primary: the desktop actions row and both band forms stand down.
+		expect(inDialog('[data-testid="movil-corte"]')).toBeNull();
+		expect(inDialog('.reconciliation-section')).toBeTruthy();
+		expect(inDialog('[data-testid="band-primary"]')).toBeTruthy();
 		expect(inDialog('[data-testid="closing-submit"]')).toBeNull();
-		expect(inDialog('[data-testid="action-band"]')).toBeNull();
-		expect(inDialog('[data-testid="closing-difference"]')).toBeNull();
 	});
 
-	it("close-shift stamps the counted figure and the note onto the doc, then submits", async () => {
+	it("retains the compact screen's note rule and submits the counted amount with it", async () => {
 		window.innerWidth = 390;
 		const { wrapper } = await mountDialog();
 		const vm = wrapper.vm as any;
-
-		vm.onMovilCloseShift({ counted: 5391, source: "manual", note: "billete roto en caja" });
+		vm.onDrawerCounted(5300);
+		expect(vm.submitDialog()).toBe(false);
+		vm.closingNote = "billete roto en caja";
 		await nextTick();
-
-		const cashRow = vm.dialog_data.payment_reconciliation.find(
-			(row: any) => row.mode_of_payment === CASH,
-		);
-		expect(Number(cashRow.closing_amount)).toBe(5391);
+		expect(vm.dialog_data.payment_reconciliation[0].closing_amount).toBe(5300);
 		expect(vm.dialog_data.posa_difference_note).toBe("billete roto en caja");
-	});
-
-	it("draws the MOVIL corte at tablet width too — one compact boundary", async () => {
-		// Inverted 2026-08-26 (owner: «there's still wired the old mobile
-		// view … on my tablet»): the 768–1099 band joins the movil register.
-		window.innerWidth = 900;
-		await mountDialog();
-
-		expect(inDialog('[data-testid="movil-corte"]')).toBeTruthy();
-	});
-
-	it("keeps the desktop corte at desktop width", async () => {
-		window.innerWidth = 1440;
-		await mountDialog();
-
-		expect(inDialog('[data-testid="movil-corte"]')).toBeNull();
-		// Standalone, the dialog's own band owns the action — the desktop
-		// corte exactly as it was before the movil branch existed.
-		expect(inDialog('[data-testid="action-band"]')).toBeTruthy();
+		expect(vm.submitDialog()).toBe(true);
 	});
 });
 

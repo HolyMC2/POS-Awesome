@@ -115,6 +115,9 @@ def create_opening_voucher(pos_profile, company, balance_details, terminal_id=No
             ).format(existing_open[0].name, existing_open[0].pos_profile)
         )
 
+    from .cash_custody.service import enforce_opening
+    enforce_opening(pos_profile, balance_details)
+
     new_pos_opening = frappe.get_doc(
         {
             "doctype": "POS Opening Shift",
@@ -145,6 +148,8 @@ def create_opening_voucher(pos_profile, company, balance_details, terminal_id=No
     from .shift_terminal import _status
     data["terminal_status"] = _status(new_pos_opening, terminal_id, terminal_token)
     update_opening_shift_data(data, new_pos_opening.pos_profile)
+    from .cash_custody.service import is_enabled
+    data["cash_custody_enabled"] = is_enabled(new_pos_opening.pos_profile)
     return data
 
 

@@ -1,9 +1,12 @@
 <template>
-	<v-app class="container1 posapp pos-theme-root" :class="rtlClasses" :style="{ height: `${windowHeight}px` }">
+	<v-app
+		class="container1 posapp pos-theme-root"
+		:class="rtlClasses"
+		:style="{ height: `${windowHeight}px` }"
+	>
 		<AppLoadingOverlay :visible="globalLoading" />
 		<UpdatePrompt />
 		<v-main class="main-content">
-			<ClosingDialog />
 			<Navbar
 				:pos-profile="posProfile"
 				:pending-invoices="pendingInvoicesCount"
@@ -82,11 +85,10 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, getCurrentInstance } from "vue";
 // Note paths updated to be relative to layouts/ directory
 import Navbar from "../components/Navbar.vue";
-import ClosingDialog from "../components/pos/shell/ClosingDialog.vue";
+import { useRouter } from "vue-router";
 import AppLoadingOverlay from "../components/ui/LoadingOverlay.vue";
 import UpdatePrompt from "../components/ui/UpdatePrompt.vue";
 import { useLoading } from "../composables/core/useLoading.js";
-import { usePosShift } from "../composables/pos/shared/usePosShift";
 import { loadingState, initLoadingSources, setSourceProgress, markSourceLoaded } from "../utils/loading.js";
 import { resolveBootLoadingSources } from "../utils/bootLoadingSources";
 import { useCustomersStore } from "../stores/customersStore.js";
@@ -221,7 +223,7 @@ const loadingApi = (() => {
 const globalLoading = loadingApi?.overlayVisible || ref(false);
 const getScopeState =
 	typeof loadingApi?.getScopeState === "function" ? loadingApi.getScopeState : createFallbackLoadingScope;
-const { get_closing_data } = usePosShift();
+const router = useRouter();
 const syncStore = useSyncStore();
 const verticalStore = useVerticalStore();
 // The restaurant-only sync resources; see runOfflineSyncResource's gate.
@@ -408,9 +410,7 @@ const appResume = createAppResume({
 			online: navigator.onLine && !getIsManualOffline(),
 		}),
 	track: (event, value, metadata) => {
-		import("../utils/telemetry")
-			.then(({ track }) => track(event, value, metadata))
-			.catch(() => {});
+		import("../utils/telemetry").then(({ track }) => track(event, value, metadata)).catch(() => {});
 	},
 	isOnline: () => navigator.onLine && !getIsManualOffline(),
 });
@@ -796,10 +796,7 @@ const bootstrapWarningUiState = computed(() =>
 		warningTooltip: bootstrapWarningTooltip.value,
 		capabilitySummaries: bootstrapCapabilitySummaries.value,
 		onlineReady:
-			networkOnline.value &&
-			serverOnline.value &&
-			!serverConnecting.value &&
-			!getIsManualOffline(),
+			networkOnline.value && serverOnline.value && !serverConnecting.value && !getIsManualOffline(),
 	}),
 );
 const visibleBootstrapWarningActive = computed(() => bootstrapWarningUiState.value.active);
@@ -852,13 +849,7 @@ watch(
 		posProfile.value?.selling_price_list || null,
 		posProfile.value?.currency || null,
 	],
-	([
-		isInitialSyncSettled,
-		areWarningsReady,
-		isNetworkOnline,
-		isServerOnline,
-		isServerConnecting,
-	]) => {
+	([isInitialSyncSettled, areWarningsReady, isNetworkOnline, isServerOnline, isServerConnecting]) => {
 		if (
 			isInitialSyncSettled &&
 			areWarningsReady &&
@@ -1106,7 +1097,6 @@ const setupEventListeners = () => {
 		eventBus.on("data-load-progress", ({ name, progress }) => {
 			setSourceProgress(name, progress);
 		});
-
 	}
 };
 
@@ -1115,7 +1105,7 @@ const handleNavClick = () => {
 };
 
 const handleCloseShift = () => {
-	get_closing_data();
+	router.push("/closing");
 };
 
 const handleSyncInvoices = async () => {

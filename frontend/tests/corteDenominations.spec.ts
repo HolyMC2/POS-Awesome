@@ -221,6 +221,17 @@ describe("the card counts the drawer", () => {
 		);
 	});
 
+	it("clears an invalid quantity warning when corrected with the touch stepper", async () => {
+		const { wrapper } = mountCount();
+		const row = wrapper.findAll('[data-testid="denomination-row"]')[0]!;
+		await row.get("input").setValue("2.5");
+		expect(row.get("input").attributes("aria-invalid")).toBe("true");
+		await row.get('[data-testid="denomination-increment"]').trigger("click");
+		expect(row.get("input").attributes("aria-invalid")).toBe("false");
+		expect((row.get("input").element as HTMLInputElement).value).toBe("1");
+		expect(row.find('[role="alert"]').exists()).toBe(false);
+	});
+
 	it("declares every money figure, and claims no total", async () => {
 		const { wrapper } = mountCount();
 		await enterArtboardCount(wrapper);

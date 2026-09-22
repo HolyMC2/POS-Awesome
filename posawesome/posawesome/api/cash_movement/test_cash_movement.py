@@ -419,10 +419,13 @@ class TestCashMovementTerminalController(unittest.TestCase):
         movement = controller.POSCashMovement.__new__(controller.POSCashMovement)
         movement.pos_opening_shift = "OPEN-1"
         movement.docstatus = 2
+        movement.movement_type = "Expense"
+        movement.name = "MOVE-1"
         with patch.object(controller, "frappe") as runtime, patch(
             "posawesome.posawesome.api.shift_terminal.assert_verified_terminal_generation"
         ) as verify:
             runtime.local.posa_verified_terminal_generations = {"OPEN-1": 7}
+            runtime.db.table_exists.return_value = False
             for action in [movement.before_submit, movement.before_cancel, movement.on_trash]:
                 action()
             self.assertEqual(verify.call_count, 3)

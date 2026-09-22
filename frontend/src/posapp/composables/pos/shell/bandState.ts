@@ -39,7 +39,8 @@ export type BandKind =
 	| "queued"
 	| "floorAccount"
 	| "tableSale"
-	| "hostedContext";
+	| "hostedContext"
+	| "custody";
 
 /**
  * Stable action ids, decoupled from key bindings so the shortcuts engine
@@ -56,7 +57,8 @@ export type BandActionId =
 	| "offline.keepSelling"
 	| "floor.chargeAccount"
 	| "table.saveAndReturn"
-	| "sale.return";
+	| "sale.return"
+	| "custody.primary";
 
 export interface BandAction {
 	id: BandActionId;

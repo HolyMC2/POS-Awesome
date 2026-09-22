@@ -1,13 +1,13 @@
 <template>
-	<v-card-title class="closing-header d-flex align-center">
+	<v-card-title class="closing-header">
 		<div class="header-content">
 			<div class="header-icon-wrapper">
 				<v-icon class="header-icon" size="24">mdi-store-clock-outline</v-icon>
 			</div>
 			<div class="header-text">
-				<h3 class="header-title">{{ __("Closing POS Shift") }}</h3>
+				<h3 class="header-title">{{ __("Close shift") }}</h3>
 				<p class="header-subtitle">
-					{{ __("Reconcile payment methods and close shift") }}
+					{{ __("Count the drawer, review unfinished sales, then close.") }}
 				</p>
 			</div>
 		</div>
@@ -37,8 +37,8 @@
 			variant="text"
 			density="comfortable"
 			class="header-close-btn"
-			:title="__('Close')"
-			:aria-label="__('Close closing shift dialog')"
+			:title="__('Back')"
+			:aria-label="__('Back from closing')"
 			@click="$emit('close')"
 		></v-btn>
 	</v-card-title>
@@ -103,6 +103,9 @@ const shiftSpan = computed(() => {
 
 <style scoped>
 .closing-header {
+	display: flex !important;
+	align-items: center;
+	gap: 12px;
 	border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 	/* One compact row. 24px padding + a 72px icon plate spent ~170px of a
 	 * surface whose columns were starving below (Marco, 08-23) — and
@@ -156,6 +159,7 @@ const shiftSpan = computed(() => {
 }
 
 .header-facts {
+	margin-left: auto;
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
@@ -192,5 +196,14 @@ const shiftSpan = computed(() => {
 
 .header-divider {
 	border-color: rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+@media (max-width: 599.98px) {
+	.closing-header { display: grid !important; grid-template-columns: minmax(0, 1fr) 40px; gap: 8px; }
+	.header-content { grid-column: 1; grid-row: 1; }
+	.header-icon-wrapper, .closing-header :deep(.v-spacer) { display: none; }
+	.header-close-btn { grid-column: 2; grid-row: 1; }
+	.header-facts { grid-column: 1 / -1; grid-row: 2; margin-left: 0; justify-content: flex-start; }
+	.header-subtitle { font-size: 12px; }
 }
 </style>

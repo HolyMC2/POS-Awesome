@@ -39,6 +39,8 @@ import {
 } from "../src/posapp/composables/pos/shared/usePosShift";
 import { useInvoiceStore } from "../src/posapp/stores/invoiceStore";
 import { useUIStore } from "../src/posapp/stores/uiStore";
+import { useToastStore } from "../src/posapp/stores/toastStore";
+import { useClosingFlowStore } from "../src/posapp/stores/closingFlowStore";
 
 describe("usePosShift closing warnings", () => {
 	beforeEach(() => {
@@ -157,6 +159,88 @@ describe("usePosShift closing warnings", () => {
 		offlineState.offline = true;
 		await usePosShift().submit_closing_pos({ name: "CLOSE-1", pos_opening_shift: "OPEN-1" });
 		expect((globalThis as any).frappe.call).not.toHaveBeenCalled();
+	});
+
+	it("keeps counts and the actionable error after a refused submission", async () => {
+		vi.stubGlobal("window", { __: (value: string) => value });
+		const flow = useClosingFlowStore();
+		flow.draft = { pos_opening_shift: "OPEN-1", payment_reconciliation: [{ mode_of_payment: "Cash", closing_amount: 1200 }] };
+		(globalThis as any).frappe.call = vi.fn().mockRejectedValue(new Error("Review a saved payment before closing."));
+		await usePosShift().submit_closing_pos(flow.draft);
+		expect(flow.error).toContain("Review a saved payment");
+		expect(flow.draft.payment_reconciliation[0].closing_amount).toBe(1200);
+		expect(flow.completed).toBe(false);
+		expect(flow.submitting).toBe(false);
+	});
+
+	it("confirms a committed closing after its response was lost without submitting twice", async () => {
+		vi.stubGlobal("window", { __: (value: string) => value });
+		const call = vi.fn(async (method: string) => {
+			if (method.endsWith("submit_closing_shift")) throw new TypeError("NetworkError when attempting to fetch resource.");
+			if (method === "frappe.client.get_value") return { message: { name: "CLOSE-1", docstatus: 1, pos_opening_shift: "OPEN-1" } };
+			return { message: null };
+		});
+		(globalThis as any).frappe.call = call;
+		await usePosShift().submit_closing_pos({ pos_opening_shift: "OPEN-1" });
+		expect(useClosingFlowStore().completed).toBe(true);
+		expect(call.mock.calls.filter(([method]) => method.endsWith("submit_closing_shift"))).toHaveLength(1);
+	});
+
+	it.each([null, { name: "DRAFT", docstatus: 0, pos_opening_shift: "OPEN-1" }, { name: "OTHER", docstatus: 1, pos_opening_shift: "OPEN-2" }])("does not treat an unverified closing as success: %j", async (record) => {
+		vi.stubGlobal("window", { __: (value: string) => value });
+		const flow = useClosingFlowStore();
+		flow.draft = { pos_opening_shift: "OPEN-1", payment_reconciliation: [{ closing_amount: 1200 }] };
+		(globalThis as any).frappe.call = vi.fn(async (method: string) => {
+			if (method === "frappe.client.get_value") return { message: record };
+			throw new TypeError("NetworkError when attempting to fetch resource.");
+		});
+		await usePosShift().submit_closing_pos(flow.draft);
+		expect(flow.completed).toBe(false);
+		expect(flow.error).toContain("may already be closed");
+		expect(flow.draft.payment_reconciliation[0].closing_amount).toBe(1200);
+	});
+
+	it("does not send a second close request while the first is pending", async () => {
+		let finish: (value: unknown) => void = () => {};
+		(globalThis as any).frappe.call = vi.fn((method: string) => method === "frappe.client.get_value" ? Promise.resolve({ message: null }) : new Promise((resolve) => { finish = resolve; }));
+		const shift = usePosShift();
+		const first = shift.submit_closing_pos({ pos_opening_shift: "OPEN-1" });
+		await vi.waitFor(() => expect((globalThis as any).frappe.call).toHaveBeenCalledTimes(1));
+		await shift.submit_closing_pos({ pos_opening_shift: "OPEN-1" });
+		expect((globalThis as any).frappe.call).toHaveBeenCalledTimes(1);
+		finish({ message: null });
+		await first;
+		expect(useClosingFlowStore().submitting).toBe(false);
+	});
+
+	it("puts draft review in the screen and preserves counts when totals are refreshed", async () => {
+		vi.stubGlobal("window", { __: (value: string) => value, confirm: vi.fn() });
+		useUIStore().posOpeningShift = { name: "OPEN-1" };
+		const flow = useClosingFlowStore();
+		flow.draft = { pos_opening_shift: "OPEN-1", payment_reconciliation: [{ mode_of_payment: "Cash", closing_amount: 1200 }], posa_difference_note: "Drawer checked" };
+		(globalThis as any).frappe.call = vi.fn(async () => ({ message: {
+			closing_shift: { pos_opening_shift: "OPEN-1", payment_reconciliation: [{ mode_of_payment: "Cash", expected_amount: 1100, closing_amount: 0 }] },
+			pending_drafts: [{ name: "DRAFT-1" }], drafts_will_be_deleted: true,
+		} }));
+		await usePosShift().get_closing_data();
+		expect((window as any).confirm).not.toHaveBeenCalled();
+		expect(flow.reviewRequired).toBe(true);
+		expect(flow.reviewAccepted).toBe(false);
+		expect(flow.draft.payment_reconciliation[0]).toMatchObject({ closing_amount: 1200, expected_amount: 1100 });
+		expect(flow.draft.posa_difference_note).toBe("Drawer checked");
+	});
+
+	it("explains terminal recovery when closing an unregistered legacy shift", async () => {
+		vi.stubGlobal("window", { __: (value: string) => value });
+		const opening = { name: "LEGACY-OPEN", posa_terminal_generation: 0 };
+		useUIStore().posOpeningShift = opening;
+		const reason = "This browser must own the shift before saving work. Open Offline Status to register or recover this terminal.";
+		pendingWork.mockRejectedValueOnce(new Error(reason));
+		await usePosShift().submit_closing_pos({ pos_opening_shift: opening.name });
+		expect(useToastStore().text).toContain(reason);
+		expect(useToastStore().text).not.toContain("Reconnect and retry");
+		expect((globalThis as any).frappe.call).not.toHaveBeenCalled();
+		expect(useUIStore().posOpeningShift).toEqual(opening);
 	});
 
 	it("clears shared opening shift and invoice state after closing shift submit", async () => {

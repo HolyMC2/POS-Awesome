@@ -1,0 +1,190 @@
+{
+ "doctype": "DocType",
+ "name": "POS Cash Bag",
+ "module": "POSAwesome",
+ "autoname": "CASH-BAG-.#####",
+ "field_order": [
+  "safe",
+  "company",
+  "pos_profile",
+  "currency",
+  "seal",
+  "purpose",
+  "state",
+  "amount",
+  "count_json",
+  "prepared_by",
+  "verified_by",
+  "received_by",
+  "opening_shift",
+  "cash_movement",
+  "dispatch_journal",
+  "deposit_journal",
+  "deposit_reference",
+  "note",
+  "receipt_movement",
+  "receiving_shift"
+ ],
+ "fields": [
+  {
+   "fieldname": "safe",
+   "label": "Safe",
+   "fieldtype": "Link",
+   "options": "POS Cash Safe",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "label": "Company",
+   "fieldtype": "Link",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "pos_profile",
+   "label": "Pos Profile",
+   "fieldtype": "Link",
+   "options": "POS Profile",
+   "reqd": 1
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "seal",
+   "label": "Seal",
+   "fieldtype": "Data",
+   "unique": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "purpose",
+   "label": "Purpose",
+   "fieldtype": "Select",
+   "options": "Float\nTakings",
+   "reqd": 1
+  },
+  {
+   "fieldname": "state",
+   "label": "State",
+   "fieldtype": "Select",
+   "options": "Available\nUnverified\nDisputed\nIssued\nIn Transit\nDeposited\nUnpacked",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amount",
+   "label": "Amount",
+   "fieldtype": "Currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "count_json",
+   "label": "Count Json",
+   "fieldtype": "Long Text",
+   "reqd": 1
+  },
+  {
+   "fieldname": "prepared_by",
+   "label": "Prepared By",
+   "fieldtype": "Link",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "verified_by",
+   "label": "Verified By",
+   "fieldtype": "Link",
+   "options": "User"
+  },
+  {
+   "fieldname": "received_by",
+   "label": "Received By",
+   "fieldtype": "Link",
+   "options": "User"
+  },
+  {
+   "fieldname": "opening_shift",
+   "label": "Opening Shift",
+   "fieldtype": "Link",
+   "options": "POS Opening Shift"
+  },
+  {
+   "fieldname": "cash_movement",
+   "label": "Cash Movement",
+   "fieldtype": "Link",
+   "options": "POS Cash Movement"
+  },
+  {
+   "fieldname": "dispatch_journal",
+   "label": "Dispatch Journal",
+   "fieldtype": "Link",
+   "options": "Journal Entry"
+  },
+  {
+   "fieldname": "deposit_journal",
+   "label": "Deposit Journal",
+   "fieldtype": "Link",
+   "options": "Journal Entry"
+  },
+  {
+   "fieldname": "deposit_reference",
+   "label": "Deposit Reference",
+   "fieldtype": "Data"
+  },
+  {
+   "fieldname": "note",
+   "label": "Note",
+   "fieldtype": "Small Text"
+  },
+  {
+   "fieldname": "receipt_movement",
+   "label": "Receipt Movement",
+   "fieldtype": "Link",
+   "options": "POS Cash Movement",
+   "read_only": 1
+  },
+  {
+   "fieldname": "receiving_shift",
+   "label": "Receiving Shift",
+   "fieldtype": "Link",
+   "options": "POS Opening Shift",
+   "read_only": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "POS User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "POS Awesome Supervisor",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "track_changes": 1,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}
