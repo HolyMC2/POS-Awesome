@@ -1,13 +1,17 @@
 <template>
-	<v-dialog :model-value="modelValue" max-width="320" @update:model-value="close">
+	<v-dialog :model-value="modelValue" max-width="400" @update:model-value="close">
 		<v-card class="jump-pad pos-themed-card">
 			<v-card-title class="jump-pad__title">{{ title }}</v-card-title>
 			<v-card-text class="jump-pad__body">
-				<div class="jump-pad__readout" :class="{ 'jump-pad__readout--miss': entry && !match }">
+				<label v-if="mode === 'tab'" class="jump-pad__name">
+					<span>{{ verticalStore.t("Tab Name") }}</span>
+					<input v-model="entry" type="text" maxlength="140" autofocus autocomplete="off" data-test="new-tab-name" @keydown.enter.prevent="confirm" />
+				</label>
+				<div v-else class="jump-pad__readout" :class="{ 'jump-pad__readout--miss': entry && !match }">
 					<span class="jump-pad__entry">{{ entry || "—" }}</span>
 					<span class="jump-pad__hint">{{ hint }}</span>
 				</div>
-				<div class="jump-pad__keys">
+				<div v-if="mode === 'table'" class="jump-pad__keys">
 					<button
 						v-for="key in KEYS"
 						:key="key"
@@ -17,7 +21,7 @@
 					>
 						{{ key }}
 					</button>
-					<button type="button" class="jump-pad__key jump-pad__key--wide" @click="backspace">
+					<button type="button" class="jump-pad__key jump-pad__key--wide" :aria-label="verticalStore.t('Delete')" @click="backspace">
 						<v-icon icon="mdi-backspace-outline" size="18" />
 					</button>
 				</div>
@@ -25,8 +29,8 @@
 			<v-card-actions class="jump-pad__actions">
 				<v-btn variant="text" @click="close">{{ __("Cancel") }}</v-btn>
 				<v-spacer />
-				<v-btn color="primary" variant="flat" :disabled="!entry" @click="confirm">
-					{{ match ? openLabel : newTabLabel }}
+				<v-btn color="primary" variant="flat" :disabled="!entry.trim()" @click="confirm">
+					{{ mode === "table" && match ? openLabel : newTabLabel }}
 				</v-btn>
 			</v-card-actions>
 		</v-card>
@@ -47,7 +51,7 @@ import { useVerticalStore } from "../../stores/verticalStore";
 // cannot see app.config.globalProperties, so bind it locally.
 const __ = window.__ || ((value: string) => value);
 
-const props = defineProps<{ modelValue: boolean }>();
+const props = withDefaults(defineProps<{ modelValue: boolean; mode?: "table" | "tab" }>(), { mode: "table" });
 const emit = defineEmits<{
 	(event: "update:modelValue", value: boolean): void;
 	(event: "open-table", table: TableRow): void;
@@ -60,7 +64,7 @@ const floorStore = useFloorStore();
 const verticalStore = useVerticalStore();
 const entry = ref("");
 
-const title = computed(() => `${verticalStore.t("Go to")} ${verticalStore.t("Table")}`);
+const title = computed(() => props.mode === "tab" ? verticalStore.t("New tab") : `${verticalStore.t("Go to")} ${verticalStore.t("Table")}`);
 const openLabel = computed(() => verticalStore.t("Open"));
 const newTabLabel = computed(() => verticalStore.t("New tab"));
 
@@ -89,6 +93,7 @@ const hint = computed(() => {
  * already on the keys.
  */
 function onKeydown(event: KeyboardEvent) {
+	if (props.mode === "tab") return;
 	if (event.key >= "0" && event.key <= "9") {
 		press(event.key);
 		event.preventDefault();
@@ -133,7 +138,8 @@ function close() {
 }
 
 function confirm() {
-	const table = match.value;
+	if (!entry.value.trim()) return;
+	const table = props.mode === "table" ? match.value : null;
 	if (table) emit("open-table", table);
 	else if (entry.value.trim()) emit("open-tab", entry.value.trim());
 	close();
@@ -141,6 +147,29 @@ function confirm() {
 </script>
 
 <style scoped>
+.jump-pad__name {
+	display: grid;
+	gap: 8px;
+	font-size: 14px;
+}
+.jump-pad__name input {
+	width: 100%;
+	min-width: 0;
+	min-height: 48px;
+	padding: 10px 12px;
+	border: 1px solid var(--pos-border);
+	border-radius: 8px;
+	color: var(--pos-text-primary);
+	font-size: 16px;
+}
+.jump-pad__name input:focus-visible {
+	outline: 2px solid var(--pos-primary);
+	outline-offset: 2px;
+}
+.jump-pad__actions :deep(.v-btn) {
+	min-height: 44px;
+}
+
 .jump-pad__title {
 	font-size: 16px;
 	font-weight: 700;

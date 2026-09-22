@@ -18,7 +18,10 @@
 		</div>
 
 		<template v-if="orders.length">
-			<p class="mesa-sheet__label">{{ accountsLabel }}</p>
+			<div class="mesa-sheet__accounts-head">
+				<p class="mesa-sheet__label">{{ accountsLabel }}</p>
+				<button type="button" class="mesa-sheet__new-account" data-test="mesa-sheet-new-account" @click="emit('new-account')"><v-icon icon="mdi-plus" size="16" />{{ t("New account") }}</button>
+			</div>
 			<div class="mesa-sheet__accounts">
 				<button
 					v-for="account in accountCards"
@@ -136,6 +139,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	(event: "select", order: OrderRow): void;
+	(_event: "new-account"): void;
 	(event: "add-items"): void;
 	(event: "fire"): void;
 	(event: "view"): void;

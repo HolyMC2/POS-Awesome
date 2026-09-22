@@ -1,7 +1,16 @@
 <template>
 	<div class="floor-kanban">
+		<div class="floor-kanban__finder">
+			<label class="floor-kanban__search">
+				<v-icon icon="mdi-magnify" size="20" />
+				<input :aria-label="searchLabel" v-model="query" type="search" :placeholder="searchLabel" data-test="floor-search" />
+			</label>
+			<div class="floor-kanban__filters" :aria-label="verticalStore.t('Status')">
+				<button v-for="choice in filters" :key="choice.key" type="button" :aria-pressed="status === choice.key" :data-test="`floor-filter-${choice.key}`" @click="status = choice.key">{{ choice.title }} <span>{{ choice.count }}</span></button>
+			</div>
+		</div>
 		<div class="floor-kanban__scroller">
-			<section v-for="column in columns" :key="column.key" class="floor-kanban__column">
+			<section v-for="column in visibleColumns" :key="column.key" class="floor-kanban__column">
 				<header class="floor-kanban__header">
 					<span class="floor-kanban__title">{{ column.title }}</span>
 					<span class="floor-kanban__count">{{ column.rows.length }}</span>
@@ -29,7 +38,7 @@
 						<span v-if="row.occupied" class="floor-kanban__total">{{ row.totalLabel }}</span>
 						<span v-if="row.unsent" class="floor-kanban__badge">
 							<v-icon icon="mdi-silverware-variant" size="12" />
-							{{ row.unsent }}
+							{{ row.unsent }} {{ verticalStore.t("not sent to the kitchen") }}
 						</span>
 					</span>
 					<span class="floor-kanban__meta">
@@ -37,23 +46,15 @@
 							<v-icon :icon="chip.icon" size="13" />
 							{{ chip.text }}
 						</span>
-						<!-- Bussing action lives ON the card in the cleaning column:
-						     tapping the card body still opens the table (a busser may
-						     seat the next party directly), the chip-button only clears
-						     the latch. -->
-						<button
-							v-if="column.key === 'cleaning'"
-							type="button"
-							class="floor-kanban__chip floor-kanban__chip--action"
-							@click.stop="floorStore.markClean(row.table.name)"
-						>
-							<v-icon icon="mdi-check" size="13" />
-							{{ verticalStore.t("Mark clean") }}
-						</button>
+
 					</span>
 				</button>
 				<p v-if="!column.rows.length" class="floor-kanban__empty">{{ column.empty }}</p>
 			</section>
+			<div v-if="!visibleColumns.length" class="floor-kanban__no-results" role="status">
+				<p>{{ verticalStore.t("No results found") }}</p>
+				<button type="button" @click="query = ''; status = 'all'">{{ verticalStore.t("Clear filters") }}</button>
+			</div>
 		</div>
 	</div>
 </template>
@@ -69,7 +70,7 @@
  * thinned by fit-to-width scaling is a hint and a waiter deciding who to walk
  * to next needs a number.
  */
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useFloorStore, type TableRow } from "../../stores/floorStore";
 import { useVerticalStore } from "../../stores/verticalStore";
 import { useFormat } from "../../format";
@@ -82,6 +83,9 @@ const verticalStore = useVerticalStore();
 const { formatCurrency } = useFormat();
 const { now } = useFloorClock();
 
+const query = ref("");
+const status = ref("all");
+const searchLabel = computed(() => verticalStore.t("Search tables or accounts"));
 const transferActive = computed(() => Boolean(floorStore.transferOrder));
 
 interface Chip {
@@ -198,6 +202,22 @@ const columns = computed(() => [
 	},
 ]);
 
+const filters = computed(() => [
+	{ key: "all", title: verticalStore.t("All"), count: rows.value.length },
+	...columns.value.map((column) => ({ key: column.key, title: column.title, count: column.rows.length })),
+]);
+const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+const visibleColumns = computed(() => {
+	const needle = normalize(query.value.trim());
+	return columns.value
+		.filter((column) => status.value === "all" || column.key === status.value)
+		.map((column) => ({ ...column, rows: column.rows.filter((row) => !needle || normalize([
+			row.table.table_label,
+			...floorStore.ordersForTable(row.table.name).map((order) => order.tab_name || ""),
+		].join(" ")).includes(needle)) }))
+		.filter((column) => column.rows.length > 0);
+});
+
 function onTap(row: KanbanRow) {
 	if (transferActive.value) {
 		if (row.occupied) return;
@@ -209,11 +229,84 @@ function onTap(row: KanbanRow) {
 </script>
 
 <style scoped>
+.floor-kanban__finder {
+	flex: none;
+	display: grid;
+	gap: 8px;
+	padding: 10px;
+	border-bottom: 1px solid var(--pos-border);
+}
+.floor-kanban__search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	min-height: 46px;
+	padding: 0 10px;
+	border: 1px solid var(--pos-border);
+	border-radius: 8px;
+}
+.floor-kanban__search:focus-within {
+	outline: 2px solid var(--pos-primary);
+	outline-offset: 1px;
+}
+.floor-kanban__search input {
+	width: 100%;
+	min-width: 0;
+	min-height: 44px;
+	font-size: 16px;
+	outline: none;
+	color: var(--pos-text-primary);
+}
+.floor-kanban__filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.floor-kanban__filters button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	flex: 1 0 auto;
+	min-height: 44px;
+	padding: 6px 10px;
+	border: 1px solid var(--pos-border);
+	border-radius: 8px;
+	font-size: 13px;
+	color: var(--pos-text-secondary);
+}
+.floor-kanban__filters button[aria-pressed="true"] {
+	background: var(--pos-primary-container);
+	border-color: var(--pos-primary);
+	color: var(--pos-text-primary);
+	font-weight: 700;
+}
+.floor-kanban__filters span {
+	font-variant-numeric: tabular-nums;
+}
+.floor-kanban__no-results {
+	padding: 24px 12px;
+	text-align: center;
+	color: var(--pos-text-secondary);
+}
+.floor-kanban__no-results button {
+	min-height: 44px;
+	padding: 8px 16px;
+	color: var(--pos-primary);
+	font-weight: 600;
+}
+.floor-kanban button:focus-visible {
+	outline: 2px solid var(--pos-primary);
+	outline-offset: 2px;
+}
+
 .floor-kanban {
 	display: flex;
 	flex-direction: column;
 	flex: 1 1 auto;
 	min-height: 0;
+	min-width: 0;
 	overflow: hidden;
 }
 
@@ -317,6 +410,7 @@ function onTap(row: KanbanRow) {
 .floor-kanban__card-top {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 8px;
 }
 
@@ -325,8 +419,8 @@ function onTap(row: KanbanRow) {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: 15px;
+	overflow-wrap: anywhere;
+	font-size: 16px;
 	font-weight: 700;
 	letter-spacing: -0.01em;
 	color: var(--pos-text-primary);
@@ -334,7 +428,7 @@ function onTap(row: KanbanRow) {
 
 .floor-kanban__total {
 	flex: 0 0 auto;
-	font-size: 14px;
+	font-size: 16px;
 	font-weight: 700;
 	font-variant-numeric: tabular-nums;
 	color: var(--pos-text-primary);
@@ -344,8 +438,9 @@ function onTap(row: KanbanRow) {
 	display: inline-flex;
 	align-items: center;
 	gap: 3px;
-	flex: 0 0 auto;
-	padding: 1px 6px;
+	flex: 0 1 auto;
+	max-width: 100%;
+	padding: 3px 6px;
 	border-radius: 9px;
 	background: var(--pos-error);
 	color: #ffffff;
@@ -369,17 +464,6 @@ function onTap(row: KanbanRow) {
 	font-variant-numeric: tabular-nums;
 	background: transparent;
 	color: var(--pos-text-secondary);
-}
-
-.floor-kanban__chip--action {
-	border: 1px solid var(--pos-border-light);
-	border-radius: 999px;
-	padding: 4px 10px;
-	min-height: 28px;
-	cursor: pointer;
-	color: var(--pos-success, #059669);
-	font-weight: 600;
-	touch-action: manipulation;
 }
 
 .floor-kanban__chip--warm {

@@ -1,6 +1,7 @@
 <template>
-	<v-dialog :model-value="modelValue" max-width="340" @update:model-value="close">
+	<v-dialog :model-value="modelValue" max-width="460" @update:model-value="close">
 		<v-card class="table-sheet pos-themed-card" data-test="table-action-sheet">
+			<button type="button" class="table-sheet__close" :aria-label="__('Close')" data-testid="table-sheet-close" @click="close"><v-icon icon="mdi-close" size="22" /></button>
 			<header class="table-sheet__head">
 				<span class="table-sheet__where">
 					<v-icon icon="mdi-table-furniture" size="18" />
@@ -15,6 +16,7 @@
 
 			<div v-if="multipleOrders" class="table-sheet__actions" data-test="table-sheet-accounts">
 				<p class="table-sheet__prompt">{{ chooseAccountLabel }}</p>
+				<p class="table-sheet__prompt">{{ verticalStore.t("They are charged separately — pick the one you mean.") }}</p>
 				<button
 					v-for="order in orders"
 					:key="order.order_uid"
@@ -275,6 +277,34 @@ function orderSummary(order: OrderRow) {
 
 <style scoped>
 .table-sheet {
+	position: relative;
+	max-height: calc(100dvh - 48px);
+	overflow-y: auto !important;
+}
+.table-sheet__close {
+	position: sticky;
+	top: 0;
+	align-self: flex-end;
+	flex: none;
+	width: 44px;
+	min-height: 44px;
+	margin-bottom: -54px;
+	z-index: 1;
+	background: var(--pos-surface);
+	color: var(--pos-text-primary);
+	border: 1px solid var(--pos-border);
+	border-radius: 8px;
+}
+.table-sheet__head {
+	padding-inline-end: 52px;
+	flex-wrap: wrap;
+}
+.table-sheet button:focus-visible {
+	outline: 2px solid var(--pos-primary);
+	outline-offset: 2px;
+}
+
+.table-sheet {
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
@@ -301,8 +331,8 @@ function orderSummary(order: OrderRow) {
 .table-sheet__title {
 	overflow: hidden;
 	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: 17px;
+	overflow-wrap: anywhere;
+	font-size: 20px;
 	font-weight: 700;
 	color: var(--pos-text-primary);
 }
@@ -395,7 +425,7 @@ function orderSummary(order: OrderRow) {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
 }
 
 .table-sheet__action-badge {
@@ -413,7 +443,7 @@ function orderSummary(order: OrderRow) {
 }
 
 .table-sheet__cancel {
-	min-height: 40px;
+	min-height: 44px;
 	border: 0;
 	border-radius: 10px;
 	background: transparent;

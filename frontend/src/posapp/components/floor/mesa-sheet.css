@@ -302,3 +302,24 @@
 	color: var(--pos-text-secondary);
 	font-size: 11px;
 }
+
+.mesa-sheet__accounts-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 4px;
+}
+.mesa-sheet__new-account {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 44px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--pos-primary);
+}
+.mesa-sheet__new-account:focus-visible {
+	outline: 2px solid var(--pos-primary);
+	outline-offset: 2px;
+}

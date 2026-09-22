@@ -100,6 +100,15 @@ describe("the mesa sheet", () => {
 		expect(mountSheet().find("[data-test='mesa-sheet-split']").exists()).toBe(false);
 	});
 
+	it("offers a separate new account without changing the selected account", async () => {
+		const onNewAccount = vi.fn();
+		const onSelect = vi.fn();
+		const wrapper = mountSheet({ onNewAccount, onSelect });
+		await wrapper.find('[data-test="mesa-sheet-new-account"]').trigger("click");
+		expect(onNewAccount).toHaveBeenCalledTimes(1);
+		expect(onSelect).not.toHaveBeenCalled();
+	});
+
 	it("routes the account choice up rather than picking one itself", async () => {
 		const onSelect = vi.fn();
 		const wrapper = mountSheet({

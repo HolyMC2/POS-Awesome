@@ -164,7 +164,7 @@
 	gap: 4px;
 	flex: 1 1 auto;
 	min-width: 0;
-	overflow-x: auto;
+	flex-wrap: wrap;
 }
 
 /* One line, above the board, in the same voice as the empty states. */
@@ -202,7 +202,7 @@
 }
 
 .floor-view__floor-name {
-	white-space: nowrap;
+	overflow-wrap: anywhere;
 }
 
 .floor-view__floor-count {
@@ -283,4 +283,82 @@
 }
 .course-chooser__option:hover {
 	border-color: var(--pos-primary);
+}
+
+.floor-view__picker {
+	flex: 1;
+	min-width: 0;
+}
+.floor-view__picker select {
+	width: 100%;
+	min-height: 44px;
+	border: 1px solid var(--pos-border);
+	border-radius: 8px;
+	padding: 8px;
+	color: var(--pos-text-primary);
+	font-size: 16px;
+	background: var(--pos-surface);
+}
+.floor-view__modes {
+	display: flex;
+	flex: none;
+	gap: 6px;
+	padding: 8px;
+	border-bottom: 1px solid var(--pos-border);
+}
+.floor-view__modes button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 44px;
+	flex: 1;
+	padding: 6px 12px;
+	border: 1px solid var(--pos-border);
+	border-radius: 8px;
+	font-size: 14px;
+	color: var(--pos-text-secondary);
+}
+.floor-view__modes button[aria-pressed="true"] {
+	background: var(--pos-primary-container);
+	border-color: var(--pos-primary);
+	color: var(--pos-text-primary);
+	font-weight: 700;
+}
+.floor-view__modes button:focus-visible,
+.floor-view__picker select:focus-visible {
+	outline: 2px solid var(--pos-primary);
+	outline-offset: 2px;
+}
+.floor-view__actions :deep(.v-btn) {
+	width: 44px;
+	height: 44px;
+}
+/* Compact service screens have one scroll area for the floor and open ticket.
+   A pinned ticket must not squeeze the board out of a short phone viewport. */
+.floor-view--compact {
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+.floor-view--compact .floor-view__stage {
+	flex: none;
+	overflow: visible;
+}
+.floor-view--compact :deep(.floor-kanban),
+.floor-view--compact :deep(.floor-kanban__scroller),
+.floor-view--compact :deep(.floor-plan),
+.floor-view--compact :deep(.floor-plan__scroller) {
+	flex: none;
+	overflow: visible;
+}
+.floor-view--compact .floor-view__bar {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+}
+
+.floor-view__modes button:disabled {
+	color: var(--pos-text-secondary);
+	opacity: 0.7;
+	cursor: default;
 }

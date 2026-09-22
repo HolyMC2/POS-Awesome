@@ -126,9 +126,15 @@ vi.mock("../src/posapp/components/floor/FloorEditor.vue", () => ({
 vi.mock("../src/posapp/components/floor/FloorKanban.vue", () => ({
 	default: { template: "<div />" },
 }));
-vi.mock("../src/posapp/components/floor/JumpPad.vue", () => ({
-	default: { template: "<div />" },
-}));
+vi.mock("../src/posapp/components/floor/JumpPad.vue", async () => {
+	const { defineComponent, h } = await import("vue");
+	return { default: defineComponent({
+		emits: ["open-tab"],
+		setup(_, { emit }) {
+			return () => h("button", { "data-test": "new-named-tab", onClick: () => emit("open-tab", "Sofía 12") });
+		},
+	}) };
+});
 vi.mock("../src/posapp/components/floor/TableTicketPanel.vue", () => ({
 	default: { template: "<div />" },
 }));
@@ -198,6 +204,14 @@ describe("FloorView action routing", () => {
 		await wrapper.find("[data-test='sheet-view']").trigger("click");
 
 		expect(eventBus.emit).toHaveBeenCalledWith("floor_order_opened", { order_uid: "ord-a" });
+	});
+
+	it("starts a named account at the item selector", async () => {
+		const { wrapper, eventBus } = mountFloor();
+		await wrapper.find('[data-test="new-named-tab"]').trigger("click");
+		await flushPromises();
+		expect(floorStore.openTab).toHaveBeenCalledWith("Sofía 12");
+		expect(eventBus.emit).toHaveBeenCalledWith("set_selector_view", "items");
 	});
 
 	it("routes New account to a second cuenta, then the item list", async () => {

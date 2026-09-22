@@ -6,6 +6,17 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 ## Unreleased
 
+- **Mesas workflow polish (2026-09-22, lab release candidate).** Compact floors
+  start with readable searchable tables and occupied/free/cleaning filters.
+  Floor switching and named accounts fit without sideways scrolling; list/map
+  controls are visible. Short screens scroll the floor and ticket together.
+  Table dialogs have a reachable close action and clearer split-account context.
+  New named accounts accept names and continue to the catalogue. Desktop table
+  details expose New account; active tickets show their table and account with
+  wrapping actions. No schema changes; restore prior assets and Spanish
+  translations together to roll back.
+
+
 Original status labels are retained; this section also contains changes reported as deployed.
 
 - **Mobile reading and return flow (2026-09-22, lab release candidate).** Catalogue
