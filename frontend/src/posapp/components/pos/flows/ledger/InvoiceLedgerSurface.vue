@@ -509,9 +509,7 @@ defineExpose({ focusRing: () => tableRef.value?.focusRing?.() });
 
 	.ledger-surface__body :deep(.ledger-table) {
 		width: 100%;
-		overflow-x: auto;
-		overflow-y: hidden;
-		overscroll-behavior-x: contain;
+		overflow: visible;
 	}
 	.ledger-surface__body :deep(.ledger-table__body) {
 		overflow: visible;

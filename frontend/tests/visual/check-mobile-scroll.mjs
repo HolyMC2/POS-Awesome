@@ -41,7 +41,13 @@ try {
 				? route.continue()
 				: route.abort(),
 		);
-		for (const screen of ["cart", "pay", "closing", "dashboard"]) {
+		for (const screen of [
+			"cart",
+			"pay",
+			"closing",
+			"dashboard",
+			"recharge-history",
+		]) {
 			await page.goto(
 				`${base}/${screen === "closing" ? "responsive-closing.html" : `mobile-scroll.html?screen=${screen}`}`,
 			);
@@ -61,15 +67,19 @@ try {
 				).toBeAttached();
 			}
 			const target =
-				screen === "dashboard"
-					? page.locator(".list-stack:visible .insight-row").last()
-					: page.getByTestId(
-							screen === "cart"
-								? "movil-primary"
-								: screen === "pay"
-									? "movil-collect"
-									: "movil-corte-primary",
-						);
+				screen === "recharge-history"
+					? page.getByTestId("recargas-ledger-row").last()
+					: screen === "dashboard"
+						? page
+								.locator(".list-stack:visible .insight-row")
+								.last()
+						: page.getByTestId(
+								screen === "cart"
+									? "movil-primary"
+									: screen === "pay"
+										? "movil-collect"
+										: "movil-corte-primary",
+							);
 			await expect(target).toBeVisible();
 			if (screen === "cart") {
 				await expect(page.getByTestId("movil-cart-line")).toHaveCount(
@@ -94,6 +104,16 @@ try {
 						/auto|scroll/.test(getComputedStyle(el).overflowY),
 				);
 				return {
+					horizontal: [...document.querySelectorAll("*")]
+						.filter(
+							(el) =>
+								el.clientWidth > 0 &&
+								el.scrollWidth > el.clientWidth + 3 &&
+								/auto|scroll/.test(
+									getComputedStyle(el).overflowX,
+								),
+						)
+						.map((el) => el.className),
 					width: document.documentElement.scrollWidth,
 					height: document.documentElement.scrollHeight,
 					nested: scrollers
@@ -117,6 +137,11 @@ try {
 				`${screen} document scrolls at ${height}`,
 			).toBeLessThanOrEqual(height + 1);
 			expect(geometry.nested, `${screen} nested scroll`).toEqual([]);
+			if (width < 768)
+				expect(
+					geometry.horizontal,
+					`${screen} sideways scroll`,
+				).toEqual([]);
 			if (screen === "closing")
 				expect(
 					geometry.bodyHeight,

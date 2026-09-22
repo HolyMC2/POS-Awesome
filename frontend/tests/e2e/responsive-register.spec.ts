@@ -165,7 +165,14 @@ async function assertScrollLayout(page: Page) {
 				el.scrollHeight > el.clientHeight + 3 &&
 				/auto|scroll/.test(getComputedStyle(el).overflowY),
 		);
+		const horizontal = elements.filter(
+			(el) =>
+				el.clientWidth > 0 &&
+				el.scrollWidth > el.clientWidth + 3 &&
+				/auto|scroll/.test(getComputedStyle(el).overflowX),
+		);
 		return {
+			horizontal: horizontal.map((el) => el.className),
 			pageWidth: document.documentElement.scrollWidth,
 			pageHeight: document.documentElement.scrollHeight,
 			width: innerWidth,
@@ -187,6 +194,8 @@ async function assertScrollLayout(page: Page) {
 		"page scrolls around its inner panel",
 	).toBeLessThanOrEqual(geometry.height + 1);
 	expect(geometry.nested, "nested vertical scrollports").toEqual([]);
+	if (geometry.width < 1100)
+		expect(geometry.horizontal, "mobile sideways scrollports").toEqual([]);
 }
 
 for (const [width, height] of [
@@ -306,28 +315,6 @@ for (const [width, height] of [
 		await expect(page.getByTestId("ledger-row").first()).toBeVisible({
 			timeout: 30000,
 		});
-		if (width < 760) {
-			const table = page.getByTestId("ledger-table");
-			const distance = await table.evaluate((el) => {
-				el.scrollLeft = el.scrollWidth;
-				return el.scrollLeft;
-			});
-			expect(distance, "wide table can scroll sideways").toBeGreaterThan(
-				50,
-			);
-			const status = page
-				.getByTestId("ledger-row")
-				.first()
-				.locator(".ledger-row__status");
-			await status.scrollIntoViewIfNeeded();
-			await expect(status).toBeInViewport({ ratio: 0.99 });
-			await page.screenshot({
-				path: info.outputPath("invoices-side-scroll.png"),
-			});
-			await table.evaluate((el) => {
-				el.scrollLeft = 0;
-			});
-		}
 
 		const last = page.getByTestId("ledger-row").last();
 		await last.scrollIntoViewIfNeeded();

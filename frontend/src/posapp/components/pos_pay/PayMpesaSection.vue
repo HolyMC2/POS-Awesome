@@ -50,6 +50,7 @@
 			</v-col>
 		</v-row>
 		<v-data-table
+			:mobile-breakpoint="1100"
 			:headers="headers"
 			:items="payments"
 			item-key="name"

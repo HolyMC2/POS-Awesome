@@ -16,7 +16,7 @@
  *
  * And the ledger's own phone layout: below `useResponsive().isPhone` (768) the
  * head wraps to rows none wider than the surface, the figures pack two to a
- * row and the table retains readable columns with sideways scrolling. Every file carries the same
+ * row and the table rows re-lay as two lines. Every file carries the same
  * breakpoint, read from the composable so the number lives in one place.
  *
  * Source-scanned (`?raw`) because jsdom computes no layout.
@@ -93,10 +93,9 @@ describe("the ledger has a phone layout, on one breakpoint", () => {
 		// The finder dissolves so its modes and its box/range can be ordered
 		// among the head's own children.
 		expect(ruleBody(block, ".ledger-finder")).toMatch(/display:\s*contents/);
-		// The segment, the modes and the source switch are one-line scrollers
-		// — an intended scroller, which a swipe can bring back.
+		// Tabs and filter modes wrap rather than requiring sideways scrolling.
 		expect(ruleBody(block, ".ledger-seg,\n\t.ledger-source,\n\t.ledger-finder__modes")).toMatch(
-			/overflow-x:\s*auto/,
+			/flex-wrap:\s*wrap/,
 		);
 		// The box and the range take the full width, the range inputs share it.
 		expect(ruleBody(block, ".ledger-finder__box,\n\t.ledger-finder__range")).toMatch(/flex:\s*1 1 100%/);
@@ -119,23 +118,18 @@ describe("the ledger has a phone layout, on one breakpoint", () => {
 		).toMatch(/white-space:\s*nowrap/);
 	});
 
-	it("retains the table columns and scrolls them sideways inside the surface", () => {
+	it("re-lays the rows as two lines over the inline desk columns", () => {
 		const block = phoneBlock(styleOf(tableSource), PHONE);
-		expect(
-			ruleBody(block, ".ledger-table__head,\n\t.ledger-table__body"),
-		).toMatch(/min-width:\s*760px/);
-		expect(ruleBody(block, ".ledger-row")).not.toContain(
-			"grid-template-columns",
+		// `!important` because the desk tracks arrive as an inline style.
+		expect(ruleBody(block, ".ledger-row")).toMatch(
+			/grid-template-columns:\s*auto minmax\(0, 1fr\) auto !important/,
 		);
+		expect(ruleBody(block, ".ledger-row__ticket")).toMatch(/grid-column:\s*1 \/ 3/);
+		expect(ruleBody(block, ".ledger-row__status")).toMatch(/grid-row:\s*2/);
+		// No header row on a list; no cashier cell (the panel shows it).
 		expect(
-			ruleBody(
-				styleOf(surfaceSource),
-				".ledger-surface__body :deep(.ledger-table)",
-			),
-		).toMatch(/overflow-x:\s*auto/);
-		expect(ruleBody(block, ".ledger-table__foot")).toMatch(
-			/position:\s*sticky/,
-		);
+			ruleBody(block, ".ledger-table__head,\n\t.ledger-table__hint,\n\t.ledger-row__customer + .ledger-row__muted"),
+		).toMatch(/display:\s*none/);
 	});
 
 	it("tightens the surface and leaves the body to the table", () => {

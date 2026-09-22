@@ -1007,17 +1007,15 @@ onBeforeUnmount(() => {
 	outline: none;
 }
 
-/* Percentages only, no `max()`: this grid is fixed-layout and a `max()` track
-   is silently dropped, which collapses every column to equal width (the
-   `ledgerRowOverlap` lesson). Every cell below is nowrap-ellipsis for the same
-   reason a ticket id once painted over the row beneath it. */
+/* Fractional tracks reserve space for the gaps. Percentages totaling 100%
+   plus five gaps made the whole surface scroll sideways on tablets. */
 .cobranza__row {
 	display: grid;
 	/* Status carries TWO chips now (estado + the escalation R-chip) — 19%
 	   is what keeps «Overdue invoice · R3» un-clipped; Due and Total gave
 	   up the width because "118 days ago" and a five-digit total never
 	   filled theirs. */
-	grid-template-columns: 16% 24% 13% 13% 15% 19%;
+	grid-template-columns: minmax(0, 16fr) minmax(0, 24fr) minmax(0, 13fr) minmax(0, 13fr) minmax(0, 15fr) minmax(0, 19fr);
 	gap: 12px;
 	padding: 10px 14px;
 	align-items: baseline;
@@ -1028,7 +1026,7 @@ onBeforeUnmount(() => {
 }
 
 .cobranza__row--paid {
-	grid-template-columns: 22% 28% 18% 17% 15%;
+	grid-template-columns: minmax(0, 22fr) minmax(0, 28fr) minmax(0, 18fr) minmax(0, 17fr) minmax(0, 15fr);
 }
 
 .cobranza__row > span {
@@ -1309,19 +1307,62 @@ onBeforeUnmount(() => {
 		text-overflow: ellipsis;
 	}
 
-	/* A full-width table can be swiped sideways without panning the form. */
-	.cobranza__table {
-		overflow-x: auto;
-		overflow-y: hidden;
-		overscroll-behavior-x: contain;
+	/* A row becomes a two-line card: who and how much, the folio and the due
+	 * age underneath, the chips on their own line. The Total column stands
+	 * down — Pendiente is the figure a collector acts on, and the detail
+	 * carries the rest. Column headers describe columns that no longer
+	 * exist, so they stand down with it. */
+	.cobranza__row--head {
+		display: none;
 	}
-	.cobranza__row {
-		min-width: 760px;
-		grid-template-columns: 16fr 24fr 13fr 13fr 15fr 19fr;
-		min-height: 48px;
+
+	.cobranza__row--item {
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas:
+			"customer amount"
+			"folio    due"
+			"status   status";
+		gap: 2px 10px;
+		padding: 10px 12px;
 	}
+
+	.cobranza__row--item .cobranza__customer {
+		grid-area: customer;
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.cobranza__row--item .cobranza__amount {
+		grid-area: amount;
+		font-weight: 700;
+	}
+
+	.cobranza__row--item .cobranza__folio {
+		grid-area: folio;
+		font-size: 10.5px;
+		color: var(--pos-text-secondary, #8b93a0);
+	}
+
+	.cobranza__row--item .cobranza__cell--due {
+		grid-area: due;
+		justify-self: end;
+		font-size: 10.5px;
+	}
+
+	.cobranza__row--item .cobranza__cell--total {
+		display: none;
+	}
+
+	.cobranza__row--item .cobranza__cell--status {
+		grid-area: status;
+		margin-top: 2px;
+	}
+
+	/* «Cobrado hoy» rows: folio+amount, mode+reference under. */
 	.cobranza__row--paid {
-		grid-template-columns: 22fr 28fr 18fr 17fr 15fr;
+		grid-template-columns: minmax(0, 1fr) auto;
 	}
 }
 </style>

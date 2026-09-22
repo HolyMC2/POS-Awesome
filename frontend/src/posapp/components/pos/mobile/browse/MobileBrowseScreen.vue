@@ -6,8 +6,7 @@
 			     navbar's indicator above it — both rows spent grid space saying
 			     things already on screen. The search bar leads and the category
 			     chips are the first thing under it: they ARE the browse
-			     mechanism, and on tenants with more item groups the row fills
-			     out on its own. -->
+			     mechanism, and wrap with the catalogue on narrow screens. -->
 
 			<!--
 				The search ROW, not a search FIELD. `useScannerInput` attaches the
@@ -380,7 +379,8 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	/* The register shell supplies the space left after its chrome. */
 	height: 100%;
 	min-height: 0;
-	overflow: hidden;
+	overflow-y: auto;
+	overscroll-behavior: contain;
 	background: var(--reg-surface-sunken, #f8f9fa);
 }
 
@@ -448,10 +448,7 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	align-items: center;
 	gap: 6px;
 	margin-top: 9px;
-	overflow-x: auto;
-	/* The row scrolls rather than capping the chip count: a hidden category is
-	   a slice of the catalogue nobody can reach from here. */
-	scrollbar-width: none;
+	flex-wrap: wrap;
 }
 
 .mbrowse__chips::-webkit-scrollbar {
@@ -460,7 +457,10 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 
 .mbrowse__chip {
 	position: relative;
-	white-space: nowrap;
+	max-width: 100%;
+	min-height: 44px;
+	white-space: normal;
+	overflow-wrap: anywhere;
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
@@ -511,9 +511,9 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 }
 
 .mbrowse__grid-wrap {
-	flex: 1;
+	flex: none;
 	min-height: 0;
-	overflow-y: auto;
+	overflow: visible;
 	padding: 10px 11px 0;
 }
 
@@ -608,29 +608,6 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 }
 
 @media (pointer: coarse) {
-	/*
-	 * The chips keep the artboard's 24-30px pill and get a 44px HIT AREA from
-	 * a pseudo-element that grows vertically only. Growing horizontally would
-	 * overlap the neighbouring chip's box and hand a tap to the wrong filter,
-	 * which on this screen means silently changing what the cashier is looking
-	 * at. Vertical growth costs nothing: the row is the only thing at that y.
-	 */
-	.mbrowse__chip--filter::after,
-	.mbrowse__chip--see-all::after {
-		content: "";
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: 50%;
-		height: var(--reg-touch-min, 44px);
-		transform: translateY(-50%);
-	}
-
-	.mbrowse__chips {
-		/* Room for the expanded hit areas, so they cannot spill onto the grid. */
-		padding: 7px 0;
-	}
-
 	.mbrowse__search {
 		min-height: var(--reg-touch-min, 44px);
 	}

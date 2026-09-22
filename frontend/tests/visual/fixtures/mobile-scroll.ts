@@ -9,6 +9,7 @@ import vuetify from "../../../src/posapp/plugins/vuetify";
 import MobileSaleScreen from "../../../src/posapp/components/pos/mobile/sale/MobileSaleScreen.vue";
 import MovilCobroView from "../../../src/posapp/components/pos/mobile/pay/MovilCobroView.vue";
 import { resolveBandState } from "../../../src/posapp/composables/pos/shell/bandState";
+import RecargasLedger from "../../../src/posapp/components/pos/recargas/RecargasLedger.vue";
 import Reports from "../../../src/posapp/components/reports/Reports.vue";
 import { useUIStore } from "../../../src/posapp/stores/uiStore";
 
@@ -73,43 +74,76 @@ createApp({
 					style: "height:calc(100dvh - 180px);min-height:0;display:flex;flex-direction:column;overflow:hidden;margin-top:100px",
 				},
 				[
-					screen === "dashboard"
-						? h(Reports)
-						: screen === "pay"
-							? h(MovilCobroView, {
-									total: 2400,
-									tendered: 0,
-									currency: "MXN",
-									formatCurrency: money,
-									profile: {
-										payments: [
-											{
-												mode_of_payment: "Cash",
-												type: "Cash",
-												default: 1,
-											},
-											{
-												mode_of_payment: "Card",
-												type: "Bank",
-											},
-										],
-									},
-									customerName: "Cliente con nombre largo",
-									itemCount: 24,
-									canCollect: true,
-								})
-							: h(MobileSaleScreen, {
-									items,
-									state: resolveBandState({
-										kind: "sale",
-										total: 2400,
-										itemCount: 24,
+					screen === "recharge-history"
+						? h(
+								"section",
+								{
+									style: "overflow:auto;min-width:0;min-height:0",
+								},
+								[
+									h(RecargasLedger, {
+										ledger: {
+											complete: true,
+											operations: 24,
+											sold: 2400,
+											refunded: 0,
+											needsAttention: 0,
+											commission: null,
+											entries: items.map((item, i) => ({
+												id: item.item_code,
+												time: "18:45",
+												carrier:
+													"Compañía con nombre largo",
+												product: item.item_name,
+												reference:
+													"123456789012345678901234567890",
+												amount: 100,
+												outcome: "applied" as const,
+											})),
+										},
+										formatCurrency: money,
 									}),
-									subtotal: 2400,
-									tax: 0,
-									customerName: "Cliente con nombre largo",
-									formatCurrency: money,
-								}),
+								],
+							)
+						: screen === "dashboard"
+							? h(Reports)
+							: screen === "pay"
+								? h(MovilCobroView, {
+										total: 2400,
+										tendered: 0,
+										currency: "MXN",
+										formatCurrency: money,
+										profile: {
+											payments: [
+												{
+													mode_of_payment: "Cash",
+													type: "Cash",
+													default: 1,
+												},
+												{
+													mode_of_payment: "Card",
+													type: "Bank",
+												},
+											],
+										},
+										customerName:
+											"Cliente con nombre largo",
+										itemCount: 24,
+										canCollect: true,
+									})
+								: h(MobileSaleScreen, {
+										items,
+										state: resolveBandState({
+											kind: "sale",
+											total: 2400,
+											itemCount: 24,
+										}),
+										subtotal: 2400,
+										tax: 0,
+										customerName:
+											"Cliente con nombre largo",
+										formatCurrency: money,
+									}),
 				],
 			),
 		),

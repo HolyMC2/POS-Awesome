@@ -250,12 +250,5 @@ function onIntent(payload: IntentPayload): void {
 		font-size: 26px;
 	}
 
-	.recargas :deep(.recargas-ledger__scroll) {
-		overflow-x: auto;
-		overscroll-behavior-x: contain;
-	}
-	.recargas :deep(.recargas-ledger__table) {
-		min-width: 540px;
-	}
 }
 </style>

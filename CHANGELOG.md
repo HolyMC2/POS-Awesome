@@ -11,12 +11,12 @@ Original status labels are retained; this section also contains changes reported
 - **Responsive POS scrolling (2026-09-22, lab release candidate).** Long forms,
   cart, reports and compact closing use one vertical scroll area; Recargas keeps
   its action reachable above the dock, including reduced keyboard viewports.
-  Invoice, Cobranza and recharge tables retain readable columns with horizontal
-  scrolling on phones. Payment actions wrap, and Help remains in the actions
+  Invoice, Cobranza and recharge tables adapt into readable records on phones
+  without sideways scrolling. Filters wrap within the screen. Payment actions wrap, and Help remains in the actions
   menu without covering register controls. Source: `fix/pos-responsive-20260922`.
   Frontend only; no migration. Roll back by restoring the prior POS asset manifest
   and bundles together. Browser regression coverage includes 320–1920 px widths,
-  short landscape, keyboard viewport changes, long lists and sideways tables.
+  short landscape, keyboard viewport changes, long lists and no sideways scroll.
 
 - **The server-side bundle batch hint is removed from the submit path
   (2026-09-12, lab verification, not committed).** Supersedes the repair in the
