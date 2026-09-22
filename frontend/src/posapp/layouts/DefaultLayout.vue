@@ -1,5 +1,5 @@
 <template>
-	<v-app class="container1 posapp pos-theme-root" :class="rtlClasses">
+	<v-app class="container1 posapp pos-theme-root" :class="rtlClasses" :style="{ height: `${windowHeight}px` }">
 		<AppLoadingOverlay :visible="globalLoading" />
 		<UpdatePrompt />
 		<v-main class="main-content">
@@ -143,6 +143,7 @@ import {
 	validateBootstrapSnapshot,
 } from "../../offline/bootstrapSnapshot";
 import { useRtl } from "../composables/core/useRtl";
+import { useResponsive } from "../composables/core/useResponsive";
 import { createAppResume } from "../composables/core/useAppResume";
 import { useSocketStore } from "../stores/socketStore";
 import { useVerticalStore } from "../stores/verticalStore";
@@ -179,6 +180,7 @@ const FRAPPE_NAV_SELECTOR_STRING = FRAPPE_NAV_SELECTORS.join(", ");
 
 // Composable setup
 const { rtlClasses } = useRtl();
+const { windowHeight } = useResponsive();
 // Use the global theme plugin via inject or assume it's available on globalProperties if not using composable yet
 // For Composition API, we can access $theme if provided, or rely on custom logic.
 // However, the original code used `this.$theme`. We can try injecting it if provided, or access via internal instance.
@@ -1319,13 +1321,19 @@ const adjust_frappe_sidebar_offset = () => {
 
 <style scoped>
 .container1 {
+	flex: 0 0 auto;
 	width: 100%;
 	max-width: 100%;
-	min-height: 100dvh;
+	min-height: 0;
 	height: 100dvh;
 	overflow: hidden;
 	padding-inline-start: var(--posa-desk-sidebar-width, 0px);
 	box-sizing: border-box;
+}
+
+.container1 :deep(.v-application__wrap) {
+	height: 100%;
+	min-height: 0;
 }
 
 .main-content {
@@ -1371,32 +1379,24 @@ const adjust_frappe_sidebar_offset = () => {
 	margin-top: 4px;
 }
 
-/* The scrollport is .main-content (the <main>) + .page-content, NOT any
-   VMain inner wrapper: without the `scrollable` prop VMain 3.12.6 renders
-   the slot DIRECTLY inside <main> (VMain.js — the `props.scrollable ?
-   <div class="v-main__scroller"> : slots.default()` ternary), so there is
-   no .v-main__wrap / .v-main__scroller element to target. .main-content
-   above (height:100% + flex column + min-height:0) and .page-content
-   (flex:1 1 auto + overflow:auto) are the definite-height chain that makes
-   the 769-1099px band scroll; keep both or that band clips below the fold.
-   tests/defaultLayoutMainScroller.spec.ts guards exactly those rules. */
+/* VMain renders directly into <main> without an inner scroller. Keep this
+   height chain for standalone routes; the register assigns its own panel
+   scrollports below. tests/defaultLayoutMainScroller.spec.ts guards it. */
 
 @media (max-width: 767.98px) {
-	.container1 {
-		height: auto;
-		min-height: 100dvh;
-		overflow-y: auto;
-		overflow-x: hidden;
-	}
-
-	.main-content {
-		height: auto;
-		min-height: 100dvh;
-	}
-
 	.page-content {
-		overflow: visible;
-		min-height: 0;
+		padding-top: 0;
 	}
+}
+
+/* The register owns its scrolling surfaces. Standalone tool routes still
+   use the page scrollport above. */
+.page-content:has(> .pos-main-container) {
+	overflow: hidden;
+}
+
+/* POS exposes the same help workflow in NavbarMenu, clear of checkout. */
+:global(body:has(.posapp) #muelle-support-workflow) {
+	display: none !important;
 }
 </style>

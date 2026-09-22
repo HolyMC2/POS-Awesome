@@ -127,7 +127,7 @@
 		     shift anyway, so putting it aside risks only a refused sale —
 		     and it returns on the next boot until the corte is done. -->
 		<div
-			v-if="staleShiftBannerVisible"
+			v-if="staleShiftBannerVisible && hostedDestinationId !== 'closing'"
 			class="stale-shift-banner"
 			data-testid="stale-shift-banner"
 		>
@@ -439,9 +439,9 @@
 					@add="addComboSuggestion"
 				/>
 
-				<!-- One band, one number, one action (§17.7 invariant 1). Desktop
-				     only: below the boundary the dock's own summary already owns
-				     that lane, and two of them would be two numbers. -->
+				<!-- The sale uses its compact screen's action. Recargas has no
+				     separate mobile submit control, so its band stays available
+				     at every width; the dock's sale summary stands down there. -->
 				<!-- v-show, NEVER v-if — the same rule the scan-bar div above
 				     states, now for the band's own body: `InvoiceSummary` and
 				     `MesaContextStrip` `<Teleport defer>` INTO the lanes this
@@ -455,7 +455,8 @@
 				     Hidden the band keeps its targets alive; the cashier still
 				     sees exactly one total. -->
 				<ActionBand
-					v-show="railVisible"
+					v-show="railVisible || hostedDestinationId === 'recharge'"
+					:class="{ 'recharge-action-band': hostedDestinationId === 'recharge' }"
 					:state="bandState"
 					:format-currency="formatCurrency"
 					@primary="onBandPrimary"
@@ -503,7 +504,7 @@
 			:queued-amount-label="queuedAmountLabel"
 		/>
 
-		<div v-if="showBottomDock" ref="mobileDock" data-testid="mobile-dock" class="mobile-dock">
+		<div v-if="showBottomDock" ref="mobileDock" data-testid="mobile-dock" class="mobile-dock" :class="{ 'mobile-dock--destination': hostedDestinationId }">
 			<div class="mobile-dock__summary">
 				<div class="mobile-dock__totals">
 					<strong class="mobile-dock__amount" :class="dockTotalBump">{{
@@ -2379,8 +2380,8 @@ export default {
 		const layoutStyleOverrides = computed(() => {
 			const fallbackBottomSpace = getFallbackBottomSpace();
 			const effectiveBottomSpace = showBottomDock.value
-				? Math.max(bottomDockHeight.value, fallbackBottomSpace)
-				: fallbackBottomSpace;
+				? bottomDockHeight.value || fallbackBottomSpace
+				: 0;
 			return {
 				"--bottom-safe-space": `${effectiveBottomSpace}px`,
 			};
@@ -3047,8 +3048,14 @@ export default {
  * dock has a slow tab again — `compactPanelSwitchInstant.spec.ts` enforces it.
  */
 .dynamic-container {
+	position: relative;
 	padding-bottom: calc(var(--bottom-safe-space) + var(--dynamic-xs));
 	min-width: 0;
+	height: 100%;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 .dynamic-main-row {
@@ -3056,12 +3063,7 @@ export default {
 	margin: 0;
 }
 
-/* Desktop (>=1100px, the two-column register) is viewport-locked: this view
- * fits `.page-content` exactly, so the PAGE scrollbar never appears and the
- * only scrolling happens inside a panel. Below 1100px nothing here applies —
- * the compact switcher shows one panel at a time and the 769-1099 band still
- * scrolls through `.page-content`, which tests/defaultLayoutMainScroller.spec.ts
- * guards. Deliberately scoped rather than global for that reason. */
+/* Desktop keeps two bounded columns; compact screens show one panel. */
 @media (min-width: 1100px) {
 	.dynamic-container {
 		height: 100%;
@@ -3110,6 +3112,26 @@ export default {
 .dynamic-col--stage {
 	flex: 1 1 100%;
 	max-width: 100%;
+}
+
+@media (max-width: 1099px) {
+	.recharge-action-band {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		padding: 8px 12px;
+		gap: 8px;
+	}
+	.recharge-action-band :deep(.action-band__spacer) {
+		display: none;
+	}
+	.recharge-action-band :deep(.action-band__number) {
+		font-size: 26px;
+	}
+	.recharge-action-band :deep(.action-band__primary) {
+		height: 48px;
+		padding: 0 12px;
+		font-size: 15px;
+	}
 }
 
 /* ── The band's secondary verbs (mesa-owned sale) ──────────────────
@@ -3173,7 +3195,7 @@ export default {
  * this bar) so the last content row always clears it.
  * ─────────────────────────────────────────────────────────────── */
 .mobile-dock {
-	position: fixed;
+	position: absolute;
 	left: 0;
 	right: 0;
 	bottom: 0;
@@ -3548,6 +3570,67 @@ export default {
 	 * visible — "the drawer never reaches it". With no positioned ancestor the
 	 * overlay escapes to the viewport and covers the one number that matters. */
 	position: relative;
+}
+
+/* Compact screens inherit the remaining space after the real navbar, banner
+   and dock. A second viewport calculation inside a child would subtract
+   different chrome and bring back nested page/panel scrolling. */
+@media (max-width: 1099.98px) {
+	.register-shell__content :deep(.destination-host),
+	.register-shell__content :deep(.mbrowse),
+	.register-shell__content :deep(.movil-venta) {
+		height: 100%;
+		max-height: 100%;
+		min-height: 0;
+	}
+
+	.dynamic-main-row {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow: auto;
+	}
+
+	.dynamic-main-row:has(> .dynamic-col--movil) {
+		overflow: hidden;
+		flex-wrap: nowrap;
+	}
+
+	.dynamic-col--movil {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		min-width: 0;
+		height: 100%;
+		margin: 0;
+		padding: 0;
+		overflow: hidden;
+	}
+
+	.mobile-dock--destination .mobile-dock__summary {
+		display: none;
+	}
+}
+
+@media (max-width: 599.98px) {
+	.stale-shift-banner {
+		display: grid;
+		grid-template-columns: 16px minmax(0, 1fr) 36px;
+		gap: 4px 8px;
+		padding: 6px 10px;
+		font-size: 12px;
+		line-height: 1.35;
+	}
+
+	.stale-shift-banner__action {
+		grid-column: 2;
+		justify-self: start;
+		min-height: 36px;
+	}
+
+	.stale-shift-banner > :last-child {
+		grid-column: 3;
+		grid-row: 1 / 3;
+	}
 }
 
 /* The row is the drawer's positioning context.

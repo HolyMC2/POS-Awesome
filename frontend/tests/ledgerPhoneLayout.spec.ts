@@ -16,7 +16,7 @@
  *
  * And the ledger's own phone layout: below `useResponsive().isPhone` (768) the
  * head wraps to rows none wider than the surface, the figures pack two to a
- * row and the table rows re-lay as two lines. Every file carries the same
+ * row and the table retains readable columns with sideways scrolling. Every file carries the same
  * breakpoint, read from the composable so the number lives in one place.
  *
  * Source-scanned (`?raw`) because jsdom computes no layout.
@@ -119,18 +119,23 @@ describe("the ledger has a phone layout, on one breakpoint", () => {
 		).toMatch(/white-space:\s*nowrap/);
 	});
 
-	it("re-lays the rows as two lines over the inline desk columns", () => {
+	it("retains the table columns and scrolls them sideways inside the surface", () => {
 		const block = phoneBlock(styleOf(tableSource), PHONE);
-		// `!important` because the desk tracks arrive as an inline style.
-		expect(ruleBody(block, ".ledger-row")).toMatch(
-			/grid-template-columns:\s*auto minmax\(0, 1fr\) auto !important/,
-		);
-		expect(ruleBody(block, ".ledger-row__ticket")).toMatch(/grid-column:\s*1 \/ 3/);
-		expect(ruleBody(block, ".ledger-row__status")).toMatch(/grid-row:\s*2/);
-		// No header row on a list; no cashier cell (the panel shows it).
 		expect(
-			ruleBody(block, ".ledger-table__head,\n\t.ledger-table__hint,\n\t.ledger-row__customer + .ledger-row__muted"),
-		).toMatch(/display:\s*none/);
+			ruleBody(block, ".ledger-table__head,\n\t.ledger-table__body"),
+		).toMatch(/min-width:\s*760px/);
+		expect(ruleBody(block, ".ledger-row")).not.toContain(
+			"grid-template-columns",
+		);
+		expect(
+			ruleBody(
+				styleOf(surfaceSource),
+				".ledger-surface__body :deep(.ledger-table)",
+			),
+		).toMatch(/overflow-x:\s*auto/);
+		expect(ruleBody(block, ".ledger-table__foot")).toMatch(
+			/position:\s*sticky/,
+		);
 	});
 
 	it("tightens the surface and leaves the body to the table", () => {

@@ -843,8 +843,17 @@ onBeforeUnmount(() => {
 	gap: var(--reg-space-md, 10px);
 	flex: 1 1 auto;
 	min-height: 0;
+	min-width: 0;
+	width: 100%;
 	padding: 16px;
 	background: var(--reg-surface-sunken, #f8f9fa);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+/* Capture is a document inside this surface, never another viewport. */
+.cobranza:has(.cobranza__capture) > .cobranza__capture {
+	flex: 0 0 auto;
 }
 
 .cobranza__error {
@@ -1187,6 +1196,43 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1099.98px) {
+	.cobranza__tabs,
+	.cobranza__capture-bar {
+		flex-wrap: wrap;
+	}
+
+	.cobranza__tab {
+		flex: 1 1 auto;
+		height: auto;
+		min-height: 44px;
+		justify-content: center;
+		padding: 8px;
+	}
+
+	.cobranza__search {
+		flex: 1 1 100%;
+		min-width: 0;
+		width: 100%;
+		font-size: 16px;
+		min-height: 44px;
+	}
+
+	.cobranza__tabs-spacer {
+		display: none;
+	}
+
+	.cobranza > *,
+	.cobranza__body,
+	.cobranza__table {
+		flex: 0 0 auto;
+	}
+
+	.cobranza__table,
+	.cobranza__list,
+	.cobranza :deep(.cobranza-detail) {
+		overflow: visible;
+	}
+
 	/* The half-and-half stacking from the 1180 rule becomes the two-step. */
 	.cobranza__list {
 		max-height: none;
@@ -1263,62 +1309,19 @@ onBeforeUnmount(() => {
 		text-overflow: ellipsis;
 	}
 
-	/* A row becomes a two-line card: who and how much, the folio and the due
-	 * age underneath, the chips on their own line. The Total column stands
-	 * down — Pendiente is the figure a collector acts on, and the detail
-	 * carries the rest. Column headers describe columns that no longer
-	 * exist, so they stand down with it. */
-	.cobranza__row--head {
-		display: none;
+	/* A full-width table can be swiped sideways without panning the form. */
+	.cobranza__table {
+		overflow-x: auto;
+		overflow-y: hidden;
+		overscroll-behavior-x: contain;
 	}
-
-	.cobranza__row--item {
-		grid-template-columns: minmax(0, 1fr) auto;
-		grid-template-areas:
-			"customer amount"
-			"folio    due"
-			"status   status";
-		gap: 2px 10px;
-		padding: 10px 12px;
+	.cobranza__row {
+		min-width: 760px;
+		grid-template-columns: 16fr 24fr 13fr 13fr 15fr 19fr;
+		min-height: 48px;
 	}
-
-	.cobranza__row--item .cobranza__customer {
-		grid-area: customer;
-		font-weight: 600;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.cobranza__row--item .cobranza__amount {
-		grid-area: amount;
-		font-weight: 700;
-	}
-
-	.cobranza__row--item .cobranza__folio {
-		grid-area: folio;
-		font-size: 10.5px;
-		color: var(--pos-text-secondary, #8b93a0);
-	}
-
-	.cobranza__row--item .cobranza__cell--due {
-		grid-area: due;
-		justify-self: end;
-		font-size: 10.5px;
-	}
-
-	.cobranza__row--item .cobranza__cell--total {
-		display: none;
-	}
-
-	.cobranza__row--item .cobranza__cell--status {
-		grid-area: status;
-		margin-top: 2px;
-	}
-
-	/* «Cobrado hoy» rows: folio+amount, mode+reference under. */
 	.cobranza__row--paid {
-		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-columns: 22fr 28fr 18fr 17fr 15fr;
 	}
 }
 </style>

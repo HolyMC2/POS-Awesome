@@ -423,20 +423,11 @@ describe("the surface keeps the shell's layout and touch discipline", () => {
 		"RecargasBolsaCard.vue",
 	];
 
-	it("adds no second scrollport — the ledger owns the only one", () => {
-		// 59c5fe1ad: the register showed two live scrollbars at once because a
-		// height was GUESSED. Every ancestor down to the scrolling element is
-		// `flex: 1 1 auto; min-height: 0`, and `min-height: 0` is the half that
-		// does the work — a flex item refuses to shrink below its content
-		// without it, which is how a bare "add overflow" fix NESTS a scrollport
-		// instead of removing one.
-		const chain = `${read("RecargasView.vue")}${read("RecargasCapture.vue")}${read("RecargasLedger.vue")}`;
-		expect(read("RecargasView.vue")).toContain("overflow: hidden");
-		// Root, body, capture column, ledger card, and the scrollport itself:
-		// five links, no guessed heights anywhere along them.
-		expect(chain.match(/min-height: 0/g) ?? []).toHaveLength(5);
-		// And exactly ONE element in the whole subtree may scroll.
-		expect(chain.match(/overflow(-y)?: auto/g) ?? []).toHaveLength(1);
+	it("scrolls the form so a long carrier list cannot strand reference and amount", () => {
+		const view = read("RecargasView.vue");
+		expect(view).toMatch(/\.recargas\s*\{[^}]*overflow:\s*auto/);
+		expect(view).toContain(":deep(.recargas-ledger__scroll)");
+		expect(view).toMatch(/:deep\(\.recargas-ledger__scroll\)\s*\{[^}]*overflow:\s*visible/);
 	});
 
 	it("keeps every control a cashier taps at 44 px on a touch screen", () => {

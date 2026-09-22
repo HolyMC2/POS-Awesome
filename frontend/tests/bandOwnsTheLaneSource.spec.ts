@@ -41,7 +41,7 @@ describe("bandLaneOwnership tracks Pos.vue's railVisible", () => {
 		// lanes while staying mounted themselves, and the parent-first patch
 		// order means a v-if would destroy those targets before the teleports
 		// can stand down — the resize-crossing crash of 2026-08-26.
-		expect(shell).toMatch(/<ActionBand[\s\S]{0,700}v-show="railVisible"/);
+		expect(shell).toMatch(/<ActionBand[\s\S]{0,700}v-show="railVisible \|\| hostedDestinationId === 'recharge'"/);
 		expect(shell).not.toMatch(/<ActionBand[\s\S]{0,700}v-if="railVisible"/);
 	});
 });

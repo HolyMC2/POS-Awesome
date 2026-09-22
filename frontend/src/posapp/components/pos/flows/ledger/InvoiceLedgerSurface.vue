@@ -1,72 +1,74 @@
 <template>
 	<section class="ledger-surface" data-testid="ledger-surface">
-		<InvoiceLedgerHeader
-			ref="headerRef"
-			:segments="segments"
-			:active-segment="segment"
-			:counts="counts"
-			:modes="modes"
-			:active-mode="mode"
-			:query="query"
-			:date-from="dateFrom"
-			:date-to="dateTo"
-			:sources="draftSources"
-			:active-source="draftSource"
-			@segment="chooseSegment"
-			@mode="chooseMode"
-			@source="chooseSource"
-			@update:query="setQuery"
-			@update:date-from="publishFilters($event, dateTo)"
-			@update:date-to="publishFilters(dateFrom, $event)"
-		/>
-
-		<InvoiceLedgerFigures
-			:figures="figures"
-			:format-currency="formatCurrency"
-			:currency-symbol="currencySymbol"
-		/>
-
-		<div class="ledger-surface__body">
-			<InvoiceLedgerTable
-				ref="tableRef"
-				:rows="visibleRows"
-				:columns="columns"
-				:selected-index="selectedIndex"
-				:format-currency="formatCurrency"
-				:page="collection.pageNo"
-				:page-count="collection.pageCount"
-				:total="collection.total"
-				:page-size="pageSize"
-				:loaded-on-page="pageRows.length"
-				:footer-kind="footerKind"
-				:loading="loading"
-				@select="selectAt"
-				@open="openRow"
-				@page="$emit('page', { tab: activeTab, page: $event })"
+		<div class="ledger-surface__scroll">
+			<InvoiceLedgerHeader
+				ref="headerRef"
+				:segments="segments"
+				:active-segment="segment"
+				:counts="counts"
+				:modes="modes"
+				:active-mode="mode"
+				:query="query"
+				:date-from="dateFrom"
+				:date-to="dateTo"
+				:sources="draftSources"
+				:active-source="draftSource"
+				@segment="chooseSegment"
+				@mode="chooseMode"
+				@source="chooseSource"
+				@update:query="setQuery"
+				@update:date-from="publishFilters($event, dateTo)"
+				@update:date-to="publishFilters(dateFrom, $event)"
 			/>
 
-			<InvoiceLedgerPanel
-				:row="selectedRow"
-				:detail="matchedDetail"
-				:crm="crmContext"
+
+			<InvoiceLedgerFigures
+				:figures="figures"
 				:format-currency="formatCurrency"
-				:format-float="formatFloat"
 				:currency-symbol="currencySymbol"
-				:is-repair-candidate="isRepairCandidate"
-				:draft-actions-for="draftActionsFor"
-				:draft-action-label="draftActionLabel"
-				:can-delete-draft="canDeleteDraft"
-				:repair-busy="repairBusy"
-				:offline="offline"
-				@print="withRow('print')"
-				@return="withRow('return')"
-				@collect="withRow('collect')"
-				@delete-draft="withRow('deleteDraft')"
-				@repair="withRow('repair')"
-				@draft-action="onDraftAction"
-				@close="selectedName = null"
 			/>
+
+			<div class="ledger-surface__body">
+				<InvoiceLedgerTable
+					ref="tableRef"
+					:rows="visibleRows"
+					:columns="columns"
+					:selected-index="selectedIndex"
+					:format-currency="formatCurrency"
+					:page="collection.pageNo"
+					:page-count="collection.pageCount"
+					:total="collection.total"
+					:page-size="pageSize"
+					:loaded-on-page="pageRows.length"
+					:footer-kind="footerKind"
+					:loading="loading"
+					@select="selectAt"
+					@open="openRow"
+					@page="$emit('page', { tab: activeTab, page: $event })"
+				/>
+			</div>
 		</div>
+		<InvoiceLedgerPanel
+			:row="selectedRow"
+			:detail="matchedDetail"
+			:crm="crmContext"
+			:format-currency="formatCurrency"
+			:format-float="formatFloat"
+			:currency-symbol="currencySymbol"
+			:is-repair-candidate="isRepairCandidate"
+			:draft-actions-for="draftActionsFor"
+			:draft-action-label="draftActionLabel"
+			:can-delete-draft="canDeleteDraft"
+			:repair-busy="repairBusy"
+			:offline="offline"
+			@print="withRow('print')"
+			@return="withRow('return')"
+			@collect="withRow('collect')"
+			@delete-draft="withRow('deleteDraft')"
+			@repair="withRow('repair')"
+			@draft-action="onDraftAction"
+			@close="selectedName = null"
+		/>
 	</section>
 </template>
 
@@ -453,12 +455,21 @@ defineExpose({ focusRing: () => tableRef.value?.focusRing?.() });
 	/* The phone sheet (InvoiceLedgerPanel's frame) positions against this. */
 	position: relative;
 	display: flex;
-	flex-direction: column;
+	flex-direction: row;
 	gap: var(--reg-space-md, 10px);
 	flex: 1 1 auto;
 	min-height: 0;
 	padding: 16px;
 	background: var(--reg-surface-sunken, #f8f9fa);
+}
+
+.ledger-surface__scroll {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	gap: var(--reg-space-md, 10px);
+	min-width: 0;
+	min-height: 0;
 }
 
 .ledger-surface__body {
@@ -472,13 +483,38 @@ defineExpose({ focusRing: () => tableRef.value?.focusRing?.() });
    bottom half: a 372 px panel beside a seven-column table leaves neither
    readable on a 1,024 px register. */
 @media (max-width: 1180px) {
-	.ledger-surface__body {
+	.ledger-surface {
 		flex-direction: column;
 	}
 
-	.ledger-surface__body :deep(.ledger-panel:not(.ledger-panel--sheet)) {
+	.ledger-surface :deep(.ledger-panel:not(.ledger-panel--sheet)) {
 		width: auto;
 		max-height: 45%;
+	}
+}
+
+/* Search, figures, rows and pagination scroll together on compact screens.
+   The detail sheet stays a sibling, anchored to the visible surface. */
+@media (max-width: 1099.98px), (max-height: 600px) {
+	.ledger-surface__scroll {
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+
+	.ledger-surface__scroll > *,
+	.ledger-surface__body :deep(.ledger-table),
+	.ledger-surface__body :deep(.ledger-table__body) {
+		flex: 0 0 auto;
+	}
+
+	.ledger-surface__body :deep(.ledger-table) {
+		width: 100%;
+		overflow-x: auto;
+		overflow-y: hidden;
+		overscroll-behavior-x: contain;
+	}
+	.ledger-surface__body :deep(.ledger-table__body) {
+		overflow: visible;
 	}
 }
 

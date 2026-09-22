@@ -463,69 +463,30 @@ defineExpose({ focusRing: () => ring.value?.focus() });
 
 /* ---- phones ----------------------------------------------------------- */
 
-/* The fixed tracks total 572px before the customer gets a pixel, so below the
-   phone boundary the same cells are laid out as two lines:
-
-     TICKET ……………………………………  $ TOTAL
-     hora   cliente ……………………  [estado]
-
-   `!important` because the desk columns arrive as an inline style. The column
-   header goes (a list has no header row), the cashier cell goes (the panel
-   shows it), the keyboard hint goes with the keyboard, and rows and pager keys
-   grow to touch size. */
+/* Keep table columns readable on phones. The enclosing table owns only
+   horizontal scrolling; the surface still owns vertical scrolling. */
 @media (max-width: 767.98px) {
 	.ledger-table__head,
-	.ledger-table__hint,
-	.ledger-row__customer + .ledger-row__muted {
+	.ledger-table__body {
+		min-width: 760px;
+	}
+	.ledger-table__hint {
 		display: none;
 	}
-
 	.ledger-row {
-		grid-template-columns: auto minmax(0, 1fr) auto !important;
-		grid-template-rows: auto auto;
-		height: auto;
-		min-height: 58px;
-		padding: 8px 14px;
-		row-gap: 2px;
-		column-gap: 8px;
+		min-height: 50px;
+		font-size: 13px;
 	}
-
-	.ledger-row__ticket {
-		grid-column: 1 / 3;
-		grid-row: 1;
-		font-size: 13.5px;
-	}
-
-	.ledger-row__amount {
-		grid-column: 3;
-		grid-row: 1;
-	}
-
-	.ledger-row__muted {
-		grid-column: 1;
-		grid-row: 2;
-		font-size: 12px;
-	}
-
-	.ledger-row__customer {
-		grid-column: 2;
-		grid-row: 2;
-		font-size: 12.5px;
-	}
-
-	.ledger-row__status {
-		grid-column: 3;
-		grid-row: 2;
-	}
-
 	.ledger-table__foot {
+		position: sticky;
+		left: 0;
+		width: 100%;
 		justify-content: flex-end;
 		padding: 6px 12px;
 	}
-
 	.ledger-table__page {
-		width: 36px;
-		height: 36px;
+		width: 44px;
+		height: 44px;
 	}
 }
 </style>

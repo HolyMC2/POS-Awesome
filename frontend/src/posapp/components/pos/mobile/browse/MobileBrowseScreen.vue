@@ -377,19 +377,8 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 .mbrowse {
 	display: flex;
 	flex-direction: column;
-	/*
-	 * The phone keeps an explicit height for the same reason
-	 * `useItemsSelectorPanelSizing` gives the selector one: below 768px the
-	 * document scrolls and the fixed dock eats the bottom, so a panel that
-	 * sizes itself off its content ends up with its last row under the dock.
-	 * The grid is the single scrollport; this element never scrolls.
-	 */
-	/* `--v-layout-top` is Vuetify's own statement of what the app bar costs;
-	   without it this frame overshot the dock by exactly the navbar's height
-	   and the grid's last row hid behind the tabs. */
-	height: calc(
-		var(--viewport-height, 100vh) - var(--bottom-safe-space, 0px) - var(--v-layout-top, 0px)
-	);
+	/* The register shell supplies the space left after its chrome. */
+	height: 100%;
 	min-height: 0;
 	overflow: hidden;
 	background: var(--reg-surface-sunken, #f8f9fa);

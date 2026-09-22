@@ -3,7 +3,7 @@ import { ref } from "vue";
 
 import { useItemsSelectorPanelSizing } from "../src/posapp/composables/pos/items/useItemsSelectorPanelSizing";
 
-const PHONE_HEIGHT = "calc(var(--viewport-height) - var(--bottom-safe-space) - 24px)";
+const PHONE_HEIGHT = "100%";
 
 describe("useItemsSelectorPanelSizing", () => {
 	// The panel used to be pinned to `--container-height` (a 58-74vh guess) with
@@ -54,9 +54,8 @@ describe("useItemsSelectorPanelSizing", () => {
 		}
 	});
 
-	// Phone keeps an explicit height: the document scrolls below 768px and the
-	// fixed dock eats the bottom, so the panel has to be told its real room.
-	it("keeps the explicit viewport height constraints on phones", () => {
+	// Phones inherit the space already budgeted by the register and drawer.
+	it("fits the parent on phones without imposing a viewport minimum", () => {
 		const sizing = useItemsSelectorPanelSizing({
 			isPhone: ref(true),
 			windowWidth: ref(390),
@@ -67,7 +66,7 @@ describe("useItemsSelectorPanelSizing", () => {
 		expect(sizing.selectorCardStyle.value).toMatchObject({
 			height: PHONE_HEIGHT,
 			maxHeight: PHONE_HEIGHT,
-			minHeight: "calc(var(--viewport-height) * 0.46)",
+			minHeight: 0,
 			overflow: "hidden",
 		});
 	});

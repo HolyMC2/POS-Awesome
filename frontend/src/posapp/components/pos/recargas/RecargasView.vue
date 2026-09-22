@@ -162,13 +162,12 @@ function onIntent(payload: IntentPayload): void {
 .recargas {
 	display: flex;
 	flex-direction: column;
-	/* One scrollport on this surface, and it is the ledger's. Everything above is
-	 * fixed-height, the body fills what is left, and `min-height: 0` runs all the
-	 * way down (59c5fe1ad) — it is the half that actually does the work, since a
-	 * flex item refuses to shrink below its content without it. */
+	/* Carriers and products can be longer than any viewport. Scroll the whole
+	 * form so reference, amount and history remain reachable at every size. */
 	flex: 1 1 auto;
 	min-height: 0;
-	overflow: hidden;
+	overflow: auto;
+	overscroll-behavior: contain;
 	gap: var(--reg-space-md);
 	padding: var(--reg-space-lg);
 	background: var(--reg-surface-sunken);
@@ -214,7 +213,49 @@ function onIntent(payload: IntentPayload): void {
 .recargas__body {
 	display: flex;
 	gap: var(--reg-space-md);
-	flex: 1 1 auto;
-	min-height: 0;
+	flex: 0 0 auto;
+	min-width: 0;
+}
+
+.recargas :deep(.recargas-ledger),
+.recargas :deep(.recargas-ledger__scroll) {
+	flex: 0 0 auto;
+	overflow: visible;
+}
+
+@media (max-width: 767.98px) {
+	.recargas {
+		padding: 12px;
+	}
+
+	.recargas__head {
+		align-items: flex-start;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+
+	.recargas__body {
+		flex-direction: column;
+	}
+
+	.recargas :deep(.recargas-bolsa) {
+		width: auto;
+		max-width: none;
+		align-self: stretch;
+		order: -1;
+		padding: 12px;
+	}
+
+	.recargas :deep(.recargas-bolsa__amount) {
+		font-size: 26px;
+	}
+
+	.recargas :deep(.recargas-ledger__scroll) {
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+	}
+	.recargas :deep(.recargas-ledger__table) {
+		min-width: 540px;
+	}
 }
 </style>

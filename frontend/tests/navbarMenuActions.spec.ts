@@ -17,6 +17,16 @@ const flushPromises = async () => {
 };
 
 describe("NavbarMenu action surfaces", () => {
+	it("opens the shared help workflow from the menu without a floating checkout obstruction", () => {
+		const openHelp = vi.fn();
+		vi.stubGlobal("docoSupport", { openHelp });
+		const context = { menuOpen: true };
+		expect(navbarMenuOptions.methods.hasSupport.call(context)).toBe(true);
+		navbarMenuOptions.methods.openSupport.call(context);
+		expect(context.menuOpen).toBe(false);
+		expect(openHelp).toHaveBeenCalledOnce();
+		vi.unstubAllGlobals();
+	});
 	beforeEach(() => {
 		setActivePinia(createPinia());
 		vi.stubGlobal("__", (value: string) => value);

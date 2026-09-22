@@ -1,5 +1,5 @@
 <template>
-	<div ref="rootEl" class="movil-venta" :style="frameStyle" data-testid="movil-venta">
+	<div class="movil-venta" data-testid="movil-venta">
 		<MobileSaleHeader :status="status">
 			<template v-if="$slots['scan-bar']" #scan-bar><slot name="scan-bar" /></template>
 		</MobileSaleHeader>
@@ -72,23 +72,13 @@
  * forces the stacked single panel, and the compact switcher engages below
  * 1100 px. This is what lives INSIDE `cart`.
  *
- * WHY IT OWNS A HEIGHT. The artboard is drawn in an 844 px frame, so its cart
- * panel can be `flex: 1`. In the app the document SCROLLS below 768 px and the
- * fixed dock covers the bottom, so a `flex: 1` panel inside an auto-height
- * document gets no height at all and the totals card walks off the screen. The
- * budget comes from `useItemsSelectorPanelSizing` rather than a second guess:
- * that composable already measured what the dock leaves a phone panel
- * (`--viewport-height` minus `--bottom-safe-space`), and the sale screen and
- * the catalogue must not disagree about how tall a phone is.
- *
- * ONE SCROLLPORT. The cart is it. Everything else on the screen is `flex: none`
- * — a screen with a scrolling document AND a scrolling panel is the fight
- * `defaultLayoutMainScroller.spec.ts` exists to prevent.
+ * The shell budgets the viewport once, including its banner and dock.
+ * This screen scrolls as a whole: a long customer name or a short keyboard
+ * viewport must not squeeze the cart lines down to an unusable sliver.
  */
-import { computed, onBeforeUnmount, onMounted, ref, type CSSProperties } from "vue";
+import { computed } from "vue";
 
 import CustomerStrip from "../../customer/CustomerStrip.vue";
-import { useItemsSelectorPanelSizing } from "../../../../composables/pos/items/useItemsSelectorPanelSizing";
 import type { BandState } from "../../../../composables/pos/shell/bandState";
 import type { RegisterStatusInput } from "../../../navbar/registerStatusLine";
 import type { WalletSummaryInput } from "../../payments/walletSummary";
@@ -119,7 +109,7 @@ const props = withDefaults(
 		/** POS Profile `posa_low_stock_alert_threshold` (Int, default 10). */
 		lowStockThreshold?: number;
 		formatCurrency?: (_value: number) => string;
-		/** Phone geometry. Injected so the frame is testable without a window. */
+		/** Legacy geometry inputs; the shell now owns the available height. */
 		isPhone?: boolean;
 		windowWidth?: number;
 		windowHeight?: number;
@@ -172,55 +162,14 @@ const cart = computed(() =>
 const countLabel = computed(() =>
 	__("{0} lines · {1} pcs", [cart.value.lineCount, cart.value.pieceCount]),
 );
-
-const { selectorCardStyle } = useItemsSelectorPanelSizing({
-	isPhone: computed(() => props.isPhone),
-	windowWidth: computed(() => props.windowWidth),
-	windowHeight: computed(() => props.windowHeight),
-	// Read by neither computed the composable returns; passed because the
-	// signature asks for it rather than being faked into something meaningful.
-	responsiveStyles: ref<Record<string, string | number | undefined>>({}),
-});
-
-/**
- * The phone's explicit frame. Above the phone breakpoint the composable
- * returns `overflow: hidden` and no height, which is what a tablet or a narrow
- * desktop window wants: the column it sits in owns the height there.
- *
- * The composable's budget is viewport minus the dock — measured for a panel
- * that starts at the top of the layout. This frame starts BELOW the navbar
- * AND the teleported scan row, so the budget overshot by their combined
- * height and the totals card slid under the dock while the cart got the
- * leftovers (owner's live phone test, 2026-08-26). No CSS var states that
- * offset (`--v-layout-top` resolves empty here, and the scan row is a
- * sibling this component cannot name), so the frame measures its OWN top —
- * the one number that is true whatever chrome stacks above it.
- */
-const rootEl = ref<HTMLElement | null>(null);
-const frameTop = ref(0);
-const measureFrameTop = () => {
-	const rect = rootEl.value?.getBoundingClientRect();
-	if (rect) frameTop.value = Math.max(0, Math.round(rect.top));
-};
-onMounted(() => {
-	measureFrameTop();
-	// Fonts and the teleported scan header can land a beat after mount.
-	window.setTimeout(measureFrameTop, 300);
-	window.addEventListener("resize", measureFrameTop);
-});
-onBeforeUnmount(() => window.removeEventListener("resize", measureFrameTop));
-
-const frameStyle = computed<CSSProperties>(() => {
-	const style: CSSProperties = { ...selectorCardStyle.value };
-	if (style.height) {
-		style.height = `calc(var(--viewport-height, 100vh) - var(--bottom-safe-space, 0px) - ${frameTop.value}px)`;
-	}
-	return style;
-});
 </script>
 
 <style scoped>
 .movil-venta {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
@@ -240,11 +189,7 @@ const frameStyle = computed<CSSProperties>(() => {
 }
 
 .movil-venta__cart {
-	/* THE scrollport. `min-height: 0` is load-bearing: without it a flex child
-	   refuses to shrink below its content and the panel pushes the totals card
-	   off the bottom of the frame instead of scrolling. */
-	flex: 1;
-	min-height: 0;
+	flex: 0 0 auto;
 	display: flex;
 	flex-direction: column;
 	padding: 3px 12px 6px;
@@ -273,12 +218,7 @@ const frameStyle = computed<CSSProperties>(() => {
 }
 
 .movil-venta__lines {
-	flex: 1;
-	min-height: 0;
-	overflow-y: auto;
-	/* Momentum scrolling inside the panel; the document behind it must not
-	   chain into a second scroll when the cart hits its end. */
-	overscroll-behavior: contain;
+	flex: 0 0 auto;
 }
 
 .movil-venta__totals {

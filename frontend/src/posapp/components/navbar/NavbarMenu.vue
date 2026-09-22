@@ -108,6 +108,19 @@
 					</div>
 
 					<button
+						v-if="hasSupport()"
+						type="button"
+						class="settings-launch-card"
+						data-testid="pos-support-entry"
+						@click="openSupport"
+					>
+						<div class="settings-launch-card__icon">
+							<v-icon color="white" size="18">mdi-help-circle</v-icon>
+						</div>
+						<div class="settings-launch-card__title">{{ __("Help & Support") }}</div>
+					</button>
+
+					<button
 						type="button"
 						class="settings-launch-card"
 						data-test="open-settings-panel"
@@ -859,6 +872,13 @@ export default {
 		this.initializeWesternNumerals();
 	},
 	methods: {
+		hasSupport() {
+			return typeof window.docoSupport?.openHelp === "function";
+		},
+		openSupport() {
+			this.menuOpen = false;
+			window.docoSupport?.openHelp();
+		},
 		// Boot behaviour for print readiness on silent-print registers. Two
 		// one-shot events, so it never becomes a nag the cashier learns to
 		// dismiss blindly:

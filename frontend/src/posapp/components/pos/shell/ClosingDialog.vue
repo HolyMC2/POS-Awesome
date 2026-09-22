@@ -9,21 +9,9 @@
 				@close="dismissCorte"
 			/>
 
-			<!--
-				`Corte.dc.html` draws three columns that fill the height, with
-				the band across the bottom — never one scrolling list. This body
-				is the frame for that: `v-dialog scrollable` hands the scroll to
-				`.v-card-text`, which is how the count, the reconciliation and
-				seven overview tables ended up in ONE scrollport, and how the
-				figure the cashier is counting against scrolled off the screen
-				while they counted.
-
-				So the body stops being the scroller and the columns below own
-				their own scrollports. It stays a plain flex column here — a
-				`min-height: 0` flex child cannot push a parent that is already
-				sized by the card's flex chain, so Vuetify's own `overflow-y`
-				on this element simply never has anything to scroll.
-			-->
+			<!-- The desktop body uses Vuetify's bounded scroll area. Compact
+			     screens scroll the entire card so the count and its action
+			     remain reachable even in a short keyboard viewport. -->
 			<!-- The phone's corte (MovilCorte, artboard MovilCorte.dc.html):
 			     chrome inside this dialog. The dialog keeps fetch, figures and
 			     submitDialog; the screen counts, asks for the note the
@@ -841,6 +829,23 @@ export default {
 	.closing-layout {
 		padding: 10px;
 		gap: 12px;
+	}
+}
+
+/* Compact screens and the keyboard can leave too little space between the
+   header and footer. Let the entire form scroll instead of shrinking the
+   count area; the close action remains reachable at the end of that form. */
+@media (max-width: 1099.98px), (max-height: 600px) {
+	.closing-dialog-card {
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+	.closing-dialog-card > * {
+		flex-shrink: 0;
+	}
+	.closing-dialog-card > .closing-body {
+		flex: 0 0 auto;
+		overflow: visible;
 	}
 }
 
