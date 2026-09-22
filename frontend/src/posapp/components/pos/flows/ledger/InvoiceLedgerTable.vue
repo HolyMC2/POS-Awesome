@@ -40,6 +40,7 @@
 				:class="{ 'ledger-row--on': index === selectedIndex }"
 				:style="gridStyle"
 				role="row"
+				tabindex="-1"
 				:aria-selected="index === selectedIndex"
 				data-testid="ledger-row"
 				:data-ledger-row="row.name"
@@ -287,6 +288,11 @@ defineExpose({ focusRing: () => ring.value?.focus() });
 	height: 50px;
 	cursor: pointer;
 	border-bottom: 1px solid var(--reg-divider-soft, #f2f4f7);
+}
+
+.ledger-row:focus-visible {
+	outline: 2px solid var(--reg-accent, #0097a7);
+	outline-offset: -2px;
 }
 
 .ledger-row:hover {

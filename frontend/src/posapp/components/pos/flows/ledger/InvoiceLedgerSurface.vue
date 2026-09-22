@@ -1,6 +1,6 @@
 <template>
 	<section class="ledger-surface" data-testid="ledger-surface">
-		<div class="ledger-surface__scroll">
+		<div class="ledger-surface__scroll" :inert="isPhone && selectedRow ? true : undefined">
 			<InvoiceLedgerHeader
 				ref="headerRef"
 				:segments="segments"
@@ -91,6 +91,8 @@
  * filters, paginates and submits exactly as it did.
  */
 import { computed, onMounted, ref, watch } from "vue";
+import { useResponsive } from "../../../../composables/core/useResponsive";
+
 
 import InvoiceLedgerFigures from "./InvoiceLedgerFigures.vue";
 import InvoiceLedgerHeader from "./InvoiceLedgerHeader.vue";
@@ -125,6 +127,8 @@ import {
 	fetchCrmContext,
 	type CrmContext,
 } from "../../../../services/crmService";
+
+const { isPhone } = useResponsive();
 
 const props = withDefaults(
 	defineProps<{

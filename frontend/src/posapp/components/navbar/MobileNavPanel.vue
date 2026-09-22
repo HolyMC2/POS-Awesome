@@ -9,6 +9,8 @@
 	     cards flag, the supervisor probe) — this component only draws them. -->
 	<v-navigation-drawer
 		v-model="drawerOpen"
+		:inert="!drawerOpen ? true : undefined"
+		:aria-hidden="!drawerOpen ? 'true' : undefined"
 		temporary
 		width="312"
 		:location="isRtl ? 'right' : 'left'"
@@ -25,6 +27,9 @@
 						<span class="mobile-nav__company">{{ company }}</span>
 						<span v-if="subtitle" class="mobile-nav__register">{{ subtitle }}</span>
 					</span>
+					<button type="button" class="mobile-nav__close" data-testid="mobile-nav-close" :aria-label="__('Close')" @click="drawerOpen = false">
+						<v-icon icon="mdi-close" :size="22" aria-hidden="true" />
+					</button>
 				</div>
 
 				<div class="mobile-nav__title">{{ __("Register") }}</div>
@@ -238,10 +243,25 @@ const handleFooterActionClick = () => {
 }
 
 .mobile-nav__identity {
+	flex: 1;
 	display: flex;
 	flex-direction: column;
 	gap: 1px;
 	min-width: 0;
+}
+
+.mobile-nav__close {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	border-radius: 10px;
+	color: var(--pos-text-primary, #16222a);
+}
+.mobile-nav__close:focus-visible {
+	outline: 2px solid var(--reg-accent, #0097a7);
+	outline-offset: 2px;
 }
 
 .mobile-nav__company {

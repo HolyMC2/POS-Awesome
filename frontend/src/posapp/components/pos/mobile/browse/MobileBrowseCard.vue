@@ -243,17 +243,17 @@ const onActivate = () => emit("add", props.card);
 }
 
 .mbrowse-card__name {
-	font-size: 11.5px;
-	line-height: 1.22;
+	font-size: 14px;
+	line-height: 1.35;
 	margin: 6px 0 2px;
-	/* Two lines, clamped: the grid is a fixed two columns and a third line
-	   would shunt the price out of alignment across the row. */
-	height: 28px;
-	overflow: hidden;
+	/* Model and colour often appear at the end of an accessory name. Keep
+	   the complete name readable; the footer aligns prices within each row. */
+	min-height: 2.7em;
+	overflow-wrap: anywhere;
 }
 
 .mbrowse-card__subtitle {
-	font-size: 9.5px;
+	font-size: 11px;
 	color: var(--reg-text-muted, #667085);
 	white-space: nowrap;
 	overflow: hidden;
@@ -273,7 +273,8 @@ const onActivate = () => emit("add", props.card);
 	align-items: baseline;
 	justify-content: space-between;
 	gap: 6px;
-	margin-top: 3px;
+	margin-top: auto;
+	padding-top: 6px;
 }
 
 .mbrowse-card__price {

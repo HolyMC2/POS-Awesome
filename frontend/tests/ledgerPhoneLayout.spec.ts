@@ -23,7 +23,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 
 import InvoiceLedgerPanel from "../src/posapp/components/pos/flows/ledger/InvoiceLedgerPanel.vue";
 import panelSource from "../src/posapp/components/pos/flows/ledger/InvoiceLedgerPanel.vue?raw";
@@ -187,6 +187,32 @@ describe("the panel is a bottom sheet on a phone", () => {
 		const chosen = mount(InvoiceLedgerPanel, { props: panelProps(row()) });
 		expect(chosen.find('[data-testid="ledger-panel"]').classes()).not.toContain("ledger-panel--sheet");
 		expect(chosen.find('[data-testid="ledger-sheet-close"]').exists()).toBe(false);
+	});
+
+	it("contains keyboard focus and returns it to the opener when dismissed", async () => {
+		at(390);
+		const opener = document.createElement("button");
+		document.body.append(opener);
+		opener.focus();
+		const onClose = vi.fn();
+		const wrapper = mount(InvoiceLedgerPanel, { props: { ...panelProps(null), onClose }, attachTo: document.body });
+		await wrapper.setProps(panelProps(row()));
+		await flushPromises();
+		const close = wrapper.get('[data-testid="ledger-sheet-close"]');
+		const actions = wrapper.findAll("button");
+		const last = actions[actions.length - 1];
+		(close.element as HTMLElement).focus();
+		await close.trigger("keydown", { key: "Tab", shiftKey: true });
+		expect(document.activeElement).toBe(last.element);
+		await last.trigger("keydown", { key: "Tab" });
+		expect(document.activeElement).toBe(close.element);
+		await close.trigger("keydown", { key: "Escape" });
+		expect(onClose).toHaveBeenCalledTimes(1);
+		await wrapper.setProps(panelProps(null));
+		await flushPromises();
+		expect(document.activeElement).toBe(opener);
+		wrapper.unmount();
+		opener.remove();
 	});
 
 	it("is positioned against the surface and travels on the register's motion tokens", () => {

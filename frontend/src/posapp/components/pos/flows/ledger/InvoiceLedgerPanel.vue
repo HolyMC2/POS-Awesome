@@ -30,7 +30,7 @@
 				:aria-modal="asSheet ? 'true' : undefined"
 				:aria-label="asSheet && row ? __('Ticket {0}', [row.name]) : undefined"
 				:tabindex="asSheet ? -1 : undefined"
-				@keydown.esc="asSheet && $emit('close')"
+				@keydown="onSheetKeydown"
 			>
 		<span v-if="asSheet" class="ledger-panel__grip" aria-hidden="true"></span>
 
@@ -293,7 +293,7 @@ const props = withDefaults(
 	{ canDeleteDraft: false, repairBusy: false, offline: false, crm: null },
 );
 
-defineEmits<{
+const emit = defineEmits<{
 	print: [];
 	return: [];
 	collect: [];
@@ -312,17 +312,45 @@ defineEmits<{
 const { isPhone } = useResponsive();
 const asSheet = computed(() => Boolean(isPhone.value));
 
-// A sheet that opens takes focus, so Escape and the screen reader land on it;
-// `preventScroll` because the host clips and must not be asked to pan.
+// Keep the list's place and focus when the cashier returns from a ticket.
 const panelEl = ref<HTMLElement | null>(null);
+let returnFocus: HTMLElement | null = null;
 watch(
 	() => (asSheet.value ? props.row?.name : null),
-	async (name) => {
-		if (!name) return;
+	async (name, previous) => {
+		if (name && !previous) returnFocus = document.activeElement as HTMLElement | null;
 		await nextTick();
-		panelEl.value?.focus?.({ preventScroll: true });
+		if (name) panelEl.value?.focus({ preventScroll: true });
+		else if (previous && returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
 	},
+	{ immediate: true },
 );
+
+function onSheetKeydown(event: KeyboardEvent) {
+	if (!asSheet.value) return;
+	if (event.key === "Escape") {
+		event.preventDefault();
+		event.stopPropagation();
+		emit("close");
+		return;
+	}
+	if (event.key !== "Tab") return;
+	const controls = Array.from(panelEl.value?.querySelectorAll<HTMLElement>("button:not([disabled]),a[href],input:not([disabled]),[tabindex]") ?? [])
+		.filter(el => el.tabIndex >= 0 && getComputedStyle(el).display !== "none" && getComputedStyle(el).visibility !== "hidden");
+	const first = controls[0];
+	const last = controls.at(-1);
+	if (!first || !last) {
+		event.preventDefault();
+		return;
+	}
+	if (event.shiftKey && (document.activeElement === first || document.activeElement === panelEl.value)) {
+		event.preventDefault();
+		last.focus();
+	} else if (!event.shiftKey && document.activeElement === last) {
+		event.preventDefault();
+		first.focus();
+	}
+}
 
 const money = (value: number) => `${props.currencySymbol ?? ""}${props.formatCurrency(value)}`;
 
@@ -710,17 +738,36 @@ const tenders = computed(() => {
 	padding-top: 18px;
 }
 
+.ledger-panel--sheet .ledger-panel__title {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 44px;
+	align-items: start;
+}
+.ledger-panel--sheet .ledger-panel__ticket {
+	grid-column: 1;
+	overflow-wrap: anywhere;
+}
 .ledger-panel--sheet .ledger-panel__amount {
-	margin-left: auto;
+	grid-column: 1;
+	grid-row: 2;
+}
+.ledger-panel--sheet .ledger-panel__close {
+	grid-column: 2;
+	grid-row: 1 / 3;
+}
+@media (max-height: 600px) {
+	.ledger-panel--sheet { overflow-y: auto; }
+	.ledger-panel--sheet > * { flex: none; }
+	.ledger-panel--sheet .ledger-panel__body { overflow: visible; }
 }
 
 .ledger-panel__close {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 36px;
-	height: 36px;
-	margin: -8px -8px -8px 0;
+	width: 44px;
+	height: 44px;
+	margin: 0;
 	border: 0;
 	border-radius: 999px;
 	background: transparent;

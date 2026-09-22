@@ -506,6 +506,12 @@ defineExpose({ focusQuery: () => queryInput.value?.focus() });
 		display: contents;
 	}
 
+	.ledger-finder__input {
+		font-size: 16px;
+	}
+
+	.ledger-finder__box { min-height: 44px; }
+
 	.ledger-finder__box,
 	.ledger-finder__range {
 		order: 2;
@@ -526,6 +532,7 @@ defineExpose({ focusQuery: () => queryInput.value?.focus() });
 	}
 
 	.ledger-finder__date {
+		font-size: 16px;
 		flex: 1 1 0;
 		min-width: 0;
 		width: 100%;

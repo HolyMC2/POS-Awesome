@@ -349,3 +349,85 @@ for (const [width, height] of [
 		await page.screenshot({ path: info.outputPath("payment-entry.png") });
 	});
 }
+
+test("mobile catalogue names, menu dismissal and invoice return stay usable", async ({
+	page,
+}, info) => {
+	test.setTimeout(120000);
+	await page.setViewportSize({ width: 390, height: 720 });
+	await openRegister(page);
+	const names = page.locator(".mbrowse-card__name");
+	await expect(names.first()).toBeVisible();
+	expect(
+		await names.evaluateAll((elements) =>
+			elements.every(
+				(el) =>
+					el.scrollHeight <= el.clientHeight + 1 &&
+					parseFloat(getComputedStyle(el).fontSize) >= 14,
+			),
+		),
+	).toBe(true);
+	await page.screenshot({ path: info.outputPath("readable-catalogue.png") });
+	await page.locator(".nav-icon:visible").click();
+	const navClose = page.getByTestId("mobile-nav-close");
+	await expect(navClose).toBeInViewport();
+	expect((await navClose.boundingBox())!.width).toBeGreaterThanOrEqual(44);
+	await navClose.click();
+	await expect(page.getByTestId("mobile-nav-panel")).not.toBeInViewport();
+	await navigate(page, "invoices");
+	await page
+		.locator('[data-testid="ledger-surface"] [role="tab"]')
+		.filter({ hasText: /pending|pendiente/i })
+		.click();
+	await expect(page.getByTestId("ledger-row").first()).toBeVisible();
+	const query = page.getByTestId("ledger-finder-input");
+	await query.fill("ACC-SINV");
+	await page.waitForTimeout(800);
+	for (const [width, height] of [
+		[390, 720],
+		[320, 568],
+		[390, 430],
+	]) {
+		await page.setViewportSize({ width, height });
+		expect(
+			await query.evaluate((el) =>
+				parseFloat(getComputedStyle(el).fontSize),
+			),
+		).toBeGreaterThanOrEqual(16);
+		const row = page.getByTestId("ledger-row").last();
+		await row.scrollIntoViewIfNeeded();
+		const scroller = page.locator(".ledger-surface__scroll");
+		const scrollTop = await scroller.evaluate((el) => el.scrollTop);
+		await row.click();
+		const panel = page.getByTestId("ledger-panel");
+		await expect(panel).toBeVisible();
+		await expect(scroller).toHaveAttribute("inert", "");
+		const close = page.getByTestId("ledger-sheet-close");
+		await close.scrollIntoViewIfNeeded();
+		await expect(close).toBeInViewport({ ratio: 1 });
+		expect((await close.boundingBox())!.width).toBeGreaterThanOrEqual(44);
+		await close.focus();
+		await page.keyboard.press("Shift+Tab");
+		await expect(
+			panel
+				.locator("button:enabled, a[href]")
+				.filter({ visible: true })
+				.last(),
+		).toBeFocused();
+		await page.keyboard.press("Tab");
+		await expect(close).toBeFocused();
+		await assertScrollLayout(page);
+		await page.screenshot({
+			path: info.outputPath(`ticket-${width}x${height}.png`),
+		});
+		await page.keyboard.press("Escape");
+		await expect(page.getByTestId("ledger-sheet")).toBeHidden();
+		await expect(row).toBeFocused();
+		await expect(query).toHaveValue("ACC-SINV");
+		expect(
+			Math.abs(
+				(await scroller.evaluate((el) => el.scrollTop)) - scrollTop,
+			),
+		).toBeLessThanOrEqual(2);
+	}
+});

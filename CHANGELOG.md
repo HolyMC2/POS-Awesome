@@ -8,6 +8,14 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 Original status labels are retained; this section also contains changes reported as deployed.
 
+- **Mobile reading and return flow (2026-09-22, lab release candidate).** Catalogue
+  cards show complete product names at a readable size, with prices aligned.
+  The navigation drawer has a 44px close button. Invoice search uses phone-sized
+  inputs; ticket details keep their identifier and close action visible, contain
+  focus, and return to the same list row without losing the filter or scroll.
+  Short screens scroll the entire ticket sheet. Frontend only; no migration.
+  Rollback: restore the previous POS asset manifest and matching bundles.
+
 - **Responsive POS scrolling (2026-09-22, lab release candidate).** Long forms,
   cart, reports and compact closing use one vertical scroll area; Recargas keeps
   its action reachable above the dock, including reduced keyboard viewports.
