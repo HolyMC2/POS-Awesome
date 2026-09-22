@@ -6,7 +6,7 @@
 				<v-icon icon="mdi-magnify" size="20" />
 				<input :aria-label="searchLabel" v-model="query" type="search" :placeholder="searchLabel" data-test="floor-search" />
 			</label>
-			<button v-if="shortScreen" type="button" class="floor-kanban__filter-toggle" :aria-expanded="filtersOpen" data-test="floor-filters-toggle" @click="filtersOpen = !filtersOpen"><v-icon icon="mdi-filter-variant" size="18" />{{ status === 'all' ? verticalStore.t('Filter') : filters.find(choice => choice.key === status)?.title }}</button>
+			<button v-if="shortScreen" type="button" class="floor-kanban__filter-toggle" :aria-expanded="filtersOpen" data-test="floor-filters-toggle" @click="filtersOpen = !filtersOpen"><v-icon :icon="filtersOpen ? 'mdi-chevron-up' : 'mdi-chevron-down'" size="18" />{{ status === 'all' ? verticalStore.t('Filter') : filters.find(choice => choice.key === status)?.title }}</button>
 			</div>
 			<div v-if="!shortScreen || filtersOpen" class="floor-kanban__filters" :aria-label="verticalStore.t('Status')">
 				<button v-for="choice in filters" :key="choice.key" type="button" :aria-pressed="status === choice.key" :data-test="`floor-filter-${choice.key}`" @click="status = choice.key">{{ choice.title }} <span>{{ choice.count }}</span></button>
