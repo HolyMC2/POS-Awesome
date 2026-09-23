@@ -200,6 +200,11 @@ def session_drawer(pos_profile, mode_of_payment=None):
     """
     if not caja_managed(pos_profile):
         return None
+    # Non-drawer tenders (card, transfer, supplier balance…) keep their own
+    # accounts and never need an open caja; decide before requiring a shift.
+    drawer_mode = frappe.db.get_value("POS Profile", pos_profile, "posa_cash_mode_of_payment") or "Cash"
+    if mode_of_payment and mode_of_payment != drawer_mode:
+        return None
     shift = frappe.db.get_value("POS Opening Shift", {
         "user": frappe.session.user, "pos_profile": pos_profile, "status": "Open", "docstatus": 1,
         "posa_register": ["is", "set"]}, "name")

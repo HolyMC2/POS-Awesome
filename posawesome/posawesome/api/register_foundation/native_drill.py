@@ -359,6 +359,14 @@ class Drill:
         self.as_user(users["o1"])
         self.expect_error("FND-T01", "profile-only cash without a caja shift is refused",
                           lambda: session_drawer(self.facts["profiles"]["reg"], "Cash"), "per caja")
+        self.as_user(users["o1"])
+        self.check("FND-T01", "profile-only card/transfer without a caja shift is allowed (own account)",
+                   session_drawer(self.facts["profiles"]["reg"], "Wire Transfer") is None)
+        self.check("FND-T01", "profile-only supplier balance (Cash-typed, not drawer) needs no caja",
+                   session_drawer(self.facts["profiles"]["reg"], "Saldo proveedores") is None)
+        self.as_user(users["c1"])
+        self.check("FND-T01", "supplier balance keeps its account even with an open caja",
+                   session_drawer(self.facts["profiles"]["reg"], "Saldo proveedores") is None)
         self.as_user(users["c1"])
         self.check("FND-09", "legacy profile routes stay unchanged", session_drawer(self.facts["profiles"]["legacy"], "Cash") is None)
 
