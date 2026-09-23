@@ -85,12 +85,9 @@
 					v-if="show_item_settings"
 					v-model="show_item_settings"
 					:allow-new-line-setting="!!pos_profile?.posa_new_line"
-					:show-browse-controls="hideToolbarOnPhone"
-					:items-group="items_group"
-					v-model:item-group="item_group"
+					:show-category-navigation="context === 'pos'"
+					:show-items-view="!suppressBrowseButton"
 					v-model:items-view="items_view"
-					:active-price-list="active_price_list"
-					:show-price-list="pos_profile?.posa_px_enable_price_list_dropdown !== false"
 					:initial-settings="{
 						new_line,
 						hide_qty_decimals,
@@ -100,16 +97,23 @@
 						background_sync_interval,
 						enable_custom_items_per_page,
 						items_per_page,
-						force_server_items: temp_force_server_items,
+						category_navigation,
 					}"
 					@save="applyItemSettings"
 				/>
 
-				<v-card flat class="selector-section-card selector-results-card pos-themed-card">
+				<div v-if="categoryNavigationEnabled && !search_input.trim()" class="category-navigation">
+					<v-btn v-if="!showCategoryTiles" variant="text" prepend-icon="mdi-arrow-left" @click="backToCategories">{{ __("All categories") }}</v-btn>
+					<strong v-else>{{ __("Choose a category") }}</strong>
+					<span v-if="item_group !== 'ALL'" class="category-navigation__current">{{ item_group }}</span>
+					<v-btn v-if="showCategoryTiles" variant="text" @click="showProducts = true">{{ __("All products") }}</v-btn>
+				</div>
+				<v-card :class="{ 'selector-results-card--categories': showCategoryTiles }" flat class="selector-section-card selector-results-card pos-themed-card">
 					<v-row class="items">
 						<v-col cols="12" class="pt-0 mt-0" data-perf-tag="items-grid">
+							<CategoryTiles v-if="showCategoryTiles" :categories="categoryTiles" @select="item_group = $event" />
 							<ItemsSelectorCards
-								v-if="items_view === 'card'"
+								v-else-if="items_view === 'card'"
 								ref="itemsContainerRef"
 								:displayed-items="displayedItems"
 								:is-loading="isLoadingOrSyncing"
@@ -259,6 +263,8 @@ import { useResponsive } from "../../../composables/core/useResponsive";
 import { useRtl } from "../../../composables/core/useRtl";
 import { useFlyAnimation } from "../../../composables/core/useFlyAnimation";
 import { useCartValidation } from "../../../composables/pos/items/useCartValidation";
+import CategoryTiles from "./CategoryTiles.vue";
+import { categoryChoices, useCategoryNavigation } from "../../../composables/pos/items/useCategoryNavigation";
 import { useItemsIntegration } from "../../../composables/pos/items/useItemsIntegration";
 import { useItemSearch } from "../../../composables/pos/items/useItemSearch";
 import { useScannerInput } from "../../../composables/pos/items/useScannerInput";
@@ -478,6 +484,7 @@ const {
 } = useBarcodeIndexing();
 
 // 2. Local State & Settings
+const { mode: category_navigation, categoryFirst, showProducts } = useCategoryNavigation();
 const search_input = ref("");
 const first_search = ref("");
 // Seeded from the operator's last choice: cards suit a phone, the list
@@ -547,7 +554,6 @@ const temp_hide_qty_decimals = ref(false);
 const temp_hide_zero_rate_items = ref(false);
 const temp_enable_custom_items_per_page = ref(false);
 const temp_items_per_page = ref(50);
-const temp_force_server_items = ref(false);
 const temp_show_last_invoice_rate = ref(true);
 const temp_enable_background_sync = ref(true);
 const temp_background_sync_interval = ref(30);
@@ -572,6 +578,13 @@ const usesLimitSearch = computed(() =>
 const { stockSettings: stock_settings_ref } = storeToRefs(uiStore);
 const stock_settings = computed(() => stock_settings_ref.value || {});
 const items_group = computed(() => itemsIntegration.items_group.value || []);
+const categoryTiles = computed(() => categoryChoices(items_group.value));
+const categoryNavigationEnabled = computed(() => props.context === "pos" && categoryFirst.value && !pos_profile.value?.posa_hide_items_until_search);
+const showCategoryTiles = computed(() => categoryNavigationEnabled.value && item_group.value === "ALL" && !search_input.value.trim() && !first_search.value.trim() && !showProducts.value && categoryTiles.value.length > 0);
+const backToCategories = () => {
+	showProducts.value = false;
+	item_group.value = "ALL";
+};
 const offersCount = computed(() => uiStore.offersCount || 0);
 const couponsCount = computed(() => uiStore.couponsCount || 0);
 // selected_currency is now a local ref synced via eventBus
@@ -744,6 +757,7 @@ const lastSyncTimeLabel = computed(() => {
 
 // Settings context object for useItemsSelectorSettings
 const settingsContext = reactive({
+	category_navigation,
 	new_line,
 	hide_qty_decimals,
 	hide_zero_rate_items,
@@ -757,7 +771,6 @@ const settingsContext = reactive({
 	temp_hide_zero_rate_items,
 	temp_enable_custom_items_per_page,
 	temp_items_per_page,
-	temp_force_server_items,
 	temp_show_last_invoice_rate,
 	temp_enable_background_sync,
 	temp_background_sync_interval,
@@ -1005,7 +1018,6 @@ const toggleItemSettings = () => {
 	temp_hide_zero_rate_items.value = hide_zero_rate_items.value;
 	temp_enable_custom_items_per_page.value = enable_custom_items_per_page.value;
 	temp_items_per_page.value = items_per_page.value;
-	temp_force_server_items.value = !!(pos_profile.value && pos_profile.value.posa_force_server_items);
 	temp_show_last_invoice_rate.value = show_last_invoice_rate.value;
 	temp_enable_background_sync.value = enable_background_sync.value;
 	temp_background_sync_interval.value = background_sync_interval.value;
@@ -1055,6 +1067,7 @@ onMounted(() => {
 		// MOVIL-INTEGRATION-POINT — the movil browse bar's scan glyph. The
 		// camera scanner (and the wedge) live HERE; the phone rings the bell.
 		eventBus.on("movil:start-camera", startCameraScanning);
+		if (props.context === "pos") eventBus.on("open_catalogue_settings", toggleItemSettings);
 		// The bar's tap: focus the ONE input directly. focusItemSearch
 		// refuses coarse pointers on purpose; this tap IS the invitation.
 		eventBus.on("movil:focus-search", movilFocusSearch);
@@ -1083,6 +1096,7 @@ onBeforeUnmount(() => {
 		eventBus.off("saldo:picker-add", saldoPickerAddHandler);
 		saldoPickerAddHandler = null;
 		eventBus.off("movil:start-camera", startCameraScanning);
+		eventBus.off("open_catalogue_settings", toggleItemSettings);
 		eventBus.off("movil:focus-search", movilFocusSearch);
 		eventBus.off("movil:clear-search", movilClearSearch);
 		eventBus.off("movil:pick-variant", movilPickVariant);
@@ -1799,7 +1813,6 @@ defineExpose({
 	temp_hide_zero_rate_items,
 	temp_enable_custom_items_per_page,
 	temp_items_per_page,
-	temp_force_server_items,
 	temp_show_last_invoice_rate,
 	temp_enable_background_sync,
 	temp_background_sync_interval,
@@ -2058,4 +2071,11 @@ defineExpose({
 	-moz-osx-font-smoothing: grayscale;
 }
 
+</style>
+
+<style scoped>
+.selector-results-card--categories .items > .v-col { overflow-y: auto; overscroll-behavior: contain; }
+.category-navigation { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 0; }
+.category-navigation > strong { margin-inline-end: auto; }
+.category-navigation__current { overflow-wrap: anywhere; min-width: 0; }
 </style>

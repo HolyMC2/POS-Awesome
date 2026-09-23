@@ -146,6 +146,7 @@ export type Events = {
 	 * `flows/cotizaciones/SaveQuotationDialog.vue`).
 	 */
 	open_save_quotation: void;
+	open_catalogue_settings: void;
 	open_new_address: string; // customer
 	open_customer_display: void;
 	open_employee_switch: void;

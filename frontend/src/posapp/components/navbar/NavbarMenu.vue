@@ -674,6 +674,14 @@ export default {
 					description: __("Cashier identity and appearance preferences."),
 					actions: [
 						{
+							id: "catalogue",
+							label: __("Catalogue settings"),
+							subtitle: __("Category navigation and product display on this device"),
+							icon: "mdi-view-grid-outline",
+							tone: "primary",
+							handler: "openCatalogueSettings",
+						},
+						{
 							id: "language",
 							label: __("Language"),
 							subtitle: __("Change interface language"),
@@ -952,6 +960,10 @@ export default {
 			}
 
 			switch (action.handler) {
+				case "openCatalogueSettings":
+					this.closeMenu();
+					this.eventBus?.emit?.("open_catalogue_settings");
+					break;
 				case "openEmployeeSwitch":
 					this.closeMenu();
 					this.$emit("open-employee-switch");

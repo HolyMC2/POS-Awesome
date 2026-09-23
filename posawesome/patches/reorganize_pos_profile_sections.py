@@ -250,7 +250,6 @@ ORDERED_CHAIN = [
     # ---- Performance and Advanced -----------------------------------
     "posa_pos_awesome_advance_settings",
     "posa_allow_submissions_in_background_job",
-    "posa_use_web_route",
     "column_break_dqsba",
     "posa_use_server_cache",
     "posa_server_cache_duration",

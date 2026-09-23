@@ -16,6 +16,7 @@
 				that hands focus back to that field. Build plan §10 records what
 				happens when this component tree stops respecting the wedge.
 			-->
+			<div class="mbrowse__search-row">
 			<button
 				type="button"
 				class="mbrowse__search"
@@ -62,7 +63,10 @@
 				</span>
 			</button>
 
-			<div class="mbrowse__chips" role="group" :aria-label="__('Browse catalogue')">
+			<button type="button" class="mbrowse__settings" :aria-label="__('Catalogue settings')" @click="emit('settings')"><v-icon icon="mdi-tune" size="22" /></button>
+			</div>
+
+			<div v-if="compatibleOffered || !navigationEnabled || query" class="mbrowse__chips" role="group" :aria-label="__('Browse catalogue')">
 				<button
 					v-if="compatibleOffered"
 					type="button"
@@ -74,6 +78,7 @@
 				>
 					{{ __("Compatible") }}
 				</button>
+				<template v-if="!navigationEnabled || query">
 				<button
 					v-for="category in categories"
 					:key="category.id"
@@ -93,11 +98,19 @@
 						category.count
 					}}</span>
 				</button>
+				</template>
+			</div>
+			<div v-if="navigationEnabled && !query" class="mbrowse__navigation">
+				<button v-if="!showCategoryTiles" type="button" class="mbrowse__chip" @click="backToCategories"><v-icon icon="mdi-arrow-left" size="18" /> {{ __("All categories") }}</button>
+				<strong v-else>{{ __("Choose a category") }}</strong>
+				<span v-if="activeCategoryId" class="mbrowse__current">{{ categories.find((category) => category.id === activeCategoryId)?.label || activeCategoryId }}</span>
+				<button v-if="showCategoryTiles" type="button" class="mbrowse__chip" @click="showProducts = true">{{ __("All products") }}</button>
 			</div>
 		</header>
 
 		<div class="mbrowse__grid-wrap">
-			<div v-if="cards.length" class="mbrowse__grid" data-testid="browse-grid">
+			<CategoryTiles v-if="showCategoryTiles" :categories="categories" @select="toggleCategory" />
+			<div v-else-if="cards.length && !(loading && itemGroup !== 'ALL')" class="mbrowse__grid" data-testid="browse-grid">
 				<MobileBrowseCard
 					v-for="card in cards"
 					:key="`${card.kind}:${card.item_code}`"
@@ -146,7 +159,7 @@
 		     filtered view). The everyday «N items · tap a card» box was
 		     noise on a screen whose navigation is the dock (owner 08-31). -->
 		<footer
-			v-if="footer.claiming || footer.seeAllLabel"
+			v-if="!showCategoryTiles && (footer.claiming || footer.seeAllLabel)"
 			class="mbrowse__foot"
 			data-testid="browse-footer"
 		>
@@ -209,6 +222,9 @@ import {
 	offersCompatibleFilter,
 	resolveCompatibilityScope,
 } from "./browseCompatibility";
+import CategoryTiles from "../../items/CategoryTiles.vue";
+import { categoryChoices, useCategoryNavigation } from "../../../../composables/pos/items/useCategoryNavigation";
+import { COMBOS_CATEGORY_ID } from "../../../../composables/pos/combos/comboCatalog";
 import MobileBrowseCard from "./MobileBrowseCard.vue";
 // The register's ONE shimmer, shared with `ui/Skeleton.vue` rather than
 // re-authored here: a second sweep at a second speed is exactly the drift the
@@ -228,6 +244,9 @@ const props = withDefaults(
 		 * screen used to answer «No items found» to both.
 		 */
 		loading?: boolean;
+		itemGroups?: readonly string[];
+		itemGroup?: string;
+		barcodeFirst?: boolean;
 		/** The register's combos, from `useComboOffers`. */
 		combos?: readonly ComboOffer[];
 		/** The ticket, as lines or codes. Identifies the device to match against. */
@@ -250,6 +269,9 @@ const props = withDefaults(
 	{
 		items: () => [],
 		loading: false,
+		itemGroups: () => [],
+		itemGroup: "ALL",
+		barcodeFirst: false,
 		combos: () => [],
 		cart: () => [],
 		deviceItemCode: null,
@@ -264,6 +286,8 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
+	(_event: "select-group", _id: string): void;
+	(_event: "settings"): void;
 	(_event: "add", _card: BrowseCard): void;
 	/** Focus the register's ONE search field. This screen never owns an input. */
 	(_event: "search"): void;
@@ -294,6 +318,14 @@ const compatibleOffered = computed(() => offersCompatibleFilter(scope.value));
 /** null = never touched, so the default applies. */
 const compatibleOverride = ref<boolean | null>(null);
 const categoryOverride = ref<string | null>(null);
+const { categoryFirst, showProducts } = useCategoryNavigation();
+const navigationEnabled = computed(() => categoryFirst.value && !props.barcodeFirst && !compatibleOnly.value);
+const showCategoryTiles = computed(() => navigationEnabled.value && !props.query.trim() && !activeCategoryId.value && !showProducts.value && categories.value.length > 0);
+const backToCategories = () => {
+	showProducts.value = false;
+	categoryOverride.value = null;
+	emit("select-group", "ALL");
+};
 
 watch(
 	() => scope.value.deviceItemCode,
@@ -324,7 +356,14 @@ const scopedCards = computed(() =>
 	}),
 );
 
-const categories = computed(() => buildBrowseCategories(scopedCards.value, __));
+const categories = computed(() => {
+	const scoped = buildBrowseCategories(scopedCards.value, __);
+	if (compatibleOnly.value || props.query.trim() || !props.itemGroups.length) return scoped;
+	return [
+		...scoped.filter((category) => category.id === COMBOS_CATEGORY_ID),
+		...categoryChoices(props.itemGroups).map((category) => ({ ...category, count: null, featured: false })),
+	];
+});
 
 /**
  * A remembered category that the current scope no longer offers selects
@@ -332,17 +371,16 @@ const categories = computed(() => buildBrowseCategories(scopedCards.value, __));
  * switching to a phone with no cases must show the other accessories, not a
  * blank screen with a chip nobody can see.
  */
-const activeCategoryId = computed(() =>
-	categories.value.some((category) => category.id === categoryOverride.value)
-		? categoryOverride.value
-		: null,
-);
+const activeCategoryId = computed(() => {
+	if (props.itemGroup !== "ALL" && !compatibleOnly.value) return props.itemGroup;
+	return categories.value.some((category) => category.id === categoryOverride.value) ? categoryOverride.value : null;
+});
 
 const cards = computed(() =>
 	filterBrowseCards(allCards.value, {
 		compatibleOnly: compatibleOnly.value,
 		scope: scope.value,
-		categoryId: activeCategoryId.value,
+		categoryId: props.itemGroup !== "ALL" && !compatibleOnly.value ? null : activeCategoryId.value,
 	}),
 );
 
@@ -361,18 +399,30 @@ const toggleCompatible = () => {
 };
 
 const toggleCategory = (id: string) => {
-	categoryOverride.value = activeCategoryId.value === id ? null : id;
+	const selected = activeCategoryId.value === id ? null : id;
+	categoryOverride.value = selected;
+	if (props.itemGroups.length && !compatibleOnly.value) emit("select-group", selected && selected !== COMBOS_CATEGORY_ID ? selected : "ALL");
 };
 
 const clearFilters = () => {
 	categoryOverride.value = null;
+	emit("select-group", "ALL");
 	if (compatibleOffered.value) compatibleOverride.value = false;
 };
+
+watch(() => props.query, () => { categoryOverride.value = null; });
 
 const onAdd = (card: BrowseCard) => emit("add", card);
 </script>
 
 <style scoped>
+.mbrowse__search-row { display: flex; gap: 8px; align-items: center; }
+.mbrowse__search-row .mbrowse__search { flex: 1; min-width: 0; }
+.mbrowse__settings { flex: 0 0 44px; height: 44px; border-radius: 10px; border: 1px solid var(--reg-border); color: var(--reg-ink); background: var(--reg-surface); }
+.mbrowse__navigation { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.mbrowse__navigation > strong { margin-inline-end: auto; }
+.mbrowse__current { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+
 .mbrowse {
 	display: flex;
 	flex-direction: column;

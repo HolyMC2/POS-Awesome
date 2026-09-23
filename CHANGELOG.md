@@ -1,10 +1,22 @@
 # POSAwesome Changelog
 
+
 Recent changes and recorded rollout notes. Full older records are linked below; archiving does not mark an entry deployed or complete. Verify status against the deployed revision when it matters.
 
 For new entries, describe the changed behavior and include the commit, affected scope, and migration/rollback requirements when relevant. Link lengthy verification evidence. Read only the entries relevant to the task.
 
 ## Unreleased
+
+- **Category navigation and settings cleanup (2026-09-22, doco-mirror).**
+  Category boxes start automatically on touchscreens; each device can choose
+  categories or products everywhere. Both catalogue layouts use the complete
+  category list. Search/scanning go directly to products. Catalogue settings
+  have a visible mobile entry, consistent Save/Cancel and grouped controls;
+  shared caching policy stays in POS Profile. The obsolete web-route preference
+  is removed; `/posapp` is always canonical. Guarded migration removes only
+  Custom Field metadata and preserves the old profile column. Rollback restores
+  prior source/assets and the saved Custom Field metadata. Evidence:
+  `~/muelle-releases/pos-category-navigation-20260922/`.
 
 
 - **Cash custody workspace and contextual dock (2026-09-22, doco-mirror candidate).**

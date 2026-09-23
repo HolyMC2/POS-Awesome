@@ -4,7 +4,7 @@ import {
 	saveItemSelectorSettings,
 } from "../../../utils/itemSelectorSettings.js";
 
-declare const frappe: any;
+import { normalizeCategoryNavigation } from "./useCategoryNavigation";
 declare const __: (_text: string) => string;
 
 type SelectorSettingsDeps = {
@@ -26,9 +26,6 @@ export const useItemsSelectorSettings = ({
 		vm.temp_hide_zero_rate_items = vm.hide_zero_rate_items;
 		vm.temp_enable_custom_items_per_page = vm.enable_custom_items_per_page;
 		vm.temp_items_per_page = vm.items_per_page;
-		vm.temp_force_server_items = !!(
-			vm.pos_profile && vm.pos_profile.posa_force_server_items
-		);
 		vm.temp_show_last_invoice_rate = vm.show_last_invoice_rate;
 		vm.temp_enable_background_sync = vm.enable_background_sync;
 		vm.temp_background_sync_interval = vm.background_sync_interval;
@@ -45,6 +42,7 @@ export const useItemsSelectorSettings = ({
 		const vm = getVm();
 		if (!vm || !vm.localStorageAvailable) return;
 		const settings = {
+			category_navigation: normalizeCategoryNavigation(vm.category_navigation),
 			new_line: vm.new_line,
 			hide_qty_decimals: vm.hide_qty_decimals,
 			hide_zero_rate_items: vm.hide_zero_rate_items,
@@ -55,18 +53,6 @@ export const useItemsSelectorSettings = ({
 			items_per_page: vm.items_per_page,
 		};
 		saveItemSelectorSettings(settings);
-	};
-
-	const savePosProfileSetting = (field: string, value: unknown) => {
-		const vm = getVm();
-		if (!vm || !vm.pos_profile || !vm.pos_profile.name) {
-			return;
-		}
-		frappe.db
-			.set_value("POS Profile", vm.pos_profile.name, field, value ? 1 : 0)
-			.catch((e: unknown) => {
-				console.error("Failed to save POS Profile setting", e);
-			});
 	};
 
 	const applyItemSettings = (
@@ -110,21 +96,12 @@ export const useItemsSelectorSettings = ({
 		);
 		const itemsPerPage = getValue("items_per_page", vm.temp_items_per_page);
 		if (vm.enable_custom_items_per_page) {
-			vm.items_per_page = parseInt(itemsPerPage) || 50;
+			vm.items_per_page = Math.max(1, parseInt(itemsPerPage) || 50);
 		} else {
 			vm.items_per_page = 50;
 		}
 		vm.itemsPerPage = vm.items_per_page;
-		vm.pos_profile.posa_force_server_items = getValue(
-			"force_server_items",
-			vm.temp_force_server_items,
-		)
-			? 1
-			: 0;
-		savePosProfileSetting(
-			"posa_force_server_items",
-			vm.pos_profile.posa_force_server_items,
-		);
+		vm.category_navigation = normalizeCategoryNavigation(getValue("category_navigation", vm.category_navigation));
 		if (!vm.show_last_invoice_rate) {
 			vm.clearLastInvoiceRateCache();
 		} else {
@@ -190,7 +167,6 @@ export const useItemsSelectorSettings = ({
 		cancelItemSettings,
 		applyItemSettings,
 		saveItemSettings,
-		savePosProfileSetting,
 		loadItemSettings,
 		formatBackgroundSyncTime,
 	};

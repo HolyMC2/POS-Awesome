@@ -344,6 +344,8 @@
 							@search="onMovilSearch"
 							@scan="onMovilScan"
 							@clear-search="onMovilClearSearch"
+							@select-group="itemsStore.filterByGroup($event)"
+							@settings="openRegisterSetting('catalogue')"
 							@primary="onBandPrimary"
 							@select-line="onMovilSelectLine"
 							@change-customer="jumpToCustomer"
@@ -1945,6 +1947,9 @@ export default {
 						: "browse",
 			browseItems: movilBrowseRows.value || [],
 			browseLoading: movilBrowseLoading.value,
+			browseGroups: itemsStore.itemGroups || [],
+			browseGroup: itemsStore.itemGroup || "ALL",
+			barcodeFirst: !!posProfile.value?.posa_hide_items_until_search,
 			combos: comboOffers.value || [],
 			// The LIVE cart (invoiceStore.items off itemsData) — invoiceDoc is
 			// null until a server sync, which is exactly the window a cashier
