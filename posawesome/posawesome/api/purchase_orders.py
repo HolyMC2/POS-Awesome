@@ -550,10 +550,12 @@ def _create_payment_entry(reference_doc, payments, company, transaction_date, po
         if amount <= 0:
             continue
 
-        # Caja-managed profiles pay cash out of the acting user's caja drawer (spec 01).
-        from posawesome.posawesome.api.register_foundation.routing import session_drawer
+        # Caja-managed profiles pay drawer cash out of the acting user's open caja
+        # and link the shift (reference_no), which is how closing counts it.
+        from posawesome.posawesome.api.register_foundation.routing import session_drawer_route
 
-        paid_from_account = session_drawer(pos_profile, mode) or _get_mode_of_payment_account(mode, company)
+        drawer, opening_shift = session_drawer_route(pos_profile, mode)
+        paid_from_account = drawer or _get_mode_of_payment_account(mode, company)
 
         pe = frappe.new_doc("Payment Entry")
         pe.payment_type = "Pay"
@@ -564,6 +566,9 @@ def _create_payment_entry(reference_doc, payments, company, transaction_date, po
         pe.party = reference_doc.supplier
 
         pe.paid_from = paid_from_account
+        if opening_shift:
+            pe.reference_no = opening_shift
+            pe.reference_date = transaction_date
 
         # Fetch party account
         pe.paid_to = get_party_account("Supplier", reference_doc.supplier, company)
@@ -631,6 +636,14 @@ def create_purchase_order(data):
     items = payload.get("items") or []
     if not items:
         frappe.throw(_("Purchase order requires at least one item."))
+
+    # Refuse drawer cash without an open caja BEFORE creating any document
+    # (and take the caja shift lock first, ahead of closing's own lock order).
+    from posawesome.posawesome.api.register_foundation.routing import session_drawer_route
+
+    for pay in payload.get("payments") or []:
+        if flt(pay.get("amount")) > 0:
+            session_drawer_route(profile.get("name"), pay.get("mode_of_payment"))
 
     # Get supplier currency (NEW CODE)
     supplier_doc = frappe.get_doc("Supplier", supplier)
