@@ -1,0 +1,69 @@
+{
+ "doctype": "DocType",
+ "name": "POS Cashier Runtime",
+ "module": "POSAwesome",
+ "autoname": "field:user",
+ "naming_rule": "By fieldname",
+ "field_order": [
+  "user",
+  "accountable_shift",
+  "register",
+  "revision"
+ ],
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "options": "User",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "accountable_shift",
+   "fieldtype": "Link",
+   "label": "Accountable Shift",
+   "options": "POS Opening Shift",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "register",
+   "fieldtype": "Link",
+   "label": "Register",
+   "options": "POS Register"
+  },
+  {
+   "fieldname": "revision",
+   "fieldtype": "Int",
+   "label": "Revision",
+   "default": "1"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "POS Awesome Supervisor",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "track_changes": 1,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}

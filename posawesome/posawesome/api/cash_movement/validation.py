@@ -103,6 +103,13 @@ def _resolve_default_source_cash_account(profile_doc):
 
 def resolve_source_cash_account(payload, profile_doc):
     payload = payload or {}
+    # Register shifts (spec 01) carry an immutable drawer route; it wins over
+    # any profile default, override list or client selection.
+    from posawesome.posawesome.api.register_foundation.routing import movement_drawer
+
+    drawer = movement_drawer(payload)
+    if drawer:
+        return drawer
     selected_source = (payload.get("source_account") or "").strip()
     allow_override = bool(profile_doc.get("posa_allow_source_account_override"))
     allowed_sources = extract_allowed_accounts(profile_doc.get("posa_allowed_source_accounts"))

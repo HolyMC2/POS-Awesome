@@ -30,7 +30,16 @@
   "posa_terminal_recovery_pending",
   "posa_terminal_resume_from_generation",
   "section_break_9",
-  "amended_from"
+  "amended_from",
+  "register_section",
+  "posa_store",
+  "posa_register",
+  "posa_business_date",
+  "posa_drawer_account",
+  "posa_register_column",
+  "posa_register_contract_version",
+  "posa_binding_generation",
+  "posa_register_snapshot"
  ],
  "fields": [
   {
@@ -210,6 +219,70 @@
    "allow_on_submit": 1,
    "no_copy": 1,
    "hidden": 1
+  },
+  {
+   "fieldname": "register_section",
+   "fieldtype": "Section Break",
+   "label": "Store and register",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "posa_store",
+   "fieldtype": "Link",
+   "label": "Store",
+   "options": "POS Store",
+   "read_only": 1,
+   "search_index": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "posa_register",
+   "fieldtype": "Link",
+   "label": "Register",
+   "options": "POS Register",
+   "read_only": 1,
+   "search_index": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "posa_business_date",
+   "fieldtype": "Date",
+   "label": "Business Date",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "posa_drawer_account",
+   "fieldtype": "Link",
+   "label": "Drawer Account",
+   "options": "Account",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "posa_register_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "posa_register_contract_version",
+   "fieldtype": "Int",
+   "label": "Register Contract Version",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "posa_binding_generation",
+   "fieldtype": "Int",
+   "label": "Device Binding Generation",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "posa_register_snapshot",
+   "fieldtype": "Long Text",
+   "label": "Register Configuration Snapshot",
+   "read_only": 1,
+   "no_copy": 1
   }
  ],
  "is_submittable": 1,

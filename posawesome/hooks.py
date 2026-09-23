@@ -638,3 +638,41 @@ _custody_profile_hooks = doc_events["POS Profile"]["validate"]
 if isinstance(_custody_profile_hooks, str):
     _custody_profile_hooks = [_custody_profile_hooks]
 doc_events["POS Profile"]["validate"] = [*_custody_profile_hooks, "posawesome.posawesome.api.cash_custody.documents.protect_profile"]
+
+# Store and register foundation (spec 01). Drawer routes come from the shift's
+# immutable register snapshot at every money document boundary; runtime
+# pointers follow closing/cancellation; Desk/REST reads are store-scoped.
+def _append_hook(doctype, event, path):
+    events = doc_events.setdefault(doctype, {})
+    current = events.get(event) or []
+    if isinstance(current, str):
+        current = [current]
+    events[event] = [*current, path]
+
+
+_REGISTERS = "posawesome.posawesome.api.register_foundation"
+_append_hook("Sales Invoice", "validate", f"{_REGISTERS}.routing.apply_invoice_route")
+_append_hook("POS Invoice", "validate", f"{_REGISTERS}.routing.apply_invoice_route")
+_append_hook("Payment Entry", "validate", f"{_REGISTERS}.routing.apply_payment_entry_route")
+_append_hook("POS Closing Shift", "on_submit", f"{_REGISTERS}.runtime.on_closing_submit")
+_append_hook("POS Closing Shift", "on_cancel", f"{_REGISTERS}.runtime.on_closing_cancel")
+_append_hook("POS Opening Shift", "on_cancel", f"{_REGISTERS}.runtime.on_opening_cancel")
+
+permission_query_conditions = permission_query_conditions | {
+    "POS Store": f"{_REGISTERS}.scope.query_store",
+    "POS Register": f"{_REGISTERS}.scope.query_register",
+    "POS Register Runtime": f"{_REGISTERS}.scope.query_register_runtime",
+    "POS Cashier Runtime": f"{_REGISTERS}.scope.query_cashier_runtime",
+    "POS Device": f"{_REGISTERS}.scope.query_device",
+    "POS Device Binding": f"{_REGISTERS}.scope.query_binding",
+    "POS Enrollment Challenge": f"{_REGISTERS}.scope.query_challenge",
+    "POS Store Assignment": f"{_REGISTERS}.scope.query_assignment",
+    "POS Register Command Receipt": f"{_REGISTERS}.scope.query_receipt",
+    "POS Register Event": f"{_REGISTERS}.scope.query_event",
+}
+has_permission = has_permission | {
+    name: f"{_REGISTERS}.scope.has_permission"
+    for name in ("POS Store", "POS Register", "POS Register Runtime", "POS Cashier Runtime", "POS Device",
+                 "POS Device Binding", "POS Enrollment Challenge", "POS Store Assignment",
+                 "POS Register Command Receipt", "POS Register Event")
+}

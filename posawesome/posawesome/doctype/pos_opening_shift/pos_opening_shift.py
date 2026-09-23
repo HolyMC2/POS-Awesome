@@ -20,6 +20,22 @@ class POSOpeningShift(StatusUpdater):
         # Frappe bypasses validate() for submitted-document edits. The normal
         # Desk save path must not become a second terminal-management API.
         self._validate_terminal_fields()
+        self._validate_register_fields()
+
+    def before_validate(self):
+        self._validate_register_fields()
+
+    def _validate_register_fields(self):
+        # Store/register stamps and the drawer-route snapshot are written once
+        # by the register open command (spec 01 FND-05) and never edited.
+        register_fields = ("posa_store", "posa_register", "posa_business_date", "posa_drawer_account",
+                           "posa_register_contract_version", "posa_binding_generation",
+                           "posa_register_snapshot")
+        previous = self.get_doc_before_save()
+        if previous and any(self.get(field) != previous.get(field) for field in register_fields):
+            frappe.throw(_("The store, caja and drawer route of a shift cannot be changed."))
+        if self.is_new() and any(self.get(field) for field in register_fields) and not self.flags.get("posa_register_open"):
+            frappe.throw(_("Open register shifts through the Cajas workspace."))
 
     def _validate_terminal_fields(self):
         terminal_fields = ("posa_terminal_id", "posa_terminal_generation", "posa_terminal_token_hash",

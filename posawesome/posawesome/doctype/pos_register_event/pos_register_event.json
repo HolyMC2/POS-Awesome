@@ -1,0 +1,118 @@
+{
+ "doctype": "DocType",
+ "name": "POS Register Event",
+ "module": "POSAwesome",
+ "autoname": "hash",
+ "naming_rule": "Random",
+ "field_order": [
+  "event_type",
+  "aggregate_type",
+  "aggregate_id",
+  "aggregate_revision",
+  "schema_version",
+  "store",
+  "safe",
+  "receipt",
+  "actor",
+  "occurred_at",
+  "payload_json",
+  "published"
+ ],
+ "fields": [
+  {
+   "fieldname": "event_type",
+   "fieldtype": "Data",
+   "label": "Event Type",
+   "reqd": 1,
+   "length": 60,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "aggregate_type",
+   "fieldtype": "Data",
+   "label": "Aggregate Type",
+   "reqd": 1,
+   "length": 60
+  },
+  {
+   "fieldname": "aggregate_id",
+   "fieldtype": "Data",
+   "label": "Aggregate Id",
+   "reqd": 1,
+   "length": 140,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "aggregate_revision",
+   "fieldtype": "Int",
+   "label": "Aggregate Revision"
+  },
+  {
+   "fieldname": "schema_version",
+   "fieldtype": "Int",
+   "label": "Schema Version",
+   "default": "1"
+  },
+  {
+   "fieldname": "store",
+   "fieldtype": "Link",
+   "label": "Store",
+   "options": "POS Store",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "safe",
+   "fieldtype": "Link",
+   "label": "Safe",
+   "options": "POS Cash Safe"
+  },
+  {
+   "fieldname": "receipt",
+   "fieldtype": "Link",
+   "label": "Receipt",
+   "options": "POS Register Command Receipt"
+  },
+  {
+   "fieldname": "actor",
+   "fieldtype": "Link",
+   "label": "Actor",
+   "options": "User"
+  },
+  {
+   "fieldname": "occurred_at",
+   "fieldtype": "Datetime",
+   "label": "Occurred At"
+  },
+  {
+   "fieldname": "payload_json",
+   "fieldtype": "Long Text",
+   "label": "Payload Json"
+  },
+  {
+   "fieldname": "published",
+   "fieldtype": "Check",
+   "label": "Published",
+   "default": "0"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "POS Awesome Supervisor",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "track_changes": 1,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}

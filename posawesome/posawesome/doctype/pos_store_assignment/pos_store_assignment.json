@@ -1,0 +1,136 @@
+{
+ "doctype": "DocType",
+ "name": "POS Store Assignment",
+ "module": "POSAwesome",
+ "autoname": "hash",
+ "naming_rule": "Random",
+ "field_order": [
+  "user",
+  "bundle",
+  "scope_type",
+  "store",
+  "company",
+  "enabled",
+  "valid_from",
+  "valid_to",
+  "granted_by",
+  "reason",
+  "revision",
+  "assignment_key"
+ ],
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "options": "User",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "bundle",
+   "fieldtype": "Select",
+   "label": "Bundle",
+   "options": "Cashier\nOrder taker\nSafe custodian\nStore supervisor\nFinancial reviewer\nRegional manager\nAuditor\nConfiguration admin",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "scope_type",
+   "fieldtype": "Select",
+   "label": "Scope Type",
+   "options": "Store\nCompany",
+   "default": "Store",
+   "reqd": 1
+  },
+  {
+   "fieldname": "store",
+   "fieldtype": "Link",
+   "label": "Store",
+   "options": "POS Store",
+   "depends_on": "eval:doc.scope_type=='Store'",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "valid_from",
+   "fieldtype": "Datetime",
+   "label": "Valid From"
+  },
+  {
+   "fieldname": "valid_to",
+   "fieldtype": "Datetime",
+   "label": "Valid To"
+  },
+  {
+   "fieldname": "granted_by",
+   "fieldtype": "Link",
+   "label": "Granted By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason"
+  },
+  {
+   "fieldname": "revision",
+   "fieldtype": "Int",
+   "label": "Revision",
+   "default": "1",
+   "read_only": 1
+  },
+  {
+   "fieldname": "assignment_key",
+   "fieldtype": "Data",
+   "label": "Assignment Key",
+   "unique": 1,
+   "hidden": 1,
+   "length": 240,
+   "read_only": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "write": 1,
+   "create": 1
+  },
+  {
+   "role": "POS Awesome Supervisor",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "track_changes": 1,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}

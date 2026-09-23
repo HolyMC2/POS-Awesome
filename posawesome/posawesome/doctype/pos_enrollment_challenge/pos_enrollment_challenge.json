@@ -1,0 +1,118 @@
+{
+ "doctype": "DocType",
+ "name": "POS Enrollment Challenge",
+ "module": "POSAwesome",
+ "autoname": "hash",
+ "naming_rule": "Random",
+ "field_order": [
+  "register",
+  "store",
+  "purpose",
+  "state",
+  "code_hash",
+  "expires_at",
+  "issued_by",
+  "reason",
+  "used_by",
+  "used_at",
+  "device",
+  "binding"
+ ],
+ "fields": [
+  {
+   "fieldname": "register",
+   "fieldtype": "Link",
+   "label": "Register",
+   "options": "POS Register"
+  },
+  {
+   "fieldname": "store",
+   "fieldtype": "Link",
+   "label": "Store",
+   "options": "POS Store",
+   "reqd": 1
+  },
+  {
+   "fieldname": "purpose",
+   "fieldtype": "Select",
+   "label": "Purpose",
+   "options": "Enroll\nReplace\nOrder-only",
+   "default": "Enroll"
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Select",
+   "label": "State",
+   "options": "Issued\nUsed\nCancelled",
+   "default": "Issued",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "code_hash",
+   "fieldtype": "Data",
+   "label": "Code Hash",
+   "unique": 1,
+   "permlevel": 1,
+   "length": 64
+  },
+  {
+   "fieldname": "expires_at",
+   "fieldtype": "Datetime",
+   "label": "Expires At"
+  },
+  {
+   "fieldname": "issued_by",
+   "fieldtype": "Link",
+   "label": "Issued By",
+   "options": "User"
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason"
+  },
+  {
+   "fieldname": "used_by",
+   "fieldtype": "Link",
+   "label": "Used By",
+   "options": "User"
+  },
+  {
+   "fieldname": "used_at",
+   "fieldtype": "Datetime",
+   "label": "Used At"
+  },
+  {
+   "fieldname": "device",
+   "fieldtype": "Link",
+   "label": "Device",
+   "options": "POS Device"
+  },
+  {
+   "fieldname": "binding",
+   "fieldtype": "Link",
+   "label": "Binding",
+   "options": "POS Device Binding"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "POS Awesome Supervisor",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "track_changes": 1,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}

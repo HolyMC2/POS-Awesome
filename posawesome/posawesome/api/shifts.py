@@ -86,9 +86,22 @@ def create_opening_voucher(pos_profile, company, balance_details, terminal_id=No
 
     balance_details = json.loads(balance_details)
 
+    # Registers (spec 01): a profile served by an activated caja opens only
+    # through that caja, so legacy clients cannot bypass its drawer route.
+    if frappe.db.table_exists("POS Register") and frappe.db.exists(
+            "POS Register", {"pos_profile": pos_profile, "lifecycle": ["in", ["Ready", "Suspended"]]}):
+        frappe.throw(_("This POS Profile is now opened through its caja. Update POS (reload) and choose your caja."))
+
     # Serialize the empty-check and insert: two browsers may otherwise both
     # open a shift for the same cashier before either transaction commits.
     frappe.db.get_value("User", frappe.session.user, "name", for_update=True)
+    # Shared user-level exclusion with register openings (spec 01 §8 step 6).
+    from .register_foundation.runtime import lock_cashier, point_cashier
+    cashier_runtime = lock_cashier(frappe.session.user)
+    if cashier_runtime and cashier_runtime.get("accountable_shift") and frappe.db.get_value(
+            "POS Opening Shift", cashier_runtime.accountable_shift, "status") == "Open":
+        frappe.throw(_("You already have an open shift ({0}). Close it before opening a new one.").format(
+            cashier_runtime.accountable_shift))
 
     # One open shift per user. Multiple concurrent open shifts (same or
     # different POS Profiles) silently break cash reconciliation:
@@ -142,6 +155,8 @@ def create_opening_voucher(pos_profile, company, balance_details, terminal_id=No
     from .shift_terminal import bind_new_shift
     bind_new_shift(new_pos_opening, terminal_id, terminal_token)
     new_pos_opening.insert(ignore_permissions=True)
+    if cashier_runtime:
+        point_cashier(frappe.session.user, new_pos_opening.name)
 
     data = {}
     data["pos_opening_shift"] = new_pos_opening.as_dict()
