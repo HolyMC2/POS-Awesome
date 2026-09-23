@@ -856,6 +856,7 @@ onBeforeUnmount(() => {
 });
 
 onMounted(() => {
+	void applyClinicHandoff();
 	bus.on("payment_captured", onCaptured);
 	// Arrived from Facturas' «Agregar pago», which sets the target and lands on
 	// this destination. Opening the worklist would throw that intent away.
