@@ -3,7 +3,6 @@
 		<v-card class="catalogue-settings">
 			<v-card-title class="pa-4 d-flex align-center">
 				<span>{{ __("Catalogue settings") }}</span>
-				<v-spacer />
 				<v-btn
 					icon="mdi-close"
 					variant="text"
