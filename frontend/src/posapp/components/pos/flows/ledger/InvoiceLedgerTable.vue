@@ -40,6 +40,7 @@
 				:class="{ 'ledger-row--on': index === selectedIndex }"
 				:style="gridStyle"
 				role="row"
+				tabindex="-1"
 				:aria-selected="index === selectedIndex"
 				data-testid="ledger-row"
 				:data-ledger-row="row.name"
@@ -198,15 +199,22 @@ const countLabel = computed(() => {
 });
 
 const onKeydown = (event: KeyboardEvent) => {
+	// Closing a phone sheet clears selection but returns focus to its row.
+	const focusedName = event.target instanceof Element
+		? event.target.closest("[data-ledger-row]")?.getAttribute("data-ledger-row")
+		: null;
+	const activeIndex = props.selectedIndex >= 0
+		? props.selectedIndex
+		: focusedName ? props.rows.findIndex((row) => row.name === focusedName) : -1;
 	if (event.key === "Enter") {
-		const row = props.rows[props.selectedIndex];
+		const row = props.rows[activeIndex];
 		if (row) {
 			event.preventDefault();
-			emit("open", { row, index: props.selectedIndex });
+			emit("open", { row, index: activeIndex });
 		}
 		return;
 	}
-	const target = nextIndex(event.key, props.selectedIndex, props.rows.length);
+	const target = nextIndex(event.key, activeIndex, props.rows.length);
 	if (target === null) return;
 	event.preventDefault();
 	emit("select", target);
@@ -287,6 +295,11 @@ defineExpose({ focusRing: () => ring.value?.focus() });
 	height: 50px;
 	cursor: pointer;
 	border-bottom: 1px solid var(--reg-divider-soft, #f2f4f7);
+}
+
+.ledger-row:focus-visible {
+	outline: 2px solid var(--reg-accent, #0097a7);
+	outline-offset: -2px;
 }
 
 .ledger-row:hover {
@@ -524,8 +537,8 @@ defineExpose({ focusRing: () => ring.value?.focus() });
 	}
 
 	.ledger-table__page {
-		width: 36px;
-		height: 36px;
+		width: 44px;
+		height: 44px;
 	}
 }
 </style>

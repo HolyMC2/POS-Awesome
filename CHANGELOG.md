@@ -1,10 +1,70 @@
 # POSAwesome Changelog
 
+
 Recent changes and recorded rollout notes. Full older records are linked below; archiving does not mark an entry deployed or complete. Verify status against the deployed revision when it matters.
 
 For new entries, describe the changed behavior and include the commit, affected scope, and migration/rollback requirements when relevant. Link lengthy verification evidence. Read only the entries relevant to the task.
 
 ## Unreleased
+
+- **Cajas y turnos workspace (2026-09-22, doco-mirror candidate).**
+  Adds attention/open/history queues, scoped shift details, cash activity and
+  contextual routes to selling, counting, movements and browser recovery.
+  Available before opening a shift; mobile uses a focused detail step with one
+  scroll surface. Reads cannot submit printed drafts or move money; blind-count
+  amounts are withheld by the server. Uses existing profile/shift identities;
+  physical register and shared-safe foundations remain specified. No migration.
+  Rollback restores prior assets/translations and removes the new read-only API.
+  Release evidence: `~/muelle-releases/pos-cajas-workspace-20260922/`.
+
+- **Category navigation and settings cleanup (2026-09-22, doco-mirror).**
+  Category boxes start automatically on touchscreens; each device can choose
+  categories or products everywhere. Both catalogue layouts use the complete
+  category list. Search/scanning go directly to products. Catalogue settings
+  have a visible mobile entry, consistent Save/Cancel and grouped controls;
+  shared caching policy stays in POS Profile. The obsolete web-route preference
+  is removed; `/posapp` is always canonical. Guarded migration removes only
+  Custom Field metadata and preserves the old profile column. Rollback restores
+  prior source/assets and the saved Custom Field metadata. Evidence:
+  `~/muelle-releases/pos-category-navigation-20260922/`.
+
+
+- **Cash custody workspace and contextual dock (2026-09-22, doco-mirror candidate).**
+  Includes the existing cash-custody foundation: sealed bags, denomination counts,
+  independent verification, safe/drawer movements, bank handoffs and recoverable
+  closing allocation. Employees start from their pending queue, open a focused
+  count/transfer with explicit source and destination, and return without losing
+  filters. Unsent forms and unconfirmed requests retain their existing recovery.
+  Compact workspaces replace sale controls with their own action and a return to
+  sale. Coupon/offer/catalogue shortcuts dismiss the covering workspace immediately.
+  Subtle arrival and press feedback respects reduced motion. Closing has one
+  canonical surface; blind-count profiles reset their reconciliation headers.
+  Source: `fix/pos-responsive-20260922`. Lab already has the custody schema and
+  backend; this rollout publishes assets and additive Spanish translations only.
+  Fresh sites require guarded migration for the four custody DocTypes and closing
+  evidence link. Restore prior assets/translations for the lab UI rollback;
+  preserve financial records and custody backend/schema. Evidence:
+  `~/muelle-releases/pos-cash-workspace-20260922/`.
+
+- **Mesas finding and account actions (2026-09-22, lab release candidate).**
+  Search finds tables and account names across floors and shows each result's
+  location. Cards name the parties, identify split accounts and mark the selected
+  table. Split accounts offer their own Add items and Charge actions, hydrating
+  the exact chosen order before handing off to payment. Queued payments explain
+  the connection wait and withhold repeat actions. Compact landscape spacing
+  preserves room for tables. Frontend and one Spanish translation only; no
+  migration. Restore prior assets and translations together to roll back.
+
+- **Mesas workflow polish (2026-09-22, lab release candidate).** Compact floors
+  start with readable searchable tables and occupied/free/cleaning filters.
+  Floor switching and named accounts fit without sideways scrolling; list/map
+  controls are visible. Short screens scroll the floor and ticket together.
+  Table dialogs have a reachable close action and clearer split-account context.
+  New named accounts accept names and continue to the catalogue. Desktop table
+  details expose New account; active tickets show their table and account with
+  wrapping actions. No schema changes; restore prior assets and Spanish
+  translations together to roll back.
+
 
 - **2026-09-15 · lab verified · Cash custody UI/UX crew pass (uncommitted candidate).** Three Opus workers improved cashier queues, denomination counts/closing allocation, supervisor Desk actions and print evidence; primary integration fixed recovery, in-flight save and invalid-input issues. Spanish copy, 48px count targets, separate one-label bag tags and full handover sheets. Full frontend suite 5,579 passing, final print/Desk checks, responsive browser journeys and real lost-response/close/bank journeys with reconciled ledgers. [Review and evidence](docs/POS-CASH-CUSTODY-UX-REVIEW.md). No additional schema migration; production rollout pending. UI rollback preserves the custody records and journals described in the core custody entry below.
 
@@ -20,6 +80,25 @@ For new entries, describe the changed behavior and include the commit, affected 
   No schema migration; not deployed. Rollback: revert these source changes and rebuild.
 
 Original status labels are retained; this section also contains changes reported as deployed.
+
+- **Mobile reading and return flow (2026-09-22, lab release candidate).** Catalogue
+  cards show complete product names at a readable size, with prices aligned.
+  The navigation drawer has a 44px close button. Invoice search uses phone-sized
+  inputs; ticket details keep their identifier and close action visible, contain
+  focus, and return to the same list row without losing the filter or scroll.
+  Enter and arrow keys continue from that returned row.
+  Short screens scroll the entire ticket sheet. Frontend only; no migration.
+  Rollback: restore the previous POS asset manifest and matching bundles.
+
+- **Responsive POS scrolling (2026-09-22, lab release candidate).** Long forms,
+  cart, reports and compact closing use one vertical scroll area; Recargas keeps
+  its action reachable above the dock, including reduced keyboard viewports.
+  Invoice, Cobranza and recharge tables adapt into readable records on phones
+  without sideways scrolling. Filters wrap within the screen. Payment actions wrap, and Help remains in the actions
+  menu without covering register controls. Source: `fix/pos-responsive-20260922`.
+  Frontend only; no migration. Roll back by restoring the prior POS asset manifest
+  and bundles together. Browser regression coverage includes 320–1920 px widths,
+  short landscape, keyboard viewport changes, long lists and no sideways scroll.
 
 - **The server-side bundle batch hint is removed from the submit path
   (2026-09-12, lab verification, not committed).** Supersedes the repair in the

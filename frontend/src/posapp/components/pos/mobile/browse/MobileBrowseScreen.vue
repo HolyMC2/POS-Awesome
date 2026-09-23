@@ -6,8 +6,7 @@
 			     navbar's indicator above it — both rows spent grid space saying
 			     things already on screen. The search bar leads and the category
 			     chips are the first thing under it: they ARE the browse
-			     mechanism, and on tenants with more item groups the row fills
-			     out on its own. -->
+			     mechanism, and wrap with the catalogue on narrow screens. -->
 
 			<!--
 				The search ROW, not a search FIELD. `useScannerInput` attaches the
@@ -17,6 +16,7 @@
 				that hands focus back to that field. Build plan §10 records what
 				happens when this component tree stops respecting the wedge.
 			-->
+			<div class="mbrowse__search-row">
 			<button
 				type="button"
 				class="mbrowse__search"
@@ -63,7 +63,10 @@
 				</span>
 			</button>
 
-			<div class="mbrowse__chips" role="group" :aria-label="__('Browse catalogue')">
+			<button type="button" class="mbrowse__settings" :aria-label="__('Catalogue settings')" @click="emit('settings')"><v-icon icon="mdi-tune" size="22" /></button>
+			</div>
+
+			<div v-if="compatibleOffered || !navigationEnabled || query" class="mbrowse__chips" role="group" :aria-label="__('Browse catalogue')">
 				<button
 					v-if="compatibleOffered"
 					type="button"
@@ -75,6 +78,7 @@
 				>
 					{{ __("Compatible") }}
 				</button>
+				<template v-if="!navigationEnabled || query">
 				<button
 					v-for="category in categories"
 					:key="category.id"
@@ -94,11 +98,19 @@
 						category.count
 					}}</span>
 				</button>
+				</template>
+			</div>
+			<div v-if="navigationEnabled && !query" class="mbrowse__navigation">
+				<button v-if="!showCategoryTiles" type="button" class="mbrowse__chip" @click="backToCategories"><v-icon icon="mdi-arrow-left" size="18" /> {{ __("All categories") }}</button>
+				<strong v-else>{{ __("Choose a category") }}</strong>
+				<span v-if="activeCategoryId" class="mbrowse__current">{{ categories.find((category) => category.id === activeCategoryId)?.label || activeCategoryId }}</span>
+				<button v-if="showCategoryTiles" type="button" class="mbrowse__chip" @click="showProducts = true">{{ __("All products") }}</button>
 			</div>
 		</header>
 
 		<div class="mbrowse__grid-wrap">
-			<div v-if="cards.length" class="mbrowse__grid" data-testid="browse-grid">
+			<CategoryTiles v-if="showCategoryTiles" :categories="categories" @select="toggleCategory" />
+			<div v-else-if="cards.length && !(loading && itemGroup !== 'ALL')" class="mbrowse__grid" data-testid="browse-grid">
 				<MobileBrowseCard
 					v-for="card in cards"
 					:key="`${card.kind}:${card.item_code}`"
@@ -147,7 +159,7 @@
 		     filtered view). The everyday «N items · tap a card» box was
 		     noise on a screen whose navigation is the dock (owner 08-31). -->
 		<footer
-			v-if="footer.claiming || footer.seeAllLabel"
+			v-if="!showCategoryTiles && (footer.claiming || footer.seeAllLabel)"
 			class="mbrowse__foot"
 			data-testid="browse-footer"
 		>
@@ -210,6 +222,9 @@ import {
 	offersCompatibleFilter,
 	resolveCompatibilityScope,
 } from "./browseCompatibility";
+import CategoryTiles from "../../items/CategoryTiles.vue";
+import { categoryChoices, useCategoryNavigation } from "../../../../composables/pos/items/useCategoryNavigation";
+import { COMBOS_CATEGORY_ID } from "../../../../composables/pos/combos/comboCatalog";
 import MobileBrowseCard from "./MobileBrowseCard.vue";
 // The register's ONE shimmer, shared with `ui/Skeleton.vue` rather than
 // re-authored here: a second sweep at a second speed is exactly the drift the
@@ -229,6 +244,9 @@ const props = withDefaults(
 		 * screen used to answer «No items found» to both.
 		 */
 		loading?: boolean;
+		itemGroups?: readonly string[];
+		itemGroup?: string;
+		barcodeFirst?: boolean;
 		/** The register's combos, from `useComboOffers`. */
 		combos?: readonly ComboOffer[];
 		/** The ticket, as lines or codes. Identifies the device to match against. */
@@ -251,6 +269,9 @@ const props = withDefaults(
 	{
 		items: () => [],
 		loading: false,
+		itemGroups: () => [],
+		itemGroup: "ALL",
+		barcodeFirst: false,
 		combos: () => [],
 		cart: () => [],
 		deviceItemCode: null,
@@ -265,6 +286,8 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
+	(_event: "select-group", _id: string): void;
+	(_event: "settings"): void;
 	(_event: "add", _card: BrowseCard): void;
 	/** Focus the register's ONE search field. This screen never owns an input. */
 	(_event: "search"): void;
@@ -295,6 +318,14 @@ const compatibleOffered = computed(() => offersCompatibleFilter(scope.value));
 /** null = never touched, so the default applies. */
 const compatibleOverride = ref<boolean | null>(null);
 const categoryOverride = ref<string | null>(null);
+const { categoryFirst, showProducts } = useCategoryNavigation();
+const navigationEnabled = computed(() => categoryFirst.value && !props.barcodeFirst && !compatibleOnly.value);
+const showCategoryTiles = computed(() => navigationEnabled.value && !props.query.trim() && !activeCategoryId.value && !showProducts.value && categories.value.length > 0);
+const backToCategories = () => {
+	showProducts.value = false;
+	categoryOverride.value = null;
+	emit("select-group", "ALL");
+};
 
 watch(
 	() => scope.value.deviceItemCode,
@@ -325,7 +356,14 @@ const scopedCards = computed(() =>
 	}),
 );
 
-const categories = computed(() => buildBrowseCategories(scopedCards.value, __));
+const categories = computed(() => {
+	const scoped = buildBrowseCategories(scopedCards.value, __);
+	if (compatibleOnly.value || props.query.trim() || !props.itemGroups.length) return scoped;
+	return [
+		...scoped.filter((category) => category.id === COMBOS_CATEGORY_ID),
+		...categoryChoices(props.itemGroups).map((category) => ({ ...category, count: null, featured: false })),
+	];
+});
 
 /**
  * A remembered category that the current scope no longer offers selects
@@ -333,17 +371,16 @@ const categories = computed(() => buildBrowseCategories(scopedCards.value, __));
  * switching to a phone with no cases must show the other accessories, not a
  * blank screen with a chip nobody can see.
  */
-const activeCategoryId = computed(() =>
-	categories.value.some((category) => category.id === categoryOverride.value)
-		? categoryOverride.value
-		: null,
-);
+const activeCategoryId = computed(() => {
+	if (props.itemGroup !== "ALL" && !compatibleOnly.value) return props.itemGroup;
+	return categories.value.some((category) => category.id === categoryOverride.value) ? categoryOverride.value : null;
+});
 
 const cards = computed(() =>
 	filterBrowseCards(allCards.value, {
 		compatibleOnly: compatibleOnly.value,
 		scope: scope.value,
-		categoryId: activeCategoryId.value,
+		categoryId: props.itemGroup !== "ALL" && !compatibleOnly.value ? null : activeCategoryId.value,
 	}),
 );
 
@@ -362,36 +399,38 @@ const toggleCompatible = () => {
 };
 
 const toggleCategory = (id: string) => {
-	categoryOverride.value = activeCategoryId.value === id ? null : id;
+	const selected = activeCategoryId.value === id ? null : id;
+	categoryOverride.value = selected;
+	if (props.itemGroups.length && !compatibleOnly.value) emit("select-group", selected && selected !== COMBOS_CATEGORY_ID ? selected : "ALL");
 };
 
 const clearFilters = () => {
 	categoryOverride.value = null;
+	emit("select-group", "ALL");
 	if (compatibleOffered.value) compatibleOverride.value = false;
 };
+
+watch(() => props.query, () => { categoryOverride.value = null; });
 
 const onAdd = (card: BrowseCard) => emit("add", card);
 </script>
 
 <style scoped>
+.mbrowse__search-row { display: flex; gap: 8px; align-items: center; }
+.mbrowse__search-row .mbrowse__search { flex: 1; min-width: 0; }
+.mbrowse__settings { flex: 0 0 44px; height: 44px; border-radius: 10px; border: 1px solid var(--reg-border); color: var(--reg-ink); background: var(--reg-surface); }
+.mbrowse__navigation { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.mbrowse__navigation > strong { margin-inline-end: auto; }
+.mbrowse__current { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+
 .mbrowse {
 	display: flex;
 	flex-direction: column;
-	/*
-	 * The phone keeps an explicit height for the same reason
-	 * `useItemsSelectorPanelSizing` gives the selector one: below 768px the
-	 * document scrolls and the fixed dock eats the bottom, so a panel that
-	 * sizes itself off its content ends up with its last row under the dock.
-	 * The grid is the single scrollport; this element never scrolls.
-	 */
-	/* `--v-layout-top` is Vuetify's own statement of what the app bar costs;
-	   without it this frame overshot the dock by exactly the navbar's height
-	   and the grid's last row hid behind the tabs. */
-	height: calc(
-		var(--viewport-height, 100vh) - var(--bottom-safe-space, 0px) - var(--v-layout-top, 0px)
-	);
+	/* The register shell supplies the space left after its chrome. */
+	height: 100%;
 	min-height: 0;
-	overflow: hidden;
+	overflow-y: auto;
+	overscroll-behavior: contain;
 	background: var(--reg-surface-sunken, #f8f9fa);
 }
 
@@ -459,10 +498,7 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	align-items: center;
 	gap: 6px;
 	margin-top: 9px;
-	overflow-x: auto;
-	/* The row scrolls rather than capping the chip count: a hidden category is
-	   a slice of the catalogue nobody can reach from here. */
-	scrollbar-width: none;
+	flex-wrap: wrap;
 }
 
 .mbrowse__chips::-webkit-scrollbar {
@@ -471,7 +507,10 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 
 .mbrowse__chip {
 	position: relative;
-	white-space: nowrap;
+	max-width: 100%;
+	min-height: 44px;
+	white-space: normal;
+	overflow-wrap: anywhere;
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
@@ -522,9 +561,9 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 }
 
 .mbrowse__grid-wrap {
-	flex: 1;
+	flex: none;
 	min-height: 0;
-	overflow-y: auto;
+	overflow: visible;
 	padding: 10px 11px 0;
 }
 
@@ -619,29 +658,6 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 }
 
 @media (pointer: coarse) {
-	/*
-	 * The chips keep the artboard's 24-30px pill and get a 44px HIT AREA from
-	 * a pseudo-element that grows vertically only. Growing horizontally would
-	 * overlap the neighbouring chip's box and hand a tap to the wrong filter,
-	 * which on this screen means silently changing what the cashier is looking
-	 * at. Vertical growth costs nothing: the row is the only thing at that y.
-	 */
-	.mbrowse__chip--filter::after,
-	.mbrowse__chip--see-all::after {
-		content: "";
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: 50%;
-		height: var(--reg-touch-min, 44px);
-		transform: translateY(-50%);
-	}
-
-	.mbrowse__chips {
-		/* Room for the expanded hit areas, so they cannot spill onto the grid. */
-		padding: 7px 0;
-	}
-
 	.mbrowse__search {
 		min-height: var(--reg-touch-min, 44px);
 	}

@@ -98,6 +98,28 @@ describe("the ring walks the rows and stops at the ends", () => {
 		expect(wrapper.find('[data-testid="ledger-rows"]').attributes("tabindex")).toBe("0");
 	});
 
+	it("continues from the returned row after the detail selection is cleared", async () => {
+		const onSelect = vi.fn();
+		const onOpen = vi.fn();
+		const wrapper = mount(InvoiceLedgerTable, {
+			props: {
+				...tableProps([row({ name: "B-1" }), row({ name: "B-2" }), row({ name: "B-3" })], {
+					selectedIndex: -1,
+				}),
+				onSelect,
+				onOpen,
+			},
+		});
+		const returnedRow = wrapper.findAll('[data-testid="ledger-row"]')[1];
+		await returnedRow.trigger("keydown", { key: "Enter" });
+		expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ index: 1 }));
+		await returnedRow.trigger("keydown", { key: "ArrowDown" });
+		expect(onSelect).toHaveBeenLastCalledWith(2);
+		await wrapper.setProps({ selectedIndex: 2 });
+		await returnedRow.trigger("keydown", { key: "ArrowUp" });
+		expect(onSelect).toHaveBeenLastCalledWith(1);
+	});
+
 	it("draws no Cobro column header, ever", () => {
 		const wrapper = mount(InvoiceLedgerTable, { props: tableProps([row()]) });
 		const headers = wrapper.findAll(".ledger-table__col").map((node) => node.text());

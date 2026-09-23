@@ -140,7 +140,7 @@ const chargeLabel = computed(() => verticalStore.t("Charge"));
 const emptyChargeHint = computed(() => verticalStore.t("Add items before charging"));
 
 const title = computed(
-	() => props.order.tab_name || props.tableLabel || props.order.order_uid.slice(0, 6),
+	() => [props.order.table ? props.tableLabel : "", props.order.tab_name].filter(Boolean).join(" · ") || props.order.order_uid.slice(0, 6),
 );
 
 const totalLabel = computed(() => formatCurrency(Number(props.order.total) || 0));
@@ -233,6 +233,7 @@ const facts = computed(() => {
 
 .ticket-panel__head {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: baseline;
 	justify-content: space-between;
 	gap: 10px;
@@ -248,9 +249,7 @@ const facts = computed(() => {
 }
 
 .ticket-panel__title {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
 	font-size: 15px;
 	font-weight: 700;
 	letter-spacing: -0.01em;
@@ -323,6 +322,7 @@ const facts = computed(() => {
 
 .ticket-panel__actions {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 6px;
 }
 
@@ -348,7 +348,7 @@ const facts = computed(() => {
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
-	flex: 1 1 0;
+	flex: 1 1 120px;
 	min-width: 0;
 	min-height: 44px;
 	padding: 0 12px;
@@ -362,6 +362,10 @@ const facts = computed(() => {
 	transition:
 		background-color 120ms ease-out,
 		border-color 120ms ease-out;
+}
+
+.ticket-panel--rail .ticket-panel__action {
+	flex: none;
 }
 
 .ticket-panel__action:hover:not(:disabled) {
@@ -386,9 +390,7 @@ const facts = computed(() => {
 }
 
 .ticket-panel__action-text {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
 }
 
 .ticket-panel__action-badge {

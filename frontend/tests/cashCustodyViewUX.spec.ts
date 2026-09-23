@@ -98,11 +98,15 @@ const makeBus = () => {
 	const handlers: Record<string, Function[]> = {};
 	return {
 		handlers,
-		on: (event: string, handler: Function) => (handlers[event] ||= []).push(handler),
+		on: (event: string, handler: Function) =>
+			(handlers[event] ||= []).push(handler),
 		off: (event: string, handler: Function) => {
-			handlers[event] = (handlers[event] || []).filter((entry) => entry !== handler);
+			handlers[event] = (handlers[event] || []).filter(
+				(entry) => entry !== handler,
+			);
 		},
-		emit: (event: string) => (handlers[event] || []).slice().forEach((handler) => handler()),
+		emit: (event: string) =>
+			(handlers[event] || []).slice().forEach((handler) => handler()),
 	};
 };
 /** Every band state the screen published, newest last. A listener prop rather
@@ -201,6 +205,40 @@ describe("cash custody — a selected bag offers only legal actions", () => {
 		await flushPromises();
 		return wrapper.get(".record-detail");
 	};
+
+	it("returns to the filtered queue without changing money or losing the search", async () => {
+		const wrapper = mountView();
+		await flushPromises();
+		expect(wrapper.find(".detail").exists()).toBe(false);
+		await wrapper.get('input[type="search"]').setValue("DOCO-FLOAT");
+		await select(wrapper);
+		await wrapper.get(".custody__back").trigger("click");
+		await flushPromises();
+		expect(wrapper.find(".detail").exists()).toBe(false);
+		expect(
+			(wrapper.get('input[type="search"]').element as HTMLInputElement)
+				.value,
+		).toBe("DOCO-FLOAT");
+		expect(wrapper.findAll("button.record")).toHaveLength(1);
+		expect(command).not.toHaveBeenCalled();
+	});
+
+	it("replaces bag details with the count form and states the transfer destination", async () => {
+		const wrapper = mountView();
+		await flushPromises();
+		const detail = await select(wrapper);
+		await detail
+			.findAll("button")
+			.find((b) => b.text() === "Receive into drawer")!
+			.trigger("click");
+		await flushPromises();
+		expect(wrapper.find(".record-detail").exists()).toBe(false);
+		expect(wrapper.get("form").text()).toContain("DOCO-FLOAT-11");
+		expect(wrapper.get(".custody__direction").text()).toContain(
+			"Register: Doco Ventas",
+		);
+		expect(command).not.toHaveBeenCalled();
+	});
 
 	it("shows the custody trail and a plain-language state, not just the record id", async () => {
 		const wrapper = mountView();
@@ -456,7 +494,9 @@ describe("cash custody — honest about the network", () => {
 			.find((b: any) => b.text() === "Try again")!
 			.trigger("click");
 		await flushPromises();
-		expect(read.mock.calls.filter(([method]) => method === "context")).toHaveLength(2);
+		expect(
+			read.mock.calls.filter(([method]) => method === "context"),
+		).toHaveLength(2);
 		expect(wrapper.find(".workspace").exists()).toBe(true);
 	});
 
@@ -543,7 +583,6 @@ describe("cash custody — primary integration safeguards", () => {
 		expect(command).toHaveBeenCalledTimes(2);
 	});
 });
-
 
 /**
  * Counting a drawer is not a single keystroke. The cashier gets interrupted,
@@ -1028,46 +1067,108 @@ describe("cash custody — unsent work survives leaving the screen", () => {
 });
 
 it("offers a compact bag label separately from the full handover", async () => {
- const wrapper = mountView(); await flushPromises();
- await wrapper.get("button.record").trigger("click");
- await wrapper.findAll("button").find(b=>b.text()==="Print bag label")!.trigger("click");
- await flushPromises();
- expect(printEvidence).toHaveBeenLastCalledWith("POS Cash Bag","CASH-BAG-00007","label");
- await wrapper.findAll("button").find(b=>b.text()==="Print handover")!.trigger("click");
- await flushPromises();
- expect(printEvidence).toHaveBeenLastCalledWith("POS Cash Bag","CASH-BAG-00007","slip");
+	const wrapper = mountView();
+	await flushPromises();
+	await wrapper.get("button.record").trigger("click");
+	await wrapper
+		.findAll("button")
+		.find((b) => b.text() === "Print bag label")!
+		.trigger("click");
+	await flushPromises();
+	expect(printEvidence).toHaveBeenLastCalledWith(
+		"POS Cash Bag",
+		"CASH-BAG-00007",
+		"label",
+	);
+	await wrapper
+		.findAll("button")
+		.find((b) => b.text() === "Print handover")!
+		.trigger("click");
+	await flushPromises();
+	expect(printEvidence).toHaveBeenLastCalledWith(
+		"POS Cash Bag",
+		"CASH-BAG-00007",
+		"slip",
+	);
 });
 
 it("offers scoped full history when the recent completed records are limited", async () => {
- read.mockResolvedValue(context({queues:{bags:{history_has_more:true},counts:{history_has_more:true}}}));
- const wrapper=mountView(); await flushPromises();
- expect(wrapper.get('[data-testid="custody-history-notice"]').text()).toContain('All pending work is shown');
- expect(wrapper.get('[data-testid="custody-history-notice"] a').attributes('href')).toBe('/app/pos-cash-bag?safe=CASH-SAFE-00002');
- await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
- expect(wrapper.get('[data-testid="custody-history-notice"] a').attributes('href')).toBe('/app/pos-cash-count?safe=CASH-SAFE-00002&counted_by=cashier%40doco.mx');
+	read.mockResolvedValue(
+		context({
+			queues: {
+				bags: { history_has_more: true },
+				counts: { history_has_more: true },
+			},
+		}),
+	);
+	const wrapper = mountView();
+	await flushPromises();
+	expect(
+		wrapper.get('[data-testid="custody-history-notice"]').text(),
+	).toContain("All pending work is shown");
+	expect(
+		wrapper
+			.get('[data-testid="custody-history-notice"] a')
+			.attributes("href"),
+	).toBe("/app/pos-cash-bag?safe=CASH-SAFE-00002");
+	await wrapper.findAll('[role="tab"]')[1]!.trigger("click");
+	expect(
+		wrapper
+			.get('[data-testid="custody-history-notice"] a')
+			.attributes("href"),
+	).toBe(
+		"/app/pos-cash-count?safe=CASH-SAFE-00002&counted_by=cashier%40doco.mx",
+	);
 });
 
 it("retains the editable form when cancel cannot remove its saved copy", async () => {
- const wrapper=mountView(); await flushPromises(); await openDrop(wrapper);
- await wrapper.get('form input').setValue('KEEP-SEAL'); await flushPromises();
- const remove=vi.spyOn(Storage.prototype,'removeItem').mockImplementation(()=>{throw Error('Denied');});
- try {
-  await wrapper.findAll('form button').find(b=>b.text()==='Cancel')!.trigger('click');
-  expect(wrapper.find('form').exists()).toBe(true);
-  expect((wrapper.get('form input').element as HTMLInputElement).value).toBe('KEEP-SEAL');
-  expect(localStorage.getItem(draftKey())).toContain('KEEP-SEAL');
- } finally {remove.mockRestore();}
+	const wrapper = mountView();
+	await flushPromises();
+	await openDrop(wrapper);
+	await wrapper.get("form input").setValue("KEEP-SEAL");
+	await flushPromises();
+	const remove = vi
+		.spyOn(Storage.prototype, "removeItem")
+		.mockImplementation(() => {
+			throw Error("Denied");
+		});
+	try {
+		await wrapper
+			.findAll("form button")
+			.find((b) => b.text() === "Cancel")!
+			.trigger("click");
+		expect(wrapper.find("form").exists()).toBe(true);
+		expect(
+			(wrapper.get("form input").element as HTMLInputElement).value,
+		).toBe("KEEP-SEAL");
+		expect(localStorage.getItem(draftKey())).toContain("KEEP-SEAL");
+	} finally {
+		remove.mockRestore();
+	}
 });
 
 it("does not replay a cash request while its old form cannot be released", async () => {
- pendingActions.mockReturnValue([{action:'drop',payload:{pos_profile:'Doco Ventas'}}]);
- const wrapper=mountView(); await flushPromises();
- const remove=vi.spyOn(Storage.prototype,'removeItem').mockImplementation(()=>{throw Error('Denied');});
- try {
-  await wrapper.findAll('button').find(b=>b.text().startsWith('Retry unconfirmed action'))!.trigger('click');
-  await flushPromises(); expect(command).not.toHaveBeenCalled();
-  expect(wrapper.text()).toContain('no cash action was sent');
- } finally {remove.mockRestore();}
+	pendingActions.mockReturnValue([
+		{ action: "drop", payload: { pos_profile: "Doco Ventas" } },
+	]);
+	const wrapper = mountView();
+	await flushPromises();
+	const remove = vi
+		.spyOn(Storage.prototype, "removeItem")
+		.mockImplementation(() => {
+			throw Error("Denied");
+		});
+	try {
+		await wrapper
+			.findAll("button")
+			.find((b) => b.text().startsWith("Retry unconfirmed action"))!
+			.trigger("click");
+		await flushPromises();
+		expect(command).not.toHaveBeenCalled();
+		expect(wrapper.text()).toContain("no cash action was sent");
+	} finally {
+		remove.mockRestore();
+	}
 });
 
 /**
@@ -1086,7 +1187,9 @@ describe("cash custody — the band the shell draws", () => {
 		await flushPromises();
 		const state = band(wrapper);
 		expect(state.kind).toBe("custody");
-		expect(state.labelKey).toBe("Bags you can count and receive into the drawer");
+		expect(state.labelKey).toBe(
+			"Bags you can count and receive into the drawer",
+		);
 		expect(state.value).toBe(1000);
 		expect(state.primaryAction.id).toBe("custody.primary");
 		expect(state.primaryEnabled).toBe(true);
@@ -1105,13 +1208,18 @@ describe("cash custody — the band the shell draws", () => {
 			labelKey: "Bag {0}",
 			labelParams: ["DOCO-FLOAT-11"],
 			value: 1000,
-			primaryAction: { id: "custody.primary", labelKey: "Receive into drawer" },
+			primaryAction: {
+				id: "custody.primary",
+				labelKey: "Receive into drawer",
+			},
 		});
 
 		bus.emit("custody:primary");
 		await flushPromises();
 		expect(command).not.toHaveBeenCalled();
-		expect(wrapper.get("form").text()).toContain("Receive and count this bag into your drawer");
+		expect(wrapper.get("form").text()).toContain(
+			"Receive and count this bag into your drawer",
+		);
 	});
 
 	it("carries the form's own validated Confirm and its counted amount", async () => {
@@ -1120,30 +1228,45 @@ describe("cash custody — the band the shell draws", () => {
 		await flushPromises();
 		await openDrop(wrapper);
 		await wrapper.get("form input").setValue("DOCO-TAK-9");
-		await wrapper.get('[data-testid="cash-count-override-toggle"]').trigger("click");
-		await wrapper.get('[data-testid="cash-count-manual-amount"]').setValue("250");
+		await wrapper
+			.get('[data-testid="cash-count-override-toggle"]')
+			.trigger("click");
+		await wrapper
+			.get('[data-testid="cash-count-manual-amount"]')
+			.setValue("250");
 		await flushPromises();
 		expect(band(wrapper)).toMatchObject({
 			labelKey: "Return bag to safe",
 			value: 250,
-			primaryAction: { id: "custody.primary", labelKey: "Return this cash to the safe" },
+			primaryAction: {
+				id: "custody.primary",
+				labelKey: "Return this cash to the safe",
+			},
 			primaryEnabled: true,
 		});
 		// The same verb the form prints, and the same money.
 		expect(wrapper.get('[data-testid="custody-confirm"]').text()).toContain(
 			"Return this cash to the safe",
 		);
-		expect(wrapper.get('[data-testid="custody-confirm"]').text()).toContain("$250.00");
+		expect(wrapper.get('[data-testid="custody-confirm"]').text()).toContain(
+			"$250.00",
+		);
 
 		bus.emit("custody:primary");
 		await flushPromises();
 		expect(command).toHaveBeenCalledTimes(1);
-		expect(command).toHaveBeenCalledWith("drop", expect.objectContaining({ seal: "DOCO-TAK-9" }));
+		expect(command).toHaveBeenCalledWith(
+			"drop",
+			expect.objectContaining({ seal: "DOCO-TAK-9" }),
+		);
 	});
 
 	it("leads an unconfirmed cash action to its retry and to nothing else", async () => {
 		pendingActions.mockReturnValue([
-			{ action: "drop", payload: { pos_profile: "Doco Ventas", seal: "DOCO-TAK-9" } },
+			{
+				action: "drop",
+				payload: { pos_profile: "Doco Ventas", seal: "DOCO-TAK-9" },
+			},
 		]);
 		const bus = makeBus();
 		const wrapper = mountView({ bus });
@@ -1151,7 +1274,10 @@ describe("cash custody — the band the shell draws", () => {
 		expect(band(wrapper)).toMatchObject({
 			tone: "warning",
 			labelKey: "Unconfirmed cash action",
-			primaryAction: { id: "custody.primary", labelKey: "Retry unconfirmed action" },
+			primaryAction: {
+				id: "custody.primary",
+				labelKey: "Retry unconfirmed action",
+			},
 		});
 
 		bus.emit("custody:primary");

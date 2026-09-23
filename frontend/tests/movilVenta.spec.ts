@@ -596,11 +596,11 @@ describe("the app bar states the register once", () => {
 });
 
 describe("the phone frame", () => {
-	it("takes an explicit height, because the document scrolls under a fixed dock", () => {
+	it("inherits the shell frame on phones without a second viewport budget", () => {
 		const style = mountScreen().find('[data-testid="movil-venta"]').attributes("style") ?? "";
 
-		expect(style).toContain("var(--viewport-height)");
-		expect(style).toContain("var(--bottom-safe-space)");
+		expect(style).not.toContain("--viewport-height");
+		expect(style).not.toContain("--bottom-safe-space");
 	});
 
 	it("lets a wider column own the height instead", () => {
@@ -610,7 +610,7 @@ describe("the phone frame", () => {
 				.attributes("style") ?? "";
 
 		expect(style).not.toContain("--viewport-height");
-		expect(style).toContain("overflow: hidden");
+		expect(style).not.toContain("height");
 	});
 });
 

@@ -478,9 +478,8 @@ defineExpose({ focusQuery: () => queryInput.value?.focus() });
 	.ledger-finder__modes {
 		max-width: 100%;
 		min-width: 0;
-		overflow-x: auto;
-		scrollbar-width: none;
-		-webkit-overflow-scrolling: touch;
+		flex-wrap: wrap;
+		overflow: visible;
 	}
 
 	.ledger-seg::-webkit-scrollbar,
@@ -492,8 +491,10 @@ defineExpose({ focusQuery: () => queryInput.value?.focus() });
 	.ledger-seg__item,
 	.ledger-source__item,
 	.ledger-finder__mode {
-		flex: none;
-		white-space: nowrap;
+		flex: 1 1 auto;
+		min-height: 44px;
+		height: auto;
+		white-space: normal;
 	}
 
 	.ledger-seg {
@@ -504,6 +505,12 @@ defineExpose({ focusQuery: () => queryInput.value?.focus() });
 	.ledger-finder {
 		display: contents;
 	}
+
+	.ledger-finder__input {
+		font-size: 16px;
+	}
+
+	.ledger-finder__box { min-height: 44px; }
 
 	.ledger-finder__box,
 	.ledger-finder__range {
@@ -525,6 +532,7 @@ defineExpose({ focusQuery: () => queryInput.value?.focus() });
 	}
 
 	.ledger-finder__date {
+		font-size: 16px;
 		flex: 1 1 0;
 		min-width: 0;
 		width: 100%;

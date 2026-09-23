@@ -90,24 +90,46 @@
 		<p v-if="busy && !data" class="notice">{{ __("Loading the custody queue…") }}</p>
 
 		<template v-if="data">
+			<section class="starters custody__quick-tasks" aria-labelledby="custody-start">
+				<h3 id="custody-start">{{ __("Start a cash task") }}</h3>
+				<div class="actions">
+					<button v-if="canManage" class="btn btn--emphasis" @click="start('prepare')">
+						{{ __("Prepare float bag") }}
+					</button>
+					<button
+						class="btn btn--emphasis"
+						:disabled="!opening"
+						:title="opening ? undefined : __('Open your register shift first.')"
+						@click="start('drop')"
+					>
+						{{ __("Return bag to safe") }}
+					</button>
+					<button v-if="canManage" class="btn" @click="start('count_safe')">
+						{{ __("Count safe") }}
+					</button>
+				</div>
+				<p v-if="!opening" class="muted">
+					{{ __("Open your register shift to move cash between the drawer and the safe.") }}
+				</p>
+				<div class="custody__next-tasks" aria-labelledby="custody-guidance">
+					<h3 v-if="canManage" id="custody-guidance">{{ __("What needs you now") }}</h3>
+					<ul v-if="tasks.length" class="tasks">
+						<li v-for="task in tasks" :key="task.id">
+							<button class="task" @click="focusTask(task)">
+								<span>{{ task.text }}</span>
+								<b v-if="task.count">{{ task.count }}</b>
+							</button>
+						</li>
+					</ul>
+					<p v-else>{{ idleGuidance }}</p>
+				</div>
+			</section>
 			<CashDrawerGuidance
 				ref="drawerGuidance"
 				:profile="profile"
 				:opening="opening"
 				@request-return="start('drop')"
 			/>
-			<section class="panel panel--guidance" aria-labelledby="custody-guidance">
-				<h3 id="custody-guidance">{{ __("What needs you now") }}</h3>
-				<ul v-if="tasks.length" class="tasks">
-					<li v-for="task in tasks" :key="task.id">
-						<button class="task" @click="focusTask(task)">
-							<span>{{ task.text }}</span>
-							<b v-if="task.count">{{ task.count }}</b>
-						</button>
-					</li>
-				</ul>
-				<p v-else>{{ idleGuidance }}</p>
-			</section>
 
 			<details class="balances" :open="canManage">
 				<summary>{{ __("Safe balances") }}</summary>
@@ -159,6 +181,7 @@
 						><span class="sr-only">{{ searchLabel }}</span>
 						<input
 							type="search"
+							ref="queueSearch"
 							v-model="search"
 							:placeholder="searchLabel"
 							:aria-label="searchLabel"
@@ -267,32 +290,13 @@
 					</div>
 				</div>
 
-				<div class="detail">
-					<section class="starters" aria-labelledby="custody-start">
-						<h3 id="custody-start">{{ __("Start a cash task") }}</h3>
-						<div class="actions">
-							<button v-if="canManage" class="btn btn--emphasis" @click="start('prepare')">
-								{{ __("Prepare float bag") }}
-							</button>
-							<button
-								class="btn btn--emphasis"
-								:disabled="!opening"
-								:title="opening ? undefined : __('Open your register shift first.')"
-								@click="start('drop')"
-							>
-								{{ __("Return bag to safe") }}
-							</button>
-							<button v-if="canManage" class="btn" @click="start('count_safe')">
-								{{ __("Count safe") }}
-							</button>
-						</div>
-						<p v-if="!opening" class="muted">
-							{{ __("Open your register shift to move cash between the drawer and the safe.") }}
-						</p>
-					</section>
+				<div v-if="selectedBag || selectedCount || action" class="detail">
+					<button v-if="!action" type="button" class="btn custody__back" @click="returnToQueue">
+						<v-icon icon="mdi-arrow-left" size="18" />{{ __("Back to cash queue") }}
+					</button>
 
-					<template v-if="selectedBag">
-						<article class="record-detail">
+					<template v-if="selectedBag && !action">
+						<article class="record-detail" :key="selectedBag.name">
 							<div class="record-detail__head">
 								<h3 tabindex="-1" ref="recordHeading">
 									{{ __("Bag") }} {{ selectedBag.seal }}
@@ -305,32 +309,7 @@
 							<p v-if="bagHelp[selectedBag.state]">
 								{{ __(bagHelp[selectedBag.state] ?? "") }}
 							</p>
-							<dl class="trail">
-								<div>
-									<dt>{{ __("Purpose") }}</dt>
-									<dd>{{ __(selectedBag.purpose) }}</dd>
-								</div>
-								<div>
-									<dt>{{ __("Prepared by") }}</dt>
-									<dd>{{ selectedBag.prepared_by || "—" }}</dd>
-								</div>
-								<div>
-									<dt>{{ __("Verified by") }}</dt>
-									<dd>{{ selectedBag.verified_by || __("Not verified yet") }}</dd>
-								</div>
-								<div v-if="selectedBag.opening_shift">
-									<dt>{{ __("Shift") }}</dt>
-									<dd>{{ selectedBag.opening_shift }}</dd>
-								</div>
-								<div>
-									<dt>{{ __("Last movement") }}</dt>
-									<dd>{{ when(selectedBag.modified) }}</dd>
-								</div>
-								<div>
-									<dt>{{ __("Record") }}</dt>
-									<dd class="muted">{{ selectedBag.name }}</dd>
-								</div>
-							</dl>
+
 							<div class="actions">
 								<button
 									v-for="option in bagActions"
@@ -356,14 +335,43 @@
 									{{ __("Print bag label") }}
 								</button>
 							</div>
+							<details class="custody__history">
+								<summary>{{ __("Details and history") }}</summary>
+								<dl class="trail">
+									<div>
+										<dt>{{ __("Purpose") }}</dt>
+										<dd>{{ __(selectedBag.purpose) }}</dd>
+									</div>
+									<div>
+										<dt>{{ __("Prepared by") }}</dt>
+										<dd>{{ selectedBag.prepared_by || "—" }}</dd>
+									</div>
+									<div>
+										<dt>{{ __("Verified by") }}</dt>
+										<dd>{{ selectedBag.verified_by || __("Not verified yet") }}</dd>
+									</div>
+									<div v-if="selectedBag.opening_shift">
+										<dt>{{ __("Shift") }}</dt>
+										<dd>{{ selectedBag.opening_shift }}</dd>
+									</div>
+									<div>
+										<dt>{{ __("Last movement") }}</dt>
+										<dd>{{ when(selectedBag.modified) }}</dd>
+									</div>
+									<div>
+										<dt>{{ __("Record") }}</dt>
+										<dd class="muted">{{ selectedBag.name }}</dd>
+									</div>
+								</dl>
+							</details>
 							<p v-for="reason in bagBlockers" :key="reason" class="muted blocker">
 								{{ reason }}
 							</p>
 						</article>
 					</template>
 
-					<template v-if="selectedCount">
-						<article class="record-detail">
+					<template v-if="selectedCount && !action">
+						<article class="record-detail" :key="selectedCount.name">
 							<div class="record-detail__head">
 								<h3 tabindex="-1" ref="recordHeading">{{ countTitle(selectedCount) }}</h3>
 								<span :class="['chip', chipTone(selectedCount.state)]">{{
@@ -542,6 +550,21 @@
 								</select></label
 							>
 						</template>
+						<div
+							v-if="transferDirection"
+							class="custody__direction"
+							data-testid="custody-transfer-direction"
+						>
+							<span
+								><small>{{ __("From") }}</small
+								><strong>{{ transferDirection.from }}</strong></span
+							>
+							<v-icon icon="mdi-arrow-right" size="22" aria-hidden="true" />
+							<span
+								><small>{{ __("To") }}</small
+								><strong>{{ transferDirection.to }}</strong></span
+							>
+						</div>
 						<CashCountEditor
 							v-if="['prepare', 'drop', 'receive', 'verify', 'count_safe'].includes(action)"
 							v-model="count"
@@ -649,6 +672,7 @@ const __ = (s: string) => (window as any).__?.(s) || s;
 const emit = defineEmits<{ band: [BandState | null] }>();
 const ui = useUIStore();
 const router = useRouter();
+const queueSearch = ref<HTMLInputElement | null>(null);
 const profile = computed(() => ui.posProfile?.name);
 const opening = computed(() => ui.posOpeningShift?.name);
 const pending = ref<{ action: string; payload: any }[]>([]);
@@ -1067,6 +1091,22 @@ const formTitle = computed(() => {
 		? `${title} — ${bag.seal}`
 		: title;
 });
+const transferDirection = computed(() => {
+	const drawer = `${__("Register")}: ${profile.value || ""}`;
+	const safe = `${__("Safe")}: ${data.value?.safe || ""}`;
+	const bag = selectedBag.value ? `${__("Bag")} ${selectedBag.value.seal}` : __("Sealed bag");
+	const routes: Record<string, { from: string; to: string }> = {
+		receive: { from: bag, to: drawer },
+		drop: { from: drawer, to: safe },
+		prepare: { from: safe, to: __("Float bag") },
+		dispatch: { from: safe, to: __("Bank deposits in transit") },
+		confirm_bank: { from: __("Bank deposits in transit"), to: __("Bank") },
+		return_bank: { from: __("Bank deposits in transit"), to: safe },
+		unpack: { from: bag, to: __("Loose cash available") },
+	};
+	return routes[action.value] || null;
+});
+
 const formHelp = computed(() => {
 	const map: Record<string, string> = {
 		prepare: "Preparation reserves cash that is already in the safe. It does not create money.",
@@ -1447,6 +1487,15 @@ function cancel() {
 	reference.value = "";
 	draftHandedOff.value = false;
 }
+function returnToQueue() {
+	if (!mayChangeTask()) return;
+	selectedBag.value = null;
+	selectedCount.value = null;
+	nextTick(() => {
+		queueSearch.value?.focus();
+		queueSearch.value?.scrollIntoView?.({ block: "nearest" });
+	});
+}
 function selectBag(bag: any) {
 	if (!mayChangeTask()) return;
 	selectedBag.value = bag;
@@ -1797,6 +1846,95 @@ onBeforeUnmount(() => {
 onMounted(load);
 </script>
 <style scoped>
+.custody .custody__header {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+.custody__header > .btn {
+	align-self: start;
+}
+.custody__quick-tasks .actions {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+.custody__next-tasks {
+	margin-top: 12px;
+}
+.custody__next-tasks .tasks {
+	margin: 0;
+}
+.custody__history summary {
+	min-height: 44px;
+	padding: 10px 0;
+	cursor: pointer;
+	color: var(--pos-text-secondary);
+}
+.custody__back {
+	margin-bottom: 12px;
+}
+
+.custody__quick-tasks {
+	padding: 14px;
+	margin-bottom: 16px;
+	border: 1px solid var(--pos-border);
+	border-radius: 12px;
+	background: var(--pos-card-bg);
+}
+.custody__direction {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	gap: 12px;
+	align-items: center;
+	padding: 12px;
+	border-radius: 10px;
+	background: var(--pos-primary-container);
+}
+.custody__direction span {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.custody__direction small {
+	color: var(--pos-text-secondary);
+}
+@keyframes cash-task-arrive {
+	from {
+		opacity: 0.4;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+.record-detail,
+.custody form,
+.panel--success {
+	animation: cash-task-arrive 150ms ease-out;
+}
+.custody .btn {
+	transition:
+		background-color 120ms,
+		border-color 120ms;
+}
+.custody .btn:active:not(:disabled) {
+	transform: translateY(1px);
+}
+@media (prefers-reduced-motion: reduce) {
+	.record-detail,
+	.custody form,
+	.panel--success {
+		animation: none;
+	}
+	.custody .btn {
+		transition: none;
+	}
+	.custody .btn:active:not(:disabled) {
+		transform: none;
+	}
+}
+
 .custody {
 	padding: 20px;
 	overflow: auto;

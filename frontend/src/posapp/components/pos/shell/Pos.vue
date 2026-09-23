@@ -18,10 +18,7 @@
 			v-if="uiStore.invoiceManagementDialog && !invoiceManagementHosted"
 		></InvoiceManagement>
 		<SalesOrders v-if="uiStore.ordersDialog"></SalesOrders>
-		<Returns
-			v-if="returnsMounted && !railVisible"
-			:open-request="returnsOpenRequest"
-		></Returns>
+		<Returns v-if="returnsMounted && !railVisible" :open-request="returnsOpenRequest"></Returns>
 		<NewAddress v-if="newAddressMounted" :open-request="newAddressOpenRequest"></NewAddress>
 		<MpesaPayments v-if="mpesaMounted" :open-request="mpesaOpenRequest"></MpesaPayments>
 		<Variants v-if="uiStore.variantsDialog"></Variants>
@@ -86,6 +83,7 @@
 			:dialog="dialog"
 			@close="closeOpeningDialog"
 			@register="handleRegisterPosData"
+			@manage-registers="openRegisters"
 		></OpeningDialog>
 		<!-- The payment DIALOG survives only where there is no rail to host the
 		     surface beside: 992–1099px, which has the dialog breakpoint but not
@@ -127,7 +125,7 @@
 		     shift anyway, so putting it aside risks only a refused sale —
 		     and it returns on the next boot until the corte is done. -->
 		<div
-			v-if="staleShiftBannerVisible"
+			v-if="staleShiftBannerVisible && hostedDestinationId !== 'closing'"
 			class="stale-shift-banner"
 			data-testid="stale-shift-banner"
 		>
@@ -181,6 +179,7 @@
 				<DestinationHost
 					v-else-if="hostedDestinationId"
 					v-show="!movilOrdenActive"
+					:key="hostedDestinationId"
 					:destination-id="hostedDestinationId"
 					:refusal="destinationRefusal"
 					:t="verticalT"
@@ -235,96 +234,103 @@
 						'dynamic-main-row--with-drawer': drawerAnchoredOpen,
 					}"
 				>
-				<v-col
-					v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'offers'"
-					:xl="useCompactPosSwitcher ? 12 : 5"
-					:lg="useCompactPosSwitcher ? 12 : 5"
-					:md="useCompactPosSwitcher ? 12 : 5"
-					:sm="useCompactPosSwitcher ? 12 : 5"
-					cols="12"
-					class="pos dynamic-col dynamic-col--selector"
-				>
-					<PosOffers></PosOffers>
-				</v-col>
-				<v-col
-					v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'coupons'"
-					:xl="useCompactPosSwitcher ? 12 : 5"
-					:lg="useCompactPosSwitcher ? 12 : 5"
-					:md="useCompactPosSwitcher ? 12 : 5"
-					:sm="useCompactPosSwitcher ? 12 : 5"
-					cols="12"
-					class="pos dynamic-col dynamic-col--selector"
-				>
-					<PosCoupons></PosCoupons>
-				</v-col>
-				<!-- SALÓN TAKES THE WHOLE STAGE (CAFETERIA_GOLDEN_FLOW.md §2).
+					<v-col
+						v-show="
+							(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'offers'
+						"
+						:xl="useCompactPosSwitcher ? 12 : 5"
+						:lg="useCompactPosSwitcher ? 12 : 5"
+						:md="useCompactPosSwitcher ? 12 : 5"
+						:sm="useCompactPosSwitcher ? 12 : 5"
+						cols="12"
+						class="pos dynamic-col dynamic-col--selector"
+					>
+						<PosOffers></PosOffers>
+					</v-col>
+					<v-col
+						v-show="
+							(!useCompactPosSwitcher || compactPanel === 'selector') &&
+							activeView === 'coupons'
+						"
+						:xl="useCompactPosSwitcher ? 12 : 5"
+						:lg="useCompactPosSwitcher ? 12 : 5"
+						:md="useCompactPosSwitcher ? 12 : 5"
+						:sm="useCompactPosSwitcher ? 12 : 5"
+						cols="12"
+						class="pos dynamic-col dynamic-col--selector"
+					>
+						<PosCoupons></PosCoupons>
+					</v-col>
+					<!-- SALÓN TAKES THE WHOLE STAGE (CAFETERIA_GOLDEN_FLOW.md §2).
 				     A 616px authored room in the 5/12 selector slot is ~440px of
 				     board: horizontal scroll, the Barra clipped, the ticket rail
 				     painted over Mesa 3. The room is the screen while the waiter
 				     is in it, so the column takes 12 and the sale's column stands
 				     down — v-show, so the cart, its scroll and its focus are all
 				     still there when the waiter comes back. -->
-				<v-col
-					v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'floor'"
-					:xl="floorColSpan"
-					:lg="floorColSpan"
-					:md="floorColSpan"
-					:sm="floorColSpan"
-					cols="12"
-					class="pos dynamic-col dynamic-col--selector"
-					:class="{ 'dynamic-col--stage': floorOwnsStage }"
-				>
-					<!-- The panel's visibility is v-show like every other selector
+					<v-col
+						v-show="
+							(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'floor'
+						"
+						:xl="floorColSpan"
+						:lg="floorColSpan"
+						:md="floorColSpan"
+						:sm="floorColSpan"
+						cols="12"
+						class="pos dynamic-col dynamic-col--selector"
+						:class="{ 'dynamic-col--stage': floorOwnsStage }"
+					>
+						<!-- The panel's visibility is v-show like every other selector
 					     column; this v-if is the CAPABILITY gate, so a retail
 					     register never fetches the floor chunk and never opens a
 					     socket room. On a restaurant register it mounts with the
 					     shell and stays mounted, which is what keeps the dock badge
 					     honest before anyone has opened the floor. -->
-					<FloorView
-						v-if="floorEnabled"
-						:owns-stage="floorOwnsStage"
-						:owns-band="floorOwnsStage && railVisible"
-						@band="onFloorBand"
-					></FloorView>
-				</v-col>
-				<!-- v-show, not a v-if change: on a movil phone the keypad
+						<FloorView
+							v-if="floorEnabled"
+							:owns-stage="floorOwnsStage"
+							:owns-band="floorOwnsStage && railVisible"
+							@band="onFloorBand"
+						></FloorView>
+					</v-col>
+					<!-- v-show, not a v-if change: on a movil phone the keypad
 				     screen fronts this panel, but Payments MUST stay mounted —
 				     it owns the money path (payment lines, guards, submit) and
 				     answers movil_collect_payment from right here. -->
-				<v-col
-					v-if="
-						(!useCompactPosSwitcher || compactPanel === 'selector') &&
-						activeView === 'payment' &&
-						!usePaymentDialog
-					"
-					v-show="!movilPayActive"
-					:xl="useCompactPosSwitcher ? 12 : 5"
-					:lg="useCompactPosSwitcher ? 12 : 5"
-					:md="useCompactPosSwitcher ? 12 : 5"
-					:sm="useCompactPosSwitcher ? 12 : 5"
-					cols="12"
-					class="pos dynamic-col dynamic-col--selector"
-				>
-					<Payments></Payments>
-				</v-col>
+					<v-col
+						v-if="
+							(!useCompactPosSwitcher || compactPanel === 'selector') &&
+							activeView === 'payment' &&
+							!usePaymentDialog
+						"
+						v-show="!movilPayActive"
+						:xl="useCompactPosSwitcher ? 12 : 5"
+						:lg="useCompactPosSwitcher ? 12 : 5"
+						:md="useCompactPosSwitcher ? 12 : 5"
+						:sm="useCompactPosSwitcher ? 12 : 5"
+						cols="12"
+						class="pos dynamic-col dynamic-col--selector"
+					>
+						<Payments></Payments>
+					</v-col>
 
-				<v-col
-					v-show="
-						(!useCompactPosSwitcher || compactPanel === 'invoice') &&
-						!floorOwnsStage &&
-						!movilCartActive
-					"
-					:xl="12"
-					:lg="12"
-					:md="12"
-					:sm="12"
-					cols="12"
-					class="pos dynamic-col dynamic-col--invoice"
-				>
-					<component :is="CartView" @open-saldo-picker="openSaldoPicker" />
-				</v-col>
+					<v-col
+						v-show="
+							(!useCompactPosSwitcher || compactPanel === 'invoice') &&
+							!floorOwnsStage &&
+							!movilCartActive
+						"
+						:xl="12"
+						:lg="12"
+						:md="12"
+						:sm="12"
+						cols="12"
+						class="pos dynamic-col dynamic-col--invoice"
+					>
+						<component :is="CartView" @open-saldo-picker="openSaldoPicker" />
+					</v-col>
 
-				<!-- The phone's own register (MovilShell). Chrome only: the ONE
+					<!-- The phone's own register (MovilShell). Chrome only: the ONE
 				     ItemsSelector stays mounted in the drawer's persistent slot
 				     (scanner + teleported search header keep working with the
 				     drawer closed) and Invoice.vue stays mounted above via
@@ -332,30 +338,28 @@
 				     Tapping a cart line opens the movil LINE SHEET (round 10);
 				     the classic cart stays reachable behind «More options» for
 				     everything the sheet does not model. -->
-				<v-col
-					v-if="movilStageActive"
-					cols="12"
-					class="pos dynamic-col dynamic-col--movil"
-				>
-					<MovilShell
-						v-bind="movilShellProps"
-						@add="onMovilAdd"
-						@search="onMovilSearch"
-						@scan="onMovilScan"
-						@clear-search="onMovilClearSearch"
-						@primary="onBandPrimary"
-						@select-line="onMovilSelectLine"
-						@change-customer="jumpToCustomer"
-						@split="onMovilSplit"
-						@collect="onMovilCollect"
-						@orden-back="onMovilOrdenBack"
-						@line-edit="onMovilLineEdit"
-						@line-close="onMovilLineClose"
-						@line-more="onMovilLineMore"
-						@line-weigh="onMovilLineWeigh"
-						@line-lots="onMovilLineLots"
-					/>
-				</v-col>
+					<v-col v-if="movilStageActive" cols="12" class="pos dynamic-col dynamic-col--movil">
+						<MovilShell
+							v-bind="movilShellProps"
+							@add="onMovilAdd"
+							@search="onMovilSearch"
+							@scan="onMovilScan"
+							@clear-search="onMovilClearSearch"
+							@select-group="itemsStore.filterByGroup($event)"
+							@settings="openRegisterSetting('catalogue')"
+							@primary="onBandPrimary"
+							@select-line="onMovilSelectLine"
+							@change-customer="jumpToCustomer"
+							@split="onMovilSplit"
+							@collect="onMovilCollect"
+							@orden-back="onMovilOrdenBack"
+							@line-edit="onMovilLineEdit"
+							@line-close="onMovilLineClose"
+							@line-more="onMovilLineMore"
+							@line-weigh="onMovilLineWeigh"
+							@line-lots="onMovilLineLots"
+						/>
+					</v-col>
 
 					<!--
 						El cajón — INSIDE the row, deliberately.
@@ -439,9 +443,9 @@
 					@add="addComboSuggestion"
 				/>
 
-				<!-- One band, one number, one action (§17.7 invariant 1). Desktop
-				     only: below the boundary the dock's own summary already owns
-				     that lane, and two of them would be two numbers. -->
+				<!-- The sale uses its compact screen's action. Recargas has no
+				     separate mobile submit control, so its band stays available
+				     at every width; the dock's sale summary stands down there. -->
 				<!-- v-show, NEVER v-if — the same rule the scan-bar div above
 				     states, now for the band's own body: `InvoiceSummary` and
 				     `MesaContextStrip` `<Teleport defer>` INTO the lanes this
@@ -455,7 +459,7 @@
 				     Hidden the band keeps its targets alive; the cashier still
 				     sees exactly one total. -->
 				<ActionBand
-					v-show="railVisible && hostedDestinationId !== 'closing'"
+					v-show="railVisible && !['closing', 'registers'].includes(hostedDestinationId)"
 					:state="bandState"
 					:format-currency="formatCurrency"
 					@primary="onBandPrimary"
@@ -494,7 +498,6 @@
 						</button>
 					</template>
 				</ActionBand>
-
 			</div>
 		</div>
 
@@ -508,125 +511,148 @@
 			:queued-amount-label="queuedAmountLabel"
 		/>
 
-		<div v-if="showBottomDock" ref="mobileDock" data-testid="mobile-dock" class="mobile-dock">
-			<div class="mobile-dock__summary">
-				<div class="mobile-dock__totals">
-					<strong class="mobile-dock__amount" :class="dockTotalBump">{{
-						formattedCartTotal
-					}}</strong>
-					<div class="mobile-dock__subline">
-						<button
-							type="button"
-							class="mobile-dock__customer"
-							:title="dockCustomerLabel"
-							:aria-label="`${__('Customer')}: ${dockCustomerLabel}`"
-							@click="jumpToCustomer"
-						>
-							<v-icon icon="mdi-account-outline" size="14" />
-							<span class="mobile-dock__customer-name">{{ dockCustomerLabel }}</span>
-						</button>
-						<span class="mobile-dock__meta">{{ cartMetaLabel }}</span>
+		<div
+			v-if="showBottomDock"
+			ref="mobileDock"
+			data-testid="mobile-dock"
+			class="mobile-dock"
+			:class="{ 'mobile-dock--destination': hostedDestinationId }"
+		>
+			<WorkspaceDock
+				v-if="hostedDestinationId"
+				:label="workspaceLabel"
+				:active-id="hostedDestinationId"
+				:destinations="workspaceEntries"
+				:state="hostedBandState"
+				:currency="activeCurrency"
+				@back="uiStore.posOpeningShift ? showInvoicePanel() : create_opening_voucher()"
+				@primary="onBandPrimary"
+				@navigate="handleOpenDestination"
+			/>
+			<template v-else>
+				<div class="mobile-dock__summary">
+					<div class="mobile-dock__totals">
+						<strong class="mobile-dock__amount" :class="dockTotalBump">{{
+							formattedCartTotal
+						}}</strong>
+						<div class="mobile-dock__subline">
+							<button
+								type="button"
+								class="mobile-dock__customer"
+								:title="dockCustomerLabel"
+								:aria-label="`${__('Customer')}: ${dockCustomerLabel}`"
+								@click="jumpToCustomer"
+							>
+								<v-icon icon="mdi-account-outline" size="14" />
+								<span class="mobile-dock__customer-name">{{ dockCustomerLabel }}</span>
+							</button>
+							<span class="mobile-dock__meta">{{ cartMetaLabel }}</span>
+						</div>
 					</div>
-				</div>
-				<!-- The always-on discount field held a 190px slot in this row
+					<!-- The always-on discount field held a 190px slot in this row
 				     down to 360px viewports, squeezing the customer chip at
 				     every common phone width. It now lives in an expandable
 				     row; the toggle shows the applied value while collapsed. -->
-				<button
-					v-if="showDockDiscountToggle"
-					type="button"
-					class="mobile-dock__discount-toggle"
-					:class="{ 'mobile-dock__discount-toggle--active': dockDiscountOpen || dockDiscountApplied }"
-					:aria-expanded="dockDiscountOpen ? 'true' : 'false'"
-					:aria-label="__('Additional discount')"
-					@click="toggleDockDiscount"
-				>
-					<v-icon
-						:icon="posProfile?.posa_use_percentage_discount ? 'mdi-percent' : 'mdi-cash-minus'"
-						size="18"
-					/>
-					<span v-if="dockDiscountApplied" class="mobile-dock__discount-value">{{
-						dockDiscountLabel
-					}}</span>
-				</button>
-			</div>
-			<v-expand-transition>
-				<div v-show="dockDiscountOpen" class="mobile-dock__discount-row">
-					<v-text-field
-						v-if="!posProfile?.posa_use_percentage_discount"
-						ref="additionalDiscountField"
-						v-model="additionalDiscountDisplay"
-						@update:model-value="handleAdditionalDiscountUpdate"
-						@focus="handleAdditionalDiscountFocus"
-						@blur="handleAdditionalDiscountBlur"
-						:placeholder="__('Discount')"
-						prepend-inner-icon="mdi-cash-minus"
-						variant="solo"
-						density="compact"
-						color="warning"
-						inputmode="decimal"
-						enterkeyhint="done"
-						:prefix="getCurrencySymbol(posProfile?.currency)"
-						:disabled="
-							!posProfile?.posa_allow_user_to_edit_additional_discount ||
-							!!discountPercentageOfferName
-						"
-						hide-details
-					/>
-					<v-text-field
-						v-else
-						ref="additionalDiscountField"
-						v-model="additionalDiscountPercentageDisplay"
-						@update:model-value="handleAdditionalDiscountPercentageUpdate"
-						@focus="handleAdditionalDiscountPercentageFocus"
-						@blur="handleAdditionalDiscountPercentageBlur"
-						@change="commitAdditionalDiscountPercentage"
-						:placeholder="__('Discount %')"
-						suffix="%"
-						prepend-inner-icon="mdi-percent"
-						variant="solo"
-						density="compact"
-						color="warning"
-						inputmode="decimal"
-						enterkeyhint="done"
-						:disabled="
-							!posProfile?.posa_allow_user_to_edit_additional_discount ||
-							!!discountPercentageOfferName
-						"
-						hide-details
-					/>
-				</div>
-			</v-expand-transition>
-			<div class="mobile-dock__tabs" :style="{ '--dock-tab-count': dockTabCount }">
-				<button
-					v-for="tab in dockTabs"
-					:key="tab.id"
-					type="button"
-					class="mobile-dock__tab"
-					:data-testid="'dock-' + tab.id"
-					:class="[
-						tab.cls,
-						{
-							'mobile-dock__tab--active': tab.isActive(),
-							'mobile-dock__tab--busy': tab.busy?.(),
-							'mobile-dock__tab--dimmed': isDockTabDimmedOffline(tab, isOnline),
-						},
-					]"
-					:aria-label="tab.ariaLabel()"
-					:aria-busy="tab.busy?.() ? 'true' : undefined"
-					:disabled="tab.busy?.() || false"
-					@click="tab.onTap()"
-				>
-					<span
-						v-if="tab.badge && tab.badge()"
-						class="mobile-dock__pill"
-						:class="{ 'mobile-dock__pill--sm': tab.badgeSm }"
-						>{{ tab.badge() }}</span
+					<button
+						v-if="showDockDiscountToggle"
+						type="button"
+						class="mobile-dock__discount-toggle"
+						:class="{
+							'mobile-dock__discount-toggle--active': dockDiscountOpen || dockDiscountApplied,
+						}"
+						:aria-expanded="dockDiscountOpen ? 'true' : 'false'"
+						:aria-label="__('Additional discount')"
+						@click="toggleDockDiscount"
 					>
-					<v-icon :icon="tab.icon" :size="tab.iconSize" />
-					<span class="mobile-dock__tab-label">{{ tab.label() }}</span>
-				</button>
-			</div>
+						<v-icon
+							:icon="
+								posProfile?.posa_use_percentage_discount ? 'mdi-percent' : 'mdi-cash-minus'
+							"
+							size="18"
+						/>
+						<span v-if="dockDiscountApplied" class="mobile-dock__discount-value">{{
+							dockDiscountLabel
+						}}</span>
+					</button>
+				</div>
+				<v-expand-transition>
+					<div v-show="dockDiscountOpen" class="mobile-dock__discount-row">
+						<v-text-field
+							v-if="!posProfile?.posa_use_percentage_discount"
+							ref="additionalDiscountField"
+							v-model="additionalDiscountDisplay"
+							@update:model-value="handleAdditionalDiscountUpdate"
+							@focus="handleAdditionalDiscountFocus"
+							@blur="handleAdditionalDiscountBlur"
+							:placeholder="__('Discount')"
+							prepend-inner-icon="mdi-cash-minus"
+							variant="solo"
+							density="compact"
+							color="warning"
+							inputmode="decimal"
+							enterkeyhint="done"
+							:prefix="getCurrencySymbol(posProfile?.currency)"
+							:disabled="
+								!posProfile?.posa_allow_user_to_edit_additional_discount ||
+								!!discountPercentageOfferName
+							"
+							hide-details
+						/>
+						<v-text-field
+							v-else
+							ref="additionalDiscountField"
+							v-model="additionalDiscountPercentageDisplay"
+							@update:model-value="handleAdditionalDiscountPercentageUpdate"
+							@focus="handleAdditionalDiscountPercentageFocus"
+							@blur="handleAdditionalDiscountPercentageBlur"
+							@change="commitAdditionalDiscountPercentage"
+							:placeholder="__('Discount %')"
+							suffix="%"
+							prepend-inner-icon="mdi-percent"
+							variant="solo"
+							density="compact"
+							color="warning"
+							inputmode="decimal"
+							enterkeyhint="done"
+							:disabled="
+								!posProfile?.posa_allow_user_to_edit_additional_discount ||
+								!!discountPercentageOfferName
+							"
+							hide-details
+						/>
+					</div>
+				</v-expand-transition>
+				<div class="mobile-dock__tabs" :style="{ '--dock-tab-count': dockTabCount }">
+					<button
+						v-for="tab in dockTabs"
+						:key="tab.id"
+						type="button"
+						class="mobile-dock__tab"
+						:data-testid="'dock-' + tab.id"
+						:class="[
+							tab.cls,
+							{
+								'mobile-dock__tab--active': tab.isActive(),
+								'mobile-dock__tab--busy': tab.busy?.(),
+								'mobile-dock__tab--dimmed': isDockTabDimmedOffline(tab, isOnline),
+							},
+						]"
+						:aria-label="tab.ariaLabel()"
+						:aria-busy="tab.busy?.() ? 'true' : undefined"
+						:disabled="tab.busy?.() || false"
+						@click="tab.onTap()"
+					>
+						<span
+							v-if="tab.badge && tab.badge()"
+							class="mobile-dock__pill"
+							:class="{ 'mobile-dock__pill--sm': tab.badgeSm }"
+							>{{ tab.badge() }}</span
+						>
+						<v-icon :icon="tab.icon" :size="tab.iconSize" />
+						<span class="mobile-dock__tab-label">{{ tab.label() }}</span>
+					</button>
+				</div>
+			</template>
 		</div>
 	</div>
 </template>
@@ -661,10 +687,7 @@ import DestinationHost from "./destinations/DestinationHost.vue";
 import CobroSurface from "./cobro/CobroSurface.vue";
 import MobileOfflineOverlay from "./mobile/MobileOfflineOverlay.vue";
 import ComboSuggestionStrip from "../combos/ComboSuggestionStrip.vue";
-import {
-	resolveSearchDrawerIntent,
-	useCatalogDrawer,
-} from "../../../composables/pos/shell/useCatalogDrawer";
+import { resolveSearchDrawerIntent, useCatalogDrawer } from "../../../composables/pos/shell/useCatalogDrawer";
 
 /** See `handleItemSearchChanged`: longer than a scanner's burst, shorter than a keystroke. */
 const SEARCH_DRAWER_DEBOUNCE_MS = 200;
@@ -676,10 +699,7 @@ import {
 	getServiceOrderCountsCached,
 	invalidateServiceOrderCounts,
 } from "../../../services/serviceOrderService";
-import {
-	getReceivablesBadgeCached,
-	invalidateReceivablesBadge,
-} from "../../../services/receivablesService";
+import { getReceivablesBadgeCached, invalidateReceivablesBadge } from "../../../services/receivablesService";
 import { buildCombosCategory, buildSuggestions } from "../../../composables/pos/combos/comboCatalog";
 import { useComboOffers } from "../../../composables/pos/combos/useComboOffers";
 import { useOnlineStatus } from "../../../composables/core/useOnlineStatus";
@@ -687,6 +707,7 @@ import { useValueBump } from "../../../composables/core/useValueBump";
 import OpeningDialog from "../shift/OpeningDialog.vue";
 import PosOffers from "../offers/PosOffers.vue";
 import PosCoupons from "../offers/PosCoupons.vue";
+import WorkspaceDock from "./mobile/WorkspaceDock.vue";
 // Static, not async: it is asked for at the instant a sale lands, and a chunk
 // fetch there is exactly the moment the network is least trustworthy.
 import ChangeDueDialog from "../payments/ChangeDueDialog.vue";
@@ -726,10 +747,7 @@ import {
 	moveFocusByArrow,
 	resolveKeyboardNavigationRoot,
 } from "../../../utils/keyboardNavigation";
-import {
-	resolveLotPicker,
-	resolveLotRequirement,
-} from "../items/lot/lotPicker";
+import { resolveLotPicker, resolveLotRequirement } from "../items/lot/lotPicker";
 
 const Payments = defineAsyncComponent(() => import("../Payments.vue"));
 const FloorView = defineAsyncComponent(() => import("../../floor/FloorView.vue"));
@@ -762,8 +780,7 @@ export default {
 		// the eventBus `open-saldo-picker` path could still fire, so guard here
 		// too (defensive). `posProfile` is a storeToRefs(uiStore) ref declared
 		// below; closure resolves it at click-time, well after setup() returns.
-		const saldoEnabledForProfile = () =>
-			parseBooleanSetting(posProfile.value?.saldo_enabled);
+		const saldoEnabledForProfile = () => parseBooleanSetting(posProfile.value?.saldo_enabled);
 		const openSaldoPicker = () => {
 			if (!saldoEnabledForProfile()) {
 				return;
@@ -801,7 +818,7 @@ export default {
 		const responsive = useResponsive();
 		const rtl = useRtl();
 		const shift = usePosShift(() => {
-			dialog.value = true;
+			if (route?.path !== "/registers") dialog.value = true;
 		});
 		const handleSubmitClosingPos = (data) => {
 			shift.submit_closing_pos(data);
@@ -817,10 +834,7 @@ export default {
 		// purpose — the shift is still stale, so the next boot re-raises it.
 		const staleShiftBannerDismissed = ref(false);
 		const staleShiftBannerVisible = computed(
-			() =>
-				shift.staleShiftEnforced.value &&
-				!staleShiftBannerDismissed.value &&
-				!dialog.value,
+			() => shift.staleShiftEnforced.value && !staleShiftBannerDismissed.value && !dialog.value,
 		);
 		const closeStaleShiftNow = () => {
 			destinationRouting.activate("closing", "shortcut");
@@ -856,9 +870,7 @@ export default {
 		// SALDO-INTEGRATION-POINT — per-profile gate for the catalog picker.
 		// SaldoReferenciaDialog + SaldoStatusDialog stay mounted (bus-driven,
 		// inert without saldo lines); only the operator-facing picker is gated.
-		const showSaldoCatalogPicker = computed(() =>
-			parseBooleanSetting(posProfile.value?.saldo_enabled),
-		);
+		const showSaldoCatalogPicker = computed(() => parseBooleanSetting(posProfile.value?.saldo_enabled));
 
 		// Lean vertical layout (verticalStore) forces the stacked
 		// single-panel mode + dock at any width; otherwise width decides.
@@ -891,9 +903,7 @@ export default {
 				(!useCompactPosSwitcher.value || compactPanel.value === "selector"),
 		);
 		/** 12 while the floor owns the stage, the shipped 5 otherwise. */
-		const floorColSpan = computed(() =>
-			floorOwnsStage.value || useCompactPosSwitcher.value ? 12 : 5,
-		);
+		const floorColSpan = computed(() => (floorOwnsStage.value || useCompactPosSwitcher.value ? 12 : 5));
 		const isPhone = computed(() => responsive.isPhone.value);
 		const showBottomDock = computed(
 			() => !dialog.value && (vertical.leanVerticalLayout || responsive.windowWidth.value < 1100),
@@ -962,9 +972,7 @@ export default {
 			return info.customer_name || info.name || selectedCustomer.value || __("No customer");
 		});
 
-		const discountPercentageOfferName = computed(
-			() => invoiceStore.discountPercentageOfferName || null,
-		);
+		const discountPercentageOfferName = computed(() => invoiceStore.discountPercentageOfferName || null);
 		const showUnsignedReturnDiscount = computed(
 			() => !!invoiceStore.returnDiscountMeta && !posProfile.value?.posa_use_percentage_discount,
 		);
@@ -1102,6 +1110,7 @@ export default {
 			}
 		};
 		const setSelectorView = (view) => {
+			leaveHostedWorkspace();
 			compactPanel.value = "selector";
 			uiStore.setActiveView(view);
 			if (view === "items") {
@@ -1114,6 +1123,7 @@ export default {
 		// never leak into a later view change. See the watcher for the why.
 		const suppressNextPanelSync = ref(false);
 		const showInvoicePanel = () => {
+			leaveHostedWorkspace();
 			// Re-asking for the cart leaves the classic-cart fallback: the
 			// movil sale screen answers the Cart tab again.
 			movilCartDetail.value = false;
@@ -1145,6 +1155,7 @@ export default {
 			});
 		};
 		const showPaymentPanel = () => {
+			leaveHostedWorkspace();
 			compactPanel.value = "selector";
 			if (usePaymentDialog.value) {
 				uiStore.openPaymentDialog();
@@ -1154,9 +1165,12 @@ export default {
 			uiStore.setActiveView("payment");
 		};
 		const triggerInvoicePay = () => {
+			leaveHostedWorkspace();
 			if (!vertical.canSell) {
 				window.frappe?.msgprint?.(
-					__("This register configuration is invalid. Ask a manager to repair its capability profile."),
+					__(
+						"This register configuration is invalid. Ask a manager to repair its capability profile.",
+					),
 				);
 				return;
 			}
@@ -1377,7 +1391,25 @@ export default {
 			},
 		);
 
-		const dismissDestination = () => destinationRouting.dismiss();
+		// All sale entry points use this handoff, including shortcuts and bus events.
+		// activate() closes the host before calling applySelectorView, so re-entry
+		// stops at the guard and the chosen panel becomes visible in this tick.
+		function leaveHostedWorkspace() {
+			if (hostedDestinationId.value) destinationRouting.activate("sale", "shortcut");
+		}
+		const workspaceLabel = computed(() =>
+			verticalT(destinationRouting.activeDestination.value?.labelKey || "Workspace"),
+		);
+		const workspaceEntries = destinationRouting.entries;
+		const dismissDestination = () => {
+			if (!shiftOpen.value) dialog.value = true;
+			else destinationRouting.dismiss();
+		};
+		const openRegisters = () => {
+			dialog.value = false;
+			destinationRouting.activate("registers", "shortcut");
+		};
+		const openRegisterShift = () => { dialog.value = true; };
 
 		// Borradores and Facturas are both InvoiceManagement, hosted. While
 		// either is up, the floating copy behind `uiStore.invoiceManagementDialog`
@@ -1404,8 +1436,7 @@ export default {
 		const hostedBandState = ref(null);
 		const HOSTED_BAND_KINDS = ["recharge", "balanceDue", "change", "shortfall", "selectedDraft", "custody"];
 		const onHostedBand = (state) => {
-			hostedBandState.value =
-				state && HOSTED_BAND_KINDS.includes(state.kind) ? state : null;
+			hostedBandState.value = state && HOSTED_BAND_KINDS.includes(state.kind) ? state : null;
 		};
 		watch(hostedDestinationId, () => {
 			hostedBandState.value = null;
@@ -1755,10 +1786,7 @@ export default {
 			if (!row) movilPadOpen.value = false;
 		});
 		const movilRegisterPrecision = computed(() => {
-			const declared = Number.parseInt(
-				String(posProfile.value?.posa_decimal_precision ?? ""),
-				10,
-			);
+			const declared = Number.parseInt(String(posProfile.value?.posa_decimal_precision ?? ""), 10);
 			return Number.isInteger(declared) && declared >= 0 ? declared : 2;
 		});
 		// `CartItemRow.vue`'s uomFacts, for the same pad, from the same row.
@@ -1872,9 +1900,7 @@ export default {
 				usedSerials: data.usedSerials,
 			});
 		});
-		const lotPickerRequestedQty = computed(
-			() => Number(uiStore.lotPickerData?.requestedQty) || 1,
-		);
+		const lotPickerRequestedQty = computed(() => Number(uiStore.lotPickerData?.requestedQty) || 1);
 		/**
 		 * The picker decided; the ENGINE adds. Closing first keeps the sheet
 		 * from sitting over the cart while the adds land, and the intent rides
@@ -1925,16 +1951,19 @@ export default {
 		const movilShellProps = computed(() => ({
 			screen: movilOrdenActive.value
 				? "orden"
-				// PAY before CART: the optimistic pay window opens while the
-				// Carrito tab's own conditions still hold, and the tap that
-				// opened it must win the stage on that same frame.
-				: movilPayActive.value
+				: // PAY before CART: the optimistic pay window opens while the
+					// Carrito tab's own conditions still hold, and the tap that
+					// opened it must win the stage on that same frame.
+					movilPayActive.value
 					? "pay"
 					: movilCartActive.value
 						? "cart"
 						: "browse",
 			browseItems: movilBrowseRows.value || [],
 			browseLoading: movilBrowseLoading.value,
+			browseGroups: itemsStore.itemGroups || [],
+			browseGroup: itemsStore.itemGroup || "ALL",
+			barcodeFirst: !!posProfile.value?.posa_hide_items_until_search,
 			combos: comboOffers.value || [],
 			// The LIVE cart (invoiceStore.items off itemsData) — invoiceDoc is
 			// null until a server sync, which is exactly the window a cashier
@@ -1959,8 +1988,7 @@ export default {
 			currency: activeCurrency.value || null,
 			profile: posProfile.value || null,
 			itemCount: Number(itemsCount.value) || 0,
-			canCollect:
-				movilPayActive.value && Number(itemsCount.value) > 0 && !paymentPending.value,
+			canCollect: movilPayActive.value && Number(itemsCount.value) > 0 && !paymentPending.value,
 			ordenView: movilOrdenView.value,
 			ordenTitle: __("Service Orders"),
 			ordenWho: posProfile.value?.name || "",
@@ -1974,6 +2002,7 @@ export default {
 		// screen is the catalogue, so the drawer stays closed — its persistent
 		// slot keeps the ONE ItemsSelector (and the scanner) alive regardless.
 		const applySelectorView = (view, reason = "rail") => {
+			leaveHostedWorkspace();
 			if (view === "items") {
 				if (movilPhone.value) {
 					if (catalogDrawer.isOpen.value) {
@@ -2102,7 +2131,7 @@ export default {
 		// One number, one action. `sale` is the counter's; a cart owned by a
 		// table order says SAVE instead, and Salón publishes its own.
 		const bandState = computed(() => {
-			if (floorOwnsStage.value) {
+			if (floorOwnsStage.value && !hostedDestinationId.value) {
 				return (
 					floorBandState.value ??
 					resolveBandState({ kind: "floorAccount", total: 0, chargeable: false })
@@ -2237,9 +2266,7 @@ export default {
 		const syncStore = useSyncStore();
 		const queuedInvoiceCount = computed(() => offlineQueue.summary.value.ticketCount);
 		const queuedAmountLabel = computed(() =>
-			queuedInvoiceCount.value
-				? formatCurrency(offlineQueue.summary.value.totalHeld)
-				: "",
+			queuedInvoiceCount.value ? formatCurrency(offlineQueue.summary.value.totalHeld) : "",
 		);
 		watch(
 			() => [syncStore.pendingInvoicesCount, isOnline.value],
@@ -2396,8 +2423,8 @@ export default {
 		const layoutStyleOverrides = computed(() => {
 			const fallbackBottomSpace = getFallbackBottomSpace();
 			const effectiveBottomSpace = showBottomDock.value
-				? Math.max(bottomDockHeight.value, fallbackBottomSpace)
-				: fallbackBottomSpace;
+				? bottomDockHeight.value || fallbackBottomSpace
+				: 0;
 			return {
 				"--bottom-safe-space": `${effectiveBottomSpace}px`,
 			};
@@ -2508,21 +2535,15 @@ export default {
 		// (payment dialog, saldo dialogs), everywhere else Tab jumps to
 		// the search box — the cashier's home position.
 		const handlePosTabFocus = (event) => {
-			if (
-				event.key !== "Tab" ||
-				event.altKey ||
-				event.ctrlKey ||
-				event.metaKey ||
-				event.shiftKey
-			) {
+			if (event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
 				return;
 			}
 			if (isEditableElement(document.activeElement)) {
 				return;
 			}
-			const hasVisibleOverlay = Array.from(
-				document.querySelectorAll(".v-overlay__content"),
-			).some((el) => isElementVisible(el));
+			const hasVisibleOverlay = Array.from(document.querySelectorAll(".v-overlay__content")).some(
+				(el) => isElementVisible(el),
+			);
 			if (hasVisibleOverlay) {
 				return;
 			}
@@ -2560,6 +2581,7 @@ export default {
 				// F7 — shift overview / closing dialog. The listener was lost
 				// in an old refactor and F7 emitted into the void.
 				eventBus.on("open_shift_details", handleOpenShiftDetails);
+				eventBus.on("registers:open-shift", openRegisterShift);
 				eventBus.on("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.on("set_compact_panel", setCompactPanel);
 				// Payments.vue's Cancel asks for the cart here rather than
@@ -2617,6 +2639,7 @@ export default {
 				// components registered.
 				eventBus.off("submit_closing_pos", handleSubmitClosingPos);
 				eventBus.off("open_shift_details", handleOpenShiftDetails);
+				eventBus.off("registers:open-shift", openRegisterShift);
 				eventBus.off("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.off("set_compact_panel", setCompactPanel);
 				eventBus.off("show_invoice_panel", showInvoicePanel);
@@ -2781,6 +2804,7 @@ export default {
 			onDrawerOpened,
 			closeCatalogDrawer,
 			applySelectorView,
+			handleOpenDestination,
 			catalogCategories,
 			comboSuggestions,
 			addComboSuggestion,
@@ -2821,6 +2845,10 @@ export default {
 			focusItemSearchField,
 			onHostedBand,
 			hostedDestinationId,
+			openRegisters,
+			hostedBandState,
+			workspaceLabel,
+			workspaceEntries,
 			invoiceManagementHosted,
 			destinationRefusal,
 			dismissDestination,
@@ -2900,6 +2928,7 @@ export default {
 		Returns,
 		PosOffers,
 		PosCoupons,
+		WorkspaceDock,
 		NewAddress,
 		Variants,
 		LotPicker,
@@ -2973,7 +3002,8 @@ export default {
 			this.dialog = true;
 		},
 		get_pos_setting() {
-			return frappe.db.get_doc("POS Settings", undefined)
+			return frappe.db
+				.get_doc("POS Settings", undefined)
 				.then((doc) => {
 					this.uiStore.setPosSettings(doc);
 				})
@@ -3069,8 +3099,14 @@ export default {
  * dock has a slow tab again — `compactPanelSwitchInstant.spec.ts` enforces it.
  */
 .dynamic-container {
+	position: relative;
 	padding-bottom: calc(var(--bottom-safe-space) + var(--dynamic-xs));
 	min-width: 0;
+	height: 100%;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 .dynamic-main-row {
@@ -3078,12 +3114,7 @@ export default {
 	margin: 0;
 }
 
-/* Desktop (>=1100px, the two-column register) is viewport-locked: this view
- * fits `.page-content` exactly, so the PAGE scrollbar never appears and the
- * only scrolling happens inside a panel. Below 1100px nothing here applies —
- * the compact switcher shows one panel at a time and the 769-1099 band still
- * scrolls through `.page-content`, which tests/defaultLayoutMainScroller.spec.ts
- * guards. Deliberately scoped rather than global for that reason. */
+/* Desktop keeps two bounded columns; compact screens show one panel. */
 @media (min-width: 1100px) {
 	.dynamic-container {
 		height: 100%;
@@ -3195,7 +3226,7 @@ export default {
  * this bar) so the last content row always clears it.
  * ─────────────────────────────────────────────────────────────── */
 .mobile-dock {
-	position: fixed;
+	position: absolute;
 	left: 0;
 	right: 0;
 	bottom: 0;
@@ -3570,6 +3601,67 @@ export default {
 	 * visible — "the drawer never reaches it". With no positioned ancestor the
 	 * overlay escapes to the viewport and covers the one number that matters. */
 	position: relative;
+}
+
+/* Compact screens inherit the remaining space after the real navbar, banner
+   and dock. A second viewport calculation inside a child would subtract
+   different chrome and bring back nested page/panel scrolling. */
+@media (max-width: 1099.98px) {
+	.register-shell__content :deep(.destination-host),
+	.register-shell__content :deep(.mbrowse),
+	.register-shell__content :deep(.movil-venta) {
+		height: 100%;
+		max-height: 100%;
+		min-height: 0;
+	}
+
+	.dynamic-main-row {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow: auto;
+	}
+
+	.dynamic-main-row:has(> .dynamic-col--movil) {
+		overflow: hidden;
+		flex-wrap: nowrap;
+	}
+
+	.dynamic-col--movil {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		min-width: 0;
+		height: 100%;
+		margin: 0;
+		padding: 0;
+		overflow: hidden;
+	}
+
+	.mobile-dock--destination .mobile-dock__summary {
+		display: none;
+	}
+}
+
+@media (max-width: 599.98px) {
+	.stale-shift-banner {
+		display: grid;
+		grid-template-columns: 16px minmax(0, 1fr) 36px;
+		gap: 4px 8px;
+		padding: 6px 10px;
+		font-size: 12px;
+		line-height: 1.35;
+	}
+
+	.stale-shift-banner__action {
+		grid-column: 2;
+		justify-self: start;
+		min-height: 36px;
+	}
+
+	.stale-shift-banner > :last-child {
+		grid-column: 3;
+		grid-row: 1 / 3;
+	}
 }
 
 /* The row is the drawer's positioning context.

@@ -1686,46 +1686,12 @@ def log_client_error(payload=None):
 
 @frappe.whitelist(methods=["GET", "POST"])
 def posa_user_opted_into_web_route() -> bool:
-    """Return True when the current user should get the /posapp SPA.
+    """Compatibility endpoint for cached clients; /posapp is always canonical.
 
-    2026-07-24 SEMANTICS FLIP — the SPA is the DEFAULT, `posa_use_web_route`
-    is now an explicit per-profile OPT-OUT, not an opt-in:
-
-    - no POS Profile rows for the user (or profiles that list no users, i.e.
-      "applicable for all") → True. The old opt-in read of this returned
-      False here, and `www/posapp.py` bounced those users to /app/posapp,
-      whose Page controller bounces straight back to /posapp → an infinite
-      client/server redirect ping-pong. Any profile created after the flag
-      landed defaulted to 0 and fell into that loop.
-    - user has profiles → True unless EVERY matching enabled profile has the
-      flag explicitly 0 (a deliberate shop-level rollback to the Desk shell).
-    - DB error → True. Fail OPEN to the canonical route; the legacy Desk boot
-      path is the experimental one now.
-
-    Administrator always True so smoke specs + ops land on /posapp without
-    touching profile data. Kept tiny — polled on every POS visit.
+    No profile setting or database lookup remains. Authentication is still
+    required by Frappe and the web-route controller.
     """
-    user = frappe.session.user
-    if not user or user == "Guest":
-        return False
-    if user == "Administrator":
-        return True
-    try:
-        rows = frappe.db.sql(
-            """
-            SELECT p.posa_use_web_route
-            FROM `tabPOS Profile` p
-            INNER JOIN `tabPOS Profile User` u ON u.parent = p.name
-            WHERE p.disabled = 0 AND u.user = %s
-            LIMIT 50
-            """,
-            (user,),
-        )
-    except Exception:
-        return True
-    if not rows:
-        return True
-    return any(int(row[0] or 0) for row in rows)
+    return bool(frappe.session.user and frappe.session.user != "Guest")
 
 
 # ----------------------------------------------------------------------

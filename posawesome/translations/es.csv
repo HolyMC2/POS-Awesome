@@ -3478,6 +3478,15 @@ Register for promotions,Registrar para promociones
 Agrees to receive promotions by WhatsApp and email,Acepta recibir promociones por WhatsApp y correo
 Mobile number and email are required to register for promotions,Para registrar en promociones se requieren celular y correo
 Cashier released unsubmitted draft {0}; the draft is retained and cannot collect this retired request.,El cajero liberó el borrador sin confirmar {0}; el borrador se conserva y ya no podrá cobrar esta solicitud retirada.
+
+Search tables or accounts,Buscar mesa o cuenta
+No results found,No hay resultados
+Clear filters,Limpiar filtros
+Tab Name,Nombre de la cuenta
+Plan needs a wider screen,Plano en pantalla amplia
+Tabs without a table,Cuentas sin mesa
+Filter,Filtrar
+Payment queued — waiting for connection,Cobro en cola — esperando conexión
 "Count the drawer, review unfinished sales, then close.","Cuenta la caja, revisa las ventas pendientes y cierra el turno."
 Back from closing,Volver sin cerrar el turno
 Checking this browser and the open shift…,Verificando este navegador y el turno abierto…
@@ -3489,7 +3498,6 @@ This browser is registered. A supervisor still needs to record how sales from pr
 I checked previous browsers and accounted for their saved sales and cash movements.,Revisé los navegadores anteriores y comprobé sus ventas guardadas y movimientos de caja.
 How was the saved work checked?,¿Cómo se revisaron las ventas y los movimientos guardados?
 Record review and prepare this browser,Registrar revisión y preparar este navegador
-Ask a POS supervisor to review the previous browser and authorize this one from Offline Status. Then return here and check again.,Pide a un supervisor de caja que revise el navegador anterior y autorice este desde Estado sin conexión. Después vuelve aquí y verifica de nuevo.
 Describe the review (at least 8 characters),Describe la revisión (mínimo 8 caracteres)
 Loading shift totals and checking saved work…,Cargando los totales del turno y verificando el trabajo guardado…
 Closing needs attention,El cierre requiere atención
@@ -3518,12 +3526,8 @@ Closing shift…,Cerrando turno…
 Add a note explaining the cash difference before closing.,Agrega una nota explicando la diferencia de caja antes de cerrar.
 Load the closing details before continuing.,Carga los datos del cierre antes de continuar.
 Complete the browser review above before closing.,Completa la revisión del navegador de arriba antes de cerrar.
-"Finish or delete the listed drafts, then reload closing details.","Termina o elimina los borradores indicados y actualiza los datos del cierre."
+"Finish or delete the listed drafts, then reload closing details.",Termina o elimina los borradores indicados y actualiza los datos del cierre.
 Confirm the unfinished-sales review above.,Confirma la revisión de ventas pendientes de arriba.
-
-"Retry to reload this list. Your saved work has not been changed.","Vuelve a intentar para cargar esta lista. Tu trabajo guardado no se ha modificado."
-"Selected draft","Borrador seleccionado"
-"Select a draft to continue","Selecciona un borrador para continuar"
 The previous browser released this shift after syncing. You can register this browser and continue closing.,El navegador anterior liberó este turno después de sincronizar. Puedes registrar este navegador y continuar el cierre.
 A supervisor must authorize a transfer or review saved sales. Your cashier account cannot approve that review.,Un supervisor debe autorizar el cambio de navegador o revisar las ventas guardadas. Tu cuenta de cajero no puede aprobar esa revisión.
 "If the original browser is available, sync and review its saved work there, then release the terminal. Return here and check again.","Si el navegador original está disponible, sincroniza y revisa los registros guardados allí; después libera la terminal. Vuelve aquí y revisa de nuevo."
@@ -3531,22 +3535,12 @@ A supervisor must authorize a transfer or review saved sales. Your cashier accou
 "After the supervisor authorizes this browser and records the saved-sales review, sign back in as the original cashier and return to Close Shift.","Cuando el supervisor autorice este navegador y registre la revisión de ventas guardadas, vuelve a iniciar sesión como el cajero original y abre Cerrar turno."
 Open terminal recovery,Abrir recuperación de terminal
 Register this browser and continue,Registrar este navegador y continuar
-Back to Taller,Volver a Taller
-Taller charge,Cobro de Taller
-This register does not accept Taller charge requests. Return to the order or choose its assigned register.,Esta caja no admite solicitudes de cobro de Taller. Vuelve a la orden o elige la caja asignada.
-This register does not accept Taller charge requests.,Esta caja no admite solicitudes de cobro de Taller.
-Taller order,Orden de Taller
-Select its request to collect payment.,Selecciona su solicitud para cobrar.
-Show all charges,Ver todos los cobros
-"No pending charge for this order at this register. If already paid, return to Taller and refresh payment; otherwise check the request and assigned register.","No hay un cobro pendiente de esta orden en esta caja. Si ya se cobró, vuelve a Taller y actualiza el cobro; si no, revisa la solicitud y la caja asignada."
-Save or finish the current sale before loading the Taller charge.,Guarda o termina la venta actual antes de cargar el cobro de Taller.
 "Connection lost. The shift may already be closed, but its status could not be confirmed. Your count is preserved. Reconnect and retry; the server will check the shift before closing it.","Se perdió la conexión. Es posible que el turno ya esté cerrado, pero no se pudo confirmar. Tu conteo se conserva. Reconecta y vuelve a intentar; el servidor revisará el turno antes de cerrarlo."
 Cash custody,Control de efectivo
 POS Cash Safe,Caja fuerte POS
 POS Cash Bag,Bolsa de efectivo POS
 POS Cash Count,Arqueo de efectivo POS
 POS Cash Custody Event,Movimiento de custodia POS
-"Receive a float, return cash, and follow every bag to its next custodian.","Recibe el fondo, entrega el efectivo y sigue cada bolsa hasta su siguiente responsable."
 Safe balance,Saldo de caja fuerte
 Loose cash available,Efectivo sin asignar
 Bank deposits in transit,Depósitos bancarios en tránsito
@@ -3641,13 +3635,11 @@ Bank handling and unpacking are supervisor actions.,Los envíos al banco y la ap
 Bank receipt recorded. The deposit left the transit account.,Comprobante bancario registrado. El depósito salió de la cuenta de efectivo en tránsito.
 Browser storage is unavailable. Save the drawer count before leaving this screen.,El almacenamiento del navegador no está disponible. Guarda el conteo antes de salir de esta pantalla.
 Cash bag handover,Entrega de bolsa de efectivo
-Cash bags,Bolsas de efectivo
 Cash count evidence,Comprobante de conteo de efectivo
 Cash custody could not be checked. Retry before closing.,No se pudo comprobar la custodia de efectivo. Reintenta antes de cerrar.
 "Cash custody is off for this register. Enable it with no open shift and a reconciled, empty drawer account; cash actions stay unavailable until then.",La custodia de efectivo está desactivada en esta caja. Actívala sin turnos abiertos y con la cuenta de caja conciliada y en cero; las acciones de efectivo estarán disponibles después.
 Cash custody queues,Pendientes de custodia de efectivo
 Cash sealed and returned to the safe.,Efectivo embolsado y devuelto a la caja fuerte.
-Check the seal before opening. A count that differs is recorded as a difference for supervisor review.,"Revisa el sello antes de abrir. Si el conteo no coincide, se registra la diferencia para revisión del supervisor."
 Choose a cash bag or count.,Selecciona una bolsa o un conteo de efectivo.
 Choose a handover slip or a bag label.,Selecciona un comprobante de entrega o una etiqueta de bolsa.
 Close shift could not be opened from here. Use the Close Shift destination.,No se pudo abrir el cierre desde aquí. Usa Cerrar turno en el menú lateral.
@@ -3719,7 +3711,6 @@ Prepare a float bag from the safe,Preparar un fondo desde la caja fuerte
 Prepare a new bag with a new seal when the cash moves again.,Prepara una bolsa con un sello nuevo cuando vuelvas a mover el efectivo.
 Prepare the bag,Preparar la bolsa
 Preparing…,Preparando…
-Print bag label / handover,Imprimir etiqueta o entrega de bolsa
 Print count evidence,Imprimir comprobante del conteo
 Print the evidence if the bank copy needs it.,Imprime el comprobante para acompañar la copia bancaria si hace falta.
 Purpose,Destino
@@ -3913,7 +3904,6 @@ Your unsent cash form is still saved on this device. It reopens when the custody
 Your unsent cash form is still saved. It reopens once the unconfirmed cash action is resolved.,Tu formulario de efectivo sin enviar sigue guardado. Se abrirá cuando se resuelva la operación sin confirmar.
 Your unsent cash form was restored. Nothing was sent — check it and confirm.,Se recuperó tu formulario de efectivo sin enviar. No se envió nada; revísalo y confirma.
 "An unsent cash form was saved on this device, but it no longer matches the cash records. It was not reopened and nothing was sent.","Hay un formulario de efectivo sin enviar guardado en este dispositivo, pero ya no coincide con los registros. No se abrió ni se envió nada."
-An unsent cash form saved on this device could not be read. It was left untouched — check the cash records in Desk before repeating a cash action.,No se pudo leer un formulario de efectivo sin enviar guardado en este dispositivo. Se conservó intacto; revisa los registros de efectivo en el escritorio antes de repetir una operación.
 This browser cannot keep your unsent cash form. Nothing was sent. Finish this action now or write the count down before leaving this screen.,Este navegador no puede guardar tu formulario de efectivo sin enviar. No se envió nada. Termina la operación o anota el conteo antes de salir de esta pantalla.
 Discard the damaged saved form,Descartar el formulario guardado dañado
 The saved copy of this cash form could not be removed from this browser. Do not send another cash action from this device until a supervisor checks the cash records in Desk.,No se pudo eliminar la copia guardada de este formulario. No envíes otra operación de efectivo desde este dispositivo hasta que un supervisor revise los registros en el escritorio.
@@ -3936,6 +3926,103 @@ Checking…,Consultando…
 The drawer belongs to another register.,La caja pertenece a otro punto de venta.
 Bag {0},Bolsa {0}
 Open the first one,Abrir el primero
+Workspace actions,Acciones del espacio de trabajo
+Switch workspace,Cambiar de espacio de trabajo
+Workspace,Espacio de trabajo
+Receive cash from safe,Recibir efectivo de caja fuerte
+Choose a bag or count to see its next step.,Elige una bolsa o un conteo para ver el siguiente paso.
+Sealed bag,Bolsa sellada
+Float bag,Bolsa de fondo de caja
+Bank,Banco
+Back to cash queue,Volver a bolsas y conteos
+Details and history,Detalles e historial
+Catalogue settings,Configuración del catálogo
+All categories,Todas las categorías
+Choose a category,Elige una categoría
+All products,Todos los productos
+Saved on this device. Other registers keep their own preferences.,Se guarda en este dispositivo. Las otras cajas conservan sus preferencias.
+Start catalogue with,Al abrir el catálogo
+Automatic: categories on touchscreens,Automático: categorías en pantallas táctiles
+Category boxes on every screen,Cuadros de categorías en todas las pantallas
+Products on every screen,Productos en todas las pantallas
+Search and barcode scanning show products directly.,La búsqueda y el escaneo muestran los productos directamente.
+Product display,Vista de productos
+Sync and performance,Sincronización y rendimiento
+Category navigation and product display on this device,Categorías y vista de productos en este dispositivo
+Registers & shifts,Cajas y turnos
+"Review open shifts, cash activity and recovery","Revisa turnos abiertos, movimientos y recuperación"
+Review registers and shifts,Revisar cajas y turnos
+Daily operation,Operación diaria
+See who has an open shift and what needs attention.,Consulta quién tiene un turno abierto y qué necesita atención.
+Open my shift,Abrir mi turno
+My current shift,Mi turno actual
+Open shifts,Turnos abiertos
+Need attention,Necesitan atención
+Your permitted profiles,Perfiles a los que tienes acceso
+Your shifts only,Solo tus turnos
+Shifts,Turnos
+Shift filter,Filtrar turnos
+"Search cashier, profile or shift","Buscar cajero, perfil o turno"
+"Cashier, profile or shift","Cajero, perfil o turno"
+Could not update shifts. Check the connection and try again.,No se pudieron actualizar los turnos. Revisa la conexión e inténtalo de nuevo.
+Loading shifts…,Cargando turnos…
+No matching shifts,No hay turnos que coincidan
+No shifts need review,No hay turnos pendientes de revisión
+No open shifts,No hay turnos abiertos
+No closed shifts,No hay turnos cerrados
+This list reflects server records. Saved work on other browsers must be checked separately.,Esta lista muestra los registros del servidor. Revisa por separado el trabajo guardado en otros navegadores.
+View open shifts,Ver turnos abiertos
+Recovery review,Revisar recuperación
+From an earlier day,De un día anterior
+Load more shifts,Cargar más turnos
+Back to shifts,Volver a los turnos
+A clear view of each shift,"Cada turno, a la vista"
+Choose a shift to review its cash activity and next step.,Elige un turno para revisar sus movimientos y el siguiente paso.
+Shifts are grouped by POS profile; a profile may be shared by several cashiers.,Los turnos se agrupan por perfil de punto de venta; varios cajeros pueden compartir un perfil.
+Loading shift details…,Cargando detalle del turno…
+This shift could not be loaded. Refresh or check your access.,No se pudo cargar este turno. Actualiza o revisa tus permisos.
+Closed at,Cerrado el
+Review before closing,Revisar antes de cerrar
+"This shift started on an earlier day. Check saved sales, cash movements and the count before closing.","Este turno empezó en un día anterior. Revisa las ventas guardadas, los movimientos de efectivo y el conteo antes de cerrar."
+Resume sale,Volver a vender
+Count and close shift,Contar y cerrar turno
+Sales and cash actions stay with this shift's cashier and authorized browser.,Las ventas y los movimientos de efectivo corresponden al cajero de este turno y a su navegador autorizado.
+Cash and tenders,Efectivo y formas de pago
+Expected amounts are hidden by this profile's blind-count policy.,La política de conteo ciego de este perfil oculta los importes esperados.
+Server expected amounts. Unsynced work is not included.,Importes esperados según el servidor. No incluyen trabajo sin sincronizar.
+No tender activity recorded.,No hay actividad registrada en las formas de pago.
+Recent submitted cash movements,Últimos movimientos de efectivo confirmados
+Up to 20 most recently updated movements for this shift.,Hasta 20 de los movimientos actualizados más recientemente en este turno.
+No submitted cash movements recorded.,No hay movimientos de efectivo confirmados.
+Review browser access,Revisar acceso del navegador
+Open closing record,Abrir registro de cierre
+Site time,Hora del sitio
+Closed history,Historial de cierres
+Sign in to review shifts.,Inicia sesión para revisar turnos.
+Site signing key is not configured.,No se ha configurado la clave de firma del sitio.
+This shift list has expired. Refresh it to continue.,Esta lista de turnos venció. Actualiza para continuar.
+"Choose open shifts, attention, or closed history.","Elige turnos abiertos, pendientes de atención o historial de cierres."
+This shift is unavailable or outside your access.,Este turno no está disponible o no tienes acceso a él.
+Cash movements,Movimientos de efectivo
+You,Tú
+Ask a POS supervisor to review the previous browser and authorize this one from Offline Status. Then return here and check again.,Pide a un supervisor de caja que revise el navegador anterior y autorice este desde Estado sin conexión. Después vuelve aquí y verifica de nuevo.
+Retry to reload this list. Your saved work has not been changed.,Vuelve a intentar para cargar esta lista. Tu trabajo guardado no se ha modificado.
+Selected draft,Borrador seleccionado
+Select a draft to continue,Selecciona un borrador para continuar
+Back to Taller,Volver a Taller
+Taller charge,Cobro de Taller
+This register does not accept Taller charge requests. Return to the order or choose its assigned register.,Esta caja no admite solicitudes de cobro de Taller. Vuelve a la orden o elige la caja asignada.
+This register does not accept Taller charge requests.,Esta caja no admite solicitudes de cobro de Taller.
+Taller order,Orden de Taller
+Select its request to collect payment.,Selecciona su solicitud para cobrar.
+Show all charges,Ver todos los cobros
+"No pending charge for this order at this register. If already paid, return to Taller and refresh payment; otherwise check the request and assigned register.","No hay un cobro pendiente de esta orden en esta caja. Si ya se cobró, vuelve a Taller y actualiza el cobro; si no, revisa la solicitud y la caja asignada."
+Save or finish the current sale before loading the Taller charge.,Guarda o termina la venta actual antes de cargar el cobro de Taller.
+"Receive a float, return cash, and follow every bag to its next custodian.","Recibe el fondo, entrega el efectivo y sigue cada bolsa hasta su siguiente responsable."
+Cash bags,Bolsas de efectivo
+Check the seal before opening. A count that differs is recorded as a difference for supervisor review.,"Revisa el sello antes de abrir. Si el conteo no coincide, se registra la diferencia para revisión del supervisor."
+Print bag label / handover,Imprimir etiqueta o entrega de bolsa
+An unsent cash form saved on this device could not be read. It was left untouched — check the cash records in Desk before repeating a cash action.,No se pudo leer un formulario de efectivo sin enviar guardado en este dispositivo. Se conservó intacto; revisa los registros de efectivo en el escritorio antes de repetir una operación.
 A handover note is required for a blind count or when counted cash differs from the expected amount.,Agrega una nota de entrega para un conteo ciego o cuando el efectivo contado difiera del esperado.
 Enable cash movements and cash deposits on the POS Profile before enabling cash custody.,Activa los movimientos y depósitos de efectivo en el perfil POS antes de habilitar la custodia.
 Set the POS Profile cash movement maximum to zero before enabling cash custody; closing must transfer the complete drawer count.,Establece el máximo por movimiento de efectivo en cero antes de habilitar la custodia; el cierre debe transferir todo el efectivo contado.

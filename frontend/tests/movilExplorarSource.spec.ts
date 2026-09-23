@@ -187,20 +187,16 @@ describe("a coarse pointer gets a 44px target", () => {
 		expect(coarse.length).toBeGreaterThan(0);
 	});
 
-	it("grows the filter chips to the touch floor", () => {
-		const chip = rules(coarse).find((rule) => /__chip--filter::after/.test(rule.selector));
-
-		expect(chip, "no coarse rule expands the filter chip's hit area").toBeTruthy();
-		expect(chip?.body).toMatch(/height:\s*var\(--reg-touch-min,\s*44px\)/);
+	it("gives the filter chips real touch-sized boxes", () => {
+		const chip = rules(styleOf(resolve(BROWSE, "MobileBrowseScreen.vue"))).find((rule) => rule.selector === ".mbrowse__chip");
+		expect(chip?.body).toMatch(/min-height:\s*44px/);
 	});
 
-	it("grows them vertically only, so a tap cannot land on the wrong filter", () => {
-		// Horizontal growth would overlap the neighbouring chip's box and
-		// silently change what the cashier is looking at.
-		const chip = rules(coarse).find((rule) => /__chip--filter::after/.test(rule.selector));
-
-		expect(chip?.body).toMatch(/left:\s*0/);
-		expect(chip?.body).toMatch(/right:\s*0/);
+	it("wraps the categories without overlapping expanded hit areas", () => {
+		const style = styleOf(resolve(BROWSE, "MobileBrowseScreen.vue"));
+		const chips = rules(style).find((rule) => rule.selector === ".mbrowse__chips");
+		expect(chips?.body).toMatch(/flex-wrap:\s*wrap/);
+		expect(style).not.toContain("__chip--filter::after");
 	});
 
 	it("holds the search row at the floor", () => {

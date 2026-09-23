@@ -102,7 +102,7 @@ export function resolveActivation(id: string, ctx: ActivationContext): Activatio
 	if (!def) {
 		return { allowed: false, reason: "unknown", destination: null };
 	}
-	if (!ctx.shiftOpen) {
+	if (!ctx.shiftOpen && def.requiresShift !== false) {
 		return { allowed: false, reason: "shift_closed", destination: def };
 	}
 	if (!isDestinationEnabled(def, ctx)) {
@@ -125,7 +125,7 @@ export interface RailEntry {
 export function railEntries(ctx: ActivationContext): RailEntry[] {
 	return DESTINATIONS.filter((def) => isDestinationEnabled(def, ctx)).map((def) => ({
 		def,
-		enabled: ctx.shiftOpen && (ctx.isOnline || isReachableOffline(def)),
+		enabled: (ctx.shiftOpen || def.requiresShift === false) && (ctx.isOnline || isReachableOffline(def)),
 		blockedOffline: !ctx.isOnline && !isReachableOffline(def),
 	}));
 }

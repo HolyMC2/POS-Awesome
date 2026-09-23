@@ -9,9 +9,6 @@ type UseItemsSelectorPanelSizingArgs = {
 	responsiveStyles: Ref<ResponsiveStyleMap>;
 };
 
-const PHONE_SELECTOR_HEIGHT =
-	"calc(var(--viewport-height) - var(--bottom-safe-space) - 24px)";
-
 export function useItemsSelectorPanelSizing({
 	isPhone,
 	windowWidth,
@@ -24,15 +21,12 @@ export function useItemsSelectorPanelSizing({
 
 	const selectorCardStyle = computed<CSSProperties>(() => {
 		if (isPhone.value) {
-			// Phone keeps an explicit height: the document scrolls below 768px
-			// and the fixed dock eats the bottom, so the panel has to be told
-			// how much room it actually has. The virtual scroller owns all
-			// vertical scroll here — letting the card scroll too gave two
-			// nested scrollers and rows sliding behind the sticky search bar.
+			// The shell/drawer has already budgeted the navbar and dock. Keep
+			// virtualization inside that space, even with the keyboard open.
 			return {
-				height: PHONE_SELECTOR_HEIGHT,
-				maxHeight: PHONE_SELECTOR_HEIGHT,
-				minHeight: "calc(var(--viewport-height) * 0.46)",
+				height: "100%",
+				maxHeight: "100%",
+				minHeight: 0,
 				overflow: "hidden",
 				position: "relative",
 			};

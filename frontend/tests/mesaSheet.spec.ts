@@ -100,6 +100,15 @@ describe("the mesa sheet", () => {
 		expect(mountSheet().find("[data-test='mesa-sheet-split']").exists()).toBe(false);
 	});
 
+	it("offers a separate new account without changing the selected account", async () => {
+		const onNewAccount = vi.fn();
+		const onSelect = vi.fn();
+		const wrapper = mountSheet({ onNewAccount, onSelect });
+		await wrapper.find('[data-test="mesa-sheet-new-account"]').trigger("click");
+		expect(onNewAccount).toHaveBeenCalledTimes(1);
+		expect(onSelect).not.toHaveBeenCalled();
+	});
+
 	it("routes the account choice up rather than picking one itself", async () => {
 		const onSelect = vi.fn();
 		const wrapper = mountSheet({
@@ -123,6 +132,22 @@ describe("the mesa sheet", () => {
 
 		const empty = mountSheet({ orders: [account("ord-a", { items_count: 0, total: 0 })] });
 		expect(empty.find("[data-test='mesa-sheet-release']").exists()).toBe(true);
+	});
+
+	it("offers charge when the shell has no payment band and the selected account has items", async () => {
+		const onCharge = vi.fn();
+		const wrapper = mountSheet({ showCharge: true, onCharge });
+		await wrapper.find('[data-test="mesa-sheet-charge"]').trigger("click");
+		expect(onCharge).toHaveBeenCalledOnce();
+		await wrapper.setProps({ orders: [account("ord-a", { items_count: 0, total: 0 })] });
+		expect(wrapper.find('[data-test="mesa-sheet-charge"]').exists()).toBe(false);
+		expect(mountSheet({ showCharge: false }).find('[data-test="mesa-sheet-charge"]').exists()).toBe(false);
+	});
+
+	it("explains a queued payment and disables actions until it completes", () => {
+		const wrapper = mountSheet({ showCharge: true, orders: [account("ord-a", { status: "Settling" })] });
+		expect(wrapper.text()).toContain("Payment queued — waiting for connection");
+		for (const verb of wrapper.findAll(".mesa-sheet__verb")) expect(verb.attributes("disabled")).toBeDefined();
 	});
 
 	it("keeps Send to kitchen pressable at zero unsent", () => {

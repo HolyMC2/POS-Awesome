@@ -25,14 +25,37 @@
 				on this element simply never has anything to scroll.
 			-->
 			<v-card-text class="pa-0 white-background closing-body">
-				<ClosingReview v-if="!dialog_data.pos_opening_shift" :prepared="false" @retry="retryPreparation" @drafts="reviewDrafts" @sync="syncSavedWork" />
-				<div v-if="dialog_data.pos_opening_shift" class="closing-layout" :class="{ 'closing-layout--no-count': !cashRow, 'closing-layout--custody': custodyEnabled }">
+				<ClosingReview
+					v-if="!dialog_data.pos_opening_shift"
+					:prepared="false"
+					@retry="retryPreparation"
+					@drafts="reviewDrafts"
+					@sync="syncSavedWork"
+				/>
+				<div
+					v-if="dialog_data.pos_opening_shift"
+					class="closing-layout"
+					:class="{
+						'closing-layout--no-count': !cashRow,
+						'closing-layout--custody': custodyEnabled,
+					}"
+				>
 					<!-- Counting the drawer is the ACT this screen exists for, so
 					     it holds its own column and never scrolls away from the
 					     difference band below it. -->
 					<div v-if="cashRow" class="closing-layout__count">
-						<CashClosingAllocation :profile="dialog_data.pos_profile" :opening="dialog_data.pos_opening_shift" :currency="drawerCurrency" :expected="showsExpected ? expectedCash : undefined" @enabled="custodyEnabled=$event" @prepared="dialog_data.cash_custody=$event" @counted="onDrawerCounted" @note="closingNote=$event" />
-						<DrawerCount v-if="!custodyEnabled"
+						<CashClosingAllocation
+							:profile="dialog_data.pos_profile"
+							:opening="dialog_data.pos_opening_shift"
+							:currency="drawerCurrency"
+							:expected="showsExpected ? expectedCash : undefined"
+							@enabled="custodyEnabled = $event"
+							@prepared="dialog_data.cash_custody = $event"
+							@counted="onDrawerCounted"
+							@note="closingNote = $event"
+						/>
+						<DrawerCount
+							v-if="!custodyEnabled"
 							:currency="drawerCurrency"
 							:expected="expectedCash"
 							:breakdown="expectedBreakdown"
@@ -50,7 +73,12 @@
 					     `v-show`, so an inspection in progress survives the
 					     fold. -->
 					<div class="closing-layout__detail">
-						<ClosingReview :prepared="Boolean(dialog_data.pos_opening_shift)" @retry="retryPreparation" @drafts="reviewDrafts" @sync="syncSavedWork" />
+						<ClosingReview
+							:prepared="Boolean(dialog_data.pos_opening_shift)"
+							@retry="retryPreparation"
+							@drafts="reviewDrafts"
+							@sync="syncSavedWork"
+						/>
 						<PaymentReconciliation
 							:payments="dialog_data.payment_reconciliation"
 							:headers="headers"
@@ -59,7 +87,12 @@
 							:format-currency="formatCurrency"
 							:format-float="formatFloat"
 						/>
-						<DifferenceNote v-if="movilCorte && showsExpected && !custodyEnabled" v-model="closingNote" :gate="noteGate" :tolerance-label="formatCurrencyWithSymbolForDrawer(noteGate.tolerance)" />
+						<DifferenceNote
+							v-if="movilCorte && showsExpected && !custodyEnabled"
+							v-model="closingNote"
+							:gate="noteGate"
+							:tolerance-label="formatCurrencyWithSymbolForDrawer(noteGate.tolerance)"
+						/>
 						<button
 							type="button"
 							class="closing-overview-toggle"
@@ -95,7 +128,9 @@
 			</v-card-text>
 
 			<v-divider></v-divider>
-			<p v-if="submitHint" class="closing-submit-hint" role="status" data-testid="closing-submit-hint">{{ submitHint }}</p>
+			<p v-if="submitHint" class="closing-submit-hint" role="status" data-testid="closing-submit-hint">
+				{{ submitHint }}
+			</p>
 
 			<!-- The closing screen owns its footer; the shell hides the sale band. -->
 			<div v-if="bandState" class="closing-band">
@@ -118,7 +153,16 @@
 							}}</span>
 						</div>
 					</template>
-					<template #actions><button type="button" class="closing-back" :disabled="closingFlow.submitting" @click="dismissCorte">{{ __("Back") }}</button></template>
+					<template #actions
+						><button
+							type="button"
+							class="closing-back"
+							:disabled="closingFlow.submitting"
+							@click="dismissCorte"
+						>
+							{{ __("Back") }}
+						</button></template
+					>
 				</ActionBand>
 			</div>
 
@@ -324,7 +368,7 @@ export default {
 
 		const expectedCash = computed(() => Number(cashRow.value?.expected_amount) || 0);
 		const custodyEnabled = ref(false);
-	const countedCash = computed(() => Number(cashRow.value?.closing_amount) || 0);
+		const countedCash = computed(() => Number(cashRow.value?.closing_amount) || 0);
 
 		/**
 		 * A figure the doc already carried. Only ever read at mount — after that
@@ -381,33 +425,57 @@ export default {
 		const responsive = useResponsive();
 		const movilCorte = computed(() => responsive.isCompact.value);
 		const closingNote = ref(dialog_data.value.posa_difference_note || "");
-		const noteGate = computed(() => evaluateNoteGate({
-			difference: countedCash.value - expectedCash.value,
-			takings: Number(dialog_data.value.grand_total) || 0,
-			note: closingNote.value,
-			minorPerMajor: denominationsFor(drawerCurrency.value).minorPerMajor,
-		}));
-		watch(closingNote, (note) => { dialog_data.value.posa_difference_note = note; });
-		const canSubmit = computed(() => Boolean(dialog_data.value.pos_opening_shift) && (!custodyEnabled.value || Boolean(dialog_data.value.cash_custody)) && reconciliationIsValid.value &&
-			closingFlow.terminalReady && !closingFlow.preparing && !closingFlow.submitting && !closingFlow.completed &&
-			!closingFlow.reviewBlocked && (!closingFlow.reviewRequired || closingFlow.reviewAccepted) &&
-			(!movilCorte.value || !showsExpected.value || noteGate.value.canClose));
+		const noteGate = computed(() =>
+			evaluateNoteGate({
+				difference: countedCash.value - expectedCash.value,
+				takings: Number(dialog_data.value.grand_total) || 0,
+				note: closingNote.value,
+				minorPerMajor: denominationsFor(drawerCurrency.value).minorPerMajor,
+			}),
+		);
+		watch(closingNote, (note) => {
+			dialog_data.value.posa_difference_note = note;
+		});
+		const canSubmit = computed(
+			() =>
+				Boolean(dialog_data.value.pos_opening_shift) &&
+				(!custodyEnabled.value || Boolean(dialog_data.value.cash_custody)) &&
+				reconciliationIsValid.value &&
+				closingFlow.terminalReady &&
+				!closingFlow.preparing &&
+				!closingFlow.submitting &&
+				!closingFlow.completed &&
+				!closingFlow.reviewBlocked &&
+				(!closingFlow.reviewRequired || closingFlow.reviewAccepted) &&
+				(!movilCorte.value || !showsExpected.value || noteGate.value.canClose),
+		);
 
 		const submitHint = computed(() => {
 			if (closingFlow.submitting) return __("Closing shift…");
 			if (closingFlow.preparing) return __("Loading shift totals and checking saved work…");
-			if (!dialog_data.value.pos_opening_shift) return __("Load the closing details before continuing.");
+			if (!dialog_data.value.pos_opening_shift)
+				return __("Load the closing details before continuing.");
 			if (!closingFlow.terminalReady) return __("Complete the browser review above before closing.");
-			if (closingFlow.reviewBlocked) return __("Finish or delete the listed drafts, then reload closing details.");
-			if (closingFlow.reviewRequired && !closingFlow.reviewAccepted) return __("Confirm the unfinished-sales review above.");
-			if (custodyEnabled.value && !dialog_data.value.cash_custody) return __("Save the current count and allocate its exact total before closing.");
-			if (!reconciliationIsValid.value) return __("Enter a closing amount for every payment method. Use 0 when there were no payments.");
-			if (movilCorte.value && showsExpected.value && !noteGate.value.canClose) return __("Add a note explaining the cash difference before closing.");
+			if (closingFlow.reviewBlocked)
+				return __("Finish or delete the listed drafts, then reload closing details.");
+			if (closingFlow.reviewRequired && !closingFlow.reviewAccepted)
+				return __("Confirm the unfinished-sales review above.");
+			if (custodyEnabled.value && !dialog_data.value.cash_custody)
+				return __("Save the current count and allocate its exact total before closing.");
+			if (!reconciliationIsValid.value)
+				return __(
+					"Enter a closing amount for every payment method. Use 0 when there were no payments.",
+				);
+			if (movilCorte.value && showsExpected.value && !noteGate.value.canClose)
+				return __("Add a note explaining the cash difference before closing.");
 			return "";
 		});
 
 		const submitDialog = () => {
-			if (!canSubmit.value) { closingFlow.error = submitHint.value; return false; }
+			if (!canSubmit.value) {
+				closingFlow.error = submitHint.value;
+				return false;
+			}
 			if (movilCorte.value && showsExpected.value && !noteGate.value.canClose) {
 				closingFlow.error = __("Add a note explaining the cash difference before closing.");
 				return false;
@@ -466,7 +534,12 @@ export default {
 		const syncSavedWork = () => eventBus?.emit("run_menu_action", { id: "sync-offline-sales" });
 		const retryPreparation = () => eventBus?.emit("open_shift_details");
 		const reviewDrafts = () => eventBus?.emit("open_destination", "drafts");
-		watch(() => [closingFlow.completed, closingFlow.submitting], ([done, busy]) => { if (done && !busy) dismissCorte(); });
+		watch(
+			() => [closingFlow.completed, closingFlow.submitting],
+			([done, busy]) => {
+				if (done && !busy) dismissCorte();
+			},
+		);
 
 		const handleKeydown = (event) => {
 			if (event.key === "Escape" && closingDialog.value) {
@@ -582,7 +655,12 @@ export default {
 </script>
 
 <style scoped>
-.closing-submit-hint { margin: 0; padding: 8px 16px 0; font-size: 13px; line-height: 1.4; }
+.closing-submit-hint {
+	margin: 0;
+	padding: 8px 16px 0;
+	font-size: 13px;
+	line-height: 1.4;
+}
 
 .closing-dialog-card {
 	border-radius: 16px;
@@ -625,8 +703,7 @@ export default {
 	 * NO scrollbar. Open the disclosure and the BODY scrolls: one scroll,
 	 * with the difference band and the actions pinned outside it. */
 	grid-template-rows: auto;
-	grid-template-areas:
-		"count detail";
+	grid-template-areas: "count detail";
 	gap: 16px;
 	padding: 16px;
 	flex: 1 1 auto;
@@ -645,12 +722,16 @@ export default {
  * carry both, and the evidence keeps enough width for the reconciliation's six
  * columns instead of the empty half-screen the live capture showed.
  */
-.closing-layout--custody { grid-template-columns: minmax(690px, 1.2fr) minmax(360px, 1fr); }
+.closing-layout--custody {
+	grid-template-columns: minmax(690px, 1.2fr) minmax(360px, 1fr);
+}
 
 /* Room enough for the reconciliation's six columns to stand without its own
    sideways scroll; the count area keeps everything above that. */
 @container closing-body (min-width: 1500px) {
-	.closing-layout--custody { grid-template-columns: minmax(690px, 1fr) minmax(660px, 0.9fr); }
+	.closing-layout--custody {
+		grid-template-columns: minmax(690px, 1fr) minmax(660px, 0.9fr);
+	}
 }
 
 /*
@@ -667,15 +748,22 @@ export default {
 		flex-direction: column;
 	}
 
-	.closing-layout--custody .closing-layout__detail { display: contents; }
-	.closing-layout--custody .closing-layout__detail > :not(.closing-review) { order: 2; }
-	.closing-layout--custody .closing-layout__count { order: 1; }
-	.closing-layout--custody :deep(.closing-review) { order: 0; }
+	.closing-layout--custody .closing-layout__detail {
+		display: contents;
+	}
+	.closing-layout--custody .closing-layout__detail > :not(.closing-review) {
+		order: 2;
+	}
+	.closing-layout--custody .closing-layout__count {
+		order: 1;
+	}
+	.closing-layout--custody :deep(.closing-review) {
+		order: 0;
+	}
 }
 .closing-layout--no-count {
 	grid-template-columns: minmax(0, 1fr);
-	grid-template-areas:
-		"detail";
+	grid-template-areas: "detail";
 }
 
 .closing-layout__tiles {
@@ -740,10 +828,18 @@ export default {
 			"detail";
 	}
 
-	.closing-layout__detail { display: contents; }
-	.closing-layout__detail > :not(.closing-review) { order: 2; }
-	.closing-layout__count { order: 1; }
-	.closing-layout :deep(.closing-review) { order: 0; }
+	.closing-layout__detail {
+		display: contents;
+	}
+	.closing-layout__detail > :not(.closing-review) {
+		order: 2;
+	}
+	.closing-layout__count {
+		order: 1;
+	}
+	.closing-layout :deep(.closing-review) {
+		order: 0;
+	}
 
 	.closing-layout__count,
 	.closing-layout__detail {
@@ -767,6 +863,23 @@ export default {
 	}
 }
 
+/* Compact screens and the keyboard can leave too little space between the
+   header and footer. Let the entire form scroll instead of shrinking the
+   count area; the close action remains reachable at the end of that form. */
+@media (max-width: 1099.98px), (max-height: 600px) {
+	.closing-dialog-card {
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+	.closing-dialog-card > * {
+		flex-shrink: 0;
+	}
+	.closing-dialog-card > .closing-body {
+		flex: 0 0 auto;
+		overflow: visible;
+	}
+}
+
 .white-background {
 	background-color: rgb(var(--v-theme-surface));
 }
@@ -785,10 +898,22 @@ export default {
 	}
 }
 
-.closing-band :deep(.action-band) { min-height: 100px; }
-.closing-band :deep(.action-band__primary) { min-height: 56px; }
-.closing-back { padding: 10px 16px; min-height: 44px; border: 1px solid currentColor; border-radius: 8px; }
-.closing-back:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 3px; }
+.closing-band :deep(.action-band) {
+	min-height: 100px;
+}
+.closing-band :deep(.action-band__primary) {
+	min-height: 56px;
+}
+.closing-back {
+	padding: 10px 16px;
+	min-height: 44px;
+	border: 1px solid currentColor;
+	border-radius: 8px;
+}
+.closing-back:focus-visible {
+	outline: 2px solid rgb(var(--v-theme-primary));
+	outline-offset: 3px;
+}
 
 .closing-band__row {
 	display: flex;
@@ -818,12 +943,43 @@ export default {
 }
 
 @media (max-width: 599.98px) {
-	.closing-band :deep(.action-band) { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px; min-height: 0; }
-	.closing-band :deep(.action-band__divider), .closing-band :deep(.action-band__spacer), .closing-band :deep(.action-band__context) { display: none; }
-	.closing-band :deep(.action-band__number) { font-size: 28px; }
-	.closing-band :deep(.action-band__primary) { grid-column: 2; grid-row: 1; min-height: 48px; height: auto; min-width: 110px; padding: 8px 12px; font-size: 16px; }
-	.closing-band :deep(.action-band__breakdown) { grid-column: 1; grid-row: 2; font-size: 11px; }
-	.closing-band :deep(.action-band__actions) { grid-column: 2; grid-row: 2; justify-content: end; }
-	.closing-back { padding: 6px 12px; min-height: 36px; }
+	.closing-band :deep(.action-band) {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 8px;
+		padding: 12px;
+		min-height: 0;
+	}
+	.closing-band :deep(.action-band__divider),
+	.closing-band :deep(.action-band__spacer),
+	.closing-band :deep(.action-band__context) {
+		display: none;
+	}
+	.closing-band :deep(.action-band__number) {
+		font-size: 28px;
+	}
+	.closing-band :deep(.action-band__primary) {
+		grid-column: 2;
+		grid-row: 1;
+		min-height: 48px;
+		height: auto;
+		min-width: 110px;
+		padding: 8px 12px;
+		font-size: 16px;
+	}
+	.closing-band :deep(.action-band__breakdown) {
+		grid-column: 1;
+		grid-row: 2;
+		font-size: 11px;
+	}
+	.closing-band :deep(.action-band__actions) {
+		grid-column: 2;
+		grid-row: 2;
+		justify-content: end;
+	}
+	.closing-back {
+		padding: 6px 12px;
+		min-height: 36px;
+	}
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-	<div ref="panelEl" class="floor-view" :class="{ 'floor-view--stage': stage }">
+	<div ref="panelEl" class="floor-view" :class="{ 'floor-view--stage': ownsStage, 'floor-view--compact': !wide }">
 		<!-- Transfer is a modal gesture (spec §4): the banner is the mode, the
 		     whole floor is the target picker, Esc is the way out. -->
 		<div v-if="transferOrder" class="floor-view__banner" role="status">
@@ -11,19 +11,31 @@
 		</div>
 
 		<header class="floor-view__bar">
-			<div class="floor-view__floors">
+			<label v-if="!wide" class="floor-view__picker">
+				<select :aria-label="verticalStore.t('Floor')" :value="activeFloor || ''" data-test="floor-select" @change="floorStore.setActiveFloor(($event.target as HTMLSelectElement).value)">
+					<option v-for="floor in floorTabs" :key="floor.name" :value="floor.name">{{ floor.floor_name }} · {{ floor.busy }}/{{ floor.total }}</option>
+				</select>
+			</label>
+			<div v-else class="floor-view__floors">
 				<button
 					v-for="floor in floorTabs"
 					:key="floor.name"
 					type="button"
 					class="floor-view__floor"
 					:class="{ 'floor-view__floor--active': floor.name === activeFloor }"
+					:aria-pressed="floor.name === activeFloor"
 					:data-test="`floor-tab-${floor.name}`"
 					@click="floorStore.setActiveFloor(floor.name)"
 				>
 					<span class="floor-view__floor-name">{{ floor.floor_name }}</span>
 					<span v-if="floor.total" class="floor-view__floor-count">{{ floor.busy }}/{{ floor.total }}</span>
 				</button>
+			</div>
+
+			<div v-if="!editorMode && floors.length" class="floor-view__modes" :aria-label="verticalStore.t('Floor')">
+				<button type="button" :aria-pressed="viewMode === 'kanban'" data-test="floor-view-list" @click="floorStore.setViewMode('kanban')"><v-icon icon="mdi-view-list-outline" size="18" />{{ verticalStore.t("List view") }}</button>
+				<button type="button" :aria-pressed="viewMode === 'plan'" :disabled="!canShowPlan" data-test="floor-view-plan" @click="floorStore.setViewMode('plan')"><v-icon icon="mdi-floor-plan" size="18" />{{ verticalStore.t(canShowPlan ? "Plan view" : "Plan needs a wider screen") }}</button>
+				<button v-if="!floorStore.tabOrders.length" type="button" data-test="tabs-rail-new" @click="openJump('tab')"><v-icon icon="mdi-plus" size="18" />{{ verticalStore.t("New tab") }}</button>
 			</div>
 			<!-- Two verbs stay on the bar; the rest move behind a labelled menu.
 			     Five icon-only buttons taught nobody what they did and left the
@@ -37,7 +49,7 @@
 					:aria-label="jumpLabel"
 					:title="jumpLabel"
 					data-test="floor-jump"
-					@click="jumpOpen = true"
+					@click="openJump('table')"
 				/>
 				<v-btn
 					size="small"
@@ -63,13 +75,7 @@
 					</template>
 					<v-list density="compact" class="floor-view__menu">
 						<v-list-item
-							:prepend-icon="viewMode === 'plan' ? 'mdi-view-list-outline' : 'mdi-floor-plan'"
-							:title="toggleLabel"
-							data-test="floor-toggle-view"
-							@click="toggleViewMode"
-						/>
-						<v-list-item
-							v-if="viewMode === 'plan' && !editorMode"
+							v-if="viewMode === 'plan' && !editorMode && wide"
 							prepend-icon="mdi-fit-to-page-outline"
 							:title="fitLabel"
 							:active="fit"
@@ -88,7 +94,8 @@
 			</div>
 		</header>
 
-		<TabsRail show-new @open="openTabOrder" @new-tab="jumpOpen = true" />
+
+		<TabsRail v-if="floorStore.tabOrders.length || !floors.length" show-new :compact="!wide" @open="openTabOrder" @new-tab="openJump('tab')" />
 
 		<p v-if="floorStore.error" class="floor-view__error" role="alert">{{ floorStore.error }}</p>
 
@@ -113,7 +120,7 @@
 				:available-width="panelWidth"
 				@done="floorStore.setEditorMode(false)"
 			/>
-			<template v-else-if="!activeFloorTables.length">
+			<template v-else-if="!activeFloorTables.length && viewMode === 'plan'">
 				<div class="floor-view__blank">
 					<v-icon icon="mdi-table-furniture" size="32" />
 					<p class="floor-view__blank-text">{{ emptyFloorLabel }}</p>
@@ -129,7 +136,7 @@
 				:selected-table="selectedTableName"
 				@open="askTable"
 			/>
-			<FloorKanban v-else @open="askTable" />
+			<FloorKanban v-else :selected-table="selectedTableName" @open="askTable" @edit="floorStore.setEditorMode(true)" />
 
 			<!-- The mesa sheet: the whole answer for the table under the finger,
 			     beside the room instead of over it. Only where the stage is the
@@ -140,17 +147,20 @@
 				class="floor-view__sheet"
 				:table="mesaSheetTable"
 				:orders="selectedTableOrders"
-				:selected-uid="selectedAccountUid"
+				:selected-uid="selectedAccount?.order_uid || null"
+				:show-charge="!ownsBand"
 				:firing="firing"
 				:releasing="releasing"
 				@select="pickAccount"
 				@add-items="sheetAddItems"
 				@fire="sheetFire"
 				@view="sheetView"
+				@charge="chargeSelectedAccount"
 				@transfer="sheetTransfer"
 				@release="sheetRelease"
 				@open="sheetOpenTable"
 				@clean="sheetClean"
+				@new-account="onSheetAction('new-account', mesaSheetTable)"
 			/>
 
 			<!-- The open ticket's own detail. Transfer starts here rather than from
@@ -214,7 +224,7 @@
 			</v-card>
 		</v-dialog>
 
-		<JumpPad v-model="jumpOpen" @open-table="openTable" @open-tab="openNamedTab" />
+		<JumpPad v-model="jumpOpen" :mode="jumpMode" @open-table="openTable" @open-tab="openNamedTab" />
 		<TableActionSheet
 			v-model="sheetOpen"
 			:table="sheetTable"
@@ -278,22 +288,23 @@
  * usable proxy for the room this component actually has, and a media query
  * here would put a side rail on a 500px column.
  */
-import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import FloorEditor from "./FloorEditor.vue";
 import FloorKanban from "./FloorKanban.vue";
 import FloorPlan from "./FloorPlan.vue";
 import JumpPad from "./JumpPad.vue";
 import MesaSheet from "./MesaSheet.vue";
-import TableActionSheet, { type TableSheetAction } from "./TableActionSheet.vue";
+import TableActionSheet, { type AccountSheetAction, type TableSheetAction } from "./TableActionSheet.vue";
 import TableTicketPanel from "./TableTicketPanel.vue";
 import TabsRail from "./TabsRail.vue";
-import { resolveCanvas } from "./floorGeometry";
+import { resolveCanvas, resolveTableLayout } from "./floorGeometry";
 import { bus as importedBus } from "../../bus";
 import * as restaurantApi from "../../api/restaurant";
 import { useFloorStore, type OrderRow, type TableRow } from "../../stores/floorStore";
 import { useInvoiceStore } from "../../stores/invoiceStore";
 import { useVerticalStore } from "../../stores/verticalStore";
 import { useFormat } from "../../format";
+import { useResponsive } from "../../composables/core/useResponsive";
 import { resolveBandState, type BandState } from "../../composables/pos/shell/bandState";
 import { trackCustomMark } from "../../utils/telemetry";
 import type { KotProjection } from "../../../offline/restaurantTypes";
@@ -353,9 +364,15 @@ const floorStore = useFloorStore();
 const verticalStore = useVerticalStore();
 const { formatCurrency } = useFormat();
 
+const { windowHeight } = useResponsive();
 const panelEl = ref<HTMLElement | null>(null);
 const panelWidth = ref(0);
 const jumpOpen = ref(false);
+const jumpMode = ref<"table" | "tab">("table");
+function openJump(mode: "table" | "tab") {
+	jumpMode.value = mode;
+	jumpOpen.value = true;
+}
 const sheetOpen = ref(false);
 const sheetTable = ref<TableRow | null>(null);
 const firing = ref(false);
@@ -367,11 +384,14 @@ const floors = computed(() => floorStore.floors);
 const activeOrder = computed(() => floorStore.activeOrder);
 const activeFloor = computed(() => floorStore.activeFloor);
 const activeFloorTables = computed(() => floorStore.activeFloorTables);
-const viewMode = computed(() => floorStore.viewMode);
+const viewMode = computed(() =>
+	!canShowPlan.value || (!floorStore.hasViewPreference && panelWidth.value > 0 && !wide.value)
+		? "kanban" : floorStore.viewMode,
+);
 const editorMode = computed(() => floorStore.editorMode);
 const transferOrder = computed(() => floorStore.transferOrder);
 
-const wide = computed(() => panelWidth.value >= WIDE_PANEL);
+const wide = computed(() => panelWidth.value >= WIDE_PANEL && windowHeight.value >= 600);
 /** The full-stage arrangement: the shell gave up the sale's column AND there
  *  is enough measured width to lay the room out beside a sheet. */
 const stage = computed(() => props.ownsStage && wide.value);
@@ -416,6 +436,19 @@ const planWidth = computed(() => {
 	return Math.max(0, panelWidth.value - (wide.value && activeOrder.value ? RAIL_WIDTH : 0));
 });
 
+// A compact plan must fit while retaining 44px table targets. Otherwise the
+// same tables remain fully actionable in the list, without sideways panning.
+const canShowPlan = computed(() => {
+	if (panelWidth.value >= 1100 || !panelWidth.value) return true;
+	const canvas = resolveCanvas(floorStore.activeFloorRow);
+	const sizes = activeFloorTables.value.map((table, i) => {
+		const layout = resolveTableLayout(table, i, canvas);
+		return Math.min(layout.w, layout.h) * canvas.cell;
+	});
+	const smallest = sizes.length ? Math.min(...sizes) : canvas.cell;
+	return canvas.cols * canvas.cell * Math.max(0.25, Math.min(1, 44 / Math.max(1, smallest))) + 16 <= planWidth.value;
+});
+
 const canvasWidth = computed(() => {
 	const canvas = resolveCanvas(floorStore.activeFloorRow);
 	return canvas.cols * canvas.cell;
@@ -427,7 +460,7 @@ const canvasWidth = computed(() => {
  * see the whole floor, not its top-left corner.
  */
 const fit = computed(() =>
-	fitOverride.value === null ? canvasWidth.value > planWidth.value : fitOverride.value,
+	!wide.value || (fitOverride.value === null ? canvasWidth.value > planWidth.value : fitOverride.value),
 );
 
 /** Occupancy per floor, so the switcher reports the room instead of naming it. */
@@ -467,9 +500,7 @@ const noFloorsLabel = computed(() => verticalStore.t("No floors configured for t
 const noFloorsHint = computed(() =>
 	verticalStore.t("Add a floor in the register's setup, then lay out its tables here."),
 );
-const toggleLabel = computed(() =>
-	viewMode.value === "plan" ? verticalStore.t("List view") : verticalStore.t("Plan view"),
-);
+
 const transferBannerText = computed(() => {
 	const order = transferOrder.value;
 	const who = order?.tab_name || order?.order_uid.slice(0, 6) || "";
@@ -511,7 +542,7 @@ const floorBandState = computed<BandState>(() =>
 		kind: "floorAccount",
 		total: Number(selectedAccount.value?.total) || 0,
 		accountLabel: selectedAccountLabel.value,
-		chargeable: Number(selectedAccount.value?.items_count) > 0,
+		chargeable: Number(selectedAccount.value?.items_count) > 0 && selectedAccount.value?.status !== "Settling",
 	}),
 );
 
@@ -753,9 +784,6 @@ async function release() {
 	}
 }
 
-function toggleViewMode() {
-	floorStore.setViewMode(viewMode.value === "plan" ? "kanban" : "plan");
-}
 
 /**
  * A tap on a tile ASKS instead of acting (see TableActionSheet for why the
@@ -789,7 +817,12 @@ function floorActionEnd(startedAt: number) {
  * question is the sheet BESIDE the room; otherwise it is the modal, unchanged.
  * Either way the tile creates nothing on its own.
  */
-function askTable(table: TableRow) {
+async function askTable(table: TableRow) {
+	if (table.floor !== floorStore.activeFloor) {
+		floorStore.setActiveFloor(table.floor);
+		// Let the floor-change watcher clear the old selection before selecting this result.
+		await nextTick();
+	}
 	if (stage.value && panelWidth.value >= STAGE_SHEET_MIN_PANEL) {
 		selectTable(table);
 		return;
@@ -981,12 +1014,14 @@ async function onSheetAction(action: TableSheetAction, table: TableRow) {
 /** A table with split accounts never routes through openOrCreate: that server
  * helper deliberately chooses the oldest order, while the operator has just
  * named the exact account they mean. Hydrate and open that row directly. */
-async function openSelectedOrder(row: OrderRow) {
+async function openSelectedOrder(row: OrderRow, action: AccountSheetAction = "view") {
 	const startedAt = floorActionStart();
 	const order = await floorStore.resumeOrder(row);
 	if (order) {
 		floorActionEnd(startedAt);
-		bus.emit("floor_order_opened", { order_uid: order.order_uid });
+		if (action === "charge") chargeActiveOrder();
+		else if (action === "add-items") goToItems();
+		else bus.emit("floor_order_opened", { order_uid: order.order_uid });
 	}
 }
 
@@ -1028,7 +1063,7 @@ async function openNamedTab(tabName: string) {
 	const order = await floorStore.openTab(tabName);
 	if (order) {
 		floorActionEnd(startedAt);
-		bus.emit("floor_order_opened", { order_uid: order.order_uid });
+		goToItems();
 	}
 }
 

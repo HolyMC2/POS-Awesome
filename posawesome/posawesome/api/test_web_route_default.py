@@ -1,10 +1,4 @@
-"""Regression guards for the /posapp default (2026-07-24 semantics flip).
-
-`posa_use_web_route` used to be an opt-in defaulting to 0, while
-`page/posapp/posapp.js` bounced every /app/posapp hit back to /posapp — so a
-profile that never got the flag toggled trapped its cashiers in a redirect
-ping-pong. The SPA is now the default and the flag is an explicit opt-OUT.
-"""
+"""Canonical route and retired POS Profile preference regression tests."""
 
 import json
 import pathlib
@@ -18,34 +12,16 @@ PATCH_PATH = REPO_ROOT / "posawesome" / "patches" / "set_web_route_default_on.py
 WEB_ROUTE_PATH = REPO_ROOT / "posawesome" / "www" / "posapp.py"
 
 
-def _load_custom_field(name):
-    for field in json.loads(FIXTURES_PATH.read_text()):
-        if field.get("name") == name:
-            return field
-    raise AssertionError(f"Missing fixture field {name}")
-
-
 class TestWebRouteFixtureAndRedirect(unittest.TestCase):
-    """Static guards — no frappe needed, safe under bench."""
+    def test_retired_field_is_absent_from_fixture_and_hooks(self):
+        fields = json.loads(FIXTURES_PATH.read_text())
+        self.assertFalse(any(f.get("fieldname") == "posa_use_web_route" for f in fields))
+        self.assertFalse(any(f.get("insert_after") == "posa_use_web_route" for f in fields))
+        self.assertNotIn('"POS Profile-posa_use_web_route"', (REPO_ROOT / "posawesome/hooks.py").read_text())
 
-    def test_flag_defaults_on_in_fixtures(self):
-        field = _load_custom_field("POS Profile-posa_use_web_route")
-
-        self.assertEqual(field.get("default"), "1")
-
-    def test_patch_backfills_existing_profiles(self):
-        source = PATCH_PATH.read_text()
-
-        self.assertIn('"default": "1"', source)
-        self.assertIn("update `tabPOS Profile` set posa_use_web_route = 1", source)
-
-    def test_optout_redirect_carries_legacy_bypass(self):
-        # Without ?legacy=1 the Desk Page controller bounces straight back
-        # here → infinite loop. This is THE bug; keep the suffix.
-        source = WEB_ROUTE_PATH.read_text()
-
-        self.assertIn('redirect_location = "/app/posapp?legacy=1"', source)
-        self.assertNotIn('redirect_location = "/app/posapp"', source)
+    def test_historical_patch_cannot_recreate_field(self):
+        import runpy
+        runpy.run_path(str(PATCH_PATH))["execute"]()
 
 
 def _install_stubs():
@@ -138,8 +114,8 @@ class TestWebRouteDecision(unittest.TestCase):
         # The old opt-in read returned False here → the redirect loop.
         self.assertTrue(self._decide("cashier@example.com", []))
 
-    def test_all_profiles_explicitly_off_falls_back_to_desk(self):
-        self.assertFalse(self._decide("cashier@example.com", [(0,), (0,)]))
+    def test_old_optout_values_no_longer_change_route(self):
+        self.assertTrue(self._decide("cashier@example.com", [(0,), (0,)]))
 
     def test_any_profile_on_gets_spa(self):
         self.assertTrue(self._decide("cashier@example.com", [(0,), (1,)]))
@@ -152,6 +128,45 @@ class TestWebRouteDecision(unittest.TestCase):
 
     def test_administrator_always_gets_spa(self):
         self.assertTrue(self._decide("Administrator", [(0,)]))
+
+
+    def test_web_controller_renders_for_authenticated_user_without_profile_lookup(self):
+        import importlib.util
+        from unittest.mock import Mock
+        spec = importlib.util.spec_from_file_location("canonical_pos_web", WEB_ROUTE_PATH)
+        route = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(route)
+        self.frappe.session.user = "cashier@example.com"
+        self.frappe.db.sql = Mock(side_effect=AssertionError("must not query route preferences"))
+        self.frappe.sessions = types.SimpleNamespace(get_csrf_token=lambda: "test-token")
+        self.frappe.local.flags = types.SimpleNamespace()
+        self.frappe.Redirect = type("Redirect", (Exception,), {})
+        route._build_boot_payload = lambda: {"user": "cashier@example.com"}
+        route._read_asset_manifest = lambda: {}
+        result = route.get_context({})
+        self.assertEqual(result["user"], "cashier@example.com")
+        self.assertFalse(hasattr(self.frappe.local.flags, "redirect_location"))
+        self.frappe.session.user = "Guest"
+        with self.assertRaises(self.frappe.Redirect):
+            route.get_context({})
+        self.assertEqual(self.frappe.local.flags.redirect_location, "/login?redirect-to=/posapp")
+
+    def test_retirement_is_repeatable_and_reconnects_following_fields(self):
+        import runpy
+        from unittest.mock import Mock
+        field = "POS Profile-posa_use_web_route"
+        remaining = {field}
+        self.frappe.get_all = Mock(side_effect=lambda dt, **kw: ["following-field"] if dt == "Custom Field" else [])
+        self.frappe.db.exists = lambda dt, name: name in remaining
+        self.frappe.db.set_value = Mock()
+        self.frappe.delete_doc = Mock(side_effect=lambda dt, name, **kw: remaining.discard(name))
+        self.frappe.clear_cache = Mock()
+        execute = runpy.run_path(str(REPO_ROOT / "posawesome/patches/remove_web_route_setting.py"))["execute"]
+        execute()
+        execute()
+        self.frappe.delete_doc.assert_called_once_with("Custom Field", field, force=True, ignore_permissions=True)
+        self.frappe.db.set_value.assert_called_with("Custom Field", "following-field", "insert_after", "posa_use_server_cache")
+        self.assertEqual(self.frappe.clear_cache.call_count, 2)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,8 @@
 <template>
 	<section v-if="tabOrders.length || showNew" class="tabs-rail">
 		<header class="tabs-rail__header">
-			<span class="tabs-rail__title">{{ title }}</span>
+			<button v-if="compact && chips.length" type="button" class="tabs-rail__toggle" :aria-expanded="expanded" data-test="tabs-toggle" @click="expanded = !expanded">{{ title }} ({{ chips.length }}) <v-icon :icon="expanded ? 'mdi-chevron-up' : 'mdi-chevron-down'" size="18" /></button>
+			<span v-else class="tabs-rail__title">{{ title }}<span v-if="chips.length"> ({{ chips.length }})</span></span>
 			<v-btn
 				v-if="showNew"
 				size="small"
@@ -14,7 +15,7 @@
 				{{ newLabel }}
 			</v-btn>
 		</header>
-		<div v-if="chips.length" class="tabs-rail__strip">
+		<div v-if="chips.length && (!compact || expanded)" class="tabs-rail__strip">
 			<button
 				v-for="chip in chips"
 				:key="chip.order.order_uid"
@@ -40,7 +41,7 @@
 				</span>
 			</button>
 		</div>
-		<p v-else class="tabs-rail__empty">{{ emptyLabel }}</p>
+		<p v-else-if="!chips.length && !compact" class="tabs-rail__empty">{{ emptyLabel }}</p>
 	</section>
 </template>
 
@@ -55,13 +56,14 @@
  * how long it has sat, and how much of it the kitchen has not seen. The v1
  * showed two unlabelled integers.
  */
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useFloorStore, type OrderRow } from "../../stores/floorStore";
 import { useVerticalStore } from "../../stores/verticalStore";
 import { useFormat } from "../../format";
 import { ageStep, formatIdleShort, idleMinutes, useFloorClock } from "./floorClock";
 
-defineProps<{ showNew?: boolean }>();
+defineProps<{ showNew?: boolean; compact?: boolean }>();
+const expanded = ref(false);
 const emit = defineEmits<{
 	(event: "open", order: OrderRow): void;
 	(event: "new-tab"): void;
@@ -74,7 +76,7 @@ const { now } = useFloorClock();
 
 const tabOrders = computed(() => floorStore.tabOrders);
 const activeUid = computed(() => floorStore.activeOrder?.order_uid || null);
-const title = computed(() => verticalStore.t("Tabs"));
+const title = computed(() => verticalStore.t("Tabs without a table"));
 const newLabel = computed(() => verticalStore.t("New tab"));
 /**
  * This rail is the TABLE-LESS one, and its empty state has to say so.
@@ -104,6 +106,25 @@ const chips = computed(() =>
 </script>
 
 <style scoped>
+.tabs-rail__toggle {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 44px;
+	text-align: start;
+	color: var(--pos-text-primary);
+	font-size: 14px;
+	font-weight: 600;
+}
+.tabs-rail__header :deep(.v-btn) {
+	min-height: 44px;
+}
+.tabs-rail__toggle:focus-visible,
+.tabs-rail__chip:focus-visible {
+	outline: 2px solid var(--pos-primary);
+	outline-offset: 2px;
+}
+
 .tabs-rail {
 	flex: 0 0 auto;
 	padding: 6px 8px;
@@ -126,12 +147,11 @@ const chips = computed(() =>
 	color: var(--pos-text-secondary);
 }
 
-/* Horizontal strip: the rail must never make the page scroll sideways, so the
-   overflow lives here. */
+/* Accounts wrap into the available width, including long names. */
 .tabs-rail__strip {
-	display: flex;
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
 	gap: 6px;
-	overflow-x: auto;
 	padding-bottom: 2px;
 }
 
@@ -141,7 +161,7 @@ const chips = computed(() =>
 	justify-content: center;
 	gap: 2px;
 	flex: 0 0 auto;
-	min-width: 104px;
+	min-width: 0;
 	min-height: 48px;
 	padding: 6px 10px;
 	border: 1px solid var(--pos-border);
@@ -188,7 +208,7 @@ const chips = computed(() =>
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
 	font-size: 13px;
 	font-weight: 700;
 	color: var(--pos-text-primary);

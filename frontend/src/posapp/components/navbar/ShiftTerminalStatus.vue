@@ -1,6 +1,6 @@
 <template>
 	<div class="shift-terminal-status">
-	<section class="offline-status-panel__warning" data-test="shift-terminal-status" v-if="openingName">
+	<section class="offline-status-panel__warning" data-test="shift-terminal-status" v-if="openingName && !managementOnly">
 		<strong>{{ __("Selling terminal") }}</strong>
 		<p>{{ status?.owned ? __("This browser owns the shift.") : __("This shift must be registered to this browser before selling.") }}</p>
 		<p v-if="status && !status.owned && !status.can_manage">{{ __("Ask a supervisor to sign in on this replacement browser, authorize your shift, then sign back in here. Saved sales remain with their original cashier.") }}</p>
@@ -25,16 +25,17 @@
 		<p v-if="error" role="alert">{{ error }}</p>
 		<TerminalInvoiceRecovery v-if="status?.can_manage" />
 	</section>
-    <section v-if="managerAllowed" class="offline-status-panel__warning" data-test="manager-terminal-selector">
+    <section v-if="managerAllowed || managerError" class="offline-status-panel__warning" data-test="manager-terminal-selector">
         <strong>{{ __("Manager: authorize a replacement browser") }}</strong>
         <p>{{ __("Select the cashier's open shift. Authorization uses this browser; afterward the cashier must sign in here. Previous browsers cannot submit new sales.") }}</p>
-        <label>{{ __("Cashier shift") }}
+        <p v-if="initialShift">{{ initialShift }}</p>
+        <label v-else>{{ __("Cashier shift") }}
             <select v-model="selectedShift" @change="selectManagerShift" data-test="manager-shift-select">
                 <option value="">{{ __("Select an open shift") }}</option>
                 <option v-for="shift in managerShifts" :key="shift.name" :value="shift.name">{{ shift.user }} — {{ shift.pos_profile }} — {{ shift.name }}</option>
             </select>
         </label>
-        <template v-if="selectedShift">
+        <template v-if="selectedShift && managerAllowed">
             <label>{{ __("Recovery reason or reconciliation record") }}<textarea v-model="managerReason" maxlength="1000" rows="2" data-test="manager-shift-reason" /></label>
             <label><input type="checkbox" v-model="managerAcknowledged" data-test="manager-shift-ack" />{{ __("I understand previous browsers may still contain unsynced sales and must be checked.") }}</label>
             <button @click="manageSelected('transfer_terminal')" :disabled="busy || !managerAcknowledged || managerReason.trim().length < 8" data-test="manager-shift-transfer">{{ __("Authorize this browser for the selected cashier") }}</button>
@@ -54,6 +55,8 @@ import { getPendingShiftWorkCount } from "../../../offline/shiftQueueGuard";
 import { currentQueueOwner } from "../../../offline/queueOwnership";
 import { applyTerminalStatus, getShiftTerminalContext, getTerminalCredentials, refreshTerminalStatus, terminalFenceKey } from "../../../offline/shiftTerminal";
 
+const props = defineProps<{ initialShift?: string; managementOnly?: boolean }>();
+const emit = defineEmits<{ changed: [] }>();
 const __ = (window as any).__ || ((value: string) => value);
 const openingName = memory.pos_opening_storage?.pos_opening_shift?.name;
 const status = ref<any>(memory.pos_opening_storage?.terminal_status || null);
@@ -73,6 +76,12 @@ const managerError = ref("");
 async function loadManagerShifts() {
     if (isOffline()) return;
     try {
+        if (props.initialShift) {
+            selectedShift.value = props.initialShift;
+            await selectManagerShift();
+            managerAllowed.value = managerStatus.value?.can_manage === true;
+            return;
+        }
         const response = await (window as any).frappe.call({ method: "posawesome.posawesome.api.shift_terminal.list_manageable_open_shifts" });
         managerAllowed.value = response.message?.can_manage === true;
         managerShifts.value = response.message?.shifts || [];
@@ -102,6 +111,7 @@ async function manageSelected(action: string) {
                 reason: managerReason.value, acknowledge_saved_work: Number(managerAcknowledged.value) },
         });
         managerStatus.value = response.message;
+        emit("changed");
         if (selectedShift.value === openingName) { applyTerminalStatus(response.message); await refresh(); }
     } catch (failure) { managerError.value = String((failure as Error).message); }
     finally { busy.value = false; }
@@ -155,7 +165,7 @@ async function act(action: string) {
 	finally { busy.value = false; }
 }
 
-onMounted(() => { if (openingName) void refresh(); void loadManagerShifts(); });
+onMounted(() => { if (openingName && !props.managementOnly) void refresh(); void loadManagerShifts(); });
 </script>
 
 <style scoped>

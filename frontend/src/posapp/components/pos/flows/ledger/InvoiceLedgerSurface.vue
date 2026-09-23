@@ -1,78 +1,80 @@
 <template>
 	<section class="ledger-surface" data-testid="ledger-surface">
-		<InvoiceLedgerHeader
-			ref="headerRef"
-			:segments="segments"
-			:active-segment="segment"
-			:counts="counts"
-			:modes="modes"
-			:active-mode="mode"
-			:query="query"
-			:date-from="dateFrom"
-			:date-to="dateTo"
-			:sources="draftSources"
-			:active-source="draftSource"
-			@segment="chooseSegment"
-			@mode="chooseMode"
-			@source="chooseSource"
-			@update:query="setQuery"
-			@update:date-from="publishFilters($event, dateTo)"
-			@update:date-to="publishFilters(dateFrom, $event)"
-		/>
-
-		<v-alert v-if="loadError" type="error" variant="tonal" role="alert" class="ledger-surface__error">
-			{{ loadError }}
-			<div>{{ __("Retry to reload this list. Your saved work has not been changed.") }}</div>
-			<v-btn :loading="loading" @click="$emit('retry')">{{ __("Retry") }}</v-btn>
-		</v-alert>
-
-		<InvoiceLedgerFigures v-if="!loadError"
-			:figures="figures"
-			:format-currency="formatCurrency"
-			:currency-symbol="currencySymbol"
-		/>
-
-		<div v-if="!loadError" class="ledger-surface__body">
-			<InvoiceLedgerTable
-				ref="tableRef"
-				:rows="visibleRows"
-				:columns="columns"
-				:selected-index="selectedIndex"
-				:format-currency="formatCurrency"
-				:page="collection.pageNo"
-				:page-count="collection.pageCount"
-				:total="collection.total"
-				:page-size="pageSize"
-				:loaded-on-page="pageRows.length"
-				:footer-kind="footerKind"
-				:loading="loading"
-				@select="selectAt"
-				@open="openRow"
-				@page="$emit('page', { tab: activeTab, page: $event })"
+		<div class="ledger-surface__scroll" :inert="isPhone && selectedRow ? true : undefined">
+			<InvoiceLedgerHeader
+				ref="headerRef"
+				:segments="segments"
+				:active-segment="segment"
+				:counts="counts"
+				:modes="modes"
+				:active-mode="mode"
+				:query="query"
+				:date-from="dateFrom"
+				:date-to="dateTo"
+				:sources="draftSources"
+				:active-source="draftSource"
+				@segment="chooseSegment"
+				@mode="chooseMode"
+				@source="chooseSource"
+				@update:query="setQuery"
+				@update:date-from="publishFilters($event, dateTo)"
+				@update:date-to="publishFilters(dateFrom, $event)"
 			/>
 
-			<InvoiceLedgerPanel
-				:row="selectedRow"
-				:detail="matchedDetail"
-				:crm="crmContext"
+
+			<v-alert v-if="loadError" type="error" variant="tonal" role="alert" class="ledger-surface__error">
+				{{ loadError }}
+				<div>{{ __("Retry to reload this list. Your saved work has not been changed.") }}</div>
+				<v-btn :loading="loading" @click="$emit('retry')">{{ __("Retry") }}</v-btn>
+			</v-alert>
+
+			<InvoiceLedgerFigures v-if="!loadError"
+				:figures="figures"
 				:format-currency="formatCurrency"
-				:format-float="formatFloat"
 				:currency-symbol="currencySymbol"
-				:is-repair-candidate="isRepairCandidate"
-				:draft-actions-for="draftActionsFor"
-				:draft-action-label="draftActionLabel"
-				:can-delete-draft="canDeleteDraft"
-				:repair-busy="repairBusy"
-				:offline="offline"
-				@print="withRow('print')"
-				@return="withRow('return')"
-				@collect="withRow('collect')"
-				@delete-draft="withRow('deleteDraft')"
-				@repair="withRow('repair')"
-				@draft-action="onDraftAction"
-				@close="selectedName = null"
 			/>
+
+			<div v-if="!loadError" class="ledger-surface__body">
+				<InvoiceLedgerTable
+					ref="tableRef"
+					:rows="visibleRows"
+					:columns="columns"
+					:selected-index="selectedIndex"
+					:format-currency="formatCurrency"
+					:page="collection.pageNo"
+					:page-count="collection.pageCount"
+					:total="collection.total"
+					:page-size="pageSize"
+					:loaded-on-page="pageRows.length"
+					:footer-kind="footerKind"
+					:loading="loading"
+					@select="selectAt"
+					@open="openRow"
+					@page="$emit('page', { tab: activeTab, page: $event })"
+				/>
+			</div>
 		</div>
+		<InvoiceLedgerPanel v-if="!loadError"
+			:row="selectedRow"
+			:detail="matchedDetail"
+			:crm="crmContext"
+			:format-currency="formatCurrency"
+			:format-float="formatFloat"
+			:currency-symbol="currencySymbol"
+			:is-repair-candidate="isRepairCandidate"
+			:draft-actions-for="draftActionsFor"
+			:draft-action-label="draftActionLabel"
+			:can-delete-draft="canDeleteDraft"
+			:repair-busy="repairBusy"
+			:offline="offline"
+			@print="withRow('print')"
+			@return="withRow('return')"
+			@collect="withRow('collect')"
+			@delete-draft="withRow('deleteDraft')"
+			@repair="withRow('repair')"
+			@draft-action="onDraftAction"
+			@close="selectedName = null"
+		/>
 	</section>
 </template>
 
@@ -97,6 +99,7 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { BandState } from "../../../../composables/pos/shell/bandState";
 import { translate as __ } from "./ledgerText";
+import { useResponsive } from "../../../../composables/core/useResponsive";
 
 import InvoiceLedgerFigures from "./InvoiceLedgerFigures.vue";
 import InvoiceLedgerHeader from "./InvoiceLedgerHeader.vue";
@@ -131,6 +134,8 @@ import {
 	fetchCrmContext,
 	type CrmContext,
 } from "../../../../services/crmService";
+
+const { isPhone } = useResponsive();
 
 const props = withDefaults(
 	defineProps<{
@@ -488,7 +493,7 @@ defineExpose({ focusRing: () => tableRef.value?.focusRing?.() });
 	/* The phone sheet (InvoiceLedgerPanel's frame) positions against this. */
 	position: relative;
 	display: flex;
-	flex-direction: column;
+	flex-direction: row;
 	gap: var(--reg-space-md, 10px);
 	flex: 1 1 auto;
 	min-height: 0;
@@ -498,6 +503,15 @@ defineExpose({ focusRing: () => tableRef.value?.focusRing?.() });
 
 .ledger-surface__error {
 	flex: 0 0 auto;
+}
+
+.ledger-surface__scroll {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	gap: var(--reg-space-md, 10px);
+	min-width: 0;
+	min-height: 0;
 }
 
 .ledger-surface__body {
@@ -511,13 +525,36 @@ defineExpose({ focusRing: () => tableRef.value?.focusRing?.() });
    bottom half: a 372 px panel beside a seven-column table leaves neither
    readable on a 1,024 px register. */
 @media (max-width: 1180px) {
-	.ledger-surface__body {
+	.ledger-surface {
 		flex-direction: column;
 	}
 
-	.ledger-surface__body :deep(.ledger-panel:not(.ledger-panel--sheet)) {
+	.ledger-surface :deep(.ledger-panel:not(.ledger-panel--sheet)) {
 		width: auto;
 		max-height: 45%;
+	}
+}
+
+/* Search, figures, rows and pagination scroll together on compact screens.
+   The detail sheet stays a sibling, anchored to the visible surface. */
+@media (max-width: 1099.98px), (max-height: 600px) {
+	.ledger-surface__scroll {
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+
+	.ledger-surface__scroll > *,
+	.ledger-surface__body :deep(.ledger-table),
+	.ledger-surface__body :deep(.ledger-table__body) {
+		flex: 0 0 auto;
+	}
+
+	.ledger-surface__body :deep(.ledger-table) {
+		width: 100%;
+		overflow: visible;
+	}
+	.ledger-surface__body :deep(.ledger-table__body) {
+		overflow: visible;
 	}
 }
 

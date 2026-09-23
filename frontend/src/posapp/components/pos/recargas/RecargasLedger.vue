@@ -41,7 +41,7 @@
 						<td class="reg-mono recargas-ledger__num" :data-money-role="MONEY_ROLE.entry">
 							{{ formatCurrency(entry.amount) }}
 						</td>
-						<td class="recargas-ledger__num">
+						<td class="recargas-ledger__num recargas-ledger__status">
 							<span
 								class="recargas-chip"
 								:class="`recargas-chip--${entry.outcome}`"
@@ -245,5 +245,37 @@ const __ = (window as any).__ || ((value: string) => value);
 .recargas-chip--failed {
 	background: var(--reg-tone-danger-bg, #fdeaea);
 	color: var(--reg-tone-danger-ink, #b42318);
+}
+/* The same history becomes compact records on phones: every field stays
+   visible, including long service names and references, without side panning. */
+@media (max-width: 1099.98px) {
+	.recargas-ledger { min-width: 0; padding: 12px; }
+	.recargas-ledger__head { flex-wrap: wrap; gap: 4px; }
+	.recargas-ledger__scroll { overflow: visible; }
+	.recargas-ledger__table,
+	.recargas-ledger__table tbody { display: block; }
+	.recargas-ledger__table thead { display: none; }
+	.recargas-ledger__table tr {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas: "what amount" "reference time" "status status";
+		gap: 6px 10px;
+		padding: 12px 0;
+		border-bottom: 1px solid var(--reg-divider-soft);
+	}
+	.recargas-ledger__table td {
+		min-width: 0;
+		height: auto;
+		padding: 0;
+		border: 0;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+	.recargas-ledger__what { grid-area: what; }
+	.recargas-ledger__ref { grid-area: reference; }
+	.recargas-ledger__time { grid-area: time; text-align: right; }
+	.recargas-ledger__table td[data-money-role] { grid-area: amount; }
+	.recargas-ledger__status { grid-area: status; }
+	.recargas-chip { max-width: 100%; white-space: normal; text-align: left; }
 }
 </style>

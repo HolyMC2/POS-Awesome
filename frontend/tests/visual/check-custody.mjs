@@ -5,7 +5,7 @@ import { createServer } from "vite";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 const root = process.cwd(),
-	out = "/tmp/pos-ux-crew/visual";
+	out = process.env.POSA_CUSTODY_ARTIFACTS || "/tmp/pos-cash-workspace-20260922/visual";
 await mkdir(out, { recursive: true });
 const server = await createServer({
 	root,

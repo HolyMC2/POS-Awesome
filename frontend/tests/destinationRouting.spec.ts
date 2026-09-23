@@ -43,14 +43,19 @@ const effects = (): DestinationEffects & {
 };
 
 describe("the shift is the outermost envelope", () => {
-	it("refuses every destination before the shift opens", () => {
+	it("refuses transactional destinations before the shift opens", () => {
 		// The canvas annotation on page 1 says it outright: el turno es el sobre
 		// de todo lo demás. Until it opens the register genuinely cannot do
 		// anything, so nothing is reachable — not even by URL.
-		for (const def of DESTINATIONS) {
+		for (const def of DESTINATIONS.filter((entry) => entry.requiresShift !== false)) {
 			const decision = resolveActivation(def.id, ctx({ shiftOpen: false }));
 			expect(decision.allowed, `${def.id} was reachable with no shift`).toBe(false);
 		}
+	});
+
+	it("allows read-only register review without a shift, but still requires a connection", () => {
+		expect(resolveActivation("registers", ctx({ shiftOpen: false })).allowed).toBe(true);
+		expect(resolveActivation("registers", ctx({ shiftOpen: false, isOnline: false }))).toMatchObject({ allowed: false, reason: "offline" });
 	});
 
 	it("reports the shift before the network, so nobody fixes the wrong thing", () => {

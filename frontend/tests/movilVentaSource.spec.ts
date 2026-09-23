@@ -364,8 +364,9 @@ describe("the sale screen reuses rather than re-derives", () => {
 		expect(header).toMatch(/compact:\s*true/);
 	});
 
-	it("takes the phone's height budget from the catalogue's, not a second guess", () => {
+	it("leaves the viewport budget to the shell and scrolls the whole sale", () => {
 		const screen = readFileSync(resolve(SALE, "MobileSaleScreen.vue"), "utf8");
-		expect(screen).toContain("useItemsSelectorPanelSizing");
+		expect(screen).not.toContain("useItemsSelectorPanelSizing");
+		expect(screen).toMatch(/\.movil-venta\s*\{[^}]*overflow-y:\s*auto/);
 	});
 });

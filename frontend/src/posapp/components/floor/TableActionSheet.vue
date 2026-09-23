@@ -1,6 +1,7 @@
 <template>
-	<v-dialog :model-value="modelValue" max-width="340" @update:model-value="close">
+	<v-dialog :model-value="modelValue" max-width="460" @update:model-value="close">
 		<v-card class="table-sheet pos-themed-card" data-test="table-action-sheet">
+			<button type="button" class="table-sheet__close" :aria-label="__('Close')" data-testid="table-sheet-close" @click="close"><v-icon icon="mdi-close" size="22" /></button>
 			<header class="table-sheet__head">
 				<span class="table-sheet__where">
 					<v-icon icon="mdi-table-furniture" size="18" />
@@ -12,24 +13,30 @@
 			</header>
 
 			<p v-if="metaLine" class="table-sheet__meta">{{ metaLine }}</p>
+			<p v-if="!multipleOrders && orders[0]?.status === 'Settling'" class="table-sheet__account-note" role="status">{{ verticalStore.t("Payment queued — waiting for connection") }}</p>
 
 			<div v-if="multipleOrders" class="table-sheet__actions" data-test="table-sheet-accounts">
 				<p class="table-sheet__prompt">{{ chooseAccountLabel }}</p>
-				<button
-					v-for="order in orders"
-					:key="order.order_uid"
-					type="button"
-					class="table-sheet__action table-sheet__account"
-					:data-test="`table-sheet-order-${order.order_uid}`"
-					@click="pickOrder(order)"
-				>
-					<v-icon icon="mdi-receipt-text-outline" size="20" />
-					<span class="table-sheet__action-text">
-						<strong>{{ order.tab_name || order.order_uid.slice(0, 6) }}</strong>
-						<small>{{ orderSummary(order) }}</small>
-					</span>
-					<span v-if="order.unsent_count" class="table-sheet__action-badge">{{ order.unsent_count }}</span>
-				</button>
+				<p class="table-sheet__prompt">{{ verticalStore.t("They are charged separately — pick the one you mean.") }}</p>
+				<section v-for="order in orders" :key="order.order_uid" class="table-sheet__account-card" :aria-label="accountName(order)">
+					<button type="button" class="table-sheet__account-heading" :disabled="order.status === 'Settling'" :data-test="`table-sheet-order-${order.order_uid}`" @click="pickOrder(order)">
+						<span class="table-sheet__action-text">
+							<strong>{{ accountName(order) }}</strong>
+							<small>{{ orderSummary(order) }} <template v-if="order.status !== 'Settling'"> · {{ verticalStore.t("View order") }}</template></small>
+						</span>
+						<v-icon icon="mdi-chevron-right" size="20" />
+					</button>
+					<p v-if="order.unsent_count" class="table-sheet__account-note">{{ order.unsent_count }} {{ verticalStore.t("not sent to the kitchen") }}</p>
+					<p v-if="order.status === 'Settling'" class="table-sheet__account-note" role="status">{{ verticalStore.t("Payment queued — waiting for connection") }}</p>
+					<div v-else class="table-sheet__account-actions">
+						<button type="button" class="table-sheet__action" :data-test="`table-sheet-add-${order.order_uid}`" :aria-label="`${verticalStore.t('Add items')} · ${accountName(order)}`" @click="pickOrder(order, 'add-items')">
+							<v-icon icon="mdi-plus" size="18" />{{ verticalStore.t("Add items") }}
+						</button>
+						<button v-if="Number(order.items_count) > 0" type="button" class="table-sheet__action table-sheet__action--primary" :data-test="`table-sheet-charge-${order.order_uid}`" :aria-label="`${verticalStore.t('Charge')} · ${accountName(order)} · ${formatCurrency(Number(order.total) || 0)}`" @click="pickOrder(order, 'charge')">
+							<v-icon icon="mdi-cash-register" size="18" />{{ verticalStore.t("Charge") }}
+						</button>
+					</div>
+				</section>
 				<!-- Add yet another party to a table that already has two or more
 				     cuentas — the picker otherwise replaces the action rows. -->
 				<button
@@ -74,6 +81,8 @@
  * because `<script setup>` may not carry ES exports — the parent needs the
  * union to type its handler.
  */
+export type AccountSheetAction = "view" | "add-items" | "charge";
+
 export type TableSheetAction =
 	| "open"
 	| "new-account"
@@ -113,7 +122,7 @@ const props = defineProps<{
 const emit = defineEmits<{
 	(event: "update:modelValue", value: boolean): void;
 	(event: "action", action: TableSheetAction, table: TableRow): void;
-	(event: "order", order: OrderRow): void;
+	(event: "order", order: OrderRow, action: AccountSheetAction): void;
 }>();
 
 const __ = window.__ || ((value: string) => value);
@@ -193,6 +202,9 @@ const actions = computed<ActionRow[]>(() => {
 	if (needsCleaning.value && !occupied.value) {
 		return [{ id: "clean", icon: "mdi-broom", label: verticalStore.t("Mark clean"), primary: true }];
 	}
+	if (occupied.value && orders.value[0]?.status === "Settling") {
+		return [{ id: "new-account", icon: "mdi-account-multiple-plus-outline", label: verticalStore.t("New account") }];
+	}
 	if (occupied.value) {
 		rows.push({
 			id: "add-items",
@@ -262,8 +274,10 @@ function pick(action: TableSheetAction) {
 	close();
 }
 
-function pickOrder(order: OrderRow) {
-	emit("order", order);
+const accountName = (order: OrderRow) => order.tab_name || order.order_uid.slice(0, 6);
+
+function pickOrder(order: OrderRow, action: AccountSheetAction = "view") {
+	emit("order", order, action);
 	close();
 }
 
@@ -274,6 +288,34 @@ function orderSummary(order: OrderRow) {
 </script>
 
 <style scoped>
+.table-sheet {
+	position: relative;
+	max-height: calc(100dvh - 48px);
+	overflow-y: auto !important;
+}
+.table-sheet__close {
+	position: sticky;
+	top: 0;
+	align-self: flex-end;
+	flex: none;
+	width: 44px;
+	min-height: 44px;
+	margin-bottom: -54px;
+	z-index: 1;
+	background: var(--pos-surface);
+	color: var(--pos-text-primary);
+	border: 1px solid var(--pos-border);
+	border-radius: 8px;
+}
+.table-sheet__head {
+	padding-inline-end: 52px;
+	flex-wrap: wrap;
+}
+.table-sheet button:focus-visible {
+	outline: 2px solid var(--pos-primary);
+	outline-offset: 2px;
+}
+
 .table-sheet {
 	display: flex;
 	flex-direction: column;
@@ -301,8 +343,8 @@ function orderSummary(order: OrderRow) {
 .table-sheet__title {
 	overflow: hidden;
 	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: 17px;
+	overflow-wrap: anywhere;
+	font-size: 20px;
 	font-weight: 700;
 	color: var(--pos-text-primary);
 }
@@ -351,17 +393,25 @@ function orderSummary(order: OrderRow) {
 	font-size: 12px;
 }
 
-.table-sheet__account .table-sheet__action-text {
+.table-sheet__account .table-sheet__action-text,
+.table-sheet__account-heading .table-sheet__action-text {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
 }
 
-.table-sheet__account small {
+.table-sheet__account small,
+.table-sheet__account-heading small {
 	color: var(--pos-text-secondary);
-	font-size: 11px;
+	font-size: 13px;
 	font-weight: 500;
 }
+
+.table-sheet__account-card { min-width: 0; padding: 10px; border: 1px solid var(--pos-border); border-radius: 12px; }
+.table-sheet__account-heading { display: flex; align-items: center; width: 100%; min-height: 48px; gap: 8px; text-align: start; font-size: 16px; }
+.table-sheet__account-note { margin: 4px 0 8px; font-size: 13px; color: var(--pos-text-secondary); }
+.table-sheet__account-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.table-sheet__account-actions .table-sheet__action { flex: 1 1 100px; justify-content: center; padding: 8px; overflow-wrap: anywhere; }
 
 .table-sheet__action {
 	display: flex;
@@ -395,7 +445,7 @@ function orderSummary(order: OrderRow) {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
 }
 
 .table-sheet__action-badge {
@@ -413,7 +463,7 @@ function orderSummary(order: OrderRow) {
 }
 
 .table-sheet__cancel {
-	min-height: 40px;
+	min-height: 44px;
 	border: 0;
 	border-radius: 10px;
 	background: transparent;

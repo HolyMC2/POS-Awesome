@@ -19,19 +19,7 @@
 			:format-currency="formatMoney"
 		/>
 
-		<!-- The count scrolls; the difference above it and the action below it do
-		     not. Ten steppers at the touch minimum are ~500 px of rows on a
-		     390 × 844 phone, and the two things a cashier alternates between —
-		     "what does the drawer say" and "what am I still missing" — must not
-		     be able to leave the screen while the other is being read.
-
-		     The artboard collapses `$5 · $2 · $1` into one row to make the card
-		     fit without scrolling. We do not, and the reason is arithmetic: one
-		     count over three face values cannot produce a subtotal (the drawn
-		     "11 → $26" has several solutions), so that row would be an ASSERTION
-		     sitting inside a card whose entire purpose is that the total is a
-		     DERIVATION. Scrolling costs a gesture; collapsing costs the property.
-		     Reported to the lead rather than decided silently. -->
+		<!-- The dialog scrolls the whole count and its action together. -->
 		<div class="movil-corte__count">
 			<DrawerCount
 				:currency="currency"
@@ -294,7 +282,7 @@ defineExpose({ gate, bandState, difference, counted });
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
-	height: 100%;
+	height: auto;
 	background: var(--reg-surface-sunken, #f8f9fa);
 }
 
@@ -331,10 +319,9 @@ defineExpose({ gate, bandState, difference, counted });
 }
 
 .movil-corte__count {
-	flex: 1 1 auto;
+	flex: none;
 	min-height: 0;
-	overflow-y: auto;
-	-webkit-overflow-scrolling: touch;
+	overflow: visible;
 	margin: var(--reg-space-md, 10px) 11px 0;
 }
 

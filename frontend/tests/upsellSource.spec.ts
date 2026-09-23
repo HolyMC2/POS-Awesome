@@ -160,12 +160,16 @@ describe("one fetch per register, never one per cart change", () => {
 		// The drawer wants the category chip and the strip wants the tiles, and
 		// they ask together on register open — the worst possible moment for a
 		// duplicate round trip.
-		call.mockImplementation(
-			() => new Promise((resolve) => setTimeout(() => resolve({ message: [HONOR_COMBO_PAYLOAD] }), 0)),
-		);
+		// Hold the response explicitly: a zero-delay timer yields to unrelated
+		// offline-startup work and made the global RPC spy timing-dependent.
+		let respond!: (_value: { message: typeof HONOR_COMBO_PAYLOAD[] }) => void;
+		call.mockImplementation(() => new Promise((resolve) => { respond = resolve; }));
 		const drawer = useComboOffers();
 		const strip = useComboOffers();
-		await Promise.all([drawer.load({ pos_profile: PROFILE }), strip.load({ pos_profile: PROFILE })]);
+		const pending = [drawer.load({ pos_profile: PROFILE }), strip.load({ pos_profile: PROFILE })];
+		expect(call).toHaveBeenCalledTimes(1);
+		respond({ message: [HONOR_COMBO_PAYLOAD] });
+		await Promise.all(pending);
 
 		expect(call).toHaveBeenCalledTimes(1);
 		expect(drawer.offers.value).toEqual(strip.offers.value);

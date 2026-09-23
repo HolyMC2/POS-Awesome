@@ -5228,8 +5228,8 @@ onMounted(() => {
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
-	max-height: 360px;
-	overflow: auto;
+	/* The dashboard is the scrollport; long lists remain part of its page. */
+	max-height: none;
 	padding-right: 2px;
 }
 

@@ -1,4 +1,5 @@
 const SETTINGS_KEY = "posawesome_item_selector_settings";
+export const ITEM_SETTINGS_CHANGED = "posa:item-settings-changed";
 
 /**
  * Interface for item selector settings.
@@ -38,6 +39,7 @@ export const saveItemSelectorSettings = (settings: ItemSelectorSettings): boolea
     try {
         const merged = { ...(loadItemSelectorSettings() || {}), ...settings };
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
+        window.dispatchEvent(new Event(ITEM_SETTINGS_CHANGED));
         return true;
     } catch (error) {
         console.error("Failed to save item selector settings:", error);

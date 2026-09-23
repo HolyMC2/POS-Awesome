@@ -1,11 +1,10 @@
 <template>
-	<div fluid :class="rtlClasses">
+	<div fluid class="pay-view" :class="rtlClasses">
 		<AppLoadingOverlay :visible="isPaymentRouteLocked" :message="paymentsLoadingMessage" />
 		<v-row v-show="!dialog">
 			<v-col md="8" cols="12" class="pb-2 pr-0">
 				<v-card
-					class="main mx-auto mt-3 p-3 pb-16 overflow-y-auto pos-themed-card"
-					style="max-height: calc(100dvh - 32px); height: calc(100dvh - 32px)"
+					class="main mx-auto mt-3 p-3 pos-themed-card"
 				>
 					<div class="pay-mode-controls">
 						<div class="pay-mode-controls__group">
@@ -168,7 +167,6 @@
 			<v-col md="4" cols="12" class="pb-3">
 				<v-card
 					class="invoices mx-auto mt-3 p-3 pos-themed-card"
-					style="max-height: calc(100dvh - 32px); height: calc(100dvh - 32px)"
 				>
 					<PayTotalsSidebar
 						v-model:exchange-rate="exchangeRate"
@@ -1380,6 +1378,27 @@ export default {
 </script>
 
 <style>
+.pay-view {
+	min-width: 0;
+}
+
+.pay-view > .v-row {
+	margin: 0;
+}
+
+.pay-view .main,
+.pay-view .invoices {
+	height: auto;
+	max-height: none;
+	overflow: visible;
+}
+
+.pay-view .pay-mode-toggle {
+	height: auto;
+	min-height: 48px;
+	overflow: visible;
+}
+
 .selected-row {
 	background-color: #e3f2fd !important;
 	/* Paired ink, per the dark-mode-pairs rule: a background stated with

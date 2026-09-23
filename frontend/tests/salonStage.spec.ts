@@ -80,6 +80,7 @@ vi.mock("../src/posapp/format", () => ({
 	useFormat: () => ({ formatCurrency: (value: number) => `$${Number(value).toFixed(2)}` }),
 }));
 vi.mock("../src/posapp/components/floor/floorGeometry", () => ({
+	resolveTableLayout: () => ({ w: 2, h: 2 }),
 	resolveCanvas: () => ({ cols: 12, rows: 8, cell: 64 }),
 }));
 vi.mock("../src/posapp/utils/telemetry", () => ({ trackCustomMark: vi.fn() }));

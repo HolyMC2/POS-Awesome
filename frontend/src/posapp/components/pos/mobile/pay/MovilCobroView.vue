@@ -318,12 +318,19 @@ const pieceLabel = computed(() =>
 
 <style scoped>
 .movil-cobro {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	overscroll-behavior: contain;
 	display: flex;
 	flex-direction: column;
 	gap: var(--reg-space-md, 10px);
 	min-height: 0;
 	padding: var(--reg-space-md, 10px) 11px;
 	background: var(--reg-surface-sunken, #f8f9fa);
+}
+
+.movil-cobro > * {
+	flex-shrink: 0;
 }
 
 .movil-cobro__head {
@@ -383,7 +390,7 @@ const pieceLabel = computed(() =>
 }
 
 .movil-cobro__pad {
-	flex: 1 1 auto;
+	flex: 0 0 auto;
 	min-height: 0;
 }
 

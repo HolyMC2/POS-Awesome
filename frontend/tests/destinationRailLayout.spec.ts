@@ -109,29 +109,43 @@ describe("Gasto's geometry is its own, not a utility that may not exist", () => 
 		// the register columns already use; the second half is the one that
 		// actually lets a flex child shrink (commit 59c5fe1ad).
 		expect(style).toContain(".cash-movement-destination {");
-		expect(style).toMatch(/\.cash-movement-destination\s*\{[^}]*flex:\s*1 1 auto/);
-		expect(style).toMatch(/\.cash-movement-destination\s*\{[^}]*min-height:\s*0/);
+		expect(style).toMatch(
+			/\.cash-movement-destination\s*\{[^}]*flex:\s*1 1 auto/,
+		);
+		expect(style).toMatch(
+			/\.cash-movement-destination\s*\{[^}]*min-height:\s*0/,
+		);
 	});
 
 	it("opens exactly ONE scrollport, and it is the body", () => {
 		const style = read(VIEW).slice(read(VIEW).indexOf("<style"));
-		const scrollports = [...style.matchAll(/overflow(-y)?:\s*(auto|scroll)/g)];
+		const scrollports = [
+			...style.matchAll(/overflow(-y)?:\s*(auto|scroll)/g),
+		];
 		expect(
 			scrollports.length,
 			"a destination surface has its own scroll needs but must not nest a second scrollport",
 		).toBe(1);
-		expect(style).toMatch(/\.cash-movement-destination__body\s*\{[^}]*overflow-y:\s*auto/);
+		expect(style).toMatch(
+			/\.cash-movement-destination__body\s*\{[^}]*overflow-y:\s*auto/,
+		);
 	});
 
 	it("puts the form and its history in ONE grid, so they share a column edge", () => {
 		const style = read(VIEW);
 		// They used to be two `v-col`s that shared nothing but a row, which is
 		// why they did not line up.
-		expect(style).toMatch(/\.cash-movement-destination__body\s*\{[^}]*display:\s*grid/);
-		expect(style).toMatch(/grid-template-columns:\s*minmax\(320px, 5fr\) minmax\(0, 7fr\)/);
+		expect(style).toMatch(
+			/\.cash-movement-destination__body\s*\{[^}]*display:\s*grid/,
+		);
+		expect(style).toMatch(
+			/grid-template-columns:\s*minmax\(320px, 5fr\) minmax\(0, 7fr\)/,
+		);
 		// The row takes the leftover height instead of leaving half the surface
 		// empty under the form.
-		expect(style).toMatch(/grid-template-rows:\s*minmax\(min-content, 1fr\)/);
+		expect(style).toMatch(
+			/grid-template-rows:\s*minmax\(min-content, 1fr\)/,
+		);
 	});
 
 	it("keeps the direction strip, the account labels and the submit untouched", () => {
@@ -151,8 +165,12 @@ describe("Gasto's geometry is its own, not a utility that may not exist", () => 
 
 describe("the corte, hosted beside the rail", () => {
 	it("owns its closing band while the shell hides the sale band", () => {
-		expect(read(CORTE)).toContain('<div v-if="bandState" class="closing-band">');
-		expect(read("../src/posapp/components/pos/shell/Pos.vue")).toContain('v-show="railVisible && hostedDestinationId !== \'closing\'"');
+		expect(read(CORTE)).toContain(
+			'<div v-if="bandState" class="closing-band">',
+		);
+		expect(read("../src/posapp/components/pos/shell/Pos.vue")).toContain(
+			"v-show=\"railVisible && !['closing', 'registers'].includes(hostedDestinationId)\"",
+		);
 	});
 
 	it("removes its OWN listener and not everybody's", () => {
@@ -162,12 +180,16 @@ describe("the corte, hosted beside the rail", () => {
 		// the hosted copy unmounting would have taken the navbar's «Close
 		// shift» with it.
 		const corte = read(CORTE);
-		expect(corte).toContain('eventBus.off("open_ClosingDialog", handleOpenClosingDialog)');
+		expect(corte).toContain(
+			'eventBus.off("open_ClosingDialog", handleOpenClosingDialog)',
+		);
 		expect(corte).not.toContain('eventBus.off("open_ClosingDialog");');
 	});
 
 	it("has no competing floating copy in the layout", () => {
-		expect(read("../src/posapp/layouts/DefaultLayout.vue")).not.toContain("<ClosingDialog");
+		expect(read("../src/posapp/layouts/DefaultLayout.vue")).not.toContain(
+			"<ClosingDialog",
+		);
 	});
 
 	it("relays its band state to the shell boundary instead of dead-ending", () => {
@@ -175,14 +197,18 @@ describe("the corte, hosted beside the rail", () => {
 		// surface can feed its own band from the same state" — and the host
 		// used to drop it. `Pos.vue` is free to ignore it and does today; the
 		// corte keeps its own Submit and prints the difference itself.
-		const host = read("../src/posapp/components/pos/shell/destinations/DestinationHost.vue");
+		const host = read(
+			"../src/posapp/components/pos/shell/destinations/DestinationHost.vue",
+		);
 		expect(host).toContain("@band=\"$emit('band', $event)\"");
 		// update:selectedDetail joined in movil round 3 — the orden surface
 		// publishes its loaded selection so the phone's chrome can front it.
 		expect(host).toContain(
 			'defineEmits<{ dismiss: []; band: [BandState]; "update:selectedDetail": [unknown] }>()',
 		);
-		expect(read(CORTE)).toContain('watch(bandState, (state) => emit("band", state)');
+		expect(read(CORTE)).toContain(
+			'watch(bandState, (state) => emit("band", state)',
+		);
 	});
 
 	it("asks the shell to prepare the shift rather than forking the close flow", () => {

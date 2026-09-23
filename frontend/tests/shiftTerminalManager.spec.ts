@@ -41,3 +41,29 @@ it("lets a supervisor without an own opening authorize this browser for a select
     expect(getTerminalCredentials()).toEqual(proof);
     wrapper.unmount();
 });
+
+it("opens the workspace's exact shift without a truncated selector or changing cashier context", async () => {
+    const call = vi.fn(async ({ method, args }: any) => {
+        expect(method.endsWith("get_terminal_status")).toBe(true);
+        expect(args.opening_shift).toBe("TARGET-OPEN");
+        return { message: { can_manage: true, owned: false, recovery_pending: true } };
+    });
+    (window as any).frappe = { session: { user: "manager@example.com" }, call };
+    const wrapper = mount(ShiftTerminalStatus, { props: { initialShift: "TARGET-OPEN", managementOnly: true } });
+    await flushPromises();
+    expect(wrapper.find('[data-test="manager-shift-select"]').exists()).toBe(false);
+    expect(wrapper.get('[data-test="manager-terminal-selector"]').text()).toContain("TARGET-OPEN");
+    expect(wrapper.get('[data-test="manager-shift-transfer"]').attributes("disabled")).toBeDefined();
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(memory.pos_opening_storage).toBeNull();
+    wrapper.unmount();
+});
+
+it("shows a failed selected-shift permission check and offers no transfer", async () => {
+    (window as any).frappe = { session: { user: "manager@example.com" }, call: vi.fn().mockRejectedValue(new Error("Shift access denied")) };
+    const wrapper = mount(ShiftTerminalStatus, { props: { initialShift: "TARGET-OPEN", managementOnly: true } });
+    await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toContain("Shift access denied");
+    expect(wrapper.find('[data-test="manager-shift-transfer"]').exists()).toBe(false);
+    wrapper.unmount();
+});

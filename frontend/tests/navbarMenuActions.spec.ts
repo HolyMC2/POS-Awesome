@@ -18,6 +18,16 @@ const flushPromises = async () => {
 };
 
 describe("NavbarMenu action surfaces", () => {
+	it("opens the shared help workflow from the menu without a floating checkout obstruction", () => {
+		const openHelp = vi.fn();
+		vi.stubGlobal("docoSupport", { openHelp });
+		const context = { menuOpen: true };
+		expect(navbarMenuOptions.methods.hasSupport.call(context)).toBe(true);
+		navbarMenuOptions.methods.openSupport.call(context);
+		expect(context.menuOpen).toBe(false);
+		expect(openHelp).toHaveBeenCalledOnce();
+		vi.unstubAllGlobals();
+	});
 	beforeEach(() => {
 		setActivePinia(createPinia());
 		vi.stubGlobal("__", (value: string) => value);
@@ -130,13 +140,14 @@ describe("NavbarMenu action surfaces", () => {
 		await flushPromises();
 
 		expect((wrapper.vm as any).quickActions.map((action: any) => action.id)).toEqual([
+			"registers",
 			"switch-cashier",
 			"lock-screen",
 			"print-last-invoice",
 			"sync-offline-sales",
 			"close-shift",
 		]);
-		expect((wrapper.vm as any).quickActions[3].label).toBe("Sync Offline Sales");
+		expect((wrapper.vm as any).quickActions.find((action: any) => action.id === "sync-offline-sales").label).toBe("Sync Offline Sales");
 
 		const sections = (wrapper.vm as any).settingsSections;
 		expect(sections.map((section: any) => section.id)).toEqual([

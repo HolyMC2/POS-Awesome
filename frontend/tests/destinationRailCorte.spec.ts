@@ -7,10 +7,16 @@ import { createPinia, setActivePinia } from "pinia";
 import { createVuetify } from "vuetify";
 
 vi.mock("../src/posapp/components/pos/closing/ClosingRecovery.vue", () => ({
-	default: { template: '<div />', mounted() { this.$emit("ready", true); } },
+	default: {
+		template: "<div />",
+		mounted() {
+			this.$emit("ready", true);
+		},
+	},
 }));
 
 import ClosingDialog from "../src/posapp/components/pos/shell/ClosingDialog.vue";
+import { useUIStore } from "../src/posapp/stores/uiStore";
 import { DESTINATION_SURFACE } from "../src/posapp/components/pos/shell/destinations/surfaceContext";
 
 /** Minimal mitt stand-in that respects the handler argument to `off`. */
@@ -39,16 +45,30 @@ const closingShift = () => ({
 	period_start_date: "2026-08-22 09:02:00",
 	period_end_date: "2026-08-22 20:05:00",
 	payment_reconciliation: [
-		{ mode_of_payment: "Efectivo", opening_amount: 1500, expected_amount: 5391, closing_amount: 0 },
+		{
+			mode_of_payment: "Efectivo",
+			opening_amount: 1500,
+			expected_amount: 5391,
+			closing_amount: 0,
+		},
 	],
 });
 
 const overviewMessage = {
 	total_invoices: 31,
 	company_currency: "MXN",
-	cash_expected: { mode_of_payment: "Efectivo", company_currency_total: 5391, by_currency: [] },
+	cash_expected: {
+		mode_of_payment: "Efectivo",
+		company_currency_total: 5391,
+		by_currency: [],
+	},
 	payments_by_mode: [],
-	cash_movements: { count: 0, company_currency_total: 0, by_currency: [], by_type: [] },
+	cash_movements: {
+		count: 0,
+		company_currency_total: 0,
+		by_currency: [],
+		by_type: [],
+	},
 	draft_invoices: { count: 0 },
 };
 
@@ -66,7 +86,9 @@ const mountCorte = (
 				...(hosted
 					? {
 							[DESTINATION_SURFACE as symbol]: {
-								attachTo: { value: document.createElement("div") },
+								attachTo: {
+									value: document.createElement("div"),
+								},
 								destinationId: { value: "closing" },
 							},
 						}
@@ -82,7 +104,9 @@ beforeEach(() => {
 	window.innerWidth = 1440;
 	setActivePinia(createPinia());
 	vi.stubGlobal("__", (text: string) => text);
-	vi.stubGlobal("format_number", (value: number) => Number(value || 0).toFixed(2));
+	vi.stubGlobal("format_number", (value: number) =>
+		Number(value || 0).toFixed(2),
+	);
 	vi.stubGlobal("flt", (value: number) => Number(value) || 0);
 	vi.stubGlobal("get_currency_symbol", () => "$");
 	vi.stubGlobal("frappe", {
@@ -96,6 +120,17 @@ afterEach(() => {
 });
 
 describe("the corte as a rail destination", () => {
+	it("removes expected headers when moving to a blind-count profile", async () => {
+		const ui = useUIStore();
+		ui.posProfile = { name: "Visible", hide_expected_amount: 0 } as any;
+		const wrapper = mountCorte(makeBus(), false);
+		await nextTick();
+		expect((wrapper.vm as any).headers.some((h: any) => h.value === "expected_amount")).toBe(true);
+		ui.posProfile = { name: "Blind count", hide_expected_amount: 1 } as any;
+		await nextTick();
+		expect((wrapper.vm as any).headers.map((h: any) => h.value)).toEqual(["mode_of_payment", "opening_amount", "closing_amount"]);
+		wrapper.unmount();
+	});
 	it("asks the shell to prepare the shift when it is hosted", async () => {
 		const bus = makeBus();
 		const asked: number[] = [];
@@ -104,7 +139,10 @@ describe("the corte as a rail destination", () => {
 		const hosted = mountCorte(bus, true);
 		await nextTick();
 
-		expect(asked, "a hosted corte that never asks renders an empty surface").toHaveLength(1);
+		expect(
+			asked,
+			"a hosted corte that never asks renders an empty surface",
+		).toHaveLength(1);
 		hosted.unmount();
 	});
 
@@ -140,7 +178,9 @@ describe("the corte as a rail destination", () => {
 		// showing nothing, with the rail beside it and no way out. `close`
 		// becomes the host's `dismiss`, which returns to the PREVIOUS
 		// destination rather than a hardcoded sale.
-		expect((hosted.vm as unknown as { closingDialog: boolean }).closingDialog).toBe(false);
+		expect(
+			(hosted.vm as unknown as { closingDialog: boolean }).closingDialog,
+		).toBe(false);
 		expect(closed).toHaveBeenCalledOnce();
 		hosted.unmount();
 	});
@@ -149,10 +189,18 @@ describe("the corte as a rail destination", () => {
 		const bus = makeBus();
 		const hosted = mountCorte(bus, true);
 		bus.emit("open_ClosingDialog", closingShift());
-		await nextTick(); await nextTick(); await nextTick();
+		await nextTick();
+		await nextTick();
+		await nextTick();
 		expect(hosted.findAll('[data-testid="band-primary"]')).toHaveLength(1);
-		expect(hosted.get('[data-testid="action-band"]').attributes("data-band-value")).toBe("-5391");
-		expect(hosted.find('[data-testid="closing-submit"]').exists()).toBe(false);
+		expect(
+			hosted
+				.get('[data-testid="action-band"]')
+				.attributes("data-band-value"),
+		).toBe("-5391");
+		expect(hosted.find('[data-testid="closing-submit"]').exists()).toBe(
+			false,
+		);
 		hosted.unmount();
 	});
 });

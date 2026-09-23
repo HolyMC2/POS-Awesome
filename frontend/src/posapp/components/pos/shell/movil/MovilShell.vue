@@ -28,6 +28,9 @@
 			v-if="screen === 'browse'"
 			:items="browseItems"
 			:loading="browseLoading"
+			:item-groups="browseGroups"
+			:item-group="browseGroup"
+			:barcode-first="barcodeFirst"
 			:combos="combos"
 			:cart="cartItems"
 			:query="query"
@@ -39,7 +42,9 @@
 			@add="(card) => emit('add', card)"
 			@search="emit('search')"
 			@scan="emit('scan')"
+			@settings="emit('settings')"
 			@clear="emit('clear-search')"
+			@select-group="emit('select-group', $event)"
 		/>
 		<div v-else-if="screen === 'orden'" class="movil-orden-stage">
 			<!-- Host chrome, not the ghost component's: MovilOrdenView draws ONE
@@ -163,6 +168,9 @@ withDefaults(
 		/** ItemsSelector's own first-load flag — the browse grid draws
 		 *  skeletons rather than «No items found» while it is true. */
 		browseLoading?: boolean;
+		browseGroups?: readonly string[];
+		browseGroup?: string;
+		barcodeFirst?: boolean;
 		combos?: readonly ComboOffer[];
 		/** The invoice's items child table — the browse screen's compatibility
 		 *  scope AND the sale screen's lines read the same rows. */
@@ -203,6 +211,9 @@ withDefaults(
 	{
 		browseItems: () => [],
 		browseLoading: false,
+		browseGroups: () => [],
+		browseGroup: "ALL",
+		barcodeFirst: false,
 		combos: () => [],
 		cartItems: () => [],
 		query: "",
@@ -232,6 +243,8 @@ withDefaults(
 );
 
 const emit = defineEmits<{
+	(_event: "select-group", _id: string): void;
+	(_event: "settings"): void;
 	(_event: "add", _card: BrowseCard): void;
 	(_event: "search"): void;
 	(_event: "scan"): void;

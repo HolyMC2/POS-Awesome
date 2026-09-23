@@ -329,8 +329,6 @@ defineExpose({
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
-	max-height: calc(100vh - 180px);
-	overflow: auto;
 	padding-right: 2px;
 }
 

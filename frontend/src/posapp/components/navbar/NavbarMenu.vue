@@ -120,6 +120,19 @@
 					</div>
 
 					<button
+						v-if="hasSupport()"
+						type="button"
+						class="settings-launch-card"
+						data-testid="pos-support-entry"
+						@click="openSupport"
+					>
+						<div class="settings-launch-card__icon">
+							<v-icon color="white" size="18">mdi-help-circle</v-icon>
+						</div>
+						<div class="settings-launch-card__title">{{ __("Help & Support") }}</div>
+					</button>
+
+					<button
 						type="button"
 						class="settings-launch-card"
 						data-test="open-settings-panel"
@@ -548,6 +561,9 @@ export default {
 		},
 		quickActions() {
 			const actions = [
+				{ id: "registers", label: __("Registers & shifts"),
+					subtitle: __("Review open shifts, cash activity and recovery"),
+					icon: "mdi-cash-register", tone: "primary", handler: "openRegisters" },
 				{
 					id: "switch-cashier",
 					label: __("Switch Cashier"),
@@ -686,6 +702,14 @@ export default {
 					title: __("Personal"),
 					description: __("Cashier identity and appearance preferences."),
 					actions: [
+						{
+							id: "catalogue",
+							label: __("Catalogue settings"),
+							subtitle: __("Category navigation and product display on this device"),
+							icon: "mdi-view-grid-outline",
+							tone: "primary",
+							handler: "openCatalogueSettings",
+						},
 						{
 							id: "language",
 							label: __("Language"),
@@ -885,6 +909,13 @@ export default {
 		this.initializeWesternNumerals();
 	},
 	methods: {
+		hasSupport() {
+			return typeof window.docoSupport?.openHelp === "function";
+		},
+		openSupport() {
+			this.menuOpen = false;
+			window.docoSupport?.openHelp();
+		},
 		// Boot behaviour for print readiness on silent-print registers. Two
 		// one-shot events, so it never becomes a nag the cashier learns to
 		// dismiss blindly:
@@ -958,6 +989,10 @@ export default {
 			}
 
 			switch (action.handler) {
+				case "openCatalogueSettings":
+					this.closeMenu();
+					this.eventBus?.emit?.("open_catalogue_settings");
+					break;
 				case "openEmployeeSwitch":
 					this.closeMenu();
 					this.$emit("open-employee-switch");
@@ -1047,6 +1082,10 @@ export default {
 				case "refreshCacheUsage":
 					this.closeMenu();
 					this.$emit("refresh-cache-usage");
+					break;
+				case "openRegisters":
+					this.closeMenu();
+					this.$router.push("/registers");
 					break;
 				case "openDashboard":
 					this.closeMenu();

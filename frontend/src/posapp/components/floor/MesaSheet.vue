@@ -18,7 +18,10 @@
 		</div>
 
 		<template v-if="orders.length">
-			<p class="mesa-sheet__label">{{ accountsLabel }}</p>
+			<div class="mesa-sheet__accounts-head">
+				<p class="mesa-sheet__label">{{ accountsLabel }}</p>
+				<button type="button" class="mesa-sheet__new-account" data-test="mesa-sheet-new-account" @click="emit('new-account')"><v-icon icon="mdi-plus" size="16" />{{ t("New account") }}</button>
+			</div>
 			<div class="mesa-sheet__accounts">
 				<button
 					v-for="account in accountCards"
@@ -130,15 +133,18 @@ const props = defineProps<{
 	orders: OrderRow[];
 	/** The cuenta the verbs act on. Never guessed here — see the module note. */
 	selectedUid: string | null;
+	showCharge?: boolean;
 	firing?: boolean;
 	releasing?: boolean;
 }>();
 
 const emit = defineEmits<{
 	(event: "select", order: OrderRow): void;
+	(_event: "new-account"): void;
 	(event: "add-items"): void;
 	(event: "fire"): void;
 	(event: "view"): void;
+	(event: "charge"): void;
 	(event: "transfer"): void;
 	(event: "release"): void;
 	(event: "open"): void;
@@ -209,7 +215,7 @@ const openLabel = computed(() => t("Open table"));
 // caption that repeats its name is the sheet saying one fact twice.
 const verbsLabel = computed(() => t("With the selected account"));
 
-type VerbId = "add-items" | "fire" | "view" | "transfer" | "release";
+type VerbId = "add-items" | "fire" | "view" | "transfer" | "release" | "charge";
 
 /**
  * Written out rather than `emit(verb.id)`: a typed `defineEmits` is a set of
@@ -220,6 +226,7 @@ const runVerb = (id: VerbId) => {
 	if (id === "add-items") emit("add-items");
 	else if (id === "fire") emit("fire");
 	else if (id === "view") emit("view");
+	else if (id === "charge") emit("charge");
 	else if (id === "transfer") emit("transfer");
 	else emit("release");
 };
@@ -239,7 +246,7 @@ const accountCards = computed(() =>
 			chips.push({ key: "pending", text: t("Queued on this device"), tone: "warn" });
 		}
 		if (order.status === "Settling") {
-			chips.push({ key: "settling", text: t("Waiting to be charged"), tone: "warn" });
+			chips.push({ key: "settling", text: t("Payment queued — waiting for connection"), tone: "warn" });
 		}
 		const lines = Number(order.items_count) || 0;
 		const meta = [
@@ -295,6 +302,9 @@ const verbs = computed(() => {
 		{ id: "view", icon: "mdi-receipt-text-outline", label: t("View order") },
 		{ id: "transfer", icon: "mdi-swap-horizontal", label: t("Transfer table") },
 	];
+	if (props.showCharge && lines > 0) {
+		rows.splice(1, 0, { id: "charge", icon: "mdi-cash-register", label: t("Charge") });
+	}
 	// Spec §3: releasing a table is cancelling its EMPTY order, so it is offered
 	// only when there is nothing to lose and never needs a confirm.
 	if (!lines) {
@@ -304,6 +314,9 @@ const verbs = computed(() => {
 			label: t("Release table"),
 			disabled: Boolean(props.releasing),
 		});
+	}
+	if (order?.status === "Settling") {
+		return rows.map((verb) => ({ ...verb, disabled: true, hint: t("Payment queued — waiting for connection") }));
 	}
 	return rows;
 });

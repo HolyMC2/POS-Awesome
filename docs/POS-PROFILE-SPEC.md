@@ -303,3 +303,17 @@ keep.
    M-Pesa decision — needs Marco's call on the M-Pesa exception).
 3. P1 dead-field removal batch (fixture + patch).
 4. P2 documentation/warts.
+
+### Catalogue preferences on each device (2026-09-22)
+
+Catalogue settings → Start catalogue with offers automatic (category boxes on
+touchscreens, products on mouse/keyboard desktops), categories everywhere, or
+products everywhere. It is a device preference, saved in the existing local
+item-selector settings; it does not change other registers. Search/scanning
+show products directly. Barcode-first profiles retain their search-first view.
+
+The obsolete `posa_use_web_route` control is removed from POS Profile fixtures
+and migrated away. `/posapp` is always canonical; `/app/posapp?legacy=1` remains
+an explicit testing entry. Migration preserves the old database column for
+rollback. Profile-owned caching policy stays in POS Profile, not the local
+catalogue display dialog.

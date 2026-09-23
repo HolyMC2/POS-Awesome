@@ -10,12 +10,8 @@ at `/posapp` (web route) instead of `/app/posapp` (Page DocType inside
 Desk) cuts the baseline DOM cost ~60 % and removes a ~5 s LCP overhead
 on slow devices. See `3-SIGMA.md §3 Phase 1` for the rationale + plan.
 
-This route is the DEFAULT for every logged-in POS user since 2026-07-24.
-The POS Profile flag `posa_use_web_route` survives only as a per-shop
-OPT-OUT (set it to 0 on every profile a user belongs to → Desk shell at
-`/app/posapp?legacy=1`). It used to be an opt-in defaulting to 0, which
-put every profile created after it landed into a /posapp ↔ /app/posapp
-redirect loop.
+This route is canonical for every logged-in POS user. Explicit
+`/app/posapp?legacy=1` remains available for regression testing.
 
 Behaviour
 ---------
@@ -57,19 +53,6 @@ def get_context(context: Dict[str, Any]) -> Dict[str, Any]:
         # logged-in user; guests get the standard login screen with
         # a redirect-back to `/posapp`.
         frappe.local.flags.redirect_location = "/login?redirect-to=/posapp"
-        raise frappe.Redirect
-
-    # Per-profile OPT-OUT (default is this SPA — see
-    # `posa_user_opted_into_web_route`). Only a shop that set
-    # `posa_use_web_route = 0` on EVERY one of the user's enabled profiles
-    # lands on the Desk shell.
-    #
-    # `?legacy=1` is REQUIRED on the redirect target: `page/posapp/posapp.js`
-    # bounces every bare /app/posapp hit back to /posapp, so redirecting to
-    # the un-suffixed path is an infinite ping-pong (the bug this flag's
-    # "rollback" actually shipped with).
-    if not _user_opted_into_web_route(frappe.session.user):
-        frappe.local.flags.redirect_location = "/app/posapp?legacy=1"
         raise frappe.Redirect
 
     boot_payload = _build_boot_payload()
@@ -217,7 +200,7 @@ def _build_boot_payload() -> Dict[str, Any]:
             "user": sysdefaults.get("time_zone") or "UTC",
         },
         "posawesome_settings": {
-            "use_web_route": _user_opted_into_web_route(user),
+            "use_web_route": True,
         },
         # Mirror Desk: the SPA's frappe-shim reads frappe.boot.__messages for
         # frappe._()/__() — seed it so /posapp is translated, not raw source.
@@ -228,28 +211,6 @@ def _build_boot_payload() -> Dict[str, Any]:
         # from boot_session; the web route must seed them explicitly.
         **_connector_boot(),
     }
-
-
-def _user_opted_into_web_route(user: str) -> bool:
-    """Opt-OUT check (default True). Delegates to the shared helper in
-    `posawesome.posawesome.api.utilities` so the web-route controller and
-    the whitelisted endpoint agree on the answer. Administrator, users
-    with no POS Profile rows, and DB errors all resolve to True.
-    """
-    if not user or user == "Administrator":
-        return True
-    # The session may not be initialised yet when web-route imports run;
-    # temporarily swap it so the helper can read frappe.session.user
-    # directly.
-    from posawesome.posawesome.api.utilities import posa_user_opted_into_web_route
-
-    saved = getattr(frappe.session, "user", None)
-    try:
-        frappe.session.user = user
-        return bool(posa_user_opted_into_web_route())
-    finally:
-        if saved is not None:
-            frappe.session.user = saved
 
 
 def _read_asset_manifest() -> Dict[str, Any]:

@@ -69,7 +69,9 @@ export const useFloorStore = defineStore("floor", () => {
 	const tables = ref<TableRow[]>([]);
 	const orders = ref<OrderRow[]>([]);
 	const activeFloor = ref<string | null>(null);
-	const viewMode = ref<"plan" | "kanban">(readLocal(VIEW_MODE_KEY) === "kanban" ? "kanban" : "plan");
+	const savedViewMode = readLocal(VIEW_MODE_KEY);
+	const hasViewPreference = ref(savedViewMode === "plan" || savedViewMode === "kanban");
+	const viewMode = ref<"plan" | "kanban">(savedViewMode === "kanban" ? "kanban" : "plan");
 	const editorMode = ref(false);
 	const loading = ref(false);
 	const error = ref<string | null>(null);
@@ -210,6 +212,7 @@ export const useFloorStore = defineStore("floor", () => {
 
 	const setViewMode = (mode: "plan" | "kanban") => {
 		viewMode.value = mode;
+		hasViewPreference.value = true;
 		writeLocal(VIEW_MODE_KEY, mode);
 	};
 
@@ -402,6 +405,7 @@ export const useFloorStore = defineStore("floor", () => {
 		activeFloorRow,
 		activeFloorTables,
 		viewMode,
+		hasViewPreference,
 		editorMode,
 		loading,
 		error,

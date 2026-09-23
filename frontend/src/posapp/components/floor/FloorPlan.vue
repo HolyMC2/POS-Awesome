@@ -57,20 +57,10 @@
 							<v-icon icon="mdi-printer-off" size="12" />
 						</span>
 						<span v-if="tile.pending" class="floor-tile__pending-dot" :title="pendingHint" />
-						<!-- The broom is itself the "mark clean" control: tapping the
-						     glyph clears the latch without opening the table, so a
-						     busser never seats a phantom party. stop keeps the tile's
-						     own tap-is-the-transition intact. -->
-						<button
-							v-if="tile.needsCleaning"
-							type="button"
-							class="floor-tile__glyph floor-tile__glyph--action"
-							:aria-label="verticalStore.t('Mark clean')"
-							:title="verticalStore.t('Mark clean')"
-							@click.stop="floorStore.markClean(tile.table.name)"
-						>
+						<!-- Status only; the table sheet offers the full-size cleaning action. -->
+						<span v-if="tile.needsCleaning" class="floor-tile__glyph" :title="verticalStore.t('Needs cleaning')">
 							<v-icon icon="mdi-broom" size="14" />
-						</button>
+						</span>
 					</button>
 					<p v-if="!tiles.length" class="floor-plan__empty">
 						{{ emptyMessage }}

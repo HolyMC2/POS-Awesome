@@ -843,8 +843,17 @@ onBeforeUnmount(() => {
 	gap: var(--reg-space-md, 10px);
 	flex: 1 1 auto;
 	min-height: 0;
+	min-width: 0;
+	width: 100%;
 	padding: 16px;
 	background: var(--reg-surface-sunken, #f8f9fa);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+/* Capture is a document inside this surface, never another viewport. */
+.cobranza:has(.cobranza__capture) > .cobranza__capture {
+	flex: 0 0 auto;
 }
 
 .cobranza__error {
@@ -998,17 +1007,15 @@ onBeforeUnmount(() => {
 	outline: none;
 }
 
-/* Percentages only, no `max()`: this grid is fixed-layout and a `max()` track
-   is silently dropped, which collapses every column to equal width (the
-   `ledgerRowOverlap` lesson). Every cell below is nowrap-ellipsis for the same
-   reason a ticket id once painted over the row beneath it. */
+/* Fractional tracks reserve space for the gaps. Percentages totaling 100%
+   plus five gaps made the whole surface scroll sideways on tablets. */
 .cobranza__row {
 	display: grid;
 	/* Status carries TWO chips now (estado + the escalation R-chip) — 19%
 	   is what keeps «Overdue invoice · R3» un-clipped; Due and Total gave
 	   up the width because "118 days ago" and a five-digit total never
 	   filled theirs. */
-	grid-template-columns: 16% 24% 13% 13% 15% 19%;
+	grid-template-columns: minmax(0, 16fr) minmax(0, 24fr) minmax(0, 13fr) minmax(0, 13fr) minmax(0, 15fr) minmax(0, 19fr);
 	gap: 12px;
 	padding: 10px 14px;
 	align-items: baseline;
@@ -1019,7 +1026,7 @@ onBeforeUnmount(() => {
 }
 
 .cobranza__row--paid {
-	grid-template-columns: 22% 28% 18% 17% 15%;
+	grid-template-columns: minmax(0, 22fr) minmax(0, 28fr) minmax(0, 18fr) minmax(0, 17fr) minmax(0, 15fr);
 }
 
 .cobranza__row > span {
@@ -1187,6 +1194,43 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1099.98px) {
+	.cobranza__tabs,
+	.cobranza__capture-bar {
+		flex-wrap: wrap;
+	}
+
+	.cobranza__tab {
+		flex: 1 1 auto;
+		height: auto;
+		min-height: 44px;
+		justify-content: center;
+		padding: 8px;
+	}
+
+	.cobranza__search {
+		flex: 1 1 100%;
+		min-width: 0;
+		width: 100%;
+		font-size: 16px;
+		min-height: 44px;
+	}
+
+	.cobranza__tabs-spacer {
+		display: none;
+	}
+
+	.cobranza > *,
+	.cobranza__body,
+	.cobranza__table {
+		flex: 0 0 auto;
+	}
+
+	.cobranza__table,
+	.cobranza__list,
+	.cobranza :deep(.cobranza-detail) {
+		overflow: visible;
+	}
+
 	/* The half-and-half stacking from the 1180 rule becomes the two-step. */
 	.cobranza__list {
 		max-height: none;
