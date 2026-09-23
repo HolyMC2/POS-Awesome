@@ -191,8 +191,8 @@ class RegisterDocument(Document):
             fail("validation_failed", "The drawer account must be an active, non-group cash ledger in the company currency.")
         conflicts = drawer_conflicts(self.drawer_account, self.company, self.name)
         if conflicts and not (self.legacy_profile_route and conflicts == ["mode_of_payment_default"]):
-            fail("validation_failed", "This cash account is already used by another drawer, safe or payment method ("
-                 + ", ".join(conflicts) + "). Each caja needs its own drawer account.")
+            fail("validation_failed", "This cash account is already used by another drawer, safe or payment method ({0}). Each caja needs its own drawer account.",
+                 args=(", ".join(conflicts),))
         if self.default_safe:
             safe_company = frappe.db.get_value("POS Cash Safe", self.default_safe, "company")
             if safe_company != self.company:

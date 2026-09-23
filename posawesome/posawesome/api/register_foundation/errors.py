@@ -25,8 +25,12 @@ def correlation_id() -> str:
     return value
 
 
-def fail(code: str, message: str, next_actions=None):
-    """Raise with a machine-readable envelope the SPA can act on."""
+def fail(code: str, message: str, next_actions=None, args=()):
+    """Raise with a machine-readable envelope the SPA can act on.
+
+    ``message`` is a translatable template; ``args`` fill its ``{0}`` slots
+    after translation so the sentence is translated whole.
+    """
     try:
         frappe.local.response["posa_error"] = {
             "code": code, "retryable": code in RETRYABLE,
@@ -34,7 +38,8 @@ def fail(code: str, message: str, next_actions=None):
         }
     except Exception:
         pass
-    frappe.throw(_(message), _EXC.get(code, frappe.ValidationError), title=code)
+    text = _(message).format(*args) if args else _(message)
+    frappe.throw(text, _EXC.get(code, frappe.ValidationError), title=code)
 
 
 def denied(message="This record is unavailable or outside your access."):

@@ -51,6 +51,7 @@ class Drill:
     # -- helpers -----------------------------------------------------------
     def as_user(self, user):
         frappe.set_user(user)
+        frappe.local.lang = "en"  # assertions match English message templates
         from . import scope
         scope.clear_cache()
         frappe.local.posa_verified_terminal_generations = {}
@@ -73,6 +74,7 @@ class Drill:
             frappe.connect()
             try:
                 frappe.set_user(user)
+                frappe.local.lang = "en"
                 barrier.wait(timeout=30)
                 value = fn()
                 frappe.db.commit()

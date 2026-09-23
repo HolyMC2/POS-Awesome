@@ -226,7 +226,7 @@ def configure_register(request_id, register, expected_revision, values, schema_v
     data = {k: v for k, v in _json(values, {}).items() if k in _REGISTER_FIELDS}
     unknown = set(_json(values, {})) - set(_REGISTER_FIELDS)
     if unknown:
-        fail("validation_failed", "Unknown register settings: " + ", ".join(sorted(unknown)))
+        fail("validation_failed", "Unknown register settings: {0}", args=(", ".join(sorted(unknown)),))
     row, store = load_register(register, "configure")
     receipt = Receipt("registers.configure", request_id, {"register": register, "rev": expected_revision,
                                                           "values": data}, store=store.name)
@@ -270,13 +270,13 @@ def set_register_lifecycle(request_id, register, target, expected_revision, reas
 
         missing = readiness_for(doc.as_dict(), store)
         if missing:
-            fail("invalid_state", "This caja is not ready: " + "; ".join(item["message"] for item in missing),
-                 ["open_setup"])
+            fail("invalid_state", "This caja is not ready: {0}", ["open_setup"],
+                 args=("; ".join(_(item["message"]) for item in missing),))
     if target == "Retired":
         blockers = retirement_blockers(doc)
         if blockers:
-            fail("invalid_state", "This caja cannot be retired yet: " + "; ".join(b["message"] for b in blockers),
-                 [b["key"] for b in blockers])
+            fail("invalid_state", "This caja cannot be retired yet: {0}", [b["key"] for b in blockers],
+                 args=("; ".join(_(b["message"]) for b in blockers),))
     doc.lifecycle = target
     save(doc)
     emit("register.lifecycle", "POS Register", doc.name, doc.revision, store=store.name, receipt=receipt,
@@ -656,7 +656,8 @@ def open_register(request_id, register, balance_details, terminal_id, terminal_t
 
     missing = readiness_for(doc.as_dict(), store, binding_override=bool(binding))
     if missing:
-        fail("invalid_state", "This caja is not ready: " + "; ".join(i["message"] for i in missing), ["open_setup"])
+        fail("invalid_state", "This caja is not ready: {0}", ["open_setup"],
+             args=("; ".join(_(i["message"]) for i in missing),))
     profile = frappe.get_doc("POS Profile", doc.pos_profile)
     from .routing import build_snapshot, cash_modes
 

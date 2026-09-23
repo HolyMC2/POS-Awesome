@@ -125,6 +125,7 @@ def _row_dto(row, user, now):
         attention.append("setup_incomplete")
     dto = {"name": row.name, "register_code": row.register_code, "label": row.label, "store": row.store,
            "store_code": row.store_code, "store_name": row.store_name, "mode": row.mode,
+           "company": row.company, "pos_profile": row.pos_profile,
            "lifecycle": row.lifecycle, "work_state": state if row.active_opening_shift else "Available",
            "connectivity": model.connectivity(get_datetime(row.last_seen_at) if row.last_seen_at else None, now),
            "last_seen_at": str(row.last_seen_at) if row.last_seen_at else None,

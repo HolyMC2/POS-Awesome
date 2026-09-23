@@ -57,14 +57,14 @@ def assert_cashier_free(user, cashier_row):
     """
     pointer = cashier_row.get("accountable_shift") if cashier_row else None
     if pointer and _shift_open(pointer):
-        fail("invalid_state", f"You already have an open shift ({pointer}). Close it before opening another.",
-             ["resume_shift", "close_shift"])
+        fail("invalid_state", "You already have an open shift ({0}). Close it before opening another.",
+             ["resume_shift", "close_shift"], args=(pointer,))
     existing = frappe.db.get_all("POS Opening Shift", filters={
         "user": user, "pos_closing_shift": ["is", "not set"], "docstatus": 1, "status": "Open"},
         fields=["name", "pos_profile"], order_by="period_start_date desc", limit=1)
     if existing:
-        fail("invalid_state", "You already have an open shift ({0}) on POS Profile {1}. Close it before opening a new one."
-             .format(existing[0].name, existing[0].pos_profile), ["resume_shift", "close_shift"])
+        fail("invalid_state", "You already have an open shift ({0}) on POS Profile {1}. Close it before opening a new one.",
+             ["resume_shift", "close_shift"], args=(existing[0].name, existing[0].pos_profile))
 
 
 def point_cashier(user, shift, register=None):
