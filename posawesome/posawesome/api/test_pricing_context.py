@@ -164,6 +164,25 @@ class TestPricingContext(unittest.TestCase):
         doc.items[0].qty = -1
         assert_rates_within_band(doc, self.profile)
 
+    def test_unscoped_rule_includes_blank_and_null_price_lists(self):
+        from posawesome.posawesome.api.pricing_rules import get_active_pricing_rules
+
+        rule = self.insert({
+            "doctype": "Pricing Rule", "title": self.tag, "company": self.company,
+            "selling": 1, "apply_on": "Item Code", "items": [{"item_code": self.item.name}],
+            "price_or_product_discount": "Price", "rate_or_discount": "Discount Percentage",
+            "discount_percentage": 10, "for_price_list": self.price_list.name,
+        })
+        other = self.insert({"doctype": "Price List", "price_list_name": self.tag + " other",
+            "currency": self.currency, "selling": 1, "enabled": 1})
+        for value, included in ((None, True), ("", True), (self.price_list.name, True), (other.name, False)):
+            with self.subTest(value=value):
+                frappe.db.set_value("Pricing Rule", rule.name, "for_price_list", value)
+                with patch("posawesome.posawesome.api.pricing_rules._pricing_cache_get", return_value=None), \
+                        patch("posawesome.posawesome.api.pricing_rules._pricing_cache_set"):
+                    rows = get_active_pricing_rules({"company": self.company, "price_list": self.price_list.name})
+                self.assertEqual(any(row.get("name") == rule.name for row in rows), included)
+
     def test_customer_specific_price_cannot_apply_to_another_customer(self):
         from posawesome.posawesome.api.pricing_context import reference_rate_lookup
 

@@ -366,7 +366,7 @@ def get_active_pricing_rules(params: dict | None = None, **kwargs):
 
     if ctx.get("price_list"):
         query = query.where(
-            (PricingRule.for_price_list.isnull()) | (PricingRule.for_price_list == ctx.price_list)
+            (Coalesce(PricingRule.for_price_list, "") == "") | (PricingRule.for_price_list == ctx.price_list)
         )
 
     if ctx.get("currency"):

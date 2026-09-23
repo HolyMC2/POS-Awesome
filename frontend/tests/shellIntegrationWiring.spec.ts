@@ -34,7 +34,7 @@ describe("the shell mounts what wave 1 built", () => {
 		const handler = shell().match(/const closeStaleShiftNow = \(\) => \{([\s\S]*?)\n\t\t\};/)?.[1];
 		expect(handler).toContain('destinationRouting.activate("closing", "shortcut")');
 		expect(handler).not.toContain("get_closing_data");
-		expect(shell()).toContain('v-show="railVisible && hostedDestinationId !== \'closing\'"');
+		expect(shell()).toContain('v-show="railVisible && ![\'closing\', \'registers\'].includes(hostedDestinationId)"');
 		const layout = readFileSync(fileURLToPath(new URL("../src/posapp/layouts/DefaultLayout.vue", import.meta.url)), "utf8");
 		expect(layout).not.toContain("<ClosingDialog");
 		expect(layout).toContain('router.push("/closing")');
