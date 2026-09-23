@@ -115,6 +115,14 @@ def compute_closing_tables(opening_shift, doctype=None, for_update=False):
         or "Cash"
     )
 
+    # Caja shifts (spec 01) reconcile the cash mode stamped at opening, not a
+    # later profile edit. Legacy shifts keep the live profile mode.
+    from posawesome.posawesome.api.register_foundation.routing import shift_route
+
+    snapshot = shift_route(opening_shift.get("name"))
+    if snapshot and snapshot.get("cash_modes"):
+        cash_mode_of_payment = snapshot["cash_modes"][0]
+
     current_read = {"for_update": True} if for_update else {}
     invoices = get_pos_invoices(opening_shift.get("name"), doctype, submit_printed=0, **current_read)
 

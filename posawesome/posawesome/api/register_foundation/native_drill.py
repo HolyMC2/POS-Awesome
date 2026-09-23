@@ -779,6 +779,48 @@ def _money_paths(self, users, regs):
     self.expect_error("MONEY-RACE", "after close, caja gift cash is refused", lambda: gift_cards.top_up_gift_card(
         pos_profile=profile, gift_card_code=code, amount=3), "per caja")
 
+    # Mid-shift profile edit: the snapshot's cash mode keeps deciding drawer cash.
+    new_shift = self.open(users["c1"], "MOSTRADOR")["pos_opening_shift"]["name"]
+    frappe.db.commit()
+    new_drawer = frappe.db.get_value("POS Opening Shift", new_shift, "posa_drawer_account")
+    frappe.set_user("Administrator")
+    original_mode = frappe.db.get_value("POS Profile", profile, "posa_cash_mode_of_payment")
+    frappe.db.set_value("POS Profile", profile, "posa_cash_mode_of_payment", "Saldo proveedores")
+    frappe.clear_document_cache("POS Profile", profile)
+    frappe.db.commit()
+    try:
+        tables0 = compute_closing_tables(frappe.get_doc("POS Opening Shift", new_shift).as_dict())
+        cash0 = flt(next((r.expected_amount for r in tables0["payment_reconciliation"] if r.mode_of_payment == "Cash"), 0), 2)
+        g_before = self.gl(new_drawer)
+        self.as_user(users["c1"])
+        edited = po([{"mode_of_payment": "Cash", "amount": 7}, {"mode_of_payment": "Saldo proveedores", "amount": 3}])
+        frappe.db.commit()
+        self.as_user(users["c1"])
+        gift_cards.top_up_gift_card(pos_profile=profile, gift_card_code=code, amount=11)
+        frappe.db.commit()
+        linked = frappe.get_all("Payment Entry Reference", filters={"reference_name": edited.get("purchase_order")}, pluck="parent")
+        rows = {p.mode_of_payment: p for p in frappe.get_all("Payment Entry", filters={"name": ["in", linked], "docstatus": 1},
+                                                             fields=["mode_of_payment", "paid_from", "reference_no"])}
+        self.check("MONEY-SNAP", "after a mid-shift cash-mode edit, original Cash still uses the drawer and shift link",
+                   rows.get("Cash") and rows["Cash"].paid_from == new_drawer and rows["Cash"].reference_no == new_shift,
+                   {k: dict(v) for k, v in rows.items()})
+        self.check("MONEY-SNAP", "the newly configured mode stays a non-drawer tender for this shift",
+                   rows.get("Saldo proveedores") and rows["Saldo proveedores"].paid_from == wire
+                   and not rows["Saldo proveedores"].reference_no, dict(rows.get("Saldo proveedores") or {}))
+        g_after = self.gl(new_drawer)
+        tables1 = compute_closing_tables(frappe.get_doc("POS Opening Shift", new_shift).as_dict())
+        cash1 = flt(next((r.expected_amount for r in tables1["payment_reconciliation"] if r.mode_of_payment == "Cash"), 0), 2)
+        saldo1 = [flt(r.expected_amount, 2) for r in tables1["payment_reconciliation"] if r.mode_of_payment == "Saldo proveedores"]
+        saldo0 = [flt(r.expected_amount, 2) for r in tables0["payment_reconciliation"] if r.mode_of_payment == "Saldo proveedores"]
+        self.check("MONEY-SNAP", "closing books the journal and supplier cash on the stamped Cash row (+11 -7)",
+                   flt(cash1 - cash0, 2) == 4.0 and (flt(g_after[0] - g_before[0], 2), flt(g_after[1] - g_before[1], 2)) == (11.0, 7.0)
+                   and saldo1 == saldo0, {"cash": [cash0, cash1], "saldo": [saldo0, saldo1], "gl": [g_before, g_after]})
+    finally:
+        frappe.set_user("Administrator")
+        frappe.db.set_value("POS Profile", profile, "posa_cash_mode_of_payment", original_mode)
+        frappe.clear_document_cache("POS Profile", profile)
+        frappe.db.commit()
+
 
 Drill.money_paths = _money_paths
 
