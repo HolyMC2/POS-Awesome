@@ -264,3 +264,41 @@ def can_release(request, profile):
         ["docstatus", "owner", "pos_profile", "posa_pos_opening_shift"], as_dict=True)
     return bool(draft and draft.docstatus == 0 and draft.owner == frappe.session.user
                 and draft.pos_profile == profile and draft.posa_pos_opening_shift)
+
+
+def source_authorizes_invoice_prices(invoice):
+    """Only a locked, current source quote may replace Item Price authority.
+
+    All invoice lines must exactly match the durable request. Retail additions
+    keep the ordinary register price guard; remarks or client flags alone grant
+    nothing. Source and invoice verifiers recheck payer, currency, references,
+    quantity, fee, discounts and receipt under the existing source-first lock.
+    """
+    if invoice.get('is_return'):
+        return False
+    request = linked_request(invoice)
+    if not request or request.settle_mode != 'Register' or request.status not in ('Open', 'Cancelled'):
+        return False
+    source = frappe.get_doc(request.reference_doctype, request.reference_name, for_update=True)
+    verify_quote = getattr(source, 'validate_pos_charge_request_quote', None)
+    verify_invoice = getattr(source, 'validate_pos_charge_request_invoice', None)
+    if not callable(verify_quote) or not callable(verify_invoice):
+        return False
+    if request.status == 'Cancelled':
+        _validate_amendment(request, invoice)
+    else:
+        verify_quote(request)
+        _contract().validate_invoice(request, invoice, submitted=False)
+    # The shared contract allows additional retail lines. Exemption is narrower:
+    # exact source-only lines, each consumed once, with no partial line bypass.
+    remaining = list(_contract().validated_items(request.items_json))
+    for line in invoice.get('items') or []:
+        match = next((row for row in remaining if row['item_code'] == line.get('item_code')
+            and abs(_contract().finite(row['qty']) - _contract().finite(line.get('qty'))) < .000001
+            and abs(_contract().finite(row['rate']) - _contract().finite(line.get('rate'))) < .000001
+            and (row.get('uom') or frappe.get_cached_value('Item', row['item_code'], 'stock_uom')) == line.get('uom')
+            and (not row.get('warehouse') or row['warehouse'] == line.get('warehouse'))), None)
+        if match is None:
+            return False
+        remaining.remove(match)
+    return not remaining

@@ -476,6 +476,11 @@ def assert_rates_within_band(
     except (TypeError, ValueError, AttributeError):
         pass
 
+    if str(_line_value(invoice_doc, "remarks") or "").startswith("POS Charge Request: "):
+        from posawesome.posawesome.api.charge_request_integrity import source_authorizes_invoice_prices
+        if source_authorizes_invoice_prices(invoice_doc):
+            return
+
     allow_edit = bool(_profile_value(profile_doc, "posa_allow_user_to_edit_rate"))
     price_list = _pricing_price_list(invoice_doc, profile_doc)
     if not price_list:
