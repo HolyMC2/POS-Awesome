@@ -520,7 +520,7 @@
 				:destinations="workspaceEntries"
 				:state="hostedBandState"
 				:currency="activeCurrency"
-				@back="showInvoicePanel"
+				@back="uiStore.posOpeningShift ? showInvoicePanel() : create_opening_voucher()"
 				@primary="onBandPrimary"
 				@navigate="handleOpenDestination"
 			/>
