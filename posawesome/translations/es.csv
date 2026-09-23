@@ -4028,3 +4028,7 @@ Enable cash movements and cash deposits on the POS Profile before enabling cash 
 Set the POS Profile cash movement maximum to zero before enabling cash custody; closing must transfer the complete drawer count.,Establece el máximo por movimiento de efectivo en cero antes de habilitar la custodia; el cierre debe transferir todo el efectivo contado.
 The drawer account must match the cash Mode of Payment account for this company.,La cuenta del cajón debe coincidir con la cuenta de la forma de pago en efectivo de esta empresa.
 This bag seal is already used on this site. Choose a new seal.,Este sello de bolsa ya se utilizó en el sitio. Elige un sello nuevo.
+Return to clinic,Volver a Clínica
+Open the clinic register named in the balance request before collecting.,Abra la caja de la clínica indicada en la solicitud de saldo antes de cobrar.
+This clinic balance changed. Return to the clinic and refresh it.,El saldo de la clínica cambió. Vuelva a Clínica y actualícelo.
+This clinic balance is not available to this register.,El saldo de la clínica no está disponible para esta caja.

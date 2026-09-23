@@ -6,6 +6,8 @@
 	     DOCUMENT (see `onSurfaceKeydown`): a key pressed with nothing focused
 	     never bubbles through this section. -->
 	<section ref="surfaceRef" class="cobranza" data-testid="cobranza-surface">
+		<a v-if="clinicHandoff" :href="clinicHandoff.returnTo">{{ __("Return to clinic") }}</a>
+		<p v-if="clinicHandoffError" role="alert">{{ clinicHandoffError }}</p>
 		<!-- CAPTURE. The same PayView the Payments destination has always been,
 		     mounted here rather than navigated to — see the header. -->
 		<template v-if="step === 'capture'">
@@ -331,6 +333,7 @@ import {
 } from "../../../../services/receivablesService";
 import { useToastStore } from "../../../../stores/toastStore";
 import { useUIStore } from "../../../../stores/uiStore";
+import { clinicPaymentHandoff } from "../../../../utils/clinicPaymentHandoff";
 import { coarsePointer } from "../../../../utils/pointer";
 
 // Declared but never emitted: `DestinationHost` binds `@close` on every hosted
@@ -355,6 +358,40 @@ const __ =
 const searchRef = ref<HTMLInputElement | null>(null);
 
 const step = ref<"worklist" | "capture">("worklist");
+const clinicHandoff = clinicPaymentHandoff(window.location.search);
+const clinicHandoffError = ref("");
+let clinicHandoffApplied = false;
+let clinicHandoffGeneration = 0;
+async function applyClinicHandoff() {
+  const target = clinicHandoff;
+  const profile = profileName.value;
+  if (!target || !profile || clinicHandoffApplied || offline.value) return;
+  const generation = ++clinicHandoffGeneration;
+  if (target.profile && target.profile !== profile) {
+    clinicHandoffError.value = __("Open the clinic register named in the balance request before collecting.");
+    return;
+  }
+  clinicHandoffError.value = "";
+  try {
+    if (target.invoice) {
+      const result = await fetchReceivableDetail(profile, target.invoice, "Sales Invoice");
+      if (generation !== clinicHandoffGeneration || profile !== profileName.value) return;
+      if (result.row.customer !== target.customer || Number(result.row.outstanding) <= 0) {
+        clinicHandoffError.value = __("This clinic balance changed. Return to the clinic and refresh it.");
+        return;
+      }
+      await collect(result.row);
+    } else {
+      query.value = target.customer;
+      landed.value = true;
+      tab.value = "all";
+      await loadWorklist();
+    }
+    clinicHandoffApplied = true;
+  } catch (error) {
+    if (generation === clinicHandoffGeneration) clinicHandoffError.value = __("This clinic balance is not available to this register.");
+  }
+}
 
 // ---- the compact band's two-step (owner 08-31: «on mobile the data view
 // covers all screen») -------------------------------------------------------
@@ -799,11 +836,16 @@ const onCaptured = (payload: { queued?: boolean } = {}) => {
 	void loadCollected();
 };
 
+watch(isOnline, online => { if (online) void applyClinicHandoff(); });
+
 watch(profileName, () => {
+	clinicHandoffGeneration++;
+	clinicHandoffApplied = false;
 	landed.value = false;
 	selectedName.value = null;
 	detail.value = null;
-	void refreshAll();
+	if (clinicHandoff) { captureTarget.value = null; step.value = "worklist"; }
+	void refreshAll().then(applyClinicHandoff);
 });
 
 onMounted(() => {
@@ -814,6 +856,7 @@ onBeforeUnmount(() => {
 });
 
 onMounted(() => {
+	void applyClinicHandoff();
 	bus.on("payment_captured", onCaptured);
 	// Arrived from Facturas' «Agregar pago», which sets the target and lands on
 	// this destination. Opening the worklist would throw that intent away.
@@ -832,6 +875,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+	clinicHandoffGeneration++;
 	bus.off("payment_captured", onCaptured);
 });
 </script>
