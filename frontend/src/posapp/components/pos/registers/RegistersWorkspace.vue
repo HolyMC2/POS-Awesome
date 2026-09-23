@@ -12,6 +12,12 @@
 				<button v-else @click="reviewCurrent" data-test="my-shift">{{ __("My current shift") }}</button>
 			</div>
 		</header>
+		<div class="registers__views" role="tablist" :aria-label="__('Workspace view')">
+			<button role="tab" :aria-selected="view === 'cajas'" data-test="view-cajas" @click="setView('cajas')">{{ __("Cajas") }}</button>
+			<button role="tab" :aria-selected="view === 'shifts'" data-test="view-shifts" @click="setView('shifts')">{{ __("Shifts") }}</button>
+		</div>
+		<StoreCajas v-if="view === 'cajas'" @show-shifts="setView('shifts')" @open-shift="bus?.emit('registers:open-shift')" @resume="resumeCurrent" @review-shift="reviewShift" />
+		<template v-else>
 		<div class="registers__summary" aria-live="polite">
 			<span><strong>{{ page?.summary.open ?? '—' }}</strong> {{ __("Open shifts") }}</span>
 			<span :class="{ attention: page?.summary.attention }"><strong>{{ page?.summary.attention ?? '—' }}</strong> {{ __("Need attention") }}</span>
@@ -80,6 +86,7 @@
 				</article>
 			</section>
 		</div>
+		</template>
 	</section>
 </template>
 
@@ -89,6 +96,8 @@ import type { Emitter } from "mitt";
 import type { Events } from "../../../bus";
 import { useUIStore } from "../../../stores/uiStore";
 import ShiftTerminalStatus from "../../navbar/ShiftTerminalStatus.vue";
+import StoreCajas from "./StoreCajas.vue";
+import { listStores } from "./foundationApi";
 import { listShifts, shiftDetail, type ShiftDetail, type ShiftPage, type ShiftQueue, type ShiftRow } from "./api";
 
 const __ = window.__ || ((value: string) => value);
@@ -97,14 +106,17 @@ const bus = inject<Emitter<Events> | null>("eventBus", null);
 // Keep only navigation in this browser session. Money and permissions are always re-read.
 const user = window.frappe?.session?.user;
 const navigationKey = user && user !== "Guest" ? `posa:registers:navigation:${user}` : null;
-function readNavigation(): { queue?: ShiftQueue; search?: string; selected?: string; scrollTop?: number } {
+function readNavigation(): { view?: "cajas" | "shifts"; queue?: ShiftQueue; search?: string; selected?: string; scrollTop?: number } {
 	try {
 		const value = navigationKey ? JSON.parse(sessionStorage.getItem(navigationKey) || "null") : null;
 		if (!value || !["attention", "open", "closed"].includes(value.queue)) return {};
-		return { queue: value.queue, search: String(value.search || "").slice(0, 120), selected: String(value.selected || "").slice(0, 140), scrollTop: Math.max(0, Number(value.scrollTop) || 0) };
+		return { view: value.view === "cajas" || value.view === "shifts" ? value.view : undefined, queue: value.queue, search: String(value.search || "").slice(0, 120), selected: String(value.selected || "").slice(0, 140), scrollTop: Math.max(0, Number(value.scrollTop) || 0) };
 	} catch { return {}; }
 }
 const savedNavigation = readNavigation();
+// Cajas (stores/registers) is the default once the user has a store; people
+// without store access keep the shift review they already know.
+const view = ref<"cajas" | "shifts">(savedNavigation.view || "shifts");
 const page = ref<ShiftPage | null>(null);
 const rows = ref<ShiftRow[]>([]);
 const queue = ref<ShiftQueue>(savedNavigation.queue || "attention");
@@ -177,18 +189,31 @@ function backToList() {
 		row?.focus({ preventScroll: true });
 	});
 }
+function setView(value: "cajas" | "shifts") {
+	view.value = value;
+	if (value === "shifts") void load();
+}
+function resumeCurrent() { bus?.emit("open_destination", "sale"); }
+function reviewShift(name: string) {
+	view.value = "shifts";
+	void load();
+	void select(name).then(() => { showRecovery.value = true; });
+}
 function setQueue(value: ShiftQueue) { queue.value = value; queueScrollTop = 0; backToList(); void load(); }
 function refresh() { void load(); if (selected.value) void select(selected.value, false); }
 function reviewCurrent() { if (ui.posOpeningShift?.name) void select(ui.posOpeningShift.name); }
 function navigate(id: "sale" | "expense" | "closing") { if (isCurrent.value) bus?.emit("open_destination", id); }
 onMounted(() => {
+	if (!savedNavigation.view) {
+		void listStores().then((result) => { if (result?.stores?.length) view.value = "cajas"; }).catch(() => undefined);
+	}
 	void load().then(() => nextTick(() => { const host = scrollHost(); if (host && !selected.value) host.scrollTop = queueScrollTop; }));
 	if (selected.value) void select(selected.value, false);
 });
 onBeforeUnmount(() => {
 	++listRequest; ++detailRequest;
 	try {
-		if (navigationKey) sessionStorage.setItem(navigationKey, JSON.stringify({ queue: queue.value, search: appliedSearch, selected: selected.value, scrollTop: selected.value ? queueScrollTop : scrollHost()?.scrollTop || 0 }));
+		if (navigationKey) sessionStorage.setItem(navigationKey, JSON.stringify({ view: view.value, queue: queue.value, search: appliedSearch, selected: selected.value, scrollTop: selected.value ? queueScrollTop : scrollHost()?.scrollTop || 0 }));
 	} catch { /* Navigation remains usable when browser storage is unavailable. */ }
 });
 </script>
@@ -210,6 +235,9 @@ onBeforeUnmount(() => {
 .registers button.registers__primary { background: var(--reg-accent, #0097a7); color: var(--reg-on-accent, white); border-color: transparent; }
 .registers :is(button,input,a):focus-visible { outline: 3px solid var(--reg-accent, #0097a7); outline-offset: 3px; }
 .registers a { color: var(--pos-primary); text-underline-offset: 3px; }
+.registers__views { display: inline-grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; margin-bottom: 16px; background: var(--pos-hover-bg); border-radius: 12px; max-width: 100%; }
+.registers__views button { border-color: transparent; background: transparent; min-width: 120px; }
+.registers__views button[aria-selected="true"] { background: var(--pos-card-bg); color: var(--pos-primary); border-color: var(--pos-border); }
 .registers__summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 14px 0; border-block: 1px solid var(--pos-border); margin-bottom: 20px; }
 .registers__summary strong { font-size: 22px; margin-right: 4px; }
 .registers__summary small { margin-left: auto; }

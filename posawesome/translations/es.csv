@@ -4005,3 +4005,219 @@ This shift list has expired. Refresh it to continue.,Esta lista de turnos venci�
 This shift is unavailable or outside your access.,Este turno no está disponible o no tienes acceso a él.
 Cash movements,Movimientos de efectivo
 You,Tú
+A POS Profile is listed twice.,Un perfil POS aparece dos veces.
+A cashless caja opens without cash.,Una caja sin efectivo se abre sin efectivo.
+A routing change is waiting for the next opening. The open shift keeps its current drawer.,Hay un cambio de cuenta pendiente para la próxima apertura. El turno abierto conserva su cajón actual.
+A store is a physical location with its own cajas. It is not created from a warehouse or profile name.,Una tienda es un lugar físico con sus propias cajas. No se crea a partir del nombre de un almacén o perfil.
+A warehouse is listed twice.,Un almacén aparece dos veces.
+Acknowledge that the previous device may hold unsynced work.,Confirma que el dispositivo anterior puede tener trabajo sin sincronizar.
+Acknowledge that this device may hold unsynced work.,Confirma que este dispositivo puede tener trabajo sin sincronizar.
+Activate caja,Activar caja
+Add a permitted POS Profile to the store first.,Primero agrega un perfil POS permitido a la tienda.
+Add caja,Agregar caja
+Add permitted warehouses and POS Profiles to the store in Desk before adding cajas.,Agrega en Desk los almacenes y perfiles POS permitidos de la tienda antes de agregar cajas.
+Add this POS Profile to the store's permitted profiles.,Agrega este perfil POS a los perfiles permitidos de la tienda.
+An opening balance uses a payment method this caja does not accept.,Un saldo de apertura usa una forma de pago que esta caja no acepta.
+"Another drawer, safe or payment method already uses this cash account","Otro cajón, caja fuerte o forma de pago ya usa esta cuenta de efectivo"
+"Another drawer, safe or payment method already uses this cash account.","Otro cajón, caja fuerte o forma de pago ya usa esta cuenta de efectivo."
+Another supervisor must approve a route you configured.,Otro supervisor debe aprobar una cuenta que tú configuraste.
+Approve route change,Aprobar cambio de cuenta
+Approve the drawer route change,Aprobar el cambio de cuenta del cajón
+Ask a supervisor for help,Pide ayuda a un supervisor
+Ask another supervisor to change your own access.,Pide a otro supervisor que cambie tu propio acceso.
+Ask the store administrator.,Consulta al administrador de la tienda.
+Available to open,Disponible para abrir
+Back to cajas,Volver a cajas
+Before this caja can open,Antes de poder abrir esta caja
+Business day,Día operativo
+Business day starts at,El día operativo empieza a las
+Caja details,Detalle de la caja
+Caja filter,Filtrar cajas
+Caja tablet,Tableta de caja
+Cajas,Cajas
+Cashless,Sin efectivo
+"Cashless (cards, transfers, orders)","Sin efectivo (tarjetas, transferencias, pedidos)"
+Change pending,Cambio pendiente
+Change the register lifecycle from the Cajas workspace.,Cambia el estado de la caja desde Cajas y turnos.
+Check code,Verificar código
+Choose Cash or Cashless.,Elige efectivo o sin efectivo.
+"Choose a caja to see who is responsible, its device and what it needs next.","Elige una caja para ver quién es responsable, su dispositivo y qué necesita."
+Choose a capability bundle.,Elige un conjunto de permisos.
+Choose a profile,Elige un perfil
+Choose an enabled POS Profile,Elige un perfil POS habilitado
+Choose an enabled POS Profile.,Elige un perfil POS habilitado.
+Choose an existing company.,Elige una empresa existente.
+Choose an existing store.,Elige una tienda existente.
+Choose connect or replace.,Elige conectar o reemplazar.
+Choose store or company scope.,Elige alcance de tienda o de empresa.
+Choose the drawer's own cash account.,Elige la cuenta de efectivo propia del cajón.
+Choose this drawer's own account,Elige la cuenta propia de este cajón
+Company and store code cannot change after the store has activity.,La empresa y el código de tienda no pueden cambiar después de que la tienda tenga actividad.
+Confirm,Confirmar
+Confirm and connect,Confirmar y conectar
+Confirm your password to authorize this recovery.,Confirma tu contraseña para autorizar esta recuperación.
+Connect device,Conectar dispositivo
+Connect this caja's device.,Conecta el dispositivo de esta caja.
+Connect this device with a code,Conectar este dispositivo con un código
+Connected,Conectada
+Connection code for,Código de conexión para
+Connection code from your supervisor,Código de conexión de tu supervisor
+Contact unknown,Contacto desconocido
+Create store,Crear tienda
+Create the first store,Crear la primera tienda
+Default safe (optional),Caja fuerte predeterminada (opcional)
+Device,Dispositivo
+Device name,Nombre del dispositivo
+Disable the grant instead; grant history is retained.,Desactiva el permiso; el historial de permisos se conserva.
+Drawer account,Cuenta del cajón
+Drawer cash account,Cuenta de efectivo del cajón
+Each caja has its own drawer,Cada caja tiene su propio cajón
+"Each cash caja needs its own ledger account. Accounts already used by another drawer, safe or payment method are unavailable.","Cada caja con efectivo necesita su propia cuenta contable. Las cuentas que ya usa otro cajón, caja fuerte o forma de pago no están disponibles."
+Edit caja setup,Editar configuración de la caja
+Edit setup,Editar configuración
+"Enter it on the caja's device from “Open my shift”. Valid once, until","Captúralo en el dispositivo de la caja desde “Abrir mi turno”. Sirve una sola vez, hasta"
+Every permitted POS Profile must belong to the store company.,Cada perfil POS permitido debe pertenecer a la empresa de la tienda.
+Every permitted warehouse must belong to the store company.,Cada almacén permitido debe pertenecer a la empresa de la tienda.
+Fix setup,Corregir configuración
+In setup,En configuración
+Invalid opening balances.,Saldos de apertura no válidos.
+Invalid request data.,Datos de solicitud no válidos.
+Keep using this profile's current single drawer until shared safes are enabled.,Sigue usando el cajón único actual de este perfil hasta que se habiliten las cajas fuertes compartidas.
+Last contact,Último contacto
+"Letters, digits, hyphen or underscore. It cannot be reused after sales.","Letras, números, guion o guion bajo. No se puede reutilizar después de tener ventas."
+Load more cajas,Cargar más cajas
+Loading cajas…,Cargando cajas…
+Loading caja…,Cargando caja…
+Mapping must be an object.,El mapeo debe ser un objeto.
+Name employees recognize,Nombre que reconocen los empleados
+Never observed,Nunca observado
+New cajas start as drafts. Connect a device and activate it when every requirement is met.,Las cajas nuevas empiezan como borrador. Conecta un dispositivo y actívala cuando cumpla todos los requisitos.
+New store,Nueva tienda
+No cajas match this filter,Ninguna caja coincide con este filtro
+No connection. The action was not confirmed; retry when back online.,Sin conexión. La acción no se confirmó; reintenta cuando vuelva la conexión.
+No contact,Sin contacto
+No device is connected yet. Connect one instead.,Aún no hay un dispositivo conectado. Conecta uno.
+No stores are set up for you,No tienes tiendas configuradas
+No stores yet,Aún no hay tiendas
+None,Ninguna
+Not connected,No conectado
+Only a connected device may open this caja,Solo un dispositivo conectado puede abrir esta caja
+Only an administrator can delete an unused draft register.,Solo un administrador puede eliminar una caja en borrador sin uso.
+Only an administrator can grant company-wide access.,Solo un administrador puede otorgar acceso a toda la empresa.
+Only an administrator can grant this capability.,Solo un administrador puede otorgar este permiso.
+Only an administrator can run the register migration.,Solo un administrador puede ejecutar la migración de cajas.
+Open by,Abierta por
+Open register shifts through the Cajas workspace.,Abre los turnos de caja desde Cajas y turnos.
+Open shift here,Abrir turno aquí
+Open since,Abierta desde
+Open with a POS profile instead,Abrir con un perfil POS
+Open — device recovery pending,Abierta — recuperación de dispositivo pendiente
+Open — your shift,Abierta — tu turno
+Previous-device sales need supervisor review before closing.,Las ventas del dispositivo anterior necesitan revisión del supervisor antes del cierre.
+Reactivate the store before adding cajas.,Reactiva la tienda antes de agregar cajas.
+Register history cannot be deleted.,El historial de cajas no se puede eliminar.
+"Registers with history are retired, not deleted.","Las cajas con historial se retiran, no se eliminan."
+Reload caja,Recargar caja
+Replace device,Reemplazar dispositivo
+Replace this caja's device,Reemplazar el dispositivo de esta caja
+Replacement code for,Código de reemplazo para
+Resume my sale,Continuar mi venta
+Retire,Retirar
+Retire every caja of this store first.,Primero retira todas las cajas de esta tienda.
+Retire this caja,Retirar esta caja
+Retired,Retirada
+Retired cajas cannot be reconfigured.,Las cajas retiradas no se pueden reconfigurar.
+Retired cajas cannot connect devices.,Las cajas retiradas no pueden conectar dispositivos.
+Review shift recovery,Revisar recuperación del turno
+Review shifts,Revisar turnos
+Revoke this grant and create a new one instead of changing its scope.,Revoca este permiso y crea uno nuevo en lugar de cambiar su alcance.
+Save as draft,Guardar como borrador
+Save changes,Guardar cambios
+Setup,Configuración
+Setup in progress,Configuración en curso
+Setup incomplete,Configuración incompleta
+"Shifts keep working as before. An administrator creates a store and its cajas, then grants access.",Los turnos siguen funcionando como antes. Un administrador crea la tienda y sus cajas y luego otorga acceso.
+Short code,Código corto
+Show all cajas,Mostrar todas las cajas
+Sign in to continue.,Inicia sesión para continuar.
+Store,Tienda
+Store and register code cannot change after financial activity.,La tienda y el código de caja no pueden cambiar después de tener movimientos.
+Store name,Nombre de la tienda
+"Stores with registers or activity are retired, not deleted.","Las tiendas con cajas o actividad se retiran, no se eliminan."
+Suspend,Suspender
+Suspend this caja,Suspender esta caja
+"Suspend, reactivate or retire the store from the Cajas workspace.","Suspende, reactiva o retira la tienda desde Cajas y turnos."
+Suspended,Suspendida
+The POS Profile belongs to another company.,El perfil POS pertenece a otra empresa.
+The POS Profile must belong to the store company.,El perfil POS debe pertenecer a la empresa de la tienda.
+The action could not be completed.,No se pudo completar la acción.
+The caja already has another open shift; this closing cannot be cancelled.,La caja ya tiene otro turno abierto; este cierre no se puede cancelar.
+The caja code cannot change after financial activity.,El código de la caja no puede cambiar después de tener movimientos.
+The caja could not be opened.,No se pudo abrir la caja.
+The cashier already has another open shift; this closing cannot be cancelled.,El cajero ya tiene otro turno abierto; este cierre no se puede cancelar.
+The default safe belongs to another company.,La caja fuerte predeterminada pertenece a otra empresa.
+The drawer account must be an active cash ledger in the company currency,La cuenta del cajón debe ser una cuenta de efectivo activa en la moneda de la empresa
+The drawer account must be an active cash ledger in the company currency.,La cuenta del cajón debe ser una cuenta de efectivo activa en la moneda de la empresa.
+"The drawer account must be an active, non-group cash ledger in the company currency.","La cuenta del cajón debe ser una cuenta de efectivo activa, no de grupo, en la moneda de la empresa."
+The drawer account still holds an unexplained balance,la cuenta del cajón aún tiene un saldo sin explicar
+The drawer route differs from the legacy route. A supervisor must approve the change.,La cuenta del cajón difiere de la cuenta anterior. Un supervisor debe aprobar el cambio.
+The grant must end after it starts.,El permiso debe terminar después de empezar.
+The linked storefront branch does not exist on this site.,La sucursal de tienda en línea vinculada no existe en este sitio.
+The original request is still being verified. Retry shortly.,La solicitud original aún se está verificando. Reintenta en un momento.
+The payment and its caja belong to different companies.,El pago y su caja pertenecen a empresas distintas.
+The previous device may still hold unsynced sales; they will stay with this shift for review.,El dispositivo anterior puede tener ventas sin sincronizar; se quedarán con este turno para revisión.
+The sale and its caja belong to different companies.,La venta y su caja pertenecen a empresas distintas.
+The store is not active.,La tienda no está activa.
+"The store, caja and drawer route of a shift cannot be changed.","La tienda, la caja y la cuenta del cajón de un turno no se pueden cambiar."
+This POS Profile is now opened through its caja. Update POS (reload) and choose your caja.,Este perfil POS ahora se abre desde su caja. Actualiza POS (recarga) y elige tu caja.
+This browser is already connected to a caja. Disconnect it there first.,Este navegador ya está conectado a una caja. Primero desconéctalo de ahí.
+This browser is not the connected device for this caja. Ask a supervisor to connect or replace it.,Este navegador no es el dispositivo conectado de esta caja. Pide a un supervisor que lo conecte o reemplace.
+This browser needs its device identity. Reload POS and retry.,Este navegador necesita su identidad de dispositivo. Recarga POS y reintenta.
+This caja already has a connected device. Use device replacement.,Esta caja ya tiene un dispositivo conectado. Usa el reemplazo de dispositivo.
+This caja cannot be retired yet: {0},Esta caja aún no se puede retirar: {0}
+This caja has an open shift. The routing change applies at its next opening.,Esta caja tiene un turno abierto. El cambio de cuenta aplica en su próxima apertura.
+This caja is already open by another cashier.,Esta caja ya está abierta por otro cajero.
+This caja is busy right now. Retry in a moment.,Esta caja está ocupada en este momento. Reintenta en un momento.
+This caja is cashless and cannot accept or pay out cash. Use another payment method or a cash caja.,Esta caja es sin efectivo y no puede recibir ni entregar efectivo. Usa otra forma de pago o una caja con efectivo.
+This caja is cashless; it has no drawer for cash movements.,Esta caja es sin efectivo; no tiene cajón para movimientos de efectivo.
+This caja is not ready to open.,Esta caja no está lista para abrir.
+This caja is not ready: {0},Esta caja no está lista: {0}
+This caja is open. Drawer and profile changes apply at its next opening; the current shift keeps its route.,Esta caja está abierta. Los cambios de cajón y perfil aplican en su próxima apertura; el turno actual conserva su cuenta.
+This caja's cash movements always use its own drawer account.,Los movimientos de efectivo de esta caja siempre usan su propia cuenta de cajón.
+"This cash account is already used by another drawer, safe or payment method ({0}). Each caja needs its own drawer account.","Esta cuenta de efectivo ya la usa otro cajón, caja fuerte o forma de pago ({0}). Cada caja necesita su propia cuenta de cajón."
+This connection code expired or was already used. Ask for a new one.,Este código de conexión venció o ya se usó. Pide uno nuevo.
+This connection code is not valid. Ask for a new one.,Este código de conexión no es válido. Pide uno nuevo.
+This device,Este dispositivo
+This device is not connected to this caja,Este dispositivo no está conectado a esta caja
+This device will become the caja's device.,Este dispositivo será el dispositivo de la caja.
+This device will replace the caja's previous device.,Este dispositivo reemplazará al dispositivo anterior de la caja.
+This field is maintained by register actions.,Este campo lo mantienen las acciones de caja.
+This list expired or its filters changed. Refresh to continue.,Esta lista venció o sus filtros cambiaron. Actualiza para continuar.
+This profile uses single-register cash custody. Multi-register custody arrives with shared safes.,Este perfil usa custodia de efectivo de una sola caja. La custodia para varias cajas llega con las cajas fuertes compartidas.
+This record is maintained by POS register actions and cannot be edited directly.,Este registro lo mantienen las acciones de caja POS y no se puede editar directamente.
+This record is unavailable or outside your access.,Este registro no está disponible o está fuera de tu acceso.
+This request ID was already used for a different instruction.,Este identificador de solicitud ya se usó para otra instrucción.
+This screen is out of date. Reload POS to continue.,Esta pantalla está desactualizada. Recarga POS para continuar.
+This store has no cajas yet,Esta tienda aún no tiene cajas
+This store is suspended; new shifts cannot open.,Esta tienda está suspendida; no se pueden abrir turnos nuevos.
+Timezone,Zona horaria
+Unknown filter.,Filtro desconocido.
+Unknown register settings: {0},Configuración de caja desconocida: {0}
+Unknown store status.,Estado de tienda desconocido.
+Workspace view,Vista del espacio de trabajo
+You already have an open shift ({0}). Close it before opening a new one.,Ya tienes un turno abierto ({0}). Ciérralo antes de abrir uno nuevo.
+You already have an open shift ({0}). Close it before opening another.,Ya tienes un turno abierto ({0}). Ciérralo antes de abrir otro.
+You cannot assign people to this store.,No puedes asignar personas a esta tienda.
+You cannot create stores for this company.,No puedes crear tiendas para esta empresa.
+Your caja,Tu caja
+Your password,Tu contraseña
+Your shift,Tu turno
+a browser recovery case is unresolved,hay un caso de recuperación de navegador sin resolver
+a cash bag from this caja is still in custody,una bolsa de efectivo de esta caja sigue en custodia
+a draft or pending sale must be completed or cancelled,hay que completar o cancelar una venta en borrador o pendiente
+an open shift must be closed,hay que cerrar un turno abierto
+in use,en uso
+the drawer account still holds an unexplained balance,la cuenta del cajón aún tiene un saldo sin explicar
+"You already have an open shift ({0}) on POS Profile {1}. Close it before opening a new one.",Ya tienes un turno abierto ({0}) en el perfil POS {1}. Ciérralo antes de abrir uno nuevo.
+Caja Mostrador,Caja Mostrador
+Centro,Centro

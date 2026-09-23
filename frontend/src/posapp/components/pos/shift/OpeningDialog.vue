@@ -29,10 +29,13 @@
 								</v-alert>
 							</v-col>
 						</v-row>
+						<MyCajaPicker v-model="selectedCaja" />
+						<v-alert v-if="openError" type="error" variant="tonal" class="mb-3" data-test="open-caja-error">{{ openError }}</v-alert>
 						<v-alert v-if="custodyEnabled" type="info" variant="tonal">{{ __("Open the empty drawer with zero cash. Next, receive and count its float bag in Cash custody; that receipt records the starting funds.") }}</v-alert>
 						<v-row>
-							<!-- Company and POS Profile in same row for space efficiency -->
-							<v-col cols="12" md="6" class="form-field">
+							<!-- Company and POS Profile in same row for space efficiency.
+							     A chosen caja determines both, so they are not asked again. -->
+							<v-col v-if="!selectedCaja" cols="12" md="6" class="form-field">
 								<v-autocomplete
 									:items="companies"
 									:label="frappe._('Company')"
@@ -47,7 +50,7 @@
 								/>
 							</v-col>
 
-							<v-col cols="12" md="6" class="form-field">
+							<v-col v-if="!selectedCaja" cols="12" md="6" class="form-field">
 								<v-autocomplete
 									:items="pos_profiles"
 									:label="frappe._('POS Profile')"
@@ -168,7 +171,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from "vue";
+import { nextTick, onMounted, ref, watch } from "vue";
 import {
 	getOpeningDialogStorage,
 	setOpeningDialogStorage,
@@ -184,6 +187,8 @@ import { useDialogFullscreen } from "../../../composables/core/useDialogFullscre
 import OpeningReadiness from "./OpeningReadiness.vue";
 import ShiftTerminalStatus from "../../navbar/ShiftTerminalStatus.vue";
 import { getTerminalCredentials } from "../../../../offline/shiftTerminal";
+import MyCajaPicker from "./MyCajaPicker.vue";
+import { openCaja } from "../registers/foundationApi";
 
 defineOptions({
 	name: "OpeningDialog",
@@ -202,6 +207,11 @@ const isOpen = ref(props.dialog ? props.dialog : false);
 const is_loading = ref(false);
 const showTerminalRecovery = ref(false);
 const custodyEnabled = ref(false);
+// Spec 01: a caja assigned to this cashier determines company and profile and
+// opens through the register command (its own drawer route). Null keeps the
+// legacy profile opening for users and profiles not yet on cajas.
+const selectedCaja = ref(null);
+const openError = ref("");
 // First screen of the shift: it has to be usable on the phone the cashier
 // opened the till with, not an 800px card cropped to a 360px viewport.
 const { dialogProps } = useDialogFullscreen({ maxWidth: "800px", maxHeight: "90vh" });
@@ -255,6 +265,14 @@ watch(
 		isOpen.value = val ? val : false;
 	},
 );
+
+watch(selectedCaja, async (caja) => {
+	openError.value = "";
+	if (!caja) return;
+	company.value = caja.company;
+	await nextTick();
+	pos_profile.value = caja.pos_profile;
+});
 
 watch(company, (val) => {
 	pos_profiles.value = [];
@@ -341,6 +359,20 @@ function submit_dialog() {
 	}
 
 	is_loading.value = true;
+	openError.value = "";
+
+	if (selectedCaja.value) {
+		const balances = payments_methods.value.map((row) => ({
+			mode_of_payment: row.mode_of_payment,
+			amount: Number(row.amount) || 0,
+		}));
+		return openCaja(selectedCaja.value.name, balances, getTerminalCredentials())
+			.then((message) => handleOpened(message))
+			.catch((error) => {
+				openError.value = error?.message || __("The caja could not be opened.");
+				is_loading.value = false;
+			});
+	}
 
 	return Promise.resolve().then(() => frappe
 		.call("posawesome.posawesome.api.shifts.create_opening_voucher", {
@@ -349,24 +381,25 @@ function submit_dialog() {
 			balance_details: payments_methods.value,
 			...getTerminalCredentials(),
 		}))
-		.then((r) => {
-			if (r.message) {
-				emit("register", r.message);
-				try {
-					setOpeningStorage(r.message);
-					setBootstrapSnapshot(
-						createBootstrapSnapshotFromRegisterData(r.message, getBootstrapSnapshot(), {
-							buildVersion: BUILD_VERSION,
-						}),
-					);
-				} catch (e) {
-					console.error("Failed to cache opening data", e);
-				}
-				// Close handles hiding the dialog, parent handles logic
-				emit("close");
-				is_loading.value = false;
-			}
-		});
+		.then((r) => handleOpened(r.message));
+}
+
+function handleOpened(message) {
+	if (!message) return;
+	emit("register", message);
+	try {
+		setOpeningStorage(message);
+		setBootstrapSnapshot(
+			createBootstrapSnapshotFromRegisterData(message, getBootstrapSnapshot(), {
+				buildVersion: BUILD_VERSION,
+			}),
+		);
+	} catch (e) {
+		console.error("Failed to cache opening data", e);
+	}
+	// Close handles hiding the dialog, parent handles logic
+	emit("close");
+	is_loading.value = false;
 }
 
 function go_desk() {
