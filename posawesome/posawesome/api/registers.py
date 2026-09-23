@@ -114,7 +114,7 @@ def list_shifts(queue="attention", search="", cursor=None, page_length=30):
         params["search"] = "%" + search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         clauses.append("(s.name LIKE %(search)s OR s.pos_profile LIKE %(search)s "
                        "OR u.full_name LIKE %(search)s OR s.user LIKE %(search)s)")
-    context = [user, manager, queue, search]
+    context = [frappe.local.site, user, manager, queue, search]
     if cursor:
         after = _read_cursor(cursor, context)
         params.update(after_date=after["date"], after_name=after["name"])

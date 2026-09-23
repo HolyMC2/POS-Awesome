@@ -1,5 +1,5 @@
 <template>
-	<section class="registers" :class="{ 'registers--detail': selected }" data-test="registers-workspace">
+	<section ref="workspace" class="registers" :class="{ 'registers--detail': selected }" data-test="registers-workspace">
 		<header class="registers__header">
 			<div>
 				<p class="registers__eyebrow">{{ __("Daily operation") }}</p>
@@ -50,7 +50,7 @@
 				<button v-if="page?.next_cursor && !loading && !listError" class="registers__more" :disabled="loadingMore" @click="load(true)" data-test="more-shifts">{{ loadingMore ? __("Loading shifts…") : __("Load more shifts") }}</button>
 			</section>
 			<section class="registers__detail" :aria-label="__('Shift details')" :aria-busy="detailLoading">
-				<button v-if="selected" ref="backButton" class="registers__back" @click="backToList" data-test="back-shifts">← {{ __("Back to shifts") }}</button>
+				<div v-if="selected" class="registers__detail-toolbar"><button ref="backButton" @click="backToList" data-test="back-shifts">← {{ __("Back to shifts") }}</button><button class="registers__detail-refresh" :disabled="detailLoading" @click="refresh">{{ __("Refresh") }}</button></div>
 				<div v-if="!selected" class="registers__empty registers__welcome"><v-icon icon="mdi-cash-register" size="40" /><h2>{{ __("A clear view of each shift") }}</h2><p>{{ __("Choose a shift to review its cash activity and next step.") }}</p><p>{{ __("Shifts are grouped by POS profile; a profile may be shared by several cashiers.") }}</p></div>
 				<p v-else-if="detailLoading" class="registers__empty" role="status">{{ __("Loading shift details…") }}</p>
 				<div v-else-if="detailError" class="registers__notice" role="alert"><p>{{ __("This shift could not be loaded. Refresh or check your access.") }}</p><button @click="select(selected)">{{ __("Try again") }}</button></div>
@@ -94,11 +94,22 @@ import { listShifts, shiftDetail, type ShiftDetail, type ShiftPage, type ShiftQu
 const __ = window.__ || ((value: string) => value);
 const ui = useUIStore();
 const bus = inject<Emitter<Events> | null>("eventBus", null);
+// Keep only navigation in this browser session. Money and permissions are always re-read.
+const user = window.frappe?.session?.user;
+const navigationKey = user && user !== "Guest" ? `posa:registers:navigation:${user}` : null;
+function readNavigation(): { queue?: ShiftQueue; search?: string; selected?: string; scrollTop?: number } {
+	try {
+		const value = navigationKey ? JSON.parse(sessionStorage.getItem(navigationKey) || "null") : null;
+		if (!value || !["attention", "open", "closed"].includes(value.queue)) return {};
+		return { queue: value.queue, search: String(value.search || "").slice(0, 120), selected: String(value.selected || "").slice(0, 140), scrollTop: Math.max(0, Number(value.scrollTop) || 0) };
+	} catch { return {}; }
+}
+const savedNavigation = readNavigation();
 const page = ref<ShiftPage | null>(null);
 const rows = ref<ShiftRow[]>([]);
-const queue = ref<ShiftQueue>("attention");
-const search = ref("");
-const selected = ref("");
+const queue = ref<ShiftQueue>(savedNavigation.queue || "attention");
+const search = ref(savedNavigation.search || "");
+const selected = ref(savedNavigation.selected || "");
 const detail = ref<ShiftDetail | null>(null);
 const loading = ref(false);
 const loadingMore = ref(false);
@@ -107,6 +118,9 @@ const listError = ref(false);
 const detailError = ref(false);
 const showRecovery = ref(false);
 const backButton = ref<HTMLButtonElement | null>(null);
+const workspace = ref<HTMLElement | null>(null);
+const scrollHost = () => workspace.value?.closest<HTMLElement>(".destination-host");
+let queueScrollTop = savedNavigation.scrollTop || 0;
 const tabs: { id: ShiftQueue; label: string }[] = [{ id: "attention", label: "Needs attention" }, { id: "open", label: "Open" }, { id: "closed", label: "Closed history" }];
 let listRequest = 0;
 let detailRequest = 0;
@@ -133,12 +147,19 @@ async function load(append = false) {
 }
 async function select(name: string, focus = true) {
 	const request = ++detailRequest;
+	if (!selected.value) queueScrollTop = scrollHost()?.scrollTop || 0;
 	selected.value = name;
 	detail.value = null;
 	detailLoading.value = true;
 	detailError.value = false;
 	showRecovery.value = false;
-	if (focus) { await nextTick(); backButton.value?.focus({ preventScroll: true }); }
+	if (focus) {
+		await nextTick();
+		if (request !== detailRequest) return;
+		const host = scrollHost();
+		if (host) host.scrollTop = 0;
+		backButton.value?.focus({ preventScroll: true });
+	}
 	try { const result = await shiftDetail(name); if (request === detailRequest) detail.value = result; }
 	catch { if (request === detailRequest) detailError.value = true; }
 	finally { if (request === detailRequest) detailLoading.value = false; }
@@ -150,16 +171,26 @@ function backToList() {
 	detail.value = null;
 	showRecovery.value = false;
 	void nextTick(() => {
+		const host = scrollHost();
+		if (host) host.scrollTop = queueScrollTop;
 		const row = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-shift]")).find((element) => element.dataset.shift === previous);
 		row?.focus({ preventScroll: true });
 	});
 }
-function setQueue(value: ShiftQueue) { queue.value = value; backToList(); void load(); }
+function setQueue(value: ShiftQueue) { queue.value = value; queueScrollTop = 0; backToList(); void load(); }
 function refresh() { void load(); if (selected.value) void select(selected.value, false); }
 function reviewCurrent() { if (ui.posOpeningShift?.name) void select(ui.posOpeningShift.name); }
 function navigate(id: "sale" | "expense" | "closing") { if (isCurrent.value) bus?.emit("open_destination", id); }
-onMounted(() => { void load(); });
-onBeforeUnmount(() => { ++listRequest; ++detailRequest; });
+onMounted(() => {
+	void load().then(() => nextTick(() => { const host = scrollHost(); if (host && !selected.value) host.scrollTop = queueScrollTop; }));
+	if (selected.value) void select(selected.value, false);
+});
+onBeforeUnmount(() => {
+	++listRequest; ++detailRequest;
+	try {
+		if (navigationKey) sessionStorage.setItem(navigationKey, JSON.stringify({ queue: queue.value, search: appliedSearch, selected: selected.value, scrollTop: selected.value ? queueScrollTop : scrollHost()?.scrollTop || 0 }));
+	} catch { /* Navigation remains usable when browser storage is unavailable. */ }
+});
 </script>
 
 <style scoped>
@@ -189,6 +220,7 @@ onBeforeUnmount(() => { ++listRequest; ++detailRequest; });
 .registers__tabs button[aria-pressed="true"] { background: var(--pos-card-bg); color: var(--pos-primary); border-color: var(--pos-border); }
 .registers__search { display: flex; gap: 6px; margin: 12px 0; }
 .registers__search input { min-width: 0; width: 100%; }
+.registers__search button { flex: 0 0 auto; white-space: nowrap; }
 .registers__list, .registers__movements { list-style: none; padding: 0; display: grid; gap: 8px; }
 .registers button.registers__row { text-align: left; width: 100%; display: grid; gap: 5px; padding: 16px; font-weight: 400; }
 .registers__row strong { font-size: 16px; }
@@ -201,7 +233,8 @@ onBeforeUnmount(() => { ++listRequest; ++detailRequest; });
 .registers__notice { border: 1px solid #e8c888; padding: 14px; border-radius: 12px; display: grid; gap: 8px; }
 .registers__empty { padding: 26px 12px; display: grid; gap: 14px; color: var(--pos-text-secondary); }
 .registers__welcome { padding: 48px 24px; text-align: center; justify-items: center; }
-.registers__back { margin-bottom: 16px; }
+.registers__detail-toolbar { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+.registers__detail-refresh { display: none; }
 .registers__story { display: grid; gap: 22px; padding: clamp(16px, 2vw, 24px); border: 1px solid var(--pos-border); background: var(--pos-card-bg); border-radius: 16px; animation: shift-arrive 150ms ease-out; }
 .registers__facts { display: flex; flex-wrap: wrap; gap: 14px 30px; }
 .registers dt { color: var(--pos-text-secondary); }
@@ -217,7 +250,8 @@ onBeforeUnmount(() => { ++listRequest; ++detailRequest; });
 @media (max-width: 800px) {
 	.registers__layout { display: block; }
 	.registers__detail { display: none; }
-	.registers--detail .registers__queue { display: none; }
+	.registers--detail .registers__queue, .registers--detail .registers__header, .registers--detail .registers__summary { display: none; }
+	.registers__detail-refresh { display: block; }
 	.registers--detail .registers__detail { display: block; }
 	.registers__summary small { margin-left: 0; width: 100%; }
 	.registers__header .registers__actions { width: 100%; }

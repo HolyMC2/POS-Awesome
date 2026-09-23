@@ -18,6 +18,7 @@ class RegistersTests(unittest.TestCase):
         self.frappe.PermissionError = PermissionError
         self.frappe.throw = lambda message, exc=ValueError: (_ for _ in ()).throw(exc(message))
         self.frappe.session = types.SimpleNamespace(user="cashier")
+        self.frappe.local = types.SimpleNamespace(site="tenant.test")
         self.frappe.conf = {"encryption_key": "test-key"}
         self.frappe.db = types.SimpleNamespace(sql=Mock())
         self.frappe.get_cached_doc = Mock(return_value={"hide_expected_amount": 0})

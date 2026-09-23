@@ -17,6 +17,8 @@ const render = () => mount(RegistersWorkspace, { global: { provide: { eventBus: 
 
 beforeEach(() => {
 	setActivePinia(createPinia());
+	sessionStorage.clear();
+	(window as any).frappe = { ...(window as any).frappe, session: { user: "cashier" } };
 	vi.clearAllMocks();
 	list.mockResolvedValue(page());
 	details.mockResolvedValue(detail());
@@ -121,4 +123,44 @@ it("shows a failed refresh instead of leaving old money or an empty success stat
 	expect(wrapper.text()).not.toContain("475");
 	expect(wrapper.text()).not.toContain("No shifts need review");
 	wrapper.unmount();
+});
+
+it("opens detail at the top and returns to the queue's previous scroll position", async () => {
+	const host = document.createElement("div");
+	host.className = "destination-host";
+	document.body.appendChild(host);
+	const wrapper = mount(RegistersWorkspace, { attachTo: host, global: { provide: { eventBus: { emit } }, stubs: { "v-icon": true } } });
+	await flushPromises();
+	host.scrollTop = 480;
+	await wrapper.get('[data-shift="OPEN-1"]').trigger("click");
+	await flushPromises();
+	expect(host.scrollTop).toBe(0);
+	await wrapper.get('[data-test="back-shifts"]').trigger("click");
+	await flushPromises();
+	expect(host.scrollTop).toBe(480);
+	wrapper.unmount();
+	host.remove();
+});
+
+
+it("returns from a cash action to the same selection, using fresh server data", async () => {
+	const wrapper = render();
+	await flushPromises();
+	await wrapper.get('[data-test="queue-open"]').trigger("click");
+	await flushPromises();
+	await wrapper.get('[data-shift="OPEN-1"]').trigger("click");
+	await flushPromises();
+	wrapper.unmount();
+	details.mockClear();
+	const returned = render();
+	await flushPromises();
+	expect(list).toHaveBeenLastCalledWith("open", "", null);
+	expect(details).toHaveBeenCalledWith("OPEN-1");
+	expect(returned.find('[data-test="shift-detail"]').exists()).toBe(true);
+	returned.unmount();
+	(window as any).frappe.session.user = "another-cashier";
+	const differentCashier = render();
+	await flushPromises();
+	expect(differentCashier.find('[data-test="shift-detail"]').exists()).toBe(false);
+	differentCashier.unmount();
 });

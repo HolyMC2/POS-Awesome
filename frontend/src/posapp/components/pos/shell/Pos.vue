@@ -459,7 +459,7 @@
 				     Hidden the band keeps its targets alive; the cashier still
 				     sees exactly one total. -->
 				<ActionBand
-					v-show="railVisible && hostedDestinationId !== 'closing'"
+					v-show="railVisible && !['closing', 'registers'].includes(hostedDestinationId)"
 					:state="bandState"
 					:format-currency="formatCurrency"
 					@primary="onBandPrimary"
