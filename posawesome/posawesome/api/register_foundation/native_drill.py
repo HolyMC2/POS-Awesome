@@ -550,6 +550,9 @@ class Drill:
         # Stale-pointer healer must use a current read (two connections).
         self.heal_race(users, regs)
 
+        # Profile-only caja cash paths (gift cards, purchase payments) end to end.
+        self.money_paths(users, regs)
+
         # Rollback switch (spec 01 §8): pause caja openings, restore profile openings.
         from posawesome.posawesome.api.shifts import create_opening_voucher
         legacy_args = (self.facts["profiles"]["reg"], self.facts["company"],
@@ -622,6 +625,162 @@ def _heal_race(self, users, regs):
 
 
 Drill.heal_race = _heal_race
+
+
+def _money_paths(self, users, regs):
+    """Gift-card issue/top-up and purchase payments on a caja-managed profile:
+    exact GL, exact closing expectation, no-shift denial, rollback, close race."""
+    from posawesome.posawesome.api import gift_cards, purchase_orders
+    from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.creation import (
+        compute_closing_tables, make_closing_shift_from_opening, submit_closing_shift)
+
+    profile, company = self.facts["profiles"]["reg"], self.facts["company"]
+    frappe.set_user("Administrator")
+    abbr = frappe.db.get_value("Company", company, "abbr")
+    group = frappe.db.get_value("Account", {"company": company, "is_group": 1, "root_type": "Liability"}, "name")
+    liability = f"QA RF {self.tag} Gift Liability - {abbr}"
+    if not frappe.db.exists("Account", liability):
+        frappe.get_doc({"doctype": "Account", "account_name": f"QA RF {self.tag} Gift Liability", "company": company,
+                        "parent_account": group, "account_currency": "MXN"}).insert(ignore_permissions=True)
+    frappe.db.set_value("POS Profile", profile, {"posa_use_gift_cards": 1, "posa_gift_card_liability_account": liability,
+                                                 "posa_allow_purchase_order": 1})
+    frappe.clear_document_cache("POS Profile", profile)
+    for key in ("c1", "c2"):
+        frappe.get_doc("User", users[key]).add_roles("POS Awesome Supervisor")
+    # Saldo's own rule: the supplier-balance account may only pay its supplier.
+    supplier = "Perfeccel" if frappe.db.exists("Supplier", "Perfeccel") else frappe.get_all(
+        "Supplier", filters={"disabled": 0}, pluck="name", limit=1)[0]
+    frappe.db.set_value("Item", "IPN007407", "is_purchase_item", 1)
+    frappe.db.commit()
+    shift = frappe.db.get_value("POS Opening Shift", {"user": users["c1"], "posa_register": regs["MOSTRADOR"],
+                                                      "status": "Open", "docstatus": 1}, "name")
+    drawer = frappe.db.get_value("POS Opening Shift", shift, "posa_drawer_account")
+    # Non-drawer tender: supplier balance (Cash-typed, own account). Bank tenders in the
+    # purchase flow need a bank reference the flow does not collect (pre-existing).
+    wire = frappe.db.get_value("Mode of Payment Account", {"parent": "Saldo proveedores", "company": company}, "default_account")
+
+    def expected_cash():
+        frappe.db.commit()
+        tables = compute_closing_tables(frappe.get_doc("POS Opening Shift", shift).as_dict())
+        return flt(next((r.expected_amount for r in tables["payment_reconciliation"] if r.mode_of_payment == "Cash"), 0), 2)
+
+    def po(payments, supplier_name=supplier):
+        return purchase_orders.create_purchase_order(json.dumps({
+            "pos_profile": profile, "company": company, "supplier": supplier_name,
+            "items": [{"item_code": "IPN007407", "qty": 1, "rate": 50}], "payments": payments}))
+
+    e0, g0, w0 = expected_cash(), self.gl(drawer), self.gl(wire)
+    code = f"QARF{self.tag}GC".upper()
+    self.as_user(users["c1"])
+    gift_cards.issue_gift_card(pos_profile=profile, company=company, initial_amount=100, gift_card_code=code)
+    frappe.db.commit()
+    self.as_user(users["c1"])
+    gift_cards.top_up_gift_card(pos_profile=profile, gift_card_code=code, amount=25)
+    frappe.db.commit()
+    jes = frappe.get_all("Journal Entry", filters={"cheque_no": shift, "docstatus": 1}, pluck="name")
+    self.check("MONEY-GC", "gift issue + top-up post to the caja drawer and reference its shift",
+               len(jes) == 2 and flt(self.gl(drawer)[0] - g0[0], 2) == 125.0, {"journals": jes})
+    self.as_user(users["c1"])
+    result = po([{"mode_of_payment": "Cash", "amount": 40}, {"mode_of_payment": "Saldo proveedores", "amount": 10}])
+    frappe.db.commit()
+    linked = frappe.get_all("Payment Entry Reference", filters={"reference_name": result.get("purchase_order")},
+                            pluck="parent")
+    pes = frappe.get_all("Payment Entry", filters={"name": ["in", linked or [""]], "docstatus": 1},
+                         fields=["name", "mode_of_payment", "paid_from", "reference_no", "paid_amount"])
+    cash_pe = [p for p in pes if p.mode_of_payment == "Cash"]
+    wire_pe = [p for p in pes if p.mode_of_payment == "Saldo proveedores"]
+    self.check("MONEY-PO", "cash supplier payment leaves the caja drawer and is linked to the shift",
+               len(cash_pe) == 1 and cash_pe[0].paid_from == drawer and cash_pe[0].reference_no == shift,
+               {"po": result.get("purchase_order"), "pes": pes})
+    self.check("MONEY-PO", "non-cash supplier payment keeps its own account and no shift link",
+               len(wire_pe) == 1 and wire_pe[0].paid_from == wire and not wire_pe[0].reference_no, wire_pe)
+    g1 = self.gl(drawer)
+    self.check("MONEY-GL", "drawer GL = +125 gift, -40 supplier", (flt(g1[0] - g0[0], 2), flt(g1[1] - g0[1], 2)) == (125.0, 40.0),
+               {"before": g0, "after": g1})
+    self.check("MONEY-GL", "supplier-balance account credited 10 only", flt(self.gl(wire)[1] - w0[1], 2) == 10.0)
+    e1 = expected_cash()
+    self.check("MONEY-CLOSE", "closing expected cash includes gift +125 and supplier -40 exactly once",
+               flt(e1 - e0, 2) == 85.0 and expected_cash() == e1, {"before": e0, "after": e1})
+
+    # No open caja: drawer cash refused, non-cash allowed, nothing written.
+    self.as_user(users["c2"])
+    before = (frappe.db.count("Journal Entry"), frappe.db.count("Payment Entry"), frappe.db.count("Purchase Order"))
+    self.expect_error("MONEY-DENY", "gift issue without an open caja is refused",
+                      lambda: gift_cards.issue_gift_card(pos_profile=profile, company=company, initial_amount=5,
+                                                         gift_card_code=code + "X"), "per caja")
+    self.as_user(users["c2"])
+    self.expect_error("MONEY-DENY", "cash supplier payment without an open caja is refused before any document",
+                      lambda: po([{"mode_of_payment": "Cash", "amount": 5}]), "per caja")
+    self.check("MONEY-DENY", "refusals wrote no journal, payment or purchase order",
+               before == (frappe.db.count("Journal Entry"), frappe.db.count("Payment Entry"), frappe.db.count("Purchase Order")))
+    self.as_user(users["c2"])
+    po([{"mode_of_payment": "Saldo proveedores", "amount": 5}])
+    frappe.db.commit()
+    self.check("MONEY-DENY", "non-cash supplier payment without an open caja is allowed", True)
+
+    # A failure after the money document rolls the whole transaction back.
+    self.as_user(users["c1"])
+    submitted_po = lambda: frappe.db.count("Purchase Order", {"docstatus": 1})
+    g2, counts = self.gl(drawer), (frappe.db.count("Journal Entry"), frappe.db.count("Payment Entry"), submitted_po())
+    original = gift_cards._append_transaction
+    gift_cards._append_transaction = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("injected failure after journal"))
+    try:
+        self.expect_error("MONEY-RB", "gift top-up failing after its journal rolls back", lambda: gift_cards.top_up_gift_card(
+            pos_profile=profile, gift_card_code=code, amount=7), "injected")
+    finally:
+        gift_cards._append_transaction = original
+    self.as_user(users["c1"])
+    self.expect_error("MONEY-RB", "purchase with a failing second tender rolls back the first payment",
+                      lambda: po([{"mode_of_payment": "Cash", "amount": 6}, {"mode_of_payment": "Nope Tender", "amount": 1}]))
+    # The purchase flow keeps a DRAFT order by design (committed before money steps);
+    # nothing financial may survive.
+    self.check("MONEY-RB", "no GL, journal, payment or submitted order survived the failures",
+               self.gl(drawer) == g2 and counts == (frappe.db.count("Journal Entry"), frappe.db.count("Payment Entry"),
+                                                   submitted_po()) and expected_cash() == e1,
+               {"gl": [g2, self.gl(drawer)], "counts": [counts, (frappe.db.count("Journal Entry"),
+                frappe.db.count("Payment Entry"), submitted_po())]})
+
+    # Race: closing vs a top-up on the same caja; caja cash is never outside the corte.
+    self.as_user(users["c1"])
+    term = self.terms["MOSTRADOR"]
+    gen = frappe.db.get_value("POS Opening Shift", shift, "posa_terminal_generation")
+
+    def close():
+        opening = frappe.get_doc("POS Opening Shift", shift)
+        closing = make_closing_shift_from_opening(json.dumps(opening.as_dict(), default=str))["closing_shift"]
+        for row in closing.payment_reconciliation:
+            row.closing_amount = row.expected_amount
+        return submit_closing_shift(json.dumps(closing.as_dict(), default=str), term["terminal_id"], gen, term["terminal_token"])
+
+    def top_up():
+        return gift_cards.top_up_gift_card(pos_profile=profile, gift_card_code=code, amount=9)
+
+    res = self.in_threads([(users["c1"], close), (users["c1"], top_up)])
+    retried = False
+    if res[0][0] != "ok" and "1020" in res[0][1]:
+        # Closing lost a snapshot race to a committed top-up: nothing was closed;
+        # the operator's retry must now count that cash.
+        self.as_user(users["c1"])
+        close()
+        frappe.db.commit()
+        retried = True
+    closing_name = frappe.db.get_value("POS Closing Shift", {"pos_opening_shift": shift, "docstatus": 1}, "name")
+    counted = [r for r in frappe.get_all("POS Closing Shift Detail", filters={"parent": closing_name},
+                                         fields=["mode_of_payment", "expected_amount"]) if r.mode_of_payment == "Cash"]
+    journals = frappe.get_all("Journal Entry", filters={"cheque_no": shift, "docstatus": 1}, pluck="name")
+    topped = res[1][0] == "ok"
+    expected_after = flt(e1 + (9 if topped else 0), 2)
+    self.check("MONEY-RACE", "close vs top-up: committed caja cash is inside the closing, a late one is refused",
+               (res[0][0] == "ok" or retried) and bool(counted) and flt(counted[0].expected_amount, 2) == expected_after
+               and len(journals) == (3 if topped else 2) and (topped or "per caja" in res[1][1]),
+               {"results": [r[0] if r[0] == "ok" else r[1][:120] for r in res], "close_retried": retried,
+                "closing_cash": counted, "journals": len(journals)})
+    self.as_user(users["c1"])
+    self.expect_error("MONEY-RACE", "after close, caja gift cash is refused", lambda: gift_cards.top_up_gift_card(
+        pos_profile=profile, gift_card_code=code, amount=3), "per caja")
+
+
+Drill.money_paths = _money_paths
 
 
 def run(tag=None):

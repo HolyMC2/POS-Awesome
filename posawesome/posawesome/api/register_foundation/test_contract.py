@@ -68,8 +68,14 @@ class HookContract(unittest.TestCase):
         validation = (HERE.parent / "cash_movement" / "validation.py").read_text()
         self.assertIn("movement_drawer(payload)", validation)
         # Profile-only cash routes go through the acting user's caja drawer.
-        self.assertIn("session_drawer(", (HERE.parent / "gift_cards.py").read_text())
-        self.assertIn("session_drawer(pos_profile, mode)", (HERE.parent / "purchase_orders.py").read_text())
+        gift = (HERE.parent / "gift_cards.py").read_text()
+        purchase = (HERE.parent / "purchase_orders.py").read_text()
+        self.assertIn("session_drawer_route(", gift)
+        self.assertIn("je_doc.cheque_no = opening_shift", gift)
+        self.assertIn("session_drawer_route(pos_profile, mode)", purchase)
+        self.assertIn("pe.reference_no = opening_shift", purchase)
+        closing = (HERE.parent.parent / "doctype" / "pos_closing_shift" / "closing_processing" / "creation.py").read_text()
+        self.assertIn("shift_journal_drawer_delta(", closing)
 
     def test_runtime_pointers_follow_close_and_cancel(self):
         for doctype, event in (("POS Closing Shift", "on_submit"), ("POS Closing Shift", "on_cancel"),

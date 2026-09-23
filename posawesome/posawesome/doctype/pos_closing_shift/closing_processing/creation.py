@@ -229,6 +229,11 @@ def compute_closing_tables(opening_shift, doctype=None, for_update=False):
     cash_movement_delta = sum(
         drawer_delta(row.get("movement_type"), row.get("amount")) for row in cash_movements
     )
+    # Caja shifts (spec 01): drawer cash from shift-referenced journals
+    # (gift-card issue/top-up). Zero for legacy shifts.
+    from posawesome.posawesome.api.register_foundation.routing import shift_journal_drawer_delta
+
+    cash_movement_delta += shift_journal_drawer_delta(opening_shift.get("name"), for_update=for_update)
     if cash_movement_delta:
         existing_cash = [pay for pay in payments if pay.mode_of_payment == cash_mode_of_payment]
         if existing_cash:

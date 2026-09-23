@@ -120,7 +120,7 @@ def _resolve_liability_account(profile_doc):
     return liability_account
 
 
-def _create_gift_card_journal_entry(company, posting_date, remark, accounts):
+def _create_gift_card_journal_entry(company, posting_date, remark, accounts, opening_shift=None):
     je_doc = frappe.get_doc(
         {
             "doctype": "Journal Entry",
@@ -129,6 +129,10 @@ def _create_gift_card_journal_entry(company, posting_date, remark, accounts):
             "company": company,
         }
     )
+    if opening_shift:
+        # Caja cash (spec 01): the shift reference is how closing counts it.
+        je_doc.cheque_no = opening_shift
+        je_doc.cheque_date = posting_date or nowdate()
 
     for row in accounts:
         account_row = je_doc.append("accounts", {})
@@ -456,7 +460,10 @@ def _create_issue_or_top_up_entry(profile_doc, company, amount, reference_doctyp
     if _to_float(amount) <= 0:
         return None
 
-    source_account = _resolve_issue_source_account(profile_doc, company)
+    from posawesome.posawesome.api.register_foundation.routing import session_drawer_route
+
+    drawer, opening_shift = session_drawer_route(_doc_value(profile_doc, "name"))
+    source_account = drawer or _resolve_issue_source_account(profile_doc, company)
     liability_account = _resolve_liability_account(profile_doc)
     cost_center = _resolve_cost_center(profile_doc, company)
     remark = frappe._("POS Awesome gift card {0} for {1}").format(
@@ -482,6 +489,7 @@ def _create_issue_or_top_up_entry(profile_doc, company, amount, reference_doctyp
                 "user_remark": cashier,
             },
         ],
+        opening_shift=opening_shift,
     )
 
 

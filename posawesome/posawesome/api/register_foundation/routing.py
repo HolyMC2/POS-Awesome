@@ -190,30 +190,61 @@ def caja_managed(pos_profile) -> bool:
                                                   "lifecycle": ["in", ["Ready", "Suspended"]]}))
 
 
-def session_drawer(pos_profile, mode_of_payment=None):
-    """Drawer for cash routes that are not bound to a shift document.
+def session_drawer_route(pos_profile, mode_of_payment=None):
+    """(drawer_account, opening_shift) for cash routes not bound to a shift document.
 
     Gift-card issue/top-up and purchase payments name only a profile. On a
-    caja-managed profile their cash must move through the acting user's own
-    open caja shift; without one the cash route is refused instead of silently
-    posting to a shared legacy account. Legacy profiles return None (unchanged).
+    caja-managed profile the drawer cash mode must move through the acting
+    user's own open caja shift: it is resolved server-side, LOCKED (the same
+    first lock closing takes) and re-checked as open, so a concurrent close
+    either finishes first (then this refuses) or waits and sees this document.
+    Non-drawer tenders and legacy profiles return (None, None) unchanged.
     """
     if not caja_managed(pos_profile):
-        return None
+        return None, None
     # Non-drawer tenders (card, transfer, supplier balance…) keep their own
     # accounts and never need an open caja; decide before requiring a shift.
     drawer_mode = frappe.db.get_value("POS Profile", pos_profile, "posa_cash_mode_of_payment") or "Cash"
     if mode_of_payment and mode_of_payment != drawer_mode:
-        return None
+        return None, None
     shift = frappe.db.get_value("POS Opening Shift", {
         "user": frappe.session.user, "pos_profile": pos_profile, "status": "Open", "docstatus": 1,
         "posa_register": ["is", "set"]}, "name")
+    if shift:
+        from posawesome.posawesome.api.shifts import lock_opening_shift
+
+        row = lock_opening_shift(shift)  # current read under the shift lock
+        if row.status != "Open" or int(row.docstatus or 0) != 1 or row.user != frappe.session.user:
+            shift = None
     route = shift_route(shift) if shift else None
     if not route:
         fail("invalid_state", "Cash for this profile is kept per caja. Open your caja shift before taking or paying out cash.",
              ["open_shift"])
-    if mode_of_payment and mode_of_payment not in (route.get("cash_modes") or []):
-        return None
     if route.get("mode") == "Cashless" or not route.get("drawer_account"):
         fail("invalid_state", "This caja is cashless and cannot accept or pay out cash. Use another payment method or a cash caja.")
-    return route["drawer_account"]
+    return route["drawer_account"], shift
+
+
+def session_drawer(pos_profile, mode_of_payment=None):
+    """Drawer account only (see ``session_drawer_route``)."""
+    return session_drawer_route(pos_profile, mode_of_payment)[0]
+
+
+def shift_journal_drawer_delta(opening_shift, for_update=False):
+    """Drawer cash from Journal Entries referenced to a caja shift (cheque_no).
+
+    Gift-card issue/top-up on a caja-managed profile posts a Journal Entry into
+    the stamped drawer and references the shift. Closing adds only the drawer
+    account rows of those journals, so each is counted exactly once and
+    legacy shifts (no snapshot) are unaffected.
+    """
+    route = shift_route(opening_shift)
+    if not route or not route.get("drawer_account"):
+        return 0.0
+    value = frappe.db.sql(
+        """SELECT COALESCE(SUM(jea.debit - jea.credit), 0) FROM `tabJournal Entry Account` jea
+        INNER JOIN `tabJournal Entry` je ON je.name = jea.parent
+        WHERE je.docstatus = 1 AND je.cheque_no = %s AND jea.account = %s"""
+        + (" FOR UPDATE" if for_update else ""),
+        (opening_shift, route["drawer_account"]))[0][0]
+    return flt(value, 2)
