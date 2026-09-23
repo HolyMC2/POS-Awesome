@@ -46,3 +46,4 @@ posawesome.patches.add_quotation_conversion_fields
 posawesome.patches.add_credit_note_print_format
 posawesome.patches.add_embedded_barcode_scheme
 posawesome.patches.remove_web_route_setting
+posawesome.patches.add_offline_sync_delta_indexes
