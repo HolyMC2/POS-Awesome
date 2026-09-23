@@ -1,0 +1,25 @@
+{
+ "doctype": "DocType",
+ "name": "POS Store Profile",
+ "module": "POSAwesome",
+ "istable": 1,
+ "editable_grid": 1,
+ "field_order": [
+  "pos_profile"
+ ],
+ "fields": [
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "label": "POS Profile",
+   "options": "POS Profile",
+   "reqd": 1,
+   "in_list_view": 1
+  }
+ ],
+ "track_changes": 0,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}

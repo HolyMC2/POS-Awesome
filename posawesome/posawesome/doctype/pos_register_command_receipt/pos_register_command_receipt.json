@@ -1,0 +1,117 @@
+{
+ "doctype": "DocType",
+ "name": "POS Register Command Receipt",
+ "module": "POSAwesome",
+ "autoname": "hash",
+ "naming_rule": "Random",
+ "field_order": [
+  "namespace",
+  "request_id",
+  "receipt_key",
+  "payload_hash",
+  "actor",
+  "store",
+  "target_doctype",
+  "target_name",
+  "status",
+  "correlation_id",
+  "result_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "namespace",
+   "fieldtype": "Data",
+   "label": "Namespace",
+   "reqd": 1,
+   "length": 60,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "request_id",
+   "fieldtype": "Data",
+   "label": "Request Id",
+   "reqd": 1,
+   "length": 80
+  },
+  {
+   "fieldname": "receipt_key",
+   "fieldtype": "Data",
+   "label": "Receipt Key",
+   "reqd": 1,
+   "unique": 1,
+   "length": 160
+  },
+  {
+   "fieldname": "payload_hash",
+   "fieldtype": "Data",
+   "label": "Payload Hash",
+   "reqd": 1,
+   "length": 64
+  },
+  {
+   "fieldname": "actor",
+   "fieldtype": "Link",
+   "label": "Actor",
+   "options": "User",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "store",
+   "fieldtype": "Link",
+   "label": "Store",
+   "options": "POS Store",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "target_doctype",
+   "fieldtype": "Data",
+   "label": "Target Doctype",
+   "length": 60
+  },
+  {
+   "fieldname": "target_name",
+   "fieldtype": "Data",
+   "label": "Target Name",
+   "length": 140
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nCompleted",
+   "default": "Pending"
+  },
+  {
+   "fieldname": "correlation_id",
+   "fieldtype": "Data",
+   "label": "Correlation Id",
+   "length": 64
+  },
+  {
+   "fieldname": "result_json",
+   "fieldtype": "Long Text",
+   "label": "Result Json"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "POS Awesome Supervisor",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "track_changes": 1,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}

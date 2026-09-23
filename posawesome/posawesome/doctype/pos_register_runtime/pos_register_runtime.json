@@ -1,0 +1,124 @@
+{
+ "doctype": "DocType",
+ "name": "POS Register Runtime",
+ "module": "POSAwesome",
+ "autoname": "field:register",
+ "naming_rule": "By fieldname",
+ "field_order": [
+  "register",
+  "store",
+  "work_state",
+  "active_opening_shift",
+  "active_cashier",
+  "active_binding",
+  "ownership_generation",
+  "row_revision",
+  "last_seen_at",
+  "last_seen_device"
+ ],
+ "fields": [
+  {
+   "fieldname": "register",
+   "fieldtype": "Link",
+   "label": "Register",
+   "options": "POS Register",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "store",
+   "fieldtype": "Link",
+   "label": "Store",
+   "options": "POS Store",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "work_state",
+   "fieldtype": "Select",
+   "label": "Work State",
+   "options": "Available\nOpen\nHandover\nClosing\nRecovery",
+   "default": "Available",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "active_opening_shift",
+   "fieldtype": "Link",
+   "label": "Active Opening Shift",
+   "options": "POS Opening Shift"
+  },
+  {
+   "fieldname": "active_cashier",
+   "fieldtype": "Link",
+   "label": "Active Cashier",
+   "options": "User"
+  },
+  {
+   "fieldname": "active_binding",
+   "fieldtype": "Link",
+   "label": "Active Binding",
+   "options": "POS Device Binding"
+  },
+  {
+   "fieldname": "ownership_generation",
+   "fieldtype": "Int",
+   "label": "Ownership Generation",
+   "default": "0"
+  },
+  {
+   "fieldname": "row_revision",
+   "fieldtype": "Int",
+   "label": "Row Revision",
+   "default": "1"
+  },
+  {
+   "fieldname": "last_seen_at",
+   "fieldtype": "Datetime",
+   "label": "Last Seen At"
+  },
+  {
+   "fieldname": "last_seen_device",
+   "fieldtype": "Link",
+   "label": "Last Seen Device",
+   "options": "POS Device"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "POS User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "POS Awesome Supervisor",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "track_changes": 1,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}

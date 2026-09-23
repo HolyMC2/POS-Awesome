@@ -93,6 +93,13 @@ def _resolve_cost_center(profile_doc, company):
 
 
 def _resolve_issue_source_account(profile_doc, company):
+    # Caja-managed profiles (spec 01): the cash lands in the acting user's own
+    # caja drawer, never a shared profile account.
+    from posawesome.posawesome.api.register_foundation.routing import session_drawer
+
+    drawer = session_drawer(_doc_value(profile_doc, "name"))
+    if drawer:
+        return drawer
     source_account = str(_doc_value(profile_doc, "posa_default_source_account") or "").strip()
     if source_account:
         return source_account

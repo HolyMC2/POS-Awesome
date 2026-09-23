@@ -669,6 +669,7 @@ import {
 	computed,
 	watch,
 	nextTick,
+	toRef,
 } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { resolveCartView, resolveItemsView } from "../../../vertical/viewRegistry";
@@ -731,6 +732,7 @@ import { useFormat } from "../../../format";
 import { connectQzTray } from "../../../services/qzTray";
 import { useRtl } from "../../../composables/core/useRtl";
 import { useUIStore } from "../../../stores/uiStore";
+import { useRegisterHeartbeat } from "../../../composables/pos/shared/useRegisterHeartbeat";
 import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { useSyncStore } from "../../../stores/syncStore";
 import { useOfflineQueue } from "../offline/useOfflineQueue";
@@ -841,6 +843,8 @@ export default {
 		};
 		const offers = useOffers();
 		const uiStore = useUIStore();
+		// Caja presence (spec 02 §4); no-op for legacy profile shifts.
+		useRegisterHeartbeat(toRef(uiStore, "posOpeningShift"));
 		const invoiceStore = useInvoiceStore();
 		const itemsStore = useItemsStore();
 		const customersStore = useCustomersStore();

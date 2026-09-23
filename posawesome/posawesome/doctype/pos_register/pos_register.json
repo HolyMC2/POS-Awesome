@@ -1,0 +1,234 @@
+{
+ "doctype": "DocType",
+ "name": "POS Register",
+ "module": "POSAwesome",
+ "autoname": "hash",
+ "naming_rule": "Random",
+ "title_field": "label",
+ "search_fields": "register_code,label,store",
+ "field_order": [
+  "register_code",
+  "label",
+  "store",
+  "company",
+  "pos_profile",
+  "mode",
+  "lifecycle",
+  "section_routing",
+  "drawer_account",
+  "default_safe",
+  "requires_enrolled_device",
+  "legacy_profile_route",
+  "route_change_approved_by",
+  "route_change_reason",
+  "pending_configuration",
+  "section_meta",
+  "configuration_revision",
+  "hardware_profile_revision",
+  "revision",
+  "has_activity",
+  "register_key",
+  "drawer_route_key"
+ ],
+ "fields": [
+  {
+   "fieldname": "register_code",
+   "fieldtype": "Data",
+   "label": "Register Code",
+   "reqd": 1,
+   "length": 32,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "label": "Label",
+   "reqd": 1,
+   "length": 120,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "store",
+   "fieldtype": "Link",
+   "label": "Store",
+   "options": "POS Store",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "label": "POS Profile",
+   "options": "POS Profile",
+   "reqd": 1
+  },
+  {
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "Mode",
+   "options": "Cash\nCashless",
+   "default": "Cash",
+   "reqd": 1
+  },
+  {
+   "fieldname": "lifecycle",
+   "fieldtype": "Select",
+   "label": "Lifecycle",
+   "options": "Draft\nReady\nSuspended\nRetired",
+   "default": "Draft",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_routing",
+   "fieldtype": "Section Break",
+   "label": "Drawer routing"
+  },
+  {
+   "fieldname": "drawer_account",
+   "fieldtype": "Link",
+   "label": "Drawer Account",
+   "options": "Account",
+   "depends_on": "eval:doc.mode=='Cash'"
+  },
+  {
+   "fieldname": "default_safe",
+   "fieldtype": "Link",
+   "label": "Default Safe",
+   "options": "POS Cash Safe",
+   "depends_on": "eval:doc.mode=='Cash'"
+  },
+  {
+   "fieldname": "requires_enrolled_device",
+   "fieldtype": "Check",
+   "label": "Requires Enrolled Device",
+   "default": "1"
+  },
+  {
+   "fieldname": "legacy_profile_route",
+   "fieldtype": "Check",
+   "label": "Legacy profile route (migration)",
+   "default": "0",
+   "read_only": 1
+  },
+  {
+   "fieldname": "route_change_approved_by",
+   "fieldtype": "Link",
+   "label": "Route Change Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "route_change_reason",
+   "fieldtype": "Small Text",
+   "label": "Route Change Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pending_configuration",
+   "fieldtype": "Long Text",
+   "label": "Pending Configuration",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_meta",
+   "fieldtype": "Section Break",
+   "label": "Revision"
+  },
+  {
+   "fieldname": "configuration_revision",
+   "fieldtype": "Int",
+   "label": "Configuration Revision",
+   "default": "1",
+   "read_only": 1
+  },
+  {
+   "fieldname": "hardware_profile_revision",
+   "fieldtype": "Int",
+   "label": "Hardware Profile Revision",
+   "default": "0",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revision",
+   "fieldtype": "Int",
+   "label": "Revision",
+   "default": "1",
+   "read_only": 1
+  },
+  {
+   "fieldname": "has_activity",
+   "fieldtype": "Check",
+   "label": "Has Activity",
+   "default": "0",
+   "read_only": 1
+  },
+  {
+   "fieldname": "register_key",
+   "fieldtype": "Data",
+   "label": "Register Key",
+   "unique": 1,
+   "hidden": 1,
+   "length": 200,
+   "read_only": 1
+  },
+  {
+   "fieldname": "drawer_route_key",
+   "fieldtype": "Data",
+   "label": "Drawer Route Key",
+   "unique": 1,
+   "hidden": 1,
+   "length": 200,
+   "read_only": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "write": 1,
+   "create": 1
+  },
+  {
+   "role": "POS User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "POS Awesome Supervisor",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "track_changes": 1,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}

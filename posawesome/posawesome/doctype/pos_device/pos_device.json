@@ -1,0 +1,144 @@
+{
+ "doctype": "DocType",
+ "name": "POS Device",
+ "module": "POSAwesome",
+ "autoname": "hash",
+ "naming_rule": "Random",
+ "title_field": "label",
+ "field_order": [
+  "label",
+  "store",
+  "state",
+  "terminal_id",
+  "verifier_hash",
+  "installation_epoch",
+  "enrolled_by",
+  "enrolled_at",
+  "last_heartbeat",
+  "last_version",
+  "revoked_by",
+  "revoked_at",
+  "revocation_reason"
+ ],
+ "fields": [
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "label": "Label",
+   "reqd": 1,
+   "length": 120,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "store",
+   "fieldtype": "Link",
+   "label": "Store",
+   "options": "POS Store",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Select",
+   "label": "State",
+   "options": "Enrolled\nRevoked",
+   "default": "Enrolled",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "terminal_id",
+   "fieldtype": "Data",
+   "label": "Terminal Id",
+   "unique": 1,
+   "length": 80
+  },
+  {
+   "fieldname": "verifier_hash",
+   "fieldtype": "Data",
+   "label": "Verifier Hash",
+   "permlevel": 1,
+   "length": 64
+  },
+  {
+   "fieldname": "installation_epoch",
+   "fieldtype": "Int",
+   "label": "Installation Epoch",
+   "default": "1"
+  },
+  {
+   "fieldname": "enrolled_by",
+   "fieldtype": "Link",
+   "label": "Enrolled By",
+   "options": "User"
+  },
+  {
+   "fieldname": "enrolled_at",
+   "fieldtype": "Datetime",
+   "label": "Enrolled At"
+  },
+  {
+   "fieldname": "last_heartbeat",
+   "fieldtype": "Datetime",
+   "label": "Last Heartbeat"
+  },
+  {
+   "fieldname": "last_version",
+   "fieldtype": "Data",
+   "label": "Last Version",
+   "length": 60
+  },
+  {
+   "fieldname": "revoked_by",
+   "fieldtype": "Link",
+   "label": "Revoked By",
+   "options": "User"
+  },
+  {
+   "fieldname": "revoked_at",
+   "fieldtype": "Datetime",
+   "label": "Revoked At"
+  },
+  {
+   "fieldname": "revocation_reason",
+   "fieldtype": "Small Text",
+   "label": "Revocation Reason"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "POS User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "POS Awesome Supervisor",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "track_changes": 1,
+ "allow_copy": 0,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "engine": "InnoDB"
+}
