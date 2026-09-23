@@ -10,6 +10,7 @@ import {
 	type RailGroup,
 	type RailOfflineAvailability,
 } from "./railDestinations";
+import { getDestination } from "./destinationRegistry";
 import { resolveRailSettings, type RailSettingItem } from "./railSettings";
 
 /**
@@ -106,13 +107,14 @@ export function useRegisterRail(ctx: RegisterRailContext) {
 		return count > 0 ? count : null;
 	};
 
-	/** The whole rail is inert until the shift opens (§5.1). */
-	const railDisabled = computed(() => !ctx.shiftOpen.value);
+	// Operational review remains reachable before opening a selling shift.
+	const railDisabled = computed(() => items.value.every((item) => item.disabled));
 
 	const items = computed<RailItem[]>(() =>
 		visibleRailDestinations(ctx.gates.value).map((destination) => {
 			const offlineBlocked = ctx.offline.value && isOfflineBlocked(destination);
-			const disabled = railDisabled.value || offlineBlocked;
+			const shiftBlocked = !ctx.shiftOpen.value && getDestination(destination.id)?.requiresShift !== false;
+			const disabled = shiftBlocked || offlineBlocked;
 			const badge = resolveBadge(destination);
 			const label = resolveLabel(destination);
 
@@ -120,7 +122,7 @@ export function useRegisterRail(ctx: RegisterRailContext) {
 			if (badge !== null) {
 				notes.push(String(badge));
 			}
-			if (railDisabled.value) {
+			if (shiftBlocked) {
 				notes.push(ctx.__("Shift not open"));
 			} else if (offlineBlocked) {
 				notes.push(ctx.__("Needs connection"));
@@ -132,7 +134,7 @@ export function useRegisterRail(ctx: RegisterRailContext) {
 				icon: destination.icon,
 				group: destination.group,
 				badge,
-				active: !railDisabled.value && ctx.activeDestinationId.value === destination.id,
+				active: !disabled && ctx.activeDestinationId.value === destination.id,
 				dimmed: offlineBlocked,
 				disabled,
 				ariaLabel: notes.length ? `${label} — ${notes.join(" · ")}` : label,

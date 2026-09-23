@@ -124,10 +124,10 @@ describe("RegisterRail — badges", () => {
 });
 
 describe("RegisterRail — shift gate", () => {
-	it("draws the whole rail inert before the shift opens", () => {
+	it("keeps the tools menu available for review while shift actions remain disabled", () => {
 		const { wrapper } = mountRail({ shiftOpen: false });
-		expect(wrapper.get("nav").classes()).toContain("register-rail--disabled");
-		expect(wrapper.get("nav").attributes("data-rail-state")).toBe("disabled");
+		expect(wrapper.get("nav").classes()).not.toContain("register-rail--disabled");
+		expect(wrapper.get("nav").attributes("data-rail-state")).toBe("enabled");
 		// `aria-disabled`, NOT the native attribute. This assertion used to read
 		// `attributes("disabled") !== undefined`, which encoded the defect A1
 		// found in wave 3: the native attribute drops the element from the tab
@@ -135,7 +135,7 @@ describe("RegisterRail — shift gate", () => {
 		// nothing at all to everyone else. See a11yRailDisabledFocus.spec.ts.
 		expect(
 			wrapper
-				.findAll("button.register-rail__item")
+				.findAll("button.register-rail__item[data-rail-destination]")
 				.every((b) => b.attributes("aria-disabled") === "true"),
 		).toBe(true);
 	});
@@ -250,7 +250,7 @@ describe("RegisterRail — state hooks for the evidence lane and wave-3 audit", 
 		expect(mountRail({ shiftOpen: true }).wrapper.get("nav").attributes("data-rail-state")).toBe(
 			"enabled",
 		);
-		expect(mountRail({ shiftOpen: false }).wrapper.get("nav").attributes("data-rail-state")).toBe(
+		expect(mountRail({ shiftOpen: false, offline: true }).wrapper.get("nav").attributes("data-rail-state")).toBe(
 			"disabled",
 		);
 	});

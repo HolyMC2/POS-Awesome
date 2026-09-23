@@ -7,6 +7,16 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 ## Unreleased
 
+- **Cajas y turnos workspace (2026-09-22, doco-mirror candidate).**
+  Adds attention/open/history queues, scoped shift details, cash activity and
+  contextual routes to selling, counting, movements and browser recovery.
+  Available before opening a shift; mobile uses a focused detail step with one
+  scroll surface. Reads cannot submit printed drafts or move money; blind-count
+  amounts are withheld by the server. Uses existing profile/shift identities;
+  physical register and shared-safe foundations remain specified. No migration.
+  Rollback restores prior assets/translations and removes the new read-only API.
+  Release evidence: `~/muelle-releases/pos-cajas-workspace-20260922/`.
+
 - **Category navigation and settings cleanup (2026-09-22, doco-mirror).**
   Category boxes start automatically on touchscreens; each device can choose
   categories or products everywhere. Both catalogue layouts use the complete

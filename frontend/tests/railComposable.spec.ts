@@ -92,10 +92,10 @@ describe("useRegisterRail — badges", () => {
 });
 
 describe("useRegisterRail — shift gate (§5.1)", () => {
-	it("disables every destination until the shift opens", () => {
+	it("keeps register review reachable while transactional destinations wait for a shift", () => {
 		const { rail } = makeContext({ shiftOpen: false });
-		expect(rail.railDisabled.value).toBe(true);
-		expect(rail.items.value.every((item) => item.disabled)).toBe(true);
+		expect(rail.railDisabled.value).toBe(false);
+		expect(rail.items.value.filter((item) => !item.disabled).map((item) => item.id)).toEqual(["registers"]);
 	});
 
 	it("says why, so the state is not just a grey column", () => {
@@ -139,6 +139,7 @@ describe("useRegisterRail — offline", () => {
 			"purchase",
 			"quotations",
 			"recharge",
+			"registers",
 			"return",
 			"serviceOrder",
 		]);
@@ -271,6 +272,7 @@ describe("useRegisterRail — groups", () => {
 			"barcode",
 			"giftCards",
 			"dashboard",
+			"registers",
 			"cashCustody",
 		]);
 	});

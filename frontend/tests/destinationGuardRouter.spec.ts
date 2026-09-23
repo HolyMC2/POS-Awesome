@@ -55,6 +55,12 @@ describe("destination guard, as the router installs it", () => {
 		expect(resolveDestinationRedirect("/barcode")).toBeNull();
 	});
 
+	it("allows register review after boot without a selling shift", () => {
+		booted({ shift: null });
+		expect(resolveDestinationRedirect("/registers")).toBeNull();
+		expect(resolveDestinationRedirect("/cash-movement")).toBe("/pos");
+	});
+
 	it("never redirects a path to itself, so a closed shift cannot loop", () => {
 		// `/pos` is the `sale` destination and `sale` is shift-gated, so the
 		// raw guard refuses it and names `/pos` as the fallback. Following that

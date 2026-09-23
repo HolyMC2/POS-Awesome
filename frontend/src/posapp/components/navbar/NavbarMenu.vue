@@ -535,6 +535,9 @@ export default {
 		},
 		quickActions() {
 			const actions = [
+				{ id: "registers", label: __("Registers & shifts"),
+					subtitle: __("Review open shifts, cash activity and recovery"),
+					icon: "mdi-cash-register", tone: "primary", handler: "openRegisters" },
 				{
 					id: "switch-cashier",
 					label: __("Switch Cashier"),
@@ -1053,6 +1056,10 @@ export default {
 				case "refreshCacheUsage":
 					this.closeMenu();
 					this.$emit("refresh-cache-usage");
+					break;
+				case "openRegisters":
+					this.closeMenu();
+					this.$router.push("/registers");
 					break;
 				case "openDashboard":
 					this.closeMenu();

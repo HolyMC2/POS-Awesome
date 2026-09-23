@@ -110,13 +110,14 @@ describe("NavbarMenu action surfaces", () => {
 		await flushPromises();
 
 		expect((wrapper.vm as any).quickActions.map((action: any) => action.id)).toEqual([
+			"registers",
 			"switch-cashier",
 			"lock-screen",
 			"print-last-invoice",
 			"sync-offline-sales",
 			"close-shift",
 		]);
-		expect((wrapper.vm as any).quickActions[3].label).toBe("Sync Offline Sales");
+		expect((wrapper.vm as any).quickActions.find((action: any) => action.id === "sync-offline-sales").label).toBe("Sync Offline Sales");
 
 		const sections = (wrapper.vm as any).settingsSections;
 		expect(sections.map((section: any) => section.id)).toEqual([

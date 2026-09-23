@@ -151,6 +151,7 @@ export type Events = {
 	open_customer_display: void;
 	open_employee_switch: void;
 	open_shift_details: void; // F7 → shift overview / closing dialog
+	"registers:open-shift": void;
 	lock_pos_screen: void;
 	show_shortcuts_cheatsheet: void; // Alt+H → keymap discoverability overlay
 	show_price_check: void; // Alt+C → read-only price lookup

@@ -76,6 +76,7 @@ describe("rail destination registry", () => {
 			"barcode",
 			"giftCards",
 			"dashboard",
+			"registers",
 			"cashCustody",
 			"closing",
 		]);
@@ -184,6 +185,7 @@ describe("rail capability gating", () => {
 			"lots",
 			"purchase",
 			"barcode",
+			"registers",
 			"cashCustody",
 		]);
 	});
@@ -237,6 +239,7 @@ describe("rail offline contract", () => {
 			"purchase",
 			"quotations",
 			"recharge",
+			"registers",
 			"return",
 			"serviceOrder",
 		]);
@@ -252,6 +255,7 @@ describe("rail offline contract", () => {
 			"barcode",
 			"giftCards",
 			"dashboard",
+			"registers",
 			"cashCustody",
 		]);
 		// Gated = absent, not disabled (R3): a cashier never sees Tablero, a
@@ -261,6 +265,7 @@ describe("rail offline contract", () => {
 			"lots",
 			"purchase",
 			"barcode",
+			"registers",
 			"cashCustody",
 		]);
 		// Every tool explains itself in the flyout; no pill ever needs to.

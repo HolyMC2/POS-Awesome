@@ -132,6 +132,8 @@ export interface DestinationDef {
 	 * the URL and the chord refuse it the same way.
 	 */
 	access?: "supervisor";
+	/** Read-only operational workspaces may be used before opening a selling shift. */
+	requiresShift?: boolean;
 	/**
 	 * `page` — a full view that was a route of its own (Payments, Purchase
 	 * Orders, Barcode Labels, Gift Cards, Dashboard). It sizes itself to a
@@ -406,6 +408,9 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 		badgeSource: null,
 		surface: "page",
 	},
+	{ id: "registers", labelKey: "Registers & shifts", kind: "sheet", path: "/registers",
+	  capability: null, profileFlag: null, offline: "online_required", shortcutActionId: null,
+	  badgeSource: null, surface: "page", requiresShift: false },
 	{ id: "cashCustody", labelKey: "Cash custody", kind: "sheet", path: "/cash-custody", capability: null,
 	  profileFlag: null, offline: "online_required", shortcutActionId: null, badgeSource: null, surface: "page" },
 
@@ -518,6 +523,7 @@ export const SHEET_COMPONENTS: Record<string, () => Promise<unknown>> = {
 	// Not a dialog: `CashMovementView` is a plain view, so it renders straight
 	// into the surface with no overlay in between. That is also why it never
 	// reached the `useDialogFullscreen` seam and kept its modal-body geometry.
+	registers: () => import("../../../components/pos/registers/RegistersWorkspace.vue"),
 	cashCustody: () => import("../../../components/pos/custody/CashCustodyView.vue"),
 	expense: () => import("../../../components/pos/cash/CashMovementView.vue"),
 	closing: () => import("../../../components/pos/shell/ClosingDialog.vue"),

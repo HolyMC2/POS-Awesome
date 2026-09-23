@@ -1,8 +1,33 @@
 # 02 — Cajas workspace
 
-Status: specified; not implemented. Version 1, 2026-09-22.
+Status: full specification pending; initial shift workspace implemented. Version 1, 2026-09-22.
 Owner: POSAwesome. Requires [01](01-store-register-foundation.md).
 Uses the command/scope protocol in 01 and capacity contract in [09](09-scale-isolation-rollout.md).
+
+### Initial Doco slice (2026-09-22)
+
+`/posapp/registers` exposes existing shifts as **Cajas y turnos**, reachable from
+the opening dialog, actions menu and register tools. Attention/open/history
+queues use scoped keyset pagination. Detail shows the responsible cashier,
+profile, dates, canonical expected tender balances and up to 20 submitted cash
+movements. Blind-count profiles receive no money amounts. Reading detail never
+calls the closing builder, submits printed drafts, claims a browser or moves cash.
+
+Cashiers see their own permitted shifts; supervisors see assigned profiles, with
+the existing System Manager scope override. Current-shift actions reuse sales,
+cash movement and closing destinations. Other shifts expose the existing explicit
+browser recovery flow without changing the active cashier. Supervisors can review
+without opening a selling shift. Failed reads have retry states; late responses
+cannot replace a newer selection. The queue and detail share one scroll surface,
+with a separate detail step on phones and narrow tablets.
+
+This is a useful slice over current records, not completion of this specification.
+It does not create physical registers/stores, infer device connectivity, reconcile
+offline work across browsers, enable shared-safe custody, or certify enterprise
+capacity. Counts cover accessible server shift records, not all operational
+exceptions. Closed shifts link their closing record; they are not recalculated
+as live cash. Details calculate money on demand; lists never scan invoice or GL
+tables. The measured mirror query latency is evidence only for its current data.
 
 ## 1. Outcome
 

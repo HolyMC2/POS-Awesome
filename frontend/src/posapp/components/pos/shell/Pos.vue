@@ -83,6 +83,7 @@
 			:dialog="dialog"
 			@close="closeOpeningDialog"
 			@register="handleRegisterPosData"
+			@manage-registers="openRegisters"
 		></OpeningDialog>
 		<!-- The payment DIALOG survives only where there is no rail to host the
 		     surface beside: 992–1099px, which has the dialog breakpoint but not
@@ -812,7 +813,7 @@ export default {
 		const responsive = useResponsive();
 		const rtl = useRtl();
 		const shift = usePosShift(() => {
-			dialog.value = true;
+			if (route?.path !== "/registers") dialog.value = true;
 		});
 		const handleSubmitClosingPos = (data) => {
 			shift.submit_closing_pos(data);
@@ -1395,7 +1396,15 @@ export default {
 			verticalT(destinationRouting.activeDestination.value?.labelKey || "Workspace"),
 		);
 		const workspaceEntries = destinationRouting.entries;
-		const dismissDestination = () => destinationRouting.dismiss();
+		const dismissDestination = () => {
+			if (!shiftOpen.value) dialog.value = true;
+			else destinationRouting.dismiss();
+		};
+		const openRegisters = () => {
+			dialog.value = false;
+			destinationRouting.activate("registers", "shortcut");
+		};
+		const openRegisterShift = () => { dialog.value = true; };
 
 		// Borradores and Facturas are both InvoiceManagement, hosted. While
 		// either is up, the floating copy behind `uiStore.invoiceManagementDialog`
@@ -2563,6 +2572,7 @@ export default {
 				// F7 — shift overview / closing dialog. The listener was lost
 				// in an old refactor and F7 emitted into the void.
 				eventBus.on("open_shift_details", handleOpenShiftDetails);
+				eventBus.on("registers:open-shift", openRegisterShift);
 				eventBus.on("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.on("set_compact_panel", setCompactPanel);
 				// Payments.vue's Cancel asks for the cart here rather than
@@ -2620,6 +2630,7 @@ export default {
 				// components registered.
 				eventBus.off("submit_closing_pos", handleSubmitClosingPos);
 				eventBus.off("open_shift_details", handleOpenShiftDetails);
+				eventBus.off("registers:open-shift", openRegisterShift);
 				eventBus.off("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.off("set_compact_panel", setCompactPanel);
 				eventBus.off("show_invoice_panel", showInvoicePanel);
@@ -2825,6 +2836,7 @@ export default {
 			focusItemSearchField,
 			onHostedBand,
 			hostedDestinationId,
+			openRegisters,
 			hostedBandState,
 			workspaceLabel,
 			workspaceEntries,

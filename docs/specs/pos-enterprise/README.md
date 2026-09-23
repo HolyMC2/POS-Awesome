@@ -3,7 +3,9 @@
 Version 1 · 2026-09-22 · Owner: Doco Mexico / POSAwesome.
 
 **Status: complete first specification set; implementation and qualification
-pending.** These documents describe required future behavior. Existing features
+pending.** An initial [Cajas y turnos slice](02-cajas-workspace.md#initial-doco-slice-2026-09-22)
+now reviews existing shifts; the full store/register foundation remains pending.
+These documents describe required future behavior. Existing features
 are identified separately with code/evidence links. No document here certifies
 the deployed product, authorizes a production rollout or promises an unmeasured
 capacity/availability tier.

@@ -36,7 +36,7 @@ import { useRoute } from "vue-router";
 // wrapper first and shout into an empty room.
 import RegisterShell from "../Pos.vue";
 import { useUIStore } from "../../../../stores/uiStore";
-import { destinationForPath } from "../../../../composables/pos/shell/destinationRegistry";
+import { destinationForPath, getDestination } from "../../../../composables/pos/shell/destinationRegistry";
 
 const route = useRoute();
 const uiStore = useUIStore();
@@ -75,7 +75,7 @@ function handOver() {
 	if (!id || handedOver === id || !eventBus) {
 		return;
 	}
-	if (!uiStore.posOpeningShift) {
+	if (!uiStore.posOpeningShift && getDestination(id)?.requiresShift !== false) {
 		return;
 	}
 	handedOver = id;

@@ -3949,3 +3949,59 @@ Search and barcode scanning show products directly.,La búsqueda y el escaneo mu
 Product display,Vista de productos
 Sync and performance,Sincronización y rendimiento
 Category navigation and product display on this device,Categorías y vista de productos en este dispositivo
+Registers & shifts,Cajas y turnos
+"Review open shifts, cash activity and recovery","Revisa turnos abiertos, movimientos y recuperación"
+Review registers and shifts,Revisar cajas y turnos
+Daily operation,Operación diaria
+See who has an open shift and what needs attention.,Consulta quién tiene un turno abierto y qué necesita atención.
+Open my shift,Abrir mi turno
+My current shift,Mi turno actual
+Open shifts,Turnos abiertos
+Need attention,Necesitan atención
+Your permitted profiles,Perfiles a los que tienes acceso
+Your shifts only,Solo tus turnos
+Shifts,Turnos
+Shift filter,Filtrar turnos
+"Search cashier, profile or shift","Buscar cajero, perfil o turno"
+"Cashier, profile or shift","Cajero, perfil o turno"
+Could not update shifts. Check the connection and try again.,No se pudieron actualizar los turnos. Revisa la conexión e inténtalo de nuevo.
+Loading shifts…,Cargando turnos…
+No matching shifts,No hay turnos que coincidan
+No shifts need review,No hay turnos pendientes de revisión
+No open shifts,No hay turnos abiertos
+No closed shifts,No hay turnos cerrados
+This list reflects server records. Saved work on other browsers must be checked separately.,Esta lista muestra los registros del servidor. Revisa por separado el trabajo guardado en otros navegadores.
+View open shifts,Ver turnos abiertos
+Recovery review,Revisar recuperación
+From an earlier day,De un día anterior
+Load more shifts,Cargar más turnos
+Back to shifts,Volver a los turnos
+A clear view of each shift,"Cada turno, a la vista"
+Choose a shift to review its cash activity and next step.,Elige un turno para revisar sus movimientos y el siguiente paso.
+Shifts are grouped by POS profile; a profile may be shared by several cashiers.,Los turnos se agrupan por perfil de punto de venta; varios cajeros pueden compartir un perfil.
+Loading shift details…,Cargando detalle del turno…
+This shift could not be loaded. Refresh or check your access.,No se pudo cargar este turno. Actualiza o revisa tus permisos.
+Closed at,Cerrado el
+Review before closing,Revisar antes de cerrar
+"This shift started on an earlier day. Check saved sales, cash movements and the count before closing.","Este turno empezó en un día anterior. Revisa las ventas guardadas, los movimientos de efectivo y el conteo antes de cerrar."
+Resume sale,Volver a vender
+Count and close shift,Contar y cerrar turno
+Sales and cash actions stay with this shift's cashier and authorized browser.,Las ventas y los movimientos de efectivo corresponden al cajero de este turno y a su navegador autorizado.
+Cash and tenders,Efectivo y formas de pago
+Expected amounts are hidden by this profile's blind-count policy.,La política de conteo ciego de este perfil oculta los importes esperados.
+Server expected amounts. Unsynced work is not included.,Importes esperados según el servidor. No incluyen trabajo sin sincronizar.
+No tender activity recorded.,No hay actividad registrada en las formas de pago.
+Recent submitted cash movements,Últimos movimientos de efectivo confirmados
+Up to 20 most recently updated movements for this shift.,Hasta 20 de los movimientos actualizados más recientemente en este turno.
+No submitted cash movements recorded.,No hay movimientos de efectivo confirmados.
+Review browser access,Revisar acceso del navegador
+Open closing record,Abrir registro de cierre
+Site time,Hora del sitio
+Closed history,Historial de cierres
+Sign in to review shifts.,Inicia sesión para revisar turnos.
+Site signing key is not configured.,No se ha configurado la clave de firma del sitio.
+This shift list has expired. Refresh it to continue.,Esta lista de turnos venció. Actualiza para continuar.
+"Choose open shifts, attention, or closed history.","Elige turnos abiertos, pendientes de atención o historial de cierres."
+This shift is unavailable or outside your access.,Este turno no está disponible o no tienes acceso a él.
+Cash movements,Movimientos de efectivo
+You,Tú
