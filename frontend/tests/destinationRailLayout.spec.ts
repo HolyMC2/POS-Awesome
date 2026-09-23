@@ -169,7 +169,7 @@ describe("the corte, hosted beside the rail", () => {
 			'<div v-if="bandState" class="closing-band">',
 		);
 		expect(read("../src/posapp/components/pos/shell/Pos.vue")).toContain(
-			"v-show=\"railVisible && hostedDestinationId !== 'closing'\"",
+			"v-show=\"railVisible && !['closing', 'registers'].includes(hostedDestinationId)\"",
 		);
 	});
 

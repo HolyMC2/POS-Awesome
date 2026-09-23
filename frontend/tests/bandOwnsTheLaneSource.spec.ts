@@ -37,11 +37,12 @@ describe("bandLaneOwnership tracks Pos.vue's railVisible", () => {
 		const shell = read("../src/posapp/components/pos/shell/Pos.vue");
 		// A band shown on a condition LOOSER than railVisible would appear
 		// where the summary has not yielded, which is the defect in reverse.
+		// Closing and register review own their actions, so neither shows a sale total.
 		// v-show, NEVER v-if: the summaries `<Teleport defer>` into the band's
 		// lanes while staying mounted themselves, and the parent-first patch
 		// order means a v-if would destroy those targets before the teleports
 		// can stand down — the resize-crossing crash of 2026-08-26.
-		expect(shell).toMatch(/<ActionBand[\s\S]{0,700}v-show="railVisible && hostedDestinationId !== 'closing'"/);
+		expect(shell).toMatch(/<ActionBand[\s\S]{0,700}v-show="railVisible && !\['closing', 'registers'\]\.includes\(hostedDestinationId\)"/);
 		expect(shell).not.toMatch(/<ActionBand[\s\S]{0,700}v-if="railVisible"/);
 	});
 });
