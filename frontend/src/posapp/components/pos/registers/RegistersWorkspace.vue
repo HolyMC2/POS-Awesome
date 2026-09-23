@@ -228,9 +228,10 @@ onBeforeUnmount(() => {
 .registers__row-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .registers__badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
 .registers__badge { font-size: 11px; border-radius: 6px; padding: 3px 7px; background: var(--pos-hover-bg); font-weight: 600; }
-.attention { color: #9a5700; }
-.registers__badge.attention, .registers__notice { background: #fff6e7; color: #754600; }
-.registers__notice { border: 1px solid #e8c888; padding: 14px; border-radius: 12px; display: grid; gap: 8px; }
+.attention { color: var(--reg-tone-warning-label, #9a5700); }
+.registers__badge.attention, .registers__notice { background: var(--reg-tone-warning-bg, #fff6e7); color: var(--reg-tone-warning-label, #754600); }
+.registers__notice { border: 1px solid var(--reg-tone-warning-border, #e8c888); padding: 14px; border-radius: 12px; display: grid; gap: 8px; }
+.registers__notice button { color: var(--pos-text-primary); }
 .registers__empty { padding: 26px 12px; display: grid; gap: 14px; color: var(--pos-text-secondary); }
 .registers__welcome { padding: 48px 24px; text-align: center; justify-items: center; }
 .registers__detail-toolbar { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
