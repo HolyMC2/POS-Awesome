@@ -98,3 +98,41 @@ describe("payments and advances without an invoice", () => {
 		} finally { bus.off("open_money_exceptions", open); }
 	});
 });
+
+describe('clinic balance handoff', () => {
+  let wrapper: VueWrapper | undefined;
+  beforeEach(() => {
+    setActivePinia(createPinia()); call.mockReset();
+    (window as any).__ = (text: string) => text; (window as any).serverOnline = true;
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    window.history.replaceState({}, '', '/posapp/payments?customer=PAYER&invoice=SI-CLINIC&pos_profile=COUNTER&return_to=%2Fclinica%2Fbilling');
+  });
+  afterEach(() => { wrapper?.unmount(); wrapper = undefined; window.history.replaceState({}, '', '/'); });
+  async function render(customer = 'PAYER', profile = 'COUNTER') {
+    const store = useUIStore(); store.posProfile = { name: profile, posa_use_pos_awesome_payments: 1 } as any;
+    call.mockImplementation((method: string) => Promise.resolve(method.endsWith('get_receivable_detail')
+      ? { row: { name: 'SI-CLINIC', customer, customer_name: 'Payer', outstanding: 40, currency: 'MXN' } }
+      : { rows: [], total: 0 }));
+    wrapper = mount(CobranzaSurface, { global: { stubs: { CobranzaDetail: true }, components: {
+      VBtn: { props: ['disabled'], template: '<button :disabled="disabled"><slot /></button>' }, VAlert: { template: '<div><slot /></div>' },
+    } } });
+    window.dispatchEvent(new Event('online')); await flushPromises();
+    return store;
+  }
+  it('verifies the native receivable then hands off to the existing payment capture', async () => {
+    const store = await render();
+    expect(call).toHaveBeenCalledWith(expect.stringContaining('get_receivable_detail'), { pos_profile: 'COUNTER', invoice: 'SI-CLINIC', doctype: 'Sales Invoice' });
+    expect(store.paymentRouteTarget).toMatchObject({ customer: 'PAYER', invoiceName: 'SI-CLINIC' });
+    expect(wrapper!.find('[data-testid="pay-view-probe"]').exists()).toBe(true);
+    expect(wrapper!.get('a').attributes('href')).toBe('/clinica/billing');
+  });
+  it('refuses a different payer or register without arming collection', async () => {
+    const store = await render('OTHER-PAYER');
+    expect(store.paymentRouteTarget).toBeNull();
+    expect(wrapper!.text()).toContain('This clinic balance changed');
+    wrapper!.unmount();
+    const different = await render('PAYER', 'OTHER-REGISTER');
+    expect(different.paymentRouteTarget).toBeNull();
+    expect(wrapper!.text()).toContain('Open the clinic register');
+  });
+});
