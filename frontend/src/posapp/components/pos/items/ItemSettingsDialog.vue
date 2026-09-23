@@ -112,7 +112,6 @@
 			</v-card-text>
 			<v-divider />
 			<v-card-actions class="pa-4">
-				<v-spacer />
 				<v-btn variant="text" @click="dialogModel = false">{{ __("Cancel") }}</v-btn>
 				<v-btn color="primary" variant="elevated" @click="onSave">{{ __("Save Settings") }}</v-btn>
 			</v-card-actions>
@@ -199,6 +198,23 @@ const onSave = () => {
 	cursor: pointer;
 	min-height: 44px;
 	padding-block: 10px;
+}
+.catalogue-settings :deep(.v-card-actions) {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+	gap: 8px;
+}
+.catalogue-settings :deep(.v-card-actions .v-btn) {
+	min-width: 0;
+	min-height: 44px;
+	height: auto;
+	margin: 0 !important;
+	padding: 8px;
+	letter-spacing: 0.02em;
+}
+.catalogue-settings :deep(.v-card-actions .v-btn__content) {
+	white-space: normal;
+	line-height: 1.3;
 }
 .browse-view-toggle {
 	display: flex;
