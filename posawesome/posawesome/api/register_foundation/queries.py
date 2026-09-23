@@ -99,13 +99,14 @@ def readiness_for(register: dict, store, binding_override=None) -> list[dict]:
 _REG_FIELDS = """r.name, r.register_code, r.label, r.store, r.company, r.pos_profile, r.mode, r.lifecycle,
     r.revision, r.drawer_account, r.requires_enrolled_device, r.pending_configuration,
     st.store_code, st.store_name, st.status AS store_status,
-    rt.work_state, rt.active_opening_shift, rt.active_cashier, rt.last_seen_at, rt.row_revision,
+    rt.work_state, os.name AS active_opening_shift, IF(os.name IS NULL, NULL, rt.active_cashier) AS active_cashier,
+    rt.last_seen_at, rt.row_revision,
     rt.active_binding, u.full_name AS cashier_name,
     os.period_start_date AS opened_at, os.posa_terminal_recovery_pending AS recovery_pending"""
 _REG_FROM = """FROM `tabPOS Register` r
     INNER JOIN `tabPOS Store` st ON st.name = r.store
     LEFT JOIN `tabPOS Register Runtime` rt ON rt.name = r.name
-    LEFT JOIN `tabPOS Opening Shift` os ON os.name = rt.active_opening_shift
+    LEFT JOIN `tabPOS Opening Shift` os ON os.name = rt.active_opening_shift AND os.docstatus = 1 AND os.status = 'Open'
     LEFT JOIN `tabUser` u ON u.name = rt.active_cashier"""
 
 
@@ -157,9 +158,9 @@ def list_registers(store=None, filter="all", search="", cursor=None, page_length
         clauses.append("r.store = %(store)s")
         params["store"] = store
     if filter == "open":
-        clauses.append("rt.active_opening_shift IS NOT NULL")
+        clauses.append("os.name IS NOT NULL")
     elif filter == "available":
-        clauses.append("rt.active_opening_shift IS NULL AND r.lifecycle = 'Ready'")
+        clauses.append("os.name IS NULL AND r.lifecycle = 'Ready'")
     elif filter == "setup":
         clauses.append("r.lifecycle IN ('Draft','Suspended')")
     elif filter == "attention":
@@ -181,7 +182,7 @@ def list_registers(store=None, filter="all", search="", cursor=None, page_length
     now = now_datetime()
     summary_where = " AND ".join([clause, "r.lifecycle != 'Retired'"] + (["r.store = %(store)s"] if store else []))
     summary = frappe.db.sql(f"""SELECT COUNT(*) AS total,
-        COALESCE(SUM(rt.active_opening_shift IS NOT NULL), 0) AS open,
+        COALESCE(SUM(os.name IS NOT NULL), 0) AS open,
         COALESCE(SUM(os.posa_terminal_recovery_pending = 1 OR DATE(os.period_start_date) < CURDATE()
             OR r.pending_configuration IS NOT NULL OR r.lifecycle = 'Draft'), 0) AS attention,
         COALESCE(SUM(r.lifecycle IN ('Draft','Suspended')), 0) AS setup
@@ -214,13 +215,13 @@ def list_stores(cursor=None, page_length=None, search=""):
     rows = frappe.db.sql(f"""SELECT st.name, st.store_code, st.store_name, st.company, st.status, st.revision,
         st.timezone,
         COUNT(r.name) AS registers,
-        COALESCE(SUM(rt.active_opening_shift IS NOT NULL), 0) AS open,
+        COALESCE(SUM(os.name IS NOT NULL), 0) AS open,
         COALESCE(SUM(os.posa_terminal_recovery_pending = 1 OR DATE(os.period_start_date) < CURDATE()
             OR r.pending_configuration IS NOT NULL OR r.lifecycle = 'Draft'), 0) AS attention
         FROM `tabPOS Store` st
         LEFT JOIN `tabPOS Register` r ON r.store = st.name AND r.lifecycle != 'Retired'
         LEFT JOIN `tabPOS Register Runtime` rt ON rt.name = r.name
-        LEFT JOIN `tabPOS Opening Shift` os ON os.name = rt.active_opening_shift
+        LEFT JOIN `tabPOS Opening Shift` os ON os.name = rt.active_opening_shift AND os.docstatus = 1 AND os.status = 'Open'
         WHERE {' AND '.join(clauses)}
         GROUP BY st.name ORDER BY st.store_code ASC, st.name ASC LIMIT %(limit)s""", params, as_dict=True)
     more = len(rows) > limit
@@ -320,8 +321,8 @@ def register_detail(register):
     if runtime.get("active_opening_shift"):
         s = frappe.db.get_value("POS Opening Shift", runtime["active_opening_shift"],
                                 ["name", "user", "period_start_date", "posa_business_date", "status",
-                                 "posa_terminal_recovery_pending", "posa_binding_generation"], as_dict=True)
-        if s:
+                                 "posa_terminal_recovery_pending", "posa_binding_generation", "docstatus"], as_dict=True)
+        if s and cint(s.docstatus) == 1 and s.status == "Open":
             shift = {"name": s.name, "cashier": s.user,
                      "cashier_name": frappe.db.get_value("User", s.user, "full_name"),
                      "opened_at": str(s.period_start_date), "business_date": str(s.posa_business_date or ""),
@@ -351,7 +352,9 @@ def register_detail(register):
         "pending_configuration": bool(reg.pending_configuration),
         "legacy_profile_route": bool(cint(reg.legacy_profile_route)),
         "route_change_approved": bool(reg.route_change_approved_by),
-        "actions": _actions(reg, store, runtime, caps, user, readiness),
+        "actions": _actions(reg, store, dict(runtime, active_opening_shift=shift["name"] if shift else None,
+                                             active_cashier=shift["cashier"] if shift else None),
+                            caps, user, readiness),
         "capabilities": sorted(caps), "as_of": str(now),
     }
     # Accounts are configuration detail: only configuration users receive them.

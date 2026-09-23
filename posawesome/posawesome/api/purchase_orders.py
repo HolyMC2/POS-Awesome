@@ -524,7 +524,7 @@ def _get_mode_of_payment_account(mode, company):
     return account
 
 
-def _create_payment_entry(reference_doc, payments, company, transaction_date):
+def _create_payment_entry(reference_doc, payments, company, transaction_date, pos_profile=None):
     if not payments:
         return []
 
@@ -550,7 +550,10 @@ def _create_payment_entry(reference_doc, payments, company, transaction_date):
         if amount <= 0:
             continue
 
-        paid_from_account = _get_mode_of_payment_account(mode, company)
+        # Caja-managed profiles pay cash out of the acting user's caja drawer (spec 01).
+        from posawesome.posawesome.api.register_foundation.routing import session_drawer
+
+        paid_from_account = session_drawer(pos_profile, mode) or _get_mode_of_payment_account(mode, company)
 
         pe = frappe.new_doc("Payment Entry")
         pe.payment_type = "Pay"
@@ -738,7 +741,7 @@ def create_purchase_order(data):
         if payments:
             # Use PI if created, otherwise PO
             ref_doc = frappe.get_doc("Purchase Invoice", invoice_name) if invoice_name else po_doc
-            _create_payment_entry(ref_doc, payments, company, transaction_date)
+            _create_payment_entry(ref_doc, payments, company, transaction_date, pos_profile=profile.get("name"))
 
         return {
             "purchase_order": po_doc.name,

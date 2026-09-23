@@ -67,6 +67,9 @@ class HookContract(unittest.TestCase):
             self.assertRegex(self.hooks, rf'_append_hook\("{doctype}", "validate", f"{{_REGISTERS}}\.routing\.{hook}"\)')
         validation = (HERE.parent / "cash_movement" / "validation.py").read_text()
         self.assertIn("movement_drawer(payload)", validation)
+        # Profile-only cash routes go through the acting user's caja drawer.
+        self.assertIn("session_drawer(", (HERE.parent / "gift_cards.py").read_text())
+        self.assertIn("session_drawer(pos_profile, mode)", (HERE.parent / "purchase_orders.py").read_text())
 
     def test_runtime_pointers_follow_close_and_cancel(self):
         for doctype, event in (("POS Closing Shift", "on_submit"), ("POS Closing Shift", "on_cancel"),

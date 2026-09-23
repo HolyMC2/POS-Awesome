@@ -19,9 +19,21 @@ from __future__ import annotations
 import json
 
 import frappe
-from frappe.utils import flt
 
-from .errors import fail
+
+def flt(value, precision=None):
+    """Local float coercion; keeps this module importable under light stubs."""
+    try:
+        number = float(value or 0)
+    except (TypeError, ValueError):
+        number = 0.0
+    return round(number, precision) if precision is not None else number
+
+
+def fail(*args, **kwargs):
+    from .errors import fail as _fail
+
+    return _fail(*args, **kwargs)
 
 _CACHE = "_posa_route_cache"
 
@@ -163,4 +175,40 @@ def movement_drawer(payload):
     selected = str((payload or {}).get("source_account") or "").strip()
     if selected and selected != route["drawer_account"]:
         fail("validation_failed", "This caja's cash movements always use its own drawer account.")
+    return route["drawer_account"]
+
+
+def caja_managed(pos_profile) -> bool:
+    """True when an activated caja serves ``pos_profile`` (and cajas are not paused)."""
+    conf = getattr(frappe, "conf", None) or {}
+    if not pos_profile or conf.get("posa_registers_disabled"):
+        return False
+    table_exists = getattr(getattr(frappe, "db", None), "table_exists", None)
+    if not callable(table_exists) or not table_exists("POS Register"):
+        return False
+    return bool(frappe.db.exists("POS Register", {"pos_profile": pos_profile,
+                                                  "lifecycle": ["in", ["Ready", "Suspended"]]}))
+
+
+def session_drawer(pos_profile, mode_of_payment=None):
+    """Drawer for cash routes that are not bound to a shift document.
+
+    Gift-card issue/top-up and purchase payments name only a profile. On a
+    caja-managed profile their cash must move through the acting user's own
+    open caja shift; without one the cash route is refused instead of silently
+    posting to a shared legacy account. Legacy profiles return None (unchanged).
+    """
+    if not caja_managed(pos_profile):
+        return None
+    shift = frappe.db.get_value("POS Opening Shift", {
+        "user": frappe.session.user, "pos_profile": pos_profile, "status": "Open", "docstatus": 1,
+        "posa_register": ["is", "set"]}, "name")
+    route = shift_route(shift) if shift else None
+    if not route:
+        fail("invalid_state", "Cash for this profile is kept per caja. Open your caja shift before taking or paying out cash.",
+             ["open_shift"])
+    if mode_of_payment and mode_of_payment not in (route.get("cash_modes") or []):
+        return None
+    if route.get("mode") == "Cashless" or not route.get("drawer_account"):
+        fail("invalid_state", "This caja is cashless and cannot accept or pay out cash. Use another payment method or a cash caja.")
     return route["drawer_account"]

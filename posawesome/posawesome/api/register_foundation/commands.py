@@ -288,13 +288,10 @@ def set_register_lifecycle(request_id, register, target, expected_revision, reas
 def retirement_blockers(doc) -> list[dict]:
     """FND-T06: explain every unresolved obligation that blocks retirement."""
     blockers = []
-    runtime = frappe.db.get_value("POS Register Runtime", doc.name,
-                                  ["active_opening_shift", "work_state"], as_dict=True) or {}
     shifts = frappe.get_all("POS Opening Shift", filters={"posa_register": doc.name, "status": "Open", "docstatus": 1},
                             pluck="name", limit_page_length=5)
-    if runtime.get("active_opening_shift") or shifts:
-        blockers.append({"key": "open_shift", "message": "an open shift must be closed",
-                         "shift": runtime.get("active_opening_shift") or shifts[0]})
+    if shifts:
+        blockers.append({"key": "open_shift", "message": "an open shift must be closed", "shift": shifts[0]})
     if frappe.db.exists("POS Opening Shift", {"posa_register": doc.name, "posa_terminal_recovery_pending": 1,
                                               "docstatus": 1, "status": "Open"}):
         blockers.append({"key": "recovery", "message": "a browser recovery case is unresolved"})
@@ -644,9 +641,12 @@ def open_register(request_id, register, balance_details, terminal_id, terminal_t
     runtime = lock_register(row.name, store.name)
     assert_cashier_free(user, cashier)
     if runtime.active_opening_shift:
-        state = frappe.db.get_value("POS Opening Shift", runtime.active_opening_shift, ["status", "user"], as_dict=True)
-        if state and state.status == "Open":
+        from .runtime import _shift_open, heal_register_pointer
+
+        if _shift_open(runtime.active_opening_shift, lock=True):
             fail("invalid_state", "This caja is already open by another cashier.", ["request_help"])
+        # A pointer to a closed/cancelled shift is stale: clear it under this lock.
+        heal_register_pointer(row.name, store.name, runtime)
     if expected_revision not in (None, ""):
         with rules():
             model.assert_revision(runtime.row_revision, expected_revision)

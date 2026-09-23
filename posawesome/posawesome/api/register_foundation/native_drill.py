@@ -64,9 +64,9 @@ class Drill:
     def terminal(self):
         return {"terminal_id": "t" + secrets.token_hex(10), "terminal_token": secrets.token_hex(24)}
 
-    def in_threads(self, jobs):
+    def in_threads(self, jobs, barrier=True):
         """Run callables in independent connections released by one barrier."""
-        barrier = threading.Barrier(len(jobs))
+        barrier = threading.Barrier(len(jobs)) if barrier else None
         results = [None] * len(jobs)
 
         def worker(index, user, fn):
@@ -75,7 +75,8 @@ class Drill:
             try:
                 frappe.set_user(user)
                 frappe.local.lang = "en"
-                barrier.wait(timeout=30)
+                if barrier:
+                    barrier.wait(timeout=30)
                 value = fn()
                 frappe.db.commit()
                 results[index] = ("ok", value)
@@ -348,6 +349,19 @@ class Drill:
                        "Mode of Payment Account", {"parent": "Saldo proveedores", "company": self.facts["company"]},
                        "default_account"), saldo_account)
 
+        # Unbound cash routes (gift-card issue/top-up, purchase payments) use the actor's caja.
+        from .routing import session_drawer
+        self.as_user(users["c1"])
+        self.check("FND-T01", "profile-only cash route resolves to the actor's own caja drawer",
+                   session_drawer(self.facts["profiles"]["reg"], "Cash") == acc1)
+        self.check("FND-T01", "non-cash tender keeps its own account on profile-only routes",
+                   session_drawer(self.facts["profiles"]["reg"], "Wire Transfer") is None)
+        self.as_user(users["o1"])
+        self.expect_error("FND-T01", "profile-only cash without a caja shift is refused",
+                          lambda: session_drawer(self.facts["profiles"]["reg"], "Cash"), "per caja")
+        self.as_user(users["c1"])
+        self.check("FND-09", "legacy profile routes stay unchanged", session_drawer(self.facts["profiles"]["legacy"], "Cash") is None)
+
         # FND-T07: configuration change while open is pending; open shift keeps its route.
         frappe.set_user("Administrator")
         rev = frappe.db.get_value("POS Register", regs["MOSTRADOR"], "revision")
@@ -525,6 +539,9 @@ class Drill:
                     "page2_rows": len(page2["registers"])})
         self.facts["list_ms"] = round(elapsed * 1000, 1)
 
+        # Stale-pointer healer must use a current read (two connections).
+        self.heal_race(users, regs)
+
         # Rollback switch (spec 01 §8): pause caja openings, restore profile openings.
         from posawesome.posawesome.api.shifts import create_opening_voucher
         legacy_args = (self.facts["profiles"]["reg"], self.facts["company"],
@@ -547,6 +564,56 @@ class Drill:
         finally:
             frappe.conf.pop("posa_registers_disabled", None)
         return self.checks
+
+
+def _heal_race(self, users, regs):
+    """A: snapshot sees the shift closed → B reopens + commits → A locks the
+    caja and runs the healer. The healer must see the live shift and keep it."""
+    from .runtime import heal_register_pointer, lock_register
+
+    shift = frappe.db.get_value("POS Register Runtime", regs["SINEFECTIVO"], "active_opening_shift") \
+        or self.open(users["c3"], "SINEFECTIVO")["pos_opening_shift"]["name"]
+    frappe.db.commit()
+    frappe.db.sql("update `tabPOS Opening Shift` set status='Closed' where name=%s", (shift,))  # closed, pointer kept
+    frappe.db.commit()
+    store = self.facts["store"]
+    snapshot_ready, reopened = threading.Event(), threading.Event()
+    seen = {}
+
+    def healer():
+        frappe.db.sql("select 1")  # start transaction
+        seen["snapshot_status"] = frappe.db.sql("select status from `tabPOS Opening Shift` where name=%s", (shift,))[0][0]
+        snapshot_ready.set()
+        reopened.wait(30)
+        seen["attempts"] = []
+        for _attempt in range(3):  # same whole-transaction rerun as commands._retrying
+            try:
+                runtime = lock_register(regs["SINEFECTIVO"], store)
+                seen["healed"] = heal_register_pointer(regs["SINEFECTIVO"], store, runtime)
+                seen["attempts"].append("decided")
+                break
+            except frappe.QueryDeadlockError as exc:
+                seen["attempts"].append(f"conflict {exc.args[0] if exc.args else ''}")
+                frappe.db.rollback()
+        return seen
+
+    def reopener():
+        snapshot_ready.wait(30)
+        frappe.db.sql("update `tabPOS Opening Shift` set status='Open' where name=%s", (shift,))  # e.g. closing cancelled
+        frappe.db.commit()
+        reopened.set()
+        return True
+
+    res = self.in_threads([(users["s1"], healer), ("Administrator", reopener)], barrier=False)
+    pointer = frappe.db.get_value("POS Register Runtime", regs["SINEFECTIVO"], "active_opening_shift")
+    self.check("FND-02", "healer on a stale snapshot cannot free a reopened live shift",
+               res[0][0] == "ok" and seen.get("snapshot_status") == "Closed" and seen.get("healed") is False
+               and pointer == shift and not frappe.db.exists("POS Register Event", {
+                   "aggregate_id": regs["SINEFECTIVO"], "event_type": "register.pointer_healed"}), {"seen": seen, "pointer": pointer, "results": res})
+    self.cancel_shift(shift)
+
+
+Drill.heal_race = _heal_race
 
 
 def run(tag=None):

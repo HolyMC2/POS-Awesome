@@ -42,10 +42,23 @@ def lock_register(register, store):
     return frappe.db.get_value("POS Register Runtime", register, "*", as_dict=True, for_update=True)
 
 
-def _shift_open(name) -> bool:
+def _shift_open(name, lock=False) -> bool:
+    """Is ``name`` a submitted, open shift?
+
+    ``lock=True`` takes a current (locking) read. Under REPEATABLE READ a plain
+    read can return the snapshot taken before this transaction waited for the
+    register lock — e.g. "closed" although another transaction has since
+    reopened the shift. Decisions that FREE a caja must use the locking read.
+    Lock order is preserved: callers hold receipt/cashier/register locks first.
+    """
     if not name:
         return False
-    row = frappe.db.get_value("POS Opening Shift", name, ["status", "docstatus"], as_dict=True)
+    if lock:
+        rows = frappe.db.sql("""SELECT status, docstatus FROM `tabPOS Opening Shift` WHERE name=%s FOR UPDATE""",
+                             (name,), as_dict=True)
+        row = rows[0] if rows else None
+    else:
+        row = frappe.db.get_value("POS Opening Shift", name, ["status", "docstatus"], as_dict=True)
     return bool(row and row.status == "Open" and cint(row.docstatus) == 1)
 
 
@@ -56,7 +69,7 @@ def assert_cashier_free(user, cashier_row):
     the authority for shifts opened by old clients or Desk.
     """
     pointer = cashier_row.get("accountable_shift") if cashier_row else None
-    if pointer and _shift_open(pointer):
+    if pointer and _shift_open(pointer, lock=True):
         fail("invalid_state", "You already have an open shift ({0}). Close it before opening another.",
              ["resume_shift", "close_shift"], args=(pointer,))
     existing = frappe.db.get_all("POS Opening Shift", filters={
@@ -95,6 +108,26 @@ def release_shift(opening_shift, closed_by=None):
             store = frappe.db.get_value("POS Register", shift.posa_register, "store")
             emit("register.closed", "POS Register", shift.posa_register, int(runtime.row_revision or 1) + 1,
                  store=store, payload={"opening_shift": opening_shift, "closed_by": closed_by or frappe.session.user})
+
+
+def heal_register_pointer(register, store, runtime):
+    """Clear a register pointer whose shift is no longer open (caller holds the lock).
+
+    Pointers are released by closing/cancel hooks; this is the defensive path
+    for a pointer that outlived its shift. It only ever frees a caja whose
+    referenced shift is verifiably not open, and it leaves an audit event.
+    """
+    stale = runtime.get("active_opening_shift")
+    if not stale or _shift_open(stale, lock=True):
+        return False
+    frappe.db.sql("""UPDATE `tabPOS Register Runtime` SET active_opening_shift=NULL, active_cashier=NULL,
+        work_state='Available', row_revision=row_revision+1, modified=%s WHERE name=%s AND active_opening_shift=%s""",
+                  (now_datetime(), register, stale))
+    from .receipts import emit
+    emit("register.pointer_healed", "POS Register", register, int(runtime.get("row_revision") or 1) + 1,
+         store=store, payload={"stale_shift": stale})
+    runtime["active_opening_shift"] = None
+    return True
 
 
 def on_closing_submit(doc, method=None):
