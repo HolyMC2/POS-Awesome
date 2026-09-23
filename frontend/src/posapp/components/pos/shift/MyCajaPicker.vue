@@ -1,7 +1,8 @@
 <template>
-	<section v-if="loaded && (cajas.length || connecting)" class="my-caja" data-test="my-caja-picker">
+	<section v-if="loaded && (cajas.length || canConnect || connecting)" class="my-caja" data-test="my-caja-picker">
 		<h6>{{ __("Your caja") }}</h6>
 		<p v-if="error" class="my-caja__error" role="alert">{{ error }}</p>
+		<p v-if="notice" class="my-caja__notice" role="status" data-test="my-caja-notice">{{ notice }}</p>
 		<div class="my-caja__list" role="radiogroup" :aria-label="__('Your caja')">
 			<button v-for="caja in cajas" :key="caja.name" type="button" role="radio" :aria-checked="modelValue?.name === caja.name"
 				class="my-caja__option" :class="{ selected: modelValue?.name === caja.name }" :disabled="!!caja.opening_shift && !caja.is_mine"
@@ -45,14 +46,20 @@ const label = ref(__("Caja tablet"));
 const preview = ref<null | { label: string; store_name: string; purpose: string }>(null);
 const busy = ref(false);
 const error = ref("");
+const notice = ref("");
+const canConnect = ref(false);
 
 async function load(selectRegister?: string) {
 	try {
 		const credentials = getTerminalCredentials();
 		const result = await myCajas(credentials.terminal_id);
 		cajas.value = result.registers;
+		canConnect.value = Boolean(result.can_connect);
+		// Preselect only without ambiguity: the caja just connected, the cashier's
+		// own open caja, or the single caja this device can open right now.
+		const openable = cajas.value.filter((c) => c.can_open);
 		const preferred = cajas.value.find((c) => c.name === selectRegister) || cajas.value.find((c) => c.is_mine)
-			|| (cajas.value.length === 1 && cajas.value[0]?.can_open ? cajas.value[0] : null);
+			|| (openable.length === 1 ? openable[0] : null);
 		if (preferred && (!preferred.opening_shift || preferred.is_mine)) emit("update:modelValue", preferred);
 	} catch {
 		// No store access or offline: the legacy profile opening remains available.
@@ -89,6 +96,10 @@ async function confirm() {
 		preview.value = null;
 		code.value = "";
 		await load(result.register);
+		// A draft caja is not listed until a supervisor activates it.
+		notice.value = cajas.value.some((c) => c.name === result.register)
+			? ""
+			: `${__("This device is now connected to")} ${result.store_name} · ${result.label}. ${__("A supervisor must activate the caja before it can open.")}`;
 	} catch (err) {
 		error.value = (err as any)?.message || commandError(err).message;
 	} finally {
@@ -110,7 +121,8 @@ defineExpose({ reload: load });
 .my-caja__option:disabled { opacity: .65; cursor: not-allowed; }
 .my-caja__option small { color: var(--pos-text-secondary, #555); }
 .my-caja__warn, .my-caja__error { color: var(--reg-tone-warning-label, #754600); }
-.my-caja__error { margin: 0; }
+.my-caja__error, .my-caja__notice { margin: 0; }
+.my-caja__notice { padding: 10px 12px; border-radius: 10px; background: var(--pos-hover-bg, #f4f6f8); }
 .my-caja__link { justify-self: start; background: transparent !important; border-color: transparent !important; color: var(--pos-primary, #1976d2) !important; cursor: pointer; font-weight: 600; }
 .my-caja__connect { display: grid; gap: 10px; }
 .my-caja__connect label { display: grid; gap: 4px; font-weight: 600; }

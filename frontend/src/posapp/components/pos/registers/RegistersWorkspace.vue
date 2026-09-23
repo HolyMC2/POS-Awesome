@@ -1,5 +1,5 @@
 <template>
-	<section ref="workspace" class="registers" :class="{ 'registers--detail': selected }" data-test="registers-workspace">
+	<section ref="workspace" class="registers" :class="{ 'registers--detail': view === 'shifts' && selected, 'registers--caja-detail': view === 'cajas' && cajaDetail }" data-test="registers-workspace">
 		<header class="registers__header">
 			<div>
 				<p class="registers__eyebrow">{{ __("Daily operation") }}</p>
@@ -16,7 +16,7 @@
 			<button role="tab" :aria-selected="view === 'cajas'" data-test="view-cajas" @click="setView('cajas')">{{ __("Cajas") }}</button>
 			<button role="tab" :aria-selected="view === 'shifts'" data-test="view-shifts" @click="setView('shifts')">{{ __("Shifts") }}</button>
 		</div>
-		<StoreCajas v-if="view === 'cajas'" @show-shifts="setView('shifts')" @open-shift="bus?.emit('registers:open-shift')" @resume="resumeCurrent" @review-shift="reviewShift" />
+		<StoreCajas v-if="view === 'cajas'" @show-shifts="setView('shifts')" @open-shift="bus?.emit('registers:open-shift')" @resume="resumeCurrent" @review-shift="reviewShift" @focus-detail="cajaDetail = $event" />
 		<template v-else>
 		<div class="registers__summary" aria-live="polite">
 			<span><strong>{{ page?.summary.open ?? '—' }}</strong> {{ __("Open shifts") }}</span>
@@ -117,6 +117,7 @@ const savedNavigation = readNavigation();
 // Cajas (stores/registers) is the default once the user has a store; people
 // without store access keep the shift review they already know.
 const view = ref<"cajas" | "shifts">(savedNavigation.view || "shifts");
+const cajaDetail = ref(false);
 const page = ref<ShiftPage | null>(null);
 const rows = ref<ShiftRow[]>([]);
 const queue = ref<ShiftQueue>(savedNavigation.queue || "attention");
@@ -280,6 +281,7 @@ onBeforeUnmount(() => {
 	.registers__layout { display: block; }
 	.registers__detail { display: none; }
 	.registers--detail .registers__queue, .registers--detail .registers__header, .registers--detail .registers__summary { display: none; }
+	.registers--caja-detail .registers__header, .registers--caja-detail .registers__views { display: none; }
 	.registers__detail-refresh { display: block; }
 	.registers--detail .registers__detail { display: block; }
 	.registers__summary small { margin-left: 0; width: 100%; }

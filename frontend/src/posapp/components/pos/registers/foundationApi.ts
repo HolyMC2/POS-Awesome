@@ -211,7 +211,7 @@ export const listCajas = (store: string | null, filter: CajaFilter, search: stri
 export const cajaDetail = (register: string) => call<CajaDetail>("queries.register_detail", { register });
 export const setupOptions = (store: string) => call<SetupOptions>("queries.setup_options", { store });
 export const myCajas = (terminal_id?: string) =>
-	call<{ registers: CajaRow[]; truncated: boolean; as_of: string }>("queries.my_registers", { terminal_id });
+	call<{ registers: CajaRow[]; truncated: boolean; as_of: string; can_connect?: boolean }>("queries.my_registers", { terminal_id });
 
 export const createStore = (values: Record<string, unknown>) =>
 	command<{ name: string }>("commands.create_store", `new-store:${values.store_code}`, values);

@@ -624,6 +624,8 @@ def open_register(request_id, register, balance_details, terminal_id, terminal_t
     _schema(schema_version)
     with rules():
         request_id = model.request_id(request_id)
+    if frappe.conf.get(model.DISABLE_FLAG):
+        fail("dependency_unavailable", "Caja openings are paused on this site. Open with your POS profile.", ["use_profile"])
     row, store = load_register(register, "sell")
     from posawesome.posawesome.api._scope import assert_company, assert_profile
 

@@ -4221,3 +4221,6 @@ the drawer account still holds an unexplained balance,la cuenta del cajón aún 
 "You already have an open shift ({0}) on POS Profile {1}. Close it before opening a new one.",Ya tienes un turno abierto ({0}) en el perfil POS {1}. Ciérralo antes de abrir uno nuevo.
 Caja Mostrador,Caja Mostrador
 Centro,Centro
+This device is now connected to,Este dispositivo ya está conectado a
+A supervisor must activate the caja before it can open.,Un supervisor debe activar la caja antes de poder abrirla.
+Caja openings are paused on this site. Open with your POS profile.,Las aperturas por caja están en pausa en este sitio. Abre con tu perfil POS.

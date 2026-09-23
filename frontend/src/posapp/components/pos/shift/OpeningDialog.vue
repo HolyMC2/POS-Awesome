@@ -266,12 +266,30 @@ watch(
 	},
 );
 
-watch(selectedCaja, async (caja) => {
-	openError.value = "";
+function paymentRowsFor(profile) {
+	return payments_method_data.value
+		.filter((element) => element.parent === profile)
+		.map((element) => ({ mode_of_payment: element.mode_of_payment, amount: 0, currency: element.currency }));
+}
+
+// The chosen caja is authoritative over the dialog's own defaults, including
+// dialog data that arrives after the caja was preselected.
+async function applyCaja() {
+	const caja = selectedCaja.value;
 	if (!caja) return;
 	company.value = caja.company;
 	await nextTick();
+	if (selectedCaja.value !== caja) return;
 	pos_profile.value = caja.pos_profile;
+	payments_methods.value = paymentRowsFor(caja.pos_profile);
+}
+
+watch(selectedCaja, (caja) => {
+	openError.value = "";
+	if (caja) void applyCaja();
+});
+watch(payments_method_data, () => {
+	if (selectedCaja.value) void applyCaja();
 });
 
 watch(company, (val) => {
@@ -336,7 +354,7 @@ async function get_opening_dialog_data() {
 				pos_profiles_data.value = r.message.pos_profiles_data;
 				payments_method_data.value = r.message.payments_method;
 				no_profile_reason.value = r.message.no_profile_reason || "";
-				company.value = companies.value[0] || "";
+				if (!selectedCaja.value) company.value = companies.value[0] || "";
 				try {
 					setOpeningDialogStorage(r.message);
 				} catch (e) {

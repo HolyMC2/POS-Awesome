@@ -28,14 +28,14 @@ it("preselects the only caja this device can open and blocks cajas open by someo
 	const chosen = vi.fn();
 	const wrapper = mount(MyCajaPicker, { props: { modelValue: null, "onUpdate:modelValue": chosen } as any });
 	await flushPromises();
-	expect(chosen).not.toHaveBeenCalled(); // two cajas: the cashier chooses
+	expect(chosen.mock.calls[0]?.[0]).toMatchObject({ name: "A" }); // B is taken, so A is unambiguous
 	expect(wrapper.get('[data-caja-option="B"]').attributes("disabled")).toBeDefined();
 	expect(wrapper.get('[data-caja-option="B"]').text()).toContain("Open by Beto");
-	api.myCajas.mockResolvedValue({ registers: [caja("A")], truncated: false, as_of: "" });
-	const single = vi.fn();
-	mount(MyCajaPicker, { props: { modelValue: null, "onUpdate:modelValue": single } as any });
+	api.myCajas.mockResolvedValue({ registers: [caja("A"), caja("C")], truncated: false, as_of: "" });
+	const ambiguous = vi.fn();
+	mount(MyCajaPicker, { props: { modelValue: null, "onUpdate:modelValue": ambiguous } as any });
 	await flushPromises();
-	expect(single.mock.calls[0]?.[0]).toMatchObject({ name: "A" });
+	expect(ambiguous).not.toHaveBeenCalled(); // two openable cajas: the cashier chooses
 });
 
 it("confirms the store and caja from the code before connecting this device", async () => {

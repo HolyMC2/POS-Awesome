@@ -88,7 +88,7 @@ def create_opening_voucher(pos_profile, company, balance_details, terminal_id=No
 
     # Registers (spec 01): a profile served by an activated caja opens only
     # through that caja, so legacy clients cannot bypass its drawer route.
-    if frappe.db.table_exists("POS Register") and frappe.db.exists(
+    if not frappe.conf.get("posa_registers_disabled") and frappe.db.table_exists("POS Register") and frappe.db.exists(
             "POS Register", {"pos_profile": pos_profile, "lifecycle": ["in", ["Ready", "Suspended"]]}):
         frappe.throw(_("This POS Profile is now opened through its caja. Update POS (reload) and choose your caja."))
 

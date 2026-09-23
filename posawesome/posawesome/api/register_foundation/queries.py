@@ -18,7 +18,7 @@ from frappe.utils import cint, get_datetime, now_datetime
 
 from . import model
 from .errors import denied, fail
-from .scope import is_admin, load_register, load_store, store_predicate
+from .scope import grants, is_admin, load_register, load_store, store_predicate
 
 
 # --- cursors --------------------------------------------------------------
@@ -140,7 +140,7 @@ def _row_dto(row, user, now):
 
 @frappe.whitelist()
 def list_registers(store=None, filter="all", search="", cursor=None, page_length=None):
-    """Cajas of one store (or all granted stores), attention first."""
+    """Cajas of one store (or all granted stores), ordered by store and caja code."""
     user = frappe.session.user
     if not user or user == "Guest":
         denied()
@@ -225,7 +225,7 @@ def list_stores(cursor=None, page_length=None, search=""):
         GROUP BY st.name ORDER BY st.store_code ASC, st.name ASC LIMIT %(limit)s""", params, as_dict=True)
     more = len(rows) > limit
     rows = rows[:limit]
-    from .scope import company_capabilities, grants, store_capabilities
+    from .scope import company_capabilities, store_capabilities
 
     companies = frappe.get_all("Company", pluck="name") if is_admin(user) else sorted(
         {g.company for g in grants(user) if g.scope_type == "Company"})
@@ -248,6 +248,9 @@ def my_registers(terminal_id=None):
     user = frappe.session.user
     if not user or user == "Guest":
         denied()
+    if frappe.conf.get(model.DISABLE_FLAG):
+        # Rollback switch: the opening dialog falls back to profile openings.
+        return {"registers": [], "truncated": False, "as_of": str(now_datetime()), "can_connect": False, "paused": True}
     clause, params = store_predicate(user, alias="st", capabilities={"sell"})
     params.update(user=user, terminal=str(terminal_id or "")[:80])
     profile_clause = "1=1" if is_admin(user) else (
@@ -265,7 +268,10 @@ def my_registers(terminal_id=None):
         dto["this_device"] = bool(row.this_device)
         dto["can_open"] = bool(row.this_device or not cint(row.requires_enrolled_device)) and not row.active_opening_shift
         result.append(dto)
-    return {"registers": result, "truncated": len(rows) > 100, "as_of": str(now)}
+    # A granted cashier may redeem a connection code before the caja is Ready.
+    can_connect = bool(result) or is_admin(user) or any(
+        g.bundle in ("Cashier", "Store supervisor", "Configuration admin") for g in grants(user))
+    return {"registers": result, "truncated": len(rows) > 100, "as_of": str(now), "can_connect": can_connect}
 
 
 # --- detail ---------------------------------------------------------------

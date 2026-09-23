@@ -14,6 +14,10 @@ import re
 import unicodedata
 
 REGISTER_CONTRACT_VERSION = 1
+# site_config switch: pauses caja openings and restores legacy profile openings
+# (spec 01 §8 rollback before new financial activity). Open caja shifts keep
+# their stamped routes; nothing is rewritten.
+DISABLE_FLAG = "posa_registers_disabled"
 COMMAND_SCHEMA_VERSION = 1
 PAGE_DEFAULT = 50
 PAGE_MAX = 100

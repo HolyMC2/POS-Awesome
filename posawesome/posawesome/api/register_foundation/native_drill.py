@@ -115,6 +115,7 @@ class Drill:
                                 "account_currency": "MXN"}).insert(ignore_permissions=True)
             accounts.append(name)
         users = {}
+        frappe.flags.in_import = True  # disposable fixture users: skip the hourly creation throttle
         for key in ("c1", "c2", "c3", "s1", "o1"):
             email = f"qa-rf-{tag}-{key}@example.invalid"
             if not frappe.db.exists("User", email):
@@ -127,6 +128,7 @@ class Drill:
                 from frappe.utils.password import update_password
                 update_password(email, PASSWORD)
             users[key] = email
+        frappe.flags.in_import = False
         profiles = {}
         for kind in ("reg", "legacy"):
             name = f"QA RF {tag} {kind}"
@@ -522,6 +524,28 @@ class Drill:
                    {"sql_statements_for_two_pages": counter["n"], "first_page_ms": round(elapsed * 1000, 1),
                     "page2_rows": len(page2["registers"])})
         self.facts["list_ms"] = round(elapsed * 1000, 1)
+
+        # Rollback switch (spec 01 §8): pause caja openings, restore profile openings.
+        from posawesome.posawesome.api.shifts import create_opening_voucher
+        legacy_args = (self.facts["profiles"]["reg"], self.facts["company"],
+                       json.dumps([{"mode_of_payment": "Cash", "amount": 0}]))
+        self.as_user(users["o1"])
+        term = self.terminal()
+        self.expect_error("FND-11", "profile openings stay refused while cajas are active",
+                          lambda: create_opening_voucher(*legacy_args, term["terminal_id"], term["terminal_token"]), "caja")
+        frappe.conf["posa_registers_disabled"] = 1
+        try:
+            self.expect_error("FND-11", "paused site refuses caja openings",
+                              lambda: self.open(users["c1"], "MOSTRADOR"), "paused")
+            self.as_user(users["o1"])
+            legacy = create_opening_voucher(*legacy_args, term["terminal_id"], term["terminal_token"])
+            frappe.db.commit()
+            name = legacy["pos_opening_shift"]["name"]
+            self.check("FND-11", "paused site restores the legacy profile opening (no caja stamp)",
+                       not frappe.db.get_value("POS Opening Shift", name, "posa_register"), name)
+            self.cancel_shift(name)
+        finally:
+            frappe.conf.pop("posa_registers_disabled", None)
         return self.checks
 
 

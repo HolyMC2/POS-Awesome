@@ -150,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import CajaSetupForm from "./CajaSetupForm.vue";
 import StoreForm from "./StoreForm.vue";
 import {
@@ -158,7 +158,7 @@ import {
 	type CajaDetail, type CajaFilter, type CajaPage, type CajaRow, type CommandError, type StoreRow,
 } from "./foundationApi";
 
-const emit = defineEmits<{ (_e: "show-shifts"): void; (_e: "open-shift"): void; (_e: "review-shift", _shift: string): void; (_e: "resume"): void }>();
+const emit = defineEmits<{ (_e: "show-shifts"): void; (_e: "open-shift"): void; (_e: "review-shift", _shift: string): void; (_e: "resume"): void; (_e: "focus-detail", _active: boolean): void }>();
 const __ = (text: string) => (window as any).__?.(text) || text;
 const user = (window as any).frappe?.session?.user;
 const navKey = user && user !== "Guest" ? `posa:cajas:navigation:${user}` : null;
@@ -241,6 +241,13 @@ function actionText(id: string) {
 		review_browser_access: __("Review shift recovery"), approve_route_change: __("Approve route change"),
 	} as Record<string, string>)[id] || id;
 }
+
+// Phones show one step at a time: the parent hides its header while a caja
+// or form fills the screen, and the detail starts at the top.
+watch(() => Boolean(selected.value || panel.value), (active) => {
+	emit("focus-detail", active);
+	if (active) void nextTick(() => { const host = document.querySelector<HTMLElement>(".destination-host"); if (host && window.innerWidth <= 800) host.scrollTop = 0; });
+}, { immediate: true });
 
 function remember() {
 	try {
@@ -435,6 +442,7 @@ onBeforeUnmount(() => { ++listRequest; ++detailRequest; remember(); });
 .cajas__more { width: 100%; margin-top: 12px; }
 .cajas__toolbar { margin-bottom: 12px; }
 .cajas__story { display: grid; gap: 18px; padding: clamp(14px, 2vw, 22px); border: 1px solid var(--pos-border); border-radius: 16px; background: var(--pos-card-bg); animation: caja-arrive 150ms ease-out; }
+.cajas__story h2 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
 .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .05em; color: var(--pos-text-secondary); }
 .cajas__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 20px; }
 .cajas dt, .hint { color: var(--pos-text-secondary); font-size: 13px; }
