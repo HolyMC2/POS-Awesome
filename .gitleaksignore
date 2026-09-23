@@ -1,0 +1,4 @@
+# Historical native fixture: acknowledge_legacy=1 is a boolean permission flag,
+# not a credential. Its terminal token is generated with uuid.uuid4 at runtime.
+# Suppress only this exact finding, preserving scans of every other revision.
+079e5b3085b48f5aeccca34aa554fb1e6a2c9f82:posawesome/posawesome/api/test_bundle_batch_native.py:generic-api-key:175
