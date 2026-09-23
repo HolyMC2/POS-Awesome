@@ -8,6 +8,13 @@ and the cross-app checkout seams used by Doco, Taller, Restaurante and Clínica.
 
 Audit record: [`POS-WORLDCLASS-ROADMAP-AUDIT-V1.md`](POS-WORLDCLASS-ROADMAP-AUDIT-V1.md).
 
+Detailed operational specifications (2026-09-22):
+[`Enterprise store and cajas operations`](specs/pos-enterprise/README.md) defines
+the sequential contracts for stores/registers, Cajas workspace, shared safes,
+cashier handover, store closing, pending work, cross-register orders, equipment
+and enterprise qualification. These are specified future requirements, not
+claims of deployed features or measured enterprise capacity.
+
 This roadmap answers one question: **what must POSAwesome become so a new
 Mexican small business can open a register quickly, operate it confidently at
 peak hour, and grow without replacing it?**
