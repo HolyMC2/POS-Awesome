@@ -136,6 +136,53 @@ def post(safe, amount, source, target, remarks):
         cost_center=frappe.db.get_value('POS Profile', safe.pos_profile, 'cost_center'))
 
 
+def offsite(safe):
+    """(account, problem) for whole-bag transfers. Blank configuration means unavailable."""
+    account = safe.get('offsite_cash_account')
+    if not account:
+        return None, _('Configure an off-site cash account on this safe before transferring whole bags.')
+    from .documents import offsite_problem
+    return account, offsite_problem(safe, account)
+
+
+# Whole-bag transfer derives its amount and destination on the server.
+TRANSFER_FORBIDDEN_KEYS = {'amount', 'count', 'account', 'target_account', 'transfer_account', 'offsite_cash_account'}
+TRANSFERABLE_BAG_STATES = {'Available', 'Unverified'}
+
+
+def transfer_safe(safe, data):
+    """Move one sealed bag, whole, from the safe to its configured off-site cash ledger.
+
+    Physical movement already happened and was confirmed by the actor. Nothing is
+    counted or verified here: prepared_by, verified_by, count and amount stay as
+    they were, so an Unverified bag leaves still marked as never independently counted.
+    """
+    manager()
+    extra = TRANSFER_FORBIDDEN_KEYS & set(data)
+    if extra:
+        frappe.throw(_('Whole-bag transfers take the amount and destination from the bag and safe. Remove: {0}').format(', '.join(sorted(extra))))
+    bag = record('POS Cash Bag', data.get('bag'), safe)
+    if bag.state not in TRANSFERABLE_BAG_STATES:
+        frappe.throw(_('Only a sealed bag that is available or awaiting verification can leave the safe whole.'))
+    target, problem = offsite(safe)
+    if problem:
+        frappe.throw(problem)
+    reason = note(data)
+    amount = minor(bag.amount)
+    if amount <= 0:
+        frappe.throw(_('A cash bag must contain a positive amount.'))
+    if round(balance(safe, safe.safe_account) * 100) < amount:
+        frappe.throw(_('The safe ledger holds less than this bag. Count the safe and review the difference before transferring.'))
+    bag.transfer_journal = post(safe, amount / 100, safe.safe_account, target,
+        'Whole bag {0} ({1}) to off-site cash: {2}'.format(bag.name, bag.seal, reason))
+    bag.transfer_account = target
+    bag.transferred_by = frappe.session.user
+    bag.transferred_on = _now()
+    bag.state = 'Transferred'; bag.note = reason; save(bag)
+    return {'bag': bag.name, 'amount': bag.amount, 'state': bag.state,
+        'transfer_account': target, 'journal_entry': bag.transfer_journal}
+
+
 def movement(safe, data, amount, kind, suffix=''):
     payload = {k: data.get(k) for k in ['terminal_id', 'terminal_generation', 'terminal_token']}
     payload.update(pos_opening_shift=data['opening_shift'], pos_profile=safe.pos_profile,
@@ -157,6 +204,9 @@ def _execute(action, data, safe):
             frappe.throw(_('The safe does not have enough unallocated cash. Verify a deposit or unpack an available bag.'))
         bag = new_bag(safe, data, counted, 'Unverified')
         return {'bag': bag.name, 'amount': bag.amount}
+
+    if action == 'transfer_safe':
+        return transfer_safe(safe, data)
 
     if action in {'verify', 'receive', 'unpack', 'dispatch', 'confirm_bank', 'return_bank'}:
         bag = record('POS Cash Bag', data.get('bag'), safe)
@@ -338,12 +388,13 @@ def _command(action, payload):
 # no page length at all, and only completed history is bounded. States outside
 # the completed sets below count as unresolved, so a state added later is shown
 # rather than silently dropped.
-BAG_FIELDS = ['name','seal','purpose','state','amount','prepared_by','verified_by','received_by','opening_shift','receiving_shift','deposit_reference','modified']
+BAG_FIELDS = ['name','seal','purpose','state','amount','prepared_by','verified_by','received_by','opening_shift','receiving_shift','deposit_reference','transfer_account','transfer_journal','transferred_by','transferred_on','modified']
 COUNT_FIELDS = ['name','scope','state','opening_shift','bag','amount','expected_amount','difference','counted_by','note','modified','count_json','closing_shift']
 # Issued bags are consumed by the drawer, Deposited reached the bank, Unpacked
-# returned to loose safe cash. Unverified/Available/Disputed/In Transit still
-# hold custody of physical money and remain someone's next action.
-COMPLETED_BAG_STATES = ['Issued','Deposited','Unpacked']
+# returned to loose safe cash, Transferred left whole for the off-site cash
+# ledger. Unverified/Available/Disputed/In Transit still hold custody of
+# physical money and remain someone's next action.
+COMPLETED_BAG_STATES = ['Issued','Deposited','Unpacked','Transferred']
 # Draft counts are unfinished work; Exception counts await independent review.
 COMPLETED_COUNT_STATES = ['Final','Reviewed']
 HISTORY_PAGE_LENGTH = 100
@@ -394,6 +445,24 @@ def _queue(doctype, scope, fields, completed, limit):
 
 
 @frappe.whitelist()
+def safes():
+    """Permission-filtered cash workspaces, independent of an open sales shift."""
+    if not frappe.db.table_exists('POS Cash Safe'):
+        return []
+    # Safe configuration is System Manager-only. Expose only workspace identity,
+    # using the same explicit profile/company scope as context(), never its ledgers.
+    from posawesome.posawesome.api._scope import _is_super, get_allowed_profiles_companies_map
+    filters = {'enabled': 1}
+    if not _is_super(frappe.session.user):
+        profiles = get_allowed_profiles_companies_map(frappe.session.user)
+        if not profiles:
+            return []
+        filters.update(pos_profile=['in', list(profiles)], company=['in', list(set(profiles.values()))])
+    return frappe.get_all('POS Cash Safe', filters=filters,
+        fields=['name', 'title', 'pos_profile', 'company'], order_by='title asc', limit_page_length=0)
+
+
+@frappe.whitelist()
 def context(pos_profile, history_limit=None):
     safe = safe_for(pos_profile)
     supervisor = bool(is_closing_supervisor(frappe.session.user))
@@ -402,8 +471,13 @@ def context(pos_profile, history_limit=None):
     # A cashier only ever sees their own counts; a supervisor reviews the register's.
     count_scope = {'safe': safe.name} if supervisor else {'safe': safe.name, 'counted_by': frappe.session.user}
     counts, counts_meta = _queue('POS Cash Count', count_scope, COUNT_FIELDS, COMPLETED_COUNT_STATES, limit)
+    offsite_account, offsite_blocker = offsite(safe)
     return {'safe':safe.name,'currency':safe.currency,'float_target':safe.float_target,'drawer_limit':safe.drawer_limit,
         'can_manage':supervisor,
+        # Availability hint only; transfer_safe revalidates the destination on every write.
+        'offsite_cash_account':offsite_account,
+        'offsite_cash_account_name':frappe.db.get_value('Account',offsite_account,'account_name') if offsite_account else None,
+        'can_transfer':supervisor and not offsite_blocker,'transfer_blocker':offsite_blocker,
         'balance':get_safe_gl_balance(safe.safe_account,safe.company),'loose_balance':loose_balance(safe),
         'in_transit':get_safe_gl_balance(safe.transit_account,safe.company),'bags':bags,'counts':counts,
         'queues':{'bags':bags_meta,'counts':counts_meta}}

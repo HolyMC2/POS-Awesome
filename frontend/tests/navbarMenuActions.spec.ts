@@ -140,6 +140,7 @@ describe("NavbarMenu action surfaces", () => {
 		await flushPromises();
 
 		expect((wrapper.vm as any).quickActions.map((action: any) => action.id)).toEqual([
+			"cash-bags",
 			"registers",
 			"switch-cashier",
 			"lock-screen",

@@ -412,7 +412,7 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 	  capability: null, profileFlag: null, offline: "online_required", shortcutActionId: null,
 	  badgeSource: null, surface: "page", requiresShift: false },
 	{ id: "cashCustody", labelKey: "Cash custody", kind: "sheet", path: "/cash-custody", capability: null,
-	  profileFlag: null, offline: "online_required", shortcutActionId: null, badgeSource: null, surface: "page" },
+	  profileFlag: null, offline: "online_required", shortcutActionId: null, badgeSource: null, surface: "page", requiresShift: false },
 
 	{
 		id: "closing",

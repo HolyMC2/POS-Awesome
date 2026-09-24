@@ -8,13 +8,14 @@
 		"In Transit": ["In transit to the bank", "purple"],
 		Deposited: ["Deposited at the bank", "gray"],
 		Unpacked: ["Returned to loose safe cash", "gray"],
+		Transferred: ["Moved to the off-site safe", "gray"],
 	};
 	const state = (doc) => states[doc.state] || [doc.state || "", "gray"];
 	const person = (user) => (frappe.user_info(user) || {}).fullname || user || "";
 	const money = (doc) => window.format_currency(doc.amount, doc.currency);
 	const print = (names) => {
 		if (!names.length) return frappe.msgprint(__("Select at least one bag to print."));
-		frappe.require("/assets/posawesome/js/cash_custody.js?v=20260923-bag-labels", () =>
+		frappe.require("/assets/posawesome/js/cash_custody.js?v=20260923-offsite-transfer", () =>
 			window.posaCashCustody.printBags(names),
 		);
 	};
@@ -33,6 +34,8 @@
 			"received_by",
 			"creation",
 			"opening_shift",
+			"transfer_account",
+			"transferred_by",
 		],
 		filters: [["state", "in", ["Unverified", "Available", "Disputed"]]],
 		get_indicator(doc) {
@@ -86,6 +89,18 @@
 					doc.name +
 					(doc.verified_by ? " · " + __("Verified by") + ": " + person(doc.verified_by) : "");
 				info.append(status, date, ref);
+				if (doc.state === "Transferred") {
+					// Where the bag went, and whether anyone besides the preparer ever counted it.
+					const moved = document.createElement("span");
+					moved.style.display = "block";
+					moved.textContent =
+						__("Moved to") +
+						": " +
+						(doc.transfer_account || "—") +
+						(doc.transferred_by ? " · " + person(doc.transferred_by) : "") +
+						(doc.verified_by ? "" : " · " + __("Never independently verified"));
+					info.append(moved);
+				}
 				parent.appendChild(info);
 				return node;
 			};
@@ -103,7 +118,8 @@
 				["Held for review", ["Disputed"]],
 				["Issued to a drawer", ["Issued"]],
 				["In transit to the bank", ["In Transit"]],
-				["Completed", ["Deposited", "Unpacked"]],
+				["Moved to the off-site safe", ["Transferred"]],
+				["Completed", ["Deposited", "Unpacked", "Transferred"]],
 				["All bags", null],
 			];
 			async function choose(values) {

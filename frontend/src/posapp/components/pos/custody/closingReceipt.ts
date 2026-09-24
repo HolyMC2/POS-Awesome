@@ -1,9 +1,11 @@
 import { printClosingEvidence } from "./api";
+import { mountCashPhotos } from "./photos";
 
 const __ = (text: string) => (window as any).__?.(text) || text;
 
-/** Read-only continuation after a confirmed close, independent of opening the next shift. */
+/** Labels and optional photos after a confirmed close; never repeats the financial action. */
 export function showClosingBagReceipt(closing: string) {
+	const photos: ReturnType<typeof mountCashPhotos>[] = [];
 	const dialog = document.createElement("dialog");
 	dialog.className = "cash-bag-receipt";
 	dialog.setAttribute("aria-label", __("Closing bags"));
@@ -36,8 +38,16 @@ export function showClosingBagReceipt(closing: string) {
 	const retry = el<HTMLButtonElement>("[data-retry]");
 	retry.textContent = __("Retry");
 	el("[data-done]").textContent = __("Continue");
-	el("[data-done]").onclick = () => dialog.close();
-	dialog.addEventListener("close", () => dialog.remove(), { once: true });
+	const canClose = () => !photos.some((panel) => panel.hasPending()) || window.confirm(__("A photo is still unsent. Leave without saving it?"));
+	el("[data-done]").onclick = () => { if (canClose()) dialog.close(); };
+	dialog.addEventListener("cancel", (event) => { if (!canClose()) event.preventDefault(); });
+	dialog.addEventListener("close", () => { photos.forEach((panel) => panel.destroy()); dialog.remove(); }, { once: true });
+	function addPhotos(parent: HTMLElement, doctype: "POS Cash Bag" | "POS Cash Count", name: string) {
+		const details = document.createElement("details"), summary = document.createElement("summary"), host = document.createElement("div");
+		summary.textContent = __("Photos of cash and bag");
+		details.append(summary, host); parent.append(details);
+		details.addEventListener("toggle", () => { if (details.open) photos.push(mountCashPhotos(host, { doctype, name })); }, { once: true });
+	}
 	async function load() {
 		retry.hidden = true;
 		el("[data-error]").textContent = "";
@@ -68,8 +78,15 @@ export function showClosingBagReceipt(closing: string) {
 					bag.prepared_on,
 				].join(" · ");
 				row.append(title, details);
+				if (bag.name) addPhotos(row, "POS Cash Bag", bag.name);
 				el("[data-bags]").appendChild(row);
 			});
+			if (rows[0]?.cash_count) {
+				const row = document.createElement("li"), title = document.createElement("strong");
+				title.textContent = __("Drawer count"); row.append(title);
+				addPhotos(row, "POS Cash Count", rows[0].cash_count);
+				el("[data-bags]").append(row);
+			}
 			print.disabled = !rows.length;
 			if (!rows.length)
 				el("[data-message]").textContent = __(

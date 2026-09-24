@@ -119,6 +119,9 @@
 								</v-data-table>
 							</v-col>
 						</v-row>
+                        <v-btn variant="tonal" block class="mb-3" @click="emit('manage-cash')" data-test="opening-cash-bags">
+                            {{ __("Cash bags & safe") }}
+                        </v-btn>
                         <v-btn variant="tonal" color="primary" block class="mb-3" @click="emit('manage-registers')" data-test="opening-registers">
                             {{ __("Review registers and shifts") }}
                         </v-btn>
@@ -198,7 +201,7 @@ const props = defineProps({
 	dialog: Boolean,
 });
 
-const emit = defineEmits(["close", "register", "manage-registers"]);
+const emit = defineEmits(["close", "register", "manage-registers", "manage-cash"]);
 const __ = window.__ || ((text) => text);
 const get_currency_symbol = window.get_currency_symbol;
 const BUILD_VERSION = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : null;

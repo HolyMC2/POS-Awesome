@@ -342,16 +342,16 @@ class CustodyReadModelTest(unittest.TestCase):
         self.assertIn("CASH-COUNT-FUTURE", {row["name"] for row in result["counts"]})
 
     def test_completed_states_are_the_documented_terminal_ones(self):
-        self.assertEqual(service.COMPLETED_BAG_STATES, ["Issued", "Deposited", "Unpacked"])
+        self.assertEqual(service.COMPLETED_BAG_STATES, ["Issued", "Deposited", "Unpacked", "Transferred"])
         self.assertEqual(service.COMPLETED_COUNT_STATES, ["Final", "Reviewed"])
         self.act("carla@example.com", supervisor=True)
-        for index, state in enumerate(["Issued", "Deposited", "Unpacked"]):
+        for index, state in enumerate(["Issued", "Deposited", "Unpacked", "Transferred"]):
             LAB["rows"]["POS Cash Bag"].append(bag(f"CASH-BAG-DONE-{index}", state, moment(5)))
         for index, state in enumerate(["Final", "Reviewed"]):
             LAB["rows"]["POS Cash Count"].append(cash_count(f"CASH-COUNT-DONE-{index}", state, moment(5)))
         result = self.context()
         self.assertEqual(result["queues"]["bags"]["unresolved"], 0)
-        self.assertEqual(result["queues"]["bags"]["history"], 3)
+        self.assertEqual(result["queues"]["bags"]["history"], 4)
         self.assertEqual(result["queues"]["counts"]["unresolved"], 0)
         self.assertEqual(result["queues"]["counts"]["history"], 2)
         self.assertEqual(result["queues"]["bags"]["completed_states"], service.COMPLETED_BAG_STATES)

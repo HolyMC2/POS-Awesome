@@ -84,6 +84,7 @@
 			@close="closeOpeningDialog"
 			@register="handleRegisterPosData"
 			@manage-registers="openRegisters"
+			@manage-cash="openCashCustody"
 		></OpeningDialog>
 		<!-- The payment DIALOG survives only where there is no rail to host the
 		     surface beside: 992–1099px, which has the dialog breakpoint but not
@@ -820,7 +821,7 @@ export default {
 		const responsive = useResponsive();
 		const rtl = useRtl();
 		const shift = usePosShift(() => {
-			if (route?.path !== "/registers") dialog.value = true;
+			if (!["/registers", "/cash-custody"].includes(route?.path || "")) dialog.value = true;
 		});
 		const handleSubmitClosingPos = (data) => {
 			shift.submit_closing_pos(data);
@@ -1414,6 +1415,7 @@ export default {
 			destinationRouting.activate("registers", "shortcut");
 		};
 		const openRegisterShift = () => { dialog.value = true; };
+		const openCashCustody = () => { dialog.value = false; destinationRouting.activate("cashCustody", "shortcut"); };
 
 		// Borradores and Facturas are both InvoiceManagement, hosted. While
 		// either is up, the floating copy behind `uiStore.invoiceManagementDialog`
@@ -2850,6 +2852,7 @@ export default {
 			onHostedBand,
 			hostedDestinationId,
 			openRegisters,
+			openCashCustody,
 			hostedBandState,
 			workspaceLabel,
 			workspaceEntries,

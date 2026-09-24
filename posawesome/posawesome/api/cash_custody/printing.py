@@ -24,6 +24,7 @@ STATES = {
     'In Transit': 'In transit to the bank',
     'Deposited': 'Deposited at the bank',
     'Unpacked': 'Returned to loose safe cash',
+    'Transferred': 'Moved to the off-site safe',
     'Draft': 'Saved draft count',
     'Final': 'Final count',
     'Exception': 'Difference pending review',
@@ -40,6 +41,7 @@ REFERENCES = [
     ('receipt_movement', 'Drawer receipt movement'),
     ('dispatch_journal', 'Bank transit journal'),
     ('deposit_journal', 'Bank deposit journal'),
+    ('transfer_journal', 'Transfer journal'),
     ('journal_entry', 'Correction journal'),
     ('deposit_reference', 'Bank receipt reference'),
 ]
@@ -68,6 +70,7 @@ th,td{padding:6px 8px;border-bottom:1px solid #d3d8dd;text-align:right}
 th:first-child,td:first-child{text-align:left}
 tfoot td{font-weight:700;border-top:2px solid #111;border-bottom:none}
 .note{white-space:pre-wrap;margin:6px 0;padding:8px 10px;background:#f4f6f8;border-radius:6px}
+.warning{margin:10px 0;padding:8px 10px;border:2px solid #111;border-radius:6px;font-weight:700}
 .refs dl{grid-template-columns:200px 1fr;font-size:12px;color:#33404a}
 .signatures{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:46px}
 .sign .line{display:block;border-bottom:1px solid #111;height:34px}
@@ -91,6 +94,7 @@ LABEL_PAGE = """
 .label-card dl.meta{grid-template-columns:24mm 1fr;gap:2px 6px;font-size:10px;margin:0}
 .label-card dl.meta dd{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .label-record{font-size:9px;margin:5px 0 0}
+.label-card .warning{margin:4px 0 0;padding:3px 5px;font-size:9px;border-width:1px}
 @media print{@page{size:100mm 76mm;margin:3mm}.label-card{border:none;padding:0;width:auto}}
 """
 
@@ -175,11 +179,36 @@ def _count_block(count, currency):
     return body
 
 
+def _transfer(doc):
+    """Where a moved bag went, read from the bag itself.
+
+    The safe's off-site setting may change later; the bag keeps the account and
+    journal it actually used, so reprints never name a different destination.
+    """
+    if doc.get('state') != 'Transferred':
+        return []
+    account = doc.get('transfer_account')
+    name = (frappe.db.get_value('Account', account, 'account_name') or account) if account else ''
+    moved_on = doc.get('transferred_on')
+    return [('Moved to', name), ('Moved by', _person(doc.get('transferred_by'))),
+            ('Moved on', format_datetime(moved_on) if moved_on else '')]
+
+
+def _unverified(doc):
+    # A moved bag nobody else counted must say so on paper; its state alone reads as final.
+    if doc.get('state') != 'Transferred' or doc.get('verified_by'):
+        return ''
+    return ('<p class="warning">' + _esc(_("Never independently verified. This bag left the safe with only the preparer's count."))
+            + '</p>')
+
+
 def _bag(doc, count, layout):
     currency = doc.currency
     header = ('<p class="org">' + _esc(doc.company) + '</p><h1>' + _esc(_('Cash bag handover'))
               + '</h1><p class="ref">' + _esc(doc.seal) + '</p><p class="state">'
               + _esc(_phrase(STATES, doc.state)) + '</p>')
+    moved = _transfer(doc)
+    warning = _unverified(doc)
     total = ('<p class="total"><span>' + _esc(_('Declared amount')) + '</span><b>'
              + _esc(_money(doc.amount, currency)) + '</b></p>')
     meta = _meta([
@@ -191,26 +220,28 @@ def _bag(doc, count, layout):
         ('Received by', _person(doc.get('received_by'))),
         ('Prepared on', format_datetime(doc.creation)),
         ('Opening shift', doc.get('opening_shift')),
-    ])
+    ] + moved)
     if layout == 'label':
         # A physical bag tag, not a miniature handover sheet. Signatures and
         # detailed counts belong on the full slip so this fits one 100x76mm label.
+        # A moved bag trades its shift line for where it went.
         label_meta = _meta([
             ('Purpose', _phrase(PURPOSES, doc.purpose)),
             ('Safe', frappe.db.get_value('POS Cash Safe', doc.safe, 'title') or doc.safe),
             ('Prepared by', _person(doc.prepared_by)),
             ('Prepared on', format_datetime(doc.creation)),
-            ('Opening shift', doc.get('opening_shift')),
-        ])
+        ] + (moved[:1] + moved[2:] if moved else [('Opening shift', doc.get('opening_shift'))]))
         return ('<article class="doc label-card">' + header + total
-                + '<dl class="meta">' + label_meta + '</dl>'
+                + '<dl class="meta">' + label_meta + '</dl>' + warning
                 + '<p class="label-record">' + _esc(doc.name) + '</p></article>')
-    body = ('<article class="doc">' + header + total + '<dl class="meta">' + meta + '</dl>'
+    body = ('<article class="doc">' + header + total + warning + '<dl class="meta">' + meta + '</dl>'
             + _count_block(count, currency))
     if doc.get('note'):
-        body += '<h2>' + _esc(_('Handover note')) + '</h2><p class="note">' + _esc(doc.note) + '</p>'
-    return (body + _references(doc)
-            + _signatures('Delivered by', _person(doc.prepared_by), 'Received by') + '</article>')
+        heading = 'Transfer reason' if moved else 'Handover note'
+        body += '<h2>' + _esc(_(heading)) + '</h2><p class="note">' + _esc(doc.note) + '</p>'
+    signatures = (_signatures('Moved by', _person(doc.get('transferred_by')), 'Received at the off-site safe') if moved
+                  else _signatures('Delivered by', _person(doc.prepared_by), 'Received by'))
+    return body + _references(doc) + signatures + '</article>'
 
 
 def _count(doc, count):
@@ -355,10 +386,14 @@ def _closing_bags(name):
 
 @frappe.whitelist()
 def closing_bags(closing_shift):
-    return [dict(name=d.name, seal=d.seal, amount=d.amount, currency=d.currency,
+    # _closing_bags checks the closing, its linked count and every bag before
+    # revealing the count ID used for optional drawer photo evidence.
+    docs = _closing_bags(closing_shift)
+    cash_count = frappe.db.get_value('POS Closing Shift', closing_shift, 'cash_count')
+    return [dict(name=d.name, seal=d.seal, amount=d.amount, currency=d.currency, cash_count=cash_count,
         purpose=_phrase(PURPOSES,d.purpose), state=_phrase(STATES,d.state),
         prepared_by=_person(d.prepared_by), prepared_on=format_datetime(d.creation))
-        for d in _closing_bags(closing_shift)]
+        for d in docs]
 
 
 @frappe.whitelist()

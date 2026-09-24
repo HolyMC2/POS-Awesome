@@ -658,6 +658,17 @@ _append_hook("POS Closing Shift", "on_submit", f"{_REGISTERS}.runtime.on_closing
 _append_hook("POS Closing Shift", "on_cancel", f"{_REGISTERS}.runtime.on_closing_cancel")
 _append_hook("POS Opening Shift", "on_cancel", f"{_REGISTERS}.runtime.on_opening_cancel")
 
+# Cash photo evidence: only the custody photo endpoint creates a marked File,
+# and nobody edits, re-points, publishes or deletes one. Other files untouched.
+_CASH_PHOTOS = "posawesome.posawesome.api.cash_custody.photos"
+_append_hook("File", "before_insert", f"{_CASH_PHOTOS}.guard_file")
+_append_hook("File", "before_validate", f"{_CASH_PHOTOS}.guard_file")
+_append_hook("File", "on_update", f"{_CASH_PHOTOS}.guard_file")
+_append_hook("File", "on_trash", f"{_CASH_PHOTOS}.protect_file")
+extend_doctype_class = extend_doctype_class | {"File": [f"{_CASH_PHOTOS}.CashPhotoFile"]}
+has_permission = has_permission | {"File": f"{_CASH_PHOTOS}.file_permission"}
+permission_query_conditions = permission_query_conditions | {"File": f"{_CASH_PHOTOS}.file_query"}
+
 permission_query_conditions = permission_query_conditions | {
     "POS Store": f"{_REGISTERS}.scope.query_store",
     "POS Register": f"{_REGISTERS}.scope.query_register",

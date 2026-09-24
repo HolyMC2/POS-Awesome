@@ -13,6 +13,7 @@
   "transit_account",
   "bank_account",
   "variance_account",
+  "offsite_cash_account",
   "float_target",
   "drawer_limit"
  ],
@@ -79,6 +80,13 @@
    "fieldtype": "Link",
    "options": "Account",
    "reqd": 1
+  },
+  {
+   "fieldname": "offsite_cash_account",
+   "label": "Off-site Cash Account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "description": "Optional. Cash ledger for a separate owner or home safe. Sealed bags can move here whole. Never a bank, drawer or another register's safe. Leave blank to keep whole-bag transfers unavailable."
   },
   {
    "fieldname": "float_target",

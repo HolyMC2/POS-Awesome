@@ -126,7 +126,9 @@ class _Site:
 
     def _get_value(self, doctype, name, field, **kwargs):
         if doctype == "User":
-            return {"ana@example.com": "Ana Torres"}.get(name)
+            return {"ana@example.com": "Ana Torres", "beto@example.com": "Beto Ruiz"}.get(name)
+        if doctype == "Account":
+            return {"Caja fuerte casa - GD": "Caja fuerte casa"}.get(name)
         if doctype == "POS Cash Safe":
             return self.safe_title
         return None
@@ -234,6 +236,73 @@ class TestEvidenceContent(unittest.TestCase):
         page = self.render(_count(amount=920, difference=10))
         self.assertIn("Over", page)
         self.assertNotIn("Short", page)
+
+
+def _moved(**overrides):
+    values = dict(state="Transferred", transfer_account="Caja fuerte casa - GD", transfer_journal="ACC-JV-00077",
+                  transferred_by="beto@example.com", transferred_on="2026-09-23 18:05:00",
+                  note="Beto took the sealed bag home; owner confirmed by phone")
+    values.update(overrides)
+    return _bag(**values)
+
+
+class TestTransferredBagEvidence(unittest.TestCase):
+    """A bag moved whole to the off-site safe: destination, mover and journal come
+    from the bag, and a bag nobody else counted never prints as verified."""
+
+    def render(self, doc, **kwargs):
+        with _Site(doc):
+            return printing.evidence(doc.doctype, doc.name, **kwargs)
+
+    def test_slip_names_the_actual_destination_mover_and_journal(self):
+        page = self.render(_moved())
+        self.assertIn("Moved to the off-site safe", page)
+        self.assertNotIn(">Transferred<", page)
+        self.assertIn("Caja fuerte casa", page)
+        self.assertIn("Beto Ruiz", page)
+        self.assertNotIn("beto@example.com", page)
+        self.assertIn("Transfer journal", page)
+        self.assertIn("ACC-JV-00077", page)
+        self.assertIn("Transfer reason", page)
+        self.assertIn("owner confirmed by phone", page)
+        self.assertIn("Received at the off-site safe", page)
+        self.assertNotIn("Handover note", page)
+
+    def test_unverified_bag_says_so_on_the_slip_and_the_label(self):
+        for layout in ("slip", "label", "ticket"):
+            with self.subTest(layout=layout):
+                page = self.render(_moved(), layout=layout)
+                self.assertIn("Never independently verified", page)
+                self.assertNotIn("Verified by", page)
+
+    def test_verified_bag_carries_no_warning(self):
+        page = self.render(_moved(verified_by="ana@example.com"))
+        self.assertNotIn("Never independently verified", page)
+        self.assertIn("Verified by", page)
+
+    def test_label_keeps_bag_identity_and_adds_where_it_went(self):
+        page = self.render(_moved(), layout="label")
+        self.assertIn("QA-SEAL-001", page)
+        self.assertIn("CASH-BAG-00014", page)
+        self.assertIn("$ 900.00 MXN", page)
+        self.assertIn("Moved to", page)
+        self.assertIn("Caja fuerte casa", page)
+        self.assertNotIn('<footer class="signatures">', page)
+
+    def test_unknown_account_prints_the_stored_account_not_the_safe_setting(self):
+        page = self.render(_moved(transfer_account="Old home safe - GD"))
+        self.assertIn("Old home safe - GD", page)
+
+    def test_destination_is_escaped(self):
+        page = self.render(_moved(transfer_account="<b>x</b>"))
+        self.assertNotIn("<b>x</b>", page)
+        self.assertIn("&lt;b&gt;x&lt;/b&gt;", page)
+
+    def test_other_states_print_no_transfer_block(self):
+        page = self.render(_bag(state="Available", transfer_account="Caja fuerte casa - GD"))
+        self.assertNotIn("Moved to", page)
+        self.assertNotIn("Never independently verified", page)
+        self.assertIn("Delivered by", page)
 
 
 class TestBatchEvidence(unittest.TestCase):

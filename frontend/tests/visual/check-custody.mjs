@@ -13,7 +13,7 @@ const server = await createServer({
 	server: { host: "127.0.0.1", port: 0 },
 	logLevel: "error",
 });
-let browser;
+let browser, activePage;
 try {
 	await server.listen();
 	const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
@@ -25,8 +25,11 @@ try {
 		["desktop", 1440, 900],
 		["touch", 1024, 768],
 		["phone", 390, 844],
+		["small-phone", 320, 740],
+		["tablet", 768, 1024],
 	]) {
 		const page = await browser.newPage({ viewport: { width, height } });
+		activePage = page;
 		page.on("pageerror", (e) => errors.push(e.message));
 		await page.route("**/*", (r) =>
 			r.request().url().startsWith(origin) ? r.continue() : r.abort(),
@@ -86,6 +89,18 @@ try {
 			path: `${out}/receive-${size}.png`,
 			fullPage: true,
 		});
+		// Same rendered transfer form on a narrow phone and a desktop, with no money inputs.
+		await page.goto(`${path}?scenario=supervisor`);
+		await page.locator("button.record").filter({ hasText: "FLOAT-025" }).click();
+		await page.getByRole("button", { name: "Move whole bag off-site", exact: true }).click();
+		await expect(page.getByTestId("custody-transfer-summary")).toContainText("Caja fuerte casa");
+		await page.getByTestId("custody-transfer-confirm").check();
+		await page.locator("form textarea").fill("Owner took the complete sealed bag to the home safe");
+		await expect(page.getByTestId("custody-confirm")).toBeEnabled();
+		expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+		await page.screenshot({path: `${out}/transfer-${size}.png`, fullPage: true});
+		await page.getByTestId("custody-confirm").click();
+		await expect(page.getByRole("status").filter({hasText: "Whole bag moved"}).first()).toBeVisible();
 		// Real counting controls and allocation contract: edit after save must revoke readiness.
 		await page.goto(`${path}?scenario=closing&theme=dark`);
 		const drawer = page.getByTestId("cash-closing-count");
@@ -103,6 +118,7 @@ try {
 		expect(hit.height, "count stepper touch height").toBeGreaterThanOrEqual(
 			44,
 		);
+		await page.getByLabel("Difference / handover note").fill("Blind physical count at shift handover");
 		await page.getByTestId("cash-closing-save").click();
 		await page.getByLabel("Bag seal / ID").fill("FLOAT-NEW");
 		await expect(page.getByTestId("cash-closing-ready")).toBeVisible();
@@ -145,12 +161,18 @@ try {
 	console.log(
 		JSON.stringify({
 			layoutCases: evidence.length,
-			interactiveJourneys: 6,
-			spanishCases: 3,
+			interactiveJourneys: 15,
+			spanishCases: 5,
 			errors: 0,
 			output: out,
 		}),
 	);
+} catch (error) {
+	if (activePage && !activePage.isClosed()) {
+		await activePage.screenshot({path: `${out}/failure.png`, fullPage: true});
+		await writeFile(`${out}/failure.txt`, await activePage.locator("body").innerText());
+	}
+	throw error;
 } finally {
 	await browser?.close();
 	await server.close();

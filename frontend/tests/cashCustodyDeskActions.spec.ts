@@ -473,3 +473,149 @@ it("labels a bank posting as a journal entry, not a variance correction", async 
  await dialog().primary_action();
  expect((globalThis as any).frappe.show_alert).toHaveBeenCalledWith(expect.objectContaining({message:expect.stringContaining("Journal Entry:")}),10);
 });
+
+describe("whole-bag transfer off-site from Desk", () => {
+	const HOME = "Caja fuerte casa - QA";
+	const REASON = "Beto carried the sealed bag to the home safe";
+	const ctx = (over: Record<string, any> = {}) => ({
+		safe: "CASH-SAFE-00002",
+		can_manage: true,
+		can_transfer: true,
+		transfer_blocker: null,
+		offsite_cash_account: HOME,
+		offsite_cash_account_name: "Caja fuerte casa",
+		bags: [{ name: BAG.name, state: "Unverified", amount: 900, prepared_by: "ana@example.com", verified_by: null }],
+		...over,
+	});
+	const isContext = (entry: any) => entry[0].method.endsWith("service.context");
+	const commands = () => call.mock.calls.filter((entry) => !isContext(entry));
+	const result = { bag: BAG.name, amount: 900, state: "Transferred", transfer_account: HOME, journal_entry: "ACC-JV-00077" };
+
+	beforeEach(() => {
+		(FakeDialog as any).last = null;
+	});
+
+	it("reads the safe first and shows the amount, destination and missing verification", async () => {
+		call.mockResolvedValueOnce({ message: ctx() });
+		await custody().action(makeForm(BAG), "transfer_safe");
+		expect(call.mock.calls[0][0].args).toEqual({ pos_profile: "QA", history_limit: 0 });
+		const summary = dialog().fields_dict.transfer.$wrapper.html();
+		expect(summary).toContain("$ 900.00 MXN");
+		expect(summary).toContain("Caja fuerte casa");
+		expect(summary).toContain(HOME);
+		expect(summary).toContain("never independently verified");
+		expect(summary).toContain("ana@example.com");
+		// No account picker, no amount, no count: the server derives both.
+		const names = dialog().fields.map((df: any) => df.fieldname).filter(Boolean);
+		expect(names).toEqual(["help", "feedback", "transfer", "physical_done", "note"]);
+		expect(dialog().fields_dict.note.df.reqd).toBe(1);
+	});
+
+	it("will not send until the physical move is confirmed, then sends only bag and reason", async () => {
+		call.mockResolvedValueOnce({ message: ctx() });
+		const frm = makeForm(BAG);
+		await custody().action(frm, "transfer_safe");
+		dialog().set_value("note", REASON);
+		await dialog().primary_action();
+		expect(commands()).toHaveLength(0);
+		expect(dialog().feedbackText()).toContain("has already physically left");
+		expect(localStorage.getItem(storeKey("transfer_safe"))).toBeNull();
+
+		call.mockResolvedValueOnce({ message: result });
+		dialog().set_value("physical_done", 1);
+		await dialog().primary_action();
+		expect(commands()).toHaveLength(1);
+		const args = commands()[0][0].args;
+		expect(args.action).toBe("transfer_safe");
+		expect(Object.keys(args.payload).sort()).toEqual(["bag", "note", "pos_profile", "request_id"]);
+		expect(args.payload).toMatchObject({ pos_profile: "QA", bag: BAG.name, note: REASON });
+		expect(localStorage.getItem(storeKey("transfer_safe"))).toBeNull();
+		expect(frm.reload_doc).toHaveBeenCalled();
+		expect((globalThis as any).frappe.show_alert).toHaveBeenCalledWith(
+			expect.objectContaining({ message: expect.stringContaining("ACC-JV-00077") }),
+			10,
+		);
+	});
+
+	it("refuses a bag that already left, before any cash instruction exists", async () => {
+		call.mockResolvedValueOnce({ message: ctx({ bags: [] }) });
+		const frm = makeForm({ ...BAG, state: "Available" });
+		await custody().action(frm, "transfer_safe");
+		expect(dialog()).toBeNull();
+		expect(commands()).toHaveLength(0);
+		expect(frm.reload_doc).toHaveBeenCalled();
+		expect((globalThis as any).frappe.msgprint).toHaveBeenCalledWith(
+			expect.objectContaining({ message: expect.stringContaining("no longer a sealed bag") }),
+		);
+	});
+
+	it("explains a missing destination and links a supervisor to the safe", async () => {
+		const blocker = "Configure an off-site cash account on this safe before transferring whole bags.";
+		call.mockResolvedValueOnce({ message: ctx({ can_transfer: false, transfer_blocker: blocker, offsite_cash_account: null }) });
+		await custody().action(makeForm(BAG), "transfer_safe");
+		expect(dialog()).toBeNull();
+		expect(commands()).toHaveLength(0);
+		const message = (globalThis as any).frappe.msgprint.mock.calls[0][0].message;
+		expect(message).toContain(blocker);
+		expect(message).toContain('href="/app/pos-cash-safe/CASH-SAFE-00002"');
+	});
+
+	it("sends nothing when the safe cannot be read", async () => {
+		call.mockRejectedValueOnce(new TypeError("NetworkError"));
+		await custody().action(makeForm(BAG), "transfer_safe");
+		expect(dialog()).toBeNull();
+		expect(commands()).toHaveLength(0);
+	});
+
+	it("replays a lost transfer with the same request even after the bag reads as moved", async () => {
+		call.mockResolvedValueOnce({ message: ctx() });
+		await custody().action(makeForm(BAG), "transfer_safe");
+		dialog().set_value("note", REASON);
+		dialog().set_value("physical_done", 1);
+		call.mockRejectedValueOnce(new TypeError("NetworkError"));
+		await dialog().primary_action();
+		const saved = JSON.parse(localStorage.getItem(storeKey("transfer_safe")) as string);
+		expect(custody().pendingForBag("QA", BAG.name)).toEqual(["transfer_safe"]);
+		expect(custody().pendingForBag("QA", "CASH-BAG-OTHER")).toEqual([]);
+
+		const before = call.mock.calls.length;
+		call.mockResolvedValueOnce({ message: result });
+		await custody().action(makeForm({ ...BAG, state: "Transferred" }), "transfer_safe");
+		// No fresh context read: a replay is the saved request, whatever the state says now.
+		expect(call.mock.calls.length).toBe(before);
+		expect(dialog().primary_label).toBe("Retry unconfirmed action");
+		expect(dialog().fields_dict.physical_done.df.read_only).toBe(1);
+		await dialog().primary_action();
+		const replay = commands()[commands().length - 1][0].args.payload;
+		expect(replay.request_id).toBe(saved.request_id);
+		expect(replay).toEqual(commands()[0][0].args.payload);
+		expect(localStorage.getItem(storeKey("transfer_safe"))).toBeNull();
+	});
+
+	it("shows where a moved bag went and that nobody verified it", async () => {
+		await custody().render(
+			makeForm({
+				...BAG,
+				state: "Transferred",
+				transfer_account: HOME,
+				transfer_journal: "ACC-JV-00077",
+				transferred_by: "beto@example.com",
+				transferred_on: "2026-09-23 18:05:00",
+			}),
+		);
+		const html = dashboard.innerHTML;
+		expect(html).toContain("Never independently verified");
+		expect(html).toContain('href="/app/account/' + encodeURIComponent(HOME) + '"');
+		expect(html).toContain('href="/app/journal-entry/ACC-JV-00077"');
+		expect(html).toContain("beto@example.com");
+		expect(html).not.toContain("Verified by</dt><dd>ana");
+	});
+
+	it("does not warn about verification for a verified bag that moved", async () => {
+		await custody().render(
+			makeForm({ ...BAG, state: "Transferred", verified_by: "gerente@example.com", transfer_account: HOME }),
+		);
+		expect(dashboard.innerHTML).not.toContain("Never independently verified");
+		expect(dashboard.innerHTML).toContain("gerente@example.com");
+	});
+});

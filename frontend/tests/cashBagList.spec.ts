@@ -78,6 +78,45 @@ it("renders bag details as text and a native HTML column, including email-only u
 	);
 	expect(list.list_view_settings.disable_scrolling).toBe(true);
 });
+it("shows where a moved bag went and files it under Completed and its own queue", async () => {
+	const node = list.get_subject_element(
+		{
+			name: "BAG-4",
+			seal: "SOBRANTE23",
+			amount: 2211,
+			currency: "MXN",
+			state: "Transferred",
+			purpose: "Takings",
+			prepared_by: "cajera@example.test",
+			creation: "2026-09-20",
+			transfer_account: "Caja fuerte casa - D",
+			transferred_by: "dueno@example.test",
+		},
+		"BAG-4",
+	);
+	expect(node.textContent).toContain("Moved to the off-site safe · $2211 · Takings");
+	expect(node.textContent).toContain("Moved to: Caja fuerte casa - D · dueno@example.test");
+	expect(node.textContent).toContain("Never independently verified");
+	expect(settings.get_indicator({ state: "Transferred" })).toEqual([
+		"Moved to the off-site safe",
+		"gray",
+		"state,=,Transferred",
+	]);
+	const buttons = Array.from(document.querySelectorAll("nav button")) as HTMLButtonElement[];
+	buttons.find((b) => b.textContent === "Completed")!.click();
+	await Promise.resolve();
+	expect(filters).toContainEqual(["POS Cash Bag", "state", "in", ["Deposited", "Unpacked", "Transferred"]]);
+	buttons.find((b) => b.textContent === "Moved to the off-site safe")!.click();
+	await Promise.resolve();
+	expect(filters).toContainEqual(["POS Cash Bag", "state", "in", ["Transferred"]]);
+});
+it("does not mark a verified moved bag as unverified", () => {
+	const node = list.get_subject_element(
+		{ name: "BAG-5", seal: "S5", amount: 10, state: "Transferred", purpose: "Float", verified_by: "v@example.test", transfer_account: "Casa" },
+		"BAG-5",
+	);
+	expect(node.textContent).not.toContain("Never independently verified");
+});
 it("changes only the state queue, preserving safe scope, and prints selected IDs", async () => {
 	const buttons = Array.from(document.querySelectorAll("nav button"));
 	(

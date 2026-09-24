@@ -14,12 +14,19 @@
 					<span v-if="data" class="muted">{{ __("Safe") }}: {{ data.safe }}</span>
 				</p>
 			</div>
-			<button class="btn" @click="load" :disabled="busy" data-testid="custody-refresh">
+			<button class="btn" @click="profile ? load() : loadSafes()" :disabled="busy" data-testid="custody-refresh">
 				{{ busy ? __("Refreshing…") : __("Refresh") }}
 			</button>
 		</header>
 
 		<p v-if="!profile" class="notice">{{ __("Select a register to manage its cash.") }}</p>
+		<label v-if="!ui.posProfile?.name && safeOptions.length" class="search">
+			<span>{{ __("Register") }}</span>
+			<select v-model="selectedProfile" data-testid="custody-register-select" :disabled="busy">
+				<option value="">{{ __("Select a register to manage its cash.") }}</option>
+				<option v-for="safe in safeOptions" :key="safe.name" :value="safe.pos_profile">{{ safe.pos_profile }} · {{ safe.title }}</option>
+			</select>
+		</label>
 
 		<section v-if="pending.length" class="panel panel--pending" aria-labelledby="custody-pending">
 			<h3 id="custody-pending">{{ __("Unconfirmed cash action") }}</h3>
@@ -57,6 +64,15 @@
 			<div v-if="success" class="panel panel--success" role="status">
 				<p>{{ success }}</p>
 				<p v-if="successNext" class="muted">{{ successNext }}</p>
+				<p v-if="successJournal">
+					<a
+						:href="deskLink('Journal Entry', successJournal)"
+						target="_blank"
+						rel="noopener"
+						data-testid="custody-success-journal"
+						>{{ __("Journal Entry") }} {{ successJournal }} ↗</a
+					>
+				</p>
 			</div>
 			<div v-if="staleDraft" class="panel panel--warning" data-testid="custody-stale-draft">
 				<p>
@@ -93,6 +109,9 @@
 			<section class="starters custody__quick-tasks" aria-labelledby="custody-start">
 				<h3 id="custody-start">{{ __("Start a cash task") }}</h3>
 				<div class="actions">
+					<a class="btn" :href="bagListLink" target="_blank" rel="noopener" data-testid="cash-bag-list-link">
+						{{ __("Bag list & labels") }} ↗
+					</a>
 					<button v-if="canManage" class="btn btn--emphasis" @click="start('prepare')">
 						{{ __("Prepare float bag") }}
 					</button>
@@ -231,6 +250,9 @@
 											__(bagStates[bag.state] || bag.state)
 										}}</span>
 										<span>{{ __(bag.purpose) }}</span>
+										<span v-if="bag.state === 'Transferred' && bag.transfer_account">
+											→ {{ bag.transfer_account }}
+										</span>
 										<span class="muted">{{ when(bag.modified) }}</span>
 									</span>
 									<b class="money">{{ money(bag.amount) }}</b>
@@ -309,6 +331,56 @@
 							<p v-if="bagHelp[selectedBag.state]">
 								{{ __(bagHelp[selectedBag.state] ?? "") }}
 							</p>
+							<!-- An unverified bag that left keeps saying so; the state alone
+							     must never read as a verified hand-over. -->
+							<p
+								v-if="selectedBag.state === 'Transferred' && !selectedBag.verified_by"
+								class="panel panel--warning"
+								data-testid="custody-transfer-unverified"
+							>
+								{{
+									__(
+										"Never independently verified. This bag left the safe with only the preparer's count; any recount happens off-site, outside POS.",
+									)
+								}}
+							</p>
+							<dl
+								v-if="selectedBag.state === 'Transferred'"
+								class="trail"
+								data-testid="custody-transfer-record"
+							>
+								<div>
+									<dt>{{ __("Moved to") }}</dt>
+									<dd>{{ selectedBag.transfer_account || "—" }}</dd>
+								</div>
+								<div>
+									<dt>{{ __("Moved by") }}</dt>
+									<dd>{{ selectedBag.transferred_by || "—" }}</dd>
+								</div>
+								<div>
+									<dt>{{ __("Moved on") }}</dt>
+									<dd>{{ when(selectedBag.transferred_on) || "—" }}</dd>
+								</div>
+								<div>
+									<dt>{{ __("Transfer journal") }}</dt>
+									<dd>
+										<a
+											v-if="selectedBag.transfer_journal"
+											:href="deskLink('Journal Entry', selectedBag.transfer_journal)"
+											target="_blank"
+											rel="noopener"
+											>{{ selectedBag.transfer_journal }} ↗</a
+										>
+										<a
+											v-else
+											:href="deskLink('POS Cash Bag', selectedBag.name)"
+											target="_blank"
+											rel="noopener"
+											>{{ __("Open the bag record") }} ↗</a
+										>
+									</dd>
+								</div>
+							</dl>
 
 							<div class="actions">
 								<button
@@ -335,6 +407,7 @@
 									{{ __("Print bag label") }}
 								</button>
 							</div>
+							<CashPhotos :key="selectedBag.name" doctype="POS Cash Bag" :name="selectedBag.name" />
 							<details class="custody__history">
 								<summary>{{ __("Details and history") }}</summary>
 								<dl class="trail">
@@ -348,7 +421,14 @@
 									</div>
 									<div>
 										<dt>{{ __("Verified by") }}</dt>
-										<dd>{{ selectedBag.verified_by || __("Not verified yet") }}</dd>
+										<dd>
+											{{
+												selectedBag.verified_by ||
+												(doneBagStates.includes(selectedBag.state)
+													? __("Never independently verified")
+													: __("Not verified yet"))
+											}}
+										</dd>
 									</div>
 									<div v-if="selectedBag.opening_shift">
 										<dt>{{ __("Shift") }}</dt>
@@ -366,6 +446,16 @@
 							</details>
 							<p v-for="reason in bagBlockers" :key="reason" class="muted blocker">
 								{{ reason }}
+							</p>
+							<p v-if="transferBlocked" class="muted blocker" data-testid="custody-transfer-blocker">
+								{{ __("Whole-bag transfer off-site is unavailable") }}:
+								{{
+									data.transfer_blocker ||
+									__("The off-site cash account for this safe is not ready.")
+								}}
+								<a :href="deskLink('POS Cash Safe', data.safe)" target="_blank" rel="noopener"
+									>{{ __("Open this safe's settings") }} ↗</a
+								>
 							</p>
 						</article>
 					</template>
@@ -414,6 +504,7 @@
 								</div>
 							</dl>
 							<p v-if="selectedCount.note">{{ selectedCount.note }}</p>
+							<CashPhotos :key="selectedCount.name" doctype="POS Cash Count" :name="selectedCount.name" />
 							<table v-if="evidence && evidence.denominations.length">
 								<caption class="sr-only">
 									{{
@@ -565,6 +656,55 @@
 								><strong>{{ transferDirection.to }}</strong></span
 							>
 						</div>
+						<template v-if="action === 'transfer_safe' && selectedBag">
+							<!-- Everything the server will derive, shown before anyone confirms.
+							     Nothing here is editable: the amount is the bag's and the
+							     destination is the safe's configured off-site ledger. -->
+							<dl class="summary" data-testid="custody-transfer-summary">
+								<div>
+									<dt>{{ __("Amount leaving the safe") }}</dt>
+									<dd class="money">{{ money(selectedBag.amount) }}</dd>
+								</div>
+								<div>
+									<dt>{{ __("Destination") }}</dt>
+									<dd class="custody__destination">
+										{{ transferTarget.name }}
+										<small v-if="transferTarget.account !== transferTarget.name" class="muted">{{
+											transferTarget.account
+										}}</small>
+									</dd>
+								</div>
+							</dl>
+							<p
+								v-if="!selectedBag.verified_by"
+								class="panel panel--warning"
+								role="status"
+								data-testid="custody-transfer-unverified-warning"
+							>
+								{{
+									__(
+										"This bag was never independently verified. It leaves with only the count by {0} and stays marked unverified.",
+									).replace("{0}", selectedBag.prepared_by || __("the preparer"))
+								}}
+							</p>
+							<p v-else class="muted">
+								{{ __("Verified by") }}: {{ selectedBag.verified_by }}
+							</p>
+							<label class="custody__confirm">
+								<input
+									type="checkbox"
+									required
+									:checked="transferConfirmed"
+									data-testid="custody-transfer-confirm"
+									@change="confirmTransfer(($event.target as HTMLInputElement).checked)"
+								/>
+								<span>{{
+									__(
+										"I confirm the whole bag, sealed and unopened, has already physically left for {0}.",
+									).replace("{0}", transferTarget.name)
+								}}</span>
+							</label>
+						</template>
 						<CashCountEditor
 							v-if="['prepare', 'drop', 'receive', 'verify', 'count_safe'].includes(action)"
 							v-model="count"
@@ -657,6 +797,7 @@ import { useUIStore } from "../../../stores/uiStore";
 import { read, command, emptyCount, pendingActions, printEvidence, amount } from "./api";
 import { clearDraft, draftKey, readDraft, writeDraft, type CustodyDraft } from "./draft";
 import CashCountEditor from "./CashCountEditor.vue";
+import CashPhotos from "./CashPhotos.vue";
 import CashDrawerGuidance from "./CashDrawerGuidance.vue";
 const drawerGuidance = ref<InstanceType<typeof CashDrawerGuidance> | null>(null);
 import type { BandState } from "../../../composables/pos/shell/bandState";
@@ -673,13 +814,16 @@ const emit = defineEmits<{ band: [BandState | null] }>();
 const ui = useUIStore();
 const router = useRouter();
 const queueSearch = ref<HTMLInputElement | null>(null);
-const profile = computed(() => ui.posProfile?.name);
+const selectedProfile = ref("");
+const safeOptions = ref<{ name: string; title: string; pos_profile: string; company: string }[]>([]);
+const profile = computed(() => ui.posProfile?.name || selectedProfile.value);
 const opening = computed(() => ui.posOpeningShift?.name);
 const pending = ref<{ action: string; payload: any }[]>([]);
 const data = ref<any>(null),
 	error = ref(""),
 	success = ref(""),
 	successNext = ref(""),
+	successJournal = ref(""),
 	pendingWarning = ref(""),
 	busy = ref(false),
 	printing = ref(false),
@@ -715,6 +859,7 @@ const labels: Record<string, string> = {
 	return_bank: "Return undeposited bag",
 	count_safe: "Count safe",
 	review: "Review difference",
+	transfer_safe: "Move whole bag off-site",
 };
 /** Plain-language state names. The raw state stays visible on the record in Desk. */
 const bagStates: Record<string, string> = {
@@ -725,6 +870,7 @@ const bagStates: Record<string, string> = {
 	"In Transit": "On the way to the bank",
 	Deposited: "Deposited at the bank",
 	Unpacked: "Returned to loose safe cash",
+	Transferred: "Moved to the off-site safe",
 };
 const bagHelp: Record<string, string> = {
 	Unverified: "Another person must count this bag before it can be used or sent to the bank.",
@@ -734,6 +880,8 @@ const bagHelp: Record<string, string> = {
 	"In Transit": "The bag left for the bank. Record the bank receipt once the deposit is done.",
 	Deposited: "The bank receipt is recorded. This bag is closed evidence.",
 	Unpacked: "The cash went back to loose safe funds. This bag is closed evidence.",
+	Transferred:
+		"The sealed bag left the safe whole for the off-site cash account. This bag is closed evidence.",
 };
 const countStates: Record<string, string> = {
 	Draft: "Saved draft",
@@ -753,13 +901,18 @@ const countTitles: Record<string, string> = {
 	verify: "Independent verification count",
 	count_safe: "Count every note and coin in the safe",
 };
-const doneBagStates = ["Issued", "Deposited", "Unpacked"];
+const doneBagStates = ["Issued", "Deposited", "Unpacked", "Transferred"];
+/** States a sealed bag may leave the safe from, whole, for the off-site ledger. */
+const transferableBagStates = ["Available", "Unverified"];
 const sessionUser = () => (window as any).frappe?.session?.user || "";
 const isMine = (user?: string) => Boolean(user) && user === sessionUser();
 const canManage = computed(() => Boolean(data.value?.can_manage));
 const bags = computed<any[]>(() => data.value?.bags || []);
 const counts = computed<any[]>(() => data.value?.counts || []);
 const historyMeta = computed(() => data.value?.queues?.[queue.value]);
+const bagListLink = computed(() => `/app/pos-cash-bag?${new URLSearchParams({ safe: data.value?.safe || "" })}`);
+const deskLink = (doctype: string, name: string) =>
+	`/app/${doctype.toLowerCase().replace(/ /g, "-")}/${encodeURIComponent(name || "")}`;
 const historyLink = computed(() => {
 	const filters = new URLSearchParams({ safe: data.value?.safe || "" });
 	if (queue.value === "counts" && !canManage.value) filters.set("counted_by", sessionUser());
@@ -800,6 +953,7 @@ const chipTone = (state: string) =>
 		"In Transit": "chip--info",
 		Draft: "chip--muted",
 		Unpacked: "chip--muted",
+		Transferred: "chip--muted",
 	})[state] || "chip--muted";
 
 // Queues -------------------------------------------------------------------
@@ -821,11 +975,11 @@ const bagNeedsMe = (bag: any) =>
 		? bagsToVerify.value.includes(bag) || bag.state === "In Transit" || bagsForBank.value.includes(bag)
 		: Boolean(opening.value) && receivableBags.value.includes(bag);
 const countNeedsMe = (row: any) => canManage.value && reviewableCounts.value.includes(row);
-const matches = (row: any, fields: string[]) => {
+const matches = (row: any, fields: string[], extra: string[] = []) => {
 	const term = search.value.trim().toLowerCase();
 	if (!term) return true;
-	return fields.some((field) =>
-		String(row[field] ?? "")
+	return [...fields.map((field) => row[field]), ...extra].some((value) =>
+		String(value ?? "")
 			.toLowerCase()
 			.includes(term),
 	);
@@ -846,7 +1000,22 @@ const countPool = (id: string) =>
 	});
 const visibleBags = computed(() =>
 	bagPool(filter.value).filter((bag) =>
-		matches(bag, ["seal", "state", "purpose", "prepared_by", "verified_by", "opening_shift", "name"]),
+		matches(
+			bag,
+			[
+				"seal",
+				"state",
+				"purpose",
+				"prepared_by",
+				"verified_by",
+				"opening_shift",
+				"name",
+				"transfer_account",
+				"transferred_by",
+			],
+			// What the row shows, so "off-site" or a destination name finds it too.
+			[__(bagStates[bag.state] || bag.state)],
+		),
 	),
 );
 const visibleCounts = computed(() =>
@@ -869,7 +1038,7 @@ const filterOptions = computed(() => {
 });
 const searchLabel = computed(() =>
 	queue.value === "bags"
-		? __("Search by seal, state or person")
+		? __("Search by seal, state, person or destination")
 		: __("Search counts by scope, shift or person"),
 );
 function clearFilters() {
@@ -1006,9 +1175,26 @@ function actionsForBag(bag: any) {
 		});
 		list.push({ action: "return_bank", labelKey: "Return undeposited bag", enabled: true });
 	}
+	// Terminal and supervisor-only, so never the band's suggested next step. With
+	// no usable destination the button stays visible but disabled, and the
+	// server's reason is shown next to it.
+	if (canManage.value && transferableBagStates.includes(bag.state))
+		list.push({
+			action: "transfer_safe",
+			labelKey: "Move whole bag off-site",
+			enabled: Boolean(data.value?.can_transfer),
+			band: false,
+		});
 	return list;
 }
 const bagActions = computed(() => actionsForBag(selectedBag.value));
+const transferBlocked = computed(
+	() =>
+		Boolean(selectedBag.value) &&
+		canManage.value &&
+		transferableBagStates.includes(selectedBag.value.state) &&
+		!data.value?.can_transfer,
+);
 const bagBlockers = computed(() => {
 	const bag = selectedBag.value;
 	const list: string[] = [];
@@ -1057,7 +1243,7 @@ const overLoose = computed(
 		Math.round(counted.value * 100) > Math.round(Number(data.value.loose_balance) * 100),
 );
 const noteRequired = computed(() => {
-	if (["unpack", "dispatch", "return_bank", "review"].includes(action.value)) return true;
+	if (["unpack", "dispatch", "return_bank", "review", "transfer_safe"].includes(action.value)) return true;
 	return mismatch.value;
 });
 const noteLabel = computed(() => {
@@ -1066,6 +1252,7 @@ const noteLabel = computed(() => {
 		dispatch: "Bank run details: who takes the bag and where",
 		return_bank: "Why is the bag coming back undeposited?",
 		review: "Review decision and reason",
+		transfer_safe: "Who moved the bag, from where to where, and how it was confirmed",
 	};
 	if (map[action.value]) return __(map[action.value]!);
 	if (noteRequired.value) return __("Explain the difference");
@@ -1084,10 +1271,13 @@ const formTitle = computed(() => {
 		return_bank: __("Return the undeposited bag to the safe"),
 		count_safe: __("Count the safe"),
 		review: __("Review the counted difference"),
+		transfer_safe: __("Move the whole sealed bag off-site"),
 	};
 	const title = map[action.value] || __(labels[action.value] || action.value);
 	return bag &&
-		["receive", "verify", "unpack", "dispatch", "confirm_bank", "return_bank"].includes(action.value)
+		["receive", "verify", "unpack", "dispatch", "confirm_bank", "return_bank", "transfer_safe"].includes(
+			action.value,
+		)
 		? `${title} — ${bag.seal}`
 		: title;
 });
@@ -1103,6 +1293,7 @@ const transferDirection = computed(() => {
 		confirm_bank: { from: __("Bank deposits in transit"), to: __("Bank") },
 		return_bank: { from: __("Bank deposits in transit"), to: safe },
 		unpack: { from: bag, to: __("Loose cash available") },
+		transfer_safe: { from: safe, to: transferTarget.value.name },
 	};
 	return routes[action.value] || null;
 });
@@ -1121,6 +1312,8 @@ const formHelp = computed(() => {
 		count_safe:
 			"Count all physical safe cash, including sealed bags. Exclude money in transit to the bank.",
 		review: "Post the difference and close the review. The counts stay as recorded evidence.",
+		transfer_safe:
+			"Record a move that already happened. The amount comes from the bag and the destination from this safe's settings. Nothing is counted or verified.",
 	};
 	return map[action.value] ? __(map[action.value]!) : "";
 });
@@ -1138,14 +1331,60 @@ const confirmVerbs: Record<string, string> = {
 	confirm_bank: "Record the bank receipt",
 	return_bank: "Return the bag to the safe",
 	review: "Post the difference and close the review",
+	transfer_safe: "Record the off-site transfer",
 };
 /** The actions whose Confirm names the amount the cashier just counted. */
 const countedActions = ["prepare", "drop", "receive", "verify", "count_safe"];
 const confirmVerbKey = computed(() => confirmVerbs[action.value] || "Confirm cash action");
 const confirmText = computed(() => {
 	const text = __(confirmVerbKey.value);
-	return countedActions.includes(action.value) ? `${text} · ${money(counted.value)}` : text;
+	if (countedActions.includes(action.value)) return `${text} · ${money(counted.value)}`;
+	if (action.value === "transfer_safe") return `${text} · ${money(selectedBag.value?.amount)}`;
+	return text;
 });
+
+// Whole-bag transfer ---------------------------------------------------------
+/** Where the server will send the bag, as this screen last read it. The write
+    rechecks the destination; this is what the supervisor confirms against. */
+const transferTarget = computed(() => {
+	const account = data.value?.offsite_cash_account || "";
+	return {
+		account,
+		name: data.value?.offsite_cash_account_name || account || __("Off-site cash account"),
+	};
+});
+/** The confirmation belongs to one bag, amount and destination. If a refresh
+    changes any of them, the box empties and has to be ticked again. It is never
+    saved with the draft and never sent: it is not a count and not evidence. */
+const transferIdentity = computed(() =>
+	selectedBag.value
+		? [selectedBag.value.name, selectedBag.value.amount, transferTarget.value.account].join("|")
+		: "",
+);
+const transferAck = ref("");
+const transferConfirmed = computed(
+	() => Boolean(transferIdentity.value) && transferAck.value === transferIdentity.value,
+);
+function confirmTransfer(checked: boolean) {
+	transferAck.value = checked ? transferIdentity.value : "";
+}
+/** The server derives a transfer's amount and destination and refuses any other
+    field, so that payload carries only the bag and the reason. */
+function payloadFor(name: string) {
+	if (name === "transfer_safe")
+		return { pos_profile: profile.value, bag: selectedBag.value?.name, note: note.value };
+	return {
+		pos_profile: profile.value,
+		...(["receive", "drop"].includes(name) ? { opening_shift: opening.value } : {}),
+		bag: selectedBag.value?.name,
+		cash_count: selectedCount.value?.name,
+		count: count.value,
+		seal: seal.value,
+		purpose: purpose.value,
+		note: note.value,
+		reference: reference.value,
+	};
+}
 
 // Data ---------------------------------------------------------------------
 async function load() {
@@ -1462,6 +1701,8 @@ function start(next: string, keep = false) {
 	error.value = "";
 	success.value = "";
 	successNext.value = "";
+	successJournal.value = "";
+	transferAck.value = "";
 	draftHandedOff.value = false;
 	formScope.value = draftScope.value;
 	staleDraft.value = null;
@@ -1485,6 +1726,7 @@ function cancel() {
 	note.value = "";
 	seal.value = "";
 	reference.value = "";
+	transferAck.value = "";
 	draftHandedOff.value = false;
 }
 function returnToQueue() {
@@ -1517,6 +1759,12 @@ function goToClosing() {
 		error.value = __("Close shift could not be opened from here. Use the Close Shift destination.");
 	});
 }
+/** The server's actual destination, by name when it is the one this screen read. */
+function destinationName(account?: string) {
+	if (!account) return transferTarget.value.name;
+	return account === data.value?.offsite_cash_account ? transferTarget.value.name : account;
+}
+const transferredUnverified = (name?: string) => !bags.value.find((b) => b.name === name)?.verified_by;
 function describeResult(name: string, result: any) {
 	const value = money(result?.amount);
 	if (result?.state === "Disputed")
@@ -1565,6 +1813,14 @@ function describeResult(name: string, result: any) {
 			message: __("Difference reviewed and posted."),
 			next: __("The original counts stay as evidence."),
 		},
+		transfer_safe: {
+			message: `${__("Whole bag moved to {0}.").replace("{0}", destinationName(result?.transfer_account))} ${value}`,
+			next: transferredUnverified(result?.bag)
+				? __(
+						"The bag stays marked as never independently verified. Print the handover for the off-site safe.",
+					)
+				: __("Print the handover for the off-site safe."),
+		},
 	};
 	return map[name] || { message: __("Cash action recorded."), next: "" };
 }
@@ -1575,6 +1831,12 @@ async function submit() {
 			pendingWarning.value || __("Resolve the unconfirmed cash action before starting another task.");
 		return;
 	}
+	if (action.value === "transfer_safe" && !transferConfirmed.value) {
+		error.value = __(
+			"Confirm that the whole sealed bag has already physically left before recording the transfer.",
+		);
+		return;
+	}
 	// Handover: the unsent form must be off this device BEFORE the request goes
 	// out, or a reload could offer the same physical transfer a second time.
 	// From here the pending-command layer in `api.ts` owns recovery.
@@ -1583,23 +1845,15 @@ async function submit() {
 	error.value = "";
 	success.value = "";
 	successNext.value = "";
+	successJournal.value = "";
 	const name = action.value;
 	lastAction.value = name;
 	try {
-		const result = await command(name, {
-			pos_profile: profile.value,
-			...(["receive", "drop"].includes(name) ? { opening_shift: opening.value } : {}),
-			bag: selectedBag.value?.name,
-			cash_count: selectedCount.value?.name,
-			count: count.value,
-			seal: seal.value,
-			purpose: purpose.value,
-			note: note.value,
-			reference: reference.value,
-		});
+		const result = await command(name, payloadFor(name));
 		const described = describeResult(name, result);
 		success.value = described.message;
 		successNext.value = described.next;
+		successJournal.value = name === "transfer_safe" ? result?.journal_entry || "" : "";
 		action.value = "";
 		staleDraft.value = null;
 		draftNotice.value = "";
@@ -1627,6 +1881,7 @@ async function retry(entry: { action: string; payload: any }) {
 		const described = describeResult(entry.action, result);
 		success.value = described.message;
 		successNext.value = described.next;
+		successJournal.value = entry.action === "transfer_safe" ? result?.journal_entry || "" : "";
 		action.value = "";
 		dropDraft();
 		await load();
@@ -1729,7 +1984,7 @@ const canStartTask = computed(
 		!staleDraft.value,
 );
 const nextBagStep = computed(() => {
-	const allowed = bagActions.value.filter((option: any) => option.enabled);
+	const allowed = bagActions.value.filter((option: any) => option.enabled && option.band !== false);
 	const option = allowed.find((o: any) => o.primary) || allowed[0];
 	if (!option) return null;
 	return {
@@ -1843,7 +2098,18 @@ onBeforeUnmount(() => {
 	emit("band", null);
 });
 
-onMounted(load);
+async function loadSafes() {
+	if (profile.value) return load();
+	busy.value = true;
+	try {
+		safeOptions.value = await read("safes", {});
+		if (safeOptions.value.length === 1) selectedProfile.value = safeOptions.value[0]!.pos_profile;
+		else if (!safeOptions.value.length) error.value = __("No cash safe is configured for your registers. Ask a manager to configure cash custody.");
+	} catch (e: any) {
+		error.value = e.message || __("The cash custody queue could not be loaded.");
+	} finally { busy.value = false; }
+}
+onMounted(loadSafes);
 </script>
 <style scoped>
 .custody .custody__header {
@@ -1897,6 +2163,28 @@ onMounted(load);
 }
 .custody__direction small {
 	color: var(--pos-text-secondary);
+}
+.custody__destination small {
+	display: block;
+	overflow-wrap: anywhere;
+}
+.custody__confirm {
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: start;
+	gap: 12px;
+	padding: 12px;
+	border: 1px solid var(--pos-border);
+	border-radius: var(--pos-radius-sm);
+	background: var(--pos-surface-muted);
+	cursor: pointer;
+	font-weight: 600;
+}
+.custody__confirm input {
+	width: 24px;
+	height: 24px;
+	min-height: 24px;
+	margin: 2px 0 0;
+	padding: 0;
 }
 @keyframes cash-task-arrive {
 	from {

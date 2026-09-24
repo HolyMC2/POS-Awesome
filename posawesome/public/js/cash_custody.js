@@ -1,3 +1,4 @@
+/* global format_currency, cint */
 /* Shared Desk actions use the same custody API as POS; permissions stay server-side.
    The Desk surface keeps the POS contract: one request ID per instruction, the exact
    same payload on retry, no invented balances and no field the server ignores. */
@@ -11,7 +12,10 @@ const BAG_STATES = {
  'In Transit': {label: 'In transit to the bank', color: 'purple', next: 'Confirm the bank receipt, or return the undeposited bag if the trip failed.'},
  Deposited: {label: 'Deposited at the bank', color: 'green', next: ''},
  Unpacked: {label: 'Returned to loose safe cash', color: 'grey', next: ''},
+ Transferred: {label: 'Moved to the off-site safe', color: 'grey', next: ''},
 };
+// Whole sealed bags may leave the safe for its configured off-site cash ledger only from these states.
+const TRANSFERABLE = ['Available', 'Unverified'];
 const COUNT_STATES = {
  Draft: {label: 'Saved draft', color: 'orange', next: 'Closing the shift records this count as final evidence.'},
  Final: {label: 'Final count', color: 'green', next: ''},
@@ -39,6 +43,11 @@ const ACTIONS = {
   help: 'The trip failed and the cash is back in the safe. The bag must be verified again before it can leave.'},
  review: {title: 'Review difference', primary: 'Record review', note: true, manager: true,
   help: 'Posts the counted correction against the cash over / short account and closes the exception. The original count is never rewritten.'},
+ // The server derives amount and destination; the payload is only {bag, note}. A bot calling
+ // the same command must itself confirm the physical move before sending it.
+ transfer_safe: {title: 'Move whole bag off-site', primary: 'Record the off-site transfer', note: true, manager: true, transfer: true,
+  noteLabel: 'Who moved the bag, from where to where, and how it was confirmed',
+  help: 'Record a move that already happened. The amount comes from the bag and the destination from this safe\'s settings. Nothing is counted or verified.'},
 };
 const STYLE = `.posa-custody{font-size:13px}
 .posa-custody .posa-tiles{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
@@ -66,7 +75,11 @@ const STYLE = `.posa-custody{font-size:13px}
 .posa-custody-dialog .posa-feedback{padding:8px 12px;border-radius:6px;margin-bottom:10px}
 .posa-custody-dialog .posa-feedback.red{background:#fdecec;border:1px solid #e79c9c;color:#7a1c1c}
 .posa-custody-dialog .posa-feedback.orange{background:#fff6e6;border:1px solid #f0c674;color:#5a3c00}
-.posa-custody-dialog .modal-footer .btn{min-height:44px;padding-left:18px;padding-right:18px}`;
+.posa-custody-dialog .modal-footer .btn{min-height:44px;padding-left:18px;padding-right:18px}
+.posa-custody-dialog .posa-route{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center;padding:8px 12px;border-radius:8px;background:var(--bg-light-gray,#f4f6f8);margin-bottom:6px}
+.posa-custody-dialog .posa-route span{display:grid;gap:2px;min-width:0;overflow-wrap:anywhere}
+.posa-custody-dialog .posa-route small{color:var(--text-muted,#6a7681)}
+.posa-custody-dialog .posa-warning,.posa-custody .posa-warning{margin:0 0 10px;padding:8px 12px;border-radius:6px;background:#fff6e6;border:1px solid #f0c674;color:#5a3c00;font-weight:600}`;
 
 function esc(value) {
  return frappe.utils.escape_html(value === undefined || value === null ? '' : String(value));
@@ -147,6 +160,32 @@ function pendingActions(profile) {
  }
  return found;
 }
+/* Unconfirmed actions that name this bag. A transfer whose response was lost leaves the bag
+   in a state with no button for that action, so the form must still offer the replay. */
+function pendingForBag(profile, bag) {
+ return pendingActions(profile).filter((action) => {
+  try {
+   const saved = loadPending(profile, action);
+   return Boolean(saved && saved.body.bag === bag);
+  } catch (e) { return false; }
+ });
+}
+/* Latest read of the safe: destination, availability and this bag's current state.
+   history_limit=0 keeps it small; unresolved bags are always returned in full. */
+async function transferContext(profile) {
+ const response = await frappe.call({method: 'posawesome.posawesome.api.cash_custody.service.context',
+  args: {pos_profile: profile, history_limit: 0}});
+ return (response && response.message) || null;
+}
+function transferRoute(from, to, account) {
+ return '<div class="posa-route"><span><small>' + esc(__('From')) + '</small><b>' + esc(from) + '</b></span>'
+  + '<span aria-hidden="true">→</span><span><small>' + esc(__('To')) + '</small><b>' + esc(to) + '</b>'
+  + (account && account !== to ? '<small>' + esc(account) + '</small>' : '') + '</span></div>';
+}
+function unverifiedWarning(preparer) {
+ return '<p class="posa-warning">' + esc(__('This bag was never independently verified. It leaves with only the count by {0} and stays marked unverified.')
+  .replace('{0}', preparer || __('the preparer'))) + '</p>';
+}
 function serverMessage(error) {
  let raw = error && (error.responseJSON || error);
  let messages = raw && raw._server_messages;
@@ -226,7 +265,9 @@ return {
  ACTIONS: ACTIONS,
  BAG_STATES: BAG_STATES,
  COUNT_STATES: COUNT_STATES,
+ TRANSFERABLE: TRANSFERABLE,
  canManage: canManage,
+ pendingForBag: pendingForBag,
 
  indicator(frm) {
   const map = frm.doc.doctype === 'POS Cash Bag' ? BAG_STATES : COUNT_STATES;
@@ -249,6 +290,10 @@ return {
     + tile(__('Bag seal / ID'), esc(frm.doc.seal))
     + tile(__('State'), esc(phrase(BAG_STATES, frm.doc.state)))
     + '</div>' + nextStep(BAG_STATES, frm.doc.state);
+   // The state alone must never read as a verified hand-over.
+   if (frm.doc.state === 'Transferred' && !frm.doc.verified_by) {
+    html += '<p class="posa-warning">' + esc(__("Never independently verified. This bag left the safe with only the preparer's count; any recount happens off-site, outside POS.")) + '</p>';
+   }
   } else {
    const difference = flt(frm.doc.difference);
    const wording = !difference ? __('No difference') : (difference > 0 ? __('Over') : __('Short'));
@@ -267,7 +312,12 @@ return {
    html += countTable(count, currency);
   }
   html += isBag ? meta([
-   ['Prepared by', frm.doc.prepared_by], ['Verified by', frm.doc.verified_by], ['Received by', frm.doc.received_by],
+   ['Prepared by', frm.doc.prepared_by],
+   ['Verified by', frm.doc.verified_by || (frm.doc.state === 'Transferred' ? __('Never independently verified') : '')],
+   ['Received by', frm.doc.received_by],
+   ['Moved to', formLink('Account', frm.doc.transfer_account), true], ['Moved by', frm.doc.transferred_by],
+   ['Moved on', frm.doc.transferred_on && frappe.datetime && frappe.datetime.str_to_user
+    ? frappe.datetime.str_to_user(frm.doc.transferred_on) : frm.doc.transferred_on],
    ['Register', frm.doc.pos_profile], ['Safe', formLink('POS Cash Safe', frm.doc.safe), true],
   ]) : meta([
    ['Counted by', frm.doc.counted_by], ['Reviewed by', frm.doc.reviewed_by],
@@ -282,6 +332,7 @@ return {
    ['Bank transit journal', formLink('Journal Entry', frm.doc.dispatch_journal), true],
    ['Bank deposit journal', formLink('Journal Entry', frm.doc.deposit_journal), true],
    ['Bank receipt reference', frm.doc.deposit_reference],
+   ['Transfer journal', formLink('Journal Entry', frm.doc.transfer_journal), true],
   ] : [
    ['Cash bag', formLink('POS Cash Bag', frm.doc.bag), true],
    ['Opening shift', formLink('POS Opening Shift', frm.doc.opening_shift), true],
@@ -391,8 +442,48 @@ return {
    return;
   }
   const currency = frm.doc.currency;
+  // A fresh transfer reads the safe first: the supervisor confirms the destination and amount
+  // the server will use, and a bag that already moved is refused before any request exists.
+  // A saved request is replayed as is, whatever the bag's state now says.
+  let transfer = null;
+  if (spec.transfer) {
+   if (frm.doc.doctype !== 'POS Cash Bag') return;
+   if (saved) {
+    transfer = {amount: frm.doc.amount, from: frm.doc.safe, to: frm.doc.transfer_account || __('Off-site cash account'),
+     bag: frm.doc};
+   } else {
+    let ctx = null;
+    try { ctx = await transferContext(profile); } catch (e) { ctx = null; }
+    if (!ctx) {
+     frappe.msgprint({title: __(spec.title), indicator: 'red',
+      message: esc(__('The transfer details could not be loaded. Nothing was sent. Try again when connected.'))});
+     return;
+    }
+    const bag = (ctx.bags || []).find((row) => row.name === frm.doc.name);
+    if (!bag || TRANSFERABLE.indexOf(bag.state) < 0) {
+     frappe.msgprint({title: __(spec.title), indicator: 'orange',
+      message: esc(__('This bag is no longer a sealed bag in the safe. The record was reloaded and nothing was sent.'))});
+     try { await frm.reload_doc(); } catch (e) { /* the message already says to reload */ }
+     return;
+    }
+    if (!ctx.can_transfer) {
+     frappe.msgprint({title: __(spec.title), indicator: 'orange',
+      message: esc(ctx.transfer_blocker || __('The off-site cash account for this safe is not ready.'))
+       + (ctx.can_manage && ctx.safe ? '<br>' + formLink('POS Cash Safe', ctx.safe, __("Open this safe's settings")) : '')});
+     return;
+    }
+    transfer = {amount: bag.amount, from: ctx.safe, to: ctx.offsite_cash_account_name || ctx.offsite_cash_account,
+     account: ctx.offsite_cash_account, bag: bag};
+   }
+  }
   const expected = spec.expected ? flt(spec.expected(frm)) : null;
   const fields = [{fieldtype: 'HTML', fieldname: 'help'}, {fieldtype: 'HTML', fieldname: 'feedback'}];
+  if (transfer) {
+   fields.push({fieldtype: 'HTML', fieldname: 'transfer'});
+   // Required here and in POS; never sent or stored. It is the actor's word, not a count.
+   fields.push({fieldname: 'physical_done', fieldtype: 'Check', default: 0,
+    label: __('I confirm the whole bag, sealed and unopened, has already physically left for {0}.').replace('{0}', transfer.to)});
+  }
   if (spec.seal) {
    fields.push({fieldname: 'seal', fieldtype: 'Data', label: __('Bag seal / ID'), reqd: 1,
     description: __('Use the printed seal. 3–80 letters, digits or hyphens; each package needs a new one.')});
@@ -415,7 +506,7 @@ return {
     description: __('Deposit slip or bank confirmation number.')});
   }
   if (spec.note || spec.noteHint) {
-   fields.push({fieldname: 'note', fieldtype: 'Small Text', label: __('Reason / handover note'), reqd: spec.note ? 1 : 0,
+   fields.push({fieldname: 'note', fieldtype: 'Small Text', label: __(spec.noteLabel || 'Reason / handover note'), reqd: spec.note ? 1 : 0,
     description: spec.note ? __('At least 8 characters.') : __(spec.noteHint)});
   }
 
@@ -485,6 +576,10 @@ return {
    }
   };
   const build = (values) => {
+   if (transfer && !cint(values.physical_done)) {
+    feedback('red', __('Confirm that the whole sealed bag has already physically left before recording the transfer.'));
+    return null;
+   }
    const payload = {pos_profile: profile};
    if (frm.doc.doctype === 'POS Cash Bag') payload.bag = frm.doc.name;
    if (frm.doc.doctype === 'POS Cash Count') payload.cash_count = frm.doc.name;
@@ -581,12 +676,21 @@ return {
   };
 
   field('help').$wrapper.html('<div class="posa-help">' + esc(__(spec.help)) + '</div>');
+  if (transfer) {
+   field('transfer').$wrapper.html('<div class="posa-summary"><span>' + esc(__('Amount leaving the safe')) + '</span><b>'
+    + esc(money(transfer.amount, currency)) + '</b></div>'
+    + transferRoute(__('Safe') + ': ' + (transfer.from || ''), transfer.to, transfer.account)
+    + (transfer.bag.verified_by ? '<p class="posa-help">' + esc(__('Verified by')) + ': ' + esc(transfer.bag.verified_by) + '</p>'
+     : unverifiedWarning(transfer.bag.prepared_by)));
+  }
   if (spec.count) {
    dialog.$wrapper.on('change focusout click', () => setTimeout(totals, 50));
   }
   dialog.show();
   if (pending) {
    restore(pending);
+   // The physical move was confirmed when this request was first sent; the replay is identical.
+   if (field('physical_done')) dialog.set_value('physical_done', 1);
    lock();
    feedback('orange', __('This action has an unconfirmed result from an earlier attempt. Retry checks the same request; it never records the transfer twice.'));
   }

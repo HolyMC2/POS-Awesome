@@ -561,6 +561,10 @@ export default {
 		},
 		quickActions() {
 			const actions = [
+				{ id: "cash-bags", label: __("Cash bags & safe"),
+					subtitle: __("Bags, counts, photos and handovers"),
+					icon: "mdi-bag-personal-outline", tone: "secondary", handler: "openCashBags",
+					disabled: this.manualOffline || !this.networkOnline || !this.serverOnline },
 				{ id: "registers", label: __("Registers & shifts"),
 					subtitle: __("Review open shifts, cash activity and recovery"),
 					icon: "mdi-cash-register", tone: "primary", handler: "openRegisters" },
@@ -1082,6 +1086,10 @@ export default {
 				case "refreshCacheUsage":
 					this.closeMenu();
 					this.$emit("refresh-cache-usage");
+					break;
+				case "openCashBags":
+					this.closeMenu();
+					this.$router.push("/cash-custody");
 					break;
 				case "openRegisters":
 					this.closeMenu();

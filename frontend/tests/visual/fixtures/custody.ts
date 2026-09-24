@@ -4,6 +4,7 @@ import "../../../src/style.css";
 import "../../../src/posapp/styles/theme.css";
 import "../../../src/posapp/styles/register-tokens.css";
 import { createApp, h, reactive } from "vue";
+import photoScript from "../../../../posawesome/public/js/cash_photos.js?raw";
 import spanishCSV from "../../../../posawesome/translations/es.csv?raw";
 import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -47,6 +48,9 @@ const data: any = reactive({
 	float_target: 1000,
 	drawer_limit: 5000,
 	can_manage: scenario === "supervisor",
+	can_transfer: scenario === "supervisor",
+	offsite_cash_account: "Caja fuerte casa - DOCO",
+	offsite_cash_account_name: "Caja fuerte casa",
 	balance: 15330,
 	loose_balance: 1000,
 	in_transit: 12500,
@@ -132,6 +136,7 @@ const calls: any[] = [];
 		calls.push(request);
 		if (scenario === "error")
 			throw Error("Connection unavailable. Reconnect and refresh.");
+		if (request.method.endsWith(".list_photos")) return { message: { photos: [], can_upload: true, max_photos: 6, max_bytes: 5242880 } };
 		if (request.method.endsWith(".availability"))
 			return { message: { enabled: true } };
 		if (request.method.endsWith(".context"))
@@ -157,9 +162,12 @@ const calls: any[] = [];
 				};
 			const bag = data.bags.find((b: any) => b.name === payload.bag);
 			if (bag && action === "receive") bag.state = "Issued";
+			if (bag && action === "transfer_safe") Object.assign(bag, { state: "Transferred", transfer_account: data.offsite_cash_account, transferred_by: supervisor, transferred_on: "2026-09-23 20:30:00", transfer_journal: "QA-JV-1" });
 			return {
 				message: {
 					bag: bag?.name,
+					transfer_account: bag?.transfer_account,
+					journal_entry: bag?.transfer_journal,
 					state: bag?.state,
 					amount: bag?.amount,
 				},
@@ -168,6 +176,7 @@ const calls: any[] = [];
 		return { message: {} };
 	},
 };
+new Function(photoScript)();
 await initPromise;
 memory.manual_offline = false;
 const terminal = getTerminalCredentials();

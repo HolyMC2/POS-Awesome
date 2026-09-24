@@ -4276,3 +4276,88 @@ The shift is closed. Its bag labels could not be loaded. Retry here or print the
 "The shift is closed. Printing failed; allow pop-ups and retry, or copy the bag details onto paper.","El turno está cerrado. Falló la impresión; permite ventanas emergentes y reintenta, o anota los datos de las bolsas en papel."
 Shift closed. Print the bag labels from the closing record.,Turno cerrado. Imprime las etiquetas de bolsas desde el registro del corte.
 Filtered bags,Bolsas filtradas
+Photo evidence,Evidencia fotográfica
+Photograph the cash and the bag seal. Photos are private and do not replace the physical count.,Fotografía el efectivo y el sello de la bolsa. Las fotos son privadas y no sustituyen el conteo físico.
+Take photo,Tomar foto
+Choose photo,Elegir foto
+Discard unsent photo,Descartar foto sin guardar
+Unsent photo,Foto sin guardar
+Saved photos stay linked to this record.,Las fotos guardadas quedan vinculadas a este registro.
+No photos yet.,Todavía no hay fotos.
+Photo limit reached.,Se alcanzó el límite de fotos.
+Photos could not be loaded. Retry when connected.,No se pudieron cargar las fotos. Reintenta con conexión.
+"Choose a JPEG, PNG or WebP photo.","Elige una foto JPEG, PNG o WebP."
+This photo is too large. Choose a photo smaller than 5 MB.,La foto es demasiado grande. Elige una foto de menos de 5 MB.
+Saving photo…,Guardando foto…
+Photo saved.,Foto guardada.
+Photo was not confirmed. Keep this screen open and retry; the cash record is unchanged.,No se confirmó la foto. Mantén esta pantalla abierta y reintenta; el registro de efectivo no cambió.
+A photo is still unsent. Leave without saving it?,Hay una foto sin guardar. ¿Salir sin guardarla?
+Load photo evidence,Cargar evidencia fotográfica
+Photos of cash and bag,Fotos del efectivo y de la bolsa
+Cash bags & safe,Bolsas y caja fuerte
+"Bags, counts, photos and handovers","Bolsas, conteos, fotos y entregas"
+Bag list & labels,Lista de bolsas y etiquetas
+This cash record does not exist or belongs to a register you cannot access.,El registro no existe o pertenece a una caja a la que no tienes acceso.
+Photos can only be kept on a cash bag or a cash count.,Las fotos sólo se guardan en una bolsa o un conteo de efectivo.
+Sign in to see cash photos.,Inicia sesión para ver fotos del efectivo.
+Take or choose a photo first.,Primero toma o elige una foto.
+"This file is not a photo. Take a JPEG, PNG or WebP photo and try again.","El archivo no es una foto. Toma una foto JPEG, PNG o WebP e inténtalo de nuevo."
+The photo is larger than 5 MB. Take it again at a lower resolution.,La foto supera los 5 MB. Tómala de nuevo con menor resolución.
+The photo did not arrive complete. Try again.,La foto no llegó completa. Inténtalo de nuevo.
+"This file is not a readable photo. Take a JPEG, PNG or WebP photo and try again.","El archivo no contiene una foto legible. Toma una foto JPEG, PNG o WebP e inténtalo de nuevo."
+This photo is too large to keep. Take it again at a lower resolution.,La foto es demasiado grande. Tómala de nuevo con menor resolución.
+Your role cannot add photos to cash records.,Tu rol no permite añadir fotos a registros de efectivo.
+"This record already has {0} photos, the most it can keep.","Este registro ya tiene {0} fotos, el máximo permitido."
+Cash photos are added from the cash record and cannot be changed afterwards.,Las fotos se añaden desde el registro de efectivo y no pueden modificarse después.
+Cash photos cannot be copied or attached to another record.,Las fotos de efectivo no pueden copiarse ni adjuntarse a otro registro.
+Cash photos are kept as evidence and cannot be deleted. Add a new photo instead.,Las fotos de efectivo se conservan como evidencia y no pueden borrarse. Añade una foto nueva.
+Preparing photo…,Preparando foto…
+Transferred,Enviada fuera
+Off-site Cash Account,Cuenta de efectivo externa
+Transferred To Account,Cuenta de destino del envío
+Transfer Journal,Asiento del envío
+Transfer journal,Asiento del envío
+Transferred By,Enviada por
+Transferred On,Enviada el
+"Optional. Cash ledger for a separate owner or home safe. Sealed bags can move here whole. Never a bank, drawer or another register's safe. Leave blank to keep whole-bag transfers unavailable.","Opcional. Cuenta de efectivo de una caja fuerte aparte, como la del dueño o la de casa. Las bolsas selladas pueden enviarse aquí completas. Nunca un banco, un cajón ni la caja fuerte de otra caja. Déjala vacía para mantener desactivado el envío de bolsas completas."
+Configure an off-site cash account on this safe before transferring whole bags.,Configura una cuenta de efectivo externa en esta caja fuerte antes de enviar bolsas completas.
+The off-site cash account must be an active Cash ledger account of this company in its currency.,La cuenta de efectivo externa debe ser una cuenta de efectivo activa (no de grupo) de esta empresa y en su moneda.
+"The off-site cash account must differ from this register's drawer, safe, transit, bank and variance accounts.","La cuenta de efectivo externa debe ser distinta de las cuentas de cajón, caja fuerte, tránsito, banco y diferencias de esta caja."
+"The off-site cash account already belongs to a register, safe or payment method. Choose a separate cash ledger.","La cuenta de efectivo externa ya pertenece a una caja, caja fuerte o forma de pago. Elige una cuenta de efectivo aparte."
+Another safe sends whole bags to one of these accounts. Custody accounts cannot also be an off-site destination.,Otra caja fuerte envía bolsas completas a una de estas cuentas. Las cuentas de custodia no pueden ser también un destino externo.
+Whole-bag transfers take the amount and destination from the bag and safe. Remove: {0},El envío de bolsas completas toma el monto y el destino de la bolsa y de la caja fuerte. Quita: {0}
+Only a sealed bag that is available or awaiting verification can leave the safe whole.,Sólo una bolsa sellada disponible o pendiente de verificación puede salir completa de la caja fuerte.
+The safe ledger holds less than this bag. Count the safe and review the difference before transferring.,El saldo contable de la caja fuerte es menor que esta bolsa. Cuenta la caja fuerte y revisa la diferencia antes de enviarla.
+Move whole bag off-site,Enviar bolsa completa fuera
+Moved to the off-site safe,Enviada a la caja fuerte externa
+The sealed bag left the safe whole for the off-site cash account. This bag is closed evidence.,La bolsa sellada salió completa de la caja fuerte hacia la cuenta de efectivo externa. Esta bolsa es evidencia cerrada.
+"Never independently verified. This bag left the safe with only the preparer's count; any recount happens off-site, outside POS.","Nunca verificada de forma independiente. Esta bolsa salió de la caja fuerte sólo con el conteo de quien la preparó; cualquier reconteo se hace fuera, sin POS."
+Never independently verified. This bag left the safe with only the preparer's count.,Nunca verificada de forma independiente. Esta bolsa salió de la caja fuerte sólo con el conteo de quien la preparó.
+Never independently verified,Nunca verificada de forma independiente
+Moved to,Enviada a
+Moved by,Enviada por
+Moved on,Enviada el
+Open the bag record,Abrir el registro de la bolsa
+Whole-bag transfer off-site is unavailable,El envío de bolsas completas fuera no está disponible
+The off-site cash account for this safe is not ready.,La cuenta de efectivo externa de esta caja fuerte no está lista.
+Open this safe's settings,Abrir la configuración de esta caja fuerte
+Amount leaving the safe,Monto que sale de la caja fuerte
+Destination,Destino
+This bag was never independently verified. It leaves with only the count by {0} and stays marked unverified.,Esta bolsa nunca se verificó de forma independiente. Sale sólo con el conteo de {0} y seguirá marcada como no verificada.
+the preparer,quien la preparó
+"I confirm the whole bag, sealed and unopened, has already physically left for {0}.","Confirmo que la bolsa completa, sellada y sin abrir, ya salió físicamente hacia {0}."
+"Search by seal, state, person or destination","Buscar por sello, estado, persona o destino"
+"Who moved the bag, from where to where, and how it was confirmed","Quién llevó la bolsa, de dónde a dónde y cómo se confirmó"
+Move the whole sealed bag off-site,Enviar fuera la bolsa sellada completa
+Record a move that already happened. The amount comes from the bag and the destination from this safe's settings. Nothing is counted or verified.,Registra un envío que ya ocurrió. El monto sale de la bolsa y el destino de la configuración de esta caja fuerte. No se cuenta ni se verifica nada.
+Record the off-site transfer,Registrar el envío fuera
+Off-site cash account,Cuenta de efectivo externa
+Confirm that the whole sealed bag has already physically left before recording the transfer.,Confirma que la bolsa sellada completa ya salió físicamente antes de registrar el envío.
+Whole bag moved to {0}.,Bolsa completa enviada a {0}.
+The bag stays marked as never independently verified. Print the handover for the off-site safe.,La bolsa sigue marcada como nunca verificada de forma independiente. Imprime la entrega para la caja fuerte externa.
+Print the handover for the off-site safe.,Imprime la entrega para la caja fuerte externa.
+The transfer details could not be loaded. Nothing was sent. Try again when connected.,No se pudieron cargar los datos del envío. No se envió nada. Inténtalo de nuevo con conexión.
+This bag is no longer a sealed bag in the safe. The record was reloaded and nothing was sent.,Esta bolsa ya no está sellada en la caja fuerte. Se recargó el registro y no se envió nada.
+Transfer reason,Motivo del envío
+Received at the off-site safe,Recibida en la caja fuerte externa
+No cash safe is configured for your registers. Ask a manager to configure cash custody.,No hay caja fuerte configurada para tus cajas. Pide a un encargado que configure la custodia de efectivo.

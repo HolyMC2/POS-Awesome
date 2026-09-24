@@ -25,6 +25,47 @@ def validate_custody_routing(profile, company, drawer):
         frappe.throw(_('The drawer account must match the cash Mode of Payment account for this company.'))
 
 
+def _managed_cash_accounts(company, safe_name):
+    """Ledgers already inside POS custody or a POS payment route.
+
+    Moving a whole bag into one of these would make cash reappear in another
+    register without its receipt, count and closing trail.
+    """
+    managed = set()
+    for row in frappe.get_all('POS Cash Safe', filters={'name': ['!=', safe_name]},
+            fields=['safe_account', 'transit_account', 'bank_account', 'variance_account']):
+        managed.update(row.values())
+    for row in frappe.get_all('POS Profile', filters={'company': company},
+            fields=['posa_back_office_cash_account', 'posa_default_source_account']):
+        managed.update(row.values())
+    managed.update(frappe.get_all('POS Allowed Source Account', filters={'parenttype': 'POS Profile'}, pluck='account'))
+    managed.update(frappe.get_all('Mode of Payment Account', filters={'company': company}, pluck='default_account'))
+    if frappe.db.table_exists('POS Register'):
+        managed.update(frappe.get_all('POS Register', filters={'company': company}, pluck='drawer_account'))
+    managed.discard(None)
+    managed.discard('')
+    return managed
+
+
+def offsite_problem(safe, account, drawer=None):
+    """Why `account` cannot receive whole bags from `safe`, or None when it can."""
+    if not account:
+        return _('Configure an off-site cash account on this safe before transferring whole bags.')
+    if drawer is None:
+        from posawesome.posawesome.api.cash_movement.validation import resolve_source_cash_account
+        drawer = resolve_source_cash_account({}, frappe.get_doc('POS Profile', safe.pos_profile))
+    row = frappe.db.get_value('Account', account,
+        ['company', 'is_group', 'disabled', 'account_currency', 'account_type'], as_dict=True)
+    if (not row or row.company != safe.company or row.is_group or row.disabled
+            or row.account_currency != safe.currency or row.account_type != 'Cash'):
+        return _('The off-site cash account must be an active Cash ledger account of this company in its currency.')
+    if account in {safe.safe_account, safe.transit_account, safe.bank_account, safe.variance_account, drawer}:
+        return _("The off-site cash account must differ from this register's drawer, safe, transit, bank and variance accounts.")
+    if account in _managed_cash_accounts(safe.company, safe.name):
+        return _('The off-site cash account already belongs to a register, safe or payment method. Choose a separate cash ledger.')
+    return None
+
+
 class CashSafe(Document):
     def validate(self):
         from posawesome.posawesome.api.cash_movement.validation import resolve_source_cash_account
@@ -54,6 +95,13 @@ class CashSafe(Document):
             frappe.throw(_('The variance account must be an expense account.'))
         for field in ['float_target', 'drawer_limit']:
             minor(self.get(field) or 0)
+        # Optional; may change for future transfers. Each moved bag keeps its own account and journal.
+        if self.get('offsite_cash_account'):
+            problem = offsite_problem(self, self.offsite_cash_account, accounts[-1])
+            if problem:
+                frappe.throw(problem)
+        if frappe.db.exists('POS Cash Safe', {'name': ['!=', self.name], 'offsite_cash_account': ['in', accounts]}):
+            frappe.throw(_("Another safe sends whole bags to one of these accounts. Custody accounts cannot also be an off-site destination."))
         previous = self.get_doc_before_save()
         if self.enabled and (not previous or not previous.enabled):
             if frappe.db.exists('POS Opening Shift', {'pos_profile': self.pos_profile, 'status': 'Open', 'docstatus': 1}):
