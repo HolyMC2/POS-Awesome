@@ -7,6 +7,21 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 ## Unreleased
 
+- **Provider-financed credit sales (2026-09-24, not deployed).** On a register
+  with mercado's «Ventas a crédito con proveedor», Cobro offers «Vender a
+  crédito»: provider, covered lines, enganche or credit price, plan. A split
+  provider's share is recorded on its Mode of Payment while the cashier collects
+  only the enganche; otherwise the ticket is the enganche. The sale then opens
+  its paperwork: provider documents (camera/file), till expenses linked to the
+  invoice (POS Cash Movement `sales_invoice`), plan and notes. A «Ventas a
+  crédito» queue and a ledger action reopen it; shop managers lock complete
+  paperwork. Tickets print the provider's «Ticket de enganche» without the
+  credit price; margins never reach the register. Online only. Requires mercado
+  `feat/pos-credit-sales-20260924` and guarded migrations of both apps.
+  Commits `010e9edda`, `584e98f8c`, `bb6d3fd23`. Rollback restores prior
+  assets/translations; the new fields are additive. Evidence:
+  `~/muelle-releases/pos-credit-sales-20260924/`.
+
 - **Cash bag identification and closing labels (2026-09-23, doco-mirror).**
   Desk lists show the physical folio, amount, state, preparation date and people,
   with focused queues and single/batch printing. Successful POS closings offer
