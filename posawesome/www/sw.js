@@ -328,6 +328,9 @@ self.addEventListener("fetch", (event) => {
 	if (url.pathname.startsWith("/private/files/")) return;
 	// Frappe's file download endpoint serves the same private files.
 	if (url.pathname.startsWith("/api/method/frappe.utils.file_manager.download_file")) return;
+	// A presigned object-storage URL is a private file too (an offloaded
+	// attachment), and it expires; caching it would keep the bytes anyway.
+	if (url.searchParams.has("X-Amz-Signature") || url.searchParams.has("Signature")) return;
 
 	const assetDestinations = ["style", "script", "worker", "image"];
 	const isAssetRequest = assetDestinations.includes(event.request.destination);
