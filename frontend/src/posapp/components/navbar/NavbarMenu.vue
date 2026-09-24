@@ -563,7 +563,7 @@ export default {
 			const actions = [
 				{ id: "cash-bags", label: __("Cash bags & safe"),
 					subtitle: __("Bags, counts, photos and handovers"),
-					icon: "mdi-bag-personal-outline", tone: "secondary", handler: "openCashBags",
+					icon: "mdi-cash-multiple", tone: "secondary", handler: "openCashBags",
 					disabled: this.manualOffline || !this.networkOnline || !this.serverOnline },
 				{ id: "registers", label: __("Registers & shifts"),
 					subtitle: __("Review open shifts, cash activity and recovery"),

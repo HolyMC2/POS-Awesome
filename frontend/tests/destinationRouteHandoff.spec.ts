@@ -11,10 +11,11 @@ import DestinationRouteShell from "../src/posapp/components/pos/shell/destinatio
 
 beforeEach(() => { route.path = "/registers"; ui.posOpeningShift = null; emit.mockClear(); });
 
-it("hands a cold-boot review route to the shell without waiting for a selling shift", async () => {
+it.each([["/registers", "registers"], ["/cash-custody", "cashCustody"]])("hands cold-boot %s to the shell without waiting for a selling shift", async (path, destination) => {
+	route.path = path;
 	const wrapper = mount(DestinationRouteShell, { global: { provide: { eventBus: { emit } } } });
 	await flushPromises();
-	expect(emit).toHaveBeenCalledWith("open_destination", "registers");
+	expect(emit).toHaveBeenCalledWith("open_destination", destination);
 	expect(ui.posOpeningShift).toBeNull();
 	wrapper.unmount();
 });

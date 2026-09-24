@@ -105,10 +105,10 @@ describe("useRegisterRail — badges", () => {
 });
 
 describe("useRegisterRail — shift gate (§5.1)", () => {
-	it("keeps register review reachable while transactional destinations wait for a shift", () => {
+	it("keeps register review and safe custody reachable while sales wait for a shift", () => {
 		const { rail } = makeContext({ shiftOpen: false });
 		expect(rail.railDisabled.value).toBe(false);
-		expect(rail.items.value.filter((item) => !item.disabled).map((item) => item.id)).toEqual(["registers"]);
+		expect(rail.items.value.filter((item) => !item.disabled).map((item) => item.id)).toEqual(["registers", "cashCustody"]);
 	});
 
 	it("says why, so the state is not just a grey column", () => {
