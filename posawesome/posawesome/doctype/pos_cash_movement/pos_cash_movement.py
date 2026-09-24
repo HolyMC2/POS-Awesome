@@ -45,6 +45,11 @@ class POSCashMovement(Document):
             cost_center = frappe.db.get_value(
                 "POS Profile", self.pos_profile, "cost_center"
             ) or frappe.db.get_value("Company", self.company, "cost_center")
+            remarks = self.remarks
+            if self.get("sales_invoice"):
+                remarks = _("{0} (Sales Invoice {1})").format(
+                    remarks or _("POS Cash Movement"), self.sales_invoice
+                )
             journal_entry = create_journal_entry(
                 company=self.company,
                 posting_date=self.posting_date,
@@ -52,7 +57,7 @@ class POSCashMovement(Document):
                 amount=self.amount,
                 source_account=self.source_account,
                 target_account=self.target_account,
-                remarks=self.remarks,
+                remarks=remarks,
                 cost_center=cost_center,
             )
             self.db_set("journal_entry", journal_entry, update_modified=False)

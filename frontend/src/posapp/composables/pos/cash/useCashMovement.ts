@@ -62,6 +62,8 @@ export function useCashMovement() {
 		expenseAccount?: string;
 		targetAccount?: string;
 		clientRequestId?: string;
+		/** Sale the expense was paid for (Expense only). */
+		salesInvoice?: string;
 	}) {
 		const validation = validate({
 			movementType: args.movementType,
@@ -89,6 +91,7 @@ export function useCashMovement() {
 				expense_account: args.expenseAccount,
 				target_account: args.targetAccount,
 				client_request_id: args.clientRequestId,
+				...(args.salesInvoice ? { sales_invoice: args.salesInvoice } : {}),
 			};
 
 			if (args.movementType === "Expense") {

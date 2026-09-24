@@ -34,6 +34,10 @@ const cashMovementService = {
 		return api.call(`${baseMethod}.get_shift_cash_movements`, args);
 	},
 
+	getSalesInvoiceExpenses(sales_invoice: string) {
+		return api.call(`${baseMethod}.get_sales_invoice_expenses`, { sales_invoice });
+	},
+
 	getSubmittedExpenses(args: {
 		pos_opening_shift: string;
 		limit_start?: number;

@@ -10,7 +10,11 @@ from .permissions import (
     ensure_owner_or_manager,
     is_manager,
 )
-from .queries import get_shift_movements, get_submitted_expenses as query_submitted_expenses
+from .queries import (
+    get_sales_invoice_expenses as query_sales_invoice_expenses,
+    get_shift_movements,
+    get_submitted_expenses as query_submitted_expenses,
+)
 from .validation import (
     extract_allowed_accounts,
     ensure_no_duplicate_client_request,
@@ -24,6 +28,7 @@ from .validation import (
     validate_amount,
     validate_company_consistency,
     validate_remarks,
+    validate_sales_invoice_link,
 )
 
 
@@ -57,6 +62,7 @@ def _create_cash_movement(payload, movement_type):
     remarks = (data.get("remarks") or "").strip()
     against_name = (data.get("against_name") or "").strip()
     validate_remarks(remarks, profile_doc)
+    sales_invoice = validate_sales_invoice_link(data.get("sales_invoice"), profile_doc, movement_type)
 
     existing = ensure_no_duplicate_client_request(data.get("client_request_id"))
     if existing:
@@ -91,6 +97,7 @@ def _create_cash_movement(payload, movement_type):
             "movement_type": movement_type,
             "amount": amount,
             "against_name": against_name,
+            "sales_invoice": sales_invoice,
             "source_account": source_account,
             "target_account": target_account,
             "expense_account": expense_account,
@@ -184,6 +191,20 @@ def get_shift_cash_movements(
         limit_start=limit_start,
         limit_page_length=limit_page_length,
     )
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_sales_invoice_expenses(sales_invoice):
+    """Expense movements recorded against one sale, newest first.
+
+    Readable by anyone who can read the sale; cancelled rows are included
+    (docstatus 2) so a reversal stays visible next to the sale.
+    """
+    sales_invoice = (sales_invoice or "").strip()
+    if not sales_invoice or not frappe.db.exists("Sales Invoice", sales_invoice):
+        frappe.throw(_("Sales Invoice not found."))
+    frappe.has_permission("Sales Invoice", "read", doc=sales_invoice, throw=True)
+    return query_sales_invoice_expenses(sales_invoice)
 
 
 @frappe.whitelist(methods=["GET", "POST"])
