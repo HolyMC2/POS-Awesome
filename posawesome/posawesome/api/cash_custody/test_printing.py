@@ -236,5 +236,56 @@ class TestEvidenceContent(unittest.TestCase):
         self.assertNotIn("Short", page)
 
 
+class TestBatchEvidence(unittest.TestCase):
+    def test_batch_checks_every_permission_before_rendering(self):
+        from unittest.mock import patch
+        a, b = _bag(name="A"), _bag(name="B")
+        b.denied.add("print")
+        with patch.object(FRAPPE,"get_doc",side_effect=lambda dt,n: {"A":a,"B":b}[n]):
+            with self.assertRaises(_Permission):
+                printing.bag_labels('["A","B"]')
+        self.assertEqual(a.checked,["read","print"])
+        self.assertEqual(b.checked,["read","print"])
+
+    def test_batch_rejects_malformed_or_unbounded_selections(self):
+        for value in ['broken',{},[],["A"]*51,[42]]:
+            with self.subTest(value=value), self.assertRaises(_Validation):
+                printing.bag_labels(value)
+
+    def test_duplicate_selection_prints_only_once_with_denominations(self):
+        with _Site(_bag()):
+            page=printing.bag_labels('["A","A"]',layout="ticket")
+        self.assertEqual(page.count('<article'),1)
+        self.assertIn('width:72mm',page)
+        self.assertIn('Counted notes and coins',page)
+
+    def test_closing_selects_only_its_final_allocation_and_checks_scope(self):
+        from unittest.mock import patch
+        closing=_Doc(name="CLOSE-1",docstatus=1,cash_count="COUNT-1",pos_opening_shift="OPEN-1",company="Grupo Doco",pos_profile="Custody QA")
+        count=_count(name="COUNT-1",closing_shift="CLOSE-1",opening_shift="OPEN-1")
+        bag=_bag(name="BAG-1",opening_shift="OPEN-1")
+        docs={"CLOSE-1":closing,"COUNT-1":count,"BAG-1":bag}
+        def rows(dt,**kwargs):
+            filters=kwargs['filters']
+            if dt=='POS Cash Movement':
+                self.assertEqual(filters['pos_opening_shift'],'OPEN-1')
+                self.assertEqual(filters['docstatus'],1)
+                ids=filters['client_request_id'][1]
+                self.assertEqual(ids,[f'custody:close-COUNT-1-{i}' for i in range(20)])
+                return ['FINAL-MOVE']
+            self.assertEqual(filters['cash_movement'],['in',['FINAL-MOVE']])
+            return ['BAG-1']
+        with patch.object(FRAPPE,'get_doc',side_effect=lambda dt,n:docs[n]), patch.object(FRAPPE,'get_all',rows,create=True):
+            page=printing.closing_labels('CLOSE-1')
+            self.assertIn('CLOSE-1',page)
+            self.assertEqual(closing.checked,['read','print'])
+            self.assertEqual(bag.checked,['read','print'])
+            bag.safe='OTHER-SAFE'
+            with self.assertRaises(_Validation): printing.closing_labels('CLOSE-1')
+            bag.safe=count.safe
+            closing.docstatus=0
+            with self.assertRaises(_Validation): printing.closing_labels('CLOSE-1')
+
+
 if __name__ == "__main__":
     unittest.main()

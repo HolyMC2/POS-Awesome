@@ -2,6 +2,12 @@
 // For license information, please see license.txt
 
 frappe.ui.form.on("POS Closing Shift", {
+ refresh(frm) {
+  if (frm.doc.docstatus !== 1 || !frm.doc.cash_count) return;
+  frm.add_custom_button(__('Print closing bags'), () => {
+   frappe.require('/assets/posawesome/js/cash_custody.js', () => window.posaCashCustody.printClosing(frm.doc.name));
+  });
+ },
 	onload: function (frm) {
 		frm.set_query("pos_profile", function (doc) {
 			return {

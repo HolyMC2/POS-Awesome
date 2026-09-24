@@ -12,7 +12,7 @@ frappe.ui.form.on('POS Cash Bag', {
   frappe.require('/assets/posawesome/js/cash_custody.js', () => {
    const custody = window.posaCashCustody;
    custody.render(frm);
-   frm.add_custom_button(__('Print bag label'), () => custody.print(frm, 'label'));
+   frm.add_custom_button(__('Print bag label'), () => custody.printBags([frm.doc.name]));
    frm.add_custom_button(__('Print count evidence'), () => custody.print(frm, 'slip'));
    frm.add_custom_button(__('Bags in this safe'), () => custody.list(frm, 'POS Cash Bag'), __('Queues'));
    frm.add_custom_button(__('Counts and exceptions'), () => custody.list(frm, 'POS Cash Count'), __('Queues'));

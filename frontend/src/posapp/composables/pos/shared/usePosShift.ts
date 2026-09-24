@@ -487,6 +487,24 @@ export function usePosShift(openDialog?: () => void) {
 						// submitted in the DB). Operator can re-print from
 						// Desk if QZ Tray was down.
 						const closingShiftName = r.message;
+						if (data?.cash_custody?.bags?.length) {
+							// Labels are a read-only continuation. Printing must never retry the close.
+							void import(
+								"../../../components/pos/custody/closingReceipt"
+							)
+								.then(({ showClosingBagReceipt }) =>
+									showClosingBagReceipt(closingShiftName),
+								)
+								.catch(() =>
+									toastStore.show({
+										message: translateMessage(
+											"Shift closed. Print the bag labels from the closing record.",
+										),
+										color: "warning",
+										timeout: 10000,
+									}),
+								);
+						}
 						const printFormat = activeProfile?.posa_closing_shift_print_format;
 						if (printFormat && closingShiftName) {
 							// Dynamic import keeps qzTray out of the

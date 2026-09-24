@@ -125,15 +125,23 @@ export async function command(action: string, payload: any) {
 export async function printEvidence(
 	doctype: string,
 	name: string,
-	layout: "slip" | "label" = "slip",
+	layout: "slip" | "label" | "ticket" = "slip",
 ) {
+	return printDocument("evidence", { doctype, name, layout });
+}
+
+export function printClosingEvidence(closing_shift: string, layout = "ticket") {
+	return printDocument("closing_labels", { closing_shift, layout });
+}
+
+async function printDocument(method: string, args: Record<string, unknown>) {
 	const popup = window.open("", "_blank");
 	if (!popup)
 		throw Error(__("Allow pop-ups to print cash custody evidence."));
 	try {
 		const r = await (window as any).frappe.call({
-			method: "posawesome.posawesome.api.cash_custody.printing.evidence",
-			args: { doctype, name, layout },
+			method: `posawesome.posawesome.api.cash_custody.printing.${method}`,
+			args,
 		});
 		popup.opener = null;
 		popup.document.open();

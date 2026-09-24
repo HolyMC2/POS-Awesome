@@ -31,7 +31,8 @@
    "label": "Safe",
    "fieldtype": "Link",
    "options": "POS Cash Safe",
-   "reqd": 1
+   "reqd": 1,
+   "in_standard_filter": 1
   },
   {
    "fieldname": "company",
@@ -56,30 +57,37 @@
   },
   {
    "fieldname": "seal",
-   "label": "Seal",
+   "label": "Bag seal / ID",
    "fieldtype": "Data",
    "unique": 1,
-   "reqd": 1
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
   },
   {
    "fieldname": "purpose",
    "label": "Purpose",
    "fieldtype": "Select",
    "options": "Float\nTakings",
-   "reqd": 1
+   "reqd": 1,
+   "in_list_view": 0,
+   "in_standard_filter": 1
   },
   {
    "fieldname": "state",
    "label": "State",
    "fieldtype": "Select",
    "options": "Available\nUnverified\nDisputed\nIssued\nIn Transit\nDeposited\nUnpacked",
-   "reqd": 1
+   "reqd": 1,
+   "in_standard_filter": 1
   },
   {
    "fieldname": "amount",
    "label": "Amount",
    "fieldtype": "Currency",
-   "reqd": 1
+   "reqd": 1,
+   "in_list_view": 1,
+   "options": "currency"
   },
   {
    "fieldname": "count_json",
@@ -92,7 +100,8 @@
    "label": "Prepared By",
    "fieldtype": "Link",
    "options": "User",
-   "reqd": 1
+   "reqd": 1,
+   "in_list_view": 0
   },
   {
    "fieldname": "verified_by",
@@ -184,7 +193,10 @@
  ],
  "track_changes": 1,
  "allow_copy": 0,
- "sort_field": "modified",
+ "sort_field": "creation",
  "sort_order": "DESC",
- "engine": "InnoDB"
+ "engine": "InnoDB",
+ "title_field": "seal",
+ "search_fields": "seal,state,purpose,prepared_by",
+ "show_title_field_in_link": 1
 }

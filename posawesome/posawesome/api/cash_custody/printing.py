@@ -1,8 +1,8 @@
 """Printable custody evidence; no printer daemon is needed to complete transfers.
 
-Two layouts share one permission-checked renderer: ``slip`` is the A4/letter
+Three layouts share one permission-checked renderer: ``slip`` is the A4/letter
 handover sheet with the full count, ``label`` is the small tag that travels
-attached to the sealed bag. Every value reaching the page is escaped and
+attached to the sealed bag, and ``ticket`` fits an 80 mm receipt roll. Every value reaching the page is escaped and
 translated to plain language — internal state names, JSON and raw datetimes
 never reach the operator.
 """
@@ -14,7 +14,7 @@ from frappe import _
 from frappe.utils import flt, fmt_money, format_datetime
 
 EVIDENCE_DOCTYPES = {'POS Cash Bag', 'POS Cash Count'}
-LAYOUTS = {'slip', 'label'}
+LAYOUTS = {'slip', 'label', 'ticket'}
 
 STATES = {
     'Unverified': 'Awaiting independent verification',
@@ -190,6 +190,7 @@ def _bag(doc, count, layout):
         ('Verified by', _person(doc.get('verified_by'))),
         ('Received by', _person(doc.get('received_by'))),
         ('Prepared on', format_datetime(doc.creation)),
+        ('Opening shift', doc.get('opening_shift')),
     ])
     if layout == 'label':
         # A physical bag tag, not a miniature handover sheet. Signatures and
@@ -199,6 +200,7 @@ def _bag(doc, count, layout):
             ('Safe', frappe.db.get_value('POS Cash Safe', doc.safe, 'title') or doc.safe),
             ('Prepared by', _person(doc.prepared_by)),
             ('Prepared on', format_datetime(doc.creation)),
+            ('Opening shift', doc.get('opening_shift')),
         ])
         return ('<article class="doc label-card">' + header + total
                 + '<dl class="meta">' + label_meta + '</dl>'
@@ -252,7 +254,7 @@ def evidence(doctype, name, layout='slip'):
         frappe.throw(_('Choose a cash bag or count.'))
     if layout not in LAYOUTS:
         frappe.throw(_('Choose a handover slip or a bag label.'))
-    if layout == 'label' and doctype != 'POS Cash Bag':
+    if layout != 'slip' and doctype != 'POS Cash Bag':
         frappe.throw(_('A bag label is only available for a cash bag.'))
     doc = frappe.get_doc(doctype, name)
     # Reading the record and printing it are separate grants; custody evidence needs both.
@@ -266,6 +268,102 @@ def evidence(doctype, name, layout='slip'):
         count = {}
     title = _esc(doc.get('seal') or doc.name)
     body = _bag(doc, count, layout) if doctype == 'POS Cash Bag' else _count(doc, count)
-    style = STYLE + (LABEL_PAGE if layout == 'label' else '')
+    style = _style(layout)
     return ('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
             '<title>' + title + '</title><style>' + style + '</style></head><body>' + body + '</body></html>')
+
+
+def _style(layout):
+    style = STYLE + '\n.doc + .doc{break-before:page;page-break-before:always}'
+    if layout == 'label':
+        return style + LABEL_PAGE
+    if layout == 'ticket':
+        return style + '''
+        .doc{width:72mm;max-width:100%;box-sizing:border-box;margin:0 auto;padding:2mm;font-size:11px}
+        .doc h1{font-size:16px}.doc .ref{overflow-wrap:anywhere}.doc .total b{font-size:24px}
+        .doc dl.meta,.doc .refs dl{grid-template-columns:24mm minmax(0,1fr);font-size:10px}
+        .doc dd{overflow-wrap:anywhere}.doc th,.doc td{padding:3px}
+        .doc .signatures{margin-top:12px;gap:12px}.doc .sign .line{height:20px}
+        @media print{@page{size:auto;margin:3mm}.doc{margin:0}}
+        '''
+    return style
+
+
+def _checked_bag(name):
+    doc = frappe.get_doc('POS Cash Bag', name)
+    doc.check_permission('read')
+    doc.check_permission('print')
+    return doc
+
+
+def _batch(docs, layout, closing=None):
+    if layout not in LAYOUTS:
+        frappe.throw(_('Choose a handover slip or a bag label.'))
+    body = []
+    for doc in docs:
+        try:
+            count = json.loads(doc.count_json or '{}')
+        except (ValueError, TypeError):
+            count = {}
+        rendered = _bag(doc, count if isinstance(count, dict) else {}, layout)
+        if closing:
+            rendered = rendered.replace('</article>', '<p class="label-record">'
+                + _esc(_('Closing shift')) + ': ' + _esc(closing) + '</p></article>')
+        body.append(rendered)
+    return ('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+        '<title>' + _esc(_('Cash bag labels')) + '</title><style>' + _style(layout)
+        + '</style></head><body>' + ''.join(body) + '</body></html>')
+
+
+@frappe.whitelist()
+def bag_labels(names, layout='ticket'):
+    try:
+        names = json.loads(names) if isinstance(names, str) else names
+    except (ValueError, TypeError):
+        frappe.throw(_('Select between 1 and 50 bags to print.'))
+    if not isinstance(names, list) or not 1 <= len(names) <= 50 or any(not isinstance(n, str) or not n for n in names):
+        frappe.throw(_('Select between 1 and 50 bags to print.'))
+    # Check every grant before returning any evidence; partial batches are misleading.
+    return _batch([_checked_bag(n) for n in dict.fromkeys(names)], layout)
+
+
+def _closing_bags(name):
+    closing = frappe.get_doc('POS Closing Shift', name)
+    closing.check_permission('read')
+    closing.check_permission('print')
+    if closing.docstatus != 1 or not closing.get('cash_count'):
+        frappe.throw(_('This closing has no submitted cash bag handover.'))
+    count = frappe.get_doc('POS Cash Count', closing.cash_count)
+    count.check_permission('read')
+    if count.closing_shift != closing.name or count.opening_shift != closing.pos_opening_shift:
+        frappe.throw(_('The closing count does not match this shift.'))
+    # Only bags made by finalize_drawer belong to this closing. Earlier drops in
+    # the same shift must not be printed again as if they were delivered now.
+    requests = ['custody:close-' + count.name + '-' + str(i) for i in range(20)]
+    movements = frappe.get_all('POS Cash Movement', filters={
+        'pos_opening_shift':closing.pos_opening_shift, 'docstatus':1,
+        'client_request_id':['in',requests]}, pluck='name', limit_page_length=20)
+    names = frappe.get_all('POS Cash Bag', filters={'opening_shift':closing.pos_opening_shift,
+        'cash_movement':['in',movements]}, pluck='name', order_by='creation asc, name asc', limit_page_length=21) if movements else []
+    if len(names) > 20:
+        frappe.throw(_('The closing bag allocation needs review.'))
+    docs = [_checked_bag(n) for n in names]
+    if any(doc.safe != count.safe or doc.company != closing.company or doc.pos_profile != closing.pos_profile for doc in docs):
+        frappe.throw(_('The closing bag allocation needs review.'))
+    return docs
+
+
+@frappe.whitelist()
+def closing_bags(closing_shift):
+    return [dict(name=d.name, seal=d.seal, amount=d.amount, currency=d.currency,
+        purpose=_phrase(PURPOSES,d.purpose), state=_phrase(STATES,d.state),
+        prepared_by=_person(d.prepared_by), prepared_on=format_datetime(d.creation))
+        for d in _closing_bags(closing_shift)]
+
+
+@frappe.whitelist()
+def closing_labels(closing_shift, layout='ticket'):
+    docs = _closing_bags(closing_shift)
+    if not docs:
+        frappe.throw(_('This closing has no bags to print.'))
+    return _batch(docs,layout,closing=closing_shift)

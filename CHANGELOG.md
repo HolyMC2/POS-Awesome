@@ -7,6 +7,16 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 ## Unreleased
 
+- **Cash bag identification and closing labels (2026-09-23, doco-mirror).**
+  Desk lists show the physical folio, amount, state, preparation date and people,
+  with focused queues and single/batch printing. Successful POS closings offer
+  labels for only that closing's saved bags, or their details to copy by hand.
+  Reprinting is read-only and enforces read/print permission on every bag.
+  Formats: 80 mm receipt, 100 × 76 mm label and full handover sheet. Guarded
+  migration updates list metadata; no cash balances or custody states change.
+  Rollback restores source/assets and resynchronizes POS Cash Bag metadata.
+  Evidence: `~/muelle-releases/cash-bag-workspace-20260923/`.
+
 - **Cajas y turnos workspace (2026-09-22, doco-mirror candidate).**
   Adds attention/open/history queues, scoped shift details, cash activity and
   contextual routes to selling, counting, movements and browser recovery.

@@ -332,11 +332,27 @@ return {
   section(frm, 'safe', __('Cash custody'), html);
  },
 
- async print(frm, layout) {
+ printBags(names, closing) {
+  const dialog = new frappe.ui.Dialog({title: __('Print bag labels'), fields: [
+   {fieldname: 'layout', fieldtype: 'Select', label: __('Paper format'), default: 'ticket', reqd: 1,
+    options: [{value: 'ticket', label: __('80 mm receipt')}, {value: 'label', label: __('100 × 76 mm label')},
+     {value: 'slip', label: __('Handover sheet')}]}],
+   primary_action_label: __('Print'), primary_action: (values) => {
+    dialog.hide();
+    this.printRequest(closing ? 'closing_labels' : 'bag_labels',
+     Object.assign({layout: values.layout}, closing ? {closing_shift: closing} : {names: JSON.stringify(names)}),
+     closing || __('Cash bag labels'));
+   }});
+  dialog.show();
+ },
+ printClosing(name) { this.printBags([], name); },
+ print(frm, layout) {
+  return this.printRequest('evidence', {doctype: frm.doc.doctype, name: frm.doc.name, layout: layout || 'slip'}, frm.doc.seal || frm.doc.name);
+ },
+ async printRequest(method, args, title) {
   let html = '';
   try {
-   const response = await frappe.call({method: 'posawesome.posawesome.api.cash_custody.printing.evidence',
-    args: {doctype: frm.doc.doctype, name: frm.doc.name, layout: layout || 'slip'}});
+   const response = await frappe.call({method: 'posawesome.posawesome.api.cash_custody.printing.' + method, args: args});
    html = response && response.message;
   } catch (e) { html = ''; }
   if (!html) {
@@ -345,7 +361,7 @@ return {
    return;
   }
   const frame = document.createElement('iframe');
-  frame.setAttribute('title', frm.doc.seal || frm.doc.name);
+  frame.setAttribute('title', title);
   frame.setAttribute('aria-hidden', 'true');
   frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
   frame.srcdoc = html;

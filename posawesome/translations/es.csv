@@ -4252,3 +4252,27 @@ This device is now connected to,Este dispositivo ya está conectado a
 A supervisor must activate the caja before it can open.,Un supervisor debe activar la caja antes de poder abrirla.
 Caja openings are paused on this site. Open with your POS profile.,Las aperturas por caja están en pausa en este sitio. Abre con tu perfil POS.
 Cash for this profile is kept per caja. Open your caja shift before taking or paying out cash.,El efectivo de este perfil se maneja por caja. Abre tu turno de caja antes de recibir o entregar efectivo.
+Select at least one bag to print.,Selecciona al menos una bolsa para imprimir.
+Cash bag queues,Colas de bolsas de efectivo
+In the safe,En la caja fuerte
+All bags,Todas las bolsas
+Print selected bags,Imprimir bolsas seleccionadas
+Print bag labels,Imprimir etiquetas de bolsas
+Paper format,Formato de papel
+80 mm receipt,Ticket de 80 mm
+100 × 76 mm label,Etiqueta de 100 × 76 mm
+Handover sheet,Hoja de entrega
+Print closing bags,Imprimir bolsas del corte
+Cash bag labels,Etiquetas de bolsas de efectivo
+Select between 1 and 50 bags to print.,Selecciona entre 1 y 50 bolsas para imprimir.
+This closing has no submitted cash bag handover.,Este corte no tiene una entrega de bolsas confirmada.
+The closing count does not match this shift.,El conteo del corte no corresponde a este turno.
+The closing bag allocation needs review.,Es necesario revisar las bolsas asignadas a este corte.
+This closing has no bags to print.,Este corte no tiene bolsas para imprimir.
+Closing bags,Bolsas del corte
+Shift closed. Label the bags.,Turno cerrado. Identifica las bolsas.
+"Print one slip per bag, or copy its folio, amount, date and shift onto paper. Attach it to the matching bag.","Imprime una hoja por bolsa o anota su folio, importe, fecha y turno en un papel. Colócalo en la bolsa correspondiente."
+The shift is closed. Its bag labels could not be loaded. Retry here or print them from the closing record.,El turno está cerrado. No se pudieron cargar sus etiquetas. Reintenta aquí o imprímelas desde el registro del corte.
+"The shift is closed. Printing failed; allow pop-ups and retry, or copy the bag details onto paper.","El turno está cerrado. Falló la impresión; permite ventanas emergentes y reintenta, o anota los datos de las bolsas en papel."
+Shift closed. Print the bag labels from the closing record.,Turno cerrado. Imprime las etiquetas de bolsas desde el registro del corte.
+Filtered bags,Bolsas filtradas
