@@ -67,6 +67,9 @@ export const RAIL_DESTINATION_IDS = [
 	"purchase",
 	"barcode",
 	"giftCards",
+	// Provider-financed credit sales: the paperwork queue behind a sale that
+	// closed with documents still to attach.
+	"creditSales",
 	"dashboard",
 	"registers",
 	"cashCustody",
@@ -91,6 +94,11 @@ export type RailGate =
 	| "quotations"
 	/** `posa_use_gift_cards` on the POS Profile. */
 	| "giftCards"
+	/**
+	 * Provider-financed credit sales: the profile's `mercado_credit_sales` flag
+	 * AND the server's answer that credit sales are available here.
+	 */
+	| "creditSales"
 	/** Supervisor access — the same probe the dashboard route already asks. */
 	| "dashboard";
 
@@ -464,6 +472,20 @@ export const RAIL_DESTINATIONS: readonly RailDestination[] = [
 		backedBy: null,
 		group: "tools",
 		hint: "Balance, issue and top up",
+	},
+	{
+		id: "creditSales",
+		label: "Credit sales",
+		icon: "mdi-hand-coin-outline",
+		badgeSource: null,
+		gate: "creditSales",
+		shortcutActionId: null,
+		// Documents upload to the invoice and the list is the server's
+		// paperwork state; nothing is cached to show offline.
+		offlineAvailability: "blocked",
+		backedBy: null,
+		group: "tools",
+		hint: "Down payments, documents and expenses still to finish",
 	},
 	{
 		id: "dashboard",

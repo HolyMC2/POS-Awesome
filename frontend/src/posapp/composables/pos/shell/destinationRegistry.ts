@@ -396,6 +396,21 @@ export const DESTINATIONS: readonly DestinationDef[] = [
 		surface: "page",
 	},
 	{
+		// Provider-financed credit sales (mercado): the profile flag the mercado
+		// app installs; the surface itself explains a server-side refusal
+		// (module off for the shop, no provider enabled).
+		id: "creditSales",
+		labelKey: "Credit sales",
+		kind: "sheet",
+		path: "/credit-sales",
+		capability: null,
+		profileFlag: "mercado_credit_sales",
+		offline: "online_required",
+		shortcutActionId: null,
+		badgeSource: null,
+		surface: "page",
+	},
+	{
 		id: "dashboard",
 		labelKey: "Dashboard",
 		kind: "sheet",
@@ -535,6 +550,8 @@ export const SHEET_COMPONENTS: Record<string, () => Promise<unknown>> = {
 	// A view (the quotations pattern): list beside story, straight into the
 	// host, under the sheet discipline of one inner scrollport per column.
 	lots: () => import("../../../components/pos/lots/LotsSurface.vue"),
+	// List → detail of credit sales whose paperwork is not complete yet.
+	creditSales: () => import("../../../components/pos/credit/CreditSalesSurface.vue"),
 	purchase: () => import("../../../components/pos/purchase/PurchaseOrders.vue"),
 	barcode: () => import("../../../components/pos/shell/BarcodePrinting.vue"),
 	giftCards: () => import("../../../components/pos/wallet/GiftCardsView.vue"),

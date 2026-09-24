@@ -12,6 +12,11 @@ import { getShiftTerminalContext } from "../../../../offline/shiftTerminal";
 import stockCoordinator from "../../../utils/stockCoordinator";
 import { parseBooleanSetting } from "../../../utils/stock";
 import { debugLog } from "../../../utils/debug";
+import {
+	applyCreditToDoc,
+	injectProviderPayment,
+	type CreditSubmission,
+} from "../credit/creditMath";
 
 declare const frappe: any;
 declare const __: (_str: string, _args?: any[]) => string;
@@ -109,6 +114,16 @@ export interface PaymentSubmissionOptions {
 	diff_payment?: ComputedRef<number>;
 	is_credit_sale?: Ref<boolean>;
 	loyaltyAmount?: Ref<number>;
+	/**
+	 * A provider-financed credit sale declared for this ticket (mercado), or
+	 * null. Its header fields and line flags already sit on the live document;
+	 * its `payment` — the provider's share — is written onto the provider's
+	 * payment row of the SUBMITTED copy only, so the tender helpers never fight
+	 * a pre-filled row while the cashier collects the down payment.
+	 */
+	financedSale?: () => CreditSubmission | null;
+	/** Why a declared credit sale cannot be submitted yet, or null. */
+	financedSaleBlocked?: () => string | null;
 	stores?: {
 		toastStore?: any;
 		syncStore?: any;
@@ -660,6 +675,14 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		const diff = unref(diff_payment) || 0;
 		const writeOffAmount = getEffectiveWriteOffAmount(doc, profile, diff);
 
+		const financedBlocked = !doc.is_return && options.financedSaleBlocked?.();
+		if (financedBlocked) {
+			throw new Error(financedBlocked);
+		}
+		const financedPayment = doc.is_return
+			? 0
+			: formatFloat(options.financedSale?.()?.payment?.amount || 0, prec);
+
 		// 1. Ensure return payments are negative
 		if (doc.is_return) {
 			ensureReturnPaymentsAreNegative();
@@ -709,6 +732,7 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 				0,
 			);
 		}
+		current_total_payments += financedPayment;
 
 		const invoice_total = formatFloat(
 			doc.rounded_total || doc.grand_total,
@@ -773,7 +797,7 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			if (has_cash_payment && cash_amount > 0) {
 				if (
 					!profile.posa_allow_partial_payment &&
-					formatFloat(cash_amount + writeOffAmount, prec) <
+					formatFloat(cash_amount + writeOffAmount + financedPayment, prec) <
 						invoice_total &&
 					invoice_total > 0
 				) {
@@ -982,6 +1006,8 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			onScheduleBackgroundCheck,
 		} = callbacks;
 
+		const financed = doc.is_return ? null : options.financedSale?.() || null;
+
 		// Every «the sale is done, clear the register» exit in this function
 		// goes through this binding, so the detach above rides all of them
 		// without eight call sites having to remember it. Still undefined when
@@ -1125,6 +1151,11 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 				cChange > 0);
 
 		if (isOffline()) {
+			if (financed) {
+				throw new Error(
+					__("A credit sale needs an internet connection. Reconnect and charge again."),
+				);
+			}
 			if (hasGiftCardRedemption) {
 				throw new Error(
 					__("Gift card redemption requires an online connection"),
@@ -1193,6 +1224,19 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		try {
 			await validateStockBeforeOnlineSubmission(doc, profile, type);
 			const submissionDoc = buildSubmissionInvoiceDoc(doc);
+			if (financed) {
+				applyCreditToDoc(submissionDoc, financed);
+				if (
+					financed.payment &&
+					!injectProviderPayment(submissionDoc, financed.payment, prec)
+				) {
+					throw new Error(
+						__("This register has no {0} payment method for the credit sale.", [
+							financed.payment.mode_of_payment,
+						]),
+					);
+				}
+			}
 			// Record-Only table service settles THROUGH the table order: the server
 			// merges the ticket's lines over this payload and routes the result into
 			// the SAME submission ledger. Inert for retail and for a counter
@@ -1538,6 +1582,7 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 				currency: doc.currency,
 				...(pChange > 0 && !doc.is_return ? { change_amount: pChange } : {}),
 				is_return: Boolean(doc.is_return),
+				...(financed ? { credit_sale: true } : {}),
 			});
 
 			const submittedItems = Array.isArray(submittedDocument.items)
@@ -1609,12 +1654,16 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			if (
 				(errorCode === "TRANSPORT_ERROR" || errorCode === "TIMEOUT") &&
 				!hasGiftCardRedemption &&
+				!financed &&
 				formatFloat(unref(redeemedCustomerCredit) || 0, prec) <= 0 &&
 				!(resolveFloorStore()?.isRecordOnly && resolveFloorStore()?.activeOrder)
 			) {
 				// Gift cards and store credit must be verified live (same rule as
 				// the offline branch) and a mesa settle owns its own order state,
 				// so those keep the loud failure; everything else resolves here.
+				// A provider credit sale too: the queue would park the live
+				// document, whose provider row is still at zero, and a retried
+				// press is idempotent through the submission ledger anyway.
 				const recovered = await recoverFromLostAck(doc, data, print, callbacks);
 				if (recovered) {
 					return recovered;

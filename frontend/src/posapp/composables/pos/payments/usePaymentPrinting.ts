@@ -8,6 +8,7 @@ import {
 import { isOffline } from "../../../../offline/index";
 import { resolvePaymentPrintDoctype } from "../../../utils/paymentPrintDoctype";
 import { resolvePosPrintPreference } from "../../../services/printPreference";
+import { resolveCreditTicketFormat } from "../../../utils/creditTicketFormat";
 
 declare const frappe: any;
 
@@ -137,7 +138,12 @@ export function usePaymentPrinting(options: PaymentPrintingOptions) {
 			letterhead: context.letter_head || "",
 			no_letterhead: context.letter_head ? 0 : 1,
 		});
-		const print_format = preference.print_format || "Standard";
+		// A financed sale prints its provider's down-payment ticket; the
+		// preference still chooses the printer, backend and letterhead.
+		const creditFormat = offline
+			? null
+			: await resolveCreditTicketFormat({ doc, doctype, name: docname });
+		const print_format = creditFormat || preference.print_format || "Standard";
 		// Audit r2 A9: honor the resolved preference's no_letterhead as the
 		// switch and its letterhead as the value — the old expression mixed
 		// the two (a letterhead NAME could end up as the no_letterhead url

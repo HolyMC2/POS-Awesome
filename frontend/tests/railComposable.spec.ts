@@ -17,6 +17,7 @@ const ALL_GATES: RailGateMap = {
 	quotations: true,
 	giftCards: true,
 	dashboard: true,
+	creditSales: true,
 };
 
 function makeContext(overrides: Partial<Record<string, unknown>> = {}) {
@@ -150,6 +151,7 @@ describe("useRegisterRail — offline", () => {
 			"cashCustody",
 			"closing",
 			"comandas",
+			"creditSales",
 			"dashboard",
 			"drafts",
 			"giftCards",
@@ -310,6 +312,7 @@ describe("useRegisterRail — groups", () => {
 			"purchase",
 			"barcode",
 			"giftCards",
+			"creditSales",
 			"dashboard",
 			"registers",
 			"cashCustody",

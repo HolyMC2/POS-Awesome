@@ -89,6 +89,8 @@ export type Events = {
 		/** The change the server booked as a Payment Entry; absent when none. */
 		change_amount?: number;
 		is_return?: boolean;
+		/** A provider-financed credit sale: its paperwork is still to attach. */
+		credit_sale?: boolean;
 	};
 	recalculate_return_discount: { defer?: boolean };
 

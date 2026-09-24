@@ -67,11 +67,13 @@
 			:can-delete-draft="canDeleteDraft"
 			:repair-busy="repairBusy"
 			:offline="offline"
+			:credit-sales="creditSales"
 			@print="withRow('print')"
 			@return="withRow('return')"
 			@collect="withRow('collect')"
 			@delete-draft="withRow('deleteDraft')"
 			@repair="withRow('repair')"
+			@credit="withRow('credit')"
 			@draft-action="onDraftAction"
 			@close="selectedName = null"
 		/>
@@ -175,10 +177,13 @@ const props = withDefaults(
 		canDeleteDraft?: boolean;
 		repairBusy?: boolean;
 		offline?: boolean;
+		/** This register works provider-financed credit sales (mercado). */
+		creditSales?: boolean;
 		/** Injectable so a spec never depends on the machine's clock. */
 		today?: string;
 	}>(),
 	{
+		creditSales: false,
 		destinationId: null,
 		profileName: null,
 		loading: false,
@@ -212,6 +217,7 @@ const emit = defineEmits<{
 	collect: [LedgerRowSource];
 	deleteDraft: [LedgerRowSource];
 	repair: [LedgerRowSource];
+	credit: [LedgerRowSource];
 	draftAction: [{ invoice: LedgerRowSource; action: string }];
 }>();
 
@@ -411,7 +417,7 @@ const openRow = ({ row }: { row: LedgerRow; index: number }) => {
 	emit("open", row.raw);
 };
 
-const withRow = (event: "print" | "return" | "collect" | "deleteDraft" | "repair") => {
+const withRow = (event: "print" | "return" | "collect" | "deleteDraft" | "repair" | "credit") => {
 	const raw = selectedRow.value?.raw;
 	if (!raw) return;
 	// One payload, five names. Vue's typed `emit` refuses a UNION of event

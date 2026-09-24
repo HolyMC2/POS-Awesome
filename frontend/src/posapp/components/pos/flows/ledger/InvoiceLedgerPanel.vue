@@ -199,6 +199,17 @@
 					{{ __("Return") }}
 				</button>
 
+				<!-- A provider-financed sale: its documents, expenses and plan. -->
+				<button
+					v-if="creditSaleAction"
+					type="button"
+					class="ledger-panel__action"
+					data-testid="ledger-action-credit"
+					@click="$emit('credit')"
+				>
+					{{ __("Credit sale") }}
+				</button>
+
 				<button
 					v-for="action in draftActions"
 					:key="action"
@@ -289,8 +300,10 @@ const props = withDefaults(
 		/** The row's customer as the CRM knows them — fetched by the surface,
 		 * probe-gated there; `null` while unknown or when the app is absent. */
 		crm?: CrmContext | null;
+		/** This register works provider-financed credit sales (mercado). */
+		creditSales?: boolean;
 	}>(),
-	{ canDeleteDraft: false, repairBusy: false, offline: false, crm: null },
+	{ canDeleteDraft: false, repairBusy: false, offline: false, crm: null, creditSales: false },
 );
 
 const emit = defineEmits<{
@@ -300,6 +313,8 @@ const emit = defineEmits<{
 	draftAction: [string];
 	deleteDraft: [];
 	repair: [];
+	/** Open the credit sale's paperwork (documents, expenses, plan). */
+	credit: [];
 	/** Phone sheet only: the scrim, the ×, or Escape. The surface clears the selection. */
 	close: [];
 }>();
@@ -400,6 +415,14 @@ const crmFact = computed(() => {
 
 /** The Taller order behind the ticket, off the fetched doc — see ledgerRows. */
 const origin = computed(() => describeTicketOrigin(props.detail));
+
+/** A submitted, provider-financed sale on a register that works credit sales. */
+const creditSaleAction = computed(
+	() =>
+		props.creditSales &&
+		Boolean(props.row && !props.row.isDraft && !props.row.isReturn) &&
+		[1, "1", true].includes(props.detail?.is_financed),
+);
 
 const outstanding = computed(() => Number(props.row?.raw?.outstanding_amount || 0));
 const changeAmount = computed(() => Number(props.detail?.change_amount || 0));

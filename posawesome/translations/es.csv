@@ -4361,3 +4361,143 @@ This bag is no longer a sealed bag in the safe. The record was reloaded and noth
 Transfer reason,Motivo del envío
 Received at the off-site safe,Recibida en la caja fuerte externa
 No cash safe is configured for your registers. Ask a manager to configure cash custody.,No hay caja fuerte configurada para tus cajas. Pide a un encargado que configure la custodia de efectivo.
+Credit sale,Venta a crédito
+Sell on credit with a provider,Vender a crédito con un proveedor
+Copy the figures from the provider's approval. The printed ticket shows only the down payment.,Copia los datos de la aprobación del proveedor. El ticket impreso solo muestra el enganche.
+Provider,Proveedor
+Items on credit,Artículos a crédito
+Amounts,Montos
+Credit price,Precio a crédito
+"The price of the items on credit, as charged on this ticket.","El precio de los artículos a crédito, tal como se cobra en este ticket."
+Down payment,Enganche
+The ticket total of the items on credit.,El total del ticket de los artículos a crédito.
+The total price on the provider's contract.,El precio total del contrato del proveedor.
+Financed by {0},Financia {0}
+Recorded on {0}; collect only the down payment.,Se registra en {0}; cobra solo el enganche.
+Term (months),Plazo (meses)
+Monthly payment,Pago mensual
+Paperwork after charging,Papelería después de cobrar
+You will attach: {0}.,Adjuntarás: {0}.
+Not a credit sale,No es venta a crédito
+Apply credit,Aplicar crédito
+"Down payment here, the rest on {0}","Enganche aquí, el resto con {0}"
+The ticket is the down payment,El ticket es el enganche
+Select the items the credit covers.,Selecciona los artículos que cubre el crédito.
+The sale changed. Select the items the credit covers again.,La venta cambió. Vuelve a seleccionar los artículos que cubre el crédito.
+Enter the down payment.,Captura el enganche.
+The down payment must be less than the credit price.,El enganche debe ser menor que el precio a crédito.
+Enter the credit price from the provider's contract.,Captura el precio a crédito del contrato del proveedor.
+The credit price must be more than the down payment.,El precio a crédito debe ser mayor que el enganche.
+Sell on credit,Vender a crédito
+Credit sale · {0},Venta a crédito · {0}
+Financed,Financiado
+Collect the down payment only; {0} is recorded on {1}.,Cobra solo el enganche; {0} se registra en {1}.
+Turn off «Credit Sale?» to record a provider credit.,Desactiva «¿Venta a crédito?» para registrar un crédito de proveedor.
+"Complete the credit sale, or mark it as not a credit sale, before charging.","Completa la venta a crédito, o márcala como que no es venta a crédito, antes de cobrar."
+The provider credit was removed: this sale is now on the customer's account.,Se quitó el crédito del proveedor: esta venta ahora queda a cuenta del cliente.
+A credit sale needs an internet connection. Reconnect and charge again.,Una venta a crédito necesita conexión a internet. Reconecta y vuelve a cobrar.
+This register has no {0} payment method for the credit sale.,Esta caja no tiene la forma de pago {0} para la venta a crédito.
+Complete the credit sale before charging.,Completa la venta a crédito antes de cobrar.
+Credit sales,Ventas a crédito
+"Down payments, documents and expenses still to finish","Enganches, documentos y gastos pendientes"
+Only an expense can be linked to a sale.,Solo un gasto se puede vincular a una venta.
+Link the expense to a submitted sale.,Vincula el gasto a una venta confirmada.
+The linked sale belongs to another company.,La venta vinculada pertenece a otra empresa.
+You cannot access the linked sale.,No tienes acceso a la venta vinculada.
+Sales Invoice not found.,No se encontró la factura de venta.
+{0} (Sales Invoice {1}),{0} (Factura de venta {1})
+Expense paid for this sale (for example a credit sale's chip or activation).,"Gasto pagado por esta venta (por ejemplo, el chip o la activación de una venta a crédito)."
+Paperwork pending,Papelería pendiente
+Paperwork complete,Papelería completa
+Paperwork blocked,Papelería bloqueada
+Documents,Documentos
+All documents ready,Todos los documentos listos
+{0} of {1} ready,{0} de {1} listos
+This provider asks for no documents.,Este proveedor no pide documentos.
+You can see these documents but not change them.,"Puedes ver estos documentos, pero no cambiarlos."
+Upload file,Subir archivo
+Remove this file?,¿Quitar este archivo?
+Keep,Conservar
+Other documents,Otros documentos
+No other documents.,No hay otros documentos.
+Document type,Tipo de documento
+IMEI from serial number,IMEI tomado del número de serie
+Missing,Falta
+Preparing the photo…,Preparando la foto…
+Uploading…,Subiendo…
+This file is over {0} MB. Choose a smaller one.,Este archivo pesa más de {0} MB. Elige uno más pequeño.
+"Choose a photo (JPEG, PNG or WebP) or a PDF.","Elige una foto (JPEG, PNG o WebP) o un PDF."
+This file could not be read. Take the photo again or choose another file.,No se pudo leer este archivo. Vuelve a tomar la foto o elige otro archivo.
+{0} saved,{0} guardado
+The file was not saved. Check the connection and try again.,El archivo no se guardó. Revisa la conexión e inténtalo de nuevo.
+File removed,Archivo quitado
+The file was not removed. Check the connection and try again.,El archivo no se quitó. Revisa la conexión e inténtalo de nuevo.
+Open {0},Abrir {0}
+Expenses,Gastos
+Total {0},Total {0}
+"Cash paid out of this register for this sale, such as a delivery or an activation.","Efectivo que salió de esta caja por esta venta, como un envío o una activación."
+Loading expenses…,Cargando gastos…
+No expenses recorded for this sale.,No hay gastos registrados para esta venta.
+Checking the register…,Revisando la caja…
+Add expense,Agregar gasto
+Up to {0} per expense.,Hasta {0} por gasto.
+Expense account,Cuenta de gasto
+Remarks (required),Observaciones (obligatorio)
+Save expense,Guardar gasto
+Open a shift on this register to pay an expense for this sale.,Abre un turno en esta caja para pagar un gasto de esta venta.
+Cash movements are turned off for this register.,Los movimientos de efectivo están desactivados en esta caja.
+Expenses are turned off for this register.,Los gastos están desactivados en esta caja.
+This register has no expense account set up.,Esta caja no tiene una cuenta de gasto configurada.
+Expenses could not be loaded. Check the connection and try again.,No se pudieron cargar los gastos. Revisa la conexión e inténtalo de nuevo.
+The register's expense settings could not be loaded.,No se pudo cargar la configuración de gastos de la caja.
+Write what the expense was for.,Escribe para qué fue el gasto.
+The expense was not saved. Check the connection and try again.,El gasto no se guardó. Revisa la conexión e inténtalo de nuevo.
+Expense recorded,Gasto registrado
+What was it for?,¿Para qué fue?
+Loading the credit sale…,Cargando la venta a crédito…
+"Attach the documents now, while the customer is still here.","Adjunta los documentos ahora, mientras el cliente sigue aquí."
+Term,Plazo
+{0} months,{0} meses
+Not set,Sin definir
+Qty {0},Cant. {0}
+Serial no. {0},No. de serie {0}
+Plan and notes,Plan y notas
+Notes,Notas
+Save plan,Guardar plan
+No notes.,Sin notas.
+Print down-payment ticket,Imprimir ticket de enganche
+Mark paperwork complete,Marcar papelería completa
+Attach the missing documents before marking the paperwork complete.,Adjunta los documentos que faltan antes de marcar la papelería completa.
+Confirm that every document for this sale is attached and legible.,Confirma que todos los documentos de esta venta están adjuntos y se leen bien.
+Mark complete,Marcar completa
+Sold by {0},Vendió {0}
+This credit sale could not be loaded. Check the connection and try again.,No se pudo cargar esta venta a crédito. Revisa la conexión e inténtalo de nuevo.
+The term is a whole number of months.,El plazo debe ser un número entero de meses.
+The monthly payment cannot be negative.,El pago mensual no puede ser negativo.
+Credit plan saved,Plan de crédito guardado
+The plan was not saved. Check the connection and try again.,El plan no se guardó. Revisa la conexión e inténtalo de nuevo.
+Paperwork marked complete,Papelería marcada como completa
+The paperwork was not marked complete. Check the connection and try again.,La papelería no se marcó como completa. Revisa la conexión e inténtalo de nuevo.
+"Sales financed by a provider, and the paperwork each one still needs.",Ventas financiadas por un proveedor y la papelería que aún le falta a cada una.
+Loading credit sales…,Cargando ventas a crédito…
+Credit sales are not available here,Las ventas a crédito no están disponibles aquí
+Credit sales are turned off for this register.,Las ventas a crédito están desactivadas en esta caja.
+Search by customer or invoice,Buscar por cliente o factura
+Every credit sale on this register has its paperwork.,Todas las ventas a crédito de esta caja tienen su papelería.
+View all credit sales,Ver todas las ventas a crédito
+Documents {0},Documentos {0}
+Showing the latest {0}. Search to find an older sale.,Se muestran las {0} más recientes. Busca para encontrar una venta anterior.
+Back to credit sales,Volver a ventas a crédito
+Choose a credit sale,Elige una venta a crédito
+"See its documents, expenses and plan, and attach what is still missing.","Consulta sus documentos, gastos y plan, y adjunta lo que aún falta."
+No credit sales match “{0}”,Ninguna venta a crédito coincide con «{0}»
+No paperwork pending,No hay papelería pendiente
+No credit sales yet,Aún no hay ventas a crédito
+Credit sales could not be loaded. Check the connection and try again.,No se pudieron cargar las ventas a crédito. Revisa la conexión e inténtalo de nuevo.
+Open a register to see its credit sales.,Abre una caja para ver sus ventas a crédito.
+Credit sales could not be opened. Check the connection and try again.,No se pudieron abrir las ventas a crédito. Revisa la conexión e inténtalo de nuevo.
+Credit sales to show,Ventas a crédito que se muestran
+Customer or invoice,Cliente o factura
+Credit sale recorded,Venta a crédito registrada
+The sale stays in Credit sales → Pending until its documents are complete.,La venta queda en Ventas a crédito → Pendiente hasta que sus documentos estén completos.
+Finish later,Terminar después

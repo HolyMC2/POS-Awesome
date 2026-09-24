@@ -113,6 +113,17 @@
 			:format-amount="formatChangeAmount"
 			@confirm="onChangeDueConfirmed"
 		></ChangeDueDialog>
+		<!-- A provider-financed credit sale was charged: its paperwork
+		     (documents, linked expenses) is finished here, or later from the
+		     Credit sales destination. Shell-mounted for the same reason as
+		     the change dialog above: the payment panel is gone by now. -->
+		<CreditAfterSaleDialog
+			v-if="creditStore.enabled && creditStore.afterSaleInvoice"
+			:model-value="Boolean(creditStore.afterSaleInvoice)"
+			:invoice="creditStore.afterSaleInvoice"
+			@update:model-value="onCreditAfterSaleUpdate"
+			@print="printCreditTicket"
+		/>
 		<!-- The register shell: rail on the left, everything else to its right
 		     (roadmap §17.7, direction E). The rail is the ONLY desktop nav; the
 		     navbar's actions menu survives because it still carries settings,
@@ -353,6 +364,7 @@
 							@change-customer="jumpToCustomer"
 							@split="onMovilSplit"
 							@collect="onMovilCollect"
+							@credit="onMovilCredit"
 							@orden-back="onMovilOrdenBack"
 							@line-edit="onMovilLineEdit"
 							@line-close="onMovilLineClose"
@@ -723,6 +735,7 @@ import PriceCheckDialog from "./PriceCheckDialog.vue";
 import SaldoCatalogPicker from "@saldo/SaldoCatalogPicker.vue";
 import { saldoCaptureBus } from "@saldo/useSaldoCapture";
 import { printInvoiceByName } from "../../../utils/printInvoiceByName";
+import { useCreditSaleStore } from "../../../stores/creditSaleStore";
 import { tick as hapticTick } from "../../../utils/haptics";
 import { usePosShift } from "../../../composables/pos/shared/usePosShift";
 import { useOffers } from "../../../composables/pos/shared/useOffers";
@@ -753,6 +766,7 @@ import {
 import { resolveLotPicker, resolveLotRequirement } from "../items/lot/lotPicker";
 
 const Payments = defineAsyncComponent(() => import("../Payments.vue"));
+const CreditAfterSaleDialog = defineAsyncComponent(() => import("../credit/CreditAfterSaleDialog.vue"));
 const FloorView = defineAsyncComponent(() => import("../../floor/FloorView.vue"));
 const Drafts = defineAsyncComponent(() => import("../flows/Drafts.vue"));
 const InvoiceManagement = defineAsyncComponent(() => import("../flows/InvoiceManagement.vue"));
@@ -1053,6 +1067,58 @@ export default {
 		// change is submitted, and dismissed only by the cashier confirming the
 		// money left the drawer.
 		const { formatCurrency, formatFloat, currencySymbol } = useFormat();
+		// Provider-financed credit sales (mercado). The context loads only for a
+		// profile that carries `mercado_credit_sales`; everything below is inert
+		// on every other register.
+		const creditStore = useCreditSaleStore();
+		watch(
+			() => [posProfile.value?.name, posProfile.value?.mercado_credit_sales],
+			() => {
+				creditStore.loadContext(posProfile.value, { force: true });
+			},
+			{ immediate: true },
+		);
+		let pendingCreditAfterSale = null;
+		const handleCreditInvoiceSubmitted = (payload = {}) => {
+			if (!payload?.credit_sale || !payload.invoice || payload.is_return) return;
+			// The change dialog outranks the paperwork: money in hand first.
+			if (changeDueOpen.value) {
+				pendingCreditAfterSale = payload.invoice;
+				return;
+			}
+			creditStore.openAfterSale(payload.invoice);
+		};
+		const handleCreditClearInvoice = () => {
+			creditStore.reset();
+		};
+		const onCreditAfterSaleUpdate = (open) => {
+			if (!open) {
+				creditStore.closeAfterSale();
+				focusItemSearchField();
+			}
+		};
+		const printCreditTicket = (invoice) => {
+			const name = invoice || creditStore.afterSaleInvoice;
+			if (name) printInvoiceByName(posProfile.value, "Sales Invoice", name);
+		};
+		const onMovilCredit = () => {
+			creditStore.openSheet();
+		};
+		// What the phone's pay screen shows about the credit sale; figures come
+		// from the credit store, the screen only renders them.
+		const movilCredit = computed(() => {
+			if (!creditStore.enabled || invoiceDoc.value?.is_return) return null;
+			const summary = creditStore.summary;
+			const provider = creditStore.activeProvider;
+			return {
+				active: Boolean(summary && provider),
+				valid: Boolean(summary?.valid),
+				providerLabel: provider ? provider.label || provider.name : "",
+				enganche: summary?.enganche ?? 0,
+				financed: summary?.financed ?? 0,
+			};
+		});
+
 		const changeDueOpen = ref(false);
 		const changeDueAmount = ref(0);
 		const changeDueCurrency = ref("");
@@ -1069,6 +1135,11 @@ export default {
 		};
 		const onChangeDueConfirmed = () => {
 			changeDueOpen.value = false;
+			if (pendingCreditAfterSale) {
+				creditStore.openAfterSale(pendingCreditAfterSale);
+				pendingCreditAfterSale = null;
+				return;
+			}
 			// The sale already cleared itself; this only returns the cashier's
 			// hands to where the next one starts.
 			focusItemSearchField();
@@ -1355,6 +1426,7 @@ export default {
 			giftCards: parseBooleanSetting(posProfile.value?.posa_use_gift_cards),
 			quotations: parseBooleanSetting(posProfile.value?.custom_allow_create_quotation),
 			dashboard: supervisorAccess.value,
+			creditSales: creditStore.enabled,
 		}));
 
 		// A hosted flow (Borradores, Facturas, Devolución, Orden, Recarga) or a
@@ -1990,9 +2062,15 @@ export default {
 			windowHeight: responsive.windowHeight.value,
 			formatCurrency,
 			payTitle: __("Cobro"),
-			payTotal: invoiceTotal.value,
+			// A split credit sale's provider share is settled at submit, so the
+			// phone collects the rest of the ticket.
+			payTotal: Math.max(
+				invoiceTotal.value - (invoiceDoc.value?.is_return ? 0 : creditStore.providerPayment || 0),
+				0,
+			),
+			payCredit: movilCredit.value,
 			currency: activeCurrency.value || null,
-			profile: posProfile.value || null,
+			profile: creditStore.tenderProfile(posProfile.value) || null,
 			itemCount: Number(itemsCount.value) || 0,
 			canCollect: movilPayActive.value && Number(itemsCount.value) > 0 && !paymentPending.value,
 			ordenView: movilOrdenView.value,
@@ -2607,6 +2685,8 @@ export default {
 				eventBus.on("open_new_address", handleOpenNewAddress);
 				eventBus.on("open_mpesa_payments", handleOpenMpesaPayments);
 				eventBus.on("show_change_due", handleShowChangeDue);
+				eventBus.on("invoice_submitted", handleCreditInvoiceSubmitted);
+				eventBus.on("clear_invoice", handleCreditClearInvoice);
 				eventBus.on("floor_order_opened", handleFloorOrderOpened);
 				eventBus.on("floor_return_to_salon", handleReturnToSalon);
 				eventBus.on("payment_captured", onPaymentCaptured);
@@ -2660,6 +2740,8 @@ export default {
 				eventBus.off("open_new_address", handleOpenNewAddress);
 				eventBus.off("open_mpesa_payments", handleOpenMpesaPayments);
 				eventBus.off("show_change_due", handleShowChangeDue);
+				eventBus.off("invoice_submitted", handleCreditInvoiceSubmitted);
+				eventBus.off("clear_invoice", handleCreditClearInvoice);
 				eventBus.off("floor_order_opened", handleFloorOrderOpened);
 				eventBus.off("floor_return_to_salon", handleReturnToSalon);
 				eventBus.off("payment_captured", onPaymentCaptured);
@@ -2844,6 +2926,10 @@ export default {
 			movilLineSheet,
 			onMovilSplit,
 			onMovilCollect,
+			onMovilCredit,
+			creditStore,
+			onCreditAfterSaleUpdate,
+			printCreditTicket,
 			onMovilOrdenBack,
 			onMovilScan,
 			onMovilSearch,
@@ -2929,6 +3015,7 @@ export default {
 		Payments,
 		FloorView,
 		ChangeDueDialog,
+		CreditAfterSaleDialog,
 		Drafts,
 		InvoiceManagement,
 

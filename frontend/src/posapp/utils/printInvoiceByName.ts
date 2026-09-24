@@ -15,6 +15,7 @@ import { notifyQzPrintFallback, printDocumentViaQz } from "../services/qzTray";
 import { reportPrintPopupBlocked } from "./printPopupBlocked";
 import { isOffline } from "../../offline/index";
 import { resolvePosPrintPreference } from "../services/printPreference";
+import { resolveCreditTicketFormat } from "./creditTicketFormat";
 
 declare const frappe: any;
 
@@ -31,7 +32,8 @@ export async function printInvoiceByName(
 		letterhead: profile.letter_head || "",
 		no_letterhead: profile.letter_head ? 0 : 1,
 	});
-	const printFormat = preference.print_format || "Standard";
+	const creditFormat = isOffline() ? null : await resolveCreditTicketFormat({ doctype, name });
+	const printFormat = creditFormat || preference.print_format || "Standard";
 	const letterHead = preference.letterhead || 0;
 	// Audit r2 A9: an explicit no_letterhead in the resolved preference must
 	// win — it used to be re-derived from letterhead truthiness alone, so a
