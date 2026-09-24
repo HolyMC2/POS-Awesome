@@ -15,7 +15,7 @@
 	const money = (doc) => window.format_currency(doc.amount, doc.currency);
 	const print = (names) => {
 		if (!names.length) return frappe.msgprint(__("Select at least one bag to print."));
-		frappe.require("/assets/posawesome/js/cash_custody.js?v=20260923-offsite-transfer", () =>
+		frappe.require("/assets/posawesome/js/cash_custody.js", () =>
 			window.posaCashCustody.printBags(names),
 		);
 	};

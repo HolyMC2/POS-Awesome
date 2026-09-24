@@ -3,9 +3,9 @@ frappe.ui.form.on('POS Cash Count', {
  refresh(frm) {
   if (frm.is_new()) return;
   frm.add_custom_button(__('Photo evidence'), () => {
-   frappe.require('/assets/posawesome/js/cash_photos.js?v=20260923-photo-evidence', () => window.posaCashPhotos.open(frm.doctype, frm.doc.name));
+   frappe.require('/assets/posawesome/js/cash_photos.js', () => window.posaCashPhotos.open(frm.doctype, frm.doc.name));
   });
-  frappe.require('/assets/posawesome/js/cash_custody.js?v=20260923-offsite-transfer', () => {
+  frappe.require('/assets/posawesome/js/cash_custody.js', () => {
    const custody = window.posaCashCustody;
    custody.render(frm);
    frm.add_custom_button(__('Print count evidence'), () => custody.print(frm, 'slip'));

@@ -2,7 +2,7 @@
 frappe.ui.form.on('POS Cash Safe', {
  refresh(frm) {
   if (frm.is_new()) return;
-  frappe.require('/assets/posawesome/js/cash_custody.js?v=20260923-offsite-transfer', () => {
+  frappe.require('/assets/posawesome/js/cash_custody.js', () => {
    const custody = window.posaCashCustody;
    custody.renderSafe(frm);
    frm.add_custom_button(__('Bags'), () => custody.list(frm, 'POS Cash Bag'), __('Queues'));

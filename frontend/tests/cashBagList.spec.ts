@@ -14,7 +14,12 @@ beforeEach(() => {
 		user_info: () => null,
 		utils: { escape_html: escape },
 		datetime: { str_to_user: (v: string) => v },
-		require: (_: string, ready: () => void) => ready(),
+		require: (asset: string, ready: () => void) => {
+            // Native Frappe's loader determines the handler from the supplied path;
+            // it adds its own cache version after that. A query breaks extension detection.
+            expect(asset).toBe("/assets/posawesome/js/cash_custody.js");
+            ready();
+        },
 		msgprint: vi.fn(),
 	};
 	printBags = vi.fn();
