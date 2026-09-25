@@ -18,7 +18,14 @@
 		<p v-if="!documents.required.length" class="credit-docs__hint">
 			{{ __("This provider asks for no documents.") }}
 		</p>
-		<p v-else-if="!editable" class="credit-docs__hint">
+		<p v-else-if="editable" class="credit-docs__hint" data-testid="credit-documents-purpose">
+			{{
+				__(
+					"The photos or files this provider asks for. They stay private with this sale; once all are ready, a manager marks the paperwork complete.",
+				)
+			}}
+		</p>
+		<p v-else class="credit-docs__hint">
 			{{ __("You can see these documents but not change them.") }}
 		</p>
 

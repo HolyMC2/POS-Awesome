@@ -4523,3 +4523,15 @@ Updating the ticket…,Actualizando el ticket…
 Enter the total credit price from the provider's approval.,Escribe el precio total a crédito de la aprobación del proveedor.
 Enter the down payment (0 if there is none).,Escribe el enganche (0 si no hay).
 The ticket does not show the credit yet. Apply it again.,El ticket todavía no refleja el crédito. Vuelve a aplicarlo.
+Edit credit,Editar crédito
+The down payment the customer pays at the counter now.,El enganche que el cliente paga ahora en caja.
+{0} pays {1} through {2} when you charge. The printed ticket shows only the down payment.,{0} paga {1} con {2} al cobrar. El ticket impreso muestra solo el enganche.
+{0} settles {1} with the store later. The printed ticket shows only the down payment.,{0} liquida {1} a la tienda después. El ticket impreso muestra solo el enganche.
+Remove credit and restore prices,Quitar crédito y restaurar precios
+The company that approved the customer's credit.,La empresa que aprobó el crédito del cliente.
+Tick what the provider finances. Anything left unticked is charged normally today.,Marca lo que financia el proveedor. Lo que no marques se cobra normal hoy.
+Copy these figures from the provider's approval or contract.,Copia estas cifras de la aprobación o del contrato del proveedor.
+Term and monthly payment are only recorded with the sale; the provider collects them.,El plazo y el pago mensual solo se registran con la venta; el proveedor los cobra.
+Applying the credit only reprices the ticket. Nothing is charged until you collect.,Aplicar el crédito solo ajusta los precios del ticket. No se cobra nada hasta que cobres.
+"The photos or files this provider asks for. They stay private with this sale; once all are ready, a manager marks the paperwork complete.","Las fotos o archivos que pide este proveedor. Quedan privados con esta venta; cuando estén todos, un gerente marca la papelería como completa."
+The sale stays in Credit sales → Pending until its documents are attached and a manager marks the paperwork complete.,La venta queda en Ventas a crédito → Pendiente hasta que se adjunten sus documentos y un gerente marque la papelería como completa.

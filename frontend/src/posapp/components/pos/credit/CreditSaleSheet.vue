@@ -17,6 +17,7 @@
 			<div class="credit-sheet__body">
 				<section class="credit-sheet__section" :aria-label="__('Provider')">
 					<h3 class="credit-sheet__label">{{ __("1. Provider") }}</h3>
+					<p class="credit-sheet__help">{{ __("The company that approved the customer's credit.") }}</p>
 					<div class="credit-sheet__providers" role="radiogroup" :aria-label="__('Provider')">
 						<button
 							v-for="row in providers"
@@ -36,6 +37,9 @@
 
 				<section v-if="lines.length" class="credit-sheet__section" :aria-label="__('Items on credit')">
 					<h3 class="credit-sheet__label">{{ __("2. What goes on credit") }}</h3>
+					<p class="credit-sheet__help">
+						{{ __("Tick what the provider finances. Anything left unticked is charged normally today.") }}
+					</p>
 					<ul class="credit-sheet__lines">
 						<li v-for="line in lines" :key="line.rowId">
 							<label class="credit-sheet__line">
@@ -58,6 +62,7 @@
 
 				<section v-if="provider" class="credit-sheet__section" :aria-label="__('The approval')">
 					<h3 class="credit-sheet__label">{{ __("3. From the provider's approval") }}</h3>
+					<p class="credit-sheet__help">{{ __("Copy these figures from the provider's approval or contract.") }}</p>
 					<div class="credit-sheet__grid">
 						<label class="credit-sheet__field">
 							<span>{{ __("Total credit price") }}</span>
@@ -97,6 +102,9 @@
 							<input v-model="form.planMonthly" type="number" inputmode="decimal" min="0" step="any" data-testid="credit-monthly" />
 						</label>
 					</div>
+					<p class="credit-sheet__help">
+						{{ __("Term and monthly payment are only recorded with the sale; the provider collects them.") }}
+					</p>
 				</section>
 
 				<section
@@ -131,6 +139,9 @@
 				</section>
 			</div>
 
+			<p class="credit-sheet__help credit-sheet__apply-help">
+				{{ __("Applying the credit only reprices the ticket. Nothing is charged until you collect.") }}
+			</p>
 			<footer class="credit-sheet__actions">
 				<button
 					v-if="hasDraft"
@@ -140,7 +151,7 @@
 					:disabled="repricing"
 					@click="removeCredit"
 				>
-					{{ __("Not a credit sale") }}
+					{{ __("Remove credit and restore prices") }}
 				</button>
 				<span class="credit-sheet__spacer" />
 				<button type="button" class="credit-sheet__secondary" data-testid="credit-cancel" @click="close">
@@ -410,6 +421,16 @@ watch(
 	font-weight: 700;
 	color: var(--reg-text-secondary);
 }
+.credit-sheet__help {
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.35;
+	color: var(--reg-text-secondary);
+}
+.credit-sheet__apply-help {
+	padding: var(--reg-space-sm) var(--reg-space-lg) 0;
+	border-top: 1px solid var(--reg-divider-soft);
+}
 .credit-sheet__providers {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -559,8 +580,7 @@ watch(
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--reg-space-sm);
-	padding: var(--reg-space-md) var(--reg-space-lg);
-	border-top: 1px solid var(--reg-divider-soft);
+	padding: var(--reg-space-sm) var(--reg-space-lg) var(--reg-space-md);
 }
 .credit-sheet__spacer {
 	flex: 1 1 auto;

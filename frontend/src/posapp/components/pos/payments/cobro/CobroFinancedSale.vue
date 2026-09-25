@@ -25,7 +25,7 @@
 					:disabled="summary.repricing"
 					@click="$emit('open')"
 				>
-					{{ __("Edit") }}
+					{{ __("Edit credit") }}
 				</button>
 			</header>
 			<p v-if="summary.repricing" class="cobro-credit__note" role="status" data-testid="cobro-financed-repricing">
@@ -39,6 +39,7 @@
 					<small v-if="summary.othersTotal > 0">
 						{{ __("Down payment {0} + other items {1}", [formatMoney(summary.enganche), formatMoney(summary.othersTotal)]) }}
 					</small>
+					<small v-else>{{ __("The down payment the customer pays at the counter now.") }}</small>
 				</div>
 				<dl class="cobro-credit__facts">
 					<div>
@@ -54,7 +55,7 @@
 						<dd data-testid="cobro-financed-amount">{{ formatMoney(summary.financed) }}</dd>
 					</div>
 				</dl>
-				<p class="cobro-credit__note">{{ __("The printed ticket shows only the down payment.") }}</p>
+				<p class="cobro-credit__note" data-testid="cobro-financed-note">{{ financedNote }}</p>
 			</template>
 			<template v-else>
 				<p class="cobro-credit__warning" role="alert" data-testid="cobro-financed-issue">
@@ -71,7 +72,7 @@
 				:disabled="summary.repricing"
 				@click="$emit('remove')"
 			>
-				{{ __("Not a credit sale") }}
+				{{ __("Remove credit and restore prices") }}
 			</button>
 		</template>
 	</section>
@@ -116,6 +117,22 @@ defineEmits<{
 }>();
 
 const __ = (window as any).__ || ((value: string) => value);
+
+/** Who pays the financed part, and when: the part of the sale the counter never collects. */
+const financedNote = computed(() => {
+	const summary = props.summary;
+	if (!summary) return "";
+	return summary.shape === "split"
+		? __("{0} pays {1} through {2} when you charge. The printed ticket shows only the down payment.", [
+				summary.providerLabel,
+				props.formatMoney(summary.financed),
+				summary.modeOfPayment,
+			])
+		: __("{0} settles {1} with the store later. The printed ticket shows only the down payment.", [
+				summary.providerLabel,
+				props.formatMoney(summary.financed),
+			]);
+});
 
 const stateClass = computed(() => ({
 	"cobro-credit--active": Boolean(props.summary && (props.summary.valid || props.summary.repricing)),

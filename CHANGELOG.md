@@ -7,7 +7,7 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 ## Unreleased
 
-- **Provider-financed credit sales (2026-09-24, not deployed).** On a register
+- **Provider-financed credit sales (2026-09-24, doco-mirror).** On a register
   with mercado's «Ventas a crédito con proveedor», Cobro offers «Vender a
   crédito»: provider, the items on credit, and the approval's total credit
   price and down payment (0 allowed), plan optional. The register prices the
@@ -23,7 +23,10 @@ For new entries, describe the changed behavior and include the commit, affected 
   invoice (POS Cash Movement `sales_invoice`), plan and notes. A «Ventas a
   crédito» queue and a ledger action reopen it; shop managers lock complete
   paperwork. Tickets print the provider's «Ticket de enganche» without the
-  credit price; margins never reach the register. Online only. Requires mercado
+  credit price; margins never reach the register. Each step says what it is
+  for: the sheet's sections, the recorded-only plan, what «Aplicar crédito»
+  does, who pays the financed part and when, and «Quitar crédito y restaurar
+  precios». Online only. Requires mercado
   `feat/pos-credit-sales-20260924` and guarded migrations of both apps.
   Commits `010e9edda`, `584e98f8c`, `bb6d3fd23`. Rollback restores prior
   assets/translations; the new fields are additive. Evidence:

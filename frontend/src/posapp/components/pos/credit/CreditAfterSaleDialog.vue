@@ -37,7 +37,7 @@
 
 			<footer class="credit-after__footer">
 				<p v-if="paperworkPending" class="credit-after__note" data-testid="credit-after-pending">
-					{{ __("The sale stays in Credit sales → Pending until its documents are complete.") }}
+					{{ __("The sale stays in Credit sales → Pending until its documents are attached and a manager marks the paperwork complete.") }}
 				</p>
 				<button type="button" class="credit-after__primary" data-testid="credit-after-done" @click="close">
 					{{ paperworkPending ? __("Finish later") : __("Done") }}
