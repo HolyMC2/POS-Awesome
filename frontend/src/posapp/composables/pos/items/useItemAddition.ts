@@ -414,9 +414,10 @@ export function useItemAddition() {
 			// A Sales Order / Quotation line has no field to name its paquete, so
 			// its picks would reach the invoice as bare $0 lines the price guards
 			// refuse at conversion. Say so at the tap instead.
-			const invoiceType = String(
-				typeof context?.invoiceType === "string" ? context.invoiceType : context?.invoiceType?.value ?? "",
-			);
+			// The Invoice bus path carries `invoiceType`; the selector's own add
+			// context does not, so the store answers there.
+			const rawType = context?.invoiceType ?? context?.invoiceStore?.invoiceType;
+			const invoiceType = String(typeof rawType === "string" ? rawType : rawType?.value ?? "");
 			if (invoiceType === "Order" || invoiceType === "Quotation") {
 				toastStore.show({
 					title: __("Combos with choices are sold on a ticket"),

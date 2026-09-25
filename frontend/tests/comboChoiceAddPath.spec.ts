@@ -134,6 +134,10 @@ describe("the add path", () => {
 			expect(usePendingComboChoice().value).toBeNull();
 			expect(ctx.items).toEqual([]);
 		}
+		// The desk selector's context names no invoiceType; its store does.
+		const fromSelector = { ...context(), invoiceStore: { invoiceType: "Order" } } as any;
+		await api.addItem({ ...catalogRow }, fromSelector);
+		expect(usePendingComboChoice().value).toBeNull();
 	});
 
 	it("a return keeps the ordinary path — nothing is re-sold", async () => {
