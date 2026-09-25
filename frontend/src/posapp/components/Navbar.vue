@@ -156,6 +156,15 @@
 				<span>{{ text }}</span>
 			</div>
 			<template v-slot:actions>
+				<v-btn
+					v-if="toastAction"
+					class="pos-themed-button"
+					variant="text"
+					data-test="snackbar-action"
+					@click="toastStore.runAction()"
+				>
+					{{ toastAction.label }}
+				</v-btn>
 				<v-btn class="pos-themed-button" variant="text" @click="visible = false">
 					{{ __("Close") }}
 				</v-btn>
@@ -217,6 +226,7 @@ export default {
 			color,
 			timeout,
 			loading: toastLoading,
+			action: toastAction,
 			history,
 			unreadCount,
 		} = storeToRefs(toastStore);
@@ -237,6 +247,7 @@ export default {
 			color,
 			timeout,
 			toastLoading,
+			toastAction,
 			history,
 			unreadCount,
 			isFrozen,

@@ -19,6 +19,11 @@
  * Pass an explicit `key` to opt into per-notification deduplication (e.g.
  * `key: "invoice-processing::INV-0001"` for a long-running loading indicator).
  *
+ * **Actions**
+ * An optional `action: { label, handler }` renders one extra snackbar button
+ * (e.g. «Pedir alta» on an unknown scan). Clicking it runs the handler and
+ * closes the snackbar.
+ *
  * **Interfaces**
  * - `NotificationData` — caller-facing input shape (all fields optional).
  * - `Notification` — normalized internal shape with required fields and counts.
@@ -40,6 +45,12 @@ export interface NotificationData {
 	count?: number;
 	key?: string;
 	loading?: boolean;
+	action?: NotificationAction | null;
+}
+
+export interface NotificationAction {
+	label: string;
+	handler: () => void;
 }
 
 export interface Notification extends Required<
@@ -47,6 +58,7 @@ export interface Notification extends Required<
 > {
 	summary: string;
 	latestDetail: string;
+	action: NotificationAction | null;
 }
 
 export interface HistoryEntry {
@@ -64,6 +76,7 @@ export const useToastStore = defineStore("toast", () => {
 	const color = ref("success");
 	const timeout = ref(DEFAULT_SNACK_TIMEOUT);
 	const loading = ref(false);
+	const action = ref<NotificationAction | null>(null);
 
 	// Queue State
 	const queue = ref<Notification[]>([]);
@@ -119,12 +132,14 @@ export const useToastStore = defineStore("toast", () => {
 		color.value = next.color;
 		timeout.value = next.timeout;
 		loading.value = next.loading;
+		action.value = next.action;
 		visible.value = true;
 	}
 
 	function onSnackbarClosed() {
 		visible.value = false;
 		currentNotification.value = null;
+		action.value = null;
 		// Small delay to allow animation to finish before showing next
 		setTimeout(() => {
 			processNext();
@@ -141,6 +156,13 @@ export const useToastStore = defineStore("toast", () => {
 		};
 		history.value = [entry, ...history.value].slice(0, 20);
 		unreadCount.value++;
+	}
+
+	function runAction() {
+		const current = action.value;
+		visible.value = false;
+		onSnackbarClosed();
+		if (current) current.handler();
 	}
 
 	function markRead() {
@@ -185,6 +207,12 @@ export const useToastStore = defineStore("toast", () => {
 				? Math.floor(data.count!)
 				: 1;
 		const loading = Boolean(data.loading);
+		const action =
+			data.action &&
+			typeof data.action.handler === "function" &&
+			data.action.label
+				? data.action
+				: null;
 
 		// Key generation logic
 		const baseKey = data.key || `${color}::${summary || title}`;
@@ -198,6 +226,7 @@ export const useToastStore = defineStore("toast", () => {
 			loading,
 			summary,
 			latestDetail: detail,
+			action,
 		};
 	}
 
@@ -227,6 +256,9 @@ export const useToastStore = defineStore("toast", () => {
 		if (incoming.latestDetail) {
 			target.latestDetail = incoming.latestDetail;
 		}
+		if (incoming.action) {
+			target.action = incoming.action;
+		}
 	}
 
 	function formatNotificationMessage(notification: Notification) {
@@ -251,6 +283,7 @@ export const useToastStore = defineStore("toast", () => {
 			color.value = currentNotification.value.color;
 			timeout.value = currentNotification.value.timeout;
 			loading.value = currentNotification.value.loading;
+			action.value = currentNotification.value.action;
 		}
 	}
 
@@ -260,10 +293,12 @@ export const useToastStore = defineStore("toast", () => {
 		color,
 		timeout,
 		loading,
+		action,
 		history,
 		unreadCount,
 		show,
 		onSnackbarClosed,
+		runAction,
 		markRead,
 		clearHistory,
 	};
