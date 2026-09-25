@@ -7,6 +7,27 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 ## Unreleased
 
+- **Paquetes: combos with choices (2026-09-25, branch
+  `feat/pos-combos-cafeteria-20260925`, not deployed).** A `POS Combo` can now
+  be of type «Choice Groups»: the paquete's own item (non-stock, not a
+  Product Bundle) plus Groups (min/max picks, optionally «Any Item From» an
+  Item Group) and Options (item, qty per pick, extra charge, default). Adding
+  the paquete's item anywhere on the register (desk click, scan, phone tap,
+  drawer, up-sell strip) opens a picker; the sale lands as the paquete line at
+  its Item Price plus one pinned line per pick (0 or the extra charge),
+  linked by `posa_combo_parent`/`posa_combo_group`. The cart, payment summary
+  and phone draw one row per paquete (picks folded in, amounts included);
+  the row re-opens the picker to change picks. Server: `combo_choice.py`
+  answers posawesome's own `posa_price_guard_exemptions` hook, vouching only
+  for picks that match their POS Combo (returns are matched against the
+  sale), and both submit paths refuse a wrong paquete with its own reason.
+  Table orders carry the paquete (`POS Table Order Item` combo fields) through
+  settle. Also adds `posa_combo_components`/`posa_combo_broken` to Sales
+  Invoice Item, where bundle combos lost their components on every draft
+  save. **Migration required** (new doctypes, POS Combo fields, six Custom
+  Fields, POS Table Order Item fields); rollback restores source and leaves
+  the new empty columns. Guide: docs/PAQUETES.md.
+
 - **Scans read fresh stock and prices (2026-09-25, doco-mirror).**
   `get_items` no longer serves or stores a cached page for a `search_value`
   lookup. Typed register searches already asked with the cache off; barcode

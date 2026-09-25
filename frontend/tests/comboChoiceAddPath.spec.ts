@@ -126,6 +126,16 @@ describe("the add path", () => {
 		expect(ctx.items).toEqual([]);
 	});
 
+	it("refuses a paquete on a Sales Order or Quotation — its picks could not name it there", async () => {
+		const api = useItemAddition();
+		for (const invoiceType of ["Order", "Quotation"]) {
+			const ctx = { ...context(), invoiceType };
+			await api.addItem({ ...catalogRow }, ctx);
+			expect(usePendingComboChoice().value).toBeNull();
+			expect(ctx.items).toEqual([]);
+		}
+	});
+
 	it("a return keeps the ordinary path — nothing is re-sold", async () => {
 		const api = useItemAddition();
 		const ctx = { ...context(), isReturnInvoice: true };

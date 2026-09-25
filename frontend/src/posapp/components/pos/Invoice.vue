@@ -1581,10 +1581,13 @@ export default {
 
 		// A paquete's picks follow its quantity, whatever changed it — the
 		// phone's line sheet, a keyboard step, a resumed draft. Idempotent:
-		// a cart already in step changes nothing, so this cannot loop.
+		// a cart already in step changes nothing, so this cannot loop. Not on
+		// a return: there the cashier chose each line's quantity from the
+		// sale (one of two conchas), and that choice is the return.
 		this.$watch(
 			() => this.invoiceStore.metadata?.changeVersion,
 			() => {
+				if (this.isReturnInvoice) return;
 				syncChoiceChildQty(this.invoiceStore.items, (rowId, mutate) =>
 					this.invoiceStore.updateItemWithTotals(rowId, mutate),
 				);

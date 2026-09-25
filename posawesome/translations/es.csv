@@ -4663,3 +4663,5 @@ Line {0} ({1}): its price must be the paquete's extra charge ({2}).,Línea {0} (
 Line {0} ({1}) was not part of a paquete on the original sale.,La línea {0} ({1}) no formaba parte de un paquete en la venta original.
 Line {0} ({1}) must be returned at the price it was sold for ({2}).,La línea {0} ({1}) debe devolverse al precio con que se vendió ({2}).
 Line {0} ({1}) returns more than the paquete sold.,La línea {0} ({1}) devuelve más de lo que vendió el paquete.
+Combos with choices are sold on a ticket,Los combos con opciones se venden en ticket
+Switch this sale to Invoice to add {0}.,Cambia esta venta a Factura para agregar {0}.

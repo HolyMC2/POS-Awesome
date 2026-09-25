@@ -411,6 +411,20 @@ export function useItemAddition() {
 		// dismissed picker abandons the add like a cancelled recarga capture.
 		const paquete = context?.isReturnInvoice ? null : choiceComboFor(item?.item_code);
 		if (paquete) {
+			// A Sales Order / Quotation line has no field to name its paquete, so
+			// its picks would reach the invoice as bare $0 lines the price guards
+			// refuse at conversion. Say so at the tap instead.
+			const invoiceType = String(
+				typeof context?.invoiceType === "string" ? context.invoiceType : context?.invoiceType?.value ?? "",
+			);
+			if (invoiceType === "Order" || invoiceType === "Quotation") {
+				toastStore.show({
+					title: __("Combos with choices are sold on a ticket"),
+					detail: __("Switch this sale to Invoice to add {0}.", [paquete.item_name]),
+					color: "warning",
+				});
+				return;
+			}
 			const choice = await requestComboChoice(paquete, { qty: Math.abs(Number(item?.qty)) || 1 });
 			if (!choice) return;
 			const header = addChoiceCombo(item, paquete, choice, context, choiceCartDeps(context));

@@ -113,7 +113,7 @@
 							<ComboCartLine
 								:line="comboLineFor(item)"
 								:format-currency="memoizedFormatCurrency"
-								:editable="isPaqueteLine(item) && !!editComboChoice"
+								:editable="isPaqueteLine(item) && !!editComboChoice && !isReturnInvoice"
 								@remove="removeItem(item)"
 								@edit="editComboChoice?.(item)"
 							/>
