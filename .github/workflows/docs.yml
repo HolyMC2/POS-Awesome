@@ -5,14 +5,19 @@ permissions:
 
 on:
   push:
-    branches: ["**"]
+    branches: [dev, staging, prod]
   pull_request:
-    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   docs-check:
     name: TypeDoc check
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -44,6 +49,7 @@ jobs:
   docs-generate:
     name: Generate & commit API reference
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     # Only commit generated docs from protected integration branches.
     if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
     needs: docs-check

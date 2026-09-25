@@ -2,9 +2,13 @@ name: Frontend CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [dev, staging, prod]
   pull_request:
-    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -13,6 +17,7 @@ jobs:
   static:
     name: Type-check, lint, unit
     runs-on: ubuntu-22.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
@@ -58,6 +63,7 @@ jobs:
     name: Playwright smoke (${{ matrix.path }})
     needs: static
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

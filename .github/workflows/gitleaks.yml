@@ -2,11 +2,15 @@ name: gitleaks
 
 on:
   push:
-    branches: [dev, prod, develop, main, master]
+    branches: [dev, staging, prod]
   pull_request:
-    branches: [dev, prod, develop, main, master]
+  workflow_dispatch:
   schedule:
     - cron: "30 7 * * 0"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

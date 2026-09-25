@@ -2,12 +2,16 @@ name: CodeQL
 
 on:
   push:
-    branches: [dev, prod, develop, main, master]
+    branches: [dev, staging, prod]
   pull_request:
-    branches: [dev, prod, develop, main, master]
+  workflow_dispatch:
   schedule:
     # Weekly Sunday 06:30 UTC — catches advisories landing between PRs.
     - cron: "30 6 * * 0"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -18,7 +22,7 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
