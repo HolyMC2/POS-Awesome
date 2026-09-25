@@ -177,3 +177,24 @@ from IndexedDB** (`loadCachedItems` already exists). But it touches the
 boot/display/client-search hot path for a win confined to the idle tenant, and
 gzip already covers the wire cost — so treat it as **deliberate tech-debt: do
 it when that area is next touched, not as a standalone perf sprint.**
+
+## 2026-09-25 update — searches, scans and the search limit
+
+Measured on doco-mirror (restored from a prod backup the same night; prod ran
+about 3× slower than the lab in the June profile above):
+
+- Typed searches are ranked best-first (`item_processing/relevance.py`), so a
+  smaller `posa_search_limit` no longer hides good matches. The register asks
+  for `posa_search_limit` rows on every search (1000 on Doco Ventas): a broad
+  word such as «funda» cost 532 ms / 1.2 MB JSON at 1000 against 156 ms /
+  243 KB at 200; specific searches («ip 13», «cargador») are unchanged.
+  Lowering the setting is a profile decision, not a code change.
+- The register's typed searches already request with the server cache off
+  (`loadItemsRequest.ts` sends `posa_use_server_cache: 0`), but barcode scans
+  sent the saved profile and were cached for the profile's duration (30 min on
+  Doco Ventas), so a scanned item's stock and price could be that old.
+  `get_items` now never caches a `search_value` lookup; an uncached scan
+  measured ~50 ms. Catalogue pages stay cached and pre-warmed.
+- The raw-SQL deep fix above stays deferred: the 2026-07-15 update already
+  showed prod compute at ~50–140 ms; re-read `perf:api.items.get_items`
+  telemetry before reopening it.

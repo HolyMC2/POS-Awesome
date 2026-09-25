@@ -260,3 +260,46 @@ class TestGetItemsCacheKeyParity(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class TestGetItemsSearchBypassesCache(unittest.TestCase):
+    """Catalogue pages stay cached; search_value lookups never are. Scans send
+    the saved profile (cache on), so without this their stock and prices could
+    be as old as the cache (30 min on Doco Ventas)."""
+
+    @classmethod
+    def setUpClass(cls):
+        _install_stubs()
+        cls.module = _load_module()
+
+    def _call(self, **kwargs):
+        store, reads, executed = {}, [], []
+
+        class Cache:
+            def get_value(self, key):
+                reads.append(key)
+                return store.get(key)
+
+            def set_value(self, key, value, expires_in_sec=None):
+                store[key] = value
+
+        profile = {"name": "P", "posa_use_server_cache": 1, "posa_server_cache_duration": 30}
+        self.module.frappe.cache = lambda: Cache()
+        self.module._ensure_pos_profile = lambda value: (profile, json.dumps(profile))
+        self.module._execute_item_search = lambda *args, **kw: executed.append(args) or [{"item_code": "X"}]
+        result = self.module.get_items(profile, **kwargs)
+        return result, reads, store, executed
+
+    def test_catalogue_page_uses_the_cache(self):
+        result, reads, store, executed = self._call(limit=50)
+        self.assertEqual(len(reads), 1)
+        self.assertEqual(len(store), 1)
+        self.assertEqual(result, [{"item_code": "X"}])
+
+    def test_typed_search_and_scan_skip_the_cache(self):
+        for value in ("ip 13", "7501234567890"):
+            result, reads, store, executed = self._call(search_value=value, limit=200)
+            self.assertEqual((reads, store), ([], {}), value)
+            self.assertEqual(len(executed), 1, value)
+            self.assertEqual(result, [{"item_code": "X"}])

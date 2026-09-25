@@ -965,7 +965,12 @@ def get_items(
     # Never cache delta polls: every 60s timer poll passes a fresh
     # modified_after watermark, so each poll would write a 5-min redis entry
     # under a key that can never be read again — pure churn (audit finding).
-    if profile_ctx.use_price_list_cache and not modified_after:
+    # Never cache a search_value lookup either. The register's typed searches
+    # already ask with the cache off, but barcode scans send the saved
+    # profile, so a scanned item's stock («quedan 1») and prices could be as
+    # old as the cache duration (30 min on Doco Ventas); a scan answers in
+    # ~50 ms uncached. Catalogue pages (no search) stay cached and pre-warmed.
+    if profile_ctx.use_price_list_cache and not modified_after and not cstr(search_value).strip():
         cache_key = _build_get_items_cache_key(
             profile_ctx.profile_name,
             profile_ctx.warehouse,
