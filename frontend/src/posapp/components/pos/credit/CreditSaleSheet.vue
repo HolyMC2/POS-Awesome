@@ -8,35 +8,34 @@
 		<v-card class="credit-sheet" data-testid="credit-sale-sheet">
 			<header class="credit-sheet__head">
 				<p class="credit-sheet__eyebrow">{{ __("Credit sale") }}</p>
-				<h2 class="credit-sheet__title">{{ __("Sell on credit with a provider") }}</h2>
+				<h2 class="credit-sheet__title">{{ __("Sell on credit") }}</h2>
 				<p class="credit-sheet__lead">
-					{{ __("Copy the figures from the provider's approval. The printed ticket shows only the down payment.") }}
+					{{ __("Copy the provider's approval. The ticket adjusts to it and prints only the down payment.") }}
 				</p>
 			</header>
 
 			<div class="credit-sheet__body">
 				<section class="credit-sheet__section" :aria-label="__('Provider')">
-					<h3 class="credit-sheet__label">{{ __("Provider") }}</h3>
+					<h3 class="credit-sheet__label">{{ __("1. Provider") }}</h3>
 					<div class="credit-sheet__providers" role="radiogroup" :aria-label="__('Provider')">
 						<button
-							v-for="provider in providers"
-							:key="provider.name"
+							v-for="row in providers"
+							:key="row.name"
 							type="button"
 							role="radio"
 							class="credit-sheet__provider"
-							:class="{ 'credit-sheet__provider--on': form.provider === provider.name }"
-							:aria-checked="form.provider === provider.name"
-							:data-testid="`credit-provider-${provider.name}`"
-							@click="selectProvider(provider.name)"
+							:class="{ 'credit-sheet__provider--on': form.provider === row.name }"
+							:aria-checked="form.provider === row.name"
+							:data-testid="`credit-provider-${row.name}`"
+							@click="selectProvider(row.name)"
 						>
-							<strong>{{ provider.label || provider.name }}</strong>
-							<small>{{ shapeHint(provider) }}</small>
+							<strong>{{ row.label || row.name }}</strong>
 						</button>
 					</div>
 				</section>
 
 				<section v-if="lines.length" class="credit-sheet__section" :aria-label="__('Items on credit')">
-					<h3 class="credit-sheet__label">{{ __("Items on credit") }}</h3>
+					<h3 class="credit-sheet__label">{{ __("2. What goes on credit") }}</h3>
 					<ul class="credit-sheet__lines">
 						<li v-for="line in lines" :key="line.rowId">
 							<label class="credit-sheet__line">
@@ -50,74 +49,80 @@
 									{{ line.itemName }}
 									<small v-if="line.serialNo">{{ line.serialNo.split("\n").join(", ") }}</small>
 								</span>
-								<span class="credit-sheet__line-amount">{{ money(line.amount) }}</span>
+								<span class="credit-sheet__line-amount">{{ money(ownAmount(line)) }}</span>
 							</label>
 						</li>
 					</ul>
+					<p v-if="issueFor('lines')" class="credit-sheet__error" role="alert">{{ issueFor("lines") }}</p>
 				</section>
 
-				<section v-if="provider" class="credit-sheet__section" :aria-label="__('Amounts')">
-					<h3 class="credit-sheet__label">{{ __("Amounts") }}</h3>
+				<section v-if="provider" class="credit-sheet__section" :aria-label="__('The approval')">
+					<h3 class="credit-sheet__label">{{ __("3. From the provider's approval") }}</h3>
 					<div class="credit-sheet__grid">
-						<template v-if="provider.shape === 'split'">
-							<div class="credit-sheet__fact">
-								<span>{{ __("Credit price") }}</span>
-								<strong data-testid="credit-price-fixed">{{ money(summary.creditPrice) }}</strong>
-								<small>{{ __("The price of the items on credit, as charged on this ticket.") }}</small>
-							</div>
-							<label class="credit-sheet__field">
-								<span>{{ __("Down payment") }}</span>
-								<input
-									v-model="form.enganche"
-									type="number"
-									inputmode="decimal"
-									min="0"
-									step="any"
-									data-testid="credit-enganche-input"
-									:aria-invalid="issueFor('enganche') ? 'true' : 'false'"
-								/>
-								<small v-if="issueFor('enganche')" class="credit-sheet__error">{{ issueFor("enganche") }}</small>
-							</label>
-						</template>
-						<template v-else>
-							<div class="credit-sheet__fact">
-								<span>{{ __("Down payment") }}</span>
-								<strong data-testid="credit-enganche-fixed">{{ money(summary.enganche) }}</strong>
-								<small>{{ __("The ticket total of the items on credit.") }}</small>
-								<small v-if="issueFor('enganche')" class="credit-sheet__error">{{ issueFor("enganche") }}</small>
-							</div>
-							<label class="credit-sheet__field">
-								<span>{{ __("Credit price") }}</span>
-								<input
-									v-model="form.creditPrice"
-									type="number"
-									inputmode="decimal"
-									min="0"
-									step="any"
-									data-testid="credit-price-input"
-									:aria-invalid="issueFor('price') ? 'true' : 'false'"
-								/>
-								<small v-if="issueFor('price')" class="credit-sheet__error">{{ issueFor("price") }}</small>
-								<small v-else>{{ __("The total price on the provider's contract.") }}</small>
-							</label>
-						</template>
-						<div class="credit-sheet__fact credit-sheet__fact--financed">
-							<span>{{ __("Financed by {0}", [provider.label || provider.name]) }}</span>
-							<strong data-testid="credit-financed">{{ money(summary.financed) }}</strong>
-							<small v-if="provider.shape === 'split' && provider.mode_of_payment">
-								{{ __("Recorded on {0}; collect only the down payment.", [provider.mode_of_payment]) }}
-							</small>
-						</div>
 						<label class="credit-sheet__field">
-							<span>{{ __("Term (months)") }}</span>
+							<span>{{ __("Total credit price") }}</span>
+							<input
+								v-model="form.creditPrice"
+								type="number"
+								inputmode="decimal"
+								min="0"
+								step="any"
+								data-testid="credit-price-input"
+								:aria-invalid="issueFor('price') ? 'true' : 'false'"
+								@input="priceEdited = true"
+							/>
+							<small v-if="issueFor('price')" class="credit-sheet__error">{{ issueFor("price") }}</small>
+							<small v-else>{{ __("The full price the customer pays the provider.") }}</small>
+						</label>
+						<label class="credit-sheet__field">
+							<span>{{ __("Down payment today") }}</span>
+							<input
+								v-model="form.enganche"
+								type="number"
+								inputmode="decimal"
+								min="0"
+								step="any"
+								data-testid="credit-enganche-input"
+								:aria-invalid="issueFor('enganche') ? 'true' : 'false'"
+							/>
+							<small v-if="issueFor('enganche')" class="credit-sheet__error">{{ issueFor("enganche") }}</small>
+							<small v-else>{{ __("0 if the provider asks for none.") }}</small>
+						</label>
+						<label class="credit-sheet__field">
+							<span>{{ __("Term (months)") }} <em>{{ __("optional") }}</em></span>
 							<input v-model="form.planMonths" type="number" inputmode="numeric" min="0" step="1" data-testid="credit-months" />
 						</label>
 						<label class="credit-sheet__field">
-							<span>{{ __("Monthly payment") }}</span>
+							<span>{{ __("Monthly payment") }} <em>{{ __("optional") }}</em></span>
 							<input v-model="form.planMonthly" type="number" inputmode="decimal" min="0" step="any" data-testid="credit-monthly" />
 						</label>
 					</div>
-					<p v-if="issueFor('lines')" class="credit-sheet__error" role="alert">{{ issueFor("lines") }}</p>
+				</section>
+
+				<section
+					v-if="provider && preview.covered.length"
+					class="credit-sheet__summary"
+					aria-live="polite"
+					data-testid="credit-summary"
+				>
+					<div class="credit-sheet__collect">
+						<span>{{ __("Collect today") }}</span>
+						<strong data-testid="credit-collect-today">{{ money(preview.collectToday) }}</strong>
+						<small v-if="preview.othersTotal > 0">
+							{{ __("Down payment {0} + other items {1}", [money(preview.enganche), money(preview.othersTotal)]) }}
+						</small>
+					</div>
+					<dl class="credit-sheet__facts">
+						<div>
+							<dt>{{ __("{0} finances", [provider.label || provider.name]) }}</dt>
+							<dd data-testid="credit-financed">{{ money(preview.financed) }}</dd>
+						</div>
+						<div>
+							<dt>{{ __("On the ticket") }}</dt>
+							<dd data-testid="credit-ticket-lines">{{ money(preview.ticketTarget) }}</dd>
+						</div>
+					</dl>
+					<p class="credit-sheet__note">{{ ticketNote }}</p>
 				</section>
 
 				<section v-if="provider?.documents?.length" class="credit-sheet__section credit-sheet__docs">
@@ -132,6 +137,7 @@
 					type="button"
 					class="credit-sheet__secondary credit-sheet__remove"
 					data-testid="credit-remove"
+					:disabled="repricing"
 					@click="removeCredit"
 				>
 					{{ __("Not a credit sale") }}
@@ -144,7 +150,7 @@
 					type="button"
 					class="credit-sheet__primary"
 					data-testid="credit-apply"
-					:disabled="!summary.valid"
+					:disabled="!preview.valid || repricing"
 					@click="applyCredit"
 				>
 					{{ __("Apply credit") }}
@@ -156,15 +162,13 @@
 
 <script setup lang="ts">
 /**
- * The credit declaration for the sale on screen: provider, the lines the
- * credit covers, the one figure the cashier types (down payment in the split
- * shape, credit price in the enganche shape) and the plan.
- *
- * Money stays with the payment screen: this writes a draft into the credit
- * store; `Payments.vue` treats the provider's share as settled and the
- * submission adds it to the provider's payment row.
+ * The credit declaration for the sale on screen, in the order the cashier
+ * reads the provider's approval: provider, the items on credit, the total
+ * credit price and today's down payment, the plan. Applying it prices the
+ * ticket (the credit store reprices the covered lines through the cart) and
+ * the payment screen then collects the down payment plus any other item.
  */
-import { computed, reactive, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useDialogFullscreen } from "../../../composables/core/useDialogFullscreen";
 import { useCreditSaleStore, type CreditProviderOption } from "../../../stores/creditSaleStore";
@@ -173,9 +177,11 @@ import { useFormat } from "../../../format";
 import {
 	creditLinesFromItems,
 	defaultCoveredRowIds,
+	roundMoney,
 	summarizeCredit,
 	type CreditDraft,
 	type CreditIssue,
+	type CreditLine,
 } from "../../../composables/pos/credit/creditMath";
 import { CREDIT_ISSUE_TEXT } from "../../../composables/pos/credit/creditIssues";
 
@@ -185,7 +191,7 @@ const emit = defineEmits<{ (_e: "update:modelValue", _value: boolean): void }>()
 const __ = (window as any).__ || ((value: string) => value);
 const creditStore = useCreditSaleStore();
 const invoiceStore = useInvoiceStore();
-const { providers, draft } = storeToRefs(creditStore);
+const { providers, draft, repricing } = storeToRefs(creditStore);
 const { formatCurrency, currencySymbol, currency_precision } = useFormat();
 
 const { isFullscreenDialog, dialogProps } = useDialogFullscreen({ maxWidth: 640, breakpoint: 1100 });
@@ -193,8 +199,8 @@ const { isFullscreenDialog, dialogProps } = useDialogFullscreen({ maxWidth: 640,
 interface SheetForm {
 	provider: string;
 	lineRowIds: string[];
-	enganche: number | string | null;
 	creditPrice: number | string | null;
+	enganche: number | string | null;
 	planMonths: number | string | null;
 	planMonthly: number | string | null;
 }
@@ -202,18 +208,33 @@ interface SheetForm {
 const form = reactive<SheetForm>({
 	provider: "",
 	lineRowIds: [],
-	enganche: null,
 	creditPrice: null,
+	enganche: null,
 	planMonths: null,
 	planMonthly: null,
 });
+/** The cashier typed a price; stop following the covered items' own total. */
+const priceEdited = ref(false);
 
+const precision = computed(() => Number(currency_precision.value) || 2);
 const items = computed(() => invoiceStore.invoiceDoc?.items || []);
 const lines = computed(() => creditLinesFromItems(items.value));
 const provider = computed<CreditProviderOption | null>(
 	() => providers.value.find((row) => row.name === form.provider) || null,
 );
 const hasDraft = computed(() => Boolean(draft.value));
+
+/** A line's own amount: before the credit repriced it, when it did. */
+const ownAmount = (line: CreditLine): number => {
+	const original = draft.value?.originalPrices?.[line.rowId];
+	return original ? roundMoney(original.rate * line.qty, precision.value) : line.amount;
+};
+const coveredOwnTotal = computed(() =>
+	roundMoney(
+		lines.value.filter((line) => form.lineRowIds.includes(line.rowId)).reduce((sum, line) => sum + ownAmount(line), 0),
+		precision.value,
+	),
+);
 
 const numberOrNull = (value: unknown): number | null => {
 	if (value === null || value === undefined || value === "") return null;
@@ -224,52 +245,67 @@ const numberOrNull = (value: unknown): number | null => {
 const formDraft = computed<CreditDraft>(() => ({
 	provider: form.provider,
 	lineRowIds: [...form.lineRowIds],
-	enganche: numberOrNull(form.enganche),
 	creditPrice: numberOrNull(form.creditPrice),
+	enganche: numberOrNull(form.enganche),
 	planMonths: numberOrNull(form.planMonths),
 	planMonthly: numberOrNull(form.planMonthly),
+	originalPrices: { ...(draft.value?.originalPrices || {}) },
 }));
 
-const summary = computed(() =>
-	summarizeCredit(
+/**
+ * The sale once applied: the declared figures against the lines outside the
+ * credit. The ticket does not carry them yet, so only the typed figures and
+ * the chosen items can block Apply.
+ */
+const preview = computed(() => {
+	const summary = summarizeCredit(
 		formDraft.value,
 		provider.value?.shape || "enganche",
 		items.value,
-		Number(currency_precision.value) || 2,
-	),
+		precision.value,
+	);
+	const issues: CreditIssue[] = summary.issues.filter((issue) => issue !== "ticket_pending");
+	return { ...summary, issues, valid: issues.length === 0 };
+});
+
+const touched = computed(
+	() =>
+		priceEdited.value ||
+		(form.enganche !== null && form.enganche !== "") ||
+		Boolean(draft.value),
 );
 
-const currency = computed(() => invoiceStore.invoiceDoc?.currency || "");
-const money = (value: number) =>
-	`${currency.value ? currencySymbol(currency.value) || "" : ""}${formatCurrency(value)}`;
-
-
 const issueFor = (target: "enganche" | "price" | "lines"): string => {
-	const issues = summary.value.issues;
+	const issues = preview.value.issues;
 	const pick = (candidates: CreditIssue[]) => candidates.find((issue) => issues.includes(issue));
 	const issue =
 		target === "enganche"
 			? pick(["missing_enganche", "enganche_too_high"])
 			: target === "price"
-				? pick(["missing_price", "price_not_above_enganche"])
+				? pick(["missing_price"])
 				: pick(["no_lines", "lines_changed"]);
 	// A fresh form should not greet the cashier with errors for fields they
-	// have not reached yet; the Apply button already stays disabled.
+	// have not reached yet; Apply already stays disabled.
 	if (!issue || (!touched.value && issue !== "lines_changed")) return "";
 	return __(CREDIT_ISSUE_TEXT[issue]);
 };
 
-const touched = computed(
-	() =>
-		(form.enganche !== null && form.enganche !== "") ||
-		(form.creditPrice !== null && form.creditPrice !== "") ||
-		Boolean(draft.value),
-);
+const ticketNote = computed(() => {
+	const row = provider.value;
+	if (!row) return "";
+	return row.shape === "split"
+		? __("The items on credit stay at the credit price; {0} is recorded on {1}. The printed ticket shows only the down payment.", [
+				money(preview.value.financed),
+				row.mode_of_payment || "",
+			])
+		: __("The items on credit are charged at the down payment; {0} settles the rest with the store. The printed ticket shows only the down payment.", [
+				row.label || row.name,
+			]);
+});
 
-const shapeHint = (row: CreditProviderOption): string =>
-	row.shape === "split"
-		? __("Down payment here, the rest on {0}", [row.mode_of_payment || ""])
-		: __("The ticket is the down payment");
+const currency = computed(() => invoiceStore.invoiceDoc?.currency || "");
+const money = (value: number) =>
+	`${currency.value ? currencySymbol(currency.value) || "" : ""}${formatCurrency(value)}`;
 
 const loadForm = () => {
 	const current = draft.value;
@@ -278,8 +314,9 @@ const loadForm = () => {
 	const available = new Set(lines.value.map((line) => line.rowId));
 	const kept = (current?.lineRowIds || []).filter((rowId) => available.has(rowId));
 	form.lineRowIds = kept.length ? kept : defaultCoveredRowIds(lines.value);
+	priceEdited.value = current?.creditPrice != null;
+	form.creditPrice = current?.creditPrice ?? (coveredOwnTotal.value || null);
 	form.enganche = current?.enganche ?? null;
-	form.creditPrice = current?.creditPrice ?? null;
 	const chosen = providers.value.find((row) => row.name === form.provider);
 	form.planMonths = current?.planMonths ?? chosen?.default_plan_months ?? null;
 	form.planMonthly = current?.planMonthly ?? null;
@@ -299,19 +336,22 @@ const toggleLine = (rowId: string, checked: boolean) => {
 	if (checked) next.add(rowId);
 	else next.delete(rowId);
 	form.lineRowIds = lines.value.map((line) => line.rowId).filter((id) => next.has(id));
+	// Until the cashier types a price, it follows the chosen items' own total.
+	if (!priceEdited.value) form.creditPrice = coveredOwnTotal.value || null;
 };
 
 const close = () => emit("update:modelValue", false);
 
 const applyCredit = () => {
-	if (!summary.value.valid) return;
-	creditStore.apply(formDraft.value);
+	if (!preview.value.valid || repricing.value) return;
+	const next = formDraft.value;
 	close();
+	void creditStore.apply(next);
 };
 
 const removeCredit = () => {
-	creditStore.remove();
 	close();
+	void creditStore.remove();
 };
 
 watch(
@@ -372,12 +412,10 @@ watch(
 }
 .credit-sheet__providers {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
 	gap: var(--reg-space-sm);
 }
 .credit-sheet__provider {
-	display: grid;
-	gap: 2px;
 	min-height: var(--reg-touch-min);
 	padding: var(--reg-space-sm) var(--reg-space-md);
 	text-align: left;
@@ -387,16 +425,9 @@ watch(
 	color: var(--reg-text-primary);
 	cursor: pointer;
 }
-.credit-sheet__provider small {
-	color: var(--reg-text-muted);
-	font-size: 12px;
-}
 .credit-sheet__provider--on {
 	border-color: var(--reg-accent-edge);
 	background: var(--reg-accent-soft);
-	color: var(--reg-on-accent-soft);
-}
-.credit-sheet__provider--on small {
 	color: var(--reg-on-accent-soft);
 }
 .credit-sheet__lines {
@@ -437,31 +468,22 @@ watch(
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: var(--reg-space-md);
 }
-.credit-sheet__fact,
 .credit-sheet__field {
 	display: grid;
 	gap: var(--reg-space-2xs);
 	align-content: start;
 }
-.credit-sheet__fact span,
 .credit-sheet__field span {
 	font-size: 13px;
 	color: var(--reg-text-secondary);
 }
-.credit-sheet__fact strong {
-	font-size: 20px;
-	font-variant-numeric: tabular-nums;
+.credit-sheet__field em {
+	font-style: normal;
+	color: var(--reg-text-muted);
 }
-.credit-sheet__fact small,
 .credit-sheet__field small {
 	color: var(--reg-text-muted);
 	font-size: 12px;
-}
-.credit-sheet__fact--financed {
-	padding: var(--reg-space-sm) var(--reg-space-md);
-	border-radius: var(--reg-radius-md);
-	background: var(--reg-tone-neutral-bg);
-	border: 1px solid var(--reg-tone-neutral-border);
 }
 .credit-sheet__field input {
 	min-height: var(--reg-touch-min);
@@ -475,6 +497,54 @@ watch(
 }
 .credit-sheet__field input[aria-invalid="true"] {
 	border-color: var(--reg-tone-negative-border);
+}
+.credit-sheet__summary {
+	display: grid;
+	gap: var(--reg-space-sm);
+	padding: var(--reg-space-md);
+	border-radius: var(--reg-radius-md);
+	background: var(--reg-accent-soft);
+	border: 1px solid var(--reg-accent-edge);
+	color: var(--reg-on-accent-soft);
+}
+.credit-sheet__collect {
+	display: grid;
+	gap: 2px;
+}
+.credit-sheet__collect span {
+	font-size: 13px;
+	font-weight: 700;
+}
+.credit-sheet__collect strong {
+	font-size: 28px;
+	line-height: 1.1;
+	font-variant-numeric: tabular-nums;
+}
+.credit-sheet__collect small {
+	font-size: 12px;
+}
+.credit-sheet__facts {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--reg-space-sm);
+	margin: 0;
+}
+.credit-sheet__facts div {
+	display: grid;
+	gap: 2px;
+}
+.credit-sheet__facts dt {
+	font-size: 12px;
+}
+.credit-sheet__facts dd {
+	margin: 0;
+	font-size: 17px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+.credit-sheet__note {
+	margin: 0;
+	font-size: 12px;
 }
 .credit-sheet__error {
 	margin: 0;
@@ -508,7 +578,8 @@ watch(
 	background: var(--reg-accent);
 	color: var(--reg-on-accent);
 }
-.credit-sheet__primary:disabled {
+.credit-sheet__primary:disabled,
+.credit-sheet__secondary:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
 }
@@ -527,7 +598,8 @@ watch(
 	outline-offset: 2px;
 }
 @media (max-width: 599.98px) {
-	.credit-sheet__grid {
+	.credit-sheet__grid,
+	.credit-sheet__facts {
 		grid-template-columns: minmax(0, 1fr);
 	}
 }

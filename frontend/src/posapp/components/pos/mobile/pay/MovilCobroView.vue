@@ -41,6 +41,10 @@
 				@click="emit('credit')"
 			>
 				<template v-if="!credit.active">{{ __("Sell on credit") }}</template>
+				<template v-else-if="credit.repricing">
+					<strong>{{ __("Credit sale · {0}", [credit.providerLabel]) }}</strong>
+					<small>{{ __("Updating the ticket…") }}</small>
+				</template>
 				<template v-else-if="credit.valid">
 					<strong>{{ __("Credit sale · {0}", [credit.providerLabel]) }}</strong>
 					<small>
@@ -172,6 +176,8 @@ export interface MovilCreditSummary {
 	providerLabel: string;
 	enganche: number;
 	financed: number;
+	/** The cart is repricing the ticket for the credit. */
+	repricing?: boolean;
 }
 
 export interface CollectionIntent {

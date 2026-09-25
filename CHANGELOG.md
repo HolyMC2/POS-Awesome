@@ -9,9 +9,16 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 - **Provider-financed credit sales (2026-09-24, not deployed).** On a register
   with mercado's «Ventas a crédito con proveedor», Cobro offers «Vender a
-  crédito»: provider, covered lines, enganche or credit price, plan. A split
-  provider's share is recorded on its Mode of Payment while the cashier collects
-  only the enganche; otherwise the ticket is the enganche. The sale then opens
+  crédito»: provider, the items on credit, and the approval's total credit
+  price and down payment (0 allowed), plan optional. The register prices the
+  covered lines itself — at the credit price when the provider's Mode of
+  Payment is on the register (its share is recorded there), else at the down
+  payment — pins them, refreshes the payment screen and restores their own
+  prices if the credit is removed; «Hoy cobras» shows the down payment plus any
+  other item. The rate band and discount cap skip those lines through the new
+  `posa_price_guard_exemptions` hook, which mercado answers only for a declared
+  credit sale's covered lines; the payments-vs-total check still applies. The
+  sale then opens
   its paperwork: provider documents (camera/file), till expenses linked to the
   invoice (POS Cash Movement `sales_invoice`), plan and notes. A «Ventas a
   crédito» queue and a ledger action reopen it; shop managers lock complete

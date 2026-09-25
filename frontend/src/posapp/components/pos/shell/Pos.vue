@@ -1116,6 +1116,7 @@ export default {
 				providerLabel: provider ? provider.label || provider.name : "",
 				enganche: summary?.enganche ?? 0,
 				financed: summary?.financed ?? 0,
+				repricing: creditStore.repricing,
 			};
 		});
 

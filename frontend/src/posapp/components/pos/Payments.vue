@@ -1592,8 +1592,12 @@ const creditCardSummary = computed(() => {
 		creditPrice: summary.creditPrice,
 		enganche: summary.enganche,
 		financed: summary.financed,
+		collectToday: summary.collectToday,
+		othersTotal: summary.othersTotal,
 		valid: summary.valid,
 		issueText: issue ? __(CREDIT_ISSUE_TEXT[issue]) : "",
+		repricing: creditStore.repricing,
+		repriceFailed: creditStore.repriceFailed,
 	};
 });
 const openCreditSheet = () => {

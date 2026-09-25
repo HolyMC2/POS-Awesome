@@ -7,13 +7,17 @@
  *    shape, required documents and ticket print format). Nothing is loaded
  *    unless the POS Profile carries `mercado_credit_sales`, the flag the
  *    mercado app installs; registers without it keep today's behaviour.
- *  - the DRAFT the cashier declared for the sale on screen, applied to the
- *    live invoice document and turned into the provider payment row at submit.
+ *  - the DRAFT the cashier declared for the sale on screen: the provider's
+ *    credit price and down payment. Applying it reprices the covered cart lines
+ *    (through `Invoice.vue`, which owns every line write, on the bus), keeps
+ *    their own prices for a later removal, writes the credit fields on the live
+ *    invoice document and becomes the provider payment row at submit.
  *
  * A Pinia store (not a module-level ref) because lazy chunks evaluate the entry
  * bundle a second time; the pinia instance is pinned per document.
  */
 import { defineStore } from "pinia";
+import { bus } from "../bus";
 import { parseBooleanSetting } from "../utils/stock";
 import { useInvoiceStore } from "./invoiceStore";
 import { useUIStore } from "./uiStore";
@@ -22,8 +26,11 @@ import {
 	creditLinesFromItems,
 	creditSubmission,
 	defaultCoveredRowIds,
+	planCreditReprice,
+	planCreditRestore,
 	summarizeCredit,
 	type CreditDraft,
+	type CreditLinePricesIntent,
 	type CreditSubmission,
 	type CreditSummary,
 } from "../composables/pos/credit/creditMath";
@@ -36,6 +43,23 @@ import {
 export type { CreditContext, CreditDocumentKind, CreditProviderOption } from "../components/pos/credit/creditApi";
 
 declare const frappe: any;
+
+/** How long the cart may take to reprice and re-send the payment document. */
+const REPRICE_TIMEOUT_MS = 30000;
+
+/** Ask the cart to reprice; resolves with its `credit:repriced` answer. */
+const requestReprice = (intent: CreditLinePricesIntent): Promise<boolean> =>
+	new Promise((resolve) => {
+		let timer: ReturnType<typeof setTimeout> | null = null;
+		const done = (payload?: { ok?: boolean }) => {
+			bus.off("credit:repriced", done);
+			if (timer) clearTimeout(timer);
+			resolve(Boolean(payload?.ok));
+		};
+		bus.on("credit:repriced", done);
+		timer = setTimeout(() => done({ ok: false }), REPRICE_TIMEOUT_MS);
+		bus.emit("credit:line-prices", intent);
+	});
 
 const currencyPrecision = (): number => {
 	const profilePrecision = parseInt(useUIStore().posProfile?.posa_decimal_precision as any, 10);
@@ -54,6 +78,10 @@ export const useCreditSaleStore = defineStore("creditSale", {
 		/** The invoice (server draft name) the credit declaration belongs to. */
 		draftInvoice: "" as string,
 		sheetOpen: false,
+		/** The cart is repricing the covered lines for the draft. */
+		repricing: false,
+		/** The last repricing could not refresh the payment screen. */
+		repriceFailed: false,
 		/** Invoice whose after-sale paperwork dialog is open. */
 		afterSaleInvoice: null as string | null,
 	}),
@@ -142,15 +170,46 @@ export const useCreditSaleStore = defineStore("creditSale", {
 		closeSheet() {
 			this.sheetOpen = false;
 		},
-		apply(draft: CreditDraft) {
-			this.draft = { ...draft, lineRowIds: [...draft.lineRowIds] };
+		/**
+		 * Declare the credit and price the ticket for it: the covered lines carry
+		 * the credit price (split) or the down payment (enganche). Resolves once
+		 * the payment screen has the repriced document, false if it could not.
+		 */
+		async apply(draft: CreditDraft): Promise<boolean> {
+			const provider = this.providers.find((row) => row.name === draft.provider);
+			if (!provider) return false;
+			const cart = useInvoiceStore().items;
+			const plan = planCreditReprice(
+				draft,
+				provider.shape,
+				cart,
+				currencyPrecision(),
+				this.draft?.lineRowIds || [],
+			);
+			this.draft = { ...draft, lineRowIds: [...draft.lineRowIds], originalPrices: plan.originalPrices };
 			this.draftInvoice = String(useInvoiceStore().invoiceDoc?.name || "");
 			this.syncDoc();
+			return this.reprice({ set: plan.set, restore: plan.restore });
 		},
-		remove() {
+		/** Back to a plain sale: every covered line returns to its own price. */
+		async remove(): Promise<boolean> {
+			const plan = planCreditRestore(this.draft, useInvoiceStore().items);
 			this.draft = null;
 			this.draftInvoice = "";
 			this.syncDoc();
+			if (!plan.restore.length) return true;
+			return this.reprice({ set: [], restore: plan.restore });
+		},
+		async reprice(intent: CreditLinePricesIntent): Promise<boolean> {
+			this.repricing = true;
+			this.repriceFailed = false;
+			try {
+				const ok = await requestReprice(intent);
+				this.repriceFailed = !ok;
+				return ok;
+			} finally {
+				this.repricing = false;
+			}
 		},
 		/**
 		 * Bind the declaration to the document now on the payment screen.
@@ -183,16 +242,22 @@ export const useCreditSaleStore = defineStore("creditSale", {
 				const parsed = Number(value);
 				return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 			};
+			const enganche = Number(doc.enganche);
 			this.draft = {
 				provider: provider.name,
 				lineRowIds: flagged.length ? flagged : defaultCoveredRowIds(lines),
-				enganche: provider.shape === "split" ? positive(doc.enganche) : null,
-				creditPrice: provider.shape === "enganche" ? positive(doc.customer_offered_price) : null,
+				creditPrice: positive(doc.customer_offered_price),
+				enganche: Number.isFinite(enganche) && enganche >= 0 ? enganche : null,
 				planMonths: positive(doc.plan_months),
 				planMonthly: positive(doc.plan_monthly),
+				// The saved sale already carries the credit prices; its own prices
+				// come back from the price list if the credit is removed.
+				originalPrices: {},
 			};
 			this.draftInvoice = name;
 			this.syncDoc(doc);
+			// Keep the covered lines at those prices through any repricing.
+			bus.emit("credit:line-prices", { set: [], restore: [], lock: [...this.draft.lineRowIds], refresh: false });
 		},
 		/** Keep the live document in step with the draft (or clear it). */
 		syncDoc(doc: any = useInvoiceStore().invoiceDoc) {
@@ -204,6 +269,8 @@ export const useCreditSaleStore = defineStore("creditSale", {
 			this.draft = null;
 			this.draftInvoice = "";
 			this.sheetOpen = false;
+			this.repricing = false;
+			this.repriceFailed = false;
 		},
 		/** The ticket format for a financed invoice, or null for any other. */
 		printFormatFor(doc: any): string | null {

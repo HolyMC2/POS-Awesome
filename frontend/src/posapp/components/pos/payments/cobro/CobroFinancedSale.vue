@@ -18,31 +18,59 @@
 		<template v-else>
 			<header class="cobro-credit__head">
 				<span class="cobro-credit__title">{{ __("Credit sale · {0}", [summary.providerLabel]) }}</span>
-				<button type="button" class="cobro-credit__link" data-testid="cobro-financed-edit" @click="$emit('open')">
+				<button
+					type="button"
+					class="cobro-credit__link"
+					data-testid="cobro-financed-edit"
+					:disabled="summary.repricing"
+					@click="$emit('open')"
+				>
 					{{ __("Edit") }}
 				</button>
 			</header>
-			<dl v-if="summary.valid" class="cobro-credit__facts">
-				<div>
-					<dt>{{ __("Down payment") }}</dt>
-					<dd data-testid="cobro-financed-enganche">{{ formatMoney(summary.enganche) }}</dd>
-				</div>
-				<div>
-					<dt>{{ __("Credit price") }}</dt>
-					<dd>{{ formatMoney(summary.creditPrice) }}</dd>
-				</div>
-				<div>
-					<dt>{{ __("Financed") }}</dt>
-					<dd data-testid="cobro-financed-amount">{{ formatMoney(summary.financed) }}</dd>
-				</div>
-			</dl>
-			<p v-if="summary.valid && summary.shape === 'split'" class="cobro-credit__note">
-				{{ __("Collect the down payment only; {0} is recorded on {1}.", [formatMoney(summary.financed), summary.modeOfPayment]) }}
+			<p v-if="summary.repricing" class="cobro-credit__note" role="status" data-testid="cobro-financed-repricing">
+				<v-progress-circular indeterminate size="14" width="2" />
+				{{ __("Updating the ticket…") }}
 			</p>
-			<p v-else-if="!summary.valid" class="cobro-credit__warning" role="alert">
-				{{ summary.issueText }}
-			</p>
-			<button type="button" class="cobro-credit__link cobro-credit__remove" data-testid="cobro-financed-remove" @click="$emit('remove')">
+			<template v-else-if="summary.valid">
+				<div class="cobro-credit__collect">
+					<span>{{ __("Collect today") }}</span>
+					<strong data-testid="cobro-financed-collect">{{ formatMoney(summary.collectToday) }}</strong>
+					<small v-if="summary.othersTotal > 0">
+						{{ __("Down payment {0} + other items {1}", [formatMoney(summary.enganche), formatMoney(summary.othersTotal)]) }}
+					</small>
+				</div>
+				<dl class="cobro-credit__facts">
+					<div>
+						<dt>{{ __("Down payment") }}</dt>
+						<dd data-testid="cobro-financed-enganche">{{ formatMoney(summary.enganche) }}</dd>
+					</div>
+					<div>
+						<dt>{{ __("Credit price") }}</dt>
+						<dd>{{ formatMoney(summary.creditPrice) }}</dd>
+					</div>
+					<div>
+						<dt>{{ __("{0} finances", [summary.providerLabel]) }}</dt>
+						<dd data-testid="cobro-financed-amount">{{ formatMoney(summary.financed) }}</dd>
+					</div>
+				</dl>
+				<p class="cobro-credit__note">{{ __("The printed ticket shows only the down payment.") }}</p>
+			</template>
+			<template v-else>
+				<p class="cobro-credit__warning" role="alert" data-testid="cobro-financed-issue">
+					{{ summary.repriceFailed ? __("The ticket could not be updated for the credit.") : summary.issueText }}
+				</p>
+				<button type="button" class="cobro-credit__link" data-testid="cobro-financed-retry" @click="$emit('open')">
+					{{ __("Review the credit") }}
+				</button>
+			</template>
+			<button
+				type="button"
+				class="cobro-credit__link cobro-credit__remove"
+				data-testid="cobro-financed-remove"
+				:disabled="summary.repricing"
+				@click="$emit('remove')"
+			>
 				{{ __("Not a credit sale") }}
 			</button>
 		</template>
@@ -64,8 +92,15 @@ export interface FinancedSaleCardSummary {
 	creditPrice: number;
 	enganche: number;
 	financed: number;
+	/** The down payment plus any item outside the credit. */
+	collectToday: number;
+	othersTotal: number;
 	valid: boolean;
 	issueText: string;
+	/** The cart is repricing the ticket for the credit. */
+	repricing: boolean;
+	/** The last repricing failed; the credit needs another look. */
+	repriceFailed: boolean;
 }
 
 const props = defineProps<{
@@ -83,8 +118,8 @@ defineEmits<{
 const __ = (window as any).__ || ((value: string) => value);
 
 const stateClass = computed(() => ({
-	"cobro-credit--active": Boolean(props.summary?.valid),
-	"cobro-credit--attention": Boolean(props.summary && !props.summary.valid),
+	"cobro-credit--active": Boolean(props.summary && (props.summary.valid || props.summary.repricing)),
+	"cobro-credit--attention": Boolean(props.summary && !props.summary.valid && !props.summary.repricing),
 }));
 </script>
 
@@ -142,6 +177,24 @@ const stateClass = computed(() => ({
 	font-weight: 700;
 	overflow-wrap: anywhere;
 }
+.cobro-credit__collect {
+	display: grid;
+	gap: 2px;
+}
+.cobro-credit__collect span {
+	font-size: 12px;
+	font-weight: 700;
+	color: var(--reg-text-secondary);
+}
+.cobro-credit__collect strong {
+	font-size: 22px;
+	line-height: 1.15;
+	font-variant-numeric: tabular-nums;
+}
+.cobro-credit__collect small {
+	font-size: 12px;
+	color: var(--reg-text-muted);
+}
 .cobro-credit__facts {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -164,6 +217,9 @@ const stateClass = computed(() => ({
 }
 .cobro-credit__note,
 .cobro-credit__warning {
+	display: flex;
+	align-items: center;
+	gap: var(--reg-space-xs);
 	margin: 0;
 	font-size: 13px;
 	color: var(--reg-text-secondary);
@@ -180,6 +236,10 @@ const stateClass = computed(() => ({
 	color: var(--reg-accent);
 	font-weight: 700;
 	cursor: pointer;
+}
+.cobro-credit__link:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
 }
 .cobro-credit__remove {
 	color: var(--reg-tone-negative-label);

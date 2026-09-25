@@ -321,6 +321,9 @@ const invoiceItemMethods: Record<string, unknown> &
 	show_payment() {
 		return Dialogs.show_payment(this);
 	},
+	refresh_payment_doc() {
+		return Dialogs.refresh_payment_doc(this);
+	},
 	get_draft_invoices(source = "invoice", options?: { quiet?: boolean }) {
 		return Dialogs.get_draft_invoices(
 			this,

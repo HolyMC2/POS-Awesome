@@ -4501,3 +4501,25 @@ Customer or invoice,Cliente o factura
 Credit sale recorded,Venta a crédito registrada
 The sale stays in Credit sales → Pending until its documents are complete.,La venta queda en Ventas a crédito → Pendiente hasta que sus documentos estén completos.
 Finish later,Terminar después
+{0} finances,{0} financia
+0 if the provider asks for none.,0 si el proveedor no pide enganche.
+1. Provider,1. Proveedor
+2. What goes on credit,2. Qué va a crédito
+3. From the provider's approval,3. De la aprobación del proveedor
+Collect today,Hoy cobras
+Copy the provider's approval. The ticket adjusts to it and prints only the down payment.,Copia la aprobación del proveedor. El ticket se ajusta solo e imprime únicamente el enganche.
+Down payment {0} + other items {1},Enganche {0} + otros artículos {1}
+Down payment today,Enganche (paga hoy)
+On the ticket,En el ticket
+Review the credit,Revisar el crédito
+The approval,La aprobación
+The full price the customer pays the provider.,El precio total que el cliente paga al proveedor.
+The items on credit are charged at the down payment; {0} settles the rest with the store. The printed ticket shows only the down payment.,Lo que va a crédito se cobra al precio del enganche; {0} liquida el resto a la tienda. El ticket impreso muestra solo el enganche.
+The items on credit stay at the credit price; {0} is recorded on {1}. The printed ticket shows only the down payment.,Lo que va a crédito queda al precio a crédito; {0} se registra en {1}. El ticket impreso muestra solo el enganche.
+The printed ticket shows only the down payment.,El ticket impreso muestra solo el enganche.
+The ticket could not be updated for the credit.,No se pudo actualizar el ticket para el crédito.
+Total credit price,Precio total a crédito
+Updating the ticket…,Actualizando el ticket…
+Enter the total credit price from the provider's approval.,Escribe el precio total a crédito de la aprobación del proveedor.
+Enter the down payment (0 if there is none).,Escribe el enganche (0 si no hay).
+The ticket does not show the credit yet. Apply it again.,El ticket todavía no refleja el crédito. Vuelve a aplicarlo.

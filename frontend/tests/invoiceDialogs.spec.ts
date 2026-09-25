@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { close_payments, show_payment } from "../src/posapp/components/pos/invoice_utils/dialogs";
+import { close_payments, refresh_payment_doc, show_payment } from "../src/posapp/components/pos/invoice_utils/dialogs";
 
 /** Stands in for the pinia uiStore, whose refs unwrap on property access. */
 const createUiStoreStub = () => ({
@@ -208,5 +208,38 @@ describe("payment request in-flight guard", () => {
 		(context as any).uiStore = undefined;
 
 		await expect(show_payment(context)).resolves.toBeUndefined();
+	});
+
+	describe("refreshing the open payment screen", () => {
+		it("re-sends the saved document without opening a panel or changing the view", async () => {
+			const context: any = { ...createPaymentContext(), invoiceStore: { setInvoiceDoc: vi.fn() } };
+
+			await expect(refresh_payment_doc(context)).resolves.toBe(true);
+
+			expect(context.process_invoice).toHaveBeenCalledTimes(1);
+			expect(context.invoiceStore.setInvoiceDoc).toHaveBeenCalledTimes(1);
+			expect(context.eventBus.emit).toHaveBeenCalledWith(
+				"send_invoice_doc_payment",
+				expect.objectContaining({ doctype: "Sales Invoice" }),
+			);
+			expect(context.uiStore.setActiveView).not.toHaveBeenCalled();
+			expect(context.uiStore.openPaymentDialog).not.toHaveBeenCalled();
+			expect(context.uiStore.paymentRequestPending).toBe(false);
+		});
+
+		it("does nothing while a Pay round-trip is in flight, and reports a failed save", async () => {
+			const busy: any = createPaymentContext();
+			busy.uiStore.paymentRequestPending = true;
+			await expect(refresh_payment_doc(busy)).resolves.toBe(false);
+			expect(busy.process_invoice).not.toHaveBeenCalled();
+
+			const failing: any = createPaymentContext();
+			failing.process_invoice = vi.fn(async () => {
+				throw new Error("Record has changed since last read");
+			});
+			await expect(refresh_payment_doc(failing)).resolves.toBe(false);
+			expect(failing.toastStore.show).toHaveBeenCalled();
+			expect(failing.uiStore.paymentRequestPending).toBe(false);
+		});
 	});
 });
