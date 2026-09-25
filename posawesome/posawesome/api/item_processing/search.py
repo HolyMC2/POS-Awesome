@@ -69,6 +69,10 @@ class SearchPlan:
     posa_show_template_items: bool
     search_serial_no: bool = False
     search_batch_no: bool = False
+    # Typed query ranked by relevance (item_processing/relevance.py). Set for a
+    # 3+ character search that did not resolve to one item by barcode/serial/
+    # batch; empty keeps the legacy name-ordered path.
+    rank_query: str = ""
 
 
 def normalize_brand(brand: str) -> str:
@@ -134,6 +138,7 @@ def _build_search_plan(
     normalized_search_value = ""
     longest_search_token = ""
     raw_search_value = ""
+    rank_query = ""
 
     if search_value:
         raw_search_value = cstr(search_value).strip()
@@ -156,8 +161,10 @@ def _build_search_plan(
         resolved_item_code = data.get("item_code")
         base_search_term = resolved_item_code or (longest_search_token or raw_search_value)
         min_search_len = 2
+        if not resolved_item_code and len(normalized_search_value) >= 3:
+            rank_query = raw_search_value
 
-        if use_limit_search:
+        if use_limit_search and not rank_query:
             if len(raw_search_value) >= min_search_len:
                 or_filters = [
                     ["name", "like", f"{base_search_term}%"],
@@ -268,6 +275,7 @@ def _build_search_plan(
         posa_show_template_items=bool(posa_show_template_items),
         search_serial_no=bool(search_serial_no),
         search_batch_no=bool(search_batch_no),
+        rank_query=rank_query,
     )
 
 
@@ -510,6 +518,204 @@ def _word_filter_candidates(plan: SearchPlan) -> Optional[List[str]]:
     return [row[0] for row in rows]
 
 
+def _shape_page(
+    items_data: List[Dict[str, Any]],
+    pos_profile: Dict[str, Any],
+    price_list: Optional[str],
+    customer: Optional[str],
+    plan: SearchPlan,
+    apply_word_filter: bool = True,
+) -> List[Dict[str, Any]]:
+    """Price, stock and attribute details for one page of Item rows, shaped
+    and filtered for the register (stock visibility, word filter)."""
+
+    rows: List[Dict[str, Any]] = []
+    # Rate-band preview (critique C3): merge the Item Group opt-out into
+    # each row so the SPA can suppress its out-of-band warning exactly
+    # where the server's guard skips the band — a "cambiar pantalla"
+    # priced per job must not nag on every sale. Guarded like
+    # saldo_enabled: a site mid-rollout simply ships no flag.
+    if frappe.db.has_column("Item", "posa_px_skip_rate_band"):
+        group_flags = {}
+        page_groups = {i.get("item_group") for i in items_data if i.get("item_group")}
+        if page_groups and frappe.db.has_column("Item Group", "posa_px_skip_rate_band"):
+            for group in frappe.get_all(
+                "Item Group",
+                filters={"name": ["in", list(page_groups)]},
+                fields=["name", "posa_px_skip_rate_band"],
+            ):
+                group_flags[group.name] = 1 if group.posa_px_skip_rate_band else 0
+        for item in items_data:
+            merged = 1 if item.get("posa_px_skip_rate_band") else group_flags.get(
+                item.get("item_group"), 0
+            )
+            item["posa_px_skip_rate_band"] = merged
+
+    details = get_items_details(
+        json.dumps(pos_profile),
+        as_json(items_data),
+        price_list=price_list,
+        customer=customer,
+    )
+    detail_map = {d["item_code"]: d for d in details}
+    template_attributes_map, variant_attributes_map = _build_attribute_maps(items_data, plan)
+
+    for item in items_data:
+        detail = detail_map.get(item.get("item_code"), {})
+        row = _shape_item_row(
+            dict(item),
+            detail,
+            plan,
+            template_attributes_map=template_attributes_map,
+            variant_attributes_map=variant_attributes_map,
+        )
+        if not row:
+            continue
+        if apply_word_filter and not _matches_search_words(
+            row, plan.search_words, plan.word_filter_active
+        ):
+            continue
+        rows.append(row)
+    return rows
+
+
+_RANK_CANDIDATE_CAP = 20000
+
+
+def _ranked_item_names(plan: SearchPlan) -> List[str]:
+    """Item names matching ``plan.rank_query``, best first.
+
+    The legacy path anchored a limit-search query on its longest word as a
+    NAME PREFIX and then kept rows where every word was a substring anywhere
+    (codes and barcodes included), ordered by item_name. «ip 13» therefore
+    missed «Pantalla iPhone 13» (its name starts with «Pantalla») and listed
+    items whose code or barcode merely contained 13.
+
+    Here SQL reads a superset (every term appears in a name/group/brand/
+    description/attribute column, or matches a code, barcode, serial or batch
+    the way the ranker allows) and relevance.rank() decides membership and
+    order. Codes only match by prefix or a 4+ character digit fragment.
+    """
+    from posawesome.posawesome.api.item_processing import relevance
+
+    patterns = relevance.term_patterns(plan.rank_query)
+    if not patterns:
+        return []
+    params: Dict[str, Any] = {}
+    code_options: List[str] = []
+    conditions: List[str] = []
+    for i, (text_patterns, code_pattern) in enumerate(patterns):
+        per_term: List[str] = []
+        for j, pattern in enumerate(text_patterns):
+            key = f"t{i}_{j}"
+            params[key] = pattern
+            per_term += [
+                f"i.item_name LIKE %({key})s",
+                f"i.item_group LIKE %({key})s",
+                f"IFNULL(i.brand, '') LIKE %({key})s",
+                f"IFNULL(i.description, '') LIKE %({key})s",
+                "EXISTS (SELECT 1 FROM `tabItem Variant Attribute` iva"
+                f" WHERE iva.parent = i.name AND iva.attribute_value LIKE %({key})s)",
+            ]
+        if code_pattern:
+            key = f"c{i}"
+            params[key] = code_pattern
+            code_options.append(key)
+            per_term += [
+                f"i.item_code LIKE %({key})s",
+                f"i.name LIKE %({key})s",
+                "EXISTS (SELECT 1 FROM `tabItem Barcode` ib"
+                f" WHERE ib.parent = i.name AND ib.barcode LIKE %({key})s)",
+            ]
+            if plan.search_serial_no:
+                per_term.append(
+                    "EXISTS (SELECT 1 FROM `tabSerial No` sn"
+                    f" WHERE sn.item_code = i.name AND sn.name LIKE %({key})s)"
+                )
+            if plan.search_batch_no:
+                per_term.append(
+                    "EXISTS (SELECT 1 FROM `tabBatch` b"
+                    f" WHERE b.item = i.name AND b.name LIKE %({key})s)"
+                )
+        conditions.append("(" + " OR ".join(per_term) + ")")
+
+    # Serial and batch numbers that matched a code pattern ride along so the
+    # ranker can score them like barcodes.
+    code_match = " OR ".join(f"{{col}} LIKE %({key})s" for key in code_options) or "0"
+    extra_codes = []
+    if plan.search_serial_no:
+        extra_codes.append(
+            "(SELECT GROUP_CONCAT(sn.name SEPARATOR ' ') FROM `tabSerial No` sn"
+            " WHERE sn.item_code = i.name AND (" + code_match.replace("{col}", "sn.name") + "))"
+        )
+    if plan.search_batch_no:
+        extra_codes.append(
+            "(SELECT GROUP_CONCAT(b.name SEPARATOR ' ') FROM `tabBatch` b"
+            " WHERE b.item = i.name AND (" + code_match.replace("{col}", "b.name") + "))"
+        )
+    extra_sql = "CONCAT_WS(' ', " + ", ".join(extra_codes) + ")" if extra_codes else "''"
+
+    rows = frappe.db.sql(
+        """SELECT i.name, i.item_code, i.item_name, i.item_group,
+                  IFNULL(i.brand, '') AS brand, IFNULL(i.description, '') AS description,
+                  (SELECT GROUP_CONCAT(ib.barcode SEPARATOR ' ') FROM `tabItem Barcode` ib
+                    WHERE ib.parent = i.name) AS barcodes,
+                  (SELECT GROUP_CONCAT(iva.attribute_value SEPARATOR ' ')
+                     FROM `tabItem Variant Attribute` iva WHERE iva.parent = i.name) AS attributes,
+                  {extra} AS extra_codes
+           FROM `tabItem` i
+           WHERE i.disabled = 0 AND i.is_sales_item = 1 AND {conds}
+           ORDER BY i.item_name ASC
+           LIMIT {cap}""".replace("{conds}", " AND ".join(conditions))
+        .replace("{extra}", extra_sql)
+        .replace("{cap}", str(_RANK_CANDIDATE_CAP)),
+        params,
+        as_dict=True,
+    )
+    ranked = relevance.rank(
+        rows,
+        plan.rank_query,
+        lambda r: (
+            r.get("item_name") or r.get("item_code"),
+            (r.get("item_group"), r.get("brand"), r.get("attributes"), r.get("description")),
+            (
+                r.get("item_code"),
+                r.get("name"),
+                *cstr(r.get("barcodes")).split(),
+                *cstr(r.get("extra_codes")).split(),
+            ),
+        ),
+    )
+    return [r.get("name") for r in ranked]
+
+
+def _run_ranked_item_query(
+    pos_profile: Dict[str, Any],
+    price_list: Optional[str],
+    customer: Optional[str],
+    plan: SearchPlan,
+) -> List[Dict[str, Any]]:
+    """Ranked search: fetch details only for the best matches, in rank order."""
+
+    names = _ranked_item_names(plan)[plan.initial_page_start :]
+    result: List[Dict[str, Any]] = []
+    for start in range(0, len(names), plan.fetch_page_size):
+        chunk = names[start : start + plan.fetch_page_size]
+        position = {name: index for index, name in enumerate(chunk)}
+        items_data = frappe.get_all(
+            "Item",
+            filters={**plan.filters, "name": ["in", chunk]},
+            fields=plan.fields,
+            limit_page_length=len(chunk),
+        )
+        items_data.sort(key=lambda item: position.get(item.get("name"), len(position)))
+        result.extend(_shape_page(items_data, pos_profile, price_list, customer, plan, apply_word_filter=False))
+        if plan.limit_page_length and len(result) >= plan.limit_page_length:
+            break
+    rows = result[: plan.limit_page_length] if plan.limit_page_length else result
+    return attach_item_thumbnails(rows)
+
+
 def _run_item_query(
     pos_profile: Dict[str, Any],
     price_list: Optional[str],
@@ -517,6 +723,9 @@ def _run_item_query(
     plan: SearchPlan,
 ) -> List[Dict[str, Any]]:
     """Execute the search described by ``plan`` and return shaped rows."""
+
+    if plan.rank_query:
+        return _run_ranked_item_query(pos_profile, price_list, customer, plan)
 
     result: List[Dict[str, Any]] = []
     page_start = plan.initial_page_start
@@ -562,53 +771,7 @@ def _run_item_query(
         if not items_data:
             break
 
-        # Rate-band preview (critique C3): merge the Item Group opt-out into
-        # each row so the SPA can suppress its out-of-band warning exactly
-        # where the server's guard skips the band — a "cambiar pantalla"
-        # priced per job must not nag on every sale. Guarded like
-        # saldo_enabled: a site mid-rollout simply ships no flag.
-        if frappe.db.has_column("Item", "posa_px_skip_rate_band"):
-            group_flags = {}
-            page_groups = {i.get("item_group") for i in items_data if i.get("item_group")}
-            if page_groups and frappe.db.has_column("Item Group", "posa_px_skip_rate_band"):
-                for group in frappe.get_all(
-                    "Item Group",
-                    filters={"name": ["in", list(page_groups)]},
-                    fields=["name", "posa_px_skip_rate_band"],
-                ):
-                    group_flags[group.name] = 1 if group.posa_px_skip_rate_band else 0
-            for item in items_data:
-                merged = 1 if item.get("posa_px_skip_rate_band") else group_flags.get(
-                    item.get("item_group"), 0
-                )
-                item["posa_px_skip_rate_band"] = merged
-
-        details = get_items_details(
-            json.dumps(pos_profile),
-            as_json(items_data),
-            price_list=price_list,
-            customer=customer,
-        )
-        detail_map = {d["item_code"]: d for d in details}
-        template_attributes_map, variant_attributes_map = _build_attribute_maps(items_data, plan)
-
-        for item in items_data:
-            detail = detail_map.get(item.get("item_code"), {})
-            row = _shape_item_row(
-                dict(item),
-                detail,
-                plan,
-                template_attributes_map=template_attributes_map,
-                variant_attributes_map=variant_attributes_map,
-            )
-            if not row:
-                continue
-            if not _matches_search_words(row, plan.search_words, plan.word_filter_active):
-                continue
-            result.append(row)
-            if plan.limit_page_length and len(result) >= plan.limit_page_length:
-                break
-
+        result.extend(_shape_page(items_data, pos_profile, price_list, customer, plan))
         if plan.limit_page_length and len(result) >= plan.limit_page_length:
             break
 
@@ -704,9 +867,11 @@ def _prepare_item_groups(profile_name: Optional[str], item_groups) -> ItemGroupC
     return ItemGroupContext(groups=groups, groups_tuple=groups_tuple)
 
 
-# Bump when the cached row SHAPE changes so a deploy invalidates stale entries.
+# Bump when the cached row SHAPE or a search's rows change so a deploy
+# invalidates stale entries.
 # v2: rows carry `posa_image_thumb` next to `image`.
-GET_ITEMS_CACHE_VERSION = "v2"
+# v3: typed searches return relevance-ranked rows (item_processing/relevance.py).
+GET_ITEMS_CACHE_VERSION = "v3"
 
 
 def _build_get_items_cache_key(

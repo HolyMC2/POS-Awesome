@@ -1,3 +1,4 @@
+import { rankItems } from "../../../../utils/itemRelevance";
 import { shallowRef } from "vue";
 import type { Item, POSProfile } from "../../../../types/models";
 
@@ -113,47 +114,13 @@ export function useItemsSearch() {
 			return filterItemsByGroup(itemList, itemGroup);
 		}
 
-		const searchTerm = term.toLowerCase();
-		const searchTerms = searchTerm.split(/\s+/).filter(Boolean);
-
-		return itemList.filter((item) => {
-			if (!item) {
-				return false;
-			}
-
-			// Use pre-computed search index if available
-			if (item._search_index) {
-				return searchTerms.every((t) =>
-					item._search_index!.includes(t),
-				);
-			}
-
-			// Fallback for items without index
-			const fields = [
-				item.item_code,
-				item.item_name,
-				item.barcode,
-				item.description,
-			];
-
-			if (Array.isArray(item.item_barcode)) {
-				item.item_barcode.forEach((entry: any) =>
-					fields.push(entry?.barcode),
-				);
-			} else if (item.item_barcode) {
-				fields.push(String(item.item_barcode));
-			}
-
-			if (Array.isArray(item.barcodes)) {
-				item.barcodes.forEach((code: string) => fields.push(code));
-			}
-
-			return fields
-				.filter(Boolean)
-				.some((field) =>
-					String(field).toLowerCase().includes(searchTerm),
-				);
-		});
+		// Relevance-ranked (utils/itemRelevance): every term must start a word
+		// of the name, group, brand or description, or match a code/barcode by
+		// prefix; the best match comes first.
+		return rankItems(
+			itemList.filter((item): item is Item => Boolean(item)),
+			term,
+		);
 	};
 
 	const filterItemsByGroup = (itemList: Item[], group: string) => {

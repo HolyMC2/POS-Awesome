@@ -55,6 +55,7 @@
  * @module offline/cache
  */
 
+import { rankItems } from "../posapp/utils/itemRelevance";
 import { refreshBootstrapSnapshotFromCaches } from "./bootstrapSnapshot";
 import {
 	catalogVisibilityFilters,
@@ -302,24 +303,10 @@ export async function searchStoredItems({
 		const normalizedSearch =
 			typeof search === "string" ? search.trim() : "";
 		if (normalizedSearch) {
-			const term = normalizedSearch.toLowerCase();
-			const terms = term.split(/\s+/).filter(Boolean);
-
-			collection = collection.filter((it) => {
-				const nameMatch =
-					it.item_name &&
-					terms.every((t) => it.item_name.toLowerCase().includes(t));
-				const codeMatch =
-					it.item_code && it.item_code.toLowerCase().includes(term);
-				const barcodeMatch = Array.isArray(it.item_barcode)
-					? it.item_barcode.some(
-							(b) =>
-								b.barcode && b.barcode.toLowerCase() === term,
-						)
-					: it.item_barcode &&
-						String(it.item_barcode).toLowerCase().includes(term);
-				return nameMatch || codeMatch || barcodeMatch;
-			});
+			// Rank every stored match before paging, so the first page holds
+			// the best matches rather than the first ones by item_code.
+			const ranked = rankItems(await collection.toArray(), normalizedSearch);
+			return ranked.slice(offset, offset + limit);
 		}
 
 		const res = await collection.offset(offset).limit(limit).toArray();
