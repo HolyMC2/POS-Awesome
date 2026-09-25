@@ -43,6 +43,12 @@ For new entries, describe the changed behavior and include the commit, affected 
   «En tránsito al banco»). POS Cash Bag fields carry descriptions; guarded
   migration syncs that metadata. No custody state, balance or permission changes.
 
+- **Saved print preferences apply at the register (2026-09-24, not deployed).**
+  The POS asked doco's GET-only `get_my_preference` with POST; every request
+  was refused (403) and printing silently used the profile defaults. It now
+  reads with GET. Frontend only; no migration. Rollback restores the prior
+  assets.
+
 - **Cash bag identification and closing labels (2026-09-23, doco-mirror).**
   Desk lists show the physical folio, amount, state, preparation date and people,
   with focused queues and single/batch printing. Successful POS closings offer

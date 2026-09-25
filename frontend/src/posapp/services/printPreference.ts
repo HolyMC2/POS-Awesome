@@ -24,8 +24,11 @@ export async function resolvePosPrintPreference(
 ): Promise<ResolvedPrintPreference> {
 	if (!navigator.onLine || !frappe?.call) return legacy;
 	try {
+		// The endpoint is GET-only: a POST is refused (403) and every sale fell
+		// back to the profile's defaults.
 		const request = frappe.call({
 			method: "doco.docoutils.printing.preferences.get_my_preference",
+			type: "GET",
 			args: { surface: "posawesome", target_doctype: targetDoctype, terminal_key: terminalKey() || null },
 		});
 		const response = await Promise.race([
