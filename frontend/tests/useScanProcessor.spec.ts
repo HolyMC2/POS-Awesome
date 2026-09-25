@@ -282,3 +282,67 @@ describe("useScanProcessor serial scan handling", () => {
 		expect(addedItem.conversion_factor).toBe(12);
 	});
 });
+
+describe("useScanProcessor unknown barcode hand-off", () => {
+	beforeEach(() => {
+		(globalThis as any).__ = (text: string) => text;
+		(globalThis as any).frappe = {
+			call: vi.fn(async () => ({ message: null })),
+			show_alert: vi.fn(),
+		};
+	});
+
+	it("lets the unknown-barcode handler take over instead of the not-found error", async () => {
+		const ctx: any = makeContext();
+		ctx.onUnknownBarcode = vi.fn(async () => true);
+		ctx.onItemNotFound = vi.fn();
+
+		const { processScannedItem } = useScanProcessor(ctx);
+		await processScannedItem("7501055300075");
+
+		expect(ctx.onUnknownBarcode).toHaveBeenCalledWith("7501055300075");
+		expect(ctx.onItemNotFound).not.toHaveBeenCalled();
+		expect(ctx.scannerInput.scanErrorDialog.value).toBe(false);
+	});
+
+	it("falls back to the not-found error when the handler declines or throws", async () => {
+		const ctx: any = makeContext();
+		ctx.onUnknownBarcode = vi.fn(async () => {
+			throw new Error("boom");
+		});
+
+		const { processScannedItem } = useScanProcessor(ctx);
+		await processScannedItem("7501055300075");
+
+		expect(ctx.scannerInput.scanErrorDialog.value).toBe(true);
+		expect(ctx.scannerInput.scanErrorCode.value).toBe("7501055300075");
+	});
+
+	it("skips the handler on a re-scan after creation", async () => {
+		const ctx: any = makeContext();
+		ctx.onUnknownBarcode = vi.fn(async () => true);
+
+		const { processScannedItem } = useScanProcessor(ctx);
+		await processScannedItem("7501055300075", { skipUnknownBarcode: true });
+
+		expect(ctx.onUnknownBarcode).not.toHaveBeenCalled();
+		expect(ctx.scannerInput.scanErrorDialog.value).toBe(true);
+	});
+
+	it("does not offer creation when the server lookup itself failed", async () => {
+		const ctx: any = makeContext();
+		ctx.onUnknownBarcode = vi.fn(async () => true);
+		(globalThis as any).frappe.call = vi.fn(async ({ method }: { method: string }) => {
+			if (method === "posawesome.posawesome.api.items.get_items") {
+				throw new Error("offline");
+			}
+			return { message: null };
+		});
+
+		const { processScannedItem } = useScanProcessor(ctx);
+		await processScannedItem("7501055300075");
+
+		expect(ctx.onUnknownBarcode).not.toHaveBeenCalled();
+		expect(ctx.scannerInput.scanErrorDialog.value).toBe(true);
+	});
+});

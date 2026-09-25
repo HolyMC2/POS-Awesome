@@ -7,13 +7,16 @@
 	>
 		<v-card>
 			<v-card-title class="text-h6 pa-4">
-				{{ __("Create New Item") }}
+				{{ catalogMode ? __("Register product") : __("Create New Item") }}
 			</v-card-title>
 			<v-card-text class="pa-4">
+				<p v-if="catalogHint" class="text-body-2 mb-3" data-test="new-item-catalog-hint">
+					{{ catalogHint }}
+				</p>
 				<v-form ref="formRef" @submit.prevent="submit">
 					<v-row dense>
 						<!-- ── identity ─────────────────────────────────────── -->
-						<v-col cols="12" sm="7">
+						<v-col cols="12" :sm="catalogMode ? 12 : 7">
 							<v-text-field
 								v-model="form.item_name"
 								data-test="new-item-name"
@@ -25,7 +28,7 @@
 								:rules="[(v) => !!v || __('* Required')]"
 							></v-text-field>
 						</v-col>
-						<v-col cols="12" sm="5">
+						<v-col v-if="!catalogMode" cols="12" sm="5">
 							<v-text-field
 								v-model="form.item_code"
 								data-test="new-item-code"
@@ -55,12 +58,13 @@
 									v-model="form.barcode"
 									data-test="new-item-barcode"
 									:label="frappe._('Barcode')"
+									:readonly="catalogMode"
 									density="compact"
 									variant="outlined"
 									class="pos-themed-input flex-grow-1"
 								></v-text-field>
 								<v-btn
-									v-if="cameraEnabled"
+									v-if="cameraEnabled && !catalogMode"
 									data-test="new-item-camera-scan"
 									color="secondary"
 									variant="tonal"
@@ -75,7 +79,7 @@
 							<v-select
 								v-model="form.item_group"
 								data-test="new-item-group"
-								:items="itemsGroup.filter((g) => g !== 'ALL')"
+								:items="groupOptions"
 								:label="frappe._('Item Group')"
 								density="compact"
 								variant="outlined"
@@ -87,7 +91,7 @@
 							<v-autocomplete
 								v-model="form.stock_uom"
 								data-test="new-item-stock-uom"
-								:items="uomList"
+								:items="uomOptions"
 								:label="frappe._('Stock UOM')"
 								density="compact"
 								variant="outlined"
@@ -95,6 +99,43 @@
 								:rules="[(v) => !!v || __('* Required')]"
 							></v-autocomplete>
 						</v-col>
+						<template v-if="catalogMode">
+							<v-col cols="12" sm="6">
+								<v-text-field
+									v-model="form.brand"
+									data-test="new-item-brand"
+									:label="__('Brand')"
+									density="compact"
+									variant="outlined"
+									class="pos-themed-input"
+								></v-text-field>
+							</v-col>
+							<v-col v-if="satSuggestions.length" cols="12" sm="6">
+								<v-text-field
+									v-model="form.mx_product_service_key"
+									data-test="new-item-sat-key"
+									:label="__('SAT product key')"
+									density="compact"
+									variant="outlined"
+									class="pos-themed-input"
+								></v-text-field>
+							</v-col>
+							<v-col v-if="satSuggestions.length" cols="12">
+								<div class="d-flex flex-wrap ga-2 mt-n2 mb-2">
+									<v-chip
+										v-for="suggestion in satSuggestions"
+										:key="suggestion.key"
+										data-test="new-item-sat-suggestion"
+										size="small"
+										:color="form.mx_product_service_key === suggestion.key ? 'primary' : undefined"
+										:title="suggestion.description || suggestion.key"
+										@click="form.mx_product_service_key = suggestion.key"
+									>
+										{{ suggestion.key }}{{ suggestion.description ? ` · ${suggestion.description}` : "" }}
+									</v-chip>
+								</div>
+							</v-col>
+						</template>
 
 						<!-- ── money ────────────────────────────────────────── -->
 						<v-col cols="12" class="pt-2">
@@ -217,6 +258,8 @@
  */
 import { computed, ref, reactive, watch, onMounted } from "vue";
 import itemService from "../../../services/itemService";
+import catalogScanService from "../../../services/catalogScanService";
+import { unwrapApiResult } from "../../../services/api";
 import {
 	buildQuickItemPayload,
 	marginFromSell,
@@ -250,6 +293,13 @@ const props = defineProps({
 		type: Object,
 		default: null,
 	},
+	// doco scan-to-catalog payload (prefill_for_barcode). When present the
+	// dialog creates through doco's single creation path instead of
+	// frappe.client.insert.
+	prefill: {
+		type: Object,
+		default: null,
+	},
 });
 
 const emit = defineEmits(["update:modelValue", "item-created", "request-camera-scan"]);
@@ -276,7 +326,51 @@ const form = reactive({
 	standard_rate: 0,
 	item_tax_template: "",
 	opening_stock: "",
+	brand: "",
+	mx_product_service_key: "",
 });
+
+const catalogMode = computed(() => Boolean(props.prefill && props.prefill.barcode));
+
+const satSuggestions = computed(() => {
+	const list = props.prefill?.suggested_sat_keys;
+	return Array.isArray(list) ? list.filter((s) => s && s.key) : [];
+});
+
+const catalogHint = computed(() => {
+	if (!catalogMode.value) return "";
+	const source = props.prefill.found_in;
+	if (source === "central" || source === "reference") {
+		return __("Unregistered code. Details suggested by the catalog; review them before saving.");
+	}
+	return __("Unregistered code. Fill in the details to register it.");
+});
+
+const groupOptions = computed(() => {
+	const groups = props.itemsGroup.filter((g) => g !== "ALL");
+	const suggested = props.prefill?.item_group;
+	if (catalogMode.value && suggested && !groups.includes(suggested)) {
+		groups.push(suggested);
+	}
+	return groups;
+});
+
+const uomOptions = computed(() => {
+	const current = form.stock_uom;
+	if (current && !uomList.value.includes(current)) {
+		return [...uomList.value, current];
+	}
+	return uomList.value;
+});
+
+const catalogItemName = (prefill) => {
+	const name = String(prefill.product_name || "").trim();
+	const size = String(prefill.size || "").trim();
+	if (name && size && !name.toLowerCase().includes(size.toLowerCase())) {
+		return `${name} ${size}`;
+	}
+	return name;
+};
 
 const hasCost = computed(() => parseFloat(form.valuation_rate) > 0);
 
@@ -364,7 +458,21 @@ const resetForm = () => {
 	form.standard_rate = 0;
 	form.item_tax_template = "";
 	form.opening_stock = "";
+	form.brand = "";
+	form.mx_product_service_key = "";
 	codeTouched.value = false;
+	if (catalogMode.value) {
+		const prefill = props.prefill;
+		form.barcode = String(prefill.barcode).trim();
+		form.item_name = catalogItemName(prefill);
+		// doco keys the Item by the barcode; the code field is hidden.
+		form.item_code = form.barcode;
+		codeTouched.value = true;
+		form.item_group = prefill.item_group || form.item_group;
+		form.stock_uom = prefill.stock_uom || form.stock_uom;
+		form.brand = prefill.brand || "";
+		form.mx_product_service_key = satSuggestions.value[0]?.key || "";
+	}
 };
 
 watch(
@@ -374,6 +482,13 @@ watch(
 			resetForm();
 			loadTaxTemplates();
 		}
+	},
+);
+
+watch(
+	() => props.prefill,
+	() => {
+		if (props.modelValue) resetForm();
 	},
 );
 
@@ -432,6 +547,10 @@ const submit = async () => {
 	}
 
 	loading.value = true;
+	if (catalogMode.value) {
+		await submitCatalogItem();
+		return;
+	}
 	try {
 		const res = await itemService.createItemData(
 			buildQuickItemPayload(form, {
@@ -459,8 +578,65 @@ const submit = async () => {
 	}
 };
 
+const toNumberOrNull = (value) => {
+	if (value === "" || value === null || value === undefined) return null;
+	const parsed = Number(value);
+	return Number.isFinite(parsed) ? parsed : null;
+};
+
+const submitCatalogItem = async () => {
+	const openingQty = toNumberOrNull(form.opening_stock);
+	const hasOpening = openingQty !== null && openingQty > 0;
+	try {
+		const envelope = await catalogScanService.createItemFromScan({
+			barcode: form.barcode,
+			item_name: form.item_name,
+			item_group: form.item_group,
+			stock_uom: form.stock_uom,
+			brand: form.brand || null,
+			selling_price: toNumberOrNull(form.standard_rate) || null,
+			buying_price: toNumberOrNull(form.valuation_rate),
+			item_tax_template: form.item_tax_template || null,
+			mx_product_service_key: form.mx_product_service_key || null,
+			opening_qty: hasOpening ? openingQty : null,
+			warehouse: hasOpening ? warehouse.value : null,
+			company: company.value,
+		});
+		const result = unwrapApiResult(envelope);
+
+		frappe.show_alert({
+			message: result.created ? __("Product registered") : __("The product was already registered"),
+			indicator: "green",
+		});
+
+		emit("item-created", {
+			...result,
+			barcode: form.barcode,
+			actual_qty: hasOpening ? openingQty : 0,
+			_from_scan: true,
+		});
+		close();
+	} catch (e) {
+		console.error(e);
+		const detail = e && e.message ? e.message : "";
+		frappe.msgprint(
+			detail
+				? `${__("Could not register the product")}: ${detail}`
+				: __("Could not register the product"),
+		);
+	} finally {
+		loading.value = false;
+	}
+};
+
 onMounted(() => {
 	getUOMs();
+	// The parent mounts this dialog with v-if, so it is usually born open and
+	// the modelValue watcher never fires for the first open.
+	if (props.modelValue) {
+		resetForm();
+		loadTaxTemplates();
+	}
 });
 </script>
 

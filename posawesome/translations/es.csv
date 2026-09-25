@@ -4667,3 +4667,14 @@ Combos with choices are sold on a ticket,Los combos con opciones se venden en ti
 Switch this sale to Invoice to add {0}.,Cambia esta venta a Factura para agregar {0}.
 Show {0} more categories,Mostrar {0} categorías más
 Show fewer categories,Mostrar menos categorías
+Register product,Dar de alta producto
+Unregistered code. Details suggested by the catalog; review them before saving.,Código no registrado. Datos sugeridos del catálogo; revísalos antes de guardar.
+Unregistered code. Fill in the details to register it.,Código no registrado. Captura los datos para darlo de alta.
+The product was already registered,El producto ya estaba dado de alta
+Could not register the product,No se pudo dar de alta el producto
+Product registered,Producto dado de alta
+SAT product key,Clave SAT
+Request sent,Solicitud enviada
+Could not send the request,No se pudo enviar la solicitud
+Product not registered,Producto no dado de alta
+Request registration,Pedir alta
