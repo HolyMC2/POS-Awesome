@@ -183,7 +183,6 @@
 					class="paquete-sheet__primary"
 					:class="{ 'paquete-sheet__primary--blocked': !complete }"
 					data-testid="combo-choice-confirm"
-					:aria-disabled="complete ? 'false' : 'true'"
 					@click="confirm"
 				>
 					<span class="paquete-sheet__primary-label">{{ confirmLabel }}</span>
@@ -630,9 +629,13 @@ const onKeydown = (event: KeyboardEvent) => {
 	color: var(--reg-text-secondary, #475467);
 }
 
+/* 180px on the desk, so «Café americano» wraps between words and never
+   inside one; the phone's own floor is below. Cards keep their own height —
+   a stepper opening on one must not stretch its neighbours. */
 .paquete-group__options {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+	align-items: start;
 	gap: 8px;
 }
 
@@ -715,7 +718,7 @@ const onKeydown = (event: KeyboardEvent) => {
 .paquete-option__name {
 	font-size: 14px;
 	font-weight: 600;
-	overflow-wrap: anywhere;
+	overflow-wrap: break-word;
 }
 
 .paquete-option__meta {
