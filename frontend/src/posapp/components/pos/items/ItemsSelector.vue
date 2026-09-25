@@ -103,10 +103,10 @@
 				/>
 
 				<div v-if="categoryNavigationEnabled && !search_input.trim()" class="category-navigation">
-					<v-btn v-if="!showCategoryTiles" variant="text" prepend-icon="mdi-arrow-left" @click="backToCategories">{{ __("All categories") }}</v-btn>
+					<v-btn v-if="!showCategoryTiles" variant="text" class="text-none" prepend-icon="mdi-arrow-left" @click="backToCategories">{{ __("All categories") }}</v-btn>
 					<strong v-else>{{ __("Choose a category") }}</strong>
 					<span v-if="item_group !== 'ALL'" class="category-navigation__current">{{ item_group }}</span>
-					<v-btn v-if="showCategoryTiles" variant="text" @click="showProducts = true">{{ __("All products") }}</v-btn>
+					<v-btn v-if="showCategoryTiles" variant="text" class="text-none" prepend-icon="mdi-view-grid-outline" @click="showProducts = true">{{ __("All products") }}</v-btn>
 				</div>
 				<v-card :class="{ 'selector-results-card--categories': showCategoryTiles }" flat class="selector-section-card selector-results-card pos-themed-card">
 					<v-row class="items">

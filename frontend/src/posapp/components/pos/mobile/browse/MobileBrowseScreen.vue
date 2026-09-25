@@ -803,6 +803,15 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	font-weight: 700;
 }
 
+/* Open, it is only the way to fold back: a square like the back chip. A
+   stretched pill holding one chevron read as an empty field. */
+.mbrowse__chip--more[aria-expanded="true"] {
+	flex: 0 0 44px;
+	min-width: 44px;
+	width: 44px;
+	padding: 0;
+}
+
 .mbrowse__nav-button {
 	display: inline-flex;
 	align-items: center;

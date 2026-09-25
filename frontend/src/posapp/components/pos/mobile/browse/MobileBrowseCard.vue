@@ -21,12 +21,16 @@
 				loading="lazy"
 			/>
 			<v-icon
-				v-else
+				v-else-if="card.kind === 'combo'"
 				class="mbrowse-card__glyph"
-				:icon="card.kind === 'combo' ? 'mdi-package-variant-closed' : 'mdi-cellphone'"
+				icon="mdi-package-variant-closed"
 				size="30"
 				aria-hidden="true"
 			/>
+			<!-- An item with no photo shows its initials, not a phone: the same
+			     card sells capuchinos in a cafetería, and a handset glyph on
+			     every menu item told the cashier the wrong thing. -->
+			<span v-else class="mbrowse-card__initials" aria-hidden="true">{{ initials }}</span>
 			<!--
 				The affordance, not the target. The whole card is the button —
 				the artboard's footer says "toca una tarjeta para agregarla" —
@@ -99,6 +103,17 @@ const props = defineProps<{
 const emit = defineEmits<{ (_event: "add", _card: BrowseCard): void }>();
 
 const priceLabel = computed(() => props.formatCurrency(props.card.rate));
+
+/** «Café americano» → «CA»: two letters, from the first two words. */
+const initials = computed(() =>
+	String(props.card.item_name || props.card.item_code || "")
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean)
+		.slice(0, 2)
+		.map((word) => word.charAt(0).toUpperCase())
+		.join(""),
+);
 
 const chipTone = computed(() => {
 	const chip = props.card.chip;
@@ -229,6 +244,14 @@ const onActivate = () => emit("add", props.card);
 
 .mbrowse-card__glyph {
 	color: var(--reg-text-muted, #667085);
+}
+
+.mbrowse-card__initials {
+	font-size: 26px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	color: var(--reg-text-muted, #667085);
+	opacity: 0.8;
 }
 
 .mbrowse-card__add {
