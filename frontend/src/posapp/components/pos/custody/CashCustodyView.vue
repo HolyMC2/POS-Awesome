@@ -2282,17 +2282,24 @@ onMounted(loadSafes);
 	line-height: 1.35;
 	color: var(--pos-text-secondary);
 }
-.action-list {
+/* One shared button column, so every explanation starts at the same edge:
+   the rows are subgrids of the list (a plain two-column row where subgrid
+   is unsupported). */
+.action-list,
+.custody__legend dl {
 	list-style: none;
 	margin: 0;
 	padding: 0;
 	display: grid;
-	gap: 10px;
+	grid-template-columns: minmax(180px, max-content) minmax(0, 1fr);
+	gap: 10px 12px;
 }
-.action-list__row {
+.action-list__row,
+.custody__legend dl > div {
+	grid-column: 1 / -1;
 	display: grid;
 	grid-template-columns: minmax(180px, max-content) minmax(0, 1fr);
-	gap: 12px;
+	grid-template-columns: subgrid;
 	align-items: center;
 }
 .action-list__row .btn {
@@ -2309,26 +2316,30 @@ onMounted(loadSafes);
 	color: var(--pos-text-secondary);
 }
 .custody__legend dl {
-	display: grid;
-	gap: 8px;
-	margin: 0;
+	gap: 8px 12px;
 }
 .custody__legend dl > div {
-	display: grid;
-	grid-template-columns: minmax(150px, max-content) minmax(0, 1fr);
-	gap: 10px;
 	align-items: start;
 }
+.custody__legend dt,
 .custody__legend dd {
 	margin: 0;
+}
+.custody__legend dd {
 	font-size: 13px;
 	color: var(--pos-text-secondary);
 }
 @media (max-width: 599.98px) {
+	.action-list,
+	.custody__legend dl,
 	.action-list__row,
 	.custody__legend dl > div {
 		grid-template-columns: minmax(0, 1fr);
-		gap: 4px;
+		row-gap: 4px;
+	}
+	.action-list,
+	.custody__legend dl {
+		row-gap: 10px;
 	}
 }
 .custody__next-tasks {
