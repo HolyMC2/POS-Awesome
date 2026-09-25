@@ -57,6 +57,22 @@ def _frappe_stub():
     return module
 
 
+def _utils_stub():
+    """`frappe.utils` for the two coercions the controller imports."""
+    module = types.ModuleType("frappe.utils")
+    module.__file__ = "<stub>"
+
+    def flt(value, precision=None):
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    module.flt = flt
+    module.cint = lambda value: int(flt(value))
+    return module
+
+
 def _document_stub():
     package = types.ModuleType("frappe.model")
     package.__file__ = "<stub>"
@@ -73,6 +89,7 @@ def _document_stub():
 
 _TOUCHED = (
     "frappe",
+    "frappe.utils",
     "frappe.model",
     "frappe.model.document",
     "posawesome",
@@ -101,6 +118,7 @@ def _controller(attributes=(), values=None):
 
     try:
         sys.modules["frappe"] = frappe
+        sys.modules["frappe.utils"] = _utils_stub()
         sys.modules["frappe.model"] = model_pkg
         sys.modules["frappe.model.document"] = document
         for name in ("posawesome", "posawesome.posawesome", "posawesome.posawesome.api"):

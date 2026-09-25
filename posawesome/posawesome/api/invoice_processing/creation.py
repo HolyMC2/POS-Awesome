@@ -1909,6 +1909,11 @@ def _submit_invoice(invoice, data, submit_in_background=False, pos_profile=None)
         assert_rates_within_band,
         enforce_discount_limit,
     )
+    # Paquete picks first: a wrong one is refused with its own reason instead
+    # of the rate-band message the guards below would give its $0 line.
+    from posawesome.posawesome.api.combo_choice import assert_combo_lines
+
+    assert_combo_lines(invoice_doc, profile_doc_for_caps_submit)
     enforce_discount_limit(invoice_doc, profile_doc_for_caps_submit)
     assert_rates_within_band(invoice_doc, profile_doc_for_caps_submit)
     # Credit sale (`is_credit_sale=1` in the outer data payload) lets
@@ -2269,7 +2274,10 @@ def submit_in_background_job(kwargs):
         )
 
         from posawesome.posawesome.api.pricing_context import apply_invoice_exchange_rates
+        from posawesome.posawesome.api.combo_choice import assert_combo_lines
+
         apply_invoice_exchange_rates(invoice_doc, profile_for_caps)
+        assert_combo_lines(invoice_doc, profile_for_caps)
         enforce_discount_limit(invoice_doc, profile_for_caps)
         assert_rates_within_band(invoice_doc, profile_for_caps)
 

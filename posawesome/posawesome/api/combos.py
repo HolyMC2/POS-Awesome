@@ -46,10 +46,17 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import flt, nowdate
+from frappe.utils import cint, flt, nowdate
 
 from posawesome.posawesome.api.entry_attribute import entry_attribute
 from posawesome.posawesome.api.utils import _ensure_pos_profile
+
+CHOICE_TYPE = "Choice Groups"
+
+# An «Any Item From» group offers at most this many items. A cafetería's
+# «Bebidas» is a dozen; a group pointed at a 5 000-item retail tree would
+# otherwise ship the whole catalogue inside every combo payload.
+MAX_GROUP_OPTIONS = 60
 
 
 def _as_list(value):
@@ -81,26 +88,12 @@ def _bundle_rows(bundle_codes=None):
     )
 
 
-def _pos_combo_overlay():
-    """POS presentation/eligibility rows keyed by Product Bundle name.
-
-    Absent doctype or empty table both mean "no opinion": the caller then
-    offers every enabled bundle. A tenant that has never opened the combo
-    settings still gets working combos.
-    """
-    if not frappe.db.exists("DocType", "POS Combo"):
-        return {}
-
-    rows = frappe.get_all(
-        "POS Combo",
-        filters={"disabled": 0},
-        fields=["name", "product_bundle", "priority"],
-    )
-    if not rows:
-        return {}
+def _combo_targets(names):
+    """Item targets and device (attribute) targets per POS Combo name."""
+    if not names:
+        return {}, {}
 
     # `targets` is a child table, so it cannot ride along on the parent query.
-    names = [r["name"] for r in rows]
     target_rows = frappe.get_all(
         "POS Combo Target",
         filters={"parent": ["in", names]},
@@ -126,6 +119,37 @@ def _pos_combo_overlay():
             value = (row.get("attribute_value") or "").strip()
             if value:
                 attribute_targets_by_parent.setdefault(row["parent"], []).append(value)
+    return targets_by_parent, attribute_targets_by_parent
+
+
+def _pos_combo_overlay():
+    """POS presentation/eligibility rows keyed by Product Bundle name.
+
+    Absent doctype or empty table both mean "no opinion": the caller then
+    offers every enabled bundle. A tenant that has never opened the combo
+    settings still gets working combos.
+
+    Paquetes (``combo_type`` = Choice Groups) are NOT overlays and are left
+    out: counting them would switch the allowlist on and hide every Product
+    Bundle from a tenant that has only authored paquetes.
+    """
+    if not frappe.db.exists("DocType", "POS Combo"):
+        return {}
+
+    fields = ["name", "product_bundle", "priority"]
+    typed = frappe.db.has_column("POS Combo", "combo_type")
+    if typed:
+        fields.append("combo_type")
+    rows = [
+        row
+        for row in frappe.get_all("POS Combo", filters={"disabled": 0}, fields=fields)
+        if row.get("product_bundle")
+        and (not typed or (row.get("combo_type") or "Product Bundle") != CHOICE_TYPE)
+    ]
+    if not rows:
+        return {}
+
+    targets_by_parent, attribute_targets_by_parent = _combo_targets([r["name"] for r in rows])
 
     overlay = {}
     for row in rows:
@@ -345,6 +369,18 @@ def get_combos(pos_profile=None, bundles=None, customer=None):
     if overlay:
         rows = [r for r in rows if r["name"] in overlay]
 
+    combos = _bundle_combos(
+        rows, overlay, price_list, currency, customer, warehouse, target_attribute
+    )
+    combos.extend(
+        _choice_combos(price_list, currency, customer, warehouse, target_attribute, wanted)
+    )
+    combos.sort(key=lambda c: (flt(c.get("priority")), c.get("item_name") or ""))
+    return combos
+
+
+def _bundle_combos(rows, overlay, price_list, currency, customer, warehouse, target_attribute):
+    """Product Bundle combos: fixed components, priced and counted."""
     if not rows:
         return []
 
@@ -390,6 +426,7 @@ def get_combos(pos_profile=None, bundles=None, customer=None):
 
         combos.append(
             {
+                "kind": "bundle",
                 "item_code": parent_code,
                 "item_name": parent_meta.get("item_name") or parent_code,
                 "rate": _rate_for(prices, parent_code, None, parent_meta.get("stock_uom")),
@@ -401,8 +438,153 @@ def get_combos(pos_profile=None, bundles=None, customer=None):
                 "components": components,
             }
         )
+    return combos
 
-    combos.sort(key=lambda c: (flt(c.get("priority")), c.get("item_name") or ""))
+
+def _choice_combos(price_list, currency, customer, warehouse, target_attribute, wanted):
+    """Paquetes sellable on this register: groups with priced, counted options.
+
+    Same price list, same fetcher, same stock read as the bundle combos above,
+    so a paquete's «Capuchino» quotes what the grid quotes. ``components`` is
+    empty on purpose: what a paquete contains is the cashier's pick, and
+    ``groups`` is where the register reads it. Options fed by an Item Group
+    («Any Item From») are expanded here, after the explicit rows, at no extra
+    charge — the terms ``combo_choice_rules.find_option`` vouches for.
+    """
+    # A site whose migrate has not created the paquete tables has no
+    # paquetes; asking before the import keeps the bundle path free of any
+    # query against a column that does not exist yet.
+    if not (
+        frappe.db.exists("DocType", "POS Combo Group")
+        and frappe.db.has_column("POS Combo", "combo_type")
+    ):
+        return []
+
+    from posawesome.posawesome.api.combo_choice import (
+        eligible_group_items,
+        load_choice_definitions,
+    )
+
+    definitions = load_choice_definitions(wanted or None)
+    if not definitions:
+        return []
+
+    expanded = {}
+    for code, definition in definitions.items():
+        groups = []
+        for group in definition["groups"]:
+            options = [
+                dict(option)
+                for option in group["options"]
+                if option.get("item_code") and option["item_code"] != code
+            ]
+            seen = {option["item_code"] for option in options}
+            if group.get("item_group"):
+                for item in eligible_group_items(
+                    group["item_group"], MAX_GROUP_OPTIONS + len(seen) + 1
+                ):
+                    if len(options) >= MAX_GROUP_OPTIONS:
+                        break
+                    item_code = item["name"]
+                    if item_code in seen or item_code == code:
+                        continue
+                    seen.add(item_code)
+                    options.append(
+                        {
+                            "item_code": item_code,
+                            "item_name": item.get("item_name") or item_code,
+                            "qty": 1.0,
+                            "extra_price": 0.0,
+                            "is_default": 0,
+                        }
+                    )
+            groups.append(
+                {"name": group["name"], "min": group["min"], "max": group["max"], "options": options}
+            )
+        expanded[code] = groups
+
+    option_codes = {
+        option["item_code"]
+        for groups in expanded.values()
+        for group in groups
+        for option in group["options"]
+    }
+    # A bundle offered through an Item Group would pack its own components on
+    # top of the pick; POSCombo refuses one as an explicit option for the same
+    # reason.
+    bundle_codes = (
+        set(
+            frappe.get_all(
+                "Product Bundle",
+                filters={"new_item_code": ["in", sorted(option_codes)], "disabled": 0},
+                pluck="new_item_code",
+            )
+            or []
+        )
+        if option_codes
+        else set()
+    )
+
+    codes = set(definitions) | option_codes
+    meta = _item_meta(codes)
+    prices = _price_map(codes, price_list, currency, customer)
+    stock = _stock_map(
+        {code for code in option_codes if cint((meta.get(code) or {}).get("is_stock_item"))},
+        warehouse,
+    )
+    targets_by_parent, attribute_targets_by_parent = _combo_targets(
+        [definition["name"] for definition in definitions.values()]
+    )
+
+    combos = []
+    for code, definition in definitions.items():
+        parent_meta = meta.get(code) or {}
+        groups = []
+        for group in expanded[code]:
+            options = []
+            for option in group["options"]:
+                item_code = option["item_code"]
+                if item_code in bundle_codes:
+                    continue
+                line_meta = meta.get(item_code) or {}
+                is_stock = int(line_meta.get("is_stock_item") or 0)
+                options.append(
+                    {
+                        "item_code": item_code,
+                        "item_name": line_meta.get("item_name") or option.get("item_name") or item_code,
+                        "qty": flt(option.get("qty")) or 1,
+                        "extra_price": flt(option.get("extra_price")),
+                        "is_default": int(option.get("is_default") or 0),
+                        # What the pick would cost on its own — the paquete's
+                        # saving is computed against it, never charged.
+                        "rate": _rate_for(prices, item_code, None, line_meta.get("stock_uom")),
+                        "uom": line_meta.get("stock_uom"),
+                        "image": line_meta.get("image"),
+                        "is_stock_item": is_stock,
+                        # null for a service: it has no shelf, and 0 would read
+                        # as "sold out" to the cashier.
+                        "actual_qty": flt(stock.get(item_code)) if is_stock else None,
+                    }
+                )
+            groups.append(
+                {"name": group["name"], "min": group["min"], "max": group["max"], "options": options}
+            )
+
+        combos.append(
+            {
+                "kind": "choice",
+                "item_code": code,
+                "item_name": parent_meta.get("item_name") or code,
+                "rate": _rate_for(prices, code, None, parent_meta.get("stock_uom")),
+                "image": parent_meta.get("image"),
+                "priority": definition.get("priority", 0),
+                "targets": targets_by_parent.get(definition["name"], []),
+                "target_attribute": target_attribute,
+                "target_attribute_values": attribute_targets_by_parent.get(definition["name"], []),
+                "components": [],
+                "groups": groups,
+            }
+        )
     return combos
 
 

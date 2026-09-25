@@ -293,6 +293,13 @@ extend_doctype_class = {
 #
 # auto_cancel_exempted_doctypes = ["Auto Repeat"]
 
+# Lines whose price another rule owns (`_reprice._price_guard_exemptions`).
+# A paquete's picked lines sell at 0 or at their extra charge; the voucher
+# returns only the lines that match the POS Combo they claim to belong to.
+posa_price_guard_exemptions = [
+    "posawesome.posawesome.api.combo_choice.combo_line_exemptions",
+]
+
 fixtures = [
     {
         "doctype": "Custom Field",
@@ -535,6 +542,19 @@ fixtures = [
                     # the export is the ONLY delivery path they have.
                     "POS Invoice Item-posa_combo_components",
                     "POS Invoice Item-posa_combo_broken",
+                    # The same two on Sales Invoice Item: every tenant sells in
+                    # Sales Invoice mode, where the pair was silently dropped on
+                    # each draft save and a resumed combo came back plain.
+                    "Sales Invoice Item-posa_combo_components",
+                    "Sales Invoice Item-posa_combo_broken",
+                    # Paquete picks (POS Combo, type Choice Groups): the paquete
+                    # line a picked line belongs to (its posa_row_id) and the
+                    # group it answers. combo_choice.py vouches for their price
+                    # at submit by these two, and a return is matched by them.
+                    "POS Invoice Item-posa_combo_parent",
+                    "POS Invoice Item-posa_combo_group",
+                    "Sales Invoice Item-posa_combo_parent",
+                    "Sales Invoice Item-posa_combo_group",
                     # Cotización → venta (add_quotation_conversion_fields):
                     # the invoice names the promise it honours, the quotation
                     # names the sale that closed it, and the register keeps the

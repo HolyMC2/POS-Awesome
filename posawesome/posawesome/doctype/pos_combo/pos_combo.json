@@ -7,9 +7,14 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "combo_type",
   "product_bundle",
+  "combo_item",
   "column_break_2",
   "disabled",
+  "choices_section",
+  "groups",
+  "options",
   "presentation_section",
   "priority",
   "targeting_section",
@@ -18,13 +23,35 @@
  ],
  "fields": [
   {
+   "default": "Product Bundle",
+   "description": "Product Bundle: fixed components (case + mica + instalación), stock follows the bundle. Choice Groups: the customer picks from groups (bebida, pan) — a paquete. The chosen items ride the ticket as their own lines so stock, kitchen tickets and reports see them.",
+   "fieldname": "combo_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Combo Type",
+   "options": "Product Bundle\nChoice Groups"
+  },
+  {
    "description": "The ERPNext Product Bundle this combo presents. Components, and the stock decrement that follows them, live there — this record only decides how the register shows it.",
    "fieldname": "product_bundle",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Product Bundle",
    "options": "Product Bundle",
-   "reqd": 1,
+   "unique": 1,
+   "mandatory_depends_on": "eval:doc.combo_type!='Choice Groups'",
+   "depends_on": "eval:doc.combo_type!='Choice Groups'"
+  },
+  {
+   "depends_on": "eval:doc.combo_type=='Choice Groups'",
+   "description": "The item the register sells for this paquete, at its own Item Price. A non-stock sales item that is not itself a Product Bundle: the picked items carry the stock.",
+   "fieldname": "combo_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Combo Item",
+   "mandatory_depends_on": "eval:doc.combo_type=='Choice Groups'",
+   "options": "Item",
    "unique": 1
   },
   {
@@ -36,6 +63,26 @@
    "fieldname": "disabled",
    "fieldtype": "Check",
    "label": "Disabled"
+  },
+  {
+   "depends_on": "eval:doc.combo_type=='Choice Groups'",
+   "fieldname": "choices_section",
+   "fieldtype": "Section Break",
+   "label": "Choices"
+  },
+  {
+   "description": "What the cashier asks, in order: «Bebida» (1), «Pan» (1), «Extras» (0–2).",
+   "fieldname": "groups",
+   "fieldtype": "Table",
+   "label": "Groups",
+   "options": "POS Combo Group"
+  },
+  {
+   "description": "The answers to each group. Extra Charge is added to the combo price per pick; Default is preselected.",
+   "fieldname": "options",
+   "fieldtype": "Table",
+   "label": "Options",
+   "options": "POS Combo Option"
   },
   {
    "fieldname": "presentation_section",
@@ -71,7 +118,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-22 10:00:00.000000",
+ "modified": "2026-09-25 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "POS Combo",

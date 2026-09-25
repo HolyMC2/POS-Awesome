@@ -94,6 +94,11 @@ class _Db:
         # targeting tests hand in the doctypes they need.
         return doctype == "DocType" and name in self.doctypes
 
+    def has_column(self, doctype, column):
+        # A POS Combo that predates `combo_type`: every row is a bundle
+        # overlay and no paquete tables exist — the code's own degraded path.
+        return False
+
     def get_value(self, doctype, name, fieldname=None, as_dict=False, **kwargs):
         self.calls.append((doctype, name, fieldname))
         if doctype == "Customer":
@@ -113,8 +118,9 @@ def _fake_frappe(db, rows=None):
     module.db = db
     table = {**_ROWS, **(rows or {})}
 
-    def get_all(doctype, filters=None, fields=None, order_by=None, **kwargs):
-        return table.get(doctype, [])
+    def get_all(doctype, filters=None, fields=None, order_by=None, pluck=None, **kwargs):
+        rows = table.get(doctype, [])
+        return [row.get(pluck) for row in rows] if pluck else rows
 
     module.get_all = get_all
     module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
@@ -474,6 +480,9 @@ class ShapeTests(unittest.TestCase):
                 "image",
                 "item_code",
                 "item_name",
+                # "bundle" | "choice": which of the two combo shapes this is.
+                # A paquete (choice) carries `groups` instead of components.
+                "kind",
                 "priority",
                 "rate",
                 "target_attribute",
@@ -481,6 +490,7 @@ class ShapeTests(unittest.TestCase):
                 "targets",
             ],
         )
+        self.assertEqual(combo["kind"], "bundle")
         self.assertEqual(
             sorted(combo["components"][0]),
             ["actual_qty", "is_stock_item", "item_code", "item_name", "qty", "rate", "uom"],
@@ -573,6 +583,148 @@ class AttributeTargetingTests(unittest.TestCase):
             sorted(answer["COMBO-DESAYUNO"][0]),
             ["actual_qty", "is_stock_item", "item_code", "item_name", "qty", "rate", "uom"],
         )
+
+
+
+class _PaqueteDb(_Db):
+    """A migrated site: the paquete tables and the type column exist."""
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("doctypes", ("POS Combo", "POS Combo Group", "POS Combo Option"))
+        super().__init__(**kwargs)
+
+    def has_column(self, doctype, column):
+        return True
+
+
+# «Combo Desayuno»: pick a drink (Latte +$10), pick a pan — the Pan group is
+# fed by the «Panaderia» Item Group, so a new pan joins without editing it.
+_PAQUETE = {
+    "CAFE-PAQ": {
+        "name": "CAFE-PAQ",
+        "combo_item": "CAFE-PAQ",
+        "priority": 5,
+        "groups": [
+            {"name": "Bebida", "min": 1, "max": 1, "item_group": None, "options": [
+                {"item_code": "AMERICANO", "item_name": "Americano", "qty": 1.0,
+                 "extra_price": 0.0, "is_default": 1},
+                {"item_code": "LATTE", "item_name": "Latte", "qty": 1.0,
+                 "extra_price": 10.0, "is_default": 0},
+            ]},
+            {"name": "Pan", "min": 1, "max": 2, "item_group": "Panaderia", "options": [
+                {"item_code": "CONCHA", "item_name": "Concha", "qty": 1.0,
+                 "extra_price": 0.0, "is_default": 0},
+            ]},
+        ],
+    }
+}
+
+_PAQUETE_ROWS = {
+    "POS Combo": [{"name": "CAFE-PAQ", "product_bundle": None, "priority": 5,
+                   "combo_type": "Choice Groups"}],
+    "Item": _ROWS["Item"] + [
+        {"name": "CAFE-PAQ", "item_name": "Combo Desayuno", "is_stock_item": 0,
+         "stock_uom": "Nos", "image": "/files/paq.jpg"},
+        {"name": "AMERICANO", "item_name": "Americano", "is_stock_item": 0,
+         "stock_uom": "Nos", "image": None},
+        {"name": "LATTE", "item_name": "Latte", "is_stock_item": 0,
+         "stock_uom": "Nos", "image": None},
+        {"name": "CONCHA", "item_name": "Concha", "is_stock_item": 1,
+         "stock_uom": "Nos", "image": None},
+        {"name": "CUERNO", "item_name": "Cuerno", "is_stock_item": 1,
+         "stock_uom": "Nos", "image": None},
+        {"name": "PAN-COMBO", "item_name": "Pan combo", "is_stock_item": 0,
+         "stock_uom": "Nos", "image": None},
+    ],
+}
+
+_PAQUETE_PRICES = GENERIC + [
+    {"item_code": "CAFE-PAQ", "price_list_rate": 129, "currency": "MXN", "uom": "Nos", "customer": None},
+    {"item_code": "AMERICANO", "price_list_rate": 35, "currency": "MXN", "uom": "Nos", "customer": None},
+    {"item_code": "LATTE", "price_list_rate": 55, "currency": "MXN", "uom": "Nos", "customer": None},
+    {"item_code": "CONCHA", "price_list_rate": 18, "currency": "MXN", "uom": "Nos", "customer": None},
+    {"item_code": "CUERNO", "price_list_rate": 22, "currency": "MXN", "uom": "Nos", "customer": None},
+]
+
+
+@contextlib.contextmanager
+def _paquete_world(rows=None, definitions=_PAQUETE, group_items=None):
+    choice = types.ModuleType("posawesome.posawesome.api.combo_choice")
+    choice.load_choice_definitions = lambda combo_items=None: {
+        code: definition
+        for code, definition in definitions.items()
+        if combo_items is None or code in combo_items
+    }
+    members = group_items if group_items is not None else {
+        "Panaderia": [{"name": "CONCHA", "item_name": "Concha"}, {"name": "CUERNO", "item_name": "Cuerno"}]
+    }
+    choice.eligible_group_items = lambda group, limit=None: list(members.get(group, []))
+    with mock.patch.dict(sys.modules, {"posawesome.posawesome.api.combo_choice": choice}):
+        with _world(_PAQUETE_PRICES, db=_PaqueteDb(), rows={**_PAQUETE_ROWS, **(rows or {})}) as world:
+            yield world
+
+
+class PaqueteTests(unittest.TestCase):
+    """Combos with choice groups ride beside the bundles."""
+
+    def _paquete(self, **kwargs):
+        with _paquete_world(**kwargs):
+            combos_ = combos.get_combos(pos_profile=PROFILE)
+        return next(c for c in combos_ if c["item_code"] == "CAFE-PAQ"), combos_
+
+    def test_a_paquete_rides_with_its_groups_priced(self):
+        paquete, _all = self._paquete()
+        self.assertEqual(paquete["kind"], "choice")
+        self.assertEqual(paquete["rate"], 129.0)
+        self.assertEqual(paquete["components"], [])
+        self.assertEqual([g["name"] for g in paquete["groups"]], ["Bebida", "Pan"])
+        bebida = {o["item_code"]: o for o in paquete["groups"][0]["options"]}
+        self.assertEqual(bebida["LATTE"]["extra_price"], 10.0)
+        self.assertEqual(bebida["LATTE"]["rate"], 55.0)
+        self.assertEqual(bebida["AMERICANO"]["is_default"], 1)
+
+    def test_a_service_option_has_no_shelf_figure(self):
+        paquete, _all = self._paquete()
+        bebida = {o["item_code"]: o for o in paquete["groups"][0]["options"]}
+        pan = {o["item_code"]: o for o in paquete["groups"][1]["options"]}
+        self.assertIsNone(bebida["AMERICANO"]["actual_qty"])
+        self.assertEqual(pan["CONCHA"]["actual_qty"], 0.0)
+
+    def test_an_item_group_feeds_options_after_the_explicit_rows(self):
+        paquete, _all = self._paquete()
+        pan = paquete["groups"][1]["options"]
+        self.assertEqual([o["item_code"] for o in pan], ["CONCHA", "CUERNO"])
+        self.assertEqual((pan[1]["extra_price"], pan[1]["qty"]), (0.0, 1.0))
+
+    def test_a_bundle_offered_through_an_item_group_is_left_out(self):
+        paquete, _all = self._paquete(
+            rows={"Product Bundle": _ROWS["Product Bundle"]
+                  + [{"name": "PAN-COMBO", "new_item_code": "PAN-COMBO", "description": ""}]},
+            group_items={"Panaderia": [{"name": "PAN-COMBO", "item_name": "Pan combo"}]},
+        )
+        self.assertEqual([o["item_code"] for o in paquete["groups"][1]["options"]], ["CONCHA"])
+
+    def test_a_paquete_does_not_switch_on_the_bundle_allowlist(self):
+        # The tenant authored ONE paquete and no bundle overlay. Counting the
+        # paquete as an overlay row would hide every Product Bundle.
+        _paquete, everything = self._paquete()
+        self.assertIn("COMBO-DESAYUNO", [c["item_code"] for c in everything])
+
+    def test_priority_orders_paquetes_with_bundles(self):
+        _paquete, everything = self._paquete()
+        self.assertEqual([c["item_code"] for c in everything], ["COMBO-DESAYUNO", "CAFE-PAQ"])
+
+    def test_the_narrow_cart_question_can_name_a_paquete(self):
+        with _paquete_world():
+            answer = combos.get_combo_components(bundles=["CAFE-PAQ"], pos_profile=PROFILE)
+        # The fake get_all ignores filters, so the bundle rides along here;
+        # what matters is that naming a paquete answers "no components".
+        self.assertEqual(answer["CAFE-PAQ"], [])
+
+    def test_a_pre_migration_site_offers_no_paquetes(self):
+        with _world(_PAQUETE_PRICES, rows=_PAQUETE_ROWS):
+            everything = combos.get_combos(pos_profile=PROFILE)
+        self.assertNotIn("CAFE-PAQ", [c["item_code"] for c in everything])
 
 
 if __name__ == "__main__":

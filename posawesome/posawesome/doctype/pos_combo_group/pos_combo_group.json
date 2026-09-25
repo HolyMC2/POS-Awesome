@@ -1,0 +1,59 @@
+{
+ "actions": [],
+ "creation": "2026-09-25 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "group_name",
+  "min_qty",
+  "max_qty",
+  "item_group"
+ ],
+ "fields": [
+  {
+   "description": "What the cashier asks for — «Bebida», «Pan», «Extras». The options below name this group to join it.",
+   "fieldname": "group_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Group",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "description": "Picks the customer MUST make. 0 makes the group optional (extras).",
+   "fieldname": "min_qty",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Min Picks",
+   "non_negative": 1
+  },
+  {
+   "default": "1",
+   "description": "Picks the customer MAY make. The same option can be picked more than once while this allows it («2 panes» = 2 conchas).",
+   "fieldname": "max_qty",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Max Picks",
+   "non_negative": 1
+  },
+  {
+   "description": "Optional. Every sellable item in this Item Group (and its subgroups) becomes an option at no extra charge, so a new drink on the menu joins the combo without editing it. Rows in the Options table still win: use them for upcharges and defaults.",
+   "fieldname": "item_group",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Any Item From",
+   "options": "Item Group"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-09-25 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "POSAwesome",
+ "name": "POS Combo Group",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}
