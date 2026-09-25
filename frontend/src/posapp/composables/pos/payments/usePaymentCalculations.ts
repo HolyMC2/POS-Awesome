@@ -12,6 +12,12 @@ export interface PaymentCalculationOptions {
 	customerCreditDict: Ref<any[]>;
 	customerInfo: Ref<any>;
 	giftCardRedemptions?: Ref<any[]>;
+	/**
+	 * A provider-financed credit sale's share (split shape): settled on the
+	 * provider's Mode of Payment at submit, so the counter only collects the
+	 * rest. Counted like a gift card — as already covered.
+	 */
+	financedAmount?: Ref<number>;
 	formatCurrency: (_value: number, _currency: string) => string;
 }
 
@@ -29,6 +35,7 @@ export function usePaymentCalculations(options: PaymentCalculationOptions) {
 		customerCreditDict,
 		customerInfo,
 		giftCardRedemptions,
+		financedAmount,
 		formatCurrency,
 	} = options;
 
@@ -99,6 +106,7 @@ export function usePaymentCalculations(options: PaymentCalculationOptions) {
 				)
 			: 0;
 		total += giftCardTotal;
+		total += flt(unref(financedAmount) || 0);
 
 		return flt(total);
 	});

@@ -458,6 +458,7 @@ import InvoiceActionButtons from "./InvoiceActionButtons.vue";
 import { bandOwnsLane } from "./bandLaneOwnership";
 import { resolveTaxBreakdown } from "./saleTaxBreakdown";
 import { mixedIsAvailable, resolveTenderChips } from "./tenderChips";
+import { useCreditSaleStore } from "../../../stores/creditSaleStore";
 import {
 	armTender,
 	peekArmedTender,
@@ -571,6 +572,7 @@ const responsive = useResponsive();
 const uiStore = useUIStore();
 const verticalStore = useVerticalStore();
 const invoiceStore = useInvoiceStore();
+const creditStore = useCreditSaleStore();
 // The bus the SHELL listens on, by injection; the module import is the fallback
 // for specs that mount this card with no app installed.
 const eventBus = inject("eventBus", importedBus);
@@ -742,7 +744,9 @@ const netSubtotal = computed(() => taxBreakdown.value?.net ?? props.subtotal);
 // carries the same `payments` child table `get_payments()` builds the invoice's
 // payment lines from, so the chips and the payment screen cannot offer
 // different tenders.
-const tenderChips = computed(() => resolveTenderChips(props.pos_profile));
+// A credit provider's Mode of Payment is filled by the credit sale, never
+// pre-armed as a tender.
+const tenderChips = computed(() => resolveTenderChips(creditStore.tenderProfile(props.pos_profile)));
 
 // What makes an arm valid, re-read on every change rather than captured at
 // selection time — the cart, the profile and the return flag all move

@@ -83,6 +83,8 @@ def _build_frappe_module(scenario: dict) -> types.ModuleType:
     frappe_module.get_doc = lambda doctype, name: scenario.get("original_invoice", {})
     frappe_module.log_error = lambda *a, **k: None
     frappe_module.get_traceback = lambda: ""
+    frappe_module.get_hooks = lambda name: list(scenario.get("hooks", {}).get(name, []))
+    frappe_module.get_attr = lambda path: scenario["hook_impls"][path]
 
     utils_module = types.ModuleType("frappe.utils")
     utils_module.flt = lambda v, *a: float(v or 0)
@@ -944,6 +946,60 @@ class RateBandOnEditableProfileTests(unittest.TestCase):
         rp = _import_reprice(scenario)
         profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
         invoice = {"items": [{"idx": 1, "item_code": "IT-1", "rate": 400.00}]}
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(invoice, profile)
+
+
+def _vouching_scenario(vouch):
+    """Another app vouches for the lines `vouch(invoice, profile)` returns."""
+    scenario = _basic_scenario()
+    scenario["hooks"] = {"posa_price_guard_exemptions": ["app.vouch"]}
+    scenario["hook_impls"] = {"app.vouch": vouch}
+    return scenario
+
+
+def _financed_lines(invoice, profile):
+    return [line for line in invoice["items"] if line.get("financed")]
+
+
+def _broken_hook(invoice, profile):
+    raise RuntimeError("the app's lookup failed")
+
+
+@unittest.skipIf(_UNDER_BENCH, "standalone stub test - run with python3 directly")
+class PriceGuardExemptionTests(unittest.TestCase):
+    """A credit sale prices its covered line from the provider's approval —
+    far from the list price, down to the down payment."""
+
+    def test_a_vouched_line_skips_the_band_and_the_others_do_not(self):
+        rp = _import_reprice(_vouching_scenario(_financed_lines))
+        profile = {"posa_allow_user_to_edit_rate": 1, "selling_price_list": "Doco"}
+        invoice = {"items": [{"idx": 1, "item_code": "IT-1", "rate": 8.00, "financed": 1}]}
+        rp.assert_rates_within_band(invoice, profile)
+        invoice["items"].append({"idx": 2, "item_code": "IT-2", "rate": 10.00})
+        with self.assertRaises(_PermissionError):
+            rp.assert_rates_within_band(invoice, profile)
+
+    def test_a_vouched_line_passes_a_register_that_forbids_rate_edits(self):
+        rp = _import_reprice(_vouching_scenario(_financed_lines))
+        profile = {"posa_allow_user_to_edit_rate": 0, "selling_price_list": "Doco"}
+        invoice = {"items": [{
+            "idx": 1, "item_code": "IT-1", "rate": 0.00, "price_list_rate": 0.00, "financed": 1,
+        }]}
+        rp.assert_rates_within_band(invoice, profile)
+
+    def test_a_vouched_line_skips_the_discount_cap(self):
+        rp = _import_reprice(_vouching_scenario(_financed_lines))
+        invoice = {"items": [{"idx": 1, "item_code": "IT-1", "discount_percentage": 90, "financed": 1}]}
+        rp.enforce_discount_limit(invoice, profile_doc=None)
+        invoice["items"][0]["financed"] = 0
+        with self.assertRaises(_PermissionError):
+            rp.enforce_discount_limit(invoice, profile_doc=None)
+
+    def test_a_failing_hook_exempts_nothing(self):
+        rp = _import_reprice(_vouching_scenario(_broken_hook))
+        profile = {"posa_allow_user_to_edit_rate": 1, "selling_price_list": "Doco"}
+        invoice = {"items": [{"idx": 1, "item_code": "IT-1", "rate": 8.00, "financed": 1}]}
         with self.assertRaises(_PermissionError):
             rp.assert_rates_within_band(invoice, profile)
 

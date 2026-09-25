@@ -10,6 +10,8 @@ import {
 	reportPrintPopupBlocked,
 	trackPrintPopupBlocked,
 } from "../../utils/printPopupBlocked";
+import { resolveCreditTicketFormat } from "../../utils/creditTicketFormat";
+import { isOffline } from "../../../offline/index";
 
 declare const frappe: any;
 declare const __: (text: string, args?: any[]) => string;
@@ -110,8 +112,11 @@ export function useLastInvoicePrinting() {
 			return;
 		}
 
+		const creditFormat = isOffline()
+			? null
+			: await resolveCreditTicketFormat({ doctype, name: lastInvoiceId });
 		const pf =
-			posProfile.print_format_for_online || posProfile.print_format;
+			creditFormat || posProfile.print_format_for_online || posProfile.print_format;
 		const letter_head = posProfile.letter_head || 0;
 		const debugPrint = isDebugPrintEnabled();
 		const openInNewTab = parseBooleanSetting(

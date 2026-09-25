@@ -47,6 +47,7 @@
 					:can-delete-draft="canDeleteActiveDraftSource"
 					:repair-busy="repairChangeLoading"
 					:offline="isOffline()"
+					:credit-sales="creditStore.enabled"
 					:collections="{
 						history: {
 							page: paginatedHistoryInvoices,
@@ -101,6 +102,7 @@
 					@collect="openAddPayment($event)"
 					@delete-draft="deleteDraft($event)"
 					@repair="repairChangeAllocation($event)"
+					@credit="openCreditSale($event)"
 					@draft-action="runLedgerDraftAction($event.invoice, $event.action)"
 				/>
 			</v-card>
@@ -1519,6 +1521,8 @@ import {
 import { notifyQzPrintFallback, printDocumentViaQz } from "../../../services/qzTray";
 import { useHostedSheet } from "../../../composables/pos/shell/useHostedSheet";
 import { isOffline } from "../../../../offline/index";
+import { resolveCreditTicketFormat } from "../../../utils/creditTicketFormat";
+import { useCreditSaleStore } from "../../../stores/creditSaleStore";
 import DocumentSourceSelector from "../shared/DocumentSourceSelector.vue";
 import { beginInvoiceListRequest } from "../../../utils/invoiceListRequests";
 import InvoiceLedgerSurface from "./ledger/InvoiceLedgerSurface.vue";
@@ -1600,7 +1604,9 @@ export default {
 			closeSheet: () => uiStore.closeInvoiceManagement(),
 			emit,
 		});
+		const creditStore = useCreditSaleStore();
 		return {
+			creditStore,
 			// The ledger is the chrome the RAIL gets; the floating modal keeps
 			// the tabs. `useHostedSheet` already answered both questions, and
 			// re-deriving either one here would be a second source of truth
@@ -2859,11 +2865,19 @@ export default {
 			this.uiStore.closeInvoiceManagement();
 			this.router.push("/payments");
 		},
+		/** The shell hosts the credit sale's paperwork dialog; this only names the sale. */
+		openCreditSale(invoice) {
+			if (invoice?.name) this.creditStore.openAfterSale(invoice.name);
+		},
 		async printInvoice(invoice) {
 			const profile = this.posProfile;
 			if (!invoice?.name || !profile) return;
 			const doctype = invoice.doctype || this.currentInvoiceDoctype;
-			const printFormat = profile.print_format_for_online || profile.print_format || "Standard";
+			const creditFormat = isOffline()
+				? null
+				: await resolveCreditTicketFormat({ doc: invoice, doctype, name: invoice.name });
+			const printFormat =
+				creditFormat || profile.print_format_for_online || profile.print_format || "Standard";
 			const letterHead = profile.letter_head || 0;
 			const debugPrint = isDebugPrintEnabled();
 			const useSilentPrint = !!profile.posa_silent_print;

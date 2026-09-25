@@ -36,6 +36,7 @@ import { storeToRefs } from "pinia";
 
 import { useInvoiceStore } from "../../../../stores/invoiceStore";
 import { useUIStore } from "../../../../stores/uiStore";
+import { useCreditSaleStore } from "../../../../stores/creditSaleStore";
 import { resolveBandState, type BandState } from "../../../../composables/pos/shell/bandState";
 
 // Async, like `Pos.vue`'s own reference to it: the payment chunk must not be
@@ -48,6 +49,7 @@ const emit = defineEmits<{ band: [BandState] }>();
 
 const invoiceStore = useInvoiceStore();
 const uiStore = useUIStore();
+const creditStore = useCreditSaleStore();
 const { invoiceDoc } = storeToRefs(invoiceStore);
 const { posProfile } = storeToRefs(uiStore);
 
@@ -69,10 +71,13 @@ const total = computed(() => {
 	const doc = invoiceDoc.value as Record<string, unknown> | null;
 	if (!doc) return 0;
 	const profile = (posProfile.value ?? {}) as Record<string, unknown>;
-	if (profile.posa_allow_multi_currency && doc.currency !== profile.currency) {
-		return toNumber(doc.grand_total);
-	}
-	return toNumber(doc.rounded_total) || toNumber(doc.grand_total);
+	const charged =
+		profile.posa_allow_multi_currency && doc.currency !== profile.currency
+			? toNumber(doc.grand_total)
+			: toNumber(doc.rounded_total) || toNumber(doc.grand_total);
+	// A split credit sale's provider share is settled on its Mode of Payment at
+	// submit; the counter collects the rest, so the band measures that.
+	return doc.is_return ? charged : Math.max(charged - toNumber(creditStore.providerPayment), 0);
 });
 
 /** What has actually been committed to payment rows. */

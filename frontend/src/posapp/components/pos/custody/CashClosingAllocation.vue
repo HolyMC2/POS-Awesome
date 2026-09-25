@@ -221,6 +221,13 @@
 				data-testid="cash-closing-bags"
 			>
 				<h4 class="cash-closing__step-title">{{ __("Bags going into the safe") }}</h4>
+				<p class="cash-closing__hint" data-testid="cash-closing-bags-help">
+					{{
+						__(
+							"Put all the counted cash into sealed bags. A float bag waits in the safe to start a drawer; a takings bag is sent to the bank.",
+						)
+					}}
+				</p>
 
 				<p class="cash-closing__meter" data-testid="cash-closing-remaining">
 					<span>{{ __("Allocated") }}</span>
@@ -257,25 +264,26 @@
 								autocomplete="off"
 								spellcheck="false"
 								:aria-invalid="sealProblem(index) ? 'true' : 'false'"
-								:aria-describedby="
-									sealProblem(index) ? `${ids.bag}-${bag.uid}-hint` : undefined
-								"
+								:aria-describedby="`${ids.bag}-${bag.uid}-hint`"
 							/>
 						</label>
 						<label class="cash-closing__field" :for="`${ids.purpose}-${bag.uid}`">
 							<span>{{ __("Purpose") }}</span>
 							<select :id="`${ids.purpose}-${bag.uid}`" v-model="bag.purpose">
-								<option value="Float">{{ __("Float") }}</option>
-								<option value="Takings">{{ __("Takings") }}</option>
+								<option value="Float">{{ __("Float for the next drawer") }}</option>
+								<option value="Takings">{{ __("Takings for the bank") }}</option>
 							</select>
 						</label>
 					</div>
 					<p
-						v-if="sealProblem(index)"
 						:id="`${ids.bag}-${bag.uid}-hint`"
-						class="cash-closing__hint cash-closing__hint--warn"
+						class="cash-closing__hint"
+						:class="{ 'cash-closing__hint--warn': sealProblem(index) }"
 					>
-						{{ sealProblem(index) }}
+						{{
+							sealProblem(index) ||
+							__("Write this seal on the physical bag. Each bag keeps its own unique seal.")
+						}}
 					</p>
 
 					<div class="cash-closing__bag-amount">

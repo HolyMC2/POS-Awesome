@@ -434,3 +434,109 @@ class TestCashMovementTerminalController(unittest.TestCase):
             for action in [movement.before_submit, movement.before_cancel, movement.on_trash]:
                 with self.subTest(action=action.__name__), self.assertRaises(PermissionError):
                     action()
+
+
+class TestSalesInvoiceLink(unittest.TestCase):
+    """An expense paid for a sale (a credit sale's chip or activation)."""
+
+    profile = SimpleNamespace(name="POS-PROFILE-1", company="My Co")
+
+    def _runtime(self, mock_frappe, row, can_read=True):
+        mock_frappe.db.get_value.return_value = row
+        mock_frappe.has_permission.return_value = can_read
+        mock_frappe.PermissionError = PermissionError
+        mock_frappe.throw.side_effect = lambda message, *_args: (_ for _ in ()).throw(ValueError(message))
+
+    @patch("posawesome.posawesome.api.cash_movement.validation.frappe")
+    def test_no_sale_named_is_not_a_link(self, mock_frappe):
+        self.assertIsNone(validation.validate_sales_invoice_link("", self.profile, "Expense"))
+        self.assertIsNone(validation.validate_sales_invoice_link(None, self.profile, "Deposit"))
+        mock_frappe.db.get_value.assert_not_called()
+
+    @patch("posawesome.posawesome.api.cash_movement.validation.frappe")
+    def test_submitted_sale_of_the_company_links(self, mock_frappe):
+        self._runtime(mock_frappe, SimpleNamespace(docstatus=1, company="My Co", is_return=0))
+        self.assertEqual(
+            validation.validate_sales_invoice_link(" SINV-1 ", self.profile, "Expense"), "SINV-1"
+        )
+
+    @patch("posawesome.posawesome.api.cash_movement.validation.frappe")
+    def test_only_expenses_link_and_only_to_valid_sales(self, mock_frappe):
+        cases = [
+            ("Deposit", SimpleNamespace(docstatus=1, company="My Co", is_return=0), True),
+            ("Expense", None, True),
+            ("Expense", SimpleNamespace(docstatus=0, company="My Co", is_return=0), True),
+            ("Expense", SimpleNamespace(docstatus=1, company="My Co", is_return=1), True),
+            ("Expense", SimpleNamespace(docstatus=1, company="Other Co", is_return=0), True),
+            ("Expense", SimpleNamespace(docstatus=1, company="My Co", is_return=0), False),
+        ]
+        for movement_type, row, can_read in cases:
+            with self.subTest(movement_type=movement_type, row=row, can_read=can_read):
+                self._runtime(mock_frappe, row, can_read)
+                with self.assertRaises((ValueError, PermissionError)):
+                    validation.validate_sales_invoice_link("SINV-1", self.profile, movement_type)
+
+    @patch("posawesome.posawesome.api.cash_movement.service.parse_payload")
+    @patch("posawesome.posawesome.api.cash_movement.service.get_opening_shift")
+    @patch("posawesome.posawesome.api.cash_movement.service.get_pos_profile")
+    @patch("posawesome.posawesome.api.cash_movement.service.validate_company_consistency")
+    @patch("posawesome.posawesome.api.cash_movement.service.ensure_feature_enabled")
+    @patch("posawesome.posawesome.api.cash_movement.service.ensure_movement_allowed")
+    @patch("posawesome.posawesome.api.cash_movement.service.validate_amount")
+    @patch("posawesome.posawesome.api.cash_movement.service.validate_remarks")
+    @patch("posawesome.posawesome.api.cash_movement.service.validate_sales_invoice_link")
+    @patch("posawesome.posawesome.api.cash_movement.service.ensure_no_duplicate_client_request")
+    @patch("posawesome.posawesome.api.cash_movement.service.resolve_source_cash_account")
+    @patch("posawesome.posawesome.api.cash_movement.service.resolve_target_account")
+    @patch("posawesome.posawesome.api.cash_movement.service.validate_account_company")
+    @patch("posawesome.posawesome.api.cash_movement.service.frappe")
+    def test_expense_stores_the_linked_sale(
+        self,
+        mock_frappe,
+        _validate_account_company,
+        mock_resolve_target_account,
+        mock_resolve_source_cash_account,
+        mock_ensure_no_duplicate_client_request,
+        mock_validate_link,
+        *_patched,
+    ):
+        guard = patch("posawesome.posawesome.api.shift_terminal.assert_terminal_access")
+        guard.start()
+        self.addCleanup(guard.stop)
+        mock_parse_payload, mock_get_opening_shift, mock_get_pos_profile = _patched[-1], _patched[-2], _patched[-3]
+        mock_parse_payload.return_value = {"pos_opening_shift": "POS-OPEN-1", "sales_invoice": "SINV-1"}
+        mock_get_opening_shift.return_value = SimpleNamespace(name="POS-OPEN-1", pos_profile="POS-PROFILE-1")
+        mock_get_pos_profile.return_value = SimpleNamespace(name="POS-PROFILE-1", company="My Co", get=lambda _k: None)
+        _patched[1].return_value = 150  # validate_amount
+        mock_ensure_no_duplicate_client_request.return_value = None
+        mock_validate_link.return_value = "SINV-1"
+        mock_resolve_source_cash_account.return_value = "POS Cash - MC"
+        mock_resolve_target_account.return_value = ("Gastos - MC", "Gastos - MC")
+        movement_doc = MagicMock()
+        movement_doc.as_dict.return_value = {"name": "POS-CM-.26.-00050"}
+        mock_frappe.get_doc.return_value = movement_doc
+
+        service._create_cash_movement({"x": 1}, "Expense")
+
+        mock_validate_link.assert_called_once()
+        self.assertEqual(mock_validate_link.call_args[0][0], "SINV-1")
+        (created_dict,), _ = mock_frappe.get_doc.call_args
+        self.assertEqual(created_dict["sales_invoice"], "SINV-1")
+        self.assertEqual(created_dict["movement_type"], "Expense")
+
+    @patch("posawesome.posawesome.api.cash_movement.queries.frappe")
+    def test_sale_expenses_query_names_the_payer(self, mock_frappe):
+        class _Row(dict):
+            """frappe._dict's shape: keys readable as attributes."""
+
+            __getattr__ = dict.get
+
+        mock_frappe.get_all.side_effect = [
+            [_Row(user="cashier@x", amount=100, docstatus=1)],
+            [("cashier@x", "Ana Cajera")],
+        ]
+        rows = queries.get_sales_invoice_expenses("SINV-1")
+        first_filters = mock_frappe.get_all.call_args_list[0].kwargs["filters"]
+        self.assertEqual(first_filters["sales_invoice"], "SINV-1")
+        self.assertEqual(first_filters["movement_type"], "Expense")
+        self.assertEqual(rows[0]["user_name"], "Ana Cajera")

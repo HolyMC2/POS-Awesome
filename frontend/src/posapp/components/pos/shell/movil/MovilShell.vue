@@ -92,9 +92,11 @@
 			:prints-ticket="true"
 			:item-count="itemCount"
 			:can-collect="canCollect"
+			:credit="payCredit"
 			@update:tender="(mode) => emit('update:tender', mode)"
 			@split="(intent) => emit('split', intent)"
 			@collect="(intent) => emit('collect', intent)"
+			@credit="emit('credit')"
 		/>
 		<MobileSaleScreen
 			v-else-if="screen === 'cart'"
@@ -150,7 +152,10 @@ import type { TenderProfile } from "../../invoice/tenderChips";
 import type { SaleSummarySourceLine } from "../../payments/saleSummary";
 import MobileBrowseScreen from "../../mobile/browse/MobileBrowseScreen.vue";
 import type { BrowseCard, BrowseCatalogItem } from "../../mobile/browse/browseCatalog";
-import MovilCobroView, { type CollectionIntent } from "../../mobile/pay/MovilCobroView.vue";
+import MovilCobroView, {
+	type CollectionIntent,
+	type MovilCreditSummary,
+} from "../../mobile/pay/MovilCobroView.vue";
 import MovilOrdenView from "../../mobile/orders/MovilOrdenView.vue";
 import type { ServiceOrderView } from "../../mobile/orders/serviceOrderLines";
 import MovilLineSheet from "../../mobile/line/MovilLineSheet.vue";
@@ -194,6 +199,8 @@ withDefaults(
 		 *  Payments.vue, which answers the emitted intents. */
 		payTitle?: string;
 		payTotal?: number;
+		/** A provider-financed credit sale on the pay screen, or null when off. */
+		payCredit?: MovilCreditSummary | null;
 		currency?: string | null;
 		profile?: TenderProfile | null;
 		itemCount?: number;
@@ -230,6 +237,7 @@ withDefaults(
 		windowHeight: 844,
 		payTitle: "",
 		payTotal: 0,
+		payCredit: null,
 		currency: null,
 		profile: null,
 		itemCount: 0,
@@ -255,6 +263,8 @@ const emit = defineEmits<{
 	(_event: "update:tender", _mode: string | null): void;
 	(_event: "split", _intent: CollectionIntent): void;
 	(_event: "collect", _intent: CollectionIntent): void;
+	/** Open the credit sale sheet — hosted by `Payments.vue`. */
+	(_event: "credit"): void;
 	(_event: "orden-back"): void;
 	/** The line sheet's verb — the host stamps the row identity on it. */
 	(_event: "line-edit", _intent: MovilLineIntent): void;

@@ -158,6 +158,18 @@
 							@activate="cobroGiftActive = true"
 							@deactivate="cobroGiftActive = false"
 						/>
+						<!-- A provider-financed credit sale: why part of this ticket
+						     is not collected at the counter. Column one, beside the
+						     other "who is paying" facts. -->
+						<CobroFinancedSale
+							v-if="cobroMode && creditCardVisible"
+							:summary="creditCardSummary"
+							:provider-names="creditProviderNames"
+							:blocked-reason="creditBlockedReason"
+							:format-money="formatCreditMoney"
+							@open="openCreditSheet"
+							@remove="removeCreditSale"
+						/>
 						<!-- `hide-tendered` on Cobro only: the paper column prints
 						     «Recibido / Falta por cubrir» and the band carries the
 						     shortfall a third time. What is left is the Paid/Credit
@@ -317,6 +329,16 @@
 						<div v-if="!cobroMode" class="payment-section__header">
 							<h3 class="payment-section__title">{{ __("Payment Methods") }}</h3>
 						</div>
+						<CobroFinancedSale
+							v-if="!cobroMode && creditCardVisible"
+							class="payment-credit-card"
+							:summary="creditCardSummary"
+							:provider-names="creditProviderNames"
+							:blocked-reason="creditBlockedReason"
+							:format-money="formatCreditMoney"
+							@open="openCreditSheet"
+							@remove="removeCreditSale"
+						/>
 						<!--
 							COBRO: one compact line per configured tender — icon,
 							name, amount — under the pad it feeds. Same events, same
@@ -643,6 +665,11 @@
 		/>
 		<!-- MP-INTEGRATION-POINT (sale checkout): terminal hard-gate modal -->
 		<MpPointSaleGateDialog :gate="mpPointGate" />
+		<CreditSaleSheet
+			v-if="creditStore.enabled"
+			:model-value="creditStore.sheetOpen"
+			@update:model-value="(open) => (open ? creditStore.openSheet() : creditStore.closeSheet())"
+		/>
 		<GiftCardDialog
 			:model-value="giftCardDialogOpen"
 			:card-code="giftCardCode"
@@ -759,6 +786,11 @@ import { bandOwnsLane } from "./invoice/bandLaneOwnership";
 import { resolveTaxBreakdown } from "./invoice/saleTaxBreakdown";
 // MP-INTEGRATION-POINT (sale checkout): hard gate — isolated, no-op when off.
 import MpPointSaleGateDialog from "../pos_pay/MpPointSaleGateDialog.vue";
+// Provider-financed credit sales (mercado) — inert unless the profile enables them.
+import CobroFinancedSale from "./payments/cobro/CobroFinancedSale.vue";
+import CreditSaleSheet from "./credit/CreditSaleSheet.vue";
+import { useCreditSaleStore } from "../../stores/creditSaleStore";
+import { CREDIT_ISSUE_TEXT } from "../../composables/pos/credit/creditIssues";
 import { useMpPointSaleGate } from "../../composables/pos/payments/useMpPointSaleGate";
 
 const props = defineProps({
@@ -794,6 +826,7 @@ const syncStore = useSyncStore();
 const socketStore = useSocketStore();
 const floorStore = useFloorStore();
 const verticalStore = useVerticalStore();
+const creditStore = useCreditSaleStore();
 
 // Destructure format utilities
 const {
@@ -1150,6 +1183,11 @@ const paymentItemDiscountTotal = computed(() => {
 });
 
 const displayCurrency = computed(() => (invoice_doc.value ? invoice_doc.value.currency : ""));
+// The provider's share of a split credit sale: settled on its Mode of Payment
+// at submit, so every "what is left to collect" figure leaves it out.
+const financedCovered = computed(() =>
+	invoice_doc.value?.is_return ? 0 : flt(creditStore.providerPayment || 0, currency_precision.value),
+);
 const isPaymentOpen = computed(() => activeView.value === "payment" || paymentDialogOpen.value);
 const netInvoiceSettlementAmount = computed(() => {
 	if (!invoice_doc.value) return 0;
@@ -1160,7 +1198,8 @@ const netInvoiceSettlementAmount = computed(() => {
 	);
 	const coveredAmount = flt(
 		(invoice_doc.value?.loyalty_amount || loyalty_amount.value || 0) +
-			(redeemed_customer_credit.value || 0),
+			(redeemed_customer_credit.value || 0) +
+			financedCovered.value,
 		currency_precision.value,
 	);
 
@@ -1273,6 +1312,7 @@ const paymentCalculations = usePaymentCalculations({
 	customerCreditDict: customer_credit_dict,
 	customerInfo: customer_info,
 	giftCardRedemptions,
+	financedAmount: financedCovered,
 	formatCurrency: (val, _curr) => formatCurrency(val, currency_precision.value),
 });
 
@@ -1398,6 +1438,11 @@ const { ensureReturnPaymentsAreNegative, restoreReturnPayments, validateSubmissi
 		diff_payment: diff_payment,
 		is_credit_sale: is_credit_sale,
 		loyaltyAmount: loyalty_amount,
+		financedSale: () => creditStore.submission,
+		financedSaleBlocked: () =>
+			creditStore.blocked
+				? __("Complete the credit sale, or mark it as not a credit sale, before charging.")
+				: null,
 		formatFloat: (val, prec) => flt(val, prec),
 		formatCurrency,
 		stores: {
@@ -1467,9 +1512,13 @@ const isGiftCardPayment = (payment) => {
 		.includes("gift");
 };
 
+// A credit provider's Mode of Payment is filled by the credit sale, never
+// tendered by hand, so it is not offered among the methods.
+const isCreditProviderRow = (payment) => creditStore.isProviderMode(payment?.mode_of_payment);
+
 const visiblePaymentMethods = computed(() =>
 	(Array.isArray(invoice_doc.value?.payments) ? invoice_doc.value.payments : []).filter(
-		(payment) => !isGiftCardPayment(payment),
+		(payment) => !isGiftCardPayment(payment) && !isCreditProviderRow(payment),
 	),
 );
 
@@ -1514,6 +1563,50 @@ const cobroDetailsExpanded = computed(
 		is_write_off_change.value ||
 		redeem_customer_credit.value,
 );
+
+// ── Provider-financed credit sale (mercado) ──────────────────────────────
+// The card and the sheet are the only doors; the money consequence is
+// `financedCovered` above and the submission's provider row.
+const creditCardVisible = computed(
+	() => creditStore.enabled && Boolean(invoice_doc.value) && !invoice_doc.value?.is_return,
+);
+const creditProviderNames = computed(() =>
+	creditStore.providers.map((provider) => provider.label || provider.name).join(" · "),
+);
+const creditBlockedReason = computed(() =>
+	is_credit_sale.value ? __("Turn off «Credit Sale?» to record a provider credit.") : "",
+);
+const formatCreditMoney = (value) => {
+	const currency = invoice_doc.value?.currency;
+	return `${currency ? currencySymbol(currency) || "" : ""}${formatCurrency(value)}`;
+};
+const creditCardSummary = computed(() => {
+	const summary = creditStore.summary;
+	const provider = creditStore.activeProvider;
+	if (!summary || !provider) return null;
+	const issue = summary.issues[0];
+	return {
+		providerLabel: provider.label || provider.name,
+		shape: summary.shape,
+		modeOfPayment: provider.mode_of_payment || "",
+		creditPrice: summary.creditPrice,
+		enganche: summary.enganche,
+		financed: summary.financed,
+		collectToday: summary.collectToday,
+		othersTotal: summary.othersTotal,
+		valid: summary.valid,
+		issueText: issue ? __(CREDIT_ISSUE_TEXT[issue]) : "",
+		repricing: creditStore.repricing,
+		repriceFailed: creditStore.repriceFailed,
+	};
+});
+const openCreditSheet = () => {
+	if (creditBlockedReason.value) return;
+	creditStore.openSheet();
+};
+const removeCreditSale = () => {
+	creditStore.remove();
+};
 
 // Both method lists are the same component with the same wiring — bound once
 // so the collapsed list can never drift from the primary one. Computeds are
@@ -2046,13 +2139,13 @@ const syncPreferredPaymentToCurrentTotal = (doc = invoice_doc.value) => {
 		return null;
 	}
 
-	const preferredPayment = resolvePreferredPaymentLine(doc, isCashLikePayment);
+	const preferredPayment = resolvePreferredPaymentLine(doc, isCashLikePayment, isCreditProviderRow);
 	if (!preferredPayment) {
 		return null;
 	}
 
 	const otherMeaningfulPayments = payments.filter((payment) => {
-		if (payment === preferredPayment) {
+		if (payment === preferredPayment || isCreditProviderRow(payment)) {
 			return false;
 		}
 		return Math.abs(flt(payment.amount || 0, currency_precision.value)) > 0.0001;
@@ -2103,6 +2196,8 @@ const rebalancePreferredPaymentCoverage = (giftCardAmount = giftCardAppliedAmoun
 		loyaltyAmount: invoice_doc.value?.loyalty_amount || loyalty_amount.value,
 		redeemedCustomerCredit: redeemed_customer_credit.value,
 		giftCardAmount,
+		financedAmount: financedCovered.value,
+		isExcluded: isCreditProviderRow,
 	});
 };
 
@@ -2177,10 +2272,22 @@ const ensurePaymentLinesInitialized = (doc = invoice_doc.value) => {
 		}
 	}
 
+	// Provider rows never carry money on the live document (the submission adds
+	// the provider's share) and are never the register's default tender.
+	if (creditStore.enabled && Array.isArray(doc.payments)) {
+		doc.payments.forEach((payment) => {
+			if (!isCreditProviderRow(payment)) return;
+			payment.amount = 0;
+			if (payment.base_amount !== undefined) payment.base_amount = 0;
+			payment.default = 0;
+		});
+	}
+
 	const initializedPayment = initializePaymentLinesForDialog(
 		doc,
 		currency_precision.value,
 		isCashLikePayment,
+		isCreditProviderRow,
 	);
 
 	if (doc.is_return) {
@@ -3155,6 +3262,27 @@ watch(sales_person, (newVal) => {
 	}
 });
 
+// Declaring, editing or removing a split credit sale changes what the counter
+// collects. Re-fill the preferred line with the new amount due, exactly as a
+// fresh payment screen would, unless the cashier already split the tender.
+watch(financedCovered, (next, previous) => {
+	if (next === previous || !invoice_doc.value) return;
+	paymentsTouched.value = false;
+	syncPreferredPaymentToCurrentTotal(invoice_doc.value);
+});
+
+// An account sale (unpaid, collected later) and a provider credit are two
+// different closes of the same ticket; the later choice wins.
+watch(is_credit_sale, (enabled) => {
+	if (enabled && creditStore.draft) {
+		creditStore.remove();
+		toastStore.show({
+			title: __("The provider credit was removed: this sale is now on the customer's account."),
+			color: "warning",
+		});
+	}
+});
+
 watch(is_credit_sale, (newVal) => {
 	// Stamp the flag onto the shared invoice doc so the Cobro band (CobroSurface)
 	// knows a shortfall is a legitimate credit close, not a blocked one. The
@@ -3349,6 +3477,9 @@ const applyIncomingInvoiceDoc = (doc) => {
 		return;
 	}
 	invoiceStore.setInvoiceDoc(doc);
+	// The store holds a shallow COPY of `doc`: the credit header fields have to
+	// land on that copy, which is what the submission serializes.
+	creditStore.adoptDoc(invoiceStore.invoiceDoc);
 	paid_change.value = flt(doc.paid_change || 0, currency_precision.value);
 	credit_change.value = flt(doc.credit_change || 0, currency_precision.value);
 	last_payment_change_was_cash.value = null;
@@ -3421,6 +3552,7 @@ const onSetMpesaPayment = (data) => {
 	set_mpesa_payment(data);
 };
 const onClearInvoice = () => {
+	creditStore.reset();
 	invoiceStore.clear();
 	invoiceStore.resetPostingDate();
 	paymentsTouched.value = false;

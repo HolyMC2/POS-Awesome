@@ -23,6 +23,7 @@ const ALL_GATES: RailGateMap = {
 	quotations: true,
 	giftCards: true,
 	dashboard: true,
+	creditSales: true,
 };
 
 const gates = (overrides: Partial<RailGateMap> = {}): RailGateMap => ({
@@ -79,6 +80,8 @@ describe("rail destination registry", () => {
 			"purchase",
 			"barcode",
 			"giftCards",
+			// Provider credit's paperwork queue, on registers that sell on credit.
+			"creditSales",
 			"dashboard",
 			"registers",
 			"cashCustody",
@@ -268,6 +271,8 @@ describe("rail offline contract", () => {
 			// The board reads print batches; a stale kitchen is the seating
 			// chart's lie applied to tickets.
 			"comandas",
+			// Documents upload to the invoice; the queue is server state.
+			"creditSales",
 			"dashboard",
 			"drafts",
 			"giftCards",
@@ -292,14 +297,16 @@ describe("rail offline contract", () => {
 			"purchase",
 			"barcode",
 			"giftCards",
+			"creditSales",
 			"dashboard",
 			"registers",
 			"cashCustody",
 		]);
 		// Gated = absent, not disabled (R3): a cashier never sees Tablero, a
-		// profile without gift cards never sees Monedero.
+		// profile without gift cards never sees Monedero, a register without
+		// provider credit never sees Ventas a crédito.
 		const cashier = visibleRailDestinations(
-			gates({ dashboard: false, giftCards: false }),
+			gates({ dashboard: false, giftCards: false, creditSales: false }),
 		);
 		expect(idsOf(railDestinationsInGroup(cashier, "tools"))).toEqual([
 			"lots",

@@ -95,6 +95,7 @@ const ALL_GATES: RailGateMap = {
 	quotations: true,
 	giftCards: true,
 	dashboard: true,
+	creditSales: true,
 };
 
 

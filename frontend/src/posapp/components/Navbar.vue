@@ -672,6 +672,15 @@ export default {
 					to: "/gift-cards",
 				});
 			}
+			// Credit sales — the paperwork queue, on the profile flag the
+			// mercado app installs (the surface explains a server refusal).
+			if (parseBooleanSetting(this.posProfile?.mercado_credit_sales)) {
+				items.push({
+					text: "Credit sales",
+					icon: "mdi-hand-coin-outline",
+					to: "/credit-sales",
+				});
+			}
 			// Server verdict wins once known; cashier flag is only the
 			// pre-probe fallback. Plain employees never get the entry.
 			const canSeeDashboard =

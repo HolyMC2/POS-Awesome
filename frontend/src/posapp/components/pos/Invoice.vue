@@ -417,6 +417,7 @@ import { storeToRefs } from "pinia";
 import stockCoordinator from "../../utils/stockCoordinator";
 import { computed, getCurrentInstance, ref } from "vue";
 import { save_and_clear_invoice as saveAndClearInvoiceAction } from "./invoice_utils/actions";
+import { applyCreditLinePrices } from "./invoice_utils/creditLinePrices";
 import { fetchDraftInvoices } from "../../utils/draftInvoices";
 
 // Composables
@@ -1006,6 +1007,34 @@ export default {
 			}
 		},
 
+		/**
+		 * A provider-financed credit sale reprices its covered lines
+		 * (`credit:line-prices`, from the credit store). The prices were
+		 * decided there; this writes them the way a typed price lands, pins
+		 * the lines, refetches any line restored without a snapshot, and
+		 * re-sends the payment screen its document so totals, taxes and the
+		 * amount due follow — the same preparation as Pay, without leaving
+		 * the screen. Answers `credit:repriced` unless asked not to refresh.
+		 */
+		async handleCreditLinePrices(intent = {}) {
+			const refresh = intent?.refresh !== false;
+			let ok = true;
+			try {
+				const refetch = applyCreditLinePrices(this, intent);
+				for (const item of refetch) {
+					await this.update_item_detail(item, true);
+				}
+				if (this.invoiceStore?.recalculateTotals) this.invoiceStore.recalculateTotals();
+				else this.invoiceStore?.triggerUpdateTotals?.();
+				if (refresh) ok = Boolean(await this.refresh_payment_doc());
+			} catch (error) {
+				console.error("Credit sale could not reprice the ticket:", error);
+				ok = false;
+			} finally {
+				if (refresh) this.eventBus?.emit?.("credit:repriced", { ok });
+			}
+		},
+
 		focusAdditionalDiscountField() {
 			this.eventBus?.emit?.("focus_additional_discount");
 			this.$refs.invoiceSummary?.focusAdditionalDiscountField?.();
@@ -1563,6 +1592,8 @@ export default {
 			// The phone's line sheet (movil round 10) — the ONE call site for a
 			// cart-line change made from a movil screen.
 			"movil:line-edit": this.handleMovilLineEdit,
+			// A credit sale pricing its covered lines (mercado venta a crédito).
+			"credit:line-prices": this.handleCreditLinePrices,
 			set_new_line: this.handleSetNewLine,
 			recalculate_return_discount: (payload) => this.applyReturnDiscountProration(payload),
 			reset_invoice_type_to_invoice: () => {

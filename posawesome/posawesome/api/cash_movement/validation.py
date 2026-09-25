@@ -57,6 +57,30 @@ def validate_remarks(remarks, profile_doc):
         frappe.throw(_("Remarks are required for cash movement in this POS Profile."))
 
 
+def validate_sales_invoice_link(sales_invoice, profile_doc, movement_type):
+    """Resolve the optional sale an expense was paid for.
+
+    Only an Expense may name a sale, and only a submitted, non-return Sales
+    Invoice of the register's company that the cashier can read. Returns the
+    invoice name, or None when the payload names no sale.
+    """
+    sales_invoice = (sales_invoice or "").strip()
+    if not sales_invoice:
+        return None
+    if movement_type != "Expense":
+        frappe.throw(_("Only an expense can be linked to a sale."))
+    row = frappe.db.get_value(
+        "Sales Invoice", sales_invoice, ["docstatus", "company", "is_return"], as_dict=True
+    )
+    if not row or row.docstatus != 1 or row.is_return:
+        frappe.throw(_("Link the expense to a submitted sale."))
+    if row.company != profile_doc.company:
+        frappe.throw(_("The linked sale belongs to another company."))
+    if not frappe.has_permission("Sales Invoice", "read", doc=sales_invoice):
+        frappe.throw(_("You cannot access the linked sale."), frappe.PermissionError)
+    return sales_invoice
+
+
 def extract_allowed_accounts(rows):
     accounts = []
     for row in rows or []:

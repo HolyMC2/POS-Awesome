@@ -18,12 +18,21 @@ export type PaymentInitDoc = {
 	posa_refundable_amount?: number;
 };
 
+/**
+ * Lines that are never the register's preferred tender — a credit provider's
+ * Mode of Payment is filled by the credit sale itself, not by the cashier.
+ */
+export type PaymentLineExclusion = (_payment: PaymentLine) => boolean;
+
 export type PreferredPaymentRebalanceOptions = {
 	precision?: number;
 	isCashLikePayment: (_payment: PaymentLine) => boolean;
 	loyaltyAmount?: number;
 	redeemedCustomerCredit?: number;
 	giftCardAmount?: number;
+	/** A provider-financed share settled outside the counter tenders. */
+	financedAmount?: number;
+	isExcluded?: PaymentLineExclusion;
 };
 
 const toNumber = (value: unknown): number => {
@@ -72,9 +81,12 @@ export const resolveReturnDefaultAmount = (
 export const resolvePreferredPaymentLine = (
 	doc: PaymentInitDoc | null | undefined,
 	isCashLikePayment: (_payment: PaymentLine) => boolean,
+	isExcluded?: PaymentLineExclusion,
 ): PaymentLine | null => {
 	const payments = Array.isArray(doc?.payments)
-		? doc.payments.filter((payment) => !!payment?.mode_of_payment)
+		? doc.payments.filter(
+				(payment) => !!payment?.mode_of_payment && !isExcluded?.(payment),
+			)
 		: [];
 
 	if (!payments.length) {
@@ -95,6 +107,7 @@ export const initializePaymentLinesForDialog = (
 	doc: PaymentInitDoc | null | undefined,
 	precision: number,
 	isCashLikePayment: (_payment: PaymentLine) => boolean,
+	isExcluded?: PaymentLineExclusion,
 ): PaymentLine | null => {
 	if (!doc || !Array.isArray(doc.payments) || !doc.payments.length) {
 		return null;
@@ -108,6 +121,7 @@ export const initializePaymentLinesForDialog = (
 	const preferredPayment = resolvePreferredPaymentLine(
 		doc,
 		isCashLikePayment,
+		isExcluded,
 	);
 	if (!preferredPayment) {
 		return null;
@@ -169,6 +183,7 @@ export const rebalancePreferredPaymentLine = (
 	const preferredPayment = resolvePreferredPaymentLine(
 		doc,
 		options.isCashLikePayment,
+		options.isExcluded,
 	);
 	if (!preferredPayment) {
 		return null;
@@ -180,9 +195,10 @@ export const rebalancePreferredPaymentLine = (
 	const coveredAmount =
 		toNumber(options.loyaltyAmount) +
 		toNumber(options.redeemedCustomerCredit) +
-		toNumber(options.giftCardAmount);
+		toNumber(options.giftCardAmount) +
+		toNumber(options.financedAmount);
 	const otherPaymentsTotal = payments.reduce((sum, payment) => {
-		if (payment === preferredPayment) {
+		if (payment === preferredPayment || options.isExcluded?.(payment)) {
 			return sum;
 		}
 		return sum + toNumber(payment.amount);

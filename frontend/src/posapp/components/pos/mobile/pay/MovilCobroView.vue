@@ -29,6 +29,36 @@
 
 		<ChangeToHand :totals="totals" :format-currency="formatCurrency" />
 
+		<section v-if="credit" class="movil-cobro__card movil-cobro__credit" data-testid="movil-credit">
+			<button
+				type="button"
+				class="movil-cobro__credit-button"
+				:class="{
+					'movil-cobro__credit-button--on': credit.active && credit.valid,
+					'movil-cobro__credit-button--attention': credit.active && !credit.valid,
+				}"
+				data-testid="movil-credit-open"
+				@click="emit('credit')"
+			>
+				<template v-if="!credit.active">{{ __("Sell on credit") }}</template>
+				<template v-else-if="credit.repricing">
+					<strong>{{ __("Credit sale · {0}", [credit.providerLabel]) }}</strong>
+					<small>{{ __("Updating the ticket…") }}</small>
+				</template>
+				<template v-else-if="credit.valid">
+					<strong>{{ __("Credit sale · {0}", [credit.providerLabel]) }}</strong>
+					<small>
+						{{ __("Down payment") }} {{ formatCurrency(credit.enganche) }} ·
+						{{ __("Financed") }} {{ formatCurrency(credit.financed) }}
+					</small>
+				</template>
+				<template v-else>
+					<strong>{{ __("Credit sale · {0}", [credit.providerLabel]) }}</strong>
+					<small>{{ __("Complete the credit sale before charging.") }}</small>
+				</template>
+			</button>
+		</section>
+
 		<section v-if="chips.length" class="movil-cobro__card" data-testid="movil-tender-row">
 			<h2 class="movil-cobro__label">{{ __("Payment method") }}</h2>
 			<div class="movil-cobro__tenders">
@@ -139,6 +169,17 @@ import PayKeypad from "./PayKeypad.vue";
 import { EMPTY_ENTRY, entryMinor } from "./keypadEntry";
 import { resolvePayTotals, splitIsAvailable } from "./payTotals";
 
+/** The pay screen's view of a provider-financed credit sale (host-computed). */
+export interface MovilCreditSummary {
+	active: boolean;
+	valid: boolean;
+	providerLabel: string;
+	enganche: number;
+	financed: number;
+	/** The cart is repricing the ticket for the credit. */
+	repricing?: boolean;
+}
+
 export interface CollectionIntent {
 	/** The armed `mode_of_payment`, or null when nothing is armed. */
 	mode: string | null;
@@ -176,6 +217,8 @@ const props = withDefaults(
 		 * refuses rather than promising.
 		 */
 		canCollect?: boolean;
+		/** The credit sale's summary; null hides the credit door entirely. */
+		credit?: MovilCreditSummary | null;
 	}>(),
 	{
 		title: "",
@@ -192,6 +235,7 @@ const props = withDefaults(
 		sendsWhatsapp: false,
 		itemCount: 0,
 		canCollect: false,
+		credit: null,
 	},
 );
 
@@ -199,11 +243,15 @@ const emit = defineEmits<{
 	(_event: "update:tender", _mode: string | null): void;
 	(_event: "split", _intent: CollectionIntent): void;
 	(_event: "collect", _intent: CollectionIntent): void;
+	/** Open the credit sale sheet; the payment path hosts it. */
+	(_event: "credit"): void;
 }>();
 
 // Bare `__` is a Frappe desk global; absent under vitest and in a bare mount.
-const __ = (value: string): string =>
-	typeof window !== "undefined" && (window as any).__ ? (window as any).__(value) : value;
+const __ = (value: string, args?: unknown[]): string =>
+	typeof window !== "undefined" && (window as any).__
+		? (window as any).__(value, args)
+		: (args || []).reduce<string>((text, arg, index) => text.replace(`{${index}}`, String(arg)), value);
 
 /** The keypad buffer. A string, not a number — see `keypadEntry.ts`. */
 const entry = ref<string>(EMPTY_ENTRY);
@@ -392,6 +440,47 @@ const pieceLabel = computed(() =>
 .movil-cobro__pad {
 	flex: 0 0 auto;
 	min-height: 0;
+}
+
+.movil-cobro__credit {
+	padding: 6px;
+}
+
+.movil-cobro__credit-button {
+	display: grid;
+	gap: 2px;
+	width: 100%;
+	min-height: var(--reg-touch-min, 44px);
+	padding: 6px 10px;
+	border: 1px dashed var(--reg-border, rgba(0, 0, 0, 0.18));
+	border-radius: var(--reg-radius-sm, 8px);
+	background: transparent;
+	color: var(--reg-text-primary, inherit);
+	font-weight: 700;
+	text-align: left;
+}
+
+.movil-cobro__credit-button small {
+	font-weight: 500;
+	color: var(--reg-text-secondary, inherit);
+	font-variant-numeric: tabular-nums;
+}
+
+.movil-cobro__credit-button--on {
+	border-style: solid;
+	border-color: var(--reg-tone-neutral-border, rgba(0, 0, 0, 0.18));
+	background: var(--reg-tone-neutral-bg, transparent);
+}
+
+.movil-cobro__credit-button--attention {
+	border-style: solid;
+	border-color: var(--reg-tone-warning-border, #d97706);
+	background: var(--reg-tone-warning-bg, transparent);
+}
+
+.movil-cobro__credit-button:focus-visible {
+	outline: 2px solid var(--reg-accent, currentColor);
+	outline-offset: 2px;
 }
 
 .movil-cobro__close {

@@ -28,6 +28,48 @@ For new entries, describe the changed behavior and include the commit, affected 
   `GET_ITEMS_CACHE_VERSION` v3 drops cached search pages. No migration;
   rollback restores source/assets.
 
+- **Provider-financed credit sales (2026-09-24, doco-mirror).** On a register
+  with mercado's «Ventas a crédito con proveedor», Cobro offers «Vender a
+  crédito»: provider, the items on credit, and the approval's total credit
+  price and down payment (0 allowed), plan optional. The register prices the
+  covered lines itself — at the credit price when the provider's Mode of
+  Payment is on the register (its share is recorded there), else at the down
+  payment — pins them, refreshes the payment screen and restores their own
+  prices if the credit is removed; «Hoy cobras» shows the down payment plus any
+  other item. The rate band and discount cap skip those lines through the new
+  `posa_price_guard_exemptions` hook, which mercado answers only for a declared
+  credit sale's covered lines; the payments-vs-total check still applies. The
+  sale then opens
+  its paperwork: provider documents (camera/file), till expenses linked to the
+  invoice (POS Cash Movement `sales_invoice`), plan and notes. A «Ventas a
+  crédito» queue and a ledger action reopen it; shop managers lock complete
+  paperwork. Tickets print the provider's «Ticket de enganche» without the
+  credit price; margins never reach the register. Each step says what it is
+  for: the sheet's sections, the recorded-only plan, what «Aplicar crédito»
+  does, who pays the financed part and when, and «Quitar crédito y restaurar
+  precios». Online only. Requires mercado
+  `feat/pos-credit-sales-20260924` and guarded migrations of both apps.
+  Commits `010e9edda`, `584e98f8c`, `bb6d3fd23`. Rollback restores prior
+  assets/translations; the new fields are additive. Evidence:
+  `~/muelle-releases/pos-credit-sales-20260924/`.
+
+- **Cash bags explain every control (2026-09-24).**
+  Cash custody describes each starting task, each bag or count action (prints
+  included) and the active queue filter, and keeps a legend of what every bag
+  and count state means. Safe targets say what the float and drawer limit are
+  for; bag purpose names say where the bag goes, also at closing, where each
+  seal field keeps its hint. POS, Desk (form, list queues with tooltips) and
+  printed slips now share one set of state names («Verificada en caja fuerte»,
+  «Retenida para revisión del supervisor», «Entregada a una caja»,
+  «En tránsito al banco»). POS Cash Bag fields carry descriptions; guarded
+  migration syncs that metadata. No custody state, balance or permission changes.
+
+- **Saved print preferences apply at the register (2026-09-24, not deployed).**
+  The POS asked doco's GET-only `get_my_preference` with POST; every request
+  was refused (403) and printing silently used the profile defaults. It now
+  reads with GET. Frontend only; no migration. Rollback restores the prior
+  assets.
+
 - **Cash bag identification and closing labels (2026-09-23, doco-mirror).**
   Desk lists show the physical folio, amount, state, preparation date and people,
   with focused queues and single/batch printing. Successful POS closings offer

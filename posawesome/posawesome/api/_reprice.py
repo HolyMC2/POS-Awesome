@@ -34,6 +34,10 @@ This module provides three invariants called from ``update_invoice`` /
       unless the item (or its Item Group) carries
       ``posa_px_skip_rate_band``.
 
+Another app may vouch for a line's price through the
+``posa_price_guard_exemptions`` hook (``_price_guard_exemptions``); such a
+line skips the discount cap and the rate band, never the payments invariant.
+
 Full re-fetch + recompute (``reprice_invoice_items``) is intentionally
 deferred to a follow-up commit gated by ``posa_server_side_reprice``
 flag — changing every invoice's math in a single drop is too risky for
@@ -168,6 +172,30 @@ def _pricing_price_list(invoice_doc: Any, profile_doc: Any) -> Any:
     return customer_list or group_list or profile_list or declared
 
 
+def _price_guard_exemptions(invoice_doc: Any, profile_doc: Any) -> set[int]:
+    """Lines another app vouches for (hook ``posa_price_guard_exemptions``).
+
+    Each hook receives the invoice and the POS Profile and returns the line
+    objects whose price it owns — mercado's provider-financed credit sale,
+    where the provider's approval prices the covered lines at the credit price
+    or the down payment. Those lines skip the discount cap and the rate band;
+    ``assert_payments_match_grand_total`` still covers the whole ticket. A
+    hook that fails exempts nothing.
+    """
+    get_hooks = getattr(frappe, "get_hooks", None)
+    if not callable(get_hooks):
+        return set()
+    exempt: set[int] = set()
+    for path in get_hooks("posa_price_guard_exemptions") or []:
+        try:
+            lines = frappe.get_attr(path)(invoice_doc, profile_doc) or []
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "POSAwesome price-guard exemption hook")
+            continue
+        exempt.update(id(line) for line in lines)
+    return exempt
+
+
 def _line_free_exemption(line: Any, invoice_doc: Any, profile_doc: Any, cache=None) -> bool:
     """Client markers request a promotion check; they never grant a discount."""
     is_marker = bool(
@@ -219,8 +247,11 @@ def enforce_discount_limit(invoice_doc: Any, profile_doc: Any | None = None) -> 
     price_list = _pricing_price_list(invoice_doc, profile_doc)
     free_eligibility = {}
     reference_rate = None
+    exempt = _price_guard_exemptions(invoice_doc, profile_doc)
 
     for line in _iter_lines(invoice_doc):
+        if id(line) in exempt:
+            continue
         discount_pct = flt(_line_value(line, "discount_percentage") or 0)
         discount_amount = flt(_line_value(line, "discount_amount") or 0)
         if discount_pct <= 0 and discount_amount <= 0:
@@ -491,12 +522,13 @@ def assert_rates_within_band(
     band = _resolve_band_pct(profile_doc, band_pct)
     skip_cache: dict = {}
     free_eligibility = {}
+    exempt = _price_guard_exemptions(invoice_doc, profile_doc)
     from posawesome.posawesome.api.pricing_context import reference_rate_lookup
     reference_rate = reference_rate_lookup(invoice_doc, price_list)
 
     for line in _iter_lines(invoice_doc):
         item_code = _line_value(line, "item_code")
-        if not item_code:
+        if not item_code or id(line) in exempt:
             continue
 
         # Cart line rates are commonly stored as `rate` (per-unit, post

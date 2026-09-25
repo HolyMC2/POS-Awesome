@@ -322,6 +322,15 @@ self.addEventListener("fetch", (event) => {
 	// cache while preserving the service worker that makes the POS shell and
 	// content-hashed application assets available during backend restarts.
 	if (url.pathname.startsWith("/files/")) return;
+	// Private files (a credit sale's ID photo and contract) are permission-
+	// checked on every request; a cached copy would outlive both the session
+	// and the permission on a shared register.
+	if (url.pathname.startsWith("/private/files/")) return;
+	// Frappe's file download endpoint serves the same private files.
+	if (url.pathname.startsWith("/api/method/frappe.utils.file_manager.download_file")) return;
+	// A presigned object-storage URL is a private file too (an offloaded
+	// attachment), and it expires; caching it would keep the bytes anyway.
+	if (url.searchParams.has("X-Amz-Signature") || url.searchParams.has("Signature")) return;
 
 	const assetDestinations = ["style", "script", "worker", "image"];
 	const isAssetRequest = assetDestinations.includes(event.request.destination);

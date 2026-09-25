@@ -6,8 +6,8 @@ window.posaCashCustody = (function () {
 const SUPERVISOR_ROLES = ['POS Awesome Supervisor', 'POS Manager', 'Sales Manager', 'Accounts Manager', 'System Manager'];
 const BAG_STATES = {
  Unverified: {label: 'Awaiting verification', color: 'orange', next: 'Another person counts this bag and verifies or receives it. Nobody can verify a bag they prepared.'},
- Available: {label: 'Available in the safe', color: 'blue', next: 'A cashier can receive it from Cash custody, or a supervisor can send it to the bank or return it to loose safe cash.'},
- Disputed: {label: 'Held for review', color: 'red', next: 'A supervisor reviews the difference on the latest count. The bag becomes available again once the correction is posted.'},
+ Available: {label: 'Verified in safe', color: 'blue', next: 'A cashier can receive it from Cash custody, or a supervisor can send it to the bank or return it to loose safe cash.'},
+ Disputed: {label: 'Held for supervisor review', color: 'red', next: 'A supervisor reviews the difference on the latest count. The bag becomes available again once the correction is posted.'},
  Issued: {label: 'Issued to a drawer', color: 'green', next: 'The cashier returns this cash at closing as counted takings.'},
  'In Transit': {label: 'In transit to the bank', color: 'purple', next: 'Confirm the bank receipt, or return the undeposited bag if the trip failed.'},
  Deposited: {label: 'Deposited at the bank', color: 'green', next: ''},

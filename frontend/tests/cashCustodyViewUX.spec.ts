@@ -401,7 +401,7 @@ describe("cash custody — the form says which cash action it is", () => {
 		expect(status).toContain(
 			"Return the drawer to the safe in sealed bags at closing.",
 		);
-		expect(wrapper.get(".record-detail").text()).toContain("In the drawer");
+		expect(wrapper.get(".record-detail").text()).toContain("Issued to a drawer");
 	});
 
 	it("keeps the disputed-count wording that tells the cashier the drawer did not change", async () => {
@@ -1332,5 +1332,106 @@ describe("cash custody — the band the shell draws", () => {
 		wrapper.unmount();
 		expect(band(wrapper)).toBe(null);
 		expect(bus.handlers["custody:primary"]).toEqual([]);
+	});
+});
+
+describe("cash custody — every control says what it does", () => {
+	/** The text a button's aria-describedby points at, as a screen reader reads it. */
+	const description = (wrapper: any, button: any) => {
+		const id = button.attributes("aria-describedby");
+		return id ? wrapper.get(`#${id}`).text() : "";
+	};
+	const selectBag = async (wrapper: any, seal = "DOCO-FLOAT-11") => {
+		await wrapper
+			.findAll("button.record")
+			.find((b: any) => b.text().includes(seal))!
+			.trigger("click");
+		await flushPromises();
+		return wrapper.get(".record-detail");
+	};
+
+	it("describes every way into a cash task under its button", async () => {
+		read.mockResolvedValue(context({ can_manage: true }));
+		const wrapper = mountView();
+		await flushPromises();
+		const starters = wrapper.get('[data-testid="custody-starters"]');
+		const controls = starters.findAll("a, button");
+		expect(controls.map((c: any) => c.text())).toEqual([
+			"Bag list & labels ↗",
+			"Prepare float bag",
+			"Return bag to safe",
+			"Count safe",
+		]);
+		for (const control of controls) expect(description(wrapper, control)).not.toBe("");
+		expect(description(wrapper, controls[2])).toContain("open drawer");
+	});
+
+	it("explains each action a supervisor may take on a verified bag, prints included", async () => {
+		read.mockResolvedValue(
+			context({ can_manage: true, can_transfer: true, bags: [bag({ verified_by: CASHIER })] }),
+		);
+		const wrapper = mountView();
+		await flushPromises();
+		const detail = await selectBag(wrapper);
+		const rows = detail.get('[data-testid="custody-bag-actions"]').findAll("li");
+		const labels = rows.map((row: any) => row.get("button").text());
+		expect(labels).toEqual([
+			"Receive into drawer",
+			"Send to bank",
+			"Return to loose safe cash",
+			"Move whole bag off-site",
+			"Print handover",
+			"Print bag label",
+		]);
+		for (const row of rows) expect(description(wrapper, row.get("button"))).not.toBe("");
+		const send = rows.find((row: any) => row.get("button").text() === "Send to bank")!;
+		expect(description(wrapper, send.get("button"))).toContain("deposit in transit");
+	});
+
+	it("says which records the chosen filter shows", async () => {
+		const wrapper = mountView();
+		await flushPromises();
+		const help = () => wrapper.get('[data-testid="custody-filter-help"]').text();
+		expect(help()).toContain("Bags still in the safe");
+		await wrapper
+			.findAll("button.filter")
+			.find((b: any) => b.text().startsWith("Completed"))!
+			.trigger("click");
+		expect(help()).toContain("Closed bags");
+		await wrapper
+			.findAll("button.tab")
+			.find((b: any) => b.text().startsWith("Counts"))!
+			.trigger("click");
+		expect(help()).toContain("Final counts and reviewed differences");
+	});
+
+	it("keeps a legend of what every state means, for bags and for counts", async () => {
+		const wrapper = mountView();
+		await flushPromises();
+		const legend = () => wrapper.get('[data-testid="custody-state-legend"]');
+		expect(legend().get("summary").text()).toBe("What each bag state means");
+		expect(legend().findAll("dt")).toHaveLength(8);
+		expect(legend().text()).toContain("Held for supervisor review");
+		expect(legend().text()).toContain("Another person must count this bag");
+		await wrapper
+			.findAll("button.tab")
+			.find((b: any) => b.text().startsWith("Counts"))!
+			.trigger("click");
+		expect(legend().get("summary").text()).toBe("What each count state means");
+		expect(legend().findAll("dt")).toHaveLength(4);
+		expect(legend().text()).toContain("A supervisor who did not count it reviews the difference.");
+	});
+
+	it("tells what each bag purpose is for while preparing one", async () => {
+		read.mockResolvedValue(context({ can_manage: true }));
+		const wrapper = mountView();
+		await flushPromises();
+		await wrapper
+			.findAll("button")
+			.find((b: any) => b.text() === "Prepare float bag")!
+			.trigger("click");
+		await flushPromises();
+		const select = wrapper.get("form select");
+		expect(description(wrapper, select)).toContain("A takings bag is sent to the bank.");
 	});
 });

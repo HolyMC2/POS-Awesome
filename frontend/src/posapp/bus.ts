@@ -12,6 +12,7 @@ import type { NotificationData } from "./stores/toastStore";
 import type { RealtimeStockPayload } from "./utils/realtimeStock";
 import type { KotProjection } from "../offline/restaurantTypes";
 import type { MovilLineEditIntent } from "./components/pos/mobile/line/movilLineEdit";
+import type { CreditLinePricesIntent } from "./composables/pos/credit/creditMath";
 
 /** A row of the POS Offer table as held by PosOffers.vue (`pos_offers`). Untyped upstream. */
 export interface PosOfferRow {
@@ -89,6 +90,8 @@ export type Events = {
 		/** The change the server booked as a Payment Entry; absent when none. */
 		change_amount?: number;
 		is_return?: boolean;
+		/** A provider-financed credit sale: its paperwork is still to attach. */
+		credit_sale?: boolean;
 	};
 	recalculate_return_discount: { defer?: boolean };
 
@@ -272,6 +275,14 @@ export type Events = {
 	 * `movil_collect_payment`: the screen sends an intent, the engine decides.
 	 */
 	"movil:line-edit": MovilLineEditIntent;
+	/**
+	 * A provider-financed credit sale reprices its covered cart lines (the
+	 * credit store → `Invoice.vue`, which owns every line write). See
+	 * `CreditLinePricesIntent`; the cart answers `credit:repriced` once the
+	 * payment screen has its refreshed document (or the refresh failed).
+	 */
+	"credit:line-prices": CreditLinePricesIntent;
+	"credit:repriced": { ok: boolean };
 	/**
 	 * A payment was CAPTURED against a party's open invoices — i.e. `PayView`'s
 	 * Payment Entry path finished, not the cart's. Distinct from
