@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 try:
@@ -585,7 +586,9 @@ class TestSettleCarriesPaquetes(unittest.TestCase):
 
     def test_paquete_fields_ride_onto_the_invoice_lines(self):
         components = '[{"item_code": "LATTE", "group": "Bebida", "qty": 1}]'
-        order = frappe._dict(
+        # A namespace, not frappe._dict: on a dict `order.items` is the
+        # dict method, not the rows.
+        order = SimpleNamespace(
             items=[
                 frappe._dict(line_uid="H1", item_code="PAQ", item_name="Combo Desayuno", qty=1, rate=129,
                              uom="Nos", combo_parent=None, combo_group=None, combo_components=components),
