@@ -60,20 +60,31 @@ const toNumber = (value: unknown): number => {
  * a component that arrives with a string `qty` would make `priceCombo()`
  * compute a list price by string concatenation.
  */
-export const normalizeComboComponent = (raw: any): ComboAvailabilityComponent => ({
-	item_code: String(raw?.item_code ?? ""),
-	item_name: String(raw?.item_name ?? raw?.item_code ?? ""),
-	qty: toNumber(raw?.qty) || 1,
-	rate: toNumber(raw?.rate),
-	uom: raw?.uom ?? null,
-	actual_qty: toNumber(raw?.actual_qty),
-	// Carried through, not dropped: this is the flag that keeps `Instalación`
-	// from reporting the headline combo permanently out of stock. Preserved as
-	// `undefined` when absent rather than coerced to 0 — `comboAvailability`
-	// treats "unknown" as constraining, and coercing would silently turn every
-	// unknown component into a service that never caps.
-	is_stock_item: raw?.is_stock_item ?? undefined,
-});
+export const normalizeComboComponent = (raw: any): ComboAvailabilityComponent => {
+	const component: ComboAvailabilityComponent & { group?: string; extra_price?: number } = {
+		item_code: String(raw?.item_code ?? ""),
+		item_name: String(raw?.item_name ?? raw?.item_code ?? ""),
+		qty: toNumber(raw?.qty) || 1,
+		rate: toNumber(raw?.rate),
+		uom: raw?.uom ?? null,
+		actual_qty: toNumber(raw?.actual_qty),
+		// Carried through, not dropped: this is the flag that keeps `Instalación`
+		// from reporting the headline combo permanently out of stock. Preserved as
+		// `undefined` when absent rather than coerced to 0 — `comboAvailability`
+		// treats "unknown" as constraining, and coercing would silently turn every
+		// unknown component into a service that never caps.
+		is_stock_item: raw?.is_stock_item ?? undefined,
+	};
+	// A paquete's pick (`comboChoice.ts`) also names its group and what it
+	// added to the price. Kept only when present, so a bundle's components
+	// keep exactly the shape they always had.
+	const group = String(raw?.group ?? "").trim();
+	if (group) component.group = group;
+	if (raw?.extra_price !== undefined && raw?.extra_price !== null) {
+		component.extra_price = toNumber(raw.extra_price);
+	}
+	return component;
+};
 
 /**
  * Is this component list worth marking a line as a combo?

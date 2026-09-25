@@ -59,6 +59,11 @@
 			:currency-symbol="currencySymbol"
 			@confirm="onMovilPadConfirm"
 		/>
+		<!-- The PAQUETE picker («elige tu bebida»). Mounted here for the same
+		     reason as the lot picker: the add path asks for it from wherever the
+		     tap came from (desk, phone, drawer, strip, scan), and an overlay
+		     inside a hidden column draws nothing. -->
+		<ComboChoiceSheet :block-sale-beyond-available="comboChoiceBlocksOversell" />
 		<!-- SALDO-INTEGRATION-POINT — components live in saldo Frappe app -->
 		<SaldoReferenciaDialog
 			v-model="saldoDialogOpen"
@@ -716,6 +721,10 @@ import {
 import { getReceivablesBadgeCached, invalidateReceivablesBadge } from "../../../services/receivablesService";
 import { buildCombosCategory, buildSuggestions } from "../../../composables/pos/combos/comboCatalog";
 import { useComboOffers } from "../../../composables/pos/combos/useComboOffers";
+import {
+	choiceComboFor,
+	setChoiceCombos,
+} from "../../../composables/pos/combos/comboChoiceRequest";
 import { useOnlineStatus } from "../../../composables/core/useOnlineStatus";
 import { useValueBump } from "../../../composables/core/useValueBump";
 import OpeningDialog from "../shift/OpeningDialog.vue";
@@ -775,6 +784,7 @@ const NewAddress = defineAsyncComponent(() => import("../customer/NewAddress.vue
 const Variants = defineAsyncComponent(() => import("../items/Variants.vue"));
 const LotPicker = defineAsyncComponent(() => import("../items/lot/LotPicker.vue"));
 const FractionalQtyPad = defineAsyncComponent(() => import("../invoice/FractionalQtyPad.vue"));
+const ComboChoiceSheet = defineAsyncComponent(() => import("../combos/ComboChoiceSheet.vue"));
 const Returns = defineAsyncComponent(() => import("../flows/Returns.vue"));
 const MpesaPayments = defineAsyncComponent(() => import("../payments/Mpesa-Payments.vue"));
 
@@ -1614,6 +1624,14 @@ export default {
 			customer: selectedCustomer,
 			eventBus,
 		});
+		// The add path intercepts a paquete by item code; this keeps its
+		// registry in step with whatever the register's combos are now.
+		watch(comboOffers, (offers) => setChoiceCombos(offers), { immediate: true });
+		// The picker refuses an out-of-stock pick only where the register
+		// refuses an out-of-stock line — the same profile switch.
+		const comboChoiceBlocksOversell = computed(() =>
+			Boolean(Number(posProfile.value?.posa_block_sale_beyond_available_qty)),
+		);
 		// The cart goes in so the chip's count follows the customer's device —
 		// the same eligibility the strip uses. The chip itself never
 		// disappears; see `buildCombosCategory`.
@@ -1805,6 +1823,7 @@ export default {
 				// the register weighs, and the delivery date exists at all.
 				verticalHasFractional: vertical.has("fractional"),
 				invoiceType: invoiceStore.invoiceType,
+				cartItems: invoiceStore.items,
 			}),
 		);
 		// The row left the cart — removed here, removed from the desk, or the
@@ -1962,7 +1981,8 @@ export default {
 			// variant picker and a lot-tracked row opens the lot picker, and a
 			// haptic there would tell the hand a line landed when a sheet did.
 			// This is the phone's only tap-add, so it is the phone's only tick.
-			hapticTick();
+			// A paquete is a doorbell too — its picker opens, nothing lands yet.
+			if (!choiceComboFor(code)) hapticTick();
 			eventBus.emit("add_item", row ? { ...row } : { item_code: code });
 		};
 
@@ -2925,6 +2945,7 @@ export default {
 			formatFloat,
 			currencySymbol,
 			movilLineSheet,
+			comboChoiceBlocksOversell,
 			onMovilSplit,
 			onMovilCollect,
 			onMovilCredit,
@@ -3028,6 +3049,7 @@ export default {
 		Variants,
 		LotPicker,
 		FractionalQtyPad,
+		ComboChoiceSheet,
 		MpesaPayments,
 		SalesOrders,
 		// SALDO-INTEGRATION-POINT

@@ -273,6 +273,17 @@
 			</div>
 
 			<div class="movil-line-sheet__actions">
+				<!-- A paquete's picks live in its picker, not in this sheet:
+				     the door sits first, it is the edit a paquete gets asked for. -->
+				<button
+					v-if="line.canEditChoice"
+					type="button"
+					class="movil-line-sheet__choice"
+					data-testid="movil-line-combo-choice"
+					@click="emit('edit', { kind: 'comboChoice' })"
+				>
+					{{ __("Change picks") }}
+				</button>
 				<button
 					v-if="line.canRemove"
 					type="button"
@@ -942,6 +953,18 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeydown));
 	border-radius: var(--reg-radius-sm, 10px);
 	background: var(--reg-tone-negative-bg, #fdeaea);
 	color: var(--reg-tone-negative-label, #b42318);
+	font: inherit;
+	font-size: 13.5px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.movil-line-sheet__choice {
+	min-height: var(--reg-touch-min, 44px);
+	border: 1px solid var(--reg-accent-edge, #9fdde6);
+	border-radius: var(--reg-radius-sm, 10px);
+	background: var(--reg-accent-soft, #e0f7fa);
+	color: var(--reg-on-accent-soft, #00646f);
 	font: inherit;
 	font-size: 13.5px;
 	font-weight: 700;

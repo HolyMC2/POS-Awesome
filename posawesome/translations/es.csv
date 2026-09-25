@@ -4601,3 +4601,65 @@ When the off-site move was recorded.,Cuándo se registró el envío fuera.
 Handover notes and reasons. They stay in the audit trail.,Notas de entrega y motivos. Se conservan en el historial de auditoría.
 The drawer movement that received this bag's cash.,El movimiento de caja que recibió el efectivo de esta bolsa.
 The shift whose drawer received this bag.,El turno cuya caja recibió esta bolsa.
+Change picks,Cambiar opciones
+Combo,Combo
+Sold out,Agotado
+Nothing picked yet,Aún no eliges nada
+You save {0},Ahorras {0}
+Choose {0},Elige {0}
+Included,Incluido
+Optional · up to {0},Opcional · hasta {0}
+Pick {0},Elige {0}
+Pick {0} to {1},Elige de {0} a {1}
+One fewer,Uno menos
+Choose,Elige
+Combo: choose what it includes.,Combo: elige lo que incluye.
+This combo can no longer be changed here,Este combo ya no se puede cambiar aquí
+Remove it and add it again to pick its items.,Quítalo y vuelve a agregarlo para elegir sus productos.
+Combo Type,Tipo de combo
+Combo Item,Artículo del combo
+Choice Groups,Grupos de opciones
+Choices,Opciones a elegir
+Min Picks,Mínimo a elegir
+Max Picks,Máximo a elegir
+Any Item From,Cualquier artículo de
+Qty per Pick,Cantidad por elección
+Extra Charge,Cargo extra
+Paquete Line,Línea del paquete
+Paquete Group,Grupo del paquete
+Paquete,Paquete
+"Add the groups the cashier asks for (Bebida, Pan), then the options for each. The register sells the Combo Item at its own price and adds each pick as its own line.","Agrega los grupos que pregunta el cajero (Bebida, Pan) y luego las opciones de cada uno. La caja vende el Artículo del combo a su propio precio y agrega cada elección como su propia línea."
+Groups and Options only apply to a Choice Groups combo. Change the Combo Type or clear those tables.,Grupos y Opciones solo aplican a un combo de Grupos de opciones. Cambia el Tipo de combo o vacía esas tablas.
+Choose the item this paquete sells (Combo Item).,Elige el artículo que vende este paquete (Artículo del combo).
+{0} is a template with variants. Choose the item the register sells.,{0} es una plantilla con variantes. Elige el artículo que vende la caja.
+{0} is a stock item. A paquete's own item must be non-stock: the picked items carry the stock.,{0} es un artículo de inventario. El artículo propio de un paquete no debe llevar inventario: lo llevan los artículos elegidos.
+"{0} is a Product Bundle. A paquete with choice groups cannot also be a Product Bundle, or its stock would move twice.","{0} es un Paquete de productos. Un paquete con grupos de opciones no puede ser también un Paquete de productos, o su inventario se movería dos veces."
+"Add at least one group, such as «Bebida» or «Pan».","Agrega al menos un grupo, como «Bebida» o «Pan»."
+Row {0}: every group needs a name.,Fila {0}: cada grupo necesita un nombre.
+Group {0} appears twice.,El grupo {0} aparece dos veces.
+Group {0}: Max Picks must be at least 1.,Grupo {0}: el Máximo a elegir debe ser al menos 1.
+Group {0}: Min Picks ({1}) must be between 0 and Max Picks ({2}).,Grupo {0}: el Mínimo a elegir ({1}) debe estar entre 0 y el Máximo a elegir ({2}).
+Options row {0}: group {1} is not in the Groups table.,Fila de opciones {0}: el grupo {1} no está en la tabla de Grupos.
+Options row {0}: item {1} does not exist.,Fila de opciones {0}: el artículo {1} no existe.
+Options row {0}: {1} is the paquete's own item.,Fila de opciones {0}: {1} es el artículo propio del paquete.
+Options row {0}: {1} is disabled or not a sales item.,Fila de opciones {0}: {1} está deshabilitado o no es de venta.
+Options row {0}: {1} is a template. Add the variant the customer can pick.,Fila de opciones {0}: {1} es una plantilla. Agrega la variante que el cliente puede elegir.
+Options row {0}: {1} is serial- or batch-tracked. Paquete options cannot need a unit chosen at the till.,Fila de opciones {0}: {1} lleva número de serie o lote. Las opciones de un paquete no pueden requerir elegir una unidad en caja.
+Options row {0}: {1} is a Product Bundle and cannot be a paquete option.,Fila de opciones {0}: {1} es un Paquete de productos y no puede ser opción de un paquete.
+Options row {0}: Qty per Pick must be more than zero.,Fila de opciones {0}: la Cantidad por elección debe ser mayor que cero.
+Options row {0}: Extra Charge cannot be negative.,Fila de opciones {0}: el Cargo extra no puede ser negativo.
+Options row {0}: {1} is listed twice in group {2}.,Fila de opciones {0}: {1} aparece dos veces en el grupo {2}.
+Group {0} has no options. Add rows in Options or set Any Item From.,El grupo {0} no tiene opciones. Agrega filas en Opciones o indica Cualquier artículo de.
+Group {0} preselects {1} options but allows only {2}.,El grupo {0} preselecciona {1} opciones pero solo permite {2}.
+Line {0} ({1}) belongs to a paquete that is not on this ticket.,La línea {0} ({1}) pertenece a un paquete que no está en este ticket.
+{0} is no longer a paquete with choices. Remove it and add it again.,{0} ya no es un paquete con opciones. Quítalo y vuelve a agregarlo.
+"{0} has no quantity, so its picks cannot be checked.","{0} no tiene cantidad, así que no se pueden verificar sus elecciones."
+Line {0} ({1}): {2} has no group «{3}».,Línea {0} ({1}): {2} no tiene el grupo «{3}».
+Line {0} ({1}) is not an option of «{2}» in {3}.,La línea {0} ({1}) no es una opción de «{2}» en {3}.
+Line {0} ({1}): the quantity does not match whole picks of {2}.,Línea {0} ({1}): la cantidad no corresponde a elecciones completas de {2}.
+Line {0} ({1}): its price must be the paquete's extra charge ({2}).,Línea {0} ({1}): su precio debe ser el cargo extra del paquete ({2}).
+{0} needs {1} to {2} of «{3}» per paquete; the ticket has {4}.,{0} necesita de {1} a {2} de «{3}» por paquete; el ticket tiene {4}.
+{0} needs {1} of «{2}» per paquete; the ticket has {3}.,{0} necesita {1} de «{2}» por paquete; el ticket tiene {3}.
+Line {0} ({1}) was not part of a paquete on the original sale.,La línea {0} ({1}) no formaba parte de un paquete en la venta original.
+Line {0} ({1}) must be returned at the price it was sold for ({2}).,La línea {0} ({1}) debe devolverse al precio con que se vendió ({2}).
+Line {0} ({1}) returns more than the paquete sold.,La línea {0} ({1}) devuelve más de lo que vendió el paquete.

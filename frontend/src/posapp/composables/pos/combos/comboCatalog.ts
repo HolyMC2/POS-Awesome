@@ -27,6 +27,7 @@ import {
 	describeAvailability,
 	type ComboAvailabilityDisplay,
 } from "./comboAvailabilityDisplay";
+import type { ChoiceGroup } from "./comboChoice";
 import { priceCombo } from "./comboPricing";
 
 /** A sellable combo, as the POS read model delivers it. */
@@ -72,6 +73,15 @@ export interface ComboOffer {
 	target_attribute_values?: string[];
 	/** Ordering hint from `POS Combo`; lower sorts first. */
 	priority?: number;
+	/**
+	 * `"bundle"` — a Product Bundle: fixed `components`, sold as one line.
+	 * `"choice"` — a paquete: `components` is empty and `groups` says what the
+	 * cashier picks (`comboChoice.ts`). Absent on payloads cached before the
+	 * field existed, which were all bundles.
+	 */
+	kind?: "bundle" | "choice";
+	/** A paquete's questions and their options; empty on a bundle. */
+	groups?: ChoiceGroup[];
 }
 
 /**

@@ -27,6 +27,7 @@ import {
 	COMBO_BROKEN_FIELD,
 	COMBO_COMPONENTS_FIELD,
 } from "../../../composables/pos/items/comboLineAttachment";
+import { foldComboChildren } from "../../../composables/pos/combos/comboChoice";
 
 /** One cart line, as the invoice's `items` child table carries it. */
 export interface SaleSummarySourceLine {
@@ -41,6 +42,8 @@ export interface SaleSummarySourceLine {
 	posa_combo_broken?: number | boolean | null;
 	/** POSAwesome's stable per-line key; falls back to the item code. */
 	posa_row_id?: string | null;
+	/** Set on a paquete's pick: the `posa_row_id` of its paquete line. */
+	posa_combo_parent?: string | null;
 	name?: string | null;
 }
 
@@ -60,6 +63,11 @@ export interface SaleSummaryLine {
 	 */
 	showsUnitRate: boolean;
 	isCombo: boolean;
+	/**
+	 * A paquete (`comboChoice.ts`): its picks are folded into this line —
+	 * their rows are not drawn and their extra charges are in `amount`.
+	 */
+	isPaquete: boolean;
 	/** Components in the bundle. 0 on an ordinary line. */
 	componentCount: number;
 	/**
@@ -132,9 +140,9 @@ const resolveAmount = (line: SaleSummarySourceLine): number => {
  * priced at or above its parts saves nothing, and "ahorró $0" is noise on the
  * densest card of the screen.
  */
-const resolveSaving = (line: SaleSummarySourceLine): number => {
+const resolveSaving = (line: SaleSummarySourceLine, unitRate = toNumber(line?.rate)): number => {
 	const components = (line?.[COMBO_COMPONENTS_FIELD] ?? []) as readonly ComboComponent[];
-	const { saving } = priceCombo(components, toNumber(line?.rate));
+	const { saving } = priceCombo(components, unitRate);
 	if (saving <= 0) {
 		return 0;
 	}
@@ -155,34 +163,39 @@ const resolveSaving = (line: SaleSummarySourceLine): number => {
 export const resolveSaleSummary = (
 	items: readonly (SaleSummarySourceLine | null | undefined)[] | null | undefined,
 ): SaleSummary => {
-	const rows = Array.isArray(items) ? items : [];
+	// A paquete's picks are drawn through their paquete line, never as rows of
+	// their own: «Concha $0.00» on a ticket reads like a forgotten charge.
+	const folded = foldComboChildren(Array.isArray(items) ? items : []);
 	const lines: SaleSummaryLine[] = [];
 	let pieceCount = 0;
 
-	for (const [index, row] of rows.entries()) {
+	for (const [index, row] of folded.visible.entries()) {
 		if (!row) continue;
 		const itemCode = text(row.item_code);
 		const itemName = text(row.item_name) || itemCode;
-		// A line with neither a code nor a name is not something a cashier can
-		// be shown; it is a placeholder row the cart is mid-way through
-		// building. Rendering it would put a blank line and a $0 on the ticket
-		// summary the moment somebody clicks Add.
 		if (!itemCode && !itemName) continue;
 
 		const qty = toNumber(row.qty);
 		const isCombo = isComboSummaryLine(row);
+		const picksAmount = folded.childAmountByParent.get(text(row.posa_row_id));
+		const isPaquete = picksAmount !== undefined;
+		const amount = resolveAmount(row) + (picksAmount ?? 0);
+		// The paquete's unit price includes its picks' extra charges, so the
+		// saving is measured against what the customer actually pays for one.
+		const rate = isPaquete && qty ? amount / qty : toNumber(row.rate);
 
 		lines.push({
 			key: text(row.posa_row_id) || text(row.name) || `${itemCode}#${index}`,
 			itemCode,
 			itemName,
 			qty,
-			rate: toNumber(row.rate),
-			amount: resolveAmount(row),
+			rate,
+			amount,
 			showsUnitRate: qty > 1,
 			isCombo,
+			isPaquete,
 			componentCount: isCombo ? (row[COMBO_COMPONENTS_FIELD] as readonly unknown[]).length : 0,
-			saving: isCombo ? resolveSaving(row) : 0,
+			saving: isCombo ? resolveSaving(row, rate) : 0,
 		});
 		pieceCount += qty;
 	}

@@ -107,6 +107,8 @@ const chipTone = computed(() => {
 	// An affordance, not a state: the chip says "tapping opens a picker",
 	// which is neither good nor bad news about the shelf.
 	if (chip.kind === "variants") return "neutral";
+	// Same kind of affordance: the tap opens the paquete picker.
+	if (chip.kind === "choice") return "neutral";
 	return chip.low ? "warning" : "positive";
 });
 
@@ -121,6 +123,7 @@ const chipLabel = computed(() => {
 	if (!chip) return "";
 	if (chip.kind === "saving") return `−${props.formatCurrency(chip.amount)}`;
 	if (chip.kind === "variants") return __("Variants");
+	if (chip.kind === "choice") return __("Choose");
 	return chip.low ? `${__("left")} ${chip.value}` : String(chip.value);
 });
 
@@ -135,6 +138,7 @@ const ariaLabel = computed(() => {
 	const chip = props.card.chip;
 	if (chip?.kind === "saving") parts.push(`${__("saves")} ${props.formatCurrency(chip.amount)}`);
 	if (chip?.kind === "variants") parts.push(__("This is an item template. Please choose a variant."));
+	if (chip?.kind === "choice") parts.push(__("Combo: choose what it includes."));
 	if (chip?.kind === "stock") {
 		parts.push(chip.low ? `${__("left")} ${chip.value}` : `${chip.value} ${__("pcs")}`);
 	}

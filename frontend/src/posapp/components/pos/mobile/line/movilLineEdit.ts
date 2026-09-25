@@ -25,6 +25,7 @@
  * Pure: no Vue, no store, no `__()`.
  */
 
+import { comboChildrenOf, isChoiceHeaderLine } from "../../../../composables/pos/combos/comboChoice";
 import { isFractionEligible } from "../../../../utils/fractionalMath";
 import { resolveSaleSummary, type SaleSummarySourceLine } from "../../payments/saleSummary";
 
@@ -81,6 +82,11 @@ export interface MovilLineEditOptions {
 	verticalHasFractional?: boolean;
 	/** `invoiceStore.invoiceType` — the delivery date only exists on Order / Quotation. */
 	invoiceType?: string | null;
+	/**
+	 * The whole cart, when the caller has it: a paquete's picks are folded
+	 * into its figures, so the sheet quotes what the cart row quotes.
+	 */
+	cartItems?: readonly SaleSummarySourceLine[] | null;
 }
 
 /** The sheet's whole model: what to draw, and whether it may be touched. */
@@ -132,6 +138,8 @@ export interface MovilLineEdit {
 	canEditLots: boolean;
 	canEditDeliveryDate: boolean;
 	canRemove: boolean;
+	/** A paquete (`comboChoice.ts`): its picks can be re-chosen in its picker. */
+	canEditChoice: boolean;
 }
 
 /**
@@ -159,6 +167,8 @@ export type MovilLineIntent =
 	| { kind: "note"; note: string }
 	/** A re-answered lot picker: the first add re-shapes THIS row, the rest add lines. */
 	| { kind: "lots"; adds: Array<Record<string, any>> }
+	/** Re-open a paquete's picker — Invoice.vue answers with `edit_combo_choice`. */
+	| { kind: "comboChoice" }
 	| { kind: "remove" };
 
 /** The intent as it rides the bus: the sheet's verb plus the row it is about. */
@@ -204,7 +214,7 @@ export const resolveMovilLineEdit = (
 
 	// One row through the shared summary: the sheet's name, qty, rate and
 	// amount are the payment screen's figures, not a second reading.
-	const summary = resolveSaleSummary([row]).lines[0];
+	const summary = resolveSaleSummary([row, ...comboChildrenOf(options.cartItems, row)]).lines[0];
 	if (!summary) return null;
 
 	const profile = options.profile ?? null;
@@ -297,6 +307,8 @@ export const resolveMovilLineEdit = (
 			["Order", "Quotation"].includes(text(options.invoiceType)),
 		// The desk's delete button carries exactly this one condition.
 		canRemove: !isReplace,
+		// A return re-sells nothing: its paquete keeps the picks it was sold with.
+		canEditChoice: !isReturn && isChoiceHeaderLine(row),
 	};
 };
 

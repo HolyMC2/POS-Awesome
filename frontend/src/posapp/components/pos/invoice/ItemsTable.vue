@@ -113,7 +113,9 @@
 							<ComboCartLine
 								:line="comboLineFor(item)"
 								:format-currency="memoizedFormatCurrency"
+								:editable="isPaqueteLine(item) && !!editComboChoice"
 								@remove="removeItem(item)"
+								@edit="editComboChoice?.(item)"
 							/>
 						</td>
 					</tr>
@@ -223,6 +225,10 @@ import { loadItemSelectorSettings } from "../../../utils/itemSelectorSettings";
 import { logComponentRender } from "../../../utils/perf";
 import CartItemRow from "./CartItemRow.vue";
 import ComboCartLine from "../combos/ComboCartLine.vue";
+import {
+	foldComboChildren,
+	isChoiceHeaderLine,
+} from "../../../composables/pos/combos/comboChoice";
 import ItemsTableExpandedRow from "./ItemsTableExpandedRow.vue";
 
 import { cartAlignClass, resolveCartColumnAlign } from "./cartColumnAlign";
@@ -273,6 +279,8 @@ interface Props {
 	setBatchQty: (_item: any, _event: any) => void;
 	validateDueDate: (_item: any) => void;
 	removeItem: (_item: any) => void;
+	/** Re-open a paquete's picker (`comboChoice.ts`). Absent: the row has no edit. */
+	editComboChoice?: (_item: any) => unknown;
 	subtractOne: (_item: any) => void;
 	addOne: (_item: any) => void;
 	isReturnInvoice?: boolean;
@@ -328,14 +336,25 @@ const isComboLine = (item: any): boolean =>
 	!item?.posa_combo_broken;
 
 /** Shape the invoice item into the line `ComboCartLine` declares. */
-const comboLineFor = (item: any) => ({
-	item_code: String(item?.item_code ?? ""),
-	item_name: String(item?.item_name ?? item?.item_code ?? ""),
-	qty: Number(item?.qty) || 0,
-	rate: Number(item?.rate) || 0,
-	image: item?.image ?? null,
-	components: item?.posa_combo_components ?? [],
-});
+const comboLineFor = (item: any) => {
+	const qty = Number(item?.qty) || 0;
+	// A paquete's picks are drawn inside this row, and so is what they add:
+	// the row's rate is one paquete WITH its extra charges, so rate × qty is
+	// what the ticket actually charges for it.
+	const picks = cartFold.value.childAmountByParent.get(String(item?.posa_row_id ?? "")) ?? 0;
+	const rate = (Number(item?.rate) || 0) + (qty ? picks / qty : 0);
+	return {
+		item_code: String(item?.item_code ?? ""),
+		item_name: String(item?.item_name ?? item?.item_code ?? ""),
+		qty,
+		rate,
+		image: item?.image ?? null,
+		components: item?.posa_combo_components ?? [],
+	};
+};
+
+/** A paquete line: its picks ride on the cart as rows this table does not draw. */
+const isPaqueteLine = (item: any): boolean => isChoiceHeaderLine(item, cartFold.value);
 
 const responsive = useItemsTableResponsive(
 	tableContainer,
@@ -348,8 +367,11 @@ const nameEdit = useItemsTableNameEdit();
 const items = computed(() => invoiceStore.items);
 const invoice_doc = computed(() => invoiceStore.invoiceDoc || {});
 const hasItemSearch = computed(() => !!props.itemSearch?.trim());
+// A paquete's picks are drawn inside their paquete's row (ComboCartLine),
+// never as rows of their own — «Concha $0.00» reads like a forgotten charge.
+const cartFold = computed(() => foldComboChildren(items.value || []));
 const visibleItems = computed(() => {
-	const list = items.value || [];
+	const list = cartFold.value.visible;
 	const term = props.itemSearch?.trim();
 	if (!term) return list;
 	return list.filter((row: any) => customItemFilter(row, term, row));

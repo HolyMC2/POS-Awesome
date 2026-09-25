@@ -62,6 +62,16 @@ export function remove_item(context: any, item: any) {
 	return result;
 }
 
+/** Re-pick a paquete on the ticket (`comboChoice.ts`). */
+export async function edit_combo_choice(context: any, item: any) {
+	const { editChoiceCombo } = getItemAdditionApi();
+	const changed = await editChoiceCombo(item, context);
+	if (changed && context.schedulePricingRuleApplication) {
+		context.schedulePricingRuleApplication();
+	}
+	return changed;
+}
+
 export async function add_item(context: any, item: any, options: any = {}) {
 	const { addItem } = getItemAdditionApi();
 	// Build price context for debug

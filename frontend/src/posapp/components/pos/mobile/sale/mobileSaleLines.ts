@@ -41,6 +41,7 @@ import {
 	type CartLineStockDisplay,
 	type CartLineStockSource,
 } from "../../invoice/cartLineStock";
+import { foldComboChildren } from "../../../../composables/pos/combos/comboChoice";
 
 /** A cart line plus the phone's `Existencia` figure and the row's identity. */
 export interface MobileSaleLine extends SaleSummaryLine {
@@ -109,7 +110,10 @@ export const describeMobileSaleLines = (
 	options: MobileSaleLinesOptions = {},
 ): MobileSaleCart => {
 	const summary = resolveSaleSummary(items);
-	const rows = (Array.isArray(items) ? items : []).filter(isDrawableRow);
+	// The same fold the summary applies (a paquete's picks ride inside their
+	// paquete line), or the positional pairing below would shift by one row
+	// per pick and hand every later line its neighbour's stock.
+	const rows = foldComboChildren(Array.isArray(items) ? items : []).visible.filter(isDrawableRow);
 	const paired = rows.length === summary.lines.length;
 
 	return {

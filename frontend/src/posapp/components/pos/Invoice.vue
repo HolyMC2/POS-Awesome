@@ -298,6 +298,7 @@
 								:setBatchQty="set_batch_qty"
 								:validateDueDate="validate_due_date"
 								:removeItem="remove_item"
+								:editComboChoice="edit_combo_choice"
 								:subtractOne="subtract_one"
 								:addOne="add_one"
 								:toggleOffer="toggleOffer"
@@ -418,6 +419,7 @@ import stockCoordinator from "../../utils/stockCoordinator";
 import { computed, getCurrentInstance, ref } from "vue";
 import { save_and_clear_invoice as saveAndClearInvoiceAction } from "./invoice_utils/actions";
 import { applyCreditLinePrices } from "./invoice_utils/creditLinePrices";
+import { syncChoiceChildQty } from "../../composables/pos/combos/comboChoiceCart";
 import { fetchDraftInvoices } from "../../utils/draftInvoices";
 
 // Composables
@@ -918,6 +920,12 @@ export default {
 						target: { value: amount },
 					});
 					this.calc_prices(item, amount, { target: { id: "discount_amount" } });
+					return;
+				}
+				case "comboChoice": {
+					// A paquete's picks, re-chosen in its own picker. The line
+					// keeps its row; its pick lines are replaced.
+					void this.edit_combo_choice(item);
 					return;
 				}
 				case "uom": {
@@ -1569,6 +1577,18 @@ export default {
 				if (val) this.posting_date = val;
 			},
 			{ immediate: true },
+		);
+
+		// A paquete's picks follow its quantity, whatever changed it — the
+		// phone's line sheet, a keyboard step, a resumed draft. Idempotent:
+		// a cart already in step changes nothing, so this cannot loop.
+		this.$watch(
+			() => this.invoiceStore.metadata?.changeVersion,
+			() => {
+				syncChoiceChildQty(this.invoiceStore.items, (rowId, mutate) =>
+					this.invoiceStore.updateItemWithTotals(rowId, mutate),
+				);
+			},
 		);
 
 		this._busHandlers = {

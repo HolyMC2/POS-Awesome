@@ -27,6 +27,10 @@ import {
 	COMBO_COMPONENTS_FIELD,
 	normalizeComboComponent,
 } from "../../../composables/pos/items/comboLineAttachment";
+import {
+	COMBO_GROUP_FIELD,
+	COMBO_PARENT_FIELD,
+} from "../../../composables/pos/combos/comboChoice";
 
 /**
  * Read the annotation off a line in whatever shape it arrives.
@@ -61,13 +65,21 @@ const readComponents = (value: unknown): any[] => {
  * buying.
  */
 export function comboFieldsForPayload(item: any): Record<string, unknown> {
+	// A paquete's pick names its paquete line and its group; the server
+	// vouches for the pick's price by both, so they ride on EVERY line — null
+	// on the rest, for the same stale-value reason as the pair below.
+	const pick = {
+		[COMBO_PARENT_FIELD]: String(item?.[COMBO_PARENT_FIELD] ?? "").trim() || null,
+		[COMBO_GROUP_FIELD]: String(item?.[COMBO_GROUP_FIELD] ?? "").trim() || null,
+	};
 	const components = readComponents(item?.[COMBO_COMPONENTS_FIELD]);
 	if (components.length === 0) {
-		return { [COMBO_COMPONENTS_FIELD]: null, [COMBO_BROKEN_FIELD]: 0 };
+		return { [COMBO_COMPONENTS_FIELD]: null, [COMBO_BROKEN_FIELD]: 0, ...pick };
 	}
 	return {
 		[COMBO_COMPONENTS_FIELD]: JSON.stringify(components),
 		[COMBO_BROKEN_FIELD]: item?.[COMBO_BROKEN_FIELD] ? 1 : 0,
+		...pick,
 	};
 }
 

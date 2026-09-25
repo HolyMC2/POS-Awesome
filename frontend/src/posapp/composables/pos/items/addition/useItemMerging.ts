@@ -1,5 +1,7 @@
 import _ from "lodash";
 
+import { isChoiceHeaderLine, isComboChildLine } from "../../combos/comboChoice";
+
 export function useItemMerging() {
 	type MergeEntry = any;
 	type MergeContext = any;
@@ -10,11 +12,17 @@ export function useItemMerging() {
 	// 2nd referencia AND only ever delivers one recarga while charging for two. So a
 	// line with a saldo_referencia must never be a merge target — keep each recarga
 	// on its own qty=1 line. (Same exclusion idiom as offers/replacements above.)
+	// PAQUETE (comboChoice.ts): a pick is priced by its paquete, not by the
+	// item — merging a plain «Capuchino» into a $0 pick would give the second
+	// coffee away. And a paquete line is never merged either: two paquetes
+	// with different picks are two lines, even when they cost the same.
 	const shouldIndexItem = (entry: MergeEntry) =>
 		entry &&
 		!entry.posa_is_offer &&
 		!entry.posa_is_replace &&
 		!entry.saldo_referencia &&
+		!isComboChildLine(entry) &&
+		!isChoiceHeaderLine(entry) &&
 		Number.parseFloat(entry.qty) !== 0;
 
 	const buildMergeKey = (entry: MergeEntry, requireBatch: boolean) => {

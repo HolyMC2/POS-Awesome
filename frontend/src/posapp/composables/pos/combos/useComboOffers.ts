@@ -84,6 +84,7 @@ import {
 	saveComboOffers,
 } from "../../../../offline/comboOffers";
 import { normalizeComboComponent } from "../items/comboLineAttachment";
+import { normalizeChoiceGroups } from "./comboChoice";
 import type { ComboOffer } from "./comboCatalog";
 
 declare const frappe: any;
@@ -184,6 +185,11 @@ export const normalizeComboOffer = (raw: any): ComboOffer => ({
 		: [],
 	priority: toNumber(raw?.priority),
 	components: Array.isArray(raw?.components) ? raw.components.map(normalizeComboComponent) : [],
+	// A paquete (`comboChoice.ts`) rides with its groups; the offline cache
+	// stores this normalised shape, so a register that loses its connection
+	// can still ask «¿qué bebida?».
+	kind: raw?.kind === "choice" ? "choice" : "bundle",
+	groups: raw?.kind === "choice" ? normalizeChoiceGroups(raw?.groups) : [],
 });
 
 /** A ref, a getter, or a plain value — whichever the caller already holds. */

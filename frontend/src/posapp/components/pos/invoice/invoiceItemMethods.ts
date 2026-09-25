@@ -206,6 +206,9 @@ const invoiceItemMethods: Record<string, unknown> &
 	add_item(item, options) {
 		return Actions.add_item(this, item, options);
 	},
+	edit_combo_choice(item) {
+		return Actions.edit_combo_choice(this, item);
+	},
 	get_new_item(item) {
 		return Actions.get_new_item(this, item);
 	},

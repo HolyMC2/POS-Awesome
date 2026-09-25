@@ -641,6 +641,7 @@ describe("the sheet is drawn in the register's own vocabulary", () => {
 			".movil-line-sheet__uom",
 			".movil-line-sheet__lots",
 			".movil-line-sheet__classic",
+			".movil-line-sheet__choice",
 		]) {
 			expect(
 				pxOf(declaration(scopedStyles, selector, "min-height")),
@@ -658,6 +659,8 @@ describe("the sheet is drawn in the register's own vocabulary", () => {
 			[...tag[0].matchAll(/\sclass="([^"]+)"/g)].map((cls) => cls[1].split(/\s+/)[0]),
 		);
 		expect([...new Set(classes)].sort()).toEqual([
+			// A paquete's «Cambiar opciones» — re-opens its picker.
+			"movil-line-sheet__choice",
 			"movil-line-sheet__classic",
 			"movil-line-sheet__close",
 			"movil-line-sheet__lots",

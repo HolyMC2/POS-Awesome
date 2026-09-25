@@ -17,7 +17,18 @@
 			<slot name="stepper" />
 		</div>
 
-		<div class="combo-line__body">
+		<!-- A paquete's body is its edit door: tapping the picks re-opens the
+		     picker with them selected. A bundle's body stays plain text — its
+		     parts are fixed, there is nothing to choose. -->
+		<component
+			:is="editable ? 'button' : 'div'"
+			:type="editable ? 'button' : undefined"
+			class="combo-line__body"
+			:class="{ 'combo-line__body--editable': editable }"
+			:data-testid="editable ? 'combo-edit' : undefined"
+			:aria-label="editable ? editLabel : undefined"
+			@click="editable ? emit('edit') : undefined"
+		>
 			<div class="combo-line__title">
 				<span class="combo-line__name">{{ line.item_name }}</span>
 				<span class="combo-line__chip combo-line__chip--combo" data-testid="combo-badge">
@@ -30,11 +41,18 @@
 				>
 					{{ savingLabel }}
 				</span>
+				<v-icon
+					v-if="editable"
+					class="combo-line__edit-glyph"
+					icon="mdi-pencil-outline"
+					size="15"
+					aria-hidden="true"
+				/>
 			</div>
 			<div class="combo-line__components mono" data-testid="combo-components">
 				{{ componentSummary }}
 			</div>
-		</div>
+		</component>
 
 		<!-- The figure is drawn ONLY when it is bounded and known. An
 		     all-labour combo is unbounded (POSITIVE_INFINITY) and an offline or
@@ -105,15 +123,18 @@ const props = withDefaults(
 		availabilityContext?: ComboAvailabilityContext;
 		/** POS Profile `posa_low_stock_alert_threshold` (Int, default 10). */
 		lowStockThreshold?: number;
+		/** A paquete whose picks can be changed: the body becomes a button. */
+		editable?: boolean;
 	}>(),
 	{
 		formatCurrency: (value: number) => value.toFixed(2),
 		availabilityContext: () => ({}),
 		lowStockThreshold: 0,
+		editable: false,
 	},
 );
 
-const emit = defineEmits<{ (_event: "remove"): void }>();
+const emit = defineEmits<{ (_event: "remove"): void; (_event: "edit"): void }>();
 
 const onRemove = () => emit("remove");
 
@@ -139,9 +160,25 @@ const savingLabel = computed(
 	() => `${__("saves")} ${props.formatCurrency(pricing.value.saving)}`,
 );
 
-/** "Case negro + Mica Cristal + Instalación · lista $340.00" */
+/**
+ * "Case negro + Mica Cristal + Instalación · lista $340.00". A paquete's pick
+ * that costs extra says so beside it — «Latte +$10.00» — because that is
+ * where the line's price differs from the menu board's.
+ */
 const componentSummary = computed(() => {
-	const parts = describeComponents(props.line.components ?? []);
+	const components = (props.line.components ?? []) as Array<ComboComponent & { extra_price?: number }>;
+	const parts = components.some((component) => Number(component?.extra_price) > 0)
+		? components
+				.map((component) => {
+					const qty = Number(component?.qty) || 0;
+					const name = String(component?.item_name || component?.item_code || "").trim();
+					const label = qty > 1 ? `${qty} × ${name}` : name;
+					const extra = Number(component?.extra_price) || 0;
+					return extra > 0 ? `${label} +${props.formatCurrency(extra)}` : label;
+				})
+				.filter(Boolean)
+				.join(" + ")
+		: describeComponents(components);
 	const list = `${__("list")} ${props.formatCurrency(pricing.value.listPrice)}`;
 	return parts ? `${parts} · ${list}` : list;
 });
@@ -173,6 +210,7 @@ const limitedByTitle = computed(() =>
 );
 
 const removeLabel = computed(() => `${__("Remove")} ${props.line.item_name}`);
+const editLabel = computed(() => `${__("Change picks")}: ${props.line.item_name}`);
 </script>
 
 <style scoped>
@@ -183,10 +221,10 @@ const removeLabel = computed(() => `${__("Remove")} ${props.line.item_name}`);
 	gap: 10px;
 	padding: 0 16px;
 	min-height: 56px;
-	border-bottom: 1px solid #f4f6f8;
+	border-bottom: 1px solid var(--reg-divider-soft, #f4f6f8);
 	/* 3px, not a background tint: the edge survives a row hover and does not
 	   compete with the alternating row shading the cart already uses. */
-	border-left: 3px solid #e9a13b;
+	border-left: 3px solid var(--reg-tone-warning-border, #e9a13b);
 }
 
 .combo-line__thumb {
@@ -196,7 +234,7 @@ const removeLabel = computed(() => `${__("Remove")} ${props.line.item_name}`);
 	display: grid;
 	place-items: center;
 	overflow: hidden;
-	background: radial-gradient(120% 90% at 50% 8%, #fff 0%, #f4f6f9 60%, #eaeef3 100%);
+	background: var(--reg-surface-sunken, #f4f6f9);
 }
 
 .combo-line__img {
@@ -213,6 +251,36 @@ const removeLabel = computed(() => `${__("Remove")} ${props.line.item_name}`);
 	min-width: 0;
 }
 
+/* The paquete's edit door: a plain-looking button, so the row keeps its
+   rhythm, with the pencil saying the picks can change. */
+.combo-line__body--editable {
+	display: block;
+	width: 100%;
+	padding: 6px 8px;
+	margin: 0 -8px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+
+.combo-line__body--editable:hover,
+.combo-line__body--editable:focus-visible {
+	background: var(--reg-surface-muted, #f2f4f7);
+}
+
+.combo-line__body--editable:focus-visible {
+	outline: 2px solid var(--reg-accent, #0097a7);
+	outline-offset: 1px;
+}
+
+.combo-line__edit-glyph {
+	color: var(--reg-text-muted, #667085);
+}
+
 .combo-line__title {
 	display: flex;
 	align-items: center;
@@ -222,7 +290,7 @@ const removeLabel = computed(() => `${__("Remove")} ${props.line.item_name}`);
 .combo-line__name {
 	font-size: 14px;
 	font-weight: 500;
-	color: #212121;
+	color: var(--reg-text-primary, #212121);
 }
 
 .combo-line__chip {
@@ -236,18 +304,18 @@ const removeLabel = computed(() => `${__("Remove")} ${props.line.item_name}`);
 }
 
 .combo-line__chip--combo {
-	background: #fdf3df;
-	color: #8a5a0d;
+	background: var(--reg-tone-warning-bg, #fdf3df);
+	color: var(--reg-tone-warning-label, #8a5a0d);
 }
 
 .combo-line__chip--saving {
-	background: #f0fbf4;
-	color: #14603a;
+	background: var(--reg-tone-positive-bg, #f0fbf4);
+	color: var(--reg-tone-positive-label, #14603a);
 }
 
 .combo-line__components {
 	font-size: 10.5px;
-	color: #9aa2ae;
+	color: var(--reg-text-muted, #9aa2ae);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -256,29 +324,29 @@ const removeLabel = computed(() => `${__("Remove")} ${props.line.item_name}`);
 .combo-line__stock {
 	text-align: right;
 	font-size: 12.5px;
-	color: #667085;
+	color: var(--reg-text-muted, #667085);
 }
 
 .combo-line__stock--low {
-	color: #8a5a0d;
+	color: var(--reg-tone-warning-label, #8a5a0d);
 }
 
 .combo-line__rate {
 	text-align: right;
 	font-size: 13.5px;
-	color: #4a5260;
+	color: var(--reg-text-secondary, #4a5260);
 }
 
 .combo-line__amount {
 	text-align: right;
 	font-size: 15px;
 	font-weight: 700;
-	color: #212121;
+	color: var(--reg-text-primary, #212121);
 }
 
 .combo-line__remove {
 	text-align: center;
-	color: #c3cbd5;
+	color: var(--reg-text-muted, #c3cbd5);
 	font-size: 17px;
 	background: none;
 	border: 0;

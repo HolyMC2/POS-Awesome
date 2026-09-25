@@ -7,6 +7,18 @@ import { requireSaldoCapture } from "@saldo/useSaldoCapture";
 import { saldoProfileConfigured } from "../../../components/pos/recargas/recargasGate";
 import { parseBooleanSetting } from "../../../utils/stock";
 import { useToastStore } from "../../../stores/toastStore";
+import { useItemsStore } from "../../../stores/itemsStore.js";
+import {
+	choiceComboFor,
+	requestComboChoice,
+} from "../combos/comboChoiceRequest";
+import {
+	addChoiceCombo,
+	removeChoiceChildren,
+	replaceChoiceSelection,
+	type ChoiceCartDeps,
+} from "../combos/comboChoiceCart";
+import { selectionFromComponents } from "../combos/comboChoice";
 import { useStockUtils } from "../shared/useStockUtils";
 import { isOffline } from "../../../../offline/index";
 
@@ -210,6 +222,9 @@ export function useItemAddition() {
 				context.items.splice(index, 1);
 			}
 		}
+		// A paquete leaves with its picks: left behind they are $0 lines the
+		// cart would draw as free items and the server would refuse.
+		removeChoiceChildren(item, context);
 
 		if (item.is_bundle) {
 			context.packed_items = context.packed_items.filter(
@@ -372,7 +387,36 @@ export function useItemAddition() {
 	// The saldo capture lives OUTSIDE the perf measure (audit finding: the
 	// old wrapping mixed cashier typing time + a meta HTTP round-trip into
 	// pos:add-item, making its p99 untrustable for regressions).
+	/** What the paquete cart builder needs from this composable. */
+	const choiceCartDeps = (context: any): ChoiceCartDeps => {
+		let itemsStore: any = null;
+		try {
+			itemsStore = context?.itemsStore ?? useItemsStore();
+		} catch {
+			itemsStore = null;
+		}
+		return {
+			getNewItem: (template, ctx) => getNewItem(template, ctx),
+			calcStockQty: (line, qty) => calcStockQty(line, qty),
+			lookupItem: (code) => itemsStore?.getItemByCode?.(code) ?? null,
+		};
+	};
+
 	const addItem = async function addItem(item: any, context: any) {
+		// COMBO-CHOICE-INTEGRATION-POINT — a paquete is not added, it is
+		// chosen. Every add reaches this function (desk click, scan, phone
+		// tap, drawer, up-sell strip), so the picker opens here, and the
+		// paquete line plus one line per pick land when the cashier confirms.
+		// A return re-sells nothing, so it keeps the ordinary path; a
+		// dismissed picker abandons the add like a cancelled recarga capture.
+		const paquete = context?.isReturnInvoice ? null : choiceComboFor(item?.item_code);
+		if (paquete) {
+			const choice = await requestComboChoice(paquete, { qty: Math.abs(Number(item?.qty)) || 1 });
+			if (!choice) return;
+			const header = addChoiceCombo(item, paquete, choice, context, choiceCartDeps(context));
+			invalidateMergeCache(context);
+			return header;
+		}
 		// SALDO-INTEGRATION-POINT — for saldo-enabled items, capture
 		// referencia BEFORE the line hits the cart. Per TAECEL spec §5,
 		// a successful recarga is irreversible; we MUST get a confirmed
@@ -1129,9 +1173,37 @@ export function useItemAddition() {
 		invalidateMergeCache(context);
 	};
 
+	/**
+	 * Re-open the picker for a paquete already on the ticket. The paquete line
+	 * keeps its row (and any discount on it); its picks are replaced. Answers
+	 * false when the cashier dismissed the sheet or the paquete is no longer
+	 * offered — the line then stays exactly as it was.
+	 */
+	const editChoiceCombo = async (header: any, context: any): Promise<boolean> => {
+		const paquete = choiceComboFor(header?.item_code);
+		if (!paquete) {
+			toastStore.show({
+				title: __("This combo can no longer be changed here"),
+				detail: __("Remove it and add it again to pick its items."),
+				color: "warning",
+			});
+			return false;
+		}
+		const choice = await requestComboChoice(paquete, {
+			selection: selectionFromComponents(paquete, header?.posa_combo_components),
+			qty: Math.abs(Number(header?.qty)) || 1,
+			editing: true,
+		});
+		if (!choice) return false;
+		replaceChoiceSelection(header, paquete, choice, context, choiceCartDeps(context));
+		invalidateMergeCache(context);
+		return true;
+	};
+
 	return {
 		removeItem,
 		addItem,
+		editChoiceCombo,
 		getNewItem,
 		clearInvoice,
 		groupAndAddItem,

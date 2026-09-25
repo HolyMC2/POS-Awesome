@@ -32,6 +32,7 @@ import {
 	availabilityForLine,
 	describeAvailability,
 } from "../../../../composables/pos/combos/comboAvailabilityDisplay";
+import { isFixedGroup } from "../../../../composables/pos/combos/comboChoice";
 import {
 	COMBOS_CATEGORY_ID,
 	type ComboOffer,
@@ -76,6 +77,10 @@ export type BrowseCardChip =
 	// cart, and the chip says so. It replaces the stock chip — a template's
 	// own stock figure aggregates its variants and would mislead.
 	| { kind: "variants" }
+	// A PAQUETE (`comboChoice.ts`): the tap opens the picker, not the cart —
+	// «Elige» says so before the tap, like the variants chip does. A paquete
+	// has no saving to claim until its picks are known.
+	| { kind: "choice" }
 	| null;
 
 export interface BrowseCard {
@@ -125,11 +130,24 @@ export const formatCount = (value: number): string =>
  * an empty string when there are no components, so a malformed bundle draws a
  * blank line rather than a lone separator.
  */
-export const comboSubtitle = (combo: ComboOffer): string =>
-	(combo?.components ?? [])
+export const comboSubtitle = (combo: ComboOffer): string => {
+	// A paquete has no fixed parts: its shape is its questions — «Bebida +
+	// Pan + Molletes», naming an included item where a group has no choice.
+	if (combo?.kind === "choice") {
+		return (combo.groups ?? [])
+			.map((group) =>
+				isFixedGroup(group)
+					? group.options.map((option) => option.item_name).join(" + ")
+					: group.name,
+			)
+			.filter(Boolean)
+			.join(" + ");
+	}
+	return (combo?.components ?? [])
 		.map((component) => String(component?.item_name ?? component?.item_code ?? "").trim())
 		.filter(Boolean)
 		.join(" + ");
+};
 
 /**
  * An item's subtitle: its code.
@@ -193,7 +211,12 @@ export const buildBrowseCards = (input: BuildBrowseCardsInput = {}): BrowseCard[
 				// A combo priced at or above its parts is legitimate (a shop may
 				// bundle for convenience) and draws no chip — `−$0` would claim a
 				// discount that is not there.
-				chip: saving > 0 ? { kind: "saving" as const, amount: saving } : null,
+				chip:
+					combo?.kind === "choice"
+						? { kind: "choice" as const }
+						: saving > 0
+							? { kind: "saving" as const, amount: saving }
+							: null,
 				compatible: isCompatible(code),
 			};
 		});
