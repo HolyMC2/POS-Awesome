@@ -940,3 +940,20 @@ describe("primary integration count safeguards", () => {
 		);
 	});
 });
+
+describe("closing bags — each field says what it is for", () => {
+	it("names what each bag purpose is for and keeps the seal hint beside every bag", async () => {
+		context = { bags: [], counts: [drawerDraft(500)] };
+		const { wrapper } = await mountAllocation();
+		await save(wrapper);
+		expect(wrapper.get('[data-testid="cash-closing-bags-help"]').text()).toContain(
+			"a takings bag is sent to the bank",
+		);
+		const options = wrapper.findAll(".cash-closing__bag select option").map((o: any) => o.text());
+		expect(options).toEqual(["Float for the next drawer", "Takings for the bank"]);
+		const seal = wrapper.get(".cash-closing__field--seal input");
+		const hint = () => wrapper.get(`#${seal.attributes("aria-describedby")}`);
+		expect(hint().text()).toBe("Write this seal on the physical bag. Each bag keeps its own unique seal.");
+		expect(hint().classes()).not.toContain("cash-closing__hint--warn");
+	});
+});

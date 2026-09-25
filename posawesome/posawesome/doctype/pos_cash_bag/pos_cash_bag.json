@@ -36,7 +36,8 @@
    "fieldtype": "Link",
    "options": "POS Cash Safe",
    "reqd": 1,
-   "in_standard_filter": 1
+   "in_standard_filter": 1,
+   "description": "The safe that holds this bag."
   },
   {
    "fieldname": "company",
@@ -50,7 +51,8 @@
    "label": "Pos Profile",
    "fieldtype": "Link",
    "options": "POS Profile",
-   "reqd": 1
+   "reqd": 1,
+   "description": "The register this bag belongs to."
   },
   {
    "fieldname": "currency",
@@ -66,7 +68,8 @@
    "unique": 1,
    "reqd": 1,
    "in_list_view": 1,
-   "in_standard_filter": 1
+   "in_standard_filter": 1,
+   "description": "Written on the physical bag. Each bag has its own seal; labels and handover sheets show it."
   },
   {
    "fieldname": "purpose",
@@ -75,7 +78,8 @@
    "options": "Float\nTakings",
    "reqd": 1,
    "in_list_view": 0,
-   "in_standard_filter": 1
+   "in_standard_filter": 1,
+   "description": "Float: waits in the safe to start a drawer. Takings: sent to the bank."
   },
   {
    "fieldname": "state",
@@ -83,7 +87,8 @@
    "fieldtype": "Select",
    "options": "Available\nUnverified\nDisputed\nIssued\nIn Transit\nDeposited\nUnpacked\nTransferred",
    "reqd": 1,
-   "in_standard_filter": 1
+   "in_standard_filter": 1,
+   "description": "Where the bag is now. It changes only through the bag actions above."
   },
   {
    "fieldname": "amount",
@@ -91,7 +96,8 @@
    "fieldtype": "Currency",
    "reqd": 1,
    "in_list_view": 1,
-   "options": "currency"
+   "options": "currency",
+   "description": "Cash sealed in the bag, from the preparer's count."
   },
   {
    "fieldname": "count_json",
@@ -105,94 +111,109 @@
    "fieldtype": "Link",
    "options": "User",
    "reqd": 1,
-   "in_list_view": 0
+   "in_list_view": 0,
+   "description": "Who counted and sealed the bag."
   },
   {
    "fieldname": "verified_by",
    "label": "Verified By",
    "fieldtype": "Link",
-   "options": "User"
+   "options": "User",
+   "description": "Who recounted the sealed bag independently. Empty means nobody has."
   },
   {
    "fieldname": "received_by",
    "label": "Received By",
    "fieldtype": "Link",
-   "options": "User"
+   "options": "User",
+   "description": "The cashier who received the bag into a drawer."
   },
   {
    "fieldname": "opening_shift",
    "label": "Opening Shift",
    "fieldtype": "Link",
-   "options": "POS Opening Shift"
+   "options": "POS Opening Shift",
+   "description": "The shift whose drawer cash was sealed into this bag."
   },
   {
    "fieldname": "cash_movement",
    "label": "Cash Movement",
    "fieldtype": "Link",
-   "options": "POS Cash Movement"
+   "options": "POS Cash Movement",
+   "description": "The drawer movement that sealed this cash."
   },
   {
    "fieldname": "dispatch_journal",
    "label": "Dispatch Journal",
    "fieldtype": "Link",
-   "options": "Journal Entry"
+   "options": "Journal Entry",
+   "description": "Journal entry that moved the cash from the safe to deposits in transit."
   },
   {
    "fieldname": "deposit_journal",
    "label": "Deposit Journal",
    "fieldtype": "Link",
-   "options": "Journal Entry"
+   "options": "Journal Entry",
+   "description": "Journal entry that moved the cash from in transit to the bank."
   },
   {
    "fieldname": "deposit_reference",
    "label": "Deposit Reference",
-   "fieldtype": "Data"
+   "fieldtype": "Data",
+   "description": "The reference printed on the bank deposit slip."
   },
   {
    "fieldname": "transfer_account",
    "label": "Transferred To Account",
    "fieldtype": "Link",
    "options": "Account",
-   "read_only": 1
+   "read_only": 1,
+   "description": "The off-site cash account the whole bag moved to."
   },
   {
    "fieldname": "transfer_journal",
    "label": "Transfer Journal",
    "fieldtype": "Link",
    "options": "Journal Entry",
-   "read_only": 1
+   "read_only": 1,
+   "description": "Journal entry of the off-site move."
   },
   {
    "fieldname": "transferred_by",
    "label": "Transferred By",
    "fieldtype": "Link",
    "options": "User",
-   "read_only": 1
+   "read_only": 1,
+   "description": "Who recorded the off-site move."
   },
   {
    "fieldname": "transferred_on",
    "label": "Transferred On",
    "fieldtype": "Datetime",
-   "read_only": 1
+   "read_only": 1,
+   "description": "When the off-site move was recorded."
   },
   {
    "fieldname": "note",
    "label": "Note",
-   "fieldtype": "Small Text"
+   "fieldtype": "Small Text",
+   "description": "Handover notes and reasons. They stay in the audit trail."
   },
   {
    "fieldname": "receipt_movement",
    "label": "Receipt Movement",
    "fieldtype": "Link",
    "options": "POS Cash Movement",
-   "read_only": 1
+   "read_only": 1,
+   "description": "The drawer movement that received this bag's cash."
   },
   {
    "fieldname": "receiving_shift",
    "label": "Receiving Shift",
    "fieldtype": "Link",
    "options": "POS Opening Shift",
-   "read_only": 1
+   "read_only": 1,
+   "description": "The shift whose drawer received this bag."
   }
  ],
  "permissions": [

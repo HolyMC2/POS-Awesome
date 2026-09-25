@@ -32,6 +32,17 @@ For new entries, describe the changed behavior and include the commit, affected 
   assets/translations; the new fields are additive. Evidence:
   `~/muelle-releases/pos-credit-sales-20260924/`.
 
+- **Cash bags explain every control (2026-09-24).**
+  Cash custody describes each starting task, each bag or count action (prints
+  included) and the active queue filter, and keeps a legend of what every bag
+  and count state means. Safe targets say what the float and drawer limit are
+  for; bag purpose names say where the bag goes, also at closing, where each
+  seal field keeps its hint. POS, Desk (form, list queues with tooltips) and
+  printed slips now share one set of state names («Verificada en caja fuerte»,
+  «Retenida para revisión del supervisor», «Entregada a una caja»,
+  «En tránsito al banco»). POS Cash Bag fields carry descriptions; guarded
+  migration syncs that metadata. No custody state, balance or permission changes.
+
 - **Cash bag identification and closing labels (2026-09-23, doco-mirror).**
   Desk lists show the physical folio, amount, state, preparation date and people,
   with focused queues and single/batch printing. Successful POS closings offer

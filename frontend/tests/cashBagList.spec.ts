@@ -126,7 +126,7 @@ it("changes only the state queue, preserving safe scope, and prints selected IDs
 	const buttons = Array.from(document.querySelectorAll("nav button"));
 	(
 		buttons.find(
-			(b) => b.textContent === "Available in the safe",
+			(b) => b.textContent === "Verified in safe",
 		) as HTMLButtonElement
 	).click();
 	await Promise.resolve();
