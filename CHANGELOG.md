@@ -7,6 +7,18 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 ## Unreleased
 
+- **Phone item groups read like the desk's (2026-09-25, branch
+  `feat/pos-combos-cafeteria-20260925`, not deployed).** The phone catalogue's
+  categories were a wall of 11px grey pills (products started 278–378px down on
+  a 390px phone) with a hairline selected state. Now one row of 44px chips sits
+  above the grid in every product view, inside a category too (selected chip
+  with a check and the accent wash, the rest behind «+N», which opens them
+  inline, never scrolling sideways); the search and the row stay put while the
+  grid scrolls; «Todos los productos» and the way back are real buttons;
+  CategoryTiles (desk and phone) are compact 64px tiles with Combos first and
+  counts where known. Fixed: combos led every category the phone opened, and
+  image-less items showed a phone glyph (now their initials). No migration.
+
 - **Paquetes: combos with choices (2026-09-25, branch
   `feat/pos-combos-cafeteria-20260925`, not deployed).** A `POS Combo` can now
   be of type «Choice Groups»: the paquete's own item (non-stock, not a
