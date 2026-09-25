@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { useToastStore } from "../src/posapp/stores/toastStore";
 
@@ -32,5 +32,29 @@ describe("toastStore message handling", () => {
 		store.show({ title: "T", message: "from-message", detail: "from-detail" });
 		expect(store.text).toContain("from-detail");
 		expect(store.text).not.toContain("from-message");
+	});
+});
+
+describe("toastStore actions", () => {
+	beforeEach(() => {
+		setActivePinia(createPinia());
+	});
+
+	it("exposes the action of the visible toast and runs it once", () => {
+		const store = useToastStore();
+		const handler = vi.fn();
+		store.show({ title: "Producto no dado de alta", action: { label: "Pedir alta", handler } });
+
+		expect(store.action?.label).toBe("Pedir alta");
+		store.runAction();
+		expect(handler).toHaveBeenCalledTimes(1);
+		expect(store.visible).toBe(false);
+		expect(store.action).toBeNull();
+	});
+
+	it("ignores malformed actions", () => {
+		const store = useToastStore();
+		store.show({ title: "T", action: { label: "", handler: () => {} } });
+		expect(store.action).toBeNull();
 	});
 });
