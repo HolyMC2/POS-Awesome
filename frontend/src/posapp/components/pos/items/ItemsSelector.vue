@@ -165,6 +165,10 @@
 			:items-group="items_group"
 			:camera-enabled="!!pos_profile.posa_enable_camera_scanning"
 			:scanned-barcode="newItemDialogScannedBarcode"
+			:prefill="newItemDialogPrefill ?? undefined"
+			:allow-opening-stock="context === 'pos'"
+			:opening-warehouse="pos_profile?.warehouse || ''"
+			:company="pos_profile?.company || ''"
 			@request-camera-scan="startNewItemBarcodeScan"
 			@item-created="handleItemCreated"
 		/>
@@ -236,6 +240,7 @@ import { useItemDisplay } from "../../../composables/pos/items/useItemDisplay";
 import { useItemsLoader } from "../../../composables/pos/items/useItemsLoader";
 import { useBarcodeIndexing } from "../../../composables/pos/items/useBarcodeIndexing";
 import { useScanProcessor } from "../../../composables/pos/items/useScanProcessor";
+import { useUnknownScanCatalog } from "../../../composables/pos/items/useUnknownScanCatalog";
 import { useItemCurrency } from "../../../composables/pos/items/useItemCurrency";
 import { startItemsSelectorInitialization } from "../../../composables/pos/items/useItemsSelectorInitialization";
 import { registerItemsSelectorEvents } from "../../../composables/pos/items/useItemsSelectorEvents";
@@ -255,6 +260,7 @@ import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { useEmployeeStore } from "../../../stores/employeeStore";
 
 import { parseBooleanSetting } from "../../../utils/stock";
+import { isOffline } from "../../../../offline/index";
 import { createItemSearchFocusClearGuard } from "../../../utils/itemSearchFocusClearGuard";
 
 const props = defineProps({
@@ -735,6 +741,16 @@ const add_item = async (item, optionsOrQty: any = {}) => {
 	}
 };
 
+// Selectors where an unknown barcode may become a new Item (sell + buy);
+// label printing and other embeds keep the plain "not found" error.
+const CATALOG_SCAN_CONTEXTS = new Set(["pos", "purchase"]);
+const unknownScanCatalog = useUnknownScanCatalog({
+	isOffline: () => isOffline(),
+	openCreateDialog: (prefill) => openNewItemDialogFromScan(prefill),
+	toastStore,
+	playScanTone: (tone) => scannerInput.playScanTone?.(tone),
+});
+
 const scanProcessor = useScanProcessor({
 	items,
 	pos_profile,
@@ -774,6 +790,8 @@ const scanProcessor = useScanProcessor({
 		search_input.value = code;
 		first_search.value = code;
 	},
+	onUnknownBarcode: (code) =>
+		CATALOG_SCAN_CONTEXTS.has(props.context) ? unknownScanCatalog.handleUnknownBarcode(code) : false,
 	stock_settings,
 	search_from_scanner_ref: scannerInput.searchFromScanner,
 });
@@ -1189,7 +1207,9 @@ cleanupSearchInput = stopSearchInputWatcher;
 const {
 	newItemDialog,
 	newItemDialogScannedBarcode,
+	newItemDialogPrefill,
 	openNewItemDialog,
+	openNewItemDialogFromScan,
 	startNewItemBarcodeScan,
 	onBarcodeScanned,
 	onScannerOpened,
@@ -1201,6 +1221,7 @@ const {
 	requestForegroundItemSearchFocus,
 	onBarcodeScannedFromScannerInput,
 	reloadItems: () => itemsIntegration.get_items(true),
+	onScanItemCreated: (barcode) => scanProcessor.processScannedItem(barcode, { skipUnknownBarcode: true }),
 });
 
 // Proxy functions for template

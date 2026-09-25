@@ -58,6 +58,13 @@ export interface ScanProcessorContext {
 	customer: Ref<any>;
 	onItemAdded?: () => void;
 	onItemNotFound?: (_code: string) => void;
+	/**
+	 * Last chance for a barcode nobody knows (not local, not on the server):
+	 * resolve `true` when the caller took over (create dialog / request
+	 * toast) so the stock "Item not found" error is skipped. Never called for
+	 * scale barcodes or when the server lookup itself failed.
+	 */
+	onUnknownBarcode?: (_code: string) => Promise<boolean> | boolean;
 	stock_settings: Ref<any>;
 	selected_currency?: Ref<string>;
 	conversion_rate?: Ref<number> | ComputedRef<number>;
@@ -433,7 +440,26 @@ export function useScanProcessor(context: ScanProcessorContext) {
 		}
 	};
 
-	const processScannedItem = async (scannedCode: string) => {
+	type ProcessScanOptions = {
+		// Set when re-running a scan after the unknown-barcode flow created
+		// the item, so a second miss falls straight to the stock error.
+		skipUnknownBarcode?: boolean;
+	};
+
+	const tryUnknownBarcodeHandler = async (scannedCode: string) => {
+		if (typeof context.onUnknownBarcode !== "function") return false;
+		try {
+			return Boolean(await context.onUnknownBarcode(scannedCode));
+		} catch (error) {
+			console.error("Unknown barcode handler failed:", error);
+			return false;
+		}
+	};
+
+	const processScannedItem = async (
+		scannedCode: string,
+		options: ProcessScanOptions = {},
+	) => {
 		const mark = perfMarkStart("pos:scan-process");
 		logScanFlow("Start processing scan", { scannedCode });
 		pendingScanCode.value = scannedCode;
@@ -680,6 +706,20 @@ export function useScanProcessor(context: ScanProcessorContext) {
 					scanAssignment,
 					{ isScaleBarcode: isScaleBarcodeScan },
 				);
+				return;
+			}
+
+			if (
+				!options.skipUnknownBarcode &&
+				!isScaleBarcodeScan &&
+				(await tryUnknownBarcodeHandler(scannedCode))
+			) {
+				logScanFlow("Unknown barcode handed to catalog flow", {
+					scannedCode,
+				});
+				pendingScanCode.value = "";
+				if (scannerInput.scannerLocked)
+					scannerInput.scannerLocked.value = false;
 				return;
 			}
 
