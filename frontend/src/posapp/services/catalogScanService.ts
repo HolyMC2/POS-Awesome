@@ -10,7 +10,10 @@ import api, { type ApiEnvelope } from "./api";
 
 const CATALOG_METHOD_BASE = "doco.docoutils.catalog_items";
 // Scan-loop friendly: an unknown barcode should never hang the register.
-const PREFILL_TIMEOUT_MS = 5000;
+// doco's central lookup gives up at 2 s (with its own breaker), so past
+// 2.5 s the answer is not coming; a late reply is ignored by callEnvelope and
+// the scan falls back to the stock not-found error.
+export const PREFILL_TIMEOUT_MS = 2500;
 
 export interface CatalogSatKeySuggestion {
 	key: string;

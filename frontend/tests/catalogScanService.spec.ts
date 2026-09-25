@@ -8,7 +8,9 @@ vi.mock("../src/posapp/services/api", () => ({
 }));
 
 import api from "../src/posapp/services/api";
-import catalogScanService from "../src/posapp/services/catalogScanService";
+import catalogScanService, {
+	PREFILL_TIMEOUT_MS,
+} from "../src/posapp/services/catalogScanService";
 
 const ok = <T>(data: T): ApiEnvelope<T> => ({
 	ok: true,
@@ -53,6 +55,27 @@ describe("catalogScanService", () => {
 		expect(catalogScanService.isAvailable()).toBe(false);
 		await expect(catalogScanService.prefillForBarcode("456")).resolves.toBeNull();
 		expect(api.callEnvelope).toHaveBeenCalledTimes(1);
+	});
+
+	it("caps the prefill wait at 2.5 s so doco's 2 s lookup is the slowest case", async () => {
+		vi.mocked(api.callEnvelope).mockResolvedValue(ok({ barcode: "1", found_in: "none", can_create: true }) as never);
+
+		await catalogScanService.prefillForBarcode("1");
+		expect(PREFILL_TIMEOUT_MS).toBeLessThanOrEqual(2500);
+		expect(vi.mocked(api.callEnvelope).mock.calls[0][2]).toEqual({ timeoutMs: PREFILL_TIMEOUT_MS });
+	});
+
+	it("falls back (null) on timeout and keeps the feature on", async () => {
+		vi.mocked(api.callEnvelope).mockResolvedValue({
+			ok: false,
+			data: null,
+			error: { code: "TIMEOUT", message: "Request timed out", retryable: true },
+			requestId: "r",
+			serverTime: null,
+		} as never);
+
+		await expect(catalogScanService.prefillForBarcode("123")).resolves.toBeNull();
+		expect(catalogScanService.isAvailable()).toBe(true);
 	});
 
 	it("stays available after a transient failure", async () => {
