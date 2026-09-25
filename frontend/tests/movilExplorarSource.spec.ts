@@ -199,6 +199,18 @@ describe("a coarse pointer gets a 44px target", () => {
 		expect(style).not.toContain("__chip--filter::after");
 	});
 
+	it("folds the category row instead of scrolling it sideways", () => {
+		// The row shows one line and hands the rest to «+N» (`fitCategoryRow`).
+		// A scrolling rail would be the sideways scroll the phone register
+		// removed everywhere on 2026-09-22 — and the one `responsive-register`
+		// rejects on the catalogue.
+		const style = styleOf(resolve(BROWSE, "MobileBrowseScreen.vue"));
+		const sideways = rules(style).filter(
+			(rule) => rule.selector.includes("mbrowse__chips") && /overflow(-x)?:\s*(auto|scroll)/.test(rule.body),
+		);
+		expect(sideways).toEqual([]);
+	});
+
 	it("holds the search row at the floor", () => {
 		const search = rules(coarse).find((rule) => /__search\b/.test(rule.selector));
 

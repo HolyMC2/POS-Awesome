@@ -4665,3 +4665,5 @@ Line {0} ({1}) must be returned at the price it was sold for ({2}).,La línea {0
 Line {0} ({1}) returns more than the paquete sold.,La línea {0} ({1}) devuelve más de lo que vendió el paquete.
 Combos with choices are sold on a ticket,Los combos con opciones se venden en ticket
 Switch this sale to Invoice to add {0}.,Cambia esta venta a Factura para agregar {0}.
+Show {0} more categories,Mostrar {0} categorías más
+Show fewer categories,Mostrar menos categorías

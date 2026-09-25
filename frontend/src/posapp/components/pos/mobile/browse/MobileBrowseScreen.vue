@@ -1,12 +1,13 @@
 <template>
-	<section class="mbrowse" data-testid="mobile-browse">
+	<section ref="rootEl" class="mbrowse" data-testid="mobile-browse">
 		<header class="mbrowse__head">
 			<!-- No title row (owner, 2026-08-26): «Explorar catálogo» restated
 			     the dock tab under it and the connection chip restated the
 			     navbar's indicator above it — both rows spent grid space saying
 			     things already on screen. The search bar leads and the category
 			     chips are the first thing under it: they ARE the browse
-			     mechanism, and wrap with the catalogue on narrow screens. -->
+			     mechanism. ONE row of them, never scrolling sideways; what does
+			     not fit waits behind «+N». -->
 
 			<!--
 				The search ROW, not a search FIELD. `useScannerInput` attaches the
@@ -66,21 +67,51 @@
 			<button type="button" class="mbrowse__settings" :aria-label="__('Catalogue settings')" @click="emit('settings')"><v-icon icon="mdi-tune" size="22" /></button>
 			</div>
 
-			<div v-if="compatibleOffered || !navigationEnabled || query" class="mbrowse__chips" role="group" :aria-label="__('Browse catalogue')">
+			<!--
+				The category ROW. It stays above the grid in every product view —
+				inside a category too, so switching is one tap rather than a trip
+				back to the tiles. Width decides how many chips it shows
+				(`fitCategoryRow`); the selected one is always among them and the
+				rest wait behind «+N», which opens the full set inline. Wrapping,
+				not sideways scrolling: the phone register does not scroll
+				sideways anywhere (2026-09-22), and a chip off the edge is a
+				category nobody knows is there.
+			-->
+			<div
+				v-if="stripVisible"
+				ref="stripEl"
+				class="mbrowse__chips"
+				role="group"
+				:aria-label="__('Categories')"
+				data-testid="browse-categories"
+			>
+				<button
+					v-if="showBack"
+					type="button"
+					class="mbrowse__chip mbrowse__chip--icon"
+					data-strip-fixed
+					data-testid="browse-categories-back"
+					:title="__('All categories')"
+					@click="backToCategories"
+				>
+					<v-icon icon="mdi-arrow-left" size="20" aria-hidden="true" />
+					<span class="mbrowse__sr">{{ __("All categories") }}</span>
+				</button>
 				<button
 					v-if="compatibleOffered"
 					type="button"
-					class="mbrowse__chip mbrowse__chip--filter mbrowse__chip--compatible"
+					class="mbrowse__chip mbrowse__chip--filter"
 					:class="{ 'mbrowse__chip--on': compatibleOnly }"
+					data-strip-fixed
 					:data-testid="`browse-filter-${COMPATIBLE_FILTER_ID}`"
 					:aria-pressed="compatibleOnly ? 'true' : 'false'"
 					@click="toggleCompatible"
 				>
+					<v-icon v-if="compatibleOnly" icon="mdi-check" size="16" aria-hidden="true" />
 					{{ __("Compatible") }}
 				</button>
-				<template v-if="!navigationEnabled || query">
 				<button
-					v-for="category in categories"
+					v-for="category in shownCategories"
 					:key="category.id"
 					type="button"
 					class="mbrowse__chip mbrowse__chip--filter"
@@ -88,23 +119,54 @@
 						'mbrowse__chip--on': category.id === activeCategoryId,
 						'mbrowse__chip--featured': category.featured,
 					}"
+					:data-strip-chip="category.id"
 					:data-testid="`browse-category-${category.id}`"
 					:data-count="category.count ?? undefined"
 					:aria-pressed="category.id === activeCategoryId ? 'true' : 'false'"
 					@click="toggleCategory(category.id)"
 				>
+					<v-icon
+						v-if="category.id === activeCategoryId"
+						icon="mdi-check"
+						size="16"
+						aria-hidden="true"
+					/>
 					{{ category.label }}
 					<span v-if="category.count != null" class="mbrowse__chip-count reg-mono">{{
 						category.count
 					}}</span>
 				</button>
-				</template>
+				<button
+					v-if="stripExpanded || hiddenCategoryCount > 0"
+					type="button"
+					class="mbrowse__chip mbrowse__chip--more"
+					data-testid="browse-categories-more"
+					:aria-expanded="stripExpanded ? 'true' : 'false'"
+					:aria-label="
+						stripExpanded
+							? __('Show fewer categories')
+							: __('Show {0} more categories', [hiddenCategoryCount])
+					"
+					@click="stripExpanded = !stripExpanded"
+				>
+					<v-icon v-if="stripExpanded" icon="mdi-chevron-up" size="20" aria-hidden="true" />
+					<template v-else>
+						<span class="reg-mono">+{{ hiddenCategoryCount }}</span>
+						<v-icon icon="mdi-chevron-down" size="18" aria-hidden="true" />
+					</template>
+				</button>
 			</div>
-			<div v-if="navigationEnabled && !query" class="mbrowse__navigation">
-				<button v-if="!showCategoryTiles" type="button" class="mbrowse__chip" @click="backToCategories"><v-icon icon="mdi-arrow-left" size="18" /> {{ __("All categories") }}</button>
-				<strong v-else>{{ __("Choose a category") }}</strong>
-				<span v-if="activeCategoryId" class="mbrowse__current">{{ categories.find((category) => category.id === activeCategoryId)?.label || activeCategoryId }}</span>
-				<button v-if="showCategoryTiles" type="button" class="mbrowse__chip" @click="showProducts = true">{{ __("All products") }}</button>
+			<div v-if="showCategoryTiles" class="mbrowse__navigation">
+				<strong>{{ __("Choose a category") }}</strong>
+				<button
+					type="button"
+					class="mbrowse__nav-button"
+					data-testid="browse-all-products"
+					@click="showProducts = true"
+				>
+					<v-icon icon="mdi-view-grid-outline" size="18" aria-hidden="true" />
+					{{ __("All products") }}
+				</button>
 			</div>
 		</header>
 
@@ -203,7 +265,7 @@
  * escape is one tap. The default resets when the device changes, so a filter
  * turned off for one customer does not silently persist into the next sale.
  */
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import type { ComboAvailabilityContext } from "../../../../composables/pos/combos/comboAvailability";
 import type { ComboOffer } from "../../../../composables/pos/combos/comboCatalog";
@@ -223,7 +285,11 @@ import {
 	resolveCompatibilityScope,
 } from "./browseCompatibility";
 import CategoryTiles from "../../items/CategoryTiles.vue";
-import { categoryChoices, useCategoryNavigation } from "../../../../composables/pos/items/useCategoryNavigation";
+import {
+	categoryChoices,
+	fitCategoryRow,
+	useCategoryNavigation,
+} from "../../../../composables/pos/items/useCategoryNavigation";
 import { COMBOS_CATEGORY_ID } from "../../../../composables/pos/combos/comboCatalog";
 import MobileBrowseCard from "./MobileBrowseCard.vue";
 // The register's ONE shimmer, shared with `ui/Skeleton.vue` rather than
@@ -324,6 +390,7 @@ const showCategoryTiles = computed(() => navigationEnabled.value && !props.query
 const backToCategories = () => {
 	showProducts.value = false;
 	categoryOverride.value = null;
+	stripExpanded.value = false;
 	emit("select-group", "ALL");
 };
 
@@ -376,18 +443,36 @@ const activeCategoryId = computed(() => {
 	return categories.value.some((category) => category.id === categoryOverride.value) ? categoryOverride.value : null;
 });
 
+/**
+ * The cards a selected item GROUP can show.
+ *
+ * `itemsStore.filterByGroup` has already narrowed the rows to that group (and
+ * the server may count a child group's items as the parent's, so they are not
+ * re-filtered by name here). The combos are not the store's to narrow: they
+ * arrive whatever group is open, and used to lead every category — three
+ * breakfast combos above the hot drinks a cashier had just opened. A combo
+ * belongs to Combos, which is one chip away.
+ */
+const serverGroupOpen = computed(() => props.itemGroup !== "ALL" && !compatibleOnly.value);
+const groupCards = computed(() =>
+	serverGroupOpen.value ? allCards.value.filter((card) => card.kind !== "combo") : allCards.value,
+);
+
 const cards = computed(() =>
-	filterBrowseCards(allCards.value, {
+	filterBrowseCards(groupCards.value, {
 		compatibleOnly: compatibleOnly.value,
 		scope: scope.value,
-		categoryId: props.itemGroup !== "ALL" && !compatibleOnly.value ? null : activeCategoryId.value,
+		categoryId: serverGroupOpen.value ? null : activeCategoryId.value,
 	}),
 );
 
 const footer = computed(() =>
 	buildBrowseFooter({
 		shownCount: cards.value.length,
-		totalCount: allCards.value.length,
+		// Inside a server group the rows ARE the group; «See all N» would
+		// count that group plus the combos set aside above, which is no
+		// catalogue at all. The category row is the way out.
+		totalCount: groupCards.value.length,
 		scope: scope.value,
 		compatibleOnly: compatibleOnly.value,
 		translate: __,
@@ -401,6 +486,8 @@ const toggleCompatible = () => {
 const toggleCategory = (id: string) => {
 	const selected = activeCategoryId.value === id ? null : id;
 	categoryOverride.value = selected;
+	// A pick answers the open row; it folds back to one line around the choice.
+	stripExpanded.value = false;
 	if (props.itemGroups.length && !compatibleOnly.value) emit("select-group", selected && selected !== COMBOS_CATEGORY_ID ? selected : "ALL");
 };
 
@@ -410,7 +497,129 @@ const clearFilters = () => {
 	if (compatibleOffered.value) compatibleOverride.value = false;
 };
 
-watch(() => props.query, () => { categoryOverride.value = null; });
+watch(() => props.query, () => {
+	categoryOverride.value = null;
+	stripExpanded.value = false;
+});
+
+// ---- the category row -----------------------------------------------------
+
+const rootEl = ref<HTMLElement | null>(null);
+const stripEl = ref<HTMLElement | null>(null);
+/** «+N» opened: every chip, wrapped. */
+const stripExpanded = ref(false);
+/** Chips the collapsed row keeps; null = all of them (they fit, or unmeasured). */
+const stripFit = ref<Set<string> | null>(null);
+/** `.mbrowse__chip--more`'s flex basis — the room «+N» needs at the row's end. */
+const MORE_CHIP_WIDTH = 64;
+/** Below this the screen keeps its category row to a single line. */
+const SHORT_SCREEN_HEIGHT = 480;
+
+/** The way back to the tiles, while a category-first register shows products. */
+const showBack = computed(
+	() => navigationEnabled.value && !props.query.trim() && !showCategoryTiles.value && categories.value.length > 0,
+);
+/** On the tiles landing the tiles ARE the categories; the row keeps only Compatible. */
+const stripCategories = computed(() => (showCategoryTiles.value ? [] : categories.value));
+const stripVisible = computed(
+	() => compatibleOffered.value || showBack.value || stripCategories.value.length > 0,
+);
+const shownCategories = computed(() => {
+	const fit = stripFit.value;
+	if (stripExpanded.value || !fit) return stripCategories.value;
+	return stripCategories.value.filter((category) => fit.has(category.id));
+});
+const hiddenCategoryCount = computed(() => stripCategories.value.length - shownCategories.value.length);
+
+let fitting = false;
+let refitRequested = false;
+/**
+ * Lay every chip out once, measure, keep what fits. Both renders land in the
+ * same task — the awaited `nextTick` is a microtask — so the full set is
+ * measured but never painted.
+ */
+const fitStrip = async (): Promise<void> => {
+	if (fitting) {
+		refitRequested = true;
+		return;
+	}
+	if (stripExpanded.value) return;
+	fitting = true;
+	try {
+		stripFit.value = null;
+		await nextTick();
+		const strip = stripEl.value;
+		if (!strip || stripExpanded.value) return;
+		const gap = parseFloat(getComputedStyle(strip).columnGap) || 0;
+		// Layout width, not painted width: `offsetWidth` ignores transforms (the
+		// chip still pressed at 0.98 by the tap that triggered this, a screen
+		// mid-entrance) but rounds, so half a pixel goes back on — erring
+		// towards one chip fewer, never towards a wrapped row.
+		const width = (el: HTMLElement) => (el.offsetWidth ? el.offsetWidth + 0.5 : 0);
+		const fixed = Array.from(strip.querySelectorAll<HTMLElement>("[data-strip-fixed]"), width);
+		stripFit.value = fitCategoryRow({
+			// `clientWidth` rounds too; a pixel of slack covers it.
+			available: strip.clientWidth - 1,
+			gap,
+			fixedWidth: fixed.reduce((sum, w) => sum + w, 0) + gap * Math.max(0, fixed.length - 1),
+			moreWidth: MORE_CHIP_WIDTH,
+			chips: Array.from(strip.querySelectorAll<HTMLElement>("[data-strip-chip]"), (el) => ({
+				id: el.dataset.stripChip ?? "",
+				width: width(el),
+			})),
+			activeId: activeCategoryId.value,
+			// A three-group menu shows whole on two lines; a cafeteria's dozen
+			// folds to one line and «+N» instead of becoming a wall. A short
+			// screen (a phone on its side) cannot spare the second line.
+			maxLines: (rootEl.value?.clientHeight ?? 0) >= SHORT_SCREEN_HEIGHT ? 2 : 1,
+		});
+	} finally {
+		fitting = false;
+		if (refitRequested) {
+			refitRequested = false;
+			void fitStrip();
+		}
+	}
+};
+
+watch(
+	() => [
+		stripCategories.value.map((category) => `${category.id}\u0000${category.count ?? ""}`).join("\u0001"),
+		activeCategoryId.value,
+		showBack.value,
+		compatibleOffered.value,
+		compatibleOnly.value,
+		stripExpanded.value,
+	],
+	() => void fitStrip(),
+	{ flush: "post" },
+);
+
+// The ROOT is observed, not the row: the row's height changes every time it
+// is fitted, and observing it would feed its own resize back into the fit.
+let resizeObserver: ResizeObserver | null = null;
+let observedWidth = -1;
+const refitAfterFonts = () => void fitStrip();
+onMounted(() => {
+	void fitStrip();
+	if (typeof ResizeObserver !== "undefined" && rootEl.value) {
+		resizeObserver = new ResizeObserver((entries) => {
+			const next = Math.round(entries[0]?.contentRect.width ?? 0);
+			if (next === observedWidth) return;
+			observedWidth = next;
+			void fitStrip();
+		});
+		resizeObserver.observe(rootEl.value);
+	}
+	// Chip widths are font widths. A face loads the first time text needs it
+	// — the chips' 500 weight can first appear WITH the row, after the tiles
+	// were drawn in other weights — so measure again whenever one arrives.
+	document.fonts?.addEventListener?.("loadingdone", refitAfterFonts);
+});
+onBeforeUnmount(() => {
+	resizeObserver?.disconnect();
+	document.fonts?.removeEventListener?.("loadingdone", refitAfterFonts);
+});
 
 const onAdd = (card: BrowseCard) => emit("add", card);
 </script>
@@ -418,10 +627,9 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 <style scoped>
 .mbrowse__search-row { display: flex; gap: 8px; align-items: center; }
 .mbrowse__search-row .mbrowse__search { flex: 1; min-width: 0; }
-.mbrowse__settings { flex: 0 0 44px; height: 44px; border-radius: 10px; border: 1px solid var(--reg-border); color: var(--reg-ink); background: var(--reg-surface); }
+.mbrowse__settings { flex: 0 0 44px; height: 44px; border-radius: 10px; border: 1px solid var(--reg-border); color: var(--reg-text-primary, #212121); background: var(--reg-surface); }
 .mbrowse__navigation { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
-.mbrowse__navigation > strong { margin-inline-end: auto; }
-.mbrowse__current { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.mbrowse__navigation > strong { margin-inline-end: auto; font-size: 15px; font-weight: 700; color: var(--reg-text-primary, #212121); }
 
 .mbrowse {
 	display: flex;
@@ -439,6 +647,17 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	background: var(--reg-surface, #ffffff);
 	border-bottom: 1px solid var(--reg-divider, #eceff3);
 	padding: 9px 14px 9px;
+}
+
+/* The search and the category row stay put while the grid scrolls under them,
+   so switching category never starts with scrolling back up. Only where the
+   screen is tall enough to spare them: a landscape phone keeps its rows. */
+@media (min-height: 560px) {
+	.mbrowse__head {
+		position: sticky;
+		top: 0;
+		z-index: 2;
+	}
 }
 
 .mbrowse__search {
@@ -501,10 +720,12 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	flex-wrap: wrap;
 }
 
-.mbrowse__chips::-webkit-scrollbar {
-	display: none;
-}
-
+/*
+ * The desk drawer's chip (`CatalogDrawer.vue`) at touch size: outlined on the
+ * surface, readable 13px, and ONE selected look — the pale accent wash, its
+ * edge and a check. The old 11px grey pill read as disabled, and its selected
+ * state was a hairline nobody could find.
+ */
 .mbrowse__chip {
 	position: relative;
 	max-width: 100%;
@@ -513,45 +734,124 @@ const onAdd = (card: BrowseCard) => emit("add", card);
 	overflow-wrap: anywhere;
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
-	border: 0;
+	gap: 6px;
+	border: 1px solid var(--reg-border-soft, #e6e9ee);
 	border-radius: 999px;
-	font-size: 11px;
+	font-size: 13px;
 	font-weight: 500;
-	padding: 5px 11px;
+	line-height: 1.2;
+	padding: 5px 14px;
 	font-family: inherit;
-	background: var(--reg-surface-muted, #f2f4f7);
-	color: var(--reg-text-muted, #667085);
-}
-
-.mbrowse__chip--filter {
+	background: var(--reg-surface, #ffffff);
+	color: var(--reg-text-secondary, #56606e);
 	cursor: pointer;
+	transition: transform var(--motion-fast, 120ms) var(--ease-out, ease-out);
+	-webkit-tap-highlight-color: transparent;
 }
 
+.mbrowse__chip:active {
+	transform: scale(var(--press-scale, 0.98));
+}
+
+/* Combos lead the row in the combo cards' own tone — a state of the grid, not
+   a second accent (the same reasoning `.mbrowse-card--combo` gives). */
 .mbrowse__chip--featured {
+	border-color: var(--reg-tone-warning-border, #f0dcae);
 	background: var(--reg-tone-warning-bg, #fdf9f0);
 	color: var(--reg-tone-warning-label, #8a5a0d);
 	font-weight: 700;
 }
 
-.mbrowse__chip--compatible,
 .mbrowse__chip--see-all {
+	border-color: var(--reg-accent-edge, #9fdde6);
 	background: var(--reg-accent-soft, #e0f7fa);
 	color: var(--reg-on-accent-soft, #00646f);
 	font-weight: 700;
 }
 
-.mbrowse__chip--see-all {
-	cursor: pointer;
-}
-
 .mbrowse__chip--on {
-	box-shadow: inset 0 0 0 1.5px var(--reg-accent-edge, #9fdde6);
+	border-color: var(--reg-accent-edge, #9fdde6);
+	background: var(--reg-accent-soft, #e0f7fa);
+	color: var(--reg-on-accent-soft, #00646f);
+	font-weight: 700;
 }
 
 .mbrowse__chip-count {
 	font-weight: 700;
-	opacity: 0.8;
+	opacity: 0.7;
+}
+
+/* The way back to the tiles: a square, so it costs the row one thumb. */
+.mbrowse__chip--icon {
+	flex: none;
+	width: 44px;
+	padding: 0;
+	justify-content: center;
+	color: var(--reg-text-primary, #212121);
+}
+
+/* «+N»: a known minimum, so the fit can reserve it before it exists
+   (MORE_CHIP_WIDTH), then it takes what the row has left — a full row reads
+   as one control rather than chips that ran out. */
+.mbrowse__chip--more {
+	flex: 1 0 64px;
+	min-width: 64px;
+	padding: 0 10px;
+	justify-content: center;
+	gap: 2px;
+	color: var(--reg-text-primary, #212121);
+	font-weight: 700;
+}
+
+.mbrowse__nav-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 44px;
+	padding: 0 14px;
+	border: 1px solid var(--reg-border, rgba(0, 0, 0, 0.12));
+	border-radius: 999px;
+	background: var(--reg-surface, #ffffff);
+	color: var(--reg-text-primary, #212121);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: transform var(--motion-fast, 120ms) var(--ease-out, ease-out);
+	-webkit-tap-highlight-color: transparent;
+}
+
+.mbrowse__nav-button:active {
+	transform: scale(var(--press-scale, 0.98));
+}
+
+.mbrowse__nav-button:focus-visible {
+	outline: 2px solid var(--reg-accent, #0097a7);
+	outline-offset: 2px;
+}
+
+.mbrowse__sr {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.mbrowse__chip,
+	.mbrowse__nav-button {
+		transition: none;
+	}
+
+	.mbrowse__chip:active,
+	.mbrowse__nav-button:active {
+		transform: none;
+	}
 }
 
 .mbrowse__chip:focus-visible,
