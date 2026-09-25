@@ -142,3 +142,37 @@ describe("orderAsCartItems", () => {
 		expect(orderAsCartItems({} as OrderRow)).toEqual([]);
 	});
 });
+
+describe("a paquete on a cuenta (comboChoice.ts)", () => {
+	const header = {
+		posa_row_id: "H1",
+		item_code: "CAFE-PAQ",
+		item_name: "Combo Desayuno",
+		qty: 1,
+		rate: 129,
+		posa_combo_components: [{ item_code: "CAFE-LATTE", item_name: "Latte", qty: 1, rate: 55, extra_price: 10, group: "Bebida" }],
+	};
+	const pick = { posa_row_id: "P1", item_code: "CAFE-LATTE", qty: 1, rate: 10, posa_combo_parent: "H1", posa_combo_group: "Bebida" };
+
+	it("rides the order line: picks name their paquete line, the paquete line its picks", () => {
+		const [paquete, latte] = cartAsLines([header, pick]);
+		expect(latte).toMatchObject({ line_uid: "P1", combo_parent: "H1", combo_group: "Bebida" });
+		expect(JSON.parse(String(paquete?.combo_components))[0]).toMatchObject({ item_code: "CAFE-LATTE", group: "Bebida", extra_price: 10 });
+		expect(paquete?.combo_parent).toBeUndefined();
+	});
+
+	it("comes back pinned, so resuming the cuenta cannot reprice a pick", () => {
+		const [paquete, latte] = orderAsCartItems({ lines: cartAsLines([header, pick]) } as unknown as OrderRow);
+		expect(latte).toMatchObject({ posa_combo_parent: "H1", posa_combo_group: "Bebida", rate: 10, price_list_rate: 10, locked_price: true });
+		expect(paquete?.posa_combo_components).toEqual([expect.objectContaining({ item_code: "CAFE-LATTE", group: "Bebida" })]);
+		expect(paquete?.locked_price).toBeUndefined();
+	});
+
+	it("a re-picked paquete re-syncs its line even though qty and rate did not move", () => {
+		const [before] = cartAsLines([header]);
+		const synced = new Map([[before!.line_uid, before!]]);
+		const repicked = { ...header, posa_combo_components: [{ item_code: "CAFE-AMERICANO", qty: 1, rate: 35, group: "Bebida" }] };
+		const { upserts } = buildLineDelta(cartAsLines([repicked]), synced);
+		expect(upserts.map((entry) => entry.line_uid)).toEqual(["H1"]);
+	});
+});

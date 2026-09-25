@@ -118,6 +118,16 @@ def _invoice_items(order, tip_amount=0):
             line["item_name"] = row.item_name
         if row.uom:
             line["uom"] = row.uom
+        # A paquete survives the cuenta: the line keeps its identity (the
+        # cart's posa_row_id IS the line_uid) so its picks can name it, and the
+        # picks keep the two fields the price voucher checks them by.
+        if row.get("combo_parent") or row.get("combo_components"):
+            line["posa_row_id"] = row.line_uid
+        if row.get("combo_parent"):
+            line["posa_combo_parent"] = row.combo_parent
+            line["posa_combo_group"] = row.get("combo_group")
+        if row.get("combo_components"):
+            line["posa_combo_components"] = row.combo_components
         items.append(line)
     if tip_amount:
         items.append(tip_invoice_line(order.company, tip_amount))

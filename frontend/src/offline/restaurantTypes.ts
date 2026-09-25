@@ -75,6 +75,12 @@ export interface OrderLine {
 	seat?: number | null;
 	fired?: number;
 	fired_at?: string | null;
+	/** A paquete's pick: the `line_uid` of its paquete line (`comboChoice.ts`). */
+	combo_parent?: string | null;
+	/** The paquete group the pick answers. */
+	combo_group?: string | null;
+	/** On a paquete line: its picks, as the JSON the invoice field stores. */
+	combo_components?: string | null;
 }
 
 export interface OrderRow {

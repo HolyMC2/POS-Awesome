@@ -16,7 +16,10 @@
   "seat",
   "fired",
   "fired_at",
-  "notes"
+  "notes",
+  "combo_parent",
+  "combo_group",
+  "combo_components"
  ],
  "fields": [
   {
@@ -98,12 +101,33 @@
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "description": "A paquete's pick: the line_uid of the paquete line it belongs to (POS Combo, Choice Groups). Settle carries it onto the invoice as posa_combo_parent.",
+   "fieldname": "combo_parent",
+   "fieldtype": "Data",
+   "label": "Paquete Line",
+   "read_only": 1
+  },
+  {
+   "description": "The paquete group this pick answers («Bebida», «Pan»).",
+   "fieldname": "combo_group",
+   "fieldtype": "Data",
+   "label": "Paquete Group",
+   "read_only": 1
+  },
+  {
+   "description": "On a paquete line: its picks as JSON, for the cart row to list them.",
+   "fieldname": "combo_components",
+   "fieldtype": "Small Text",
+   "label": "Combo Components",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 0,
  "istable": 1,
  "links": [],
- "modified": "2026-08-29 00:00:00.000000",
+ "modified": "2026-09-25 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "POS Table Order Item",

@@ -33,7 +33,23 @@ from posawesome.posawesome.api.restaurant._tickets import (
     resolve_order_name,
 )
 
-LINE_SCALARS = ("item_code", "item_name", "qty", "uom", "rate", "notes", "course_idx", "seat")
+LINE_SCALARS = (
+    "item_code",
+    "item_name",
+    "qty",
+    "uom",
+    "rate",
+    "notes",
+    "course_idx",
+    "seat",
+    # A paquete (POS Combo, Choice Groups) on a cuenta: each pick names its
+    # paquete line, and the paquete line carries its picks for the cart row.
+    # Settle maps them onto the invoice, where combo_choice vouches for the
+    # picks' prices.
+    "combo_parent",
+    "combo_group",
+    "combo_components",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +71,9 @@ def _line_payload(row):
         "seat": cint(row.seat),
         "fired": cint(row.fired),
         "fired_at": str(row.fired_at) if row.fired_at else None,
+        "combo_parent": row.get("combo_parent") or None,
+        "combo_group": row.get("combo_group") or None,
+        "combo_components": row.get("combo_components") or None,
     }
 
 

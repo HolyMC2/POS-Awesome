@@ -12,6 +12,18 @@
  * @module posapp/stores/floor/floorCartBridge
  */
 import { ensureLineUid, type OrderLine, type OrderRow } from "../../api/restaurant";
+import {
+	COMBO_GROUP_FIELD,
+	COMBO_PARENT_FIELD,
+} from "../../composables/pos/combos/comboChoice";
+import {
+	COMBO_BROKEN_FIELD,
+	COMBO_COMPONENTS_FIELD,
+} from "../../composables/pos/items/comboLineAttachment";
+import {
+	comboFieldsForPayload,
+	hydrateComboFields,
+} from "../../components/pos/invoice_utils/comboPersistence";
 
 /**
  * The cart, expressed as table-order lines.
@@ -35,6 +47,9 @@ export const cartAsLines = (cartItems: readonly any[]): OrderLine[] =>
 			notes: item.posa_notes ?? null,
 			course_idx: Number(item.posa_course_idx) || 1,
 			seat: Number(item.posa_seat) || 0,
+			// A paquete on a cuenta (`comboChoice.ts`): the picks name their
+			// paquete line and group; the paquete line carries its picks.
+			...paqueteFields(item),
 		});
 		if (!item.posa_row_id) {
 			item.posa_row_id = line.line_uid;
@@ -64,7 +79,47 @@ export const orderAsCartItems = (order: OrderRow): Array<Record<string, unknown>
 		// path clears the cart, so a live resync is not needed to keep it
 		// honest.
 		posa_line_fired: line.fired ? 1 : 0,
+		...paqueteCartFields(line),
 	}));
+
+/** The paquete fields of a cart row, as an order line carries them. */
+const paqueteFields = (item: any): Partial<OrderLine> => {
+	const out: Partial<OrderLine> = {};
+	const parent = String(item?.[COMBO_PARENT_FIELD] ?? "").trim();
+	if (parent) {
+		out.combo_parent = parent;
+		out.combo_group = String(item?.[COMBO_GROUP_FIELD] ?? "").trim() || null;
+	}
+	const components = comboFieldsForPayload(item)[COMBO_COMPONENTS_FIELD];
+	if (typeof components === "string" && components) out.combo_components = components;
+	return out;
+};
+
+/**
+ * Back onto the cart: a pick comes back PINNED at the price the cuenta
+ * recorded (its extra charge, usually 0) — «the existing pricing path fills
+ * the rest» must not refill a pick's rate from the price list — and a paquete
+ * line gets its picks back as the array its cart row lists.
+ */
+const paqueteCartFields = (line: OrderLine): Record<string, unknown> => {
+	const out: Record<string, unknown> = {};
+	if (line.combo_parent) {
+		out[COMBO_PARENT_FIELD] = line.combo_parent;
+		out[COMBO_GROUP_FIELD] = line.combo_group ?? null;
+		out.price_list_rate = Number(line.rate) || 0;
+		out.locked_price = true;
+		out._manual_rate_set = true;
+	}
+	if (line.combo_components) {
+		const row: Record<string, unknown> = { [COMBO_COMPONENTS_FIELD]: line.combo_components };
+		hydrateComboFields(row);
+		if (Array.isArray(row[COMBO_COMPONENTS_FIELD])) {
+			out[COMBO_COMPONENTS_FIELD] = row[COMBO_COMPONENTS_FIELD];
+			out[COMBO_BROKEN_FIELD] = 0;
+		}
+	}
+	return out;
+};
 
 export interface LineDelta {
 	upserts: OrderLine[];
@@ -78,7 +133,9 @@ const changed = (previous: OrderLine, line: OrderLine): boolean =>
 	previous.rate !== line.rate ||
 	previous.notes !== line.notes ||
 	previous.course_idx !== line.course_idx ||
-	(previous.seat ?? 0) !== (line.seat ?? 0);
+	(previous.seat ?? 0) !== (line.seat ?? 0) ||
+	// A re-picked paquete keeps its row; only its components move.
+	(previous.combo_components ?? null) !== (line.combo_components ?? null);
 
 /** Diff the cart against what the server last accepted. */
 export const buildLineDelta = (
