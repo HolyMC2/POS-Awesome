@@ -121,3 +121,6 @@ fields, so the same voucher applies.
   the juice), and the server checks each returned pick against the sale.
 - Paquetes cannot be sold on Sales Orders or Quotations yet.
 - Extra charges are in company currency and converted at the invoice's rate.
+- Selling Settings «Validate Selling Price» (off on doco-mirror) would refuse
+  a $0 pick of a STOCK item with a purchase rate; a tenant that turns it on
+  should keep stock picks priced or leave that check off.
