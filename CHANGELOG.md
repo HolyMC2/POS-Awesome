@@ -7,6 +7,14 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 ## Unreleased
 
+- **Scans read fresh stock and prices (2026-09-25, doco-mirror).**
+  `get_items` no longer serves or stores a cached page for a `search_value`
+  lookup. Typed register searches already asked with the cache off; barcode
+  scans sent the saved profile, so on Doco Ventas a scanned item's stock and
+  price could be up to 30 minutes old. Uncached scans measured ~50 ms.
+  Catalogue pages stay cached and pre-warmed. No migration; rollback restores
+  source. See docs/PERF-get-items.md (2026-09-25) for the search-limit numbers.
+
 - **Item search ranks by relevance (2026-09-24, doco-mirror).**
   «ip 13» at the Doco Ventas register listed iPhone 11/XS screens first and
   missed «Pantalla iPhone 13»: limit-search anchored on the first word as a
