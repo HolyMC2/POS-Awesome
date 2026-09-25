@@ -572,3 +572,38 @@ class TestSettleTableOrder(RestaurantTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSettleCarriesPaquetes(unittest.TestCase):
+    """A paquete on a cuenta reaches the invoice with the fields the voucher reads.
+
+    `_invoice_items` is the one mapping from order lines to invoice lines, so
+    this pins it directly: the paquete line keeps its identity (the cart's
+    posa_row_id IS the line_uid) and its picks, each pick names both, and an
+    ordinary line gains none of them.
+    """
+
+    def test_paquete_fields_ride_onto_the_invoice_lines(self):
+        components = '[{"item_code": "LATTE", "group": "Bebida", "qty": 1}]'
+        order = frappe._dict(
+            items=[
+                frappe._dict(line_uid="H1", item_code="PAQ", item_name="Combo Desayuno", qty=1, rate=129,
+                             uom="Nos", combo_parent=None, combo_group=None, combo_components=components),
+                frappe._dict(line_uid="P1", item_code="LATTE", item_name="Latte", qty=1, rate=10,
+                             uom="Nos", combo_parent="H1", combo_group="Bebida", combo_components=None),
+                frappe._dict(line_uid="X1", item_code="CAFE", item_name="Café", qty=2, rate=30,
+                             uom="Nos", combo_parent=None, combo_group=None, combo_components=None),
+            ]
+        )
+
+        header, pick, plain = settle._invoice_items(order)
+
+        self.assertEqual(header["posa_row_id"], "H1")
+        self.assertEqual(header["posa_combo_components"], components)
+        self.assertNotIn("posa_combo_parent", header)
+        self.assertEqual(
+            (pick["posa_row_id"], pick["posa_combo_parent"], pick["posa_combo_group"], pick["rate"], pick["price_list_rate"]),
+            ("P1", "H1", "Bebida", 10, 10),
+        )
+        for key in ("posa_row_id", "posa_combo_parent", "posa_combo_group", "posa_combo_components"):
+            self.assertNotIn(key, plain)
