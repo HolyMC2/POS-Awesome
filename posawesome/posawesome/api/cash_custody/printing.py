@@ -17,15 +17,15 @@ EVIDENCE_DOCTYPES = {'POS Cash Bag', 'POS Cash Count'}
 LAYOUTS = {'slip', 'label', 'ticket'}
 
 STATES = {
-    'Unverified': 'Awaiting independent verification',
-    'Available': 'Available in the safe',
+    'Unverified': 'Awaiting verification',
+    'Available': 'Verified in safe',
     'Disputed': 'Held for supervisor review',
     'Issued': 'Issued to a drawer',
     'In Transit': 'In transit to the bank',
     'Deposited': 'Deposited at the bank',
     'Unpacked': 'Returned to loose safe cash',
     'Transferred': 'Moved to the off-site safe',
-    'Draft': 'Saved draft count',
+    'Draft': 'Saved draft',
     'Final': 'Final count',
     'Exception': 'Difference pending review',
     'Reviewed': 'Difference reviewed',

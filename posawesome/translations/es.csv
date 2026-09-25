@@ -4361,3 +4361,69 @@ This bag is no longer a sealed bag in the safe. The record was reloaded and noth
 Transfer reason,Motivo del envío
 Received at the off-site safe,Recibida en la caja fuerte externa
 No cash safe is configured for your registers. Ask a manager to configure cash custody.,No hay caja fuerte configurada para tus cajas. Pide a un encargado que configure la custodia de efectivo.
+"All cash the ledger places in this safe, sealed bags included","Todo el efectivo que la contabilidad ubica en esta caja fuerte, incluidas las bolsas selladas"
+How much cash a drawer should start its shift with.,Cuánto efectivo debe tener una caja al iniciar el turno.
+"Above this, seal the extra cash and return it to the safe. It is guidance and never blocks a sale.","Arriba de este monto, sella el excedente y entrégalo a la caja fuerte. Es una guía y nunca bloquea una venta."
+What each bag state means,Qué significa cada estado de la bolsa
+What each count state means,Qué significa cada estado del conteo
+Opens every bag of this safe in Desk to print labels or handover sheets.,Abre en Desk todas las bolsas de esta caja fuerte para imprimir etiquetas u hojas de entrega.
+Seals loose cash from the safe as the starting cash for a drawer.,Sella efectivo sin asignar de la caja fuerte como fondo inicial de una caja.
+Seals cash from your open drawer and sends it to the safe.,Sella efectivo de tu caja abierta y lo entrega a la caja fuerte.
+Counts every note and coin in the safe against the ledger balance.,Cuenta cada billete y moneda de la caja fuerte contra el saldo contable.
+Count this bag and add its cash to your open drawer.,Cuenta esta bolsa y suma su efectivo a tu caja abierta.
+Recount a bag another person sealed. A match makes it usable; a difference holds it for review.,"Vuelve a contar una bolsa que selló otra persona. Si coincide, queda lista para usarse; si hay diferencia, se retiene para revisión."
+Open the count that did not match and settle the difference.,Abre el conteo que no coincidió y resuelve la diferencia.
+The bag leaves for the bank. Its cash waits as a deposit in transit until the bank receipt is recorded.,La bolsa sale al banco. Su efectivo queda como depósito en tránsito hasta que se registre el comprobante bancario.
+Open the bag and return its cash to the safe's loose cash. The seal is used up.,Abre la bolsa y regresa su efectivo al efectivo sin asignar de la caja fuerte. El sello ya no se puede reutilizar.
+Record the deposit slip reference. The cash moves from in transit to the bank account.,Registra la referencia del comprobante de depósito. El efectivo pasa de tránsito a la cuenta bancaria.
+The bank trip failed. The bag goes back to the safe and must be verified again.,No se pudo depositar. La bolsa regresa a la caja fuerte y debe verificarse otra vez.
+"Record that the sealed bag already left the safe, whole, for the off-site cash account.",Registra que la bolsa sellada ya salió completa de la caja fuerte hacia la cuenta de efectivo externa.
+Post the difference to cash over/short and close it. The count itself is never changed.,Contabiliza la diferencia en sobrantes o faltantes y ciérrala. El conteo nunca se modifica.
+"Finish this drawer count in Close shift, where the shift is closed.","Termina este conteo de caja en Cerrar turno, donde se cierra el turno."
+"A full page with the bag's count, the people involved and signature lines.","Una hoja completa con el conteo de la bolsa, las personas que intervinieron y espacios para firmas."
+"A 100 × 76 mm tag for the sealed bag with its seal, amount and purpose.","Una etiqueta de 100 × 76 mm para la bolsa sellada con su sello, monto y propósito."
+"A full page with the counted notes and coins, the difference and signature lines.","Una hoja completa con los billetes y monedas contados, la diferencia y espacios para firmas."
+A float bag waits in the safe to start a drawer. A takings bag is sent to the bank.,Una bolsa de fondo espera en la caja fuerte para iniciar una caja. Una bolsa de recaudación se envía al banco.
+Saved during a closing that is not finished. Closing the shift makes it final.,Se guardó durante un cierre que no ha terminado. Al cerrar el turno queda definitivo.
+Recorded evidence of the cash that was counted. Nothing is pending.,Comprobante del efectivo contado. No queda nada pendiente.
+The count did not match what was expected. A supervisor who did not count it reviews the difference.,El conteo no coincidió con lo esperado. Un supervisor que no hizo el conteo revisa la diferencia.
+A supervisor posted the difference. The count itself stays as it was recorded.,Un supervisor contabilizó la diferencia. El conteo se conserva tal como se registró.
+Bags waiting for something you can do now.,Bolsas que esperan algo que tú puedes hacer ahora.
+"Bags still in the safe, held for review or in transit to the bank.","Bolsas que siguen en la caja fuerte, retenidas para revisión o en tránsito al banco."
+"Closed bags: issued to a drawer, deposited, returned to loose cash or moved off-site.","Bolsas cerradas: entregadas a una caja, depositadas, devueltas al efectivo sin asignar o enviadas fuera."
+Every bag of this safe.,Todas las bolsas de esta caja fuerte.
+Differences waiting for your review.,Diferencias que esperan tu revisión.
+Counts saved as drafts and differences still pending review.,Conteos guardados como borrador y diferencias pendientes de revisión.
+Final counts and reviewed differences.,Conteos definitivos y diferencias revisadas.
+Every count of this safe you can see.,Todos los conteos de esta caja fuerte que puedes ver.
+Put all the counted cash into sealed bags. A float bag waits in the safe to start a drawer; a takings bag is sent to the bank.,Reparte todo el efectivo contado en bolsas selladas. Una bolsa de fondo espera en la caja fuerte para iniciar una caja; una bolsa de recaudación se envía al banco.
+"Every bag still in the safe, verified or not.","Todas las bolsas que siguen en la caja fuerte, verificadas o no."
+Sealed bags another person still has to count.,Bolsas selladas que otra persona todavía debe contar.
+Counted twice; ready for a drawer or the bank.,Contadas dos veces; listas para una caja o para el banco.
+The counts did not match; a supervisor settles them.,Los conteos no coincidieron; un supervisor los resuelve.
+Received into a register drawer.,Recibidas en la caja de un punto de venta.
+Sent to the bank; the deposit slip is still pending.,Enviadas al banco; falta el comprobante de depósito.
+Left the safe whole for the off-site cash account.,Salieron completas de la caja fuerte hacia la cuenta de efectivo externa.
+Closed bags kept as evidence.,Bolsas cerradas que se conservan como comprobante.
+"Every bag, whatever its state.","Todas las bolsas, en cualquier estado."
+The safe that holds this bag.,La caja fuerte que guarda esta bolsa.
+The register this bag belongs to.,El punto de venta al que pertenece esta bolsa.
+Written on the physical bag. Each bag has its own seal; labels and handover sheets show it.,Se escribe en la bolsa física. Cada bolsa tiene su propio sello; aparece en etiquetas y hojas de entrega.
+Float: waits in the safe to start a drawer. Takings: sent to the bank.,Fondo: espera en la caja fuerte para iniciar una caja. Recaudación: se envía al banco.
+Where the bag is now. It changes only through the bag actions above.,Dónde está la bolsa ahora. Solo cambia con las acciones de la bolsa de arriba.
+"Cash sealed in the bag, from the preparer's count.","Efectivo sellado en la bolsa, según el conteo de quien la preparó."
+Who counted and sealed the bag.,Quién contó y selló la bolsa.
+Who recounted the sealed bag independently. Empty means nobody has.,Quién volvió a contar la bolsa sellada de forma independiente. Vacío significa que nadie lo ha hecho.
+The cashier who received the bag into a drawer.,El cajero que recibió la bolsa en su caja.
+The shift whose drawer cash was sealed into this bag.,El turno cuyo efectivo de caja se selló en esta bolsa.
+The drawer movement that sealed this cash.,El movimiento de caja que selló este efectivo.
+Journal entry that moved the cash from the safe to deposits in transit.,Asiento contable que pasó el efectivo de la caja fuerte a depósitos en tránsito.
+Journal entry that moved the cash from in transit to the bank.,Asiento contable que pasó el efectivo de tránsito al banco.
+The reference printed on the bank deposit slip.,La referencia que aparece en el comprobante de depósito bancario.
+The off-site cash account the whole bag moved to.,La cuenta de efectivo externa a la que se envió la bolsa completa.
+Journal entry of the off-site move.,Asiento contable del envío fuera.
+Who recorded the off-site move.,Quién registró el envío fuera.
+When the off-site move was recorded.,Cuándo se registró el envío fuera.
+Handover notes and reasons. They stay in the audit trail.,Notas de entrega y motivos. Se conservan en el historial de auditoría.
+The drawer movement that received this bag's cash.,El movimiento de caja que recibió el efectivo de esta bolsa.
+The shift whose drawer received this bag.,El turno cuya caja recibió esta bolsa.

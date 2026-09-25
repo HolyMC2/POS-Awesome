@@ -108,25 +108,50 @@
 		<template v-if="data">
 			<section class="starters custody__quick-tasks" aria-labelledby="custody-start">
 				<h3 id="custody-start">{{ __("Start a cash task") }}</h3>
-				<div class="actions">
-					<a class="btn" :href="bagListLink" target="_blank" rel="noopener" data-testid="cash-bag-list-link">
-						{{ __("Bag list & labels") }} ↗
-					</a>
-					<button v-if="canManage" class="btn btn--emphasis" @click="start('prepare')">
-						{{ __("Prepare float bag") }}
-					</button>
-					<button
-						class="btn btn--emphasis"
-						:disabled="!opening"
-						:title="opening ? undefined : __('Open your register shift first.')"
-						@click="start('drop')"
-					>
-						{{ __("Return bag to safe") }}
-					</button>
-					<button v-if="canManage" class="btn" @click="start('count_safe')">
-						{{ __("Count safe") }}
-					</button>
-				</div>
+				<!-- Each task says what it does before anyone presses it. -->
+				<ul class="starter-grid" data-testid="custody-starters">
+					<li class="starter">
+						<a
+							class="btn"
+							:href="bagListLink"
+							target="_blank"
+							rel="noopener"
+							data-testid="cash-bag-list-link"
+							aria-describedby="custody-starter-list"
+						>
+							{{ __("Bag list & labels") }} ↗
+						</a>
+						<small id="custody-starter-list" class="starter__help">{{ __(starterHelp.list) }}</small>
+					</li>
+					<li v-if="canManage" class="starter">
+						<button
+							class="btn btn--emphasis"
+							aria-describedby="custody-starter-prepare"
+							@click="start('prepare')"
+						>
+							{{ __("Prepare float bag") }}
+						</button>
+						<small id="custody-starter-prepare" class="starter__help">{{ __(starterHelp.prepare) }}</small>
+					</li>
+					<li class="starter">
+						<button
+							class="btn btn--emphasis"
+							:disabled="!opening"
+							:title="opening ? undefined : __('Open your register shift first.')"
+							aria-describedby="custody-starter-drop"
+							@click="start('drop')"
+						>
+							{{ __("Return bag to safe") }}
+						</button>
+						<small id="custody-starter-drop" class="starter__help">{{ __(starterHelp.drop) }}</small>
+					</li>
+					<li v-if="canManage" class="starter">
+						<button class="btn" aria-describedby="custody-starter-count" @click="start('count_safe')">
+							{{ __("Count safe") }}
+						</button>
+						<small id="custody-starter-count" class="starter__help">{{ __(starterHelp.count_safe) }}</small>
+					</li>
+				</ul>
 				<p v-if="!opening" class="muted">
 					{{ __("Open your register shift to move cash between the drawer and the safe.") }}
 				</p>
@@ -155,7 +180,10 @@
 				<dl class="summary">
 					<div>
 						<dt>{{ __("Safe balance") }}</dt>
-						<dd>{{ money(data.balance) }}</dd>
+						<dd>
+							{{ money(data.balance) }}
+							<small class="muted">{{ __("All cash the ledger places in this safe, sealed bags included") }}</small>
+						</dd>
 					</div>
 					<div>
 						<dt>{{ __("Loose cash available") }}</dt>
@@ -172,12 +200,22 @@
 						</dd>
 					</div>
 				</dl>
-				<p class="muted targets">
-					{{ __("Suggested float") }}: {{ money(data.float_target) }} ·
-					{{ __("Drawer cash limit") }}: {{ money(data.drawer_limit) }} ({{
-						__("guidance, not a sales block")
-					}})
-				</p>
+				<dl class="targets" data-testid="custody-targets">
+					<div>
+						<dt>{{ __("Suggested float") }}: {{ money(data.float_target) }}</dt>
+						<dd class="muted">{{ __("How much cash a drawer should start its shift with.") }}</dd>
+					</div>
+					<div>
+						<dt>{{ __("Drawer cash limit") }}: {{ money(data.drawer_limit) }}</dt>
+						<dd class="muted">
+							{{
+								__(
+									"Above this, seal the extra cash and return it to the safe. It is guidance and never blocks a sale.",
+								)
+							}}
+						</dd>
+					</div>
+				</dl>
 			</details>
 			<div class="workspace">
 				<div class="queue-column">
@@ -217,6 +255,7 @@
 							{{ option.label }} <b>{{ option.count }}</b>
 						</button>
 					</div>
+					<p class="muted filters__help" data-testid="custody-filter-help">{{ filterHelp }}</p>
 
 					<div
 						role="tabpanel"
@@ -309,6 +348,19 @@
 								)
 							}}
 						</p>
+						<details class="custody__legend" data-testid="custody-state-legend">
+							<summary>
+								{{ queue === "bags" ? __("What each bag state means") : __("What each count state means") }}
+							</summary>
+							<dl>
+								<div v-for="row in stateLegend" :key="row.state">
+									<dt>
+										<span :class="['chip', chipTone(row.state)]">{{ __(row.label) }}</span>
+									</dt>
+									<dd>{{ __(row.help) }}</dd>
+								</div>
+							</dl>
+						</details>
 					</div>
 				</div>
 
@@ -382,31 +434,48 @@
 								</div>
 							</dl>
 
-							<div class="actions">
-								<button
-									v-for="option in bagActions"
-									:key="option.action"
-									:class="['btn', option.primary ? 'btn--emphasis' : '']"
-									:disabled="!option.enabled"
-									@click="option.run ? option.run() : start(option.action, true)"
-								>
-									{{ __(option.labelKey) }}
-								</button>
-								<button
-									class="btn"
-									:disabled="printing"
-									@click="printRecord('POS Cash Bag', selectedBag.name)"
-								>
-									{{ printing ? __("Preparing…") : __("Print handover") }}
-								</button>
-								<button
-									class="btn"
-									:disabled="printing"
-									@click="printRecord('POS Cash Bag', selectedBag.name, 'label')"
-								>
-									{{ __("Print bag label") }}
-								</button>
-							</div>
+							<!-- Every action says what it does to the money before it is pressed. -->
+							<ul class="action-list" data-testid="custody-bag-actions">
+								<li v-for="option in bagActions" :key="option.action" class="action-list__row">
+									<button
+										:class="['btn', option.primary ? 'btn--emphasis' : '']"
+										:disabled="!option.enabled"
+										:aria-describedby="`custody-bag-help-${option.action}`"
+										@click="option.run ? option.run() : start(option.action, true)"
+									>
+										{{ __(option.labelKey) }}
+									</button>
+									<small :id="`custody-bag-help-${option.action}`" class="action-list__help">{{
+										__(helpFor(option.action))
+									}}</small>
+								</li>
+								<li class="action-list__row">
+									<button
+										class="btn"
+										:disabled="printing"
+										aria-describedby="custody-bag-help-print"
+										@click="printRecord('POS Cash Bag', selectedBag.name)"
+									>
+										{{ printing ? __("Preparing…") : __("Print handover") }}
+									</button>
+									<small id="custody-bag-help-print" class="action-list__help">{{
+										__(actionHelp.print_handover)
+									}}</small>
+								</li>
+								<li class="action-list__row">
+									<button
+										class="btn"
+										:disabled="printing"
+										aria-describedby="custody-bag-help-label"
+										@click="printRecord('POS Cash Bag', selectedBag.name, 'label')"
+									>
+										{{ __("Print bag label") }}
+									</button>
+									<small id="custody-bag-help-label" class="action-list__help">{{
+										__(actionHelp.print_label)
+									}}</small>
+								</li>
+							</ul>
 							<CashPhotos :key="selectedBag.name" doctype="POS Cash Bag" :name="selectedBag.name" />
 							<details class="custody__history">
 								<summary>{{ __("Details and history") }}</summary>
@@ -536,30 +605,45 @@
 									)
 								}}
 							</p>
-							<div class="actions">
-								<button
-									v-if="canManage && selectedCount.state === 'Exception'"
-									class="btn btn--emphasis"
-									:disabled="isMine(selectedCount.counted_by)"
-									@click="start('review', true)"
-								>
-									{{ __("Review difference") }}
-								</button>
-								<button
+							<ul class="action-list" data-testid="custody-count-actions">
+								<li v-if="canManage && selectedCount.state === 'Exception'" class="action-list__row">
+									<button
+										class="btn btn--emphasis"
+										:disabled="isMine(selectedCount.counted_by)"
+										aria-describedby="custody-count-help-review"
+										@click="start('review', true)"
+									>
+										{{ __("Review difference") }}
+									</button>
+									<small id="custody-count-help-review" class="action-list__help">{{
+										__(actionHelp.review)
+									}}</small>
+								</li>
+								<li
 									v-if="selectedCount.state === 'Draft' && isMine(selectedCount.counted_by)"
-									class="btn"
-									@click="goToClosing"
+									class="action-list__row"
 								>
-									{{ __("Continue in Close shift") }}
-								</button>
-								<button
-									class="btn"
-									:disabled="printing"
-									@click="printRecord('POS Cash Count', selectedCount.name)"
-								>
-									{{ printing ? __("Preparing…") : __("Print count evidence") }}
-								</button>
-							</div>
+									<button class="btn" aria-describedby="custody-count-help-closing" @click="goToClosing">
+										{{ __("Continue in Close shift") }}
+									</button>
+									<small id="custody-count-help-closing" class="action-list__help">{{
+										__(actionHelp.continue_closing)
+									}}</small>
+								</li>
+								<li class="action-list__row">
+									<button
+										class="btn"
+										:disabled="printing"
+										aria-describedby="custody-count-help-print"
+										@click="printRecord('POS Cash Count', selectedCount.name)"
+									>
+										{{ printing ? __("Preparing…") : __("Print count evidence") }}
+									</button>
+									<small id="custody-count-help-print" class="action-list__help">{{
+										__(actionHelp.print_count)
+									}}</small>
+								</li>
+							</ul>
 							<p
 								v-if="
 									canManage &&
@@ -635,11 +719,12 @@
 							</p>
 							<label
 								>{{ __("Purpose")
-								}}<select v-model="purpose">
+								}}<select v-model="purpose" aria-describedby="custody-purpose-hint">
 									<option value="Float">{{ __("Float for the next drawer") }}</option>
 									<option value="Takings">{{ __("Takings for the bank") }}</option>
 								</select></label
 							>
+							<p id="custody-purpose-hint" class="muted hint">{{ __(purposeHelp) }}</p>
 						</template>
 						<div
 							v-if="transferDirection"
@@ -861,13 +946,14 @@ const labels: Record<string, string> = {
 	review: "Review difference",
 	transfer_safe: "Move whole bag off-site",
 };
-/** Plain-language state names. The raw state stays visible on the record in Desk. */
+/** Plain-language state names, the same words Desk and the printed slips use.
+    The raw state stays visible on the record in Desk. */
 const bagStates: Record<string, string> = {
 	Unverified: "Awaiting verification",
 	Available: "Verified in safe",
-	Disputed: "Disputed count",
-	Issued: "In the drawer",
-	"In Transit": "On the way to the bank",
+	Disputed: "Held for supervisor review",
+	Issued: "Issued to a drawer",
+	"In Transit": "In transit to the bank",
 	Deposited: "Deposited at the bank",
 	Unpacked: "Returned to loose safe cash",
 	Transferred: "Moved to the off-site safe",
@@ -885,10 +971,43 @@ const bagHelp: Record<string, string> = {
 };
 const countStates: Record<string, string> = {
 	Draft: "Saved draft",
-	Final: "Final evidence",
-	Exception: "Difference to review",
-	Reviewed: "Reviewed",
+	Final: "Final count",
+	Exception: "Difference pending review",
+	Reviewed: "Difference reviewed",
 };
+const countHelp: Record<string, string> = {
+	Draft: "Saved during a closing that is not finished. Closing the shift makes it final.",
+	Final: "Recorded evidence of the cash that was counted. Nothing is pending.",
+	Exception:
+		"The count did not match what was expected. A supervisor who did not count it reviews the difference.",
+	Reviewed: "A supervisor posted the difference. The count itself stays as it was recorded.",
+};
+/** What each way into a cash task does, shown under its button. */
+const starterHelp = {
+	list: "Opens every bag of this safe in Desk to print labels or handover sheets.",
+	prepare: "Seals loose cash from the safe as the starting cash for a drawer.",
+	drop: "Seals cash from your open drawer and sends it to the safe.",
+	count_safe: "Counts every note and coin in the safe against the ledger balance.",
+};
+/** What each record action does to the money, shown beside its button. */
+const actionHelp = {
+	receive: "Count this bag and add its cash to your open drawer.",
+	verify: "Recount a bag another person sealed. A match makes it usable; a difference holds it for review.",
+	open_dispute: "Open the count that did not match and settle the difference.",
+	dispatch:
+		"The bag leaves for the bank. Its cash waits as a deposit in transit until the bank receipt is recorded.",
+	unpack: "Open the bag and return its cash to the safe's loose cash. The seal is used up.",
+	confirm_bank: "Record the deposit slip reference. The cash moves from in transit to the bank account.",
+	return_bank: "The bank trip failed. The bag goes back to the safe and must be verified again.",
+	transfer_safe: "Record that the sealed bag already left the safe, whole, for the off-site cash account.",
+	review: "Post the difference to cash over/short and close it. The count itself is never changed.",
+	continue_closing: "Finish this drawer count in Close shift, where the shift is closed.",
+	print_handover: "A full page with the bag's count, the people involved and signature lines.",
+	print_label: "A 100 × 76 mm tag for the sealed bag with its seal, amount and purpose.",
+	print_count: "A full page with the counted notes and coins, the difference and signature lines.",
+} satisfies Record<string, string>;
+const helpFor = (action: string): string => (actionHelp as Record<string, string>)[action] ?? "";
+const purposeHelp = "A float bag waits in the safe to start a drawer. A takings bag is sent to the bank.";
 const countScopes: Record<string, string> = {
 	Drawer: "Drawer count",
 	Bag: "Bag count",
@@ -1036,6 +1155,28 @@ const filterOptions = computed(() => {
 		{ id: "all", label: __("All"), count: pool("all").length },
 	];
 });
+/** One sentence under the filters: which records the chosen filter shows. */
+const filterHelpKeys: Record<string, Record<string, string>> = {
+	bags: {
+		action: "Bags waiting for something you can do now.",
+		active: "Bags still in the safe, held for review or in transit to the bank.",
+		done: "Closed bags: issued to a drawer, deposited, returned to loose cash or moved off-site.",
+		all: "Every bag of this safe.",
+	},
+	counts: {
+		action: "Differences waiting for your review.",
+		active: "Counts saved as drafts and differences still pending review.",
+		done: "Final counts and reviewed differences.",
+		all: "Every count of this safe you can see.",
+	},
+};
+const filterHelp = computed(() => __(filterHelpKeys[queue.value]?.[filter.value] || ""));
+/** The legend under the queue: every state of the open queue and what it means. */
+const stateLegend = computed(() =>
+	queue.value === "bags"
+		? Object.keys(bagStates).map((state) => ({ state, label: bagStates[state]!, help: bagHelp[state] || "" }))
+		: Object.keys(countStates).map((state) => ({ state, label: countStates[state]!, help: countHelp[state] || "" })),
+);
 const searchLabel = computed(() =>
 	queue.value === "bags"
 		? __("Search by seal, state, person or destination")
@@ -2119,9 +2260,76 @@ onMounted(loadSafes);
 .custody__header > .btn {
 	align-self: start;
 }
-.custody__quick-tasks .actions {
+.starter-grid {
+	list-style: none;
+	margin: 0;
+	padding: 0;
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+	gap: 12px;
+}
+.starter {
+	display: grid;
+	gap: 6px;
+	align-content: start;
+}
+.starter .btn {
+	width: 100%;
+}
+.starter__help,
+.action-list__help {
+	font-size: 13px;
+	line-height: 1.35;
+	color: var(--pos-text-secondary);
+}
+.action-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 10px;
+}
+.action-list__row {
+	display: grid;
+	grid-template-columns: minmax(180px, max-content) minmax(0, 1fr);
+	gap: 12px;
+	align-items: center;
+}
+.action-list__row .btn {
+	width: 100%;
+}
+.filters__help {
+	margin: 0;
+	font-size: 13px;
+}
+.custody__legend summary {
+	min-height: 44px;
+	padding: 10px 0;
+	cursor: pointer;
+	color: var(--pos-text-secondary);
+}
+.custody__legend dl {
+	display: grid;
+	gap: 8px;
+	margin: 0;
+}
+.custody__legend dl > div {
+	display: grid;
+	grid-template-columns: minmax(150px, max-content) minmax(0, 1fr);
+	gap: 10px;
+	align-items: start;
+}
+.custody__legend dd {
+	margin: 0;
+	font-size: 13px;
+	color: var(--pos-text-secondary);
+}
+@media (max-width: 599.98px) {
+	.action-list__row,
+	.custody__legend dl > div {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 4px;
+	}
 }
 .custody__next-tasks {
 	margin-top: 12px;
@@ -2393,7 +2601,17 @@ h3 {
 	font-weight: 400;
 }
 .targets {
-	margin-bottom: 16px;
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 8px 16px;
+	margin: 0 0 16px;
+}
+.targets dt {
+	font-weight: 600;
+}
+.targets dd {
+	margin: 2px 0 0;
+	font-size: 13px;
 }
 .workspace {
 	display: grid;

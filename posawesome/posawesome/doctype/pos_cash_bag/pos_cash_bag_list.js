@@ -2,8 +2,8 @@
 (function () {
 	const states = {
 		Unverified: ["Awaiting verification", "orange"],
-		Available: ["Available in the safe", "blue"],
-		Disputed: ["Held for review", "red"],
+		Available: ["Verified in safe", "blue"],
+		Disputed: ["Held for supervisor review", "red"],
 		Issued: ["Issued to a drawer", "green"],
 		"In Transit": ["In transit to the bank", "purple"],
 		Deposited: ["Deposited at the bank", "gray"],
@@ -111,28 +111,30 @@
 			select.className = "posa-bag-queue-select";
 			select.setAttribute("aria-label", __("Cash bag queues"));
 			select.add(new Option(__("Filtered bags"), "custom"));
+			// [label, states, what the queue shows]; the last part is the button's tooltip.
 			const queues = [
-				["In the safe", ["Unverified", "Available", "Disputed"]],
-				["Awaiting verification", ["Unverified"]],
-				["Available in the safe", ["Available"]],
-				["Held for review", ["Disputed"]],
-				["Issued to a drawer", ["Issued"]],
-				["In transit to the bank", ["In Transit"]],
-				["Moved to the off-site safe", ["Transferred"]],
-				["Completed", ["Deposited", "Unpacked", "Transferred"]],
-				["All bags", null],
+				["In the safe", ["Unverified", "Available", "Disputed"], "Every bag still in the safe, verified or not."],
+				["Awaiting verification", ["Unverified"], "Sealed bags another person still has to count."],
+				["Verified in safe", ["Available"], "Counted twice; ready for a drawer or the bank."],
+				["Held for supervisor review", ["Disputed"], "The counts did not match; a supervisor settles them."],
+				["Issued to a drawer", ["Issued"], "Received into a register drawer."],
+				["In transit to the bank", ["In Transit"], "Sent to the bank; the deposit slip is still pending."],
+				["Moved to the off-site safe", ["Transferred"], "Left the safe whole for the off-site cash account."],
+				["Completed", ["Deposited", "Unpacked", "Transferred"], "Closed bags kept as evidence."],
+				["All bags", null, "Every bag, whatever its state."],
 			];
 			async function choose(values) {
 				list.filter_area.remove("state");
 				if (values) await list.filter_area.add([["POS Cash Bag", "state", "in", values]]);
 				else await list.refresh();
 			}
-			queues.forEach(([label, values], index) => {
+			queues.forEach(([label, values, help], index) => {
 				select.add(new Option(__(label), String(index)));
 				const button = document.createElement("button");
 				button.type = "button";
 				button.className = "btn btn-default btn-sm";
 				button.textContent = __(label);
+				button.title = __(help);
 				button.onclick = () => choose(values);
 				bar.appendChild(button);
 			});
