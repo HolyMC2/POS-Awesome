@@ -1,3 +1,4 @@
+import { rankItems } from "../../../utils/itemRelevance";
 import { ref } from "vue";
 import { isFlagOn } from "../../../../offline/catalogVisibility";
 import { perfMarkStart, perfMarkEnd } from "../../../utils/perf.js";
@@ -242,13 +243,7 @@ export function useItemSearch() {
 			return items.slice(0, limit);
 		}
 
-		let searchTerms: string[] | null = null;
-		if (needsLocalSearch) {
-			searchTerms = term.split(/\s+/).filter(Boolean);
-		}
-
 		const result: SearchItem[] = [];
-		const activeTerms = searchTerms || [];
 		const resolveItemRate = (item: SearchItem): number => {
 			const candidates = [
 				item.original_rate,
@@ -270,26 +265,7 @@ export function useItemSearch() {
 			const item = items[i];
 			if (!item) continue;
 
-			// 1. Search Filter
-			if (needsLocalSearch) {
-				let matches = false;
-				if (item._search_index) {
-					matches = activeTerms.every((t) =>
-						item._search_index!.includes(t),
-					);
-				} else {
-					// Fallback
-					const rawIndex = (
-						(item.item_code || "") +
-						" " +
-						(item.item_name || "") +
-						" " +
-						(item.barcode || "")
-					).toLowerCase();
-					matches = activeTerms.every((t) => rawIndex.includes(t));
-				}
-				if (!matches) continue;
-			}
+			// 1. Search: ranked after the loop (every matching row competes).
 
 			// 2. Zero Rate Filter
 			if (hideZeroRate) {
@@ -318,12 +294,14 @@ export function useItemSearch() {
 
 			result.push(item);
 
-			if (result.length >= limit) {
+			if (!needsLocalSearch && result.length >= limit) {
 				break;
 			}
 		}
 
-		return result;
+		// Best match first («ip 13» → iPhone 13 before 13 Pro Max; never an
+		// iPhone 11 whose code holds 13). Equal matches keep the catalogue order.
+		return needsLocalSearch ? rankItems(result, term, limit) : result;
 	};
 
 	return {

@@ -7,6 +7,19 @@ For new entries, describe the changed behavior and include the commit, affected 
 
 ## Unreleased
 
+- **Item search ranks by relevance (2026-09-24, doco-mirror).**
+  «ip 13» at the Doco Ventas register listed iPhone 11/XS screens first and
+  missed «Pantalla iPhone 13»: limit-search anchored on the first word as a
+  name prefix, «13» matched digits inside codes and barcodes, and results were
+  sorted by name. Typed searches (3+ characters) now rank on the server
+  (`item_processing/relevance.py`, same algorithm as doco's shared ranker) and
+  in the SPA (`utils/relevance.ts`: displayed list, local and IndexedDB
+  search): every word must start a word of the name, group, brand or
+  description, codes/barcodes/serials match by prefix or a 4+ digit fragment,
+  and the exact model comes first. Scanned barcodes still resolve directly.
+  `GET_ITEMS_CACHE_VERSION` v3 drops cached search pages. No migration;
+  rollback restores source/assets.
+
 - **Cash bag identification and closing labels (2026-09-23, doco-mirror).**
   Desk lists show the physical folio, amount, state, preparation date and people,
   with focused queues and single/batch printing. Successful POS closings offer
